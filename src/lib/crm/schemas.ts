@@ -1,4 +1,4 @@
-import { AttributionTouchType, ContactStatus, LeadStatus, MarketingConsentStatus } from "@prisma/client";
+import { AttributionTouchType, ContactStatus, CustomerStatus, LeadStatus, MarketingConsentStatus } from "@prisma/client";
 import { z } from "zod";
 import { normalizeEmail } from "@/lib/email/normalize";
 
@@ -40,6 +40,28 @@ export const createContactSchema = z.object({
   marketingConsentSource: optionalText(160),
 });
 
+export const createCustomerAccountSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  code: optionalText(80),
+  legalName: optionalText(240),
+  status: z.enum(CustomerStatus).default(CustomerStatus.PROSPECT),
+  websiteUrl: optionalUrl,
+  entityType: optionalText(120),
+  principalAddressLine1: optionalText(240),
+  principalAddressLine2: optionalText(240),
+  principalAddressCity: optionalText(160),
+  principalAddressRegion: optionalText(160),
+  principalAddressPostalCode: optionalText(40),
+  principalAddressCountryCode: z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+    z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/).optional(),
+  ),
+  primaryPhone: optionalText(64),
+  communicationEmail: optionalEmail,
+  noticesEmail: optionalEmail,
+  invoicingEmail: optionalEmail,
+});
+
 export const leadAttributionSchema = z.object({
   touchType: z.enum(AttributionTouchType).default(AttributionTouchType.FIRST_TOUCH),
   source: optionalText(200),
@@ -76,4 +98,5 @@ export const createLeadSchema = z.object({
 });
 
 export type CreateContactInput = z.input<typeof createContactSchema>;
+export type CreateCustomerAccountInput = z.input<typeof createCustomerAccountSchema>;
 export type CreateLeadInput = z.input<typeof createLeadSchema>;

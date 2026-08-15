@@ -87,6 +87,10 @@ INSERT INTO "Contact" (id, "brandId", "displayName", status, "marketingConsent",
 INSERT INTO "Lead" (id, "brandId", name, status, "createdAt", "updatedAt") VALUES
   ('contigo-lead', 'contigo', 'Contigo Only Lead', 'NEW', now(), now()),
   ('melbourne-lead', 'melbourne', 'Melbourne Only Lead', 'NEW', now(), now());
+
+INSERT INTO "CustomerAccount" (id, "brandId", code, name, status, "createdAt", "updatedAt") VALUES
+  ('contigo-customer', 'contigo', 'CON-001', 'Contigo Only Customer', 'ACTIVE', now(), now()),
+  ('melbourne-customer', 'melbourne', 'MEL-001', 'Melbourne Only Customer', 'ACTIVE', now(), now());
 '@ | & docker.exe exec -i $taskContainer psql -U postgres -d southwestdigital *> $null
   if ($LASTEXITCODE -ne 0) { throw "Seed failed" }
 
@@ -454,7 +458,15 @@ WHERE b.id = 'bookkeeping'
     throw "Lead page did not preserve brand isolation"
   }
 
-  Write-Output "Verified branded login, unknown-host rejection, hostname-safe auth completion, platform-admin routing and authorization, transactional brand onboarding, integration asset governance, deduplicated export jobs, future offboarding scheduling without early lockout, due offboarding with brand-only access revocation and export creation, entry-brand selection, authorized switching, tampered-cookie fallback, and CRM page isolation."
+  $taskContigoCustomers = (& curl.exe -s `
+    -H "Host: app.contigoaccounting.com" `
+    -H "Cookie: authjs.session-token=test-session-token; swd-active-brand=contigo" `
+    "http://127.0.0.1:$taskAppPort/portal/customers") -join "`n"
+  if ($taskContigoCustomers -notmatch "Contigo Only Customer" -or $taskContigoCustomers -match "Melbourne Only Customer") {
+    throw "Customer page did not preserve brand isolation"
+  }
+
+  Write-Output "Verified branded login, unknown-host rejection, hostname-safe auth completion, platform-admin routing and authorization, transactional brand onboarding, integration asset governance, deduplicated export jobs, future offboarding scheduling without early lockout, due offboarding with brand-only access revocation and export creation, entry-brand selection, authorized switching, tampered-cookie fallback, and customer/contact/lead isolation."
 }
 finally {
   if ($taskServer -and -not $taskServer.HasExited) {

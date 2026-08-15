@@ -1,6 +1,6 @@
 import { AttributionTouchType, MarketingConsentStatus } from "@prisma/client";
 import { describe, expect, it } from "vitest";
-import { createContactSchema, createLeadSchema } from "./schemas";
+import { createContactSchema, createCustomerAccountSchema, createLeadSchema } from "./schemas";
 
 describe("CRM input schemas", () => {
   it("normalizes contact email without inferring marketing consent", () => {
@@ -32,6 +32,17 @@ describe("CRM input schemas", () => {
     });
   });
 
+  it("normalizes customer communication fields", () => {
+    const customer = createCustomerAccountSchema.parse({
+      name: "Example Pty Ltd",
+      code: "MEL-001",
+      communicationEmail: " Accounts@Example.COM ",
+      principalAddressCountryCode: "au",
+    });
+    expect(customer.communicationEmail).toBe("accounts@example.com");
+    expect(customer.principalAddressCountryCode).toBe("AU");
+  });
+
   it("rejects malformed currency and URLs", () => {
     expect(
       createLeadSchema.safeParse({
@@ -42,4 +53,3 @@ describe("CRM input schemas", () => {
     ).toBe(false);
   });
 });
-

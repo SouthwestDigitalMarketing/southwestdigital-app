@@ -39,6 +39,9 @@ export default async function PortalLayout({ children }: { children: ReactNode }
             <Link href="/portal/contacts" className="rounded-full px-3 py-2 hover:bg-slate-100">
               Contacts
             </Link>
+            <Link href="/portal/customers" className="rounded-full px-3 py-2 hover:bg-slate-100">
+              Customers
+            </Link>
             <Link href="/portal/leads" className="rounded-full px-3 py-2 hover:bg-slate-100">
               Leads
             </Link>
