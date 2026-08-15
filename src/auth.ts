@@ -9,6 +9,40 @@ import { BrandedResend } from "@/lib/auth/branded-resend";
 import { isSignInEligible } from "@/lib/auth/eligibility";
 import { prisma } from "@/lib/prisma";
 
+if (process.env.AUTH_URL || process.env.NEXTAUTH_URL) {
+  throw new Error(
+    "AUTH_URL and NEXTAUTH_URL must remain unset; this deployment serves multiple trusted hostnames",
+  );
+}
+
+function usesSecureAuthCookies(): boolean {
+  try {
+    const platformUrl = new URL(process.env.PLATFORM_BASE_URL ?? "");
+    if (platformUrl.protocol === "https:") return true;
+    if (
+      platformUrl.protocol === "http:" &&
+      (platformUrl.hostname === "localhost" || platformUrl.hostname === "127.0.0.1")
+    ) {
+      return false;
+    }
+    throw new Error("PLATFORM_BASE_URL must use HTTPS outside local development");
+  } catch {
+    if (process.env.PLATFORM_BASE_URL) {
+      throw new Error("PLATFORM_BASE_URL must be a valid HTTPS or local HTTP URL");
+    }
+    return process.env.NODE_ENV === "production";
+  }
+}
+
+const secureAuthCookies = usesSecureAuthCookies();
+const secureCookiePrefix = secureAuthCookies ? "__Secure-" : "";
+const authCookieOptions = {
+  httpOnly: true,
+  sameSite: "lax" as const,
+  path: "/",
+  secure: secureAuthCookies,
+};
+
 const googleConfigured = Boolean(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET);
 const emailConfigured = Boolean(process.env.AUTH_RESEND_KEY && process.env.AUTH_EMAIL_FROM);
 
@@ -53,10 +87,49 @@ async function isAllowedRedirectHostname(hostname: string): Promise<boolean> {
   return Boolean(await resolveAppBrandByHostname(hostname));
 }
 
+function isAllowedRedirectProtocol(destination: URL): boolean {
+  if (secureAuthCookies) {
+    return destination.protocol === "https:" && destination.port === "";
+  }
+
+  return destination.protocol === "http:" || destination.protocol === "https:";
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
   secret: process.env.AUTH_SECRET,
   trustHost: true,
+  useSecureCookies: secureAuthCookies,
+  cookies: {
+    sessionToken: {
+      name: `${secureCookiePrefix}swd-authjs.session-token`,
+      options: authCookieOptions,
+    },
+    callbackUrl: {
+      name: `${secureCookiePrefix}swd-authjs.callback-url`,
+      options: authCookieOptions,
+    },
+    csrfToken: {
+      name: `${secureAuthCookies ? "__Host-" : ""}swd-authjs.csrf-token`,
+      options: authCookieOptions,
+    },
+    pkceCodeVerifier: {
+      name: `${secureCookiePrefix}swd-authjs.pkce.code_verifier`,
+      options: { ...authCookieOptions, maxAge: 15 * 60 },
+    },
+    state: {
+      name: `${secureCookiePrefix}swd-authjs.state`,
+      options: { ...authCookieOptions, maxAge: 15 * 60 },
+    },
+    nonce: {
+      name: `${secureCookiePrefix}swd-authjs.nonce`,
+      options: authCookieOptions,
+    },
+    webauthnChallenge: {
+      name: `${secureCookiePrefix}swd-authjs.challenge`,
+      options: { ...authCookieOptions, maxAge: 15 * 60 },
+    },
+  },
   providers,
   pages: {
     signIn: "/login",
@@ -104,7 +177,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     async redirect({ url, baseUrl }) {
       const destination = new URL(url, baseUrl);
-      if (await isAllowedRedirectHostname(destination.hostname)) {
+      if (
+        isAllowedRedirectProtocol(destination) &&
+        (await isAllowedRedirectHostname(destination.hostname))
+      ) {
         return destination.toString();
       }
       return process.env.PLATFORM_BASE_URL ?? baseUrl;

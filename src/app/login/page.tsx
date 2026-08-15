@@ -11,6 +11,7 @@ type LoginSearchParams = Promise<{ error?: string }>;
 
 const errorMessages: Record<string, string> = {
   AccessDenied: "This account does not have access to the requested portal.",
+  InvalidHost: "This hostname is not connected to an active Southwest Digital App portal.",
   InvalidEmail: "Enter a valid email address.",
   OAuthAccountNotLinked: "Use the same sign-in method associated with this account.",
 };
@@ -109,4 +110,3 @@ export default async function LoginPage({ searchParams }: { searchParams: LoginS
     </BrandShell>
   );
 }
-

@@ -53,6 +53,7 @@ try {
 INSERT INTO "User" (id, name, email, status, "platformRole", "createdAt", "updatedAt")
 VALUES
   ('dagny', 'Dagny', 'dagny@example.test', 'ACTIVE', 'NONE', now(), now()),
+  ('viewer', 'Read Only Viewer', 'viewer@example.test', 'ACTIVE', 'NONE', now(), now()),
   ('platform-owner', 'Southwest Owner', 'owner@southwestdigital.test', 'ACTIVE', 'OWNER', now(), now()),
   ('bookkeeping-owner', 'Bookkeeping Owner', 'owner@bookkeeping.test', 'ACTIVE', 'NONE', now(), now());
 
@@ -68,16 +69,19 @@ INSERT INTO "BrandTheme" (id, "brandId", "primaryColor", "accentColor", "backgro
 INSERT INTO "BrandDomain" (id, "brandId", hostname, purpose, status, "isPrimary", "verifiedAt", "createdAt", "updatedAt") VALUES
   ('domain-contigo', 'contigo', 'app.contigoaccounting.com', 'APP', 'VERIFIED', true, now(), now(), now()),
   ('domain-melbourne', 'melbourne', 'app.melbournecfo.com.au', 'APP', 'VERIFIED', true, now(), now(), now()),
-  ('domain-bookkeeping', 'bookkeeping', 'app.bookkeepingconroe.com', 'APP', 'VERIFIED', true, now(), now(), now());
+  ('domain-bookkeeping', 'bookkeeping', 'app.bookkeepingconroe.com', 'APP', 'VERIFIED', true, now(), now(), now()),
+  ('domain-disabled', 'contigo', 'disabled.contigo.example', 'APP', 'DISABLED', false, null, now(), now());
 
 INSERT INTO "BrandMembership" (id, "brandId", "userId", role, status, "createdAt", "updatedAt") VALUES
   ('member-contigo', 'contigo', 'dagny', 'OWNER', 'ACTIVE', now(), now()),
   ('member-melbourne', 'melbourne', 'dagny', 'OWNER', 'ACTIVE', now(), now()),
+  ('viewer-contigo', 'contigo', 'viewer', 'VIEWER', 'ACTIVE', now(), now()),
   ('member-bookkeeping', 'bookkeeping', 'bookkeeping-owner', 'OWNER', 'ACTIVE', now(), now());
 
 INSERT INTO "Session" (id, "sessionToken", "userId", expires)
 VALUES
   ('session-1', 'test-session-token', 'dagny', now() + interval '1 day'),
+  ('session-viewer', 'test-viewer-session-token', 'viewer', now() + interval '1 day'),
   ('session-platform', 'test-platform-session-token', 'platform-owner', now() + interval '1 day');
 
 INSERT INTO "Contact" (id, "brandId", "displayName", status, "marketingConsent", "createdAt", "updatedAt") VALUES
@@ -133,9 +137,47 @@ INSERT INTO "CustomerAccount" (id, "brandId", code, name, status, "createdAt", "
     throw "Unknown hostname was not rejected"
   }
 
+  $taskUnknownAuthStatus = & curl.exe -s -o NUL -w "%{http_code}" `
+    -H "Host: unknown.example" `
+    "http://127.0.0.1:$taskAppPort/api/auth/providers"
+  if ($taskUnknownAuthStatus -ne "404") {
+    throw "Unknown hostname reached Auth.js with HTTP $taskUnknownAuthStatus"
+  }
+
+  $taskUnknownAuthPostStatus = & curl.exe -s -o NUL -w "%{http_code}" -X POST `
+    -H "Host: unknown.example" `
+    "http://127.0.0.1:$taskAppPort/api/auth/signout"
+  if ($taskUnknownAuthPostStatus -ne "404") {
+    throw "Unknown hostname reached Auth.js POST with HTTP $taskUnknownAuthPostStatus"
+  }
+
+  foreach ($taskPath in @("/portal", "/portal/contacts", "/select-brand")) {
+    $taskUntrustedPortalStatus = & curl.exe -s -o NUL -w "%{http_code}" `
+      -H "Host: disabled.contigo.example" `
+      -H "Cookie: swd-authjs.session-token=test-session-token; swd-active-brand=contigo" `
+      "http://127.0.0.1:$taskAppPort$taskPath"
+    if ($taskUntrustedPortalStatus -ne "404") {
+      throw "Disabled hostname served $taskPath with HTTP $taskUntrustedPortalStatus"
+    }
+  }
+
+  $taskDisabledAuthStatus = & curl.exe -s -o NUL -w "%{http_code}" `
+    -H "Host: disabled.contigo.example" `
+    "http://127.0.0.1:$taskAppPort/api/auth/providers"
+  if ($taskDisabledAuthStatus -ne "404") {
+    throw "Disabled hostname reached Auth.js with HTTP $taskDisabledAuthStatus"
+  }
+
+  $taskBrandAuthStatus = & curl.exe -s -o NUL -w "%{http_code}" `
+    -H "Host: app.contigoaccounting.com" `
+    "http://127.0.0.1:$taskAppPort/api/auth/providers"
+  if ($taskBrandAuthStatus -ne "200") {
+    throw "Verified brand hostname could not reach Auth.js"
+  }
+
   $taskComplete = (& curl.exe -s -i `
     -H "Host: app.contigoaccounting.com" `
-    -H "Cookie: authjs.session-token=test-session-token" `
+    -H "Cookie: swd-authjs.session-token=test-session-token" `
     "http://127.0.0.1:$taskAppPort/auth/complete") -join "`n"
   if ($taskComplete -notmatch "swd-active-brand=contigo") {
     throw "Entry hostname did not establish Contigo as active"
@@ -144,33 +186,83 @@ INSERT INTO "CustomerAccount" (id, "brandId", code, name, status, "createdAt", "
     throw "Auth completion did not retain the verified entry hostname"
   }
 
+  @'
+UPDATE "BrandDomain"
+SET status = 'DISABLED', "verifiedAt" = null, "updatedAt" = now()
+WHERE id = 'domain-contigo';
+'@ | & docker.exe exec -i $taskContainer psql -U postgres -d southwestdigital *> $null
+  $taskRevokedPortalStatus = & curl.exe -s -o NUL -w "%{http_code}" `
+    -H "Host: app.contigoaccounting.com" `
+    -H "Cookie: swd-authjs.session-token=test-session-token; swd-active-brand=contigo" `
+    "http://127.0.0.1:$taskAppPort/portal/contacts"
+  if ($taskRevokedPortalStatus -ne "404") {
+    throw "A dynamically disabled hostname retained portal access with HTTP $taskRevokedPortalStatus"
+  }
+  @'
+UPDATE "BrandDomain"
+SET status = 'VERIFIED', "verifiedAt" = now(), "updatedAt" = now()
+WHERE id = 'domain-contigo';
+'@ | & docker.exe exec -i $taskContainer psql -U postgres -d southwestdigital *> $null
+
   $taskPlatformComplete = (& curl.exe -s -i `
     -H "Host: localhost:$taskAppPort" `
-    -H "Cookie: authjs.session-token=test-platform-session-token" `
+    -H "Cookie: swd-authjs.session-token=test-platform-session-token" `
     "http://127.0.0.1:$taskAppPort/auth/complete") -join "`n"
   if ($taskPlatformComplete -notmatch "location: http://localhost:$taskAppPort/platform/brands") {
     throw "Platform owner did not land in platform administration"
   }
 
+  $taskBrandUserPlatformComplete = (& curl.exe -s -i `
+    -H "Host: localhost:$taskAppPort" `
+    -H "Cookie: swd-authjs.session-token=test-session-token" `
+    "http://127.0.0.1:$taskAppPort/auth/complete") -join "`n"
+  if ($taskBrandUserPlatformComplete -notmatch "location: http://localhost:$taskAppPort/access-denied") {
+    throw "A brand-only user was allowed to enter through the platform hostname"
+  }
+
+  $taskAccessDenied = (& curl.exe -s -i `
+    -H "Host: localhost:$taskAppPort" `
+    -H "Cookie: swd-authjs.session-token=test-session-token" `
+    "http://127.0.0.1:$taskAppPort/access-denied") -join "`n"
+  if ($taskAccessDenied -notmatch "HTTP/1.1 200" -or $taskAccessDenied -notmatch "Access denied") {
+    throw "Platform denial page did not terminate the brand-only user journey"
+  }
+
   $taskPlatformBrands = (& curl.exe -s `
     -H "Host: localhost:$taskAppPort" `
-    -H "Cookie: authjs.session-token=test-platform-session-token" `
+    -H "Cookie: swd-authjs.session-token=test-platform-session-token" `
     "http://127.0.0.1:$taskAppPort/platform/brands") -join "`n"
   if ($taskPlatformBrands -notmatch "Platform administration" -or $taskPlatformBrands -notmatch "Melbourne CFO") {
     throw "Platform brand administration did not render for the platform owner"
   }
 
+  $taskPlatformOnBrandStatus = & curl.exe -s -o NUL -w "%{http_code}" `
+    -H "Host: app.contigoaccounting.com" `
+    -H "Cookie: swd-authjs.session-token=test-platform-session-token" `
+    "http://127.0.0.1:$taskAppPort/platform/brands"
+  if ($taskPlatformOnBrandStatus -ne "404") {
+    throw "Platform administration rendered on a brand hostname with HTTP $taskPlatformOnBrandStatus"
+  }
+
   $taskNonAdminPlatform = (& curl.exe -s -i `
     -H "Host: localhost:$taskAppPort" `
-    -H "Cookie: authjs.session-token=test-session-token" `
+    -H "Cookie: swd-authjs.session-token=test-session-token" `
     "http://127.0.0.1:$taskAppPort/platform/brands") -join "`n"
-  if ($taskNonAdminPlatform -notmatch "location: /portal") {
+  if ($taskNonAdminPlatform -notmatch "location: /access-denied") {
     throw "A brand-only user was not rejected from platform administration"
+  }
+
+  $taskUnauthenticatedRsc = (& curl.exe -s -i `
+    -H "Host: localhost:$taskAppPort" `
+    -H "RSC: 1" `
+    "http://127.0.0.1:$taskAppPort/platform/brands") -join "`n"
+  if ($taskUnauthenticatedRsc -match "Melbourne CFO" -or $taskUnauthenticatedRsc -match "Contigo Accounting") {
+    throw "Unauthenticated RSC request exposed platform brand inventory"
   }
 
   $taskNewBrandPage = (& curl.exe -s `
     -H "Host: localhost:$taskAppPort" `
-    -H "Cookie: authjs.session-token=test-platform-session-token" `
+    -H "Cookie: swd-authjs.session-token=test-platform-session-token" `
     "http://127.0.0.1:$taskAppPort/platform/brands/new") -join "`n"
   $taskActionMatch = [regex]::Match(
     $taskNewBrandPage,
@@ -181,10 +273,36 @@ INSERT INTO "CustomerAccount" (id, "brandId", code, name, status, "createdAt", "
     throw "Could not find the progressively enhanced onboarding action"
   }
   $taskActionField = $taskActionMatch.Groups[1].Value
+  $taskOperatorHostnameStatus = & curl.exe -s -o NUL -w "%{http_code}" -X POST `
+    -H "Host: localhost:$taskAppPort" `
+    -H "Origin: http://localhost:$taskAppPort" `
+    -H "Cookie: swd-authjs.session-token=test-platform-session-token" `
+    -F "$taskActionField=" `
+    -F "name=Forbidden Operator Host Brand" `
+    -F "legalName=" `
+    -F "slug=forbidden-operator-host" `
+    -F "appHostname=localhost" `
+    -F "ownerName=Forbidden Owner" `
+    -F "ownerEmail=forbidden@example.test" `
+    -F "logoUrl=" `
+    -F "supportEmail=" `
+    -F "primaryColor=#17324d" `
+    -F "accentColor=#d79b3b" `
+    -F "backgroundColor=#f7f8fa" `
+    -F "foregroundColor=#17202a" `
+    "http://127.0.0.1:$taskAppPort/platform/brands/new"
+  if ([int]$taskOperatorHostnameStatus -lt 400) {
+    throw "Platform hostname was accepted during brand onboarding"
+  }
+  $taskOperatorBrandCount = (("SELECT count(*) FROM `"Brand`" WHERE slug = 'forbidden-operator-host';" | & docker.exe exec -i $taskContainer psql -U postgres -d southwestdigital -tA) -join "").Trim()
+  if ($taskOperatorBrandCount -ne "0") {
+    throw "Rejected platform-host onboarding still created a brand"
+  }
+
   $taskOnboardingResponse = (& curl.exe -s -i -X POST `
     -H "Host: localhost:$taskAppPort" `
     -H "Origin: http://localhost:$taskAppPort" `
-    -H "Cookie: authjs.session-token=test-platform-session-token" `
+    -H "Cookie: swd-authjs.session-token=test-platform-session-token" `
     -F "$taskActionField=" `
     -F "name=Harness Test Brand" `
     -F "legalName=Harness Test Brand LLC" `
@@ -215,8 +333,29 @@ INSERT INTO "CustomerAccount" (id, "brandId", code, name, status, "createdAt", "
 
   $taskCreatedBrandPage = (& curl.exe -s `
     -H "Host: localhost:$taskAppPort" `
-    -H "Cookie: authjs.session-token=test-platform-session-token" `
+    -H "Cookie: swd-authjs.session-token=test-platform-session-token" `
     "http://127.0.0.1:$taskAppPort$taskCreatedBrandPath") -join "`n"
+  $taskDomainActionMatch = [regex]::Match(
+    $taskCreatedBrandPage,
+    '<form[^>]*data-harness="domain-form"[^>]*><input type="hidden" name="(\$ACTION_ID_[^"]+)"',
+    [System.Text.RegularExpressions.RegexOptions]::Singleline
+  )
+  if (-not $taskDomainActionMatch.Success) {
+    throw "Could not find the pending-domain action"
+  }
+  $taskDomainActionField = $taskDomainActionMatch.Groups[1].Value
+  $taskOperatorDomainStatus = & curl.exe -s -o NUL -w "%{http_code}" -X POST `
+    -H "Host: localhost:$taskAppPort" `
+    -H "Origin: http://localhost:$taskAppPort" `
+    -H "Cookie: swd-authjs.session-token=test-platform-session-token" `
+    -F "$taskDomainActionField=" `
+    -F "brandId=$taskCreatedBrandId" `
+    -F "hostname=localhost" `
+    -F "purpose=APP" `
+    "http://127.0.0.1:$taskAppPort$taskCreatedBrandPath"
+  if ([int]$taskOperatorDomainStatus -lt 400) {
+    throw "Platform hostname was accepted as an added brand domain"
+  }
   $taskIntegrationActionMatch = [regex]::Match(
     $taskCreatedBrandPage,
     '<form[^>]*data-harness="integration-form"[^>]*><input type="hidden" name="(\$ACTION_ID_[^"]+)"',
@@ -229,7 +368,7 @@ INSERT INTO "CustomerAccount" (id, "brandId", code, name, status, "createdAt", "
   $taskIntegrationStatus = & curl.exe -s -o NUL -w "%{http_code}" -X POST `
     -H "Host: localhost:$taskAppPort" `
     -H "Origin: http://localhost:$taskAppPort" `
-    -H "Cookie: authjs.session-token=test-platform-session-token" `
+    -H "Cookie: swd-authjs.session-token=test-platform-session-token" `
     -F "$taskIntegrationActionField=" `
     -F "brandId=$taskCreatedBrandId" `
     -F "key=meta-pixel" `
@@ -288,7 +427,7 @@ WHERE b.slug = 'harness-test-brand'
 
   $taskMelbourneAdminPage = (& curl.exe -s `
     -H "Host: localhost:$taskAppPort" `
-    -H "Cookie: authjs.session-token=test-platform-session-token" `
+    -H "Cookie: swd-authjs.session-token=test-platform-session-token" `
     "http://127.0.0.1:$taskAppPort/platform/brands/melbourne") -join "`n"
   $taskExportActionMatch = [regex]::Match(
     $taskMelbourneAdminPage,
@@ -309,7 +448,7 @@ WHERE b.slug = 'harness-test-brand'
     $taskExportStatus = & curl.exe -s -o NUL -w "%{http_code}" -X POST `
       -H "Host: localhost:$taskAppPort" `
       -H "Origin: http://localhost:$taskAppPort" `
-      -H "Cookie: authjs.session-token=test-platform-session-token" `
+      -H "Cookie: swd-authjs.session-token=test-platform-session-token" `
       -F "$taskExportActionField=" `
       -F "brandId=melbourne" `
       -F "scopes=BRAND_CONFIGURATION" `
@@ -326,7 +465,7 @@ WHERE b.slug = 'harness-test-brand'
   $taskOffboardingStatus = & curl.exe -s -o NUL -w "%{http_code}" -X POST `
     -H "Host: localhost:$taskAppPort" `
     -H "Origin: http://localhost:$taskAppPort" `
-    -H "Cookie: authjs.session-token=test-platform-session-token" `
+    -H "Cookie: swd-authjs.session-token=test-platform-session-token" `
     -F "$taskOffboardingActionField=" `
     -F "brandId=melbourne" `
     -F "serviceEndsAt=2030-09-01T17:00:00+10:00" `
@@ -364,7 +503,7 @@ WHERE b.id = 'melbourne'
   $taskPastOffboardingStatus = & curl.exe -s -o NUL -w "%{http_code}" -X POST `
     -H "Host: localhost:$taskAppPort" `
     -H "Origin: http://localhost:$taskAppPort" `
-    -H "Cookie: authjs.session-token=test-platform-session-token" `
+    -H "Cookie: swd-authjs.session-token=test-platform-session-token" `
     -F "$taskOffboardingActionField=" `
     -F "brandId=bookkeeping" `
     -F "serviceEndsAt=2025-01-01T17:00:00-06:00" `
@@ -379,7 +518,7 @@ WHERE b.id = 'melbourne'
 
   $taskBookkeepingAdminPage = (& curl.exe -s `
     -H "Host: localhost:$taskAppPort" `
-    -H "Cookie: authjs.session-token=test-platform-session-token" `
+    -H "Cookie: swd-authjs.session-token=test-platform-session-token" `
     "http://127.0.0.1:$taskAppPort/platform/brands/bookkeeping") -join "`n"
   $taskBeginOffboardingMatch = [regex]::Match(
     $taskBookkeepingAdminPage,
@@ -394,7 +533,7 @@ WHERE b.id = 'melbourne'
   $taskBeginOffboardingStatus = & curl.exe -s -o NUL -w "%{http_code}" -X POST `
     -H "Host: localhost:$taskAppPort" `
     -H "Origin: http://localhost:$taskAppPort" `
-    -H "Cookie: authjs.session-token=test-platform-session-token" `
+    -H "Cookie: swd-authjs.session-token=test-platform-session-token" `
     -F "$taskBeginOffboardingActionField=" `
     -F "brandId=bookkeeping" `
     -F "planId=$taskBookkeepingPlanId" `
@@ -416,6 +555,10 @@ WHERE b.id = 'bookkeeping'
   AND p."startedAt" IS NOT NULL
   AND m."userId" = 'bookkeeping-owner'
   AND m.status = 'SUSPENDED'
+  AND EXISTS (
+    SELECT 1 FROM "BrandDomain" d
+    WHERE d."brandId" = b.id AND d.purpose = 'APP' AND d.status = 'DISABLED' AND d."verifiedAt" IS NULL
+  )
   AND e.status = 'REQUESTED'
   AND EXISTS (SELECT 1 FROM "AuditEvent" WHERE "brandId" = b.id AND action = 'brand.offboarding.started')
   AND EXISTS (SELECT 1 FROM "BrandMembership" WHERE "brandId" = 'contigo' AND "userId" = 'dagny' AND status = 'ACTIVE')
@@ -428,7 +571,7 @@ WHERE b.id = 'bookkeeping'
 
   $taskSwitchedPortal = (& curl.exe -s `
     -H "Host: app.contigoaccounting.com" `
-    -H "Cookie: authjs.session-token=test-session-token; swd-active-brand=melbourne" `
+    -H "Cookie: swd-authjs.session-token=test-session-token; swd-active-brand=melbourne" `
     "http://127.0.0.1:$taskAppPort/portal") -join "`n"
   if ($taskSwitchedPortal -notmatch "Melbourne CFO") {
     throw "Authorized brand switch was not retained"
@@ -436,7 +579,7 @@ WHERE b.id = 'bookkeeping'
 
   $taskTamperedPortal = (& curl.exe -s `
     -H "Host: app.contigoaccounting.com" `
-    -H "Cookie: authjs.session-token=test-session-token; swd-active-brand=bookkeeping" `
+    -H "Cookie: swd-authjs.session-token=test-session-token; swd-active-brand=bookkeeping" `
     "http://127.0.0.1:$taskAppPort/portal") -join "`n"
   if ($taskTamperedPortal -notmatch "Contigo Accounting") {
     throw "Unauthorized active-brand cookie was not rejected"
@@ -444,7 +587,7 @@ WHERE b.id = 'bookkeeping'
 
   $taskContigoContacts = (& curl.exe -s `
     -H "Host: app.contigoaccounting.com" `
-    -H "Cookie: authjs.session-token=test-session-token; swd-active-brand=contigo" `
+    -H "Cookie: swd-authjs.session-token=test-session-token; swd-active-brand=contigo" `
     "http://127.0.0.1:$taskAppPort/portal/contacts") -join "`n"
   if ($taskContigoContacts -notmatch "Contigo Only Contact" -or $taskContigoContacts -match "Melbourne Only Contact") {
     throw "Contact page did not preserve brand isolation"
@@ -452,7 +595,7 @@ WHERE b.id = 'bookkeeping'
 
   $taskMelbourneLeads = (& curl.exe -s `
     -H "Host: app.contigoaccounting.com" `
-    -H "Cookie: authjs.session-token=test-session-token; swd-active-brand=melbourne" `
+    -H "Cookie: swd-authjs.session-token=test-session-token; swd-active-brand=melbourne" `
     "http://127.0.0.1:$taskAppPort/portal/leads") -join "`n"
   if ($taskMelbourneLeads -notmatch "Melbourne Only Lead" -or $taskMelbourneLeads -match "Contigo Only Lead") {
     throw "Lead page did not preserve brand isolation"
@@ -460,13 +603,124 @@ WHERE b.id = 'bookkeeping'
 
   $taskContigoCustomers = (& curl.exe -s `
     -H "Host: app.contigoaccounting.com" `
-    -H "Cookie: authjs.session-token=test-session-token; swd-active-brand=contigo" `
+    -H "Cookie: swd-authjs.session-token=test-session-token; swd-active-brand=contigo" `
     "http://127.0.0.1:$taskAppPort/portal/customers") -join "`n"
   if ($taskContigoCustomers -notmatch "Contigo Only Customer" -or $taskContigoCustomers -match "Melbourne Only Customer") {
     throw "Customer page did not preserve brand isolation"
   }
 
-  Write-Output "Verified branded login, unknown-host rejection, hostname-safe auth completion, platform-admin routing and authorization, transactional brand onboarding, integration asset governance, deduplicated export jobs, future offboarding scheduling without early lockout, due offboarding with brand-only access revocation and export creation, entry-brand selection, authorized switching, tampered-cookie fallback, and customer/contact/lead isolation."
+  $taskContigoLeads = (& curl.exe -s `
+    -H "Host: app.contigoaccounting.com" `
+    -H "Cookie: swd-authjs.session-token=test-session-token; swd-active-brand=contigo" `
+    "http://127.0.0.1:$taskAppPort/portal/leads") -join "`n"
+
+  $taskViewerContacts = (& curl.exe -s `
+    -H "Host: app.contigoaccounting.com" `
+    -H "Cookie: swd-authjs.session-token=test-viewer-session-token; swd-active-brand=contigo" `
+    "http://127.0.0.1:$taskAppPort/portal/contacts") -join "`n"
+  if ($taskViewerContacts -notmatch "Contigo Only Contact" -or $taskViewerContacts -notmatch "viewer access is read-only" -or $taskViewerContacts -match 'data-harness="create-contact-form"') {
+    throw "VIEWER did not receive read-only contact access"
+  }
+
+  $taskContactActionMatch = [regex]::Match(
+    $taskContigoContacts,
+    '<form[^>]*data-harness="create-contact-form"[^>]*><input type="hidden" name="(\$ACTION_ID_[^"]+)"',
+    [System.Text.RegularExpressions.RegexOptions]::Singleline
+  )
+  $taskCustomerActionMatch = [regex]::Match(
+    $taskContigoCustomers,
+    '<form[^>]*data-harness="create-customer-form"[^>]*><input type="hidden" name="(\$ACTION_ID_[^"]+)"',
+    [System.Text.RegularExpressions.RegexOptions]::Singleline
+  )
+  $taskLeadActionMatch = [regex]::Match(
+    $taskContigoLeads,
+    '<form[^>]*data-harness="create-lead-form"[^>]*><input type="hidden" name="(\$ACTION_ID_[^"]+)"',
+    [System.Text.RegularExpressions.RegexOptions]::Singleline
+  )
+  if (-not $taskContactActionMatch.Success -or -not $taskCustomerActionMatch.Success -or -not $taskLeadActionMatch.Success) {
+    throw "Could not capture the CRM Server Action identifiers"
+  }
+  $taskContactActionField = $taskContactActionMatch.Groups[1].Value
+  $taskCustomerActionField = $taskCustomerActionMatch.Groups[1].Value
+  $taskLeadActionField = $taskLeadActionMatch.Groups[1].Value
+
+  foreach ($taskSessionToken in @("test-viewer-session-token", "test-session-token")) {
+    $taskContactWriteStatus = & curl.exe -s -o NUL -w "%{http_code}" -X POST `
+      -H "Host: app.contigoaccounting.com" `
+      -H "Origin: http://app.contigoaccounting.com" `
+      -H "Cookie: swd-authjs.session-token=$taskSessionToken; swd-active-brand=contigo" `
+      -F "$taskContactActionField=" `
+      -F "displayName=CRM role boundary contact" `
+      -F "firstName=" `
+      -F "lastName=" `
+      -F "email=" `
+      -F "phoneNumber=" `
+      -F "roleTitle=" `
+      -F "marketingConsent=UNKNOWN" `
+      "http://127.0.0.1:$taskAppPort/portal/contacts"
+    if ($taskSessionToken -eq "test-session-token" -and [int]$taskContactWriteStatus -ge 400) {
+      throw "OWNER contact creation control failed with HTTP $taskContactWriteStatus"
+    }
+
+    $taskCustomerWriteStatus = & curl.exe -s -o NUL -w "%{http_code}" -X POST `
+      -H "Host: app.contigoaccounting.com" `
+      -H "Origin: http://app.contigoaccounting.com" `
+      -H "Cookie: swd-authjs.session-token=$taskSessionToken; swd-active-brand=contigo" `
+      -F "$taskCustomerActionField=" `
+      -F "name=CRM role boundary customer" `
+      -F "code=" `
+      -F "legalName=" `
+      -F "status=PROSPECT" `
+      -F "websiteUrl=" `
+      -F "entityType=" `
+      -F "principalAddressLine1=" `
+      -F "principalAddressLine2=" `
+      -F "principalAddressCity=" `
+      -F "principalAddressRegion=" `
+      -F "principalAddressPostalCode=" `
+      -F "principalAddressCountryCode=" `
+      -F "primaryPhone=" `
+      -F "communicationEmail=" `
+      -F "noticesEmail=" `
+      -F "invoicingEmail=" `
+      "http://127.0.0.1:$taskAppPort/portal/customers"
+    if ($taskSessionToken -eq "test-session-token" -and [int]$taskCustomerWriteStatus -ge 400) {
+      throw "OWNER customer creation control failed with HTTP $taskCustomerWriteStatus"
+    }
+
+    $taskLeadWriteStatus = & curl.exe -s -o NUL -w "%{http_code}" -X POST `
+      -H "Host: app.contigoaccounting.com" `
+      -H "Origin: http://app.contigoaccounting.com" `
+      -H "Cookie: swd-authjs.session-token=$taskSessionToken; swd-active-brand=contigo" `
+      -F "$taskLeadActionField=" `
+      -F "name=CRM role boundary lead" `
+      -F "company=" `
+      -F "email=" `
+      -F "phoneE164=" `
+      -F "source=" `
+      -F "sourceDetail=" `
+      -F "expectedServices=" `
+      -F "notes=" `
+      -F "estimatedValue=" `
+      -F "valueCurrency=USD" `
+      "http://127.0.0.1:$taskAppPort/portal/leads"
+    if ($taskSessionToken -eq "test-session-token" -and [int]$taskLeadWriteStatus -ge 400) {
+      throw "OWNER lead creation control failed with HTTP $taskLeadWriteStatus"
+    }
+  }
+
+  $taskCrmRoleBoundaryQuery = @'
+SELECT
+  (SELECT count(*) FROM "Contact" WHERE "brandId" = 'contigo' AND "displayName" = 'CRM role boundary contact')::text || ',' ||
+  (SELECT count(*) FROM "CustomerAccount" WHERE "brandId" = 'contigo' AND name = 'CRM role boundary customer')::text || ',' ||
+  (SELECT count(*) FROM "Lead" WHERE "brandId" = 'contigo' AND name = 'CRM role boundary lead')::text;
+'@
+  $taskCrmRoleBoundaryCounts = (($taskCrmRoleBoundaryQuery | & docker.exe exec -i $taskContainer psql -U postgres -d southwestdigital -tA) -join "").Trim()
+  if ($taskCrmRoleBoundaryCounts -ne "1,1,1") {
+    throw "VIEWER mutation boundary failed or OWNER controls failed: $taskCrmRoleBoundaryCounts"
+  }
+
+  Write-Output "Verified branded login, trusted-host revocation, hostname-safe auth completion, operator-host isolation, platform DAL authorization, transactional brand onboarding, integration asset governance, deduplicated export jobs, future offboarding scheduling without early lockout, due offboarding with app-domain and brand-only access revocation, entry-brand selection, authorized switching, tampered-cookie fallback, CRM tenant isolation, and VIEWER read-only enforcement."
 }
 finally {
   if ($taskServer -and -not $taskServer.HasExited) {

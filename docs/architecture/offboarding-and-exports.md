@@ -29,7 +29,7 @@ Scheduling and revocation are deliberately separate:
 
 1. A Southwest platform administrator schedules service-end, access-end, and retention-end instants using offset-aware ISO 8601 values.
 2. The brand remains in its current state until the access-end instant. Scheduling alone cannot lock users out.
-3. At or after the access-end instant, an authorized transition changes the brand to `OFFBOARDING`, suspends only that brand's memberships and integrations, and ensures an export job exists.
+3. At or after the access-end instant, an authorized transition changes the brand to `OFFBOARDING`, suspends only that brand's memberships and integrations, disables its app domains, and ensures an export job exists. Users cannot use an offboarded hostname as a doorway to another brand.
 4. A worker produces and verifies the export, then records its storage key, checksum, size, completion time, and download expiry.
 5. After the retention instant and confirmed delivery, a separately reviewed deletion workflow removes or anonymizes brand-controlled live data in dependency order.
 6. Encrypted backups expire on their documented schedule. Deletion evidence and legally required operational records remain.
@@ -43,3 +43,4 @@ The current UI supports steps 1 and 3. Step 3 refuses to run before the schedule
 - restrictive brand and plan foreign keys so deletion cannot erase workflow evidence accidentally
 - nullable actor relationships so deletion of a user does not erase who initiated an action from the audit trail
 - no cascading brand deletion
+- an offboarding transition clears verification and disables every app-purpose domain for that brand

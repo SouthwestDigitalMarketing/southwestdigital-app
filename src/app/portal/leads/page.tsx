@@ -3,7 +3,7 @@ import { requireActiveBrandContext } from "@/lib/tenancy/current";
 import { createLeadAction } from "./actions";
 
 export default async function LeadsPage() {
-  const { dataContext } = await requireActiveBrandContext();
+  const { dataContext, canWrite } = await requireActiveBrandContext();
   const leads = await listLeads(dataContext);
 
   return (
@@ -49,7 +49,8 @@ export default async function LeadsPage() {
           )}
         </div>
 
-        <form action={createLeadAction} className="h-fit space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        {canWrite ? (
+          <form data-harness="create-lead-form" action={createLeadAction} className="h-fit space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <div>
             <h2 className="text-xl font-semibold">Add lead</h2>
             <p className="mt-1 text-sm text-slate-500">Attribution is optional and stays with this brand.</p>
@@ -82,9 +83,13 @@ export default async function LeadsPage() {
           <button type="submit" className="w-full cursor-pointer rounded-full bg-[var(--brand-primary)] px-5 py-3 font-semibold text-white">
             Save lead
           </button>
-        </form>
+          </form>
+        ) : (
+          <aside className="h-fit rounded-3xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
+            Your viewer access is read-only. Ask a brand administrator for member access to add leads.
+          </aside>
+        )}
       </div>
     </section>
   );
 }
-

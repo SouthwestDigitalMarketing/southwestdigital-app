@@ -7,7 +7,7 @@ type CustomerSearchParams = Promise<{ q?: string }>;
 const inputClass = "w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5";
 
 export default async function CustomersPage({ searchParams }: { searchParams: CustomerSearchParams }) {
-  const { dataContext } = await requireActiveBrandContext();
+  const { dataContext, canWrite } = await requireActiveBrandContext();
   const query = (await searchParams).q;
   const customers = await listCustomerAccounts(dataContext, query);
 
@@ -49,7 +49,8 @@ export default async function CustomersPage({ searchParams }: { searchParams: Cu
           ) : <p className="px-6 py-12 text-center text-slate-500">No customers found for this brand.</p>}
         </div>
 
-        <form action={createCustomerAccountAction} className="h-fit space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        {canWrite ? (
+          <form data-harness="create-customer-form" action={createCustomerAccountAction} className="h-fit space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <div><h2 className="text-xl font-semibold">Add customer</h2><p className="mt-1 text-sm text-slate-500">Saved to the active brand.</p></div>
           <input name="name" required placeholder="Customer or business name" className={inputClass} />
           <div className="grid grid-cols-2 gap-3"><input name="code" placeholder="Account code" className={inputClass} /><select name="status" defaultValue="ACTIVE" className={inputClass}><option value="PROSPECT">Prospect</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option><option value="ARCHIVED">Archived</option></select></div>
@@ -65,7 +66,12 @@ export default async function CustomersPage({ searchParams }: { searchParams: Cu
           <input name="noticesEmail" type="email" placeholder="Legal notices email" className={inputClass} />
           <input name="invoicingEmail" type="email" placeholder="Invoicing email" className={inputClass} />
           <button type="submit" className="w-full cursor-pointer rounded-full bg-[var(--brand-primary)] px-5 py-3 font-semibold text-white">Save customer</button>
-        </form>
+          </form>
+        ) : (
+          <aside className="h-fit rounded-3xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
+            Your viewer access is read-only. Ask a brand administrator for member access to add customers.
+          </aside>
+        )}
       </div>
     </section>
   );

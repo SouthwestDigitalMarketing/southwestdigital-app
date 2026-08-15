@@ -25,9 +25,7 @@ const requiredEmail = (name) => {
 };
 
 const bookkeepingOwnerEmail = requiredEmail("INITIAL_BOOKKEEPING_OWNER_EMAIL");
-const platformOwnerEmail = normalizeEmail(
-  process.env.INITIAL_PLATFORM_OWNER_EMAIL || bookkeepingOwnerEmail,
-);
+const platformOwnerEmail = requiredEmail("INITIAL_PLATFORM_OWNER_EMAIL");
 const dagnyEmail = normalizeEmail(process.env.INITIAL_DAGNY_EMAIL || "dagnymotor@gmail.com");
 
 const brands = [

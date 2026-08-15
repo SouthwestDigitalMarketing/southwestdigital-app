@@ -4,9 +4,16 @@ import { z } from "zod";
 const identifier = z.string().trim().min(1).max(64);
 const instant = z.iso.datetime({ offset: true }).transform((value) => new Date(value));
 
+export const implementedExportScopes = [
+  BrandDataExportScope.BRAND_CONFIGURATION,
+  BrandDataExportScope.CRM,
+  BrandDataExportScope.INTEGRATION_METADATA,
+  BrandDataExportScope.AUDIT_HISTORY,
+] as const;
+
 export const requestBrandDataExportSchema = z.object({
   brandId: identifier,
-  scopes: z.array(z.enum(BrandDataExportScope)).min(1).max(10),
+  scopes: z.array(z.enum(implementedExportScopes)).min(1).max(implementedExportScopes.length),
 });
 
 export const scheduleBrandOffboardingSchema = z

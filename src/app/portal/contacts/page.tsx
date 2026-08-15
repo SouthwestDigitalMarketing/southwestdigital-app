@@ -5,7 +5,7 @@ import { createContactAction } from "./actions";
 type ContactSearchParams = Promise<{ q?: string }>;
 
 export default async function ContactsPage({ searchParams }: { searchParams: ContactSearchParams }) {
-  const { dataContext } = await requireActiveBrandContext();
+  const { dataContext, canWrite } = await requireActiveBrandContext();
   const query = (await searchParams).q;
   const contacts = await listContacts(dataContext, query);
 
@@ -55,7 +55,8 @@ export default async function ContactsPage({ searchParams }: { searchParams: Con
           )}
         </div>
 
-        <form action={createContactAction} className="h-fit space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        {canWrite ? (
+          <form data-harness="create-contact-form" action={createContactAction} className="h-fit space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <div>
             <h2 className="text-xl font-semibold">Add contact</h2>
             <p className="mt-1 text-sm text-slate-500">Saved to the active brand.</p>
@@ -79,9 +80,13 @@ export default async function ContactsPage({ searchParams }: { searchParams: Con
           <button type="submit" className="w-full cursor-pointer rounded-full bg-[var(--brand-primary)] px-5 py-3 font-semibold text-white">
             Save contact
           </button>
-        </form>
+          </form>
+        ) : (
+          <aside className="h-fit rounded-3xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
+            Your viewer access is read-only. Ask a brand administrator for member access to add contacts.
+          </aside>
+        )}
       </div>
     </section>
   );
 }
-

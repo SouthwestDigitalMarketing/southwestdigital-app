@@ -28,17 +28,21 @@ export async function GET(request: NextRequest) {
     developmentOverride: process.env.DEV_BRAND_HOST,
     nodeEnv: process.env.NODE_ENV,
   });
-  if (
-    isPlatformHostname(hostname, process.env.PLATFORM_BASE_URL) &&
-    isPlatformAdministrator(session.user.platformRole)
-  ) {
-    return NextResponse.redirect(new URL("/platform/brands", requestOrigin));
+  const isPlatformEntry = isPlatformHostname(hostname, process.env.PLATFORM_BASE_URL);
+  if (isPlatformEntry) {
+    const destination = isPlatformAdministrator(session.user.platformRole)
+      ? "/platform/brands"
+      : "/access-denied";
+    return NextResponse.redirect(new URL(destination, requestOrigin));
   }
 
   const [entryBrand, accessibleBrands] = await Promise.all([
     resolveAppBrandByHostname(hostname),
     getAccessibleBrands(session.user.id, session.user.platformRole),
   ]);
+  if (!entryBrand) {
+    return NextResponse.redirect(new URL("/login?error=InvalidHost", requestOrigin));
+  }
   const selectedBrandId = selectInitialBrand({
     accessibleBrandIds: accessibleBrands.map(({ id }) => id),
     entryBrandId: entryBrand?.id,
