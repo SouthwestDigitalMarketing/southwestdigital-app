@@ -80,6 +80,41 @@ enum AuditActorType {
   SYSTEM
 }
 
+enum CustomerStatus {
+  PROSPECT
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum ContactStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum MarketingConsentStatus {
+  UNKNOWN
+  GRANTED
+  DENIED
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  PROPOSAL
+  WON
+  LOST
+  ARCHIVED
+}
+
+enum AttributionTouchType {
+  FIRST_TOUCH
+  LAST_TOUCH
+  CONVERSION
+  OTHER
+}
+
 model User {
   id            String            @id @default(cuid())
   name          String?
@@ -137,25 +172,31 @@ model VerificationToken {
 }
 
 model Brand {
-  id                    String             @id @default(cuid())
-  slug                  String             @unique
-  name                  String
-  legalName             String?
-  status                BrandStatus        @default(DRAFT)
-  subscriptionStartedAt DateTime?
-  subscriptionEndedAt   DateTime?
-  accessEndsAt          DateTime?
-  dataExportedAt        DateTime?
-  retentionEndsAt       DateTime?
-  deletedAt             DateTime?
-  domains               BrandDomain[]
-  memberships           BrandMembership[]
-  theme                 BrandTheme?
-  features              BrandFeature[]
-  integrations          BrandIntegration[]
-  auditEvents           AuditEvent[]
-  createdAt             DateTime           @default(now())
-  updatedAt             DateTime           @updatedAt
+  id                     String                 @id @default(cuid())
+  slug                   String                 @unique
+  name                   String
+  legalName              String?
+  status                 BrandStatus            @default(DRAFT)
+  subscriptionStartedAt  DateTime?
+  subscriptionEndedAt    DateTime?
+  accessEndsAt           DateTime?
+  dataExportedAt         DateTime?
+  retentionEndsAt        DateTime?
+  deletedAt              DateTime?
+  domains                BrandDomain[]
+  memberships            BrandMembership[]
+  theme                  BrandTheme?
+  features               BrandFeature[]
+  integrations           BrandIntegration[]
+  auditEvents            AuditEvent[]
+  customerAccounts       CustomerAccount[]
+  contacts               Contact[]
+  leads                  Lead[]
+  customerContacts       CustomerContact[]
+  leadContacts           LeadContact[]
+  leadAttributionTouches LeadAttributionTouch[]
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
 
   @@index([status])
 }
@@ -262,4 +303,168 @@ model AuditEvent {
   @@index([brandId, occurredAt])
   @@index([actorUserId, occurredAt])
   @@index([resourceType, resourceId, occurredAt])
+}
+
+model CustomerAccount {
+  id                          String            @id @default(cuid())
+  brandId                     String
+  code                        String?
+  name                        String
+  legalName                   String?
+  status                      CustomerStatus    @default(PROSPECT)
+  websiteUrl                  String?
+  entityType                  String?
+  principalAddressLine1       String?
+  principalAddressLine2       String?
+  principalAddressCity        String?
+  principalAddressRegion      String?
+  principalAddressPostalCode  String?
+  principalAddressCountryCode String?
+  primaryPhone                String?
+  communicationEmail          String?
+  noticesEmail                String?
+  invoicingEmail              String?
+  customFields                Json?
+  brand                       Brand             @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  contacts                    CustomerContact[]
+  convertedLeads              Lead[]
+  createdAt                   DateTime          @default(now())
+  updatedAt                   DateTime          @updatedAt
+
+  @@unique([brandId, id])
+  @@unique([brandId, code])
+  @@index([brandId, status, name])
+  @@index([brandId, createdAt])
+}
+
+model Contact {
+  id                     String                 @id @default(cuid())
+  brandId                String
+  displayName            String
+  firstName              String?
+  lastName               String?
+  email                  String?
+  normalizedEmail        String?
+  secondaryEmail         String?
+  businessEmail          String?
+  personalEmail          String?
+  phoneE164              String?
+  phoneNumber            String?
+  roleTitle              String?
+  status                 ContactStatus          @default(ACTIVE)
+  marketingConsent       MarketingConsentStatus @default(UNKNOWN)
+  marketingConsentAt     DateTime?
+  marketingConsentSource String?
+  customFields           Json?
+  brand                  Brand                  @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  customerLinks          CustomerContact[]
+  leadLinks              LeadContact[]
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+
+  @@unique([brandId, id])
+  @@index([brandId, status, displayName])
+  @@index([brandId, normalizedEmail])
+  @@index([brandId, createdAt])
+}
+
+model CustomerContact {
+  id                String          @id @default(cuid())
+  brandId           String
+  customerAccountId String
+  contactId         String
+  relationship      String?
+  isPrimary         Boolean         @default(false)
+  brand             Brand           @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  customerAccount   CustomerAccount @relation(fields: [brandId, customerAccountId], references: [brandId, id], onDelete: Restrict)
+  contact           Contact         @relation(fields: [brandId, contactId], references: [brandId, id], onDelete: Restrict)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@unique([brandId, customerAccountId, contactId])
+  @@index([brandId, contactId])
+  @@index([brandId, customerAccountId, isPrimary])
+}
+
+model Lead {
+  id                  String                 @id @default(cuid())
+  brandId             String
+  convertedCustomerId String?
+  name                String
+  company             String?
+  email               String?
+  normalizedEmail     String?
+  phoneE164           String?
+  status              LeadStatus             @default(NEW)
+  source              String?
+  sourceDetail        String?
+  expectedServices    String?
+  notes               String?
+  estimatedValue      Decimal?               @db.Decimal(14, 2)
+  valueCurrency       String?                @db.VarChar(3)
+  lostReason          String?
+  convertedAt         DateTime?
+  customFields        Json?
+  brand               Brand                  @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  convertedCustomer   CustomerAccount?       @relation(fields: [brandId, convertedCustomerId], references: [brandId, id], onDelete: Restrict)
+  contacts            LeadContact[]
+  attributionTouches  LeadAttributionTouch[]
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+
+  @@unique([brandId, id])
+  @@index([brandId, status, createdAt])
+  @@index([brandId, normalizedEmail])
+  @@index([brandId, source, createdAt])
+  @@index([brandId, convertedCustomerId])
+}
+
+model LeadContact {
+  id        String   @id @default(cuid())
+  brandId   String
+  leadId    String
+  contactId String
+  role      String?
+  isPrimary Boolean  @default(false)
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  lead      Lead     @relation(fields: [brandId, leadId], references: [brandId, id], onDelete: Restrict)
+  contact   Contact  @relation(fields: [brandId, contactId], references: [brandId, id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([brandId, leadId, contactId])
+  @@index([brandId, contactId])
+  @@index([brandId, leadId, isPrimary])
+}
+
+model LeadAttributionTouch {
+  id             String               @id @default(cuid())
+  brandId        String
+  leadId         String
+  touchType      AttributionTouchType @default(OTHER)
+  source         String?
+  medium         String?
+  campaign       String?
+  term           String?
+  content        String?
+  landingPageUrl String?
+  referrerUrl    String?
+  gclid          String?
+  gbraid         String?
+  wbraid         String?
+  fbclid         String?
+  msclkid        String?
+  metaCampaignId String?
+  metaAdSetId    String?
+  metaAdId       String?
+  metadata       Json?
+  capturedAt     DateTime             @default(now())
+  brand          Brand                @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  lead           Lead                 @relation(fields: [brandId, leadId], references: [brandId, id], onDelete: Restrict)
+
+  @@index([brandId, leadId, capturedAt])
+  @@index([brandId, source, medium, capturedAt])
+  @@index([brandId, campaign, capturedAt])
+  @@index([brandId, fbclid])
+  @@index([brandId, gclid])
 }
