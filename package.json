@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:auth-foundation:windows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-foundation.ps1",
     "prisma:generate": "dotenv -e .env.local -- prisma generate",
     "prisma:migrate": "dotenv -e .env.local -- prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",

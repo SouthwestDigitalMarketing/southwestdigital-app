@@ -86,3 +86,14 @@ export function selectInitialBrand(input: {
   return accessible.size === 1 ? accessible.values().next().value ?? null : null;
 }
 
+/** Uses an already-validated active choice before falling back to the entry host. */
+export function selectCurrentBrand(input: {
+  accessibleBrandIds: readonly string[];
+  activeBrandId?: string | null;
+  entryBrandId?: string | null;
+}): string | null {
+  const accessible = new Set(input.accessibleBrandIds);
+  if (input.activeBrandId && accessible.has(input.activeBrandId)) return input.activeBrandId;
+  if (input.entryBrandId && accessible.has(input.entryBrandId)) return input.entryBrandId;
+  return accessible.size === 1 ? accessible.values().next().value ?? null : null;
+}
