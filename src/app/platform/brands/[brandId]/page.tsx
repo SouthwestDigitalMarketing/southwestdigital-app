@@ -2,8 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   addPendingBrandDomainAction,
+  beginBrandOffboardingAction,
+  cancelBrandOffboardingAction,
   inviteBrandMemberAction,
+  requestBrandDataExportAction,
   saveBrandIntegrationAction,
+  scheduleBrandOffboardingAction,
   updateBrandThemeAction,
 } from "@/app/platform/actions";
 import { getBrandForAdministration } from "@/lib/platform/repository";
@@ -17,6 +21,12 @@ const integrationProviders = [
   ["GOOGLE_SEARCH_CONSOLE", "Google Search Console"],
 ] as const;
 
+function formatBytes(byteSize: bigint | null): string {
+  if (byteSize === null) return "Size pending";
+  const megabytes = Number(byteSize) / 1024 / 1024;
+  return `${megabytes.toFixed(megabytes >= 10 ? 0 : 1)} MB`;
+}
+
 export default async function BrandAdministrationPage({
   params,
 }: {
@@ -28,6 +38,10 @@ export default async function BrandAdministrationPage({
 
   const verifiedAppDomain = brand.domains.some((domain) => domain.purpose === "APP" && domain.status === "VERIFIED");
   const brandOwner = brand.memberships.some((membership) => membership.role === "OWNER" && membership.status !== "SUSPENDED");
+  const liveOffboardingPlan = brand.offboardingPlans.find((plan) => plan.status === "PLANNED" || plan.status === "IN_PROGRESS");
+  const canBeginOffboarding = Boolean(
+    liveOffboardingPlan?.status === "PLANNED" && liveOffboardingPlan.accessEndsAt <= new Date(),
+  );
   const theme = brand.theme ?? {
     logoUrl: null,
     supportEmail: null,
@@ -216,6 +230,126 @@ export default async function BrandAdministrationPage({
               Save asset record
             </button>
           </form>
+        </section>
+
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm xl:col-span-2">
+          <div className="grid gap-8 xl:grid-cols-2">
+            <div>
+              <h2 className="text-xl font-semibold">Portable data exports</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Large exports run as background jobs and will be written to private object storage with a checksum and expiring download window.
+              </p>
+
+              {brand.dataExports.length ? (
+                <ul className="mt-5 divide-y divide-slate-100 rounded-2xl border border-slate-200">
+                  {brand.dataExports.map((dataExport) => (
+                    <li key={dataExport.id} className="px-5 py-4 text-sm">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <p className="font-semibold text-slate-950">{dataExport.format.replaceAll("_", " ").toLowerCase()}</p>
+                        <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-700">{dataExport.status.toLowerCase()}</span>
+                        <span className="ml-auto text-slate-500">{formatBytes(dataExport.byteSize)}</span>
+                      </div>
+                      <p className="mt-2 text-slate-500">Requested {dataExport.requestedAt.toISOString()}</p>
+                      <p className="mt-1 text-slate-500">{dataExport.requestedScopes.map((scope) => scope.replaceAll("_", " ").toLowerCase()).join(" · ")}</p>
+                      {dataExport.failureCode ? <p className="mt-2 text-rose-700">Failure: {dataExport.failureCode}</p> : null}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-5 rounded-2xl bg-slate-50 px-5 py-6 text-sm text-slate-500">No exports requested.</p>
+              )}
+
+              <form action={requestBrandDataExportAction} data-harness="data-export-form" className="mt-5 rounded-2xl border border-slate-200 p-5">
+                <input type="hidden" name="brandId" value={brand.id} />
+                <p className="text-sm font-semibold text-slate-800">Include in export</p>
+                <div className="mt-3 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
+                  {[
+                    ["BRAND_CONFIGURATION", "Brand configuration"],
+                    ["CRM", "Contacts, leads, and customers"],
+                    ["INTEGRATION_METADATA", "Public integration metadata"],
+                    ["AUDIT_HISTORY", "Brand audit history"],
+                  ].map(([value, label]) => (
+                    <label key={value} className="flex items-center gap-2">
+                      <input type="checkbox" name="scopes" value={value} defaultChecked /> {label}
+                    </label>
+                  ))}
+                </div>
+                <p className="mt-3 text-xs leading-5 text-slate-500">
+                  Secrets, Southwest-owned source code, and the rented website deployment are excluded. GA4 and advertising history remain in the brand-owned external accounts.
+                </p>
+                <button type="submit" className="mt-4 cursor-pointer rounded-full bg-slate-950 px-5 py-2.5 font-semibold text-white">
+                  Request export
+                </button>
+              </form>
+            </div>
+
+            <div>
+              <h2 className="text-xl font-semibold">Offboarding plan</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Scheduling records contractual dates. It does not revoke access early.
+              </p>
+
+              {liveOffboardingPlan ? (
+                <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-semibold">{liveOffboardingPlan.status.replaceAll("_", " ").toLowerCase()}</p>
+                    <span>Plan {liveOffboardingPlan.id}</span>
+                  </div>
+                  <dl className="mt-4 grid gap-2 sm:grid-cols-[150px_1fr]">
+                    <dt className="font-semibold">Service ends</dt><dd>{liveOffboardingPlan.serviceEndsAt.toISOString()}</dd>
+                    <dt className="font-semibold">Access ends</dt><dd>{liveOffboardingPlan.accessEndsAt.toISOString()}</dd>
+                    <dt className="font-semibold">Retention ends</dt><dd>{liveOffboardingPlan.retentionEndsAt.toISOString()}</dd>
+                  </dl>
+                  {liveOffboardingPlan.status === "PLANNED" ? (
+                    <div className="mt-5 grid gap-4 border-t border-amber-200 pt-5 lg:grid-cols-2">
+                      <form action={beginBrandOffboardingAction} data-harness="begin-offboarding-form">
+                        <input type="hidden" name="brandId" value={brand.id} />
+                        <input type="hidden" name="planId" value={liveOffboardingPlan.id} />
+                        <label className="block font-semibold">
+                          Re-enter <span className="font-mono">{brand.slug}</span> when the access-end instant arrives
+                          <input name="confirmSlug" required className={inputClass} />
+                        </label>
+                        <button
+                          type="submit"
+                          disabled={!canBeginOffboarding}
+                          className="mt-3 rounded-full bg-rose-800 px-5 py-2.5 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          Begin and revoke access
+                        </button>
+                      </form>
+                      <form action={cancelBrandOffboardingAction}>
+                        <input type="hidden" name="brandId" value={brand.id} />
+                        <input type="hidden" name="planId" value={liveOffboardingPlan.id} />
+                        <label className="block font-semibold">
+                          Re-enter <span className="font-mono">{brand.slug}</span> to cancel this plan
+                          <input name="confirmSlug" required className={inputClass} />
+                        </label>
+                        <button type="submit" className="mt-3 cursor-pointer rounded-full border border-amber-400 bg-white px-5 py-2.5 font-semibold text-amber-950">
+                          Cancel plan
+                        </button>
+                      </form>
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <form action={scheduleBrandOffboardingAction} data-harness="offboarding-plan-form" className="mt-5 grid gap-4 rounded-2xl border border-slate-200 p-5">
+                  <input type="hidden" name="brandId" value={brand.id} />
+                  <p className="rounded-xl bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-600">
+                    Enter complete ISO 8601 instants with an explicit offset, such as <span className="font-mono">2026-09-01T17:00:00+10:00</span>. This avoids ambiguity between Texas and Australian time zones.
+                  </p>
+                  <label className="text-sm font-semibold text-slate-700">Service ends<input name="serviceEndsAt" required placeholder="2026-09-01T17:00:00+10:00" className={inputClass} /></label>
+                  <label className="text-sm font-semibold text-slate-700">Interactive access ends<input name="accessEndsAt" required placeholder="2026-09-02T17:00:00+10:00" className={inputClass} /></label>
+                  <label className="text-sm font-semibold text-slate-700">Live-data retention ends<input name="retentionEndsAt" required placeholder="2026-12-01T17:00:00+11:00" className={inputClass} /></label>
+                  <label className="text-sm font-semibold text-slate-700">Internal reason<textarea name="reason" rows={3} className={inputClass} /></label>
+                  <label className="text-sm font-semibold text-slate-700">
+                    Type <span className="font-mono">{brand.slug}</span> to confirm the plan
+                    <input name="confirmSlug" required className={inputClass} />
+                  </label>
+                  <button type="submit" className="cursor-pointer rounded-full bg-slate-950 px-5 py-3 font-semibold text-white">Schedule offboarding</button>
+                </form>
+              )}
+            </div>
+          </div>
         </section>
       </div>
     </section>

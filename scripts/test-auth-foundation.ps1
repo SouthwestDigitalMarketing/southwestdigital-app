@@ -53,7 +53,8 @@ try {
 INSERT INTO "User" (id, name, email, status, "platformRole", "createdAt", "updatedAt")
 VALUES
   ('dagny', 'Dagny', 'dagny@example.test', 'ACTIVE', 'NONE', now(), now()),
-  ('platform-owner', 'Southwest Owner', 'owner@southwestdigital.test', 'ACTIVE', 'OWNER', now(), now());
+  ('platform-owner', 'Southwest Owner', 'owner@southwestdigital.test', 'ACTIVE', 'OWNER', now(), now()),
+  ('bookkeeping-owner', 'Bookkeeping Owner', 'owner@bookkeeping.test', 'ACTIVE', 'NONE', now(), now());
 
 INSERT INTO "Brand" (id, slug, name, status, "createdAt", "updatedAt") VALUES
   ('contigo', 'contigo-accounting', 'Contigo Accounting', 'ACTIVE', now(), now()),
@@ -71,7 +72,8 @@ INSERT INTO "BrandDomain" (id, "brandId", hostname, purpose, status, "isPrimary"
 
 INSERT INTO "BrandMembership" (id, "brandId", "userId", role, status, "createdAt", "updatedAt") VALUES
   ('member-contigo', 'contigo', 'dagny', 'OWNER', 'ACTIVE', now(), now()),
-  ('member-melbourne', 'melbourne', 'dagny', 'OWNER', 'ACTIVE', now(), now());
+  ('member-melbourne', 'melbourne', 'dagny', 'OWNER', 'ACTIVE', now(), now()),
+  ('member-bookkeeping', 'bookkeeping', 'bookkeeping-owner', 'OWNER', 'ACTIVE', now(), now());
 
 INSERT INTO "Session" (id, "sessionToken", "userId", expires)
 VALUES
@@ -280,6 +282,146 @@ WHERE b.slug = 'harness-test-brand'
     throw "Integration governance action did not persist pending public metadata without secrets"
   }
 
+  $taskMelbourneAdminPage = (& curl.exe -s `
+    -H "Host: localhost:$taskAppPort" `
+    -H "Cookie: authjs.session-token=test-platform-session-token" `
+    "http://127.0.0.1:$taskAppPort/platform/brands/melbourne") -join "`n"
+  $taskExportActionMatch = [regex]::Match(
+    $taskMelbourneAdminPage,
+    '<form[^>]*data-harness="data-export-form"[^>]*><input type="hidden" name="(\$ACTION_ID_[^"]+)"',
+    [System.Text.RegularExpressions.RegexOptions]::Singleline
+  )
+  $taskOffboardingActionMatch = [regex]::Match(
+    $taskMelbourneAdminPage,
+    '<form[^>]*data-harness="offboarding-plan-form"[^>]*><input type="hidden" name="(\$ACTION_ID_[^"]+)"',
+    [System.Text.RegularExpressions.RegexOptions]::Singleline
+  )
+  if (-not $taskExportActionMatch.Success -or -not $taskOffboardingActionMatch.Success) {
+    throw "Could not find export and offboarding actions"
+  }
+
+  $taskExportActionField = $taskExportActionMatch.Groups[1].Value
+  for ($taskExportAttempt = 0; $taskExportAttempt -lt 2; $taskExportAttempt++) {
+    $taskExportStatus = & curl.exe -s -o NUL -w "%{http_code}" -X POST `
+      -H "Host: localhost:$taskAppPort" `
+      -H "Origin: http://localhost:$taskAppPort" `
+      -H "Cookie: authjs.session-token=test-platform-session-token" `
+      -F "$taskExportActionField=" `
+      -F "brandId=melbourne" `
+      -F "scopes=BRAND_CONFIGURATION" `
+      -F "scopes=CRM" `
+      -F "scopes=INTEGRATION_METADATA" `
+      -F "scopes=AUDIT_HISTORY" `
+      "http://127.0.0.1:$taskAppPort/platform/brands/melbourne"
+    if ([int]$taskExportStatus -ge 400) {
+      throw "Brand export request failed with HTTP $taskExportStatus"
+    }
+  }
+
+  $taskOffboardingActionField = $taskOffboardingActionMatch.Groups[1].Value
+  $taskOffboardingStatus = & curl.exe -s -o NUL -w "%{http_code}" -X POST `
+    -H "Host: localhost:$taskAppPort" `
+    -H "Origin: http://localhost:$taskAppPort" `
+    -H "Cookie: authjs.session-token=test-platform-session-token" `
+    -F "$taskOffboardingActionField=" `
+    -F "brandId=melbourne" `
+    -F "serviceEndsAt=2030-09-01T17:00:00+10:00" `
+    -F "accessEndsAt=2030-09-02T17:00:00+10:00" `
+    -F "retentionEndsAt=2030-12-01T17:00:00+11:00" `
+    -F "reason=Disposable future-dated plan" `
+    -F "confirmSlug=melbourne-cfo" `
+    "http://127.0.0.1:$taskAppPort/platform/brands/melbourne"
+  if ([int]$taskOffboardingStatus -ge 400) {
+    throw "Brand offboarding scheduling failed with HTTP $taskOffboardingStatus"
+  }
+
+  $taskOffboardingQuery = @'
+SELECT count(*)
+FROM "Brand" b
+JOIN "BrandOffboardingPlan" p ON p."brandId" = b.id
+JOIN "BrandMembership" m ON m."brandId" = b.id AND m."userId" = 'dagny'
+JOIN "BrandDataExport" e ON e."brandId" = b.id
+WHERE b.id = 'melbourne'
+  AND b.status = 'ACTIVE'
+  AND m.status = 'ACTIVE'
+  AND p.status = 'PLANNED'
+  AND p."accessEndsAt" > now()
+  AND e.status = 'REQUESTED'
+  AND array_length(e."requestedScopes", 1) = 4
+  AND (SELECT count(*) FROM "BrandDataExport" WHERE "brandId" = b.id AND status IN ('REQUESTED', 'PROCESSING')) = 1
+  AND EXISTS (SELECT 1 FROM "AuditEvent" WHERE "brandId" = b.id AND action = 'brand.data_export.requested')
+  AND EXISTS (SELECT 1 FROM "AuditEvent" WHERE "brandId" = b.id AND action = 'brand.offboarding.scheduled');
+'@
+  $taskOffboardingRowCount = (($taskOffboardingQuery | & docker.exe exec -i $taskContainer psql -U postgres -d southwestdigital -tA) -join "").Trim()
+  if ($taskOffboardingRowCount -ne "1") {
+    throw "Future offboarding schedule or deduplicated export job did not preserve current access"
+  }
+
+  $taskPastOffboardingStatus = & curl.exe -s -o NUL -w "%{http_code}" -X POST `
+    -H "Host: localhost:$taskAppPort" `
+    -H "Origin: http://localhost:$taskAppPort" `
+    -H "Cookie: authjs.session-token=test-platform-session-token" `
+    -F "$taskOffboardingActionField=" `
+    -F "brandId=bookkeeping" `
+    -F "serviceEndsAt=2025-01-01T17:00:00-06:00" `
+    -F "accessEndsAt=2025-01-02T17:00:00-06:00" `
+    -F "retentionEndsAt=2025-04-01T17:00:00-05:00" `
+    -F "reason=Disposable due offboarding plan" `
+    -F "confirmSlug=bookkeeping-conroe" `
+    "http://127.0.0.1:$taskAppPort/platform/brands/bookkeeping"
+  if ([int]$taskPastOffboardingStatus -ge 400) {
+    throw "Due offboarding scheduling failed with HTTP $taskPastOffboardingStatus"
+  }
+
+  $taskBookkeepingAdminPage = (& curl.exe -s `
+    -H "Host: localhost:$taskAppPort" `
+    -H "Cookie: authjs.session-token=test-platform-session-token" `
+    "http://127.0.0.1:$taskAppPort/platform/brands/bookkeeping") -join "`n"
+  $taskBeginOffboardingMatch = [regex]::Match(
+    $taskBookkeepingAdminPage,
+    '<form[^>]*data-harness="begin-offboarding-form"[^>]*>.*?<input type="hidden" name="(\$ACTION_ID_[^"]+)".*?<input type="hidden" name="planId" value="([^"]+)"',
+    [System.Text.RegularExpressions.RegexOptions]::Singleline
+  )
+  if (-not $taskBeginOffboardingMatch.Success) {
+    throw "Could not find due offboarding transition action"
+  }
+  $taskBeginOffboardingActionField = $taskBeginOffboardingMatch.Groups[1].Value
+  $taskBookkeepingPlanId = $taskBeginOffboardingMatch.Groups[2].Value
+  $taskBeginOffboardingStatus = & curl.exe -s -o NUL -w "%{http_code}" -X POST `
+    -H "Host: localhost:$taskAppPort" `
+    -H "Origin: http://localhost:$taskAppPort" `
+    -H "Cookie: authjs.session-token=test-platform-session-token" `
+    -F "$taskBeginOffboardingActionField=" `
+    -F "brandId=bookkeeping" `
+    -F "planId=$taskBookkeepingPlanId" `
+    -F "confirmSlug=bookkeeping-conroe" `
+    "http://127.0.0.1:$taskAppPort/platform/brands/bookkeeping"
+  if ([int]$taskBeginOffboardingStatus -ge 400) {
+    throw "Due offboarding transition failed with HTTP $taskBeginOffboardingStatus"
+  }
+
+  $taskBeganOffboardingQuery = @'
+SELECT count(*)
+FROM "Brand" b
+JOIN "BrandOffboardingPlan" p ON p."brandId" = b.id
+JOIN "BrandMembership" m ON m."brandId" = b.id
+JOIN "BrandDataExport" e ON e."brandId" = b.id AND e."offboardingPlanId" = p.id
+WHERE b.id = 'bookkeeping'
+  AND b.status = 'OFFBOARDING'
+  AND p.status = 'IN_PROGRESS'
+  AND p."startedAt" IS NOT NULL
+  AND m."userId" = 'bookkeeping-owner'
+  AND m.status = 'SUSPENDED'
+  AND e.status = 'REQUESTED'
+  AND EXISTS (SELECT 1 FROM "AuditEvent" WHERE "brandId" = b.id AND action = 'brand.offboarding.started')
+  AND EXISTS (SELECT 1 FROM "BrandMembership" WHERE "brandId" = 'contigo' AND "userId" = 'dagny' AND status = 'ACTIVE')
+  AND EXISTS (SELECT 1 FROM "BrandMembership" WHERE "brandId" = 'melbourne' AND "userId" = 'dagny' AND status = 'ACTIVE');
+'@
+  $taskBeganOffboardingRowCount = (($taskBeganOffboardingQuery | & docker.exe exec -i $taskContainer psql -U postgres -d southwestdigital -tA) -join "").Trim()
+  if ($taskBeganOffboardingRowCount -ne "1") {
+    throw "Due offboarding transition did not isolate access revocation and create its export"
+  }
+
   $taskSwitchedPortal = (& curl.exe -s `
     -H "Host: app.contigoaccounting.com" `
     -H "Cookie: authjs.session-token=test-session-token; swd-active-brand=melbourne" `
@@ -312,7 +454,7 @@ WHERE b.slug = 'harness-test-brand'
     throw "Lead page did not preserve brand isolation"
   }
 
-  Write-Output "Verified branded login, unknown-host rejection, hostname-safe auth completion, platform-admin routing and authorization, transactional brand onboarding, integration asset governance, entry-brand selection, authorized switching, tampered-cookie fallback, and CRM page isolation."
+  Write-Output "Verified branded login, unknown-host rejection, hostname-safe auth completion, platform-admin routing and authorization, transactional brand onboarding, integration asset governance, deduplicated export jobs, future offboarding scheduling without early lockout, due offboarding with brand-only access revocation and export creation, entry-brand selection, authorized switching, tampered-cookie fallback, and CRM page isolation."
 }
 finally {
   if ($taskServer -and -not $taskServer.HasExited) {

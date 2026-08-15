@@ -81,6 +81,35 @@ enum IntegrationAssetOwner {
   THIRD_PARTY
 }
 
+enum OffboardingPlanStatus {
+  PLANNED
+  IN_PROGRESS
+  CANCELLED
+  COMPLETED
+}
+
+enum BrandDataExportStatus {
+  REQUESTED
+  PROCESSING
+  READY
+  FAILED
+  EXPIRED
+  CANCELLED
+}
+
+enum BrandDataExportFormat {
+  JSONL_ZIP_V1
+}
+
+enum BrandDataExportScope {
+  BRAND_CONFIGURATION
+  CRM
+  INTEGRATION_METADATA
+  AUDIT_HISTORY
+  DOCUMENTS
+  WEBSITE_CONTENT
+}
+
 enum AuditActorType {
   USER
   SYSTEM
@@ -122,19 +151,21 @@ enum AttributionTouchType {
 }
 
 model User {
-  id            String            @id @default(cuid())
-  name          String?
-  email         String            @unique
-  emailVerified DateTime?
-  image         String?
-  status        UserStatus        @default(INVITED)
-  platformRole  PlatformRole      @default(NONE)
-  accounts      Account[]
-  sessions      Session[]
-  memberships   BrandMembership[]
-  auditEvents   AuditEvent[]
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+  id                        String                 @id @default(cuid())
+  name                      String?
+  email                     String                 @unique
+  emailVerified             DateTime?
+  image                     String?
+  status                    UserStatus             @default(INVITED)
+  platformRole              PlatformRole           @default(NONE)
+  accounts                  Account[]
+  sessions                  Session[]
+  memberships               BrandMembership[]
+  auditEvents               AuditEvent[]
+  initiatedOffboardingPlans BrandOffboardingPlan[] @relation("OffboardingInitiator")
+  requestedDataExports      BrandDataExport[]      @relation("DataExportRequester")
+  createdAt                 DateTime               @default(now())
+  updatedAt                 DateTime               @updatedAt
 
   @@index([status])
   @@index([platformRole])
@@ -201,6 +232,8 @@ model Brand {
   customerContacts       CustomerContact[]
   leadContacts           LeadContact[]
   leadAttributionTouches LeadAttributionTouch[]
+  offboardingPlans       BrandOffboardingPlan[]
+  dataExports            BrandDataExport[]
   createdAt              DateTime               @default(now())
   updatedAt              DateTime               @updatedAt
 
@@ -315,6 +348,58 @@ model AuditEvent {
   @@index([brandId, occurredAt])
   @@index([actorUserId, occurredAt])
   @@index([resourceType, resourceId, occurredAt])
+}
+
+model BrandOffboardingPlan {
+  id                String                @id @default(cuid())
+  brandId           String
+  status            OffboardingPlanStatus @default(PLANNED)
+  serviceEndsAt     DateTime
+  accessEndsAt      DateTime
+  retentionEndsAt   DateTime
+  reason            String?               @db.Text
+  initiatedByUserId String?
+  startedAt         DateTime?
+  cancelledAt       DateTime?
+  completedAt       DateTime?
+  brand             Brand                 @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  initiatedBy       User?                 @relation("OffboardingInitiator", fields: [initiatedByUserId], references: [id], onDelete: SetNull)
+  dataExports       BrandDataExport[]
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  @@index([brandId, status])
+  @@index([status, accessEndsAt])
+}
+
+model BrandDataExport {
+  id                String                 @id @default(cuid())
+  brandId           String
+  offboardingPlanId String?
+  requestedByUserId String?
+  status            BrandDataExportStatus  @default(REQUESTED)
+  format            BrandDataExportFormat  @default(JSONL_ZIP_V1)
+  requestedScopes   BrandDataExportScope[]
+  manifestVersion   Int                    @default(1)
+  storageProvider   String?
+  storageKey        String?
+  checksumSha256    String?
+  byteSize          BigInt?
+  requestedAt       DateTime               @default(now())
+  startedAt         DateTime?
+  completedAt       DateTime?
+  expiresAt         DateTime?
+  failedAt          DateTime?
+  failureCode       String?
+  brand             Brand                  @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  offboardingPlan   BrandOffboardingPlan?  @relation(fields: [offboardingPlanId], references: [id], onDelete: Restrict)
+  requestedBy       User?                  @relation("DataExportRequester", fields: [requestedByUserId], references: [id], onDelete: SetNull)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  @@index([brandId, status, requestedAt])
+  @@index([status, requestedAt])
+  @@index([offboardingPlanId])
 }
 
 model CustomerAccount {

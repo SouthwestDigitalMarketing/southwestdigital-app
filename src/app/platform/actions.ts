@@ -4,6 +4,12 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { saveBrandIntegration } from "@/lib/integrations/repository";
 import {
+  beginBrandOffboarding,
+  cancelBrandOffboarding,
+  requestBrandDataExport,
+  scheduleBrandOffboarding,
+} from "@/lib/offboarding/repository";
+import {
   addPendingBrandDomain,
   createBrandOnboarding,
   inviteBrandMember,
@@ -83,6 +89,50 @@ export async function saveBrandIntegrationAction(formData: FormData) {
     externalPropertyId: formData.get("externalPropertyId"),
     publicIdentifier: formData.get("publicIdentifier"),
     notes: formData.get("notes"),
+  });
+  revalidatePath(`/platform/brands/${brandId}`);
+}
+
+export async function requestBrandDataExportAction(formData: FormData) {
+  const { session } = await requirePlatformAdministrator();
+  const brandId = formData.get("brandId");
+  await requestBrandDataExport(session.user.id, {
+    brandId,
+    scopes: formData.getAll("scopes"),
+  });
+  revalidatePath(`/platform/brands/${brandId}`);
+}
+
+export async function scheduleBrandOffboardingAction(formData: FormData) {
+  const { session } = await requirePlatformAdministrator();
+  const brandId = formData.get("brandId");
+  await scheduleBrandOffboarding(session.user.id, {
+    brandId,
+    confirmSlug: formData.get("confirmSlug"),
+    serviceEndsAt: formData.get("serviceEndsAt"),
+    accessEndsAt: formData.get("accessEndsAt"),
+    retentionEndsAt: formData.get("retentionEndsAt"),
+    reason: formData.get("reason"),
+  });
+  revalidatePath(`/platform/brands/${brandId}`);
+}
+
+export async function beginBrandOffboardingAction(formData: FormData) {
+  const { session } = await requirePlatformAdministrator();
+  const brandId = formData.get("brandId");
+  await beginBrandOffboarding(session.user.id, {
+    planId: formData.get("planId"),
+    confirmSlug: formData.get("confirmSlug"),
+  });
+  revalidatePath(`/platform/brands/${brandId}`);
+}
+
+export async function cancelBrandOffboardingAction(formData: FormData) {
+  const { session } = await requirePlatformAdministrator();
+  const brandId = formData.get("brandId");
+  await cancelBrandOffboarding(session.user.id, {
+    planId: formData.get("planId"),
+    confirmSlug: formData.get("confirmSlug"),
   });
   revalidatePath(`/platform/brands/${brandId}`);
 }

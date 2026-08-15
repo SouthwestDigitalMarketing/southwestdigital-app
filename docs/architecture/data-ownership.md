@@ -40,3 +40,5 @@ Southwest may manage brand-controlled external systems through delegated or part
 8. Preserve only legally required billing, security, and deletion evidence.
 
 Website code and a functioning website deployment are not included in the data export unless a separate transfer or buyout agreement says otherwise.
+
+The engineering workflow and scalability constraints are defined in [Offboarding and portable data exports](./offboarding-and-exports.md).

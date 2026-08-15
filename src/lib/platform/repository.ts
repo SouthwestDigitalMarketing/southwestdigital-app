@@ -56,6 +56,40 @@ const brandAdministrationSelect = {
       lastVerifiedAt: true,
     },
   },
+  offboardingPlans: {
+    orderBy: { createdAt: "desc" },
+    take: 5,
+    select: {
+      id: true,
+      status: true,
+      serviceEndsAt: true,
+      accessEndsAt: true,
+      retentionEndsAt: true,
+      reason: true,
+      startedAt: true,
+      cancelledAt: true,
+      completedAt: true,
+      initiatedBy: { select: { name: true, email: true } },
+    },
+  },
+  dataExports: {
+    orderBy: { requestedAt: "desc" },
+    take: 10,
+    select: {
+      id: true,
+      status: true,
+      format: true,
+      requestedScopes: true,
+      manifestVersion: true,
+      byteSize: true,
+      requestedAt: true,
+      startedAt: true,
+      completedAt: true,
+      expiresAt: true,
+      failureCode: true,
+      requestedBy: { select: { name: true, email: true } },
+    },
+  },
 } satisfies Prisma.BrandSelect;
 
 export async function listBrandsForAdministration() {
