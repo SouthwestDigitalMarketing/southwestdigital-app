@@ -3,11 +3,19 @@ import { notFound } from "next/navigation";
 import {
   addPendingBrandDomainAction,
   inviteBrandMemberAction,
+  saveBrandIntegrationAction,
   updateBrandThemeAction,
 } from "@/app/platform/actions";
 import { getBrandForAdministration } from "@/lib/platform/repository";
 
 const inputClass = "mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5";
+const integrationProviders = [
+  ["GA4", "Google Analytics 4"],
+  ["GTM", "Google Tag Manager"],
+  ["META_ADS", "Meta Ads / Pixel"],
+  ["GOOGLE_ADS", "Google Ads"],
+  ["GOOGLE_SEARCH_CONSOLE", "Google Search Console"],
+] as const;
 
 export default async function BrandAdministrationPage({
   params,
@@ -119,6 +127,95 @@ export default async function BrandAdministrationPage({
               </div>
             </div>
           </div>
+        </section>
+
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm xl:col-span-2">
+          <div>
+            <h2 className="text-xl font-semibold">Analytics and advertising assets</h2>
+            <p className="mt-1 max-w-3xl text-sm text-slate-500">
+              Public asset identifiers and ownership are recorded here. Credentials and API tokens are never entered in this form.
+            </p>
+          </div>
+
+          {brand.integrations.length ? (
+            <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200">
+              <ul className="divide-y divide-slate-100">
+                {brand.integrations.map((integration) => (
+                  <li key={integration.id} className="grid gap-3 bg-white px-5 py-4 text-sm md:grid-cols-[minmax(200px,1fr)_minmax(190px,1fr)_minmax(180px,1fr)_auto] md:items-center">
+                    <div>
+                      <p className="font-semibold text-slate-950">{integration.displayName ?? integration.key}</p>
+                      <p className="text-slate-500">{integration.provider.replaceAll("_", " ").toLowerCase()}</p>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-slate-700">{integration.publicIdentifier ?? "No public identifier"}</p>
+                      <p className="text-slate-500">Property {integration.externalPropertyId ?? "not recorded"}</p>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-slate-700">{integration.assetOwner.replaceAll("_", " ").toLowerCase()} owned</p>
+                      <p className="text-slate-500">Account {integration.externalAccountId ?? "not recorded"}</p>
+                    </div>
+                    <span className="rounded-full bg-amber-100 px-3 py-1 text-center font-semibold text-amber-800">
+                      {integration.status.toLowerCase()}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p className="mt-5 rounded-2xl bg-slate-50 px-5 py-6 text-sm text-slate-500">No analytics or advertising assets recorded.</p>
+          )}
+
+          <form
+            action={saveBrandIntegrationAction}
+            data-harness="integration-form"
+            className="mt-6 grid gap-4 border-t border-slate-100 pt-6 md:grid-cols-2 xl:grid-cols-4"
+          >
+            <input type="hidden" name="brandId" value={brand.id} />
+            <label className="text-sm font-semibold text-slate-700">
+              Internal key
+              <input name="key" required placeholder="website-ga4" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" className={inputClass} />
+            </label>
+            <label className="text-sm font-semibold text-slate-700">
+              Provider
+              <select name="provider" className={inputClass}>
+                {integrationProviders.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </label>
+            <label className="text-sm font-semibold text-slate-700">
+              Asset owner
+              <select name="assetOwner" defaultValue="BRAND" className={inputClass}>
+                <option value="BRAND">Brand / client</option>
+                <option value="SOUTHWEST_DIGITAL">Southwest Digital</option>
+                <option value="THIRD_PARTY">Third party</option>
+              </select>
+            </label>
+            <label className="text-sm font-semibold text-slate-700">
+              Display name
+              <input name="displayName" placeholder="Website GA4" className={inputClass} />
+            </label>
+            <label className="text-sm font-semibold text-slate-700">
+              Public identifier
+              <input name="publicIdentifier" placeholder="G-…, GTM-…, or Pixel ID" className={inputClass} />
+            </label>
+            <label className="text-sm font-semibold text-slate-700">
+              External account ID
+              <input name="externalAccountId" className={inputClass} />
+            </label>
+            <label className="text-sm font-semibold text-slate-700">
+              External property ID
+              <input name="externalPropertyId" className={inputClass} />
+            </label>
+            <label className="text-sm font-semibold text-slate-700">
+              Ownership/access note
+              <input name="notes" placeholder="Client owns; Southwest has delegated access" className={inputClass} />
+            </label>
+            <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900 md:col-span-2 xl:col-span-3">
+              Saving places the integration in <strong>pending</strong> status. A later provider-specific verification step is required before it becomes active.
+            </div>
+            <button type="submit" className="cursor-pointer rounded-full bg-slate-950 px-5 py-3 font-semibold text-white">
+              Save asset record
+            </button>
+          </form>
         </section>
       </div>
     </section>

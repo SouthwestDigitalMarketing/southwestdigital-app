@@ -196,6 +196,48 @@ INSERT INTO "Lead" (id, "brandId", name, status, "createdAt", "updatedAt") VALUE
   if ($taskOnboardingResponse -notmatch "location: /platform/brands/") {
     throw "Platform onboarding action did not redirect to the created brand: $taskOnboardingResponse"
   }
+  $taskCreatedBrandPathMatch = [regex]::Match(
+    $taskOnboardingResponse,
+    '(?:location|x-action-redirect):\s*(/platform/brands/[^;\r\n]+)',
+    [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+  )
+  if (-not $taskCreatedBrandPathMatch.Success) {
+    throw "Could not determine the created brand administration path"
+  }
+  $taskCreatedBrandPath = $taskCreatedBrandPathMatch.Groups[1].Value.Trim()
+  $taskCreatedBrandId = ($taskCreatedBrandPath -split '/')[-1]
+
+  $taskCreatedBrandPage = (& curl.exe -s `
+    -H "Host: localhost:$taskAppPort" `
+    -H "Cookie: authjs.session-token=test-platform-session-token" `
+    "http://127.0.0.1:$taskAppPort$taskCreatedBrandPath") -join "`n"
+  $taskIntegrationActionMatch = [regex]::Match(
+    $taskCreatedBrandPage,
+    '<form[^>]*data-harness="integration-form"[^>]*><input type="hidden" name="(\$ACTION_ID_[^"]+)"',
+    [System.Text.RegularExpressions.RegexOptions]::Singleline
+  )
+  if (-not $taskIntegrationActionMatch.Success) {
+    throw "Could not find the progressively enhanced integration action"
+  }
+  $taskIntegrationActionField = $taskIntegrationActionMatch.Groups[1].Value
+  $taskIntegrationStatus = & curl.exe -s -o NUL -w "%{http_code}" -X POST `
+    -H "Host: localhost:$taskAppPort" `
+    -H "Origin: http://localhost:$taskAppPort" `
+    -H "Cookie: authjs.session-token=test-platform-session-token" `
+    -F "$taskIntegrationActionField=" `
+    -F "brandId=$taskCreatedBrandId" `
+    -F "key=meta-pixel" `
+    -F "provider=META_ADS" `
+    -F "assetOwner=BRAND" `
+    -F "displayName=Harness Meta Pixel" `
+    -F "externalAccountId=meta-business-harness" `
+    -F "externalPropertyId=meta-dataset-harness" `
+    -F "publicIdentifier=123456789012345" `
+    -F "notes=Brand owns asset; Southwest has delegated access" `
+    "http://127.0.0.1:$taskAppPort$taskCreatedBrandPath"
+  if ([int]$taskIntegrationStatus -ge 400) {
+    throw "Platform integration action failed with HTTP $taskIntegrationStatus"
+  }
 
   $taskOnboardingQuery = @'
 SELECT count(*)
@@ -217,6 +259,25 @@ WHERE b.slug = 'harness-test-brand'
   $taskOnboardingRowCount = (($taskOnboardingQuery | & docker.exe exec -i $taskContainer psql -U postgres -d southwestdigital -tA) -join "").Trim()
   if ($taskOnboardingRowCount -ne "1") {
     throw "Brand onboarding transaction did not create the expected isolated records"
+  }
+
+  $taskIntegrationQuery = @'
+SELECT count(*)
+FROM "Brand" b
+JOIN "BrandIntegration" i ON i."brandId" = b.id
+JOIN "AuditEvent" a ON a."brandId" = b.id AND a."resourceId" = i.id
+WHERE b.slug = 'harness-test-brand'
+  AND i.key = 'meta-pixel'
+  AND i.provider = 'META_ADS'
+  AND i."assetOwner" = 'BRAND'
+  AND i.status = 'PENDING'
+  AND i."publicIdentifier" = '123456789012345'
+  AND i."secretCiphertext" IS NULL
+  AND a.action = 'brand.integration.created';
+'@
+  $taskIntegrationRowCount = (($taskIntegrationQuery | & docker.exe exec -i $taskContainer psql -U postgres -d southwestdigital -tA) -join "").Trim()
+  if ($taskIntegrationRowCount -ne "1") {
+    throw "Integration governance action did not persist pending public metadata without secrets"
   }
 
   $taskSwitchedPortal = (& curl.exe -s `
@@ -251,7 +312,7 @@ WHERE b.slug = 'harness-test-brand'
     throw "Lead page did not preserve brand isolation"
   }
 
-  Write-Output "Verified branded login, unknown-host rejection, hostname-safe auth completion, platform-admin routing and authorization, transactional brand onboarding, entry-brand selection, authorized switching, tampered-cookie fallback, and CRM page isolation."
+  Write-Output "Verified branded login, unknown-host rejection, hostname-safe auth completion, platform-admin routing and authorization, transactional brand onboarding, integration asset governance, entry-brand selection, authorized switching, tampered-cookie fallback, and CRM page isolation."
 }
 finally {
   if ($taskServer -and -not $taskServer.HasExited) {

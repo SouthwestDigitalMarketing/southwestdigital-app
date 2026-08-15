@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { saveBrandIntegration } from "@/lib/integrations/repository";
 import {
   addPendingBrandDomain,
   createBrandOnboarding,
@@ -65,6 +66,23 @@ export async function inviteBrandMemberAction(formData: FormData) {
     name: formData.get("name"),
     email: formData.get("email"),
     role: formData.get("role"),
+  });
+  revalidatePath(`/platform/brands/${brandId}`);
+}
+
+export async function saveBrandIntegrationAction(formData: FormData) {
+  const { session } = await requirePlatformAdministrator();
+  const brandId = formData.get("brandId");
+  await saveBrandIntegration(session.user.id, {
+    brandId,
+    key: formData.get("key"),
+    provider: formData.get("provider"),
+    assetOwner: formData.get("assetOwner"),
+    displayName: formData.get("displayName"),
+    externalAccountId: formData.get("externalAccountId"),
+    externalPropertyId: formData.get("externalPropertyId"),
+    publicIdentifier: formData.get("publicIdentifier"),
+    notes: formData.get("notes"),
   });
   revalidatePath(`/platform/brands/${brandId}`);
 }
