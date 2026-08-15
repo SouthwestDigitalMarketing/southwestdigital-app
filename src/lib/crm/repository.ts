@@ -3,8 +3,44 @@ import { prisma } from "@/lib/prisma";
 import type { BrandDataContext } from "@/lib/tenancy/context";
 import {
   createContactSchema,
+  createCustomerAccountSchema,
   createLeadSchema,
 } from "./schemas";
+
+export async function listCustomerAccounts(context: BrandDataContext, search?: string) {
+  const query = search?.trim();
+  return prisma.customerAccount.findMany({
+    where: {
+      brandId: context.brandId,
+      ...(query
+        ? {
+            OR: [
+              { name: { contains: query, mode: "insensitive" } },
+              { legalName: { contains: query, mode: "insensitive" } },
+              { code: { contains: query, mode: "insensitive" } },
+              { communicationEmail: { contains: query, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    },
+    include: {
+      contacts: {
+        where: { isPrimary: true },
+        include: { contact: true },
+        take: 1,
+      },
+    },
+    orderBy: [{ status: "asc" }, { name: "asc" }],
+    take: 200,
+  });
+}
+
+export async function createCustomerAccount(context: BrandDataContext, input: unknown) {
+  const customer = createCustomerAccountSchema.parse(input);
+  return prisma.customerAccount.create({
+    data: { brandId: context.brandId, ...customer },
+  });
+}
 
 export async function listContacts(context: BrandDataContext, search?: string) {
   const query = search?.trim();

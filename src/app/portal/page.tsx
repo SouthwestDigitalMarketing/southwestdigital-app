@@ -11,11 +11,10 @@ export default async function PortalPage() {
         </p>
         <h1 className="mt-3 text-4xl font-semibold tracking-tight">Welcome to {activeBrand.name}</h1>
         <p className="mt-4 max-w-2xl leading-7 text-slate-600">
-          Contacts and leads are now isolated to this active brand. Additional application modules
+          Customers, contacts, and leads are isolated to this active brand. Additional application modules
           will appear here as they are migrated.
         </p>
       </div>
     </section>
   );
 }
-
