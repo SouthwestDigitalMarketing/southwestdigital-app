@@ -1,5 +1,6 @@
 "use server";
 
+import { BrandRole } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { createLead } from "@/lib/crm/repository";
 import { requireActiveBrandContext } from "@/lib/tenancy/current";
@@ -10,7 +11,7 @@ function optionalFormValue(formData: FormData, key: string) {
 }
 
 export async function createLeadAction(formData: FormData) {
-  const { dataContext } = await requireActiveBrandContext();
+  const { dataContext } = await requireActiveBrandContext({ minimumRole: BrandRole.MEMBER });
   const attribution = {
     source: optionalFormValue(formData, "utmSource"),
     medium: optionalFormValue(formData, "utmMedium"),
@@ -36,4 +37,3 @@ export async function createLeadAction(formData: FormData) {
   });
   revalidatePath("/portal/leads");
 }
-

@@ -1,11 +1,12 @@
 "use server";
 
+import { BrandRole } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { createCustomerAccount } from "@/lib/crm/repository";
 import { requireActiveBrandContext } from "@/lib/tenancy/current";
 
 export async function createCustomerAccountAction(formData: FormData) {
-  const { dataContext } = await requireActiveBrandContext();
+  const { dataContext } = await requireActiveBrandContext({ minimumRole: BrandRole.MEMBER });
   await createCustomerAccount(dataContext, {
     name: formData.get("name"),
     code: formData.get("code"),

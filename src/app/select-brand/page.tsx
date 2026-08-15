@@ -3,13 +3,17 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { BrandShell } from "@/components/brand-shell";
 import { getAccessibleBrands } from "@/lib/brands/repository";
+import { requireTrustedPortalHost } from "@/lib/tenancy/request-host";
 import { selectBrand } from "./actions";
 
 export default async function SelectBrandPage() {
   const session = await auth();
   if (!session?.user || session.user.status !== UserStatus.ACTIVE) redirect("/login");
 
-  const brands = await getAccessibleBrands(session.user.id, session.user.platformRole);
+  const [, brands] = await Promise.all([
+    requireTrustedPortalHost(session.user.platformRole),
+    getAccessibleBrands(session.user.id, session.user.platformRole),
+  ]);
   if (brands.length === 0) redirect("/login?error=AccessDenied");
 
   return (
@@ -36,4 +40,3 @@ export default async function SelectBrandPage() {
     </BrandShell>
   );
 }
-

@@ -1,12 +1,15 @@
 import "server-only";
 import {
+  BrandRole,
   BrandStatus,
   DomainPurpose,
   DomainStatus,
   MembershipStatus,
   PlatformRole,
+  UserStatus,
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { authorizeBrandAccess } from "./access";
 import { normalizeHostname } from "./hostname";
 
 const brandSummarySelect = {
@@ -54,7 +57,7 @@ export async function resolveAppBrandByHostname(
       hostname,
       purpose: DomainPurpose.APP,
       status: DomainStatus.VERIFIED,
-      brand: { status: { not: BrandStatus.DELETED } },
+      brand: { status: BrandStatus.ACTIVE },
     },
     select: { brand: { select: brandSummarySelect } },
   });
@@ -87,3 +90,30 @@ export async function getAccessibleBrands(
   return memberships.map(({ brand }) => brand);
 }
 
+export async function getBrandAccessDecision(input: {
+  brandId: string;
+  userId: string;
+  userStatus: UserStatus;
+  platformRole: PlatformRole;
+  minimumRole?: BrandRole;
+}) {
+  const brand = await prisma.brand.findUnique({
+    where: { id: input.brandId },
+    select: {
+      status: true,
+      memberships: {
+        where: { userId: input.userId },
+        select: { role: true, status: true },
+        take: 1,
+      },
+    },
+  });
+
+  return authorizeBrandAccess({
+    userStatus: input.userStatus,
+    platformRole: input.platformRole,
+    brandStatus: brand?.status ?? BrandStatus.DELETED,
+    membership: brand?.memberships[0] ?? null,
+    minimumRole: input.minimumRole,
+  });
+}

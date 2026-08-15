@@ -10,6 +10,8 @@ import {
   UserStatus,
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { isPlatformHostname } from "@/lib/brands/active-brand";
+import { requirePlatformAdministrator } from "./authorization";
 import {
   addBrandDomainSchema,
   createBrandOnboardingSchema,
@@ -92,7 +94,14 @@ const brandAdministrationSelect = {
   },
 } satisfies Prisma.BrandSelect;
 
+function assertNotPlatformHostname(hostname: string) {
+  if (isPlatformHostname(hostname, process.env.PLATFORM_BASE_URL)) {
+    throw new Error("The platform operator hostname cannot be assigned to a brand");
+  }
+}
+
 export async function listBrandsForAdministration() {
+  await requirePlatformAdministrator();
   return prisma.brand.findMany({
     where: { status: { not: BrandStatus.DELETED } },
     orderBy: { name: "asc" },
@@ -112,6 +121,7 @@ export async function listBrandsForAdministration() {
 }
 
 export async function getBrandForAdministration(brandId: string) {
+  await requirePlatformAdministrator();
   return prisma.brand.findFirst({
     where: { id: brandId, status: { not: BrandStatus.DELETED } },
     select: brandAdministrationSelect,
@@ -123,6 +133,7 @@ export async function createBrandOnboarding(
   input: unknown,
 ) {
   const values = createBrandOnboardingSchema.parse(input);
+  assertNotPlatformHostname(values.appHostname);
 
   return prisma.$transaction(async (transaction) => {
     const existingOwner = await transaction.user.findUnique({
@@ -207,6 +218,7 @@ export async function addPendingBrandDomain(
   input: unknown,
 ) {
   const values = addBrandDomainSchema.parse(input);
+  assertNotPlatformHostname(values.hostname);
 
   return prisma.$transaction(async (transaction) => {
     const brand = await transaction.brand.findFirst({

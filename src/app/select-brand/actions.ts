@@ -7,6 +7,7 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { activeBrandCookie } from "@/lib/brands/cookie";
 import { getAccessibleBrands } from "@/lib/brands/repository";
+import { requireTrustedPortalHost } from "@/lib/tenancy/request-host";
 
 const brandIdSchema = z.string().trim().min(1).max(64);
 
@@ -17,7 +18,10 @@ export async function selectBrand(formData: FormData) {
   const parsed = brandIdSchema.safeParse(formData.get("brandId"));
   if (!parsed.success) redirect("/select-brand?error=invalid");
 
-  const accessibleBrands = await getAccessibleBrands(session.user.id, session.user.platformRole);
+  const [, accessibleBrands] = await Promise.all([
+    requireTrustedPortalHost(session.user.platformRole),
+    getAccessibleBrands(session.user.id, session.user.platformRole),
+  ]);
   if (!accessibleBrands.some(({ id }) => id === parsed.data)) {
     redirect("/select-brand?error=denied");
   }
@@ -25,4 +29,3 @@ export async function selectBrand(formData: FormData) {
   (await cookies()).set(activeBrandCookie(parsed.data));
   redirect("/portal");
 }
-

@@ -3,9 +3,10 @@ import "server-only";
 import {
   AuditActorType,
   BrandDataExportFormat,
-  BrandDataExportScope,
   BrandDataExportStatus,
   BrandStatus,
+  DomainPurpose,
+  DomainStatus,
   IntegrationStatus,
   MembershipStatus,
   OffboardingPlanStatus,
@@ -14,16 +15,12 @@ import { prisma } from "@/lib/prisma";
 import {
   beginBrandOffboardingSchema,
   cancelBrandOffboardingSchema,
+  implementedExportScopes,
   requestBrandDataExportSchema,
   scheduleBrandOffboardingSchema,
 } from "./schemas";
 
-export const availableExportScopes = [
-  BrandDataExportScope.BRAND_CONFIGURATION,
-  BrandDataExportScope.CRM,
-  BrandDataExportScope.INTEGRATION_METADATA,
-  BrandDataExportScope.AUDIT_HISTORY,
-] as const;
+export const availableExportScopes = implementedExportScopes;
 
 function canEnterOffboarding(status: BrandStatus): boolean {
   return status === BrandStatus.ACTIVE || status === BrandStatus.SUSPENDED;
@@ -172,6 +169,14 @@ export async function beginBrandOffboarding(actorUserId: string, input: unknown)
       transaction.brandIntegration.updateMany({
         where: { brandId: plan.brand.id, status: { not: IntegrationStatus.SUSPENDED } },
         data: { status: IntegrationStatus.SUSPENDED },
+      }),
+      transaction.brandDomain.updateMany({
+        where: {
+          brandId: plan.brand.id,
+          purpose: DomainPurpose.APP,
+          status: { not: DomainStatus.DISABLED },
+        },
+        data: { status: DomainStatus.DISABLED, verifiedAt: null },
       }),
     ]);
 

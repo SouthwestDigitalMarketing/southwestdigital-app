@@ -82,7 +82,7 @@ export default async function BrandAdministrationPage({
               </li>
             ))}
           </ul>
-          <form action={addPendingBrandDomainAction} className="mt-5 grid gap-3 border-t border-slate-100 pt-5 sm:grid-cols-[1fr_130px_auto] sm:items-end">
+          <form data-harness="domain-form" action={addPendingBrandDomainAction} className="mt-5 grid gap-3 border-t border-slate-100 pt-5 sm:grid-cols-[1fr_130px_auto] sm:items-end">
             <input type="hidden" name="brandId" value={brand.id} />
             <label className="text-sm font-semibold text-slate-700">Hostname<input name="hostname" required placeholder="app.example.com" className={inputClass} /></label>
             <label className="text-sm font-semibold text-slate-700">Purpose<select name="purpose" className={inputClass}><option value="APP">App</option><option value="WEBSITE">Website</option></select></label>

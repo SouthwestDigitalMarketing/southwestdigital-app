@@ -1,11 +1,12 @@
 "use server";
 
+import { BrandRole } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { createContact } from "@/lib/crm/repository";
 import { requireActiveBrandContext } from "@/lib/tenancy/current";
 
 export async function createContactAction(formData: FormData) {
-  const { dataContext } = await requireActiveBrandContext();
+  const { dataContext } = await requireActiveBrandContext({ minimumRole: BrandRole.MEMBER });
   await createContact(dataContext, {
     displayName: formData.get("displayName"),
     firstName: formData.get("firstName"),
@@ -18,4 +19,3 @@ export async function createContactAction(formData: FormData) {
   });
   revalidatePath("/portal/contacts");
 }
-

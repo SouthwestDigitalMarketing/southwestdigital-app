@@ -15,7 +15,7 @@ There is one tenant level: `Brand`.
 - A user may switch only among brands for which they have an active membership.
 - Southwest platform roles are independent from brand roles.
 
-See [the platform blueprint](docs/architecture/platform-blueprint.md), [authentication design](docs/architecture/authentication.md), [CRM data boundary](docs/architecture/crm-data.md), [data ownership policy](docs/architecture/data-ownership.md), and [offboarding/export design](docs/architecture/offboarding-and-exports.md).
+See [the platform blueprint](docs/architecture/platform-blueprint.md), [authentication design](docs/architecture/authentication.md), [CRM data boundary](docs/architecture/crm-data.md), [data ownership policy](docs/architecture/data-ownership.md), [offboarding/export design](docs/architecture/offboarding-and-exports.md), [database hosting decision](docs/deployment/database-hosting.md), [production identity configuration](docs/deployment/production-identity.md), and [cutover preflight](docs/deployment/cutover-preflight.md).
 
 The guarded first-tenant process is documented in [initial brand seed](docs/migration/initial-brand-seed.md). Its disposable PostgreSQL rehearsal is available as `npm run test:initial-seed:windows`.
 
