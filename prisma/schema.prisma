@@ -1,0 +1,175 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+enum PlatformRole {
+  NONE
+  ADMIN
+  OWNER
+}
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+}
+
+enum BrandStatus {
+  DRAFT
+  ACTIVE
+  SUSPENDED
+  OFFBOARDING
+  DELETED
+}
+
+enum BrandRole {
+  VIEWER
+  MEMBER
+  ADMIN
+  OWNER
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+}
+
+enum DomainPurpose {
+  APP
+  WEBSITE
+}
+
+enum DomainStatus {
+  PENDING
+  VERIFIED
+  DISABLED
+}
+
+model User {
+  id            String            @id @default(cuid())
+  name          String?
+  email         String            @unique
+  emailVerified DateTime?
+  image         String?
+  status        UserStatus        @default(INVITED)
+  platformRole  PlatformRole      @default(NONE)
+  accounts      Account[]
+  sessions      Session[]
+  memberships   BrandMembership[]
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([status])
+  @@index([platformRole])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Brand {
+  id                    String            @id @default(cuid())
+  slug                  String            @unique
+  name                  String
+  legalName             String?
+  status                BrandStatus       @default(DRAFT)
+  subscriptionStartedAt DateTime?
+  subscriptionEndedAt   DateTime?
+  accessEndsAt          DateTime?
+  dataExportedAt        DateTime?
+  retentionEndsAt       DateTime?
+  deletedAt             DateTime?
+  domains               BrandDomain[]
+  memberships           BrandMembership[]
+  theme                 BrandTheme?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  @@index([status])
+}
+
+model BrandDomain {
+  id         String        @id @default(cuid())
+  brandId    String
+  hostname   String        @unique
+  purpose    DomainPurpose @default(APP)
+  status     DomainStatus  @default(PENDING)
+  isPrimary  Boolean       @default(false)
+  verifiedAt DateTime?
+  brand      Brand         @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@index([brandId, purpose, status])
+}
+
+model BrandMembership {
+  id        String           @id @default(cuid())
+  brandId   String
+  userId    String
+  role      BrandRole        @default(MEMBER)
+  status    MembershipStatus @default(INVITED)
+  brand     Brand            @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([brandId, userId])
+  @@index([brandId, status, role])
+  @@index([userId, status])
+}
+
+model BrandTheme {
+  id              String   @id @default(cuid())
+  brandId         String   @unique
+  logoUrl         String?
+  logoAlt         String?
+  primaryColor    String   @default("#17324d")
+  accentColor     String   @default("#d79b3b")
+  backgroundColor String   @default("#f7f8fa")
+  foregroundColor String   @default("#17202a")
+  supportEmail    String?
+  brand           Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
