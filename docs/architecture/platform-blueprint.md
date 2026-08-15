@@ -28,6 +28,7 @@ There is no client-organization parent above a brand. Shared ownership is expres
 - `User.platformRole` grants exceptional Southwest operator access and never derives from a brand role.
 - Disabled users or memberships cannot access brand data.
 - Every server operation authorizes both the authenticated user and requested brand.
+- Canonical email, brand slug, and hostname uniqueness is enforced case-insensitively in PostgreSQL.
 
 ## Hostname-selected entry brand
 
@@ -56,6 +57,8 @@ Every tenant-owned record must include:
 - deletion behavior chosen deliberately for that record type
 - index beginning with `brandId` for common access paths
 - authorization tests that attempt access from a different brand
+
+Hard deletion of a brand or membership is restricted by foreign keys. Offboarding uses explicit lifecycle transitions and ordered deletion rather than an accidental cascading `Brand.delete()` operation.
 
 Filtering records in browser code is not isolation. Brand scoping occurs in server/database queries.
 

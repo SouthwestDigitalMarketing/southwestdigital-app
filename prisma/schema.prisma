@@ -52,6 +52,34 @@ enum DomainStatus {
   DISABLED
 }
 
+enum IntegrationProvider {
+  GA4
+  GTM
+  META_ADS
+  GOOGLE_SEARCH_CONSOLE
+  GOOGLE_ADS
+  CLOUDFLARE
+  STRIPE
+  PAYPAL
+  YOUTUBE
+  QUO
+  SANITY
+  OTHER
+}
+
+enum IntegrationStatus {
+  DISCONNECTED
+  PENDING
+  ACTIVE
+  ERROR
+  SUSPENDED
+}
+
+enum AuditActorType {
+  USER
+  SYSTEM
+}
+
 model User {
   id            String            @id @default(cuid())
   name          String?
@@ -63,6 +91,7 @@ model User {
   accounts      Account[]
   sessions      Session[]
   memberships   BrandMembership[]
+  auditEvents   AuditEvent[]
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
 
@@ -108,11 +137,11 @@ model VerificationToken {
 }
 
 model Brand {
-  id                    String            @id @default(cuid())
-  slug                  String            @unique
+  id                    String             @id @default(cuid())
+  slug                  String             @unique
   name                  String
   legalName             String?
-  status                BrandStatus       @default(DRAFT)
+  status                BrandStatus        @default(DRAFT)
   subscriptionStartedAt DateTime?
   subscriptionEndedAt   DateTime?
   accessEndsAt          DateTime?
@@ -122,8 +151,11 @@ model Brand {
   domains               BrandDomain[]
   memberships           BrandMembership[]
   theme                 BrandTheme?
-  createdAt             DateTime          @default(now())
-  updatedAt             DateTime          @updatedAt
+  features              BrandFeature[]
+  integrations          BrandIntegration[]
+  auditEvents           AuditEvent[]
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
 
   @@index([status])
 }
@@ -136,7 +168,7 @@ model BrandDomain {
   status     DomainStatus  @default(PENDING)
   isPrimary  Boolean       @default(false)
   verifiedAt DateTime?
-  brand      Brand         @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  brand      Brand         @relation(fields: [brandId], references: [id], onDelete: Restrict)
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
 
@@ -149,8 +181,8 @@ model BrandMembership {
   userId    String
   role      BrandRole        @default(MEMBER)
   status    MembershipStatus @default(INVITED)
-  brand     Brand            @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand     Brand            @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Restrict)
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
 
@@ -169,7 +201,65 @@ model BrandTheme {
   backgroundColor String   @default("#f7f8fa")
   foregroundColor String   @default("#17202a")
   supportEmail    String?
-  brand           Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  brand           Brand    @relation(fields: [brandId], references: [id], onDelete: Restrict)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+}
+
+model BrandFeature {
+  id         String    @id @default(cuid())
+  brandId    String
+  key        String
+  enabled    Boolean   @default(false)
+  settings   Json?
+  enabledAt  DateTime?
+  disabledAt DateTime?
+  brand      Brand     @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([brandId, key])
+  @@index([brandId, enabled])
+}
+
+model BrandIntegration {
+  id               String              @id @default(cuid())
+  brandId          String
+  key              String
+  provider         IntegrationProvider
+  status           IntegrationStatus   @default(DISCONNECTED)
+  displayName      String?
+  publicConfig     Json?
+  secretCiphertext String?             @db.Text
+  secretKeyVersion Int?
+  secretReference  String?
+  lastVerifiedAt   DateTime?
+  lastErrorAt      DateTime?
+  lastErrorCode    String?
+  brand            Brand               @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@unique([brandId, key])
+  @@index([brandId, provider, status])
+}
+
+model AuditEvent {
+  id           String         @id @default(cuid())
+  brandId      String?
+  actorUserId  String?
+  actorType    AuditActorType
+  action       String
+  resourceType String?
+  resourceId   String?
+  requestId    String?
+  ipHash       String?
+  metadata     Json?
+  occurredAt   DateTime       @default(now())
+  brand        Brand?         @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  actorUser    User?          @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([brandId, occurredAt])
+  @@index([actorUserId, occurredAt])
+  @@index([resourceType, resourceId, occurredAt])
 }
