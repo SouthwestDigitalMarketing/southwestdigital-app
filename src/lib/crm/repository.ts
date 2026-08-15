@@ -4,8 +4,6 @@ import type { BrandDataContext } from "@/lib/tenancy/context";
 import {
   createContactSchema,
   createLeadSchema,
-  type CreateContactInput,
-  type CreateLeadInput,
 } from "./schemas";
 
 export async function listContacts(context: BrandDataContext, search?: string) {
@@ -28,13 +26,17 @@ export async function listContacts(context: BrandDataContext, search?: string) {
   });
 }
 
-export async function createContact(context: BrandDataContext, input: CreateContactInput) {
+export async function createContact(context: BrandDataContext, input: unknown) {
   const contact = createContactSchema.parse(input);
   return prisma.contact.create({
     data: {
       brandId: context.brandId,
       ...contact,
       normalizedEmail: contact.email,
+      marketingConsentAt:
+        contact.marketingConsent === "GRANTED"
+          ? contact.marketingConsentAt ?? new Date()
+          : contact.marketingConsentAt,
     },
   });
 }
@@ -53,7 +55,7 @@ export async function listLeads(context: BrandDataContext) {
   });
 }
 
-export async function createLead(context: BrandDataContext, input: CreateLeadInput) {
+export async function createLead(context: BrandDataContext, input: unknown) {
   const leadInput = createLeadSchema.parse(input);
   const { attribution, estimatedValue, ...lead } = leadInput;
 
@@ -80,4 +82,3 @@ export async function createLead(context: BrandDataContext, input: CreateLeadInp
     return createdLead;
   });
 }
-
