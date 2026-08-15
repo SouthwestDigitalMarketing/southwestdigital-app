@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { selectBrand } from "@/app/select-brand/actions";
+import { isPlatformAdministrator } from "@/lib/platform/access";
 import { requireActiveBrandContext } from "@/lib/tenancy/current";
 import { signOutOfPortal } from "./actions";
 
@@ -12,7 +13,7 @@ type BrandCssProperties = CSSProperties & {
 };
 
 export default async function PortalLayout({ children }: { children: ReactNode }) {
-  const { activeBrand, accessibleBrands } = await requireActiveBrandContext();
+  const { session, activeBrand, accessibleBrands } = await requireActiveBrandContext();
   const style: BrandCssProperties = {
     "--brand-primary": activeBrand.theme?.primaryColor ?? "#17324d",
     "--brand-accent": activeBrand.theme?.accentColor ?? "#d79b3b",
@@ -41,6 +42,11 @@ export default async function PortalLayout({ children }: { children: ReactNode }
             <Link href="/portal/leads" className="rounded-full px-3 py-2 hover:bg-slate-100">
               Leads
             </Link>
+            {isPlatformAdministrator(session.user.platformRole) ? (
+              <Link href="/platform/brands" className="rounded-full px-3 py-2 hover:bg-slate-100">
+                Platform admin
+              </Link>
+            ) : null}
           </nav>
 
           <div className="ml-auto flex items-center gap-3">
@@ -76,4 +82,3 @@ export default async function PortalLayout({ children }: { children: ReactNode }
     </main>
   );
 }
-

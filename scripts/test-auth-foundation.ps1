@@ -51,7 +51,9 @@ try {
   @'
 \set ON_ERROR_STOP on
 INSERT INTO "User" (id, name, email, status, "platformRole", "createdAt", "updatedAt")
-VALUES ('dagny', 'Dagny', 'dagny@example.test', 'ACTIVE', 'NONE', now(), now());
+VALUES
+  ('dagny', 'Dagny', 'dagny@example.test', 'ACTIVE', 'NONE', now(), now()),
+  ('platform-owner', 'Southwest Owner', 'owner@southwestdigital.test', 'ACTIVE', 'OWNER', now(), now());
 
 INSERT INTO "Brand" (id, slug, name, status, "createdAt", "updatedAt") VALUES
   ('contigo', 'contigo-accounting', 'Contigo Accounting', 'ACTIVE', now(), now()),
@@ -72,7 +74,9 @@ INSERT INTO "BrandMembership" (id, "brandId", "userId", role, status, "createdAt
   ('member-melbourne', 'melbourne', 'dagny', 'OWNER', 'ACTIVE', now(), now());
 
 INSERT INTO "Session" (id, "sessionToken", "userId", expires)
-VALUES ('session-1', 'test-session-token', 'dagny', now() + interval '1 day');
+VALUES
+  ('session-1', 'test-session-token', 'dagny', now() + interval '1 day'),
+  ('session-platform', 'test-platform-session-token', 'platform-owner', now() + interval '1 day');
 
 INSERT INTO "Contact" (id, "brandId", "displayName", status, "marketingConsent", "createdAt", "updatedAt") VALUES
   ('contigo-contact', 'contigo', 'Contigo Only Contact', 'ACTIVE', 'UNKNOWN', now(), now()),
@@ -134,6 +138,87 @@ INSERT INTO "Lead" (id, "brandId", name, status, "createdAt", "updatedAt") VALUE
     throw "Auth completion did not retain the verified entry hostname"
   }
 
+  $taskPlatformComplete = (& curl.exe -s -i `
+    -H "Host: localhost:$taskAppPort" `
+    -H "Cookie: authjs.session-token=test-platform-session-token" `
+    "http://127.0.0.1:$taskAppPort/auth/complete") -join "`n"
+  if ($taskPlatformComplete -notmatch "location: http://localhost:$taskAppPort/platform/brands") {
+    throw "Platform owner did not land in platform administration"
+  }
+
+  $taskPlatformBrands = (& curl.exe -s `
+    -H "Host: localhost:$taskAppPort" `
+    -H "Cookie: authjs.session-token=test-platform-session-token" `
+    "http://127.0.0.1:$taskAppPort/platform/brands") -join "`n"
+  if ($taskPlatformBrands -notmatch "Platform administration" -or $taskPlatformBrands -notmatch "Melbourne CFO") {
+    throw "Platform brand administration did not render for the platform owner"
+  }
+
+  $taskNonAdminPlatform = (& curl.exe -s -i `
+    -H "Host: localhost:$taskAppPort" `
+    -H "Cookie: authjs.session-token=test-session-token" `
+    "http://127.0.0.1:$taskAppPort/platform/brands") -join "`n"
+  if ($taskNonAdminPlatform -notmatch "location: /portal") {
+    throw "A brand-only user was not rejected from platform administration"
+  }
+
+  $taskNewBrandPage = (& curl.exe -s `
+    -H "Host: localhost:$taskAppPort" `
+    -H "Cookie: authjs.session-token=test-platform-session-token" `
+    "http://127.0.0.1:$taskAppPort/platform/brands/new") -join "`n"
+  $taskActionMatch = [regex]::Match(
+    $taskNewBrandPage,
+    '<form class="mt-8 space-y-8"[^>]*><input type="hidden" name="(\$ACTION_ID_[^"]+)"',
+    [System.Text.RegularExpressions.RegexOptions]::Singleline
+  )
+  if (-not $taskActionMatch.Success) {
+    throw "Could not find the progressively enhanced onboarding action"
+  }
+  $taskActionField = $taskActionMatch.Groups[1].Value
+  $taskOnboardingResponse = (& curl.exe -s -i -X POST `
+    -H "Host: localhost:$taskAppPort" `
+    -H "Origin: http://localhost:$taskAppPort" `
+    -H "Cookie: authjs.session-token=test-platform-session-token" `
+    -F "$taskActionField=" `
+    -F "name=Harness Test Brand" `
+    -F "legalName=Harness Test Brand LLC" `
+    -F "slug=harness-test-brand" `
+    -F "appHostname=app.harness-test.example" `
+    -F "ownerName=Harness Owner" `
+    -F "ownerEmail=owner@harness-test.example" `
+    -F "logoUrl=" `
+    -F "supportEmail=support@harness-test.example" `
+    -F "primaryColor=#17324d" `
+    -F "accentColor=#d79b3b" `
+    -F "backgroundColor=#f7f8fa" `
+    -F "foregroundColor=#17202a" `
+    "http://127.0.0.1:$taskAppPort/platform/brands/new") -join "`n"
+  if ($taskOnboardingResponse -notmatch "location: /platform/brands/") {
+    throw "Platform onboarding action did not redirect to the created brand: $taskOnboardingResponse"
+  }
+
+  $taskOnboardingQuery = @'
+SELECT count(*)
+FROM "Brand" b
+JOIN "BrandTheme" t ON t."brandId" = b.id
+JOIN "BrandDomain" d ON d."brandId" = b.id
+JOIN "BrandMembership" m ON m."brandId" = b.id
+JOIN "User" u ON u.id = m."userId"
+JOIN "AuditEvent" a ON a."brandId" = b.id
+WHERE b.slug = 'harness-test-brand'
+  AND b.status = 'DRAFT'
+  AND d.hostname = 'app.harness-test.example'
+  AND d.status = 'PENDING'
+  AND m.role = 'OWNER'
+  AND m.status = 'INVITED'
+  AND u.email = 'owner@harness-test.example'
+  AND a.action = 'brand.onboarding.created';
+'@
+  $taskOnboardingRowCount = (($taskOnboardingQuery | & docker.exe exec -i $taskContainer psql -U postgres -d southwestdigital -tA) -join "").Trim()
+  if ($taskOnboardingRowCount -ne "1") {
+    throw "Brand onboarding transaction did not create the expected isolated records"
+  }
+
   $taskSwitchedPortal = (& curl.exe -s `
     -H "Host: app.contigoaccounting.com" `
     -H "Cookie: authjs.session-token=test-session-token; swd-active-brand=melbourne" `
@@ -166,7 +251,7 @@ INSERT INTO "Lead" (id, "brandId", name, status, "createdAt", "updatedAt") VALUE
     throw "Lead page did not preserve brand isolation"
   }
 
-  Write-Output "Verified branded login, unknown-host rejection, hostname-safe auth completion, entry-brand selection, authorized switching, tampered-cookie fallback, and CRM page isolation."
+  Write-Output "Verified branded login, unknown-host rejection, hostname-safe auth completion, platform-admin routing and authorization, transactional brand onboarding, entry-brand selection, authorized switching, tampered-cookie fallback, and CRM page isolation."
 }
 finally {
   if ($taskServer -and -not $taskServer.HasExited) {

@@ -3,9 +3,11 @@ import { NextResponse } from "next/server";
 import { UserStatus } from "@prisma/client";
 import { auth } from "@/auth";
 import { selectInitialBrand } from "@/lib/brands/access";
+import { isPlatformHostname } from "@/lib/brands/active-brand";
 import { activeBrandCookie } from "@/lib/brands/cookie";
 import { effectiveRequestHostname, safeRequestOrigin } from "@/lib/brands/request";
 import { getAccessibleBrands, resolveAppBrandByHostname } from "@/lib/brands/repository";
+import { isPlatformAdministrator } from "@/lib/platform/access";
 
 export async function GET(request: NextRequest) {
   const requestOrigin = safeRequestOrigin({
@@ -26,6 +28,13 @@ export async function GET(request: NextRequest) {
     developmentOverride: process.env.DEV_BRAND_HOST,
     nodeEnv: process.env.NODE_ENV,
   });
+  if (
+    isPlatformHostname(hostname, process.env.PLATFORM_BASE_URL) &&
+    isPlatformAdministrator(session.user.platformRole)
+  ) {
+    return NextResponse.redirect(new URL("/platform/brands", requestOrigin));
+  }
+
   const [entryBrand, accessibleBrands] = await Promise.all([
     resolveAppBrandByHostname(hostname),
     getAccessibleBrands(session.user.id, session.user.platformRole),
