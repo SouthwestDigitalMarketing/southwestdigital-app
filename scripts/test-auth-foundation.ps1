@@ -73,6 +73,14 @@ INSERT INTO "BrandMembership" (id, "brandId", "userId", role, status, "createdAt
 
 INSERT INTO "Session" (id, "sessionToken", "userId", expires)
 VALUES ('session-1', 'test-session-token', 'dagny', now() + interval '1 day');
+
+INSERT INTO "Contact" (id, "brandId", "displayName", status, "marketingConsent", "createdAt", "updatedAt") VALUES
+  ('contigo-contact', 'contigo', 'Contigo Only Contact', 'ACTIVE', 'UNKNOWN', now(), now()),
+  ('melbourne-contact', 'melbourne', 'Melbourne Only Contact', 'ACTIVE', 'UNKNOWN', now(), now());
+
+INSERT INTO "Lead" (id, "brandId", name, status, "createdAt", "updatedAt") VALUES
+  ('contigo-lead', 'contigo', 'Contigo Only Lead', 'NEW', now(), now()),
+  ('melbourne-lead', 'melbourne', 'Melbourne Only Lead', 'NEW', now(), now());
 '@ | & docker.exe exec -i $taskContainer psql -U postgres -d southwestdigital *> $null
   if ($LASTEXITCODE -ne 0) { throw "Seed failed" }
 
@@ -142,7 +150,23 @@ VALUES ('session-1', 'test-session-token', 'dagny', now() + interval '1 day');
     throw "Unauthorized active-brand cookie was not rejected"
   }
 
-  Write-Output "Verified branded login, unknown-host rejection, hostname-safe auth completion, entry-brand selection, authorized switching, and tampered-cookie fallback."
+  $taskContigoContacts = (& curl.exe -s `
+    -H "Host: app.contigoaccounting.com" `
+    -H "Cookie: authjs.session-token=test-session-token; swd-active-brand=contigo" `
+    "http://127.0.0.1:$taskAppPort/portal/contacts") -join "`n"
+  if ($taskContigoContacts -notmatch "Contigo Only Contact" -or $taskContigoContacts -match "Melbourne Only Contact") {
+    throw "Contact page did not preserve brand isolation"
+  }
+
+  $taskMelbourneLeads = (& curl.exe -s `
+    -H "Host: app.contigoaccounting.com" `
+    -H "Cookie: authjs.session-token=test-session-token; swd-active-brand=melbourne" `
+    "http://127.0.0.1:$taskAppPort/portal/leads") -join "`n"
+  if ($taskMelbourneLeads -notmatch "Melbourne Only Lead" -or $taskMelbourneLeads -match "Contigo Only Lead") {
+    throw "Lead page did not preserve brand isolation"
+  }
+
+  Write-Output "Verified branded login, unknown-host rejection, hostname-safe auth completion, entry-brand selection, authorized switching, tampered-cookie fallback, and CRM page isolation."
 }
 finally {
   if ($taskServer -and -not $taskServer.HasExited) {

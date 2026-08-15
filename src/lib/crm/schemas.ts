@@ -18,6 +18,11 @@ const optionalUrl = z.preprocess(
   z.string().trim().url().max(2048).optional(),
 );
 
+const optionalMoney = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+  z.coerce.number().nonnegative().max(999999999999).optional(),
+);
+
 export const createContactSchema = z.object({
   displayName: z.string().trim().min(1).max(200),
   firstName: optionalText(100),
@@ -65,11 +70,10 @@ export const createLeadSchema = z.object({
   sourceDetail: optionalText(300),
   expectedServices: optionalText(2000),
   notes: optionalText(10000),
-  estimatedValue: z.coerce.number().nonnegative().max(999999999999).optional(),
+  estimatedValue: optionalMoney,
   valueCurrency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/).optional(),
   attribution: leadAttributionSchema.optional(),
 });
 
 export type CreateContactInput = z.input<typeof createContactSchema>;
 export type CreateLeadInput = z.input<typeof createLeadSchema>;
-
