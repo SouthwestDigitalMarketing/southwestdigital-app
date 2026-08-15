@@ -75,6 +75,12 @@ enum IntegrationStatus {
   SUSPENDED
 }
 
+enum IntegrationAssetOwner {
+  BRAND
+  SOUTHWEST_DIGITAL
+  THIRD_PARTY
+}
+
 enum AuditActorType {
   USER
   SYSTEM
@@ -264,25 +270,31 @@ model BrandFeature {
 }
 
 model BrandIntegration {
-  id               String              @id @default(cuid())
-  brandId          String
-  key              String
-  provider         IntegrationProvider
-  status           IntegrationStatus   @default(DISCONNECTED)
-  displayName      String?
-  publicConfig     Json?
-  secretCiphertext String?             @db.Text
-  secretKeyVersion Int?
-  secretReference  String?
-  lastVerifiedAt   DateTime?
-  lastErrorAt      DateTime?
-  lastErrorCode    String?
-  brand            Brand               @relation(fields: [brandId], references: [id], onDelete: Restrict)
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  id                 String                @id @default(cuid())
+  brandId            String
+  key                String
+  provider           IntegrationProvider
+  status             IntegrationStatus     @default(DISCONNECTED)
+  assetOwner         IntegrationAssetOwner @default(BRAND)
+  displayName        String?
+  externalAccountId  String?
+  externalPropertyId String?
+  publicIdentifier   String?
+  notes              String?               @db.Text
+  publicConfig       Json?
+  secretCiphertext   String?               @db.Text
+  secretKeyVersion   Int?
+  secretReference    String?
+  lastVerifiedAt     DateTime?
+  lastErrorAt        DateTime?
+  lastErrorCode      String?
+  brand              Brand                 @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
 
   @@unique([brandId, key])
   @@index([brandId, provider, status])
+  @@index([brandId, assetOwner])
 }
 
 model AuditEvent {

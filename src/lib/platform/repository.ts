@@ -40,6 +40,22 @@ const brandAdministrationSelect = {
       user: { select: { id: true, name: true, email: true, status: true } },
     },
   },
+  integrations: {
+    orderBy: [{ provider: "asc" }, { key: "asc" }],
+    select: {
+      id: true,
+      key: true,
+      provider: true,
+      status: true,
+      assetOwner: true,
+      displayName: true,
+      externalAccountId: true,
+      externalPropertyId: true,
+      publicIdentifier: true,
+      notes: true,
+      lastVerifiedAt: true,
+    },
+  },
 } satisfies Prisma.BrandSelect;
 
 export async function listBrandsForAdministration() {
