@@ -6,7 +6,7 @@ import {
   UserStatus,
 } from "@prisma/client";
 import { describe, expect, it } from "vitest";
-import { authorizeBrandAccess, selectInitialBrand } from "./access";
+import { authorizeBrandAccess, selectCurrentBrand, selectInitialBrand } from "./access";
 
 const activeMember = {
   role: BrandRole.MEMBER,
@@ -134,6 +134,28 @@ describe("selectInitialBrand", () => {
 
   it("requires an explicit choice when multiple brands remain", () => {
     expect(selectInitialBrand({ accessibleBrandIds: ["contigo", "melbourne"] })).toBeNull();
+  });
+});
+
+describe("selectCurrentBrand", () => {
+  it("keeps an accessible brand selected after the user switches", () => {
+    expect(
+      selectCurrentBrand({
+        accessibleBrandIds: ["contigo", "melbourne"],
+        activeBrandId: "melbourne",
+        entryBrandId: "contigo",
+      }),
+    ).toBe("melbourne");
+  });
+
+  it("rejects a tampered active-brand cookie", () => {
+    expect(
+      selectCurrentBrand({
+        accessibleBrandIds: ["contigo"],
+        activeBrandId: "bookkeeping-conroe",
+        entryBrandId: "contigo",
+      }),
+    ).toBe("contigo");
   });
 });
 

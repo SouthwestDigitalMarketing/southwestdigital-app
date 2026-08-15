@@ -44,6 +44,10 @@ Request hostname
 
 Production hostnames are data. They must not be compiled into proxy or page source code. Host resolution must reject unverified or disabled domain records.
 
+Google OAuth uses a stable Southwest-controlled `AUTH_REDIRECT_PROXY_URL`. Google therefore needs one stable authorized callback while Auth.js preserves the verified originating client hostname in OAuth state and returns the browser there to establish its host-scoped session.
+
+Browsers cannot share cookies across unrelated client domains. The global user identity and credentials are shared, but each client hostname establishes its own secure host-scoped session. True cross-domain single sign-on, if later required, must use an explicit one-time-token broker rather than attempting shared cookies.
+
 ## Brand switching
 
 The switcher displays active memberships only. Changing brands creates new validated brand context; it does not change the user's identity. No data query may rely solely on a client-submitted `brandId` or slug.

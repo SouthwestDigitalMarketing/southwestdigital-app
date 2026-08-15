@@ -15,9 +15,8 @@ There is one tenant level: `Brand`.
 - A user may switch only among brands for which they have an active membership.
 - Southwest platform roles are independent from brand roles.
 
-See [the platform blueprint](docs/architecture/platform-blueprint.md) and [data ownership policy](docs/architecture/data-ownership.md).
+See [the platform blueprint](docs/architecture/platform-blueprint.md), [authentication design](docs/architecture/authentication.md), and [data ownership policy](docs/architecture/data-ownership.md).
 
 ## Status
 
 The repository is in its foundation phase. No production database, DNS, or authentication traffic has been cut over.
-
