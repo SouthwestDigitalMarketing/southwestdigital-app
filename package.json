@@ -11,6 +11,8 @@
     "test": "vitest run",
     "test:auth-foundation:windows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-foundation.ps1",
     "test:crm-isolation:windows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test-crm-isolation.ps1",
+    "test:initial-seed:windows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test-initial-brand-seed.ps1",
+    "seed:initial:local": "dotenv -e .env.local -- node scripts/seed-initial-brands.mjs",
     "prisma:generate": "dotenv -e .env.local -- prisma generate",
     "prisma:migrate": "dotenv -e .env.local -- prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
