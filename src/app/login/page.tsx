@@ -104,7 +104,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
             </div>
           )}
 
-          {providerIds.google && (
+          {(providerIds.email || providerIds.devBypass) && providerIds.google && (
             <div className="my-5 flex items-center gap-3 text-[11px] uppercase tracking-widest text-slate-400">
               <span className="h-px flex-1 bg-slate-200" />
               <span>or</span>
@@ -112,6 +112,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
             </div>
           )}
 
+          {(providerIds.email || providerIds.devBypass) && (
           <form action={handleSignIn} className={providerIds.google ? "" : "mt-6"}>
             <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600">
               Work email
@@ -131,6 +132,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
               {process.env.NODE_ENV === "development" ? "Sign In" : "Send Magic Link"}
             </button>
           </form>
+          )}
         </div>
 
         {devUsers.length > 0 && (
