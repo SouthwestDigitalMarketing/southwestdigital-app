@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Building2,
-  Tag,
+  Star,
   TrendingUp,
   Users,
   Settings,
@@ -19,7 +19,7 @@ import { signOutAction } from "./actions";
 const NAV = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, exact: true },
   { label: "Clients", href: "/clients", icon: Building2 },
-  { label: "Tickets", href: "/tickets", icon: Tag },
+  { label: "Reviews", href: "/reviews", icon: Star },
   { label: "Pipeline", href: "/pipeline", icon: TrendingUp },
   { label: "Team", href: "/team", icon: Users },
   { label: "Settings", href: "/settings", icon: Settings },
