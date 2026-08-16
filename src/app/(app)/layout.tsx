@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { auth } from "@/auth";
 import { resolveBrand } from "@/lib/brands/resolve";
 import { BrandProvider } from "@/lib/brands/context";
+import { AppShell } from "./AppShell";
 import { MembershipStatus } from "@prisma/client";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -34,7 +35,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <BrandProvider value={{ brand, membership }}>
-      {children}
+      <AppShell user={{ name: session.user.name, email: session.user.email }}>
+        {children}
+      </AppShell>
     </BrandProvider>
   );
 }
