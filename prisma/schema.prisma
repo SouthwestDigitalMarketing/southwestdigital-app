@@ -8,6 +8,8 @@ datasource db {
   directUrl = env("DIRECT_DATABASE_URL")
 }
 
+// ─── Platform-level enums ────────────────────────────────────────────────────
+
 enum PlatformRole {
   NONE
   ADMIN
@@ -18,6 +20,7 @@ enum UserStatus {
   INVITED
   ACTIVE
   SUSPENDED
+  FORMER
 }
 
 enum BrandStatus {
@@ -51,6 +54,319 @@ enum DomainStatus {
   VERIFIED
   DISABLED
 }
+
+// ─── BC-originated enums ─────────────────────────────────────────────────────
+
+enum AccountType {
+  CONTRACTOR
+  INTERN
+  ADMIN
+  STAFF
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  PAID
+}
+
+enum OnboardingFlowAudience {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+enum OnboardingQuestionStatus {
+  OPEN
+  ANSWERED
+  RESOLVED
+}
+
+enum OnboardingStepType {
+  VIDEO
+  FORM
+  ACK
+  LINK
+  FILE_UPLOAD
+}
+
+enum CredentialIcon {
+  AWARD
+  CERTIFICATE
+  BOOK
+  STAR
+  CHECK
+  GRAD_CAP
+}
+
+enum TicketStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  BLOCKED
+  AWAITING_CLIENT_RESPONSE
+  CANCELLED
+  CLOSED
+}
+
+enum TicketUrgency {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum TicketType {
+  MONTHLY_BOOKKEEPING
+  CLEANUP_CATCH_UP_WORK
+  CLIENT_COORDINATION
+  SYSTEM_TROUBLESHOOTING_SUPPORT
+}
+
+enum TicketRoleNeeded {
+  BOOKKEEPER
+  CEO
+}
+
+enum TicketCoordinationLevel {
+  NONE
+  ONE_EMAIL_REPLY
+  ONE_EMAIL_IN_PERSON
+  ONE_EMAIL_VIRTUAL
+  TWO_TO_FIVE_EMAILS
+  TWO_TO_FIVE_EMAILS_IN_PERSON
+  TWO_TO_FIVE_EMAILS_MULTI_VIRTUAL
+}
+
+enum PipelineType {
+  PROSPECTS
+  LEADS
+  CUSTOM
+}
+
+enum LeadKind {
+  LEAD
+  PROSPECT
+}
+
+enum LeadBookkeepingCategory {
+  SMALL_BUSINESS
+  REAL_ESTATE_INVESTOR
+  ECOMMERCE
+  PROFESSIONAL_SERVICES
+  OTHER
+}
+
+enum ReviewChannel {
+  SMS
+  EMAIL
+  BOTH
+}
+
+enum ReviewOutcome {
+  FIVE_STAR
+  FEEDBACK
+}
+
+enum ContentCalendarStatus {
+  PLANNED
+  PRODUCED
+  PUBLISHED
+  CANCELLED
+}
+
+enum StandardsCheckStatus {
+  HITTING
+  NEEDS_WORK
+  NA
+  NOT_REVIEWED
+}
+
+enum EngagementType {
+  MONTHLY_BOOKKEEPING
+  CLEANUP_PROJECT
+  CATCHUP_BOOKKEEPING
+  HOURLY_WORK
+  AUDIT_LENDER_CPA_SUPPORT
+  REAL_ESTATE_CLOSING
+  ADVISORY_CONSULTING
+  OTHER
+}
+
+enum EngagementStatus {
+  DRAFT
+  READY_FOR_REVIEW
+  SENT_TO_CLIENT
+  SENT_FOR_SIGNATURE
+  SIGNED
+  INVOICE_SENT
+  DEPOSIT_PAID
+  ONBOARDING_STARTED
+  ACTIVE
+  COMPLETED
+  TERMINATED
+  INTAKE_SENT
+  INTAKE_STARTED
+  INTAKE_SUBMITTED
+  INTAKE_REVIEWED
+  READY_FOR_AGREEMENT
+  AGREEMENT_GENERATED
+  ONBOARDING_PAID
+  DISCOVERY_STARTED
+  VARIATION_PENDING
+  VARIATION_SIGNED
+  IN_PROGRESS
+  QUESTIONS_PENDING
+  REPORTS_IN_REVIEW
+  DELIVERED
+  COMPLETE
+  PAUSED
+  CANCELLED
+}
+
+enum EngagementPricingModel {
+  FIXED_FEE
+  HOURLY
+  MONTHLY_RECURRING
+  HYBRID
+}
+
+enum ScopingMode {
+  AGREEMENT
+  FULLY_SCOPED_FIXED_FEE
+}
+
+enum OnboardingFeeStatus {
+  NOT_REQUIRED
+  REQUIRED
+  INVOICED
+  PAID
+  WAIVED
+  INCLUDED_IN_PROJECT_FEE
+}
+
+enum FeeCreditTarget {
+  DISCOVERY_DEPOSIT
+  PROJECT_FEE
+  NONE
+}
+
+enum DiscoveryDepositStatus {
+  PENDING
+  INVOICED
+  PAID
+  WAIVED
+}
+
+enum ProposalCatalogScenario {
+  MONTHLY_BOOKKEEPING
+  HISTORICAL_CLEANUP
+  HOURLY_WORK
+}
+
+enum ProposalPackagePriceMode {
+  BASE_MULTIPLIER
+  FIXED
+}
+
+enum ProposalFeatureKind {
+  INCLUDED
+  UPGRADE
+  SUPPORT
+  TECH_REQUIREMENT
+}
+
+enum MemberEngagementType {
+  W2_US
+  CONTRACTOR_US_1099
+  CONTRACTOR_INTL
+}
+
+enum MemberRoleProfile {
+  BOOKKEEPER_INTERN
+  BOOKKEEPER_EMPLOYEE
+  ADMIN
+  MEDIA
+  OTHER
+}
+
+enum MemberRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum MemberI9Status {
+  NOT_STARTED
+  PENDING_REVIEW
+  VERIFIED
+  REJECTED
+}
+
+enum MemberTaxStatus {
+  NOT_REQUIRED
+  NOT_STARTED
+  SUBMITTED
+  APPROVED
+}
+
+enum MemberTinType {
+  SSN
+  EIN
+}
+
+enum MemberPaymentMethod {
+  WISE
+  ACH
+  CHECK
+  PAYPAL
+  OTHER
+}
+
+enum MemberPayCadence {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  ADHOC
+}
+
+enum MemberBackgroundCheckStatus {
+  NOT_REQUIRED
+  NOT_STARTED
+  CONSENTED
+  IN_PROGRESS
+  PASSED
+  FAILED
+  NEEDS_REVIEW
+}
+
+enum MemberOnboardingStatus {
+  INCOMPLETE
+  PENDING_DOCS
+  READY_TO_ACTIVATE
+  ACTIVE
+  INACTIVE
+}
+
+enum MemberDocumentType {
+  I9_IDENTITY
+  I9_WORK_AUTH
+  W4
+  W9
+  CONTRACT
+  NDA
+  BACKGROUND_AUTH
+  RESUME
+  OTHER
+}
+
+enum OnboardingTrack {
+  INTERN
+  EMPLOYEE
+  CONTRACTOR
+}
+
+// ─── Platform identity ────────────────────────────────────────────────────────
 
 model User {
   id            String            @id @default(cuid())
@@ -107,6 +423,8 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+// ─── Brand / tenant ──────────────────────────────────────────────────────────
+
 model Brand {
   id                    String            @id @default(cuid())
   slug                  String            @unique
@@ -144,32 +462,1670 @@ model BrandDomain {
 }
 
 model BrandMembership {
-  id        String           @id @default(cuid())
-  brandId   String
-  userId    String
-  role      BrandRole        @default(MEMBER)
-  status    MembershipStatus @default(INVITED)
-  brand     Brand            @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
+  id                              String                    @id @default(cuid())
+  brandId                         String
+  userId                          String
+  role                            BrandRole                 @default(MEMBER)
+  status                          MembershipStatus          @default(INVITED)
+  accountType                     AccountType?
+  employeeNumber                  Int?
+  isPayrollManager                Boolean                   @default(false)
+  canAccessTickets                Boolean                   @default(false)
+  canUseFocus                     Boolean                   @default(true)
+  hasSeenFocusOnboarding          Boolean                   @default(false)
+  brand                           Brand                     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  user                            User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  internProfile                   InternProfile?
+  memberOnboardingProfile         MemberOnboardingProfile?
+  agreementAcceptances            AgreementAcceptance[]
+  onboardingSteps                 MemberOnboardingStep[]
+  timecardEntries                 TimecardEntry[]
+  timecardSessions                TimecardSession[]
+  contractorInvoices              ContractorInvoice[]
+  careerPathSteps                 CareerPathStep[]
+  credentialBadges                MemberCredentialBadge[]
+  memberDocuments                 MemberDocument[]          @relation("MemberDocuments")
+  uploadedMemberDocuments         MemberDocument[]          @relation("MemberDocumentUploadedBy")
+  memberAuditEvents               MemberAuditEvent[]        @relation("MemberAuditEvents")
+  changedMemberAuditEvents        MemberAuditEvent[]        @relation("MemberAuditChangedBy")
+  createdMemberOnboardingProfiles MemberOnboardingProfile[] @relation("MemberOnboardingCreatedBy")
+  updatedMemberOnboardingProfiles MemberOnboardingProfile[] @relation("MemberOnboardingUpdatedBy")
+  createdOnboardingInvites        OnboardingInvite[]        @relation("OnboardingInviteCreatedBy")
+  linkedOnboardingInvite          OnboardingInvite?         @relation("OnboardingInviteLinkedMember")
+  onboardingFlowAssignments       OnboardingFlowAssignment[]
+  onboardingStepQuestions         OnboardingStepQuestion[]
+  onboardingStepUploads           OnboardingStepUpload[]
+  assignedTickets                 Ticket[]                  @relation("AssignedTickets")
+  ticketComments                  TicketComment[]           @relation("TicketCommentAuthor")
+  createdMeetings                 TeamMeeting[]             @relation("MeetingCreator")
+  meetingAccess                   TeamMeetingAccess[]
+  standardsChecks                 StandardsCheck[]
+  reviewedStandardsChecks         StandardsCheck[]          @relation("StandardsCheckReviewedBy")
+  dailyLogs                       DailyLog[]
+  logItems                        LogItem[]
+  focusQuotes                     FocusQuote[]
+  focusQuoteSetting               FocusQuoteSetting?
+  attendanceRecords               AttendanceRecord[]
+  taskRecords                     TaskRecord[]
+  assignedEngagements             Engagement[]              @relation("EngagementAssignedOwner")
+  reviewedEngagements             Engagement[]              @relation("EngagementInternalReviewer")
+  createdEngagements              Engagement[]              @relation("EngagementCreatedBy")
+  sentReviewRequests              ReviewRequest[]           @relation("ReviewRequestSentBy")
+  createdContentCalendarItems     ContentCalendarItem[]     @relation("ContentCalendarItemCreatedBy")
+  createdPipelines                Pipeline[]                @relation("PipelineCreatedBy")
+  createdClientIntakeInvites      ClientIntakeInvite[]      @relation("ClientIntakeInviteCreatedBy")
+  createdAt                       DateTime                  @default(now())
+  updatedAt                       DateTime                  @updatedAt
 
   @@unique([brandId, userId])
+  @@unique([brandId, employeeNumber])
   @@index([brandId, status, role])
   @@index([userId, status])
 }
 
 model BrandTheme {
-  id              String   @id @default(cuid())
+  id                String   @id @default(cuid())
+  brandId           String   @unique
+  logoUrl           String?
+  logoAlt           String?
+  primaryColor      String   @default("#17324d")
+  accentColor       String   @default("#d79b3b")
+  backgroundColor   String   @default("#f7f8fa")
+  foregroundColor   String   @default("#17202a")
+  supportEmail      String?
+  monthlyViewsGoal  Int?
+  monthlyClicksGoal Int?
+  brand             Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// ─── Member profile data ─────────────────────────────────────────────────────
+
+model InternProfile {
+  id               String          @id @default(cuid())
+  membershipId     String          @unique
+  displayTitle     String?
+  primaryEmail     String?
+  timezone         String?
+  startDate        DateTime?
+  payRateUsd       Decimal?        @db.Decimal(10, 2)
+  weeklyHoursCap   Decimal?        @db.Decimal(6, 2)
+  nextRoleTitle    String?
+  nextReviewDate   DateTime?
+  nextLevelRateUsd Decimal?        @db.Decimal(10, 2)
+  availability     String?
+  workDays         String?
+  workStartTime    String?
+  workEndTime      String?
+  telegramHandle   String?
+  headshotUrl      String?
+  shortBio         String?
+  cohortLabel      String?
+  deviceInfo       String?
+  experienceNotes  String?
+  goals            String?
+  membership       BrandMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+}
+
+model MemberOnboardingProfile {
+  id                         String                      @id @default(cuid())
+  membershipId               String                      @unique
+  legalFirstName             String
+  legalLastName              String
+  preferredName              String?
+  dateOfBirth                DateTime?
+  companyEmail               String?
+  personalEmail              String?
+  personalPhone              String?
+  emergencyContactName       String?
+  emergencyContactPhone      String?
+  addressLine1               String?
+  addressLine2               String?
+  city                       String?
+  region                     String?
+  postalCode                 String?
+  countryCode                String?
+  engagementType             MemberEngagementType?
+  memberRole                 MemberRoleProfile?
+  riskLevel                  MemberRiskLevel?
+  i9Required                 Boolean                     @default(false)
+  i9Status                   MemberI9Status              @default(NOT_STARTED)
+  i9DocumentTypes            Json?
+  i9VerifiedAt               DateTime?
+  w4Status                   MemberTaxStatus             @default(NOT_REQUIRED)
+  w9Status                   MemberTaxStatus             @default(NOT_REQUIRED)
+  tinLast4                   String?
+  tinType                    MemberTinType?
+  paymentMethod              MemberPaymentMethod?
+  paymentEmailOrHandle       String?
+  bankAccountToken           String?
+  payCurrency                String                      @default("USD")
+  payRate                    Float?
+  payCadence                 MemberPayCadence?
+  ndaAccepted                Boolean                     @default(false)
+  ndaAcceptedAt              DateTime?
+  handbookAccepted           Boolean                     @default(false)
+  handbookAcceptedAt         DateTime?
+  dataSecurityAccepted       Boolean                     @default(false)
+  dataSecurityAcceptedAt     DateTime?
+  contractAccepted           Boolean                     @default(false)
+  contractAcceptedAt         DateTime?
+  relationshipType           String?
+  contractorType             String?
+  w9QBAck                    Boolean                     @default(false)
+  w9QBStatus                 String                      @default("NOT_SENT")
+  w9QBNotes                  String?
+  availableStartDate         DateTime?
+  hoursPerWeek               Float?
+  workingDays                Json?
+  typicalHoursStart          String?
+  typicalHoursEnd            String?
+  timezone                   String?
+  scheduleConflicts          String?
+  canWorkUrgent              Boolean                     @default(false)
+  canWorkWeekends            Boolean                     @default(false)
+  scheduleNotes              String?
+  scheduleAck                Boolean                     @default(false)
+  paymentAck                 Boolean                     @default(false)
+  paymentArrangement         String?
+  projectNameProposal        String?
+  projectAmountExpected      Float?
+  projectDeadlineExpected    DateTime?
+  projectNotesContractor     String?
+  adminStatus                String                      @default("INVITED")
+  sowRequired                Boolean                     @default(false)
+  sowSent                    Boolean                     @default(false)
+  sowSigned                  Boolean                     @default(false)
+  approvedForWork            Boolean                     @default(false)
+  adminNotes                 String?
+  backgroundCheckRequired    Boolean                     @default(false)
+  backgroundCheckConsent     Boolean                     @default(false)
+  backgroundCheckConsentAt   DateTime?
+  backgroundCheckStatus      MemberBackgroundCheckStatus @default(NOT_REQUIRED)
+  backgroundCheckProviderRef String?
+  needsQBOAccess             Boolean                     @default(false)
+  needsEmailAccount          Boolean                     @default(false)
+  needsTelegramAccess        Boolean                     @default(false)
+  onboardingStatus           MemberOnboardingStatus      @default(INCOMPLETE)
+  createdByMembershipId      String?
+  updatedByMembershipId      String?
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  membership                 BrandMembership             @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  createdBy                  BrandMembership?            @relation("MemberOnboardingCreatedBy", fields: [createdByMembershipId], references: [id], onDelete: SetNull)
+  updatedBy                  BrandMembership?            @relation("MemberOnboardingUpdatedBy", fields: [updatedByMembershipId], references: [id], onDelete: SetNull)
+
+  @@map("member_onboarding_profiles")
+}
+
+model MemberDocument {
+  id                     String             @id @default(cuid())
+  membershipId           String
+  docType                MemberDocumentType
+  storageKey             String
+  url                    String?
+  checksum               String?
+  uploadedByMembershipId String?
+  uploadedAt             DateTime           @default(now())
+  membership             BrandMembership    @relation("MemberDocuments", fields: [membershipId], references: [id], onDelete: Cascade)
+  uploadedBy             BrandMembership?   @relation("MemberDocumentUploadedBy", fields: [uploadedByMembershipId], references: [id], onDelete: SetNull)
+
+  @@index([membershipId, uploadedAt])
+  @@map("member_documents")
+}
+
+model MemberAuditEvent {
+  id                    String           @id @default(cuid())
+  membershipId          String
+  eventKey              String
+  previousValue         String?
+  newValue              String?
+  changedByMembershipId String?
+  createdAt             DateTime         @default(now())
+  membership            BrandMembership  @relation("MemberAuditEvents", fields: [membershipId], references: [id], onDelete: Cascade)
+  changedBy             BrandMembership? @relation("MemberAuditChangedBy", fields: [changedByMembershipId], references: [id], onDelete: SetNull)
+
+  @@index([membershipId, createdAt])
+  @@map("member_audit_events")
+}
+
+model OnboardingInvite {
+  id                    String               @id @default(cuid())
+  brandId               String
+  tokenHash             String
+  email                 String
+  recipientName         String?
+  role                  MemberRoleProfile
+  onboardingTrack       OnboardingTrack
+  engagementType        MemberEngagementType
+  countryCode           String
+  riskLevel             MemberRiskLevel
+  backgroundCheckRequired Boolean
+  needsQBOAccess        Boolean              @default(false)
+  needsEmailAccount     Boolean              @default(false)
+  needsTelegramAccess   Boolean              @default(true)
+  uiVariant             String?
+  lockedFields          Json?
+  expiresAt             DateTime
+  openedAt              DateTime?
+  usedAt                DateTime?
+  createdByMembershipId String?
+  linkedMembershipId    String?              @unique
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  createdByMembership   BrandMembership?     @relation("OnboardingInviteCreatedBy", fields: [createdByMembershipId], references: [id], onDelete: SetNull)
+  linkedMembership      BrandMembership?     @relation("OnboardingInviteLinkedMember", fields: [linkedMembershipId], references: [id], onDelete: SetNull)
+  submissions           OnboardingSubmission[]
+
+  @@index([brandId, email, createdAt])
+}
+
+model OnboardingSubmission {
+  id                       String           @id @default(cuid())
+  inviteId                 String
+  submittedAt              DateTime         @default(now())
+  ipAddress                String?
+  userAgent                String?
+  payloadSnapshotEncrypted String?
+  invite                   OnboardingInvite @relation(fields: [inviteId], references: [id], onDelete: Cascade)
+}
+
+model AgreementAcceptance {
+  id               String          @id @default(cuid())
+  membershipId     String
+  agreementKey     String
+  agreementVersion String
+  acceptedAt       DateTime        @default(now())
+  membership       BrandMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([membershipId, agreementKey, agreementVersion])
+}
+
+model MemberOnboardingStep {
+  id           String          @id @default(cuid())
+  membershipId String
+  stepKey      String
+  completedAt  DateTime?
+  membership   BrandMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([membershipId, stepKey])
+}
+
+model OnboardingStepConfig {
+  id                       String   @id @default(cuid())
+  stepKey                  String   @unique
+  titleOverride            String?
+  descriptionOverride      String?
+  streamIdOverride         String?
+  linkHrefOverride         String?
+  linkLabelOverride        String?
+  agreementVersionOverride String?
+  updatedAt                DateTime @updatedAt
+  createdAt                DateTime @default(now())
+}
+
+model OnboardingFlow {
+  id                String                     @id @default(cuid())
+  brandId           String
+  key               String
+  label             String
+  audience          OnboardingFlowAudience
+  sortOrder         Int                        @default(100)
+  isActive          Boolean                    @default(true)
+  requireSequential Boolean                    @default(false)
+  steps             OnboardingFlowStepConfig[]
+  customSteps       OnboardingFlowCustomStep[]
+  assignments       OnboardingFlowAssignment[]
+  questions         OnboardingStepQuestion[]
+  stepUploads       OnboardingStepUpload[]
+  stepOrder         OnboardingFlowStepOrder[]
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+
+  @@unique([brandId, key])
+  @@index([brandId, audience, isActive, sortOrder])
+}
+
+model OnboardingFlowStepConfig {
+  id                       String         @id @default(cuid())
+  flowId                   String
+  stepKey                  String
+  titleOverride            String?
+  descriptionOverride      String?
+  streamIdOverride         String?
+  linkHrefOverride         String?
+  linkLabelOverride        String?
+  assetHrefOverride        String?
+  assetLabelOverride       String?
+  objectivesOverride       String?
+  agreementVersionOverride String?
+  requiredOverride         Boolean?
+  blockingOverride         Boolean?
+  isEnabledOverride        Boolean?
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
+  flow                     OnboardingFlow @relation(fields: [flowId], references: [id], onDelete: Cascade)
+
+  @@unique([flowId, stepKey])
+  @@index([flowId, stepKey])
+}
+
+model OnboardingFlowCustomStep {
+  id               String             @id @default(cuid())
+  flowId           String
+  title            String
+  description      String?
+  type             OnboardingStepType
+  required         Boolean            @default(false)
+  blocking         Boolean            @default(false)
+  sortOrder        Int                @default(1000)
+  streamId         String?
+  linkHref         String?
+  linkLabel        String?
+  assetHref        String?
+  assetLabel       String?
+  objectives       String?
+  agreementKey     String?
+  agreementVersion String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  flow             OnboardingFlow     @relation(fields: [flowId], references: [id], onDelete: Cascade)
+
+  @@index([flowId, sortOrder, createdAt])
+}
+
+model OnboardingFlowAssignment {
+  id                     String          @id @default(cuid())
+  membershipId           String
+  flowId                 String
+  isActive               Boolean         @default(true)
+  reviewModeEnabled      Boolean         @default(false)
+  assignedByMembershipId String?
+  assignedAt             DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+  membership             BrandMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  flow                   OnboardingFlow  @relation(fields: [flowId], references: [id], onDelete: Cascade)
+
+  @@unique([membershipId, flowId])
+  @@index([flowId, isActive])
+  @@index([membershipId, isActive])
+}
+
+model OnboardingStepQuestion {
+  id                     String                   @id @default(cuid())
+  membershipId           String
+  flowId                 String
+  stepKey                String
+  questionText           String
+  status                 OnboardingQuestionStatus @default(OPEN)
+  adminReplyText         String?
+  askedAt                DateTime                 @default(now())
+  answeredAt             DateTime?
+  resolvedAt             DateTime?
+  answeredByMembershipId String?
+  updatedAt              DateTime                 @updatedAt
+  membership             BrandMembership          @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  flow                   OnboardingFlow           @relation(fields: [flowId], references: [id], onDelete: Cascade)
+
+  @@unique([membershipId, flowId, stepKey])
+  @@index([flowId, status])
+  @@index([membershipId, status])
+}
+
+model OnboardingStepUpload {
+  id              String          @id @default(cuid())
+  membershipId    String
+  flowId          String
+  stepKey         String
+  storageProvider String          @default("SUPABASE")
+  bucket          String
+  storagePath     String
+  fileName        String
+  mimeType        String?
+  sizeBytes       Int
+  publicUrl       String
+  uploadedAt      DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  membership      BrandMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  flow            OnboardingFlow  @relation(fields: [flowId], references: [id], onDelete: Cascade)
+
+  @@unique([membershipId, flowId, stepKey])
+  @@index([flowId, membershipId])
+}
+
+model OnboardingFlowStepOrder {
+  id        String         @id @default(cuid())
+  flowId    String
+  stepKey   String
+  sortOrder Int
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  flow      OnboardingFlow @relation(fields: [flowId], references: [id], onDelete: Cascade)
+
+  @@unique([flowId, stepKey])
+  @@index([flowId, sortOrder])
+}
+
+// ─── Timekeeping & payroll ───────────────────────────────────────────────────
+
+model TimecardEntry {
+  id           String          @id @default(cuid())
+  membershipId String
+  workDate     DateTime
+  hours        Decimal         @db.Decimal(5, 2)
+  notes        String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  membership   BrandMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@index([membershipId, workDate])
+}
+
+model TimecardSession {
+  id           String          @id @default(cuid())
+  membershipId String
+  clockInAt    DateTime
+  clockOutAt   DateTime?
+  notes        String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  membership   BrandMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@index([membershipId, clockInAt])
+  @@index([membershipId, clockOutAt])
+}
+
+model ContractorInvoice {
+  id                 String          @id @default(cuid())
+  membershipId       String
+  invoiceNumber      String          @unique
+  status             InvoiceStatus   @default(DRAFT)
+  billingPeriodStart DateTime
+  billingPeriodEnd   DateTime
+  totalHours         Decimal         @db.Decimal(10, 2)
+  billingRateUsd     Decimal         @db.Decimal(10, 2)
+  billableAmountUsd  Decimal         @db.Decimal(12, 2)
+  lineItems          Json
+  pdfData            Bytes?
+  submittedAt        DateTime?
+  approvedAt         DateTime?
+  paidAt             DateTime?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  membership         BrandMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@index([membershipId, status])
+  @@index([membershipId, billingPeriodStart, billingPeriodEnd])
+}
+
+model CareerPathStep {
+  id                 String          @id @default(cuid())
+  membershipId       String
+  stepOrder          Int
+  title              String
+  billingRateUsd     Decimal         @db.Decimal(10, 2)
+  weeklyHoursCap     Decimal         @db.Decimal(6, 2)
+  monthlyBenefitsUsd Decimal         @default(0) @db.Decimal(10, 2)
+  notes              String?
+  isActive           Boolean         @default(false)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  membership         BrandMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([membershipId, stepOrder])
+  @@index([membershipId, isActive])
+}
+
+// ─── Credential badges (platform-level) ─────────────────────────────────────
+
+model CredentialBadge {
+  id          String                  @id @default(cuid())
+  key         String                  @unique
+  label       String
+  icon        CredentialIcon
+  ribbonStyle String                  @default("TRI_STRIPE")
+  colorA      String                  @default("#0f172a")
+  colorB      String                  @default("#f8d773")
+  colorC      String?
+  sortOrder   Int                     @default(0)
+  isActive    Boolean                 @default(true)
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  members     MemberCredentialBadge[]
+
+  @@index([isActive, sortOrder])
+}
+
+model MemberCredentialBadge {
+  id                    String          @id @default(cuid())
+  membershipId          String
+  badgeId               String
+  awardedAt             DateTime        @default(now())
+  expiresAt             DateTime?
+  notes                 String?
+  awardedByMembershipId String?
+  membership            BrandMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  badge                 CredentialBadge @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@unique([membershipId, badgeId])
+  @@index([membershipId])
+  @@index([badgeId])
+}
+
+// ─── App notices ──────────────────────────────────────────────────────────────
+
+model AppNotice {
+  id         String     @id @default(cuid())
+  brandId    String
+  title      String
+  body       String
+  targetRole BrandRole?
+  isActive   Boolean    @default(true)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  @@index([brandId, isActive, targetRole])
+}
+
+// ─── Client management ────────────────────────────────────────────────────────
+
+model TicketClient {
+  id                           String               @id @default(cuid())
+  brandId                      String
+  code                         String
+  name                         String?
+  isActive                     Boolean              @default(true)
+  businessLegalName            String?
+  entityType                   String?
+  principalAddressLine1        String?
+  principalAddressLine2        String?
+  principalAddressCity         String?
+  principalAddressState        String?
+  principalAddressPostalCode   String?
+  stateOfFormation             String?
+  principalAddress             String?
+  primaryContactPhone          String?
+  authorizedCommunicationEmail String?
+  noticesEmail                 String?
+  preferredInvoicingEmail      String?
+  clientIntakeInvites          ClientIntakeInvite[]
+  reviewRequests               ReviewRequest[]
+  tickets                      Ticket[]
+  meetings                     TeamMeetingClient[]
+  contacts                     ClientContact[]
+  leads                        MeetingLead[]
+  createdAt                    DateTime             @default(now())
+  updatedAt                    DateTime             @updatedAt
+
+  @@unique([brandId, code])
+  @@index([brandId, isActive])
+}
+
+model ClientIntakeInvite {
+  id                    String           @id @default(cuid())
+  clientId              String
+  tokenHash             String
+  expiresAt             DateTime
+  usedAt                DateTime?
+  createdByMembershipId String?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  client                TicketClient     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdBy             BrandMembership? @relation("ClientIntakeInviteCreatedBy", fields: [createdByMembershipId], references: [id], onDelete: SetNull)
+
+  @@index([clientId, createdAt])
+}
+
+// ─── Reviews ──────────────────────────────────────────────────────────────────
+
+model ReviewRequest {
+  id                  String           @id @default(cuid())
+  brandId             String
+  clientId            String?
+  token               String           @unique @default(cuid())
+  channel             ReviewChannel
+  recipientPhone      String?
+  recipientEmail      String?
+  recipientName       String?
+  sentAt              DateTime         @default(now())
+  openedAt            DateTime?
+  clickedAt           DateTime?
+  outcome             ReviewOutcome?
+  feedbackRating      Int?
+  feedbackText        String?
+  sentByMembershipId  String?
+  contactId           String?
+  campaignId          String?
+  client              TicketClient?    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  sentBy              BrandMembership? @relation("ReviewRequestSentBy", fields: [sentByMembershipId], references: [id], onDelete: SetNull)
+  contact             Contact?         @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  campaign            Campaign?        @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@index([brandId, createdAt])
+  @@index([clientId, createdAt])
+  @@index([token])
+  @@index([campaignId])
+  @@index([contactId])
+}
+
+model Campaign {
+  id          String            @id @default(cuid())
+  brandId     String
+  name        String
+  description String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  contacts    CampaignContact[]
+  requests    ReviewRequest[]
+
+  @@index([brandId])
+}
+
+model CampaignContact {
+  id         String   @id @default(cuid())
+  campaignId String
+  contactId  String
+  addedAt    DateTime @default(now())
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contact    Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, contactId])
+  @@index([campaignId])
+}
+
+// ─── Contacts & CRM ──────────────────────────────────────────────────────────
+
+model Contact {
+  id             String               @id @default(cuid())
+  brandId        String
+  name           String
+  firstName      String?
+  lastName       String?
+  email          String?
+  secondaryEmail String?
+  phoneE164      String?
+  businessEmail  String?
+  personalEmail  String?
+  phoneNumber    String?
+  roleTitle      String?
+  isActive       Boolean              @default(true)
+  clientLinks    ClientContact[]
+  leadLinks      LeadContact[]
+  meetings       TeamMeetingContact[]
+  campaignLinks  CampaignContact[]
+  reviewRequests ReviewRequest[]
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@index([brandId, isActive, name])
+  @@index([brandId, email])
+}
+
+model ClientContact {
+  id        String       @id @default(cuid())
+  clientId  String
+  contactId String
+  createdAt DateTime     @default(now())
+  client    TicketClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  contact   Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, contactId])
+  @@index([contactId, createdAt])
+}
+
+model LeadContact {
+  id        String      @id @default(cuid())
+  leadId    String
+  contactId String
+  createdAt DateTime    @default(now())
+  lead      MeetingLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  contact   Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([leadId, contactId])
+  @@index([contactId, createdAt])
+}
+
+// ─── Tickets ──────────────────────────────────────────────────────────────────
+
+model Ticket {
+  id                   String                  @id @default(cuid())
+  brandId              String
+  ticketNumber         String?
+  clientId             String
+  urgency              TicketUrgency           @default(MEDIUM)
+  description          String
+  status               TicketStatus            @default(NOT_STARTED)
+  openedOn             DateTime
+  deadline             DateTime
+  closedOn             DateTime?
+  assignedMembershipId String?
+  assignedNameLegacy   String?
+  type                 TicketType
+  roleNeeded           TicketRoleNeeded
+  coordinationLevel    TicketCoordinationLevel @default(NONE)
+  ticketFolderUrl      String?
+  postBriefUrl         String?
+  notes                String?
+  importSource         String?
+  importKey            String?                 @unique
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+  client               TicketClient            @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  assignedMembership   BrandMembership?        @relation("AssignedTickets", fields: [assignedMembershipId], references: [id], onDelete: SetNull)
+  comments             TicketComment[]
+
+  @@index([brandId, status, clientId])
+  @@index([assignedMembershipId, status])
+  @@index([deadline])
+}
+
+model TicketComment {
+  id                 String          @id @default(cuid())
+  ticketId           String
+  authorMembershipId String
+  body               String
+  createdAt          DateTime        @default(now())
+  ticket             Ticket          @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorMembership   BrandMembership @relation("TicketCommentAuthor", fields: [authorMembershipId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+  @@index([authorMembershipId, createdAt])
+}
+
+// ─── Team meetings ────────────────────────────────────────────────────────────
+
+model TeamMeeting {
+  id                    String               @id @default(cuid())
+  brandId               String
+  title                 String
+  meetingUrl            String
+  meetingDate           DateTime
+  provider              String               @default("FIREFLIES")
+  notes                 String?
+  externalId            String?              @unique
+  source                String               @default("manual")
+  createdByMembershipId String
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  createdBy             BrandMembership      @relation("MeetingCreator", fields: [createdByMembershipId], references: [id], onDelete: Cascade)
+  accesses              TeamMeetingAccess[]
+  clients               TeamMeetingClient[]
+  leads                 TeamMeetingLead[]
+  tags                  TeamMeetingTag[]
+  contacts              TeamMeetingContact[]
+
+  @@index([brandId, meetingDate])
+  @@index([createdByMembershipId])
+}
+
+model TeamMeetingAccess {
+  id           String          @id @default(cuid())
+  meetingId    String
+  membershipId String
+  createdAt    DateTime        @default(now())
+  meeting      TeamMeeting     @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  membership   BrandMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, membershipId])
+  @@index([membershipId, createdAt])
+}
+
+model TeamMeetingClient {
+  id        String       @id @default(cuid())
+  meetingId String
+  clientId  String
+  createdAt DateTime     @default(now())
+  meeting   TeamMeeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  client    TicketClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, clientId])
+  @@index([clientId, createdAt])
+}
+
+model MeetingLead {
+  id                  String                  @id @default(cuid())
+  brandId             String
+  name                String
+  company             String?
+  email               String?
+  clientId            String?
+  kind                LeadKind                @default(LEAD)
+  bookkeepingCategory LeadBookkeepingCategory @default(SMALL_BUSINESS)
+  expectedServices    String?
+  notes               String?
+  isActive            Boolean                 @default(true)
+  client              TicketClient?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  meetings            TeamMeetingLead[]
+  contacts            LeadContact[]
+  pipelineItems       PipelineItem[]
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+
+  @@index([brandId, clientId, createdAt])
+}
+
+model TeamMeetingLead {
+  id        String      @id @default(cuid())
+  meetingId String
+  leadId    String
+  createdAt DateTime    @default(now())
+  meeting   TeamMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  lead      MeetingLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, leadId])
+  @@index([leadId, createdAt])
+}
+
+model MeetingTag {
+  id        String           @id @default(cuid())
+  brandId   String
+  key       String
+  label     String
+  isActive  Boolean          @default(true)
+  sortOrder Int              @default(0)
+  meetings  TeamMeetingTag[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([brandId, key])
+  @@index([brandId, isActive, sortOrder])
+}
+
+model TeamMeetingTag {
+  id        String      @id @default(cuid())
+  meetingId String
+  tagId     String
+  createdAt DateTime    @default(now())
+  meeting   TeamMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  tag       MeetingTag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, tagId])
+  @@index([tagId, createdAt])
+}
+
+model TeamMeetingContact {
+  id        String      @id @default(cuid())
+  meetingId String
+  contactId String
+  createdAt DateTime    @default(now())
+  meeting   TeamMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  contact   Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, contactId])
+  @@index([contactId, createdAt])
+}
+
+// ─── Pipeline ─────────────────────────────────────────────────────────────────
+
+model Pipeline {
+  id                    String           @id @default(cuid())
+  brandId               String
+  key                   String
+  name                  String
+  type                  PipelineType     @default(CUSTOM)
+  description           String?
+  isActive              Boolean          @default(true)
+  createdByMembershipId String?
+  createdBy             BrandMembership? @relation("PipelineCreatedBy", fields: [createdByMembershipId], references: [id], onDelete: SetNull)
+  stages                PipelineStage[]
+  items                 PipelineItem[]
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  @@unique([brandId, key])
+  @@index([brandId, type, isActive])
+}
+
+model PipelineStage {
+  id              String         @id @default(cuid())
+  pipelineId      String
+  key             String
+  name            String
+  description     String?
+  sortOrder       Int            @default(100)
+  valueMultiplier Decimal        @default(0.01) @db.Decimal(6, 3)
+  isActive        Boolean        @default(true)
+  isTerminal      Boolean        @default(false)
+  pipeline        Pipeline       @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  items           PipelineItem[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@unique([pipelineId, key])
+  @@index([pipelineId, sortOrder, isActive])
+}
+
+model PipelineItem {
+  id           String        @id @default(cuid())
+  pipelineId   String
+  stageId      String
+  leadId       String
+  baseValueUsd Decimal       @default(0) @db.Decimal(12, 2)
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  pipeline     Pipeline      @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  stage        PipelineStage @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  lead         MeetingLead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([pipelineId, leadId])
+  @@index([stageId, isActive])
+  @@index([pipelineId, isActive])
+}
+
+// ─── Content & analytics ─────────────────────────────────────────────────────
+
+model ContentCalendarItem {
+  id                    String                @id @default(cuid())
+  brandId               String
+  title                 String
+  notes                 String?
+  status                ContentCalendarStatus @default(PLANNED)
+  plannedPublishDate    DateTime
+  producedAt            DateTime?
+  actualPublishDate     DateTime?
+  youtubeVideoId        String?               @unique
+  sourceTag             String?               @unique
+  vidiqScore            Float?
+  vidiqVolume           Int?
+  vidiqCompetition      Float?
+  vidiqCapturedAt       DateTime?
+  videoDescription      String?
+  videoTags             String?
+  pinnedComment         String?
+  videoScript           String?
+  localFolderPath       String?
+  thumbnailPath         String?
+  thumbnailText         String?
+  createdByMembershipId String?
+  sortOrder             Int                   @default(0)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  createdByMembership   BrandMembership?      @relation("ContentCalendarItemCreatedBy", fields: [createdByMembershipId], references: [id], onDelete: SetNull)
+
+  @@index([brandId, status, plannedPublishDate])
+  @@index([plannedPublishDate])
+}
+
+model SourceTagClickDaily {
+  id        String   @id @default(cuid())
+  date      DateTime @db.Date
+  tag       String
+  brandId   String
+  clicks    Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([date, tag, brandId])
+  @@index([tag])
+  @@index([brandId])
+}
+
+model ArchivedYouTubeVideo {
+  videoId    String   @id
+  brandId    String
+  title      String
+  archivedAt DateTime @default(now())
+
+  @@index([brandId])
+}
+
+model StrategyNote {
+  id              Int      @id @default(autoincrement())
   brandId         String   @unique
-  logoUrl         String?
-  logoAlt         String?
-  primaryColor    String   @default("#17324d")
-  accentColor     String   @default("#d79b3b")
-  backgroundColor String   @default("#f7f8fa")
-  foregroundColor String   @default("#17202a")
-  supportEmail    String?
-  brand           Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  goalHeading     String?  @db.Text
+  goalSubtitle    String?  @db.Text
+  goalDescription String?  @db.Text
+  bottleneck      String?  @db.Text
+  strategy        String?  @db.Text
+  dailyAction     String?  @db.Text
+  reward          String?  @db.Text
+  updatedAt       DateTime @updatedAt
+}
+
+// ─── Team tools ───────────────────────────────────────────────────────────────
+
+model DailyLog {
+  id           String          @id @default(cuid())
+  membershipId String
+  date         String
+  item1        String          @default("")
+  item2        String          @default("")
+  item3        String          @default("")
+  item1Done    Boolean         @default(false)
+  item2Done    Boolean         @default(false)
+  item3Done    Boolean         @default(false)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  membership   BrandMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([membershipId, date])
+  @@index([membershipId, date])
+}
+
+model LogItem {
+  id                   String          @id @default(cuid())
+  membershipId         String
+  workDate             String
+  title                String          @default("")
+  notes                String?
+  status               String          @default("PENDING")
+  completedAt          DateTime?
+  archivedAt           DateTime?
+  dailySlot            Int?
+  dailyMarkedDate      String?
+  dailyAssignedDate    String?
+  shurikenSlot         Int?
+  shurikenMarkedDate   String?
+  shurikenAssignedDate String?
+  subtasks             Json            @default("[]")
+  isToday              Boolean         @default(false)
+  sortOrder            Int             @default(0)
+  legacyKey            String?         @unique
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  membership           BrandMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@index([membershipId, isToday, status, workDate])
+  @@index([membershipId, sortOrder])
+  @@map("log_items")
+}
+
+model FocusQuote {
+  id              String              @id @default(cuid())
+  membershipId    String
+  text            String
+  author          String              @default("")
+  sortOrder       Int                 @default(0)
+  createdAt       DateTime            @default(now())
+  membership      BrandMembership     @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  pinnedBySetting FocusQuoteSetting[]
+
+  @@index([membershipId, sortOrder])
+  @@map("focus_quotes")
+}
+
+model FocusQuoteSetting {
+  id              String          @id @default(cuid())
+  membershipId    String          @unique
+  rotationMode    String          @default("random")
+  intervalMinutes Int             @default(10)
+  pinnedQuoteId   String?
+  updatedAt       DateTime        @updatedAt
+  membership      BrandMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  pinnedQuote     FocusQuote?     @relation(fields: [pinnedQuoteId], references: [id], onDelete: SetNull)
+
+  @@map("focus_quote_settings")
+}
+
+model StandardsCheck {
+  id                     String               @id @default(cuid())
+  membershipId           String
+  standardKey            String
+  status                 StandardsCheckStatus @default(NOT_REVIEWED)
+  notes                  String?
+  reviewedByMembershipId String?
+  reviewedAt             DateTime?
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  membership             BrandMembership      @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  reviewedBy             BrandMembership?     @relation("StandardsCheckReviewedBy", fields: [reviewedByMembershipId], references: [id], onDelete: SetNull)
+
+  @@unique([membershipId, standardKey])
+  @@index([membershipId])
+  @@map("standards_checks")
+}
+
+model AttendanceRecord {
+  id                     String          @id @default(cuid())
+  membershipId           String
+  date                   String
+  status                 String
+  recordedByMembershipId String
+  recordedAt             DateTime
+  membership             BrandMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([membershipId, date])
+  @@map("scorecard_attendance_records")
+}
+
+model TaskRecord {
+  id                     String          @id @default(cuid())
+  membershipId           String
+  weekStart              String
+  status                 String
+  recordedByMembershipId String
+  recordedAt             DateTime
+  membership             BrandMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([membershipId, weekStart])
+  @@map("scorecard_task_records")
+}
+
+// ─── Legends & motivation (platform-level) ───────────────────────────────────
+
+model Legend {
+  id             String              @id @default(cuid())
+  name           String              @unique
+  slug           String              @unique
+  earlyImageUrl  String?
+  legendImageUrl String?
+  active         Boolean             @default(true)
+  sortOrder      Int                 @default(0)
+  quotes         MotivationalQuote[]
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([active, sortOrder])
+  @@map("legends")
+}
+
+model MotivationalQuote {
+  id        String   @id @default(cuid())
+  legendId  String
+  text      String
+  source    String?
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  legend    Legend   @relation(fields: [legendId], references: [id], onDelete: Cascade)
+
+  @@index([active, sortOrder])
+  @@index([legendId, active, sortOrder])
+  @@map("motivational_quotes")
+}
+
+// ─── Engagements & proposals ─────────────────────────────────────────────────
+
+model Engagement {
+  id                                 String                  @id @default(cuid())
+  brandId                            String
+  clientName                         String                  @default("")
+  clientLegalName                    String                  @default("")
+  dba                                String?
+  entityType                         String?
+  primaryContactName                 String?
+  primaryContactEmail                String?
+  primaryContactPhone                String?
+  billingContactName                 String?
+  billingContactEmail                String?
+  billingContactPhone                String?
+  businessAddress                    String?
+  quickBooksCompanyName              String?
+  relatedEntities                    String?
+  clientNotes                        String?
+  engagementType                     EngagementType?
+  status                             EngagementStatus        @default(DRAFT)
+  pricingModel                       EngagementPricingModel?
+  feeAmount                          Decimal?
+  hourlyRate                         Decimal?
+  depositRequired                    Boolean                 @default(false)
+  depositAmount                      Decimal?
+  billingFrequency                   String?
+  paymentTerms                       String?
+  effectiveDate                      DateTime?
+  startDate                          DateTime?
+  endDate                            DateTime?
+  assignedOwnerMembershipId          String?
+  internalReviewerMembershipId       String?
+  urgencyNotes                       String?
+  notes                              String?
+  realEstateDetails                  Json?
+  monthlyScope                       Json?
+  cleanupScope                       Json?
+  hourlyScope                        Json?
+  auditSupportScope                  Json?
+  exclusions                         Json?
+  customExclusions                   Json?
+  intakeTokenHash                    String?
+  intakeData                         Json?
+  onboardingData                     Json?
+  intakeSubmittedAt                  DateTime?
+  intakeExpiresAt                    DateTime?
+  salesCallCompleted                 Boolean                 @default(false)
+  salesCallDate                      DateTime?
+  salesCallNotes                     String?
+  initialClientProblem               String?
+  urgencyOrDeadline                  String?
+  initialEstimateDiscussed           String?
+  scopingMode                        ScopingMode             @default(AGREEMENT)
+  isExpedited                        Boolean                 @default(false)
+  onboardingFee                      Decimal?
+  onboardingFeeWaived                Boolean                 @default(false)
+  onboardingFeeStatus                OnboardingFeeStatus     @default(REQUIRED)
+  onboardingFeeCreditable            Boolean                 @default(true)
+  onboardingFeeCreditAppliedTo       FeeCreditTarget         @default(DISCOVERY_DEPOSIT)
+  onboardingFeeCreditAmount          Decimal?
+  estimatedTotalFee                  Decimal?
+  discoveryDepositPercent            Decimal                 @default(25)
+  discoveryDepositStatus             DiscoveryDepositStatus?
+  fullFeeDueUpfront                  Boolean                 @default(false)
+  discoveryRequired                  Boolean                 @default(true)
+  discoveryCompletedAt               DateTime?
+  finalScopeConfirmedAt              DateTime?
+  revisedFeeAmount                   Decimal?
+  changeOrderRequired                Boolean                 @default(false)
+  periodStart                        DateTime?
+  periodEnd                          DateTime?
+  taxYearsInvolved                   String?
+  accountsIncluded                   String?
+  creditCardsIncluded                String?
+  loansIncluded                      String?
+  payrollInvolved                    Boolean                 @default(false)
+  contractorPaymentsInvolved         Boolean                 @default(false)
+  missingRecordsKnown                String?
+  knownProblems                      String?
+  requiredDocuments                  String?
+  deliverables                       String?
+  specialReportingPeriodStart        DateTime?
+  specialReportingPeriodEnd          DateTime?
+  specialReportDescription           String?
+  auditPolicyOrLenderSupportRequired Boolean                 @default(false)
+  agreementText                      String?
+  agreementSentAt                    DateTime?
+  agreementTokenHash                 String?
+  signerName                         String?
+  signerTitle                        String?
+  signedAt                           DateTime?
+  signerIpAddress                    String?
+  signerUserAgent                    String?
+  agreementTextHash                  String?
+  consentToElectronicSignature       Boolean                 @default(false)
+  agreementReadAndAgreed             Boolean                 @default(false)
+  agreementScrolledToEnd             Boolean                 @default(false)
+  agreementScrolledAt                DateTime?
+  agreementNotes                     String?
+  isTestProposal                     Boolean                 @default(false)
+  discoveryTokenHash                 String?
+  createdByMembershipId              String?
+  createdAt                          DateTime                @default(now())
+  updatedAt                          DateTime                @updatedAt
+  discoveryItems                     DiscoveryItem[]
+  proposalDocuments                  ProposalDocument[]
+  assignedOwner                      BrandMembership?        @relation("EngagementAssignedOwner", fields: [assignedOwnerMembershipId], references: [id], onDelete: SetNull)
+  internalReviewer                   BrandMembership?        @relation("EngagementInternalReviewer", fields: [internalReviewerMembershipId], references: [id], onDelete: SetNull)
+  createdBy                          BrandMembership?        @relation("EngagementCreatedBy", fields: [createdByMembershipId], references: [id], onDelete: SetNull)
+
+  @@index([brandId, status, engagementType])
+  @@index([assignedOwnerMembershipId])
+  @@index([createdAt])
+}
+
+model DiscoveryItem {
+  id           String     @id @default(cuid())
+  engagementId String
+  category     String     @default("General")
+  label        String
+  instructions String?
+  status       String     @default("PENDING")
+  clientNote   String?
+  fileUrl      String?
+  adminNote    String?
+  sortOrder    Int        @default(0)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  engagement   Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+
+  @@index([engagementId])
+}
+
+model ProposalDocument {
+  id                      String            @id @default(cuid())
+  brandId                 String
+  engagementId            String?           @unique
+  slug                    String            @unique
+  companyName             String
+  preparedFor             String
+  serviceType             String
+  cleanupPeriodStart      DateTime?
+  cleanupPeriodEnd        DateTime?
+  projectGoal             String
+  estimatedTotalFee       Decimal?          @db.Decimal(12, 2)
+  displayMode             String            @default("document")
+  status                  String            @default("draft")
+  publicStatus            String            @default("draft")
+  paymentMethod           String?
+  introPaymentSentence    String?
+  acceptedAt              DateTime?
+  acceptedByName          String?
+  acceptedByEmail         String?
+  acceptanceIp            String?
+  acceptanceUserAgent     String?
+  acceptanceNote          String?
+  acceptedSnapshot        Json?
+  agreementPreparedAt     DateTime?
+  agreementSentAt         DateTime?
+  agreementSignedAt       DateTime?
+  phase3InvoiceSentAt     DateTime?
+  phase3PaymentReceivedAt DateTime?
+  phases                  ProposalPhase[]
+  sections                ProposalSection[]
+  engagement              Engagement?       @relation(fields: [engagementId], references: [id], onDelete: SetNull)
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+
+  @@index([brandId, displayMode, status])
+  @@index([publicStatus, slug])
+  @@map("proposal_documents")
+}
+
+model ProposalPhase {
+  id           String              @id @default(cuid())
+  proposalId   String
+  phaseNumber  Int
+  title        String
+  status       String              @default("pending")
+  amount       Decimal?            @db.Decimal(12, 2)
+  amountType   String              @default("fixed")
+  paymentNote  String?
+  introduction String?
+  displayOrder Int                 @default(100)
+  proposal     ProposalDocument    @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  items        ProposalPhaseItem[]
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@index([proposalId, displayOrder])
+  @@map("proposal_phases")
+}
+
+model ProposalPhaseItem {
+  id           String        @id @default(cuid())
+  phaseId      String
+  text         String
+  displayOrder Int           @default(100)
+  phase        ProposalPhase @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([phaseId, displayOrder])
+  @@map("proposal_phase_items")
+}
+
+model ProposalSection {
+  id           String               @id @default(cuid())
+  proposalId   String
+  sectionKey   String
+  title        String
+  body         String?
+  displayOrder Int                  @default(100)
+  proposal     ProposalDocument     @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  items        ProposalSectionItem[]
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@index([proposalId, displayOrder])
+  @@map("proposal_sections")
+}
+
+model ProposalSectionItem {
+  id           String          @id @default(cuid())
+  sectionId    String
+  text         String
+  displayOrder Int             @default(100)
+  section      ProposalSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([sectionId, displayOrder])
+  @@map("proposal_section_items")
+}
+
+model ProposalPackage {
+  id                        String                   @id @default(cuid())
+  brandId                   String
+  key                       String
+  scenario                  ProposalCatalogScenario
+  name                      String
+  summary                   String
+  descriptionLong           String?
+  supportLabel              String
+  supportIncludes           String
+  supportStars              Int                      @default(1)
+  highlightLabel            String?
+  tier                      Int                      @default(1)
+  priceMode                 ProposalPackagePriceMode @default(BASE_MULTIPLIER)
+  priceValue                Decimal?
+  onboardingFee             Decimal?                 @db.Decimal(12, 2)
+  billingType               String                   @default("recurring")
+  whyItMatters              Json?
+  displayOrder              Int                      @default(100)
+  badge                     String?
+  leadIn                    String?
+  positioningStatement      String?
+  buttonLabel               String?
+  paymentStage1Label        String?
+  paymentStage1Amount       Decimal?                 @db.Decimal(12, 2)
+  paymentStage2Label        String?
+  paymentStage2Amount       Decimal?                 @db.Decimal(12, 2)
+  paymentStage3Label        String?
+  paymentStage3Amount       Decimal?                 @db.Decimal(12, 2)
+  clientResponsibilities    Json?
+  exclusions                Json?
+  responseStandard          String?
+  expeditedCommitment       String?
+  workingSessionLimit       Int?
+  receiptLimit              Int?
+  responseCommitmentTitle   String?
+  responseCommitmentBody    String?
+  onboardingSummary         String?
+  onboardingItems           Json?
+  executionSummary          String?
+  executionItems            Json?
+  expeditedAddOnPrice       Decimal?                 @db.Decimal(12, 2)
+  expeditedAddOnLabel       String?
+  expeditedAddOnDescription String?
+  isActive                  Boolean                  @default(true)
+  features                  ProposalPackageFeature[]
+  packageServices           PackageService[]
+  pricingRules              PricingRule[]
+  createdAt                 DateTime                 @default(now())
+  updatedAt                 DateTime                 @updatedAt
+
+  @@unique([brandId, key])
+  @@index([brandId, scenario, isActive, displayOrder])
+}
+
+model ProposalPackageFeature {
+  id              String              @id @default(cuid())
+  packageId       String
+  kind            ProposalFeatureKind @default(INCLUDED)
+  shortLabel      String
+  longDescription String?
+  displayOrder    Int                 @default(100)
+  package         ProposalPackage     @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([packageId, displayOrder])
+}
+
+model CatalogService {
+  id                  String           @id @default(cuid())
+  brandId             String
+  code                String?
+  name                String
+  internalDescription String?          @map("description")
+  cardLabel           String?          @map("card_label")
+  clientBenefit       String?          @map("client_benefit")
+  service             String           @default("cleanup") @map("itemType")
+  category            String
+  priority            Int              @default(500)
+  defaultInclusion    String?          @map("default_inclusion")
+  estimatedHours      Decimal?         @db.Decimal(6, 2)
+  internalNotes       String?          @map("internal_notes")
+  active              Boolean          @default(true)
+  packageServices     PackageService[]
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@unique([brandId, code])
+  @@index([brandId, active, category])
+  @@map("catalog_services")
+}
+
+model PackageService {
+  id            String          @id @default(cuid())
+  packageId     String
+  serviceId     String
+  inclusionType String          @default("included")
+  notes         String?
+  package       ProposalPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  service       CatalogService  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  createdAt     DateTime        @default(now())
+
+  @@unique([packageId, serviceId])
+  @@index([packageId])
+  @@index([serviceId])
+  @@map("package_services")
+}
+
+model PricingRule {
+  id          String          @id @default(cuid())
+  packageId   String
+  name        String          @default("")
+  description String?
+  ruleType    String
+  configJson  Json
+  billingType String          @default("recurring")
+  minPrice    Decimal?        @db.Decimal(12, 2)
+  maxPrice    Decimal?        @db.Decimal(12, 2)
+  sortOrder   Int             @default(100)
+  package     ProposalPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([packageId, sortOrder])
+  @@map("pricing_rules")
+}
+
+model ProposalSelection {
+  id                  String   @id @default(cuid())
+  engagementId        String
+  packageKey          String
+  packageName         String
+  selectedPrice       Decimal? @db.Decimal(12, 2)
+  clientName          String?
+  status              String   @default("pending")
+  expeditedSelected   Boolean  @default(false)
+  expeditedAddOnPrice Decimal? @db.Decimal(12, 2)
+  selectedAt          DateTime @default(now())
+
+  @@index([engagementId])
+  @@map("proposal_selections")
+}
+
+// ─── Quotes ──────────────────────────────────────────────────────────────────
+
+model QuoteClient {
+  id        String   @id @default(cuid())
+  brandId   String
+  name      String
+  email     String
+  company   String?
+  notes     String?
+  quotes    Quote[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([brandId, email])
+  @@map("quote_clients")
+}
+
+model Quote {
+  id             String          @id @default(cuid())
+  brandId        String
+  slug           String          @unique
+  clientId       String
+  status         String          @default("draft")
+  packageId      String?
+  totalOneTime   Decimal         @default(0) @db.Decimal(12, 2)
+  totalRecurring Decimal         @default(0) @db.Decimal(12, 2)
+  onboardingFee  Decimal         @default(0) @db.Decimal(12, 2)
+  snapshotJson   Json
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  expiresAt      DateTime?
+  client         QuoteClient     @relation(fields: [clientId], references: [id])
+  lineItems      QuoteLineItem[]
+
+  @@index([brandId, clientId, status])
+  @@index([status, createdAt])
+  @@map("quotes")
+}
+
+model QuoteLineItem {
+  id          String   @id @default(cuid())
+  quoteId     String
+  label       String
+  description String?
+  amount      Decimal  @db.Decimal(12, 2)
+  billingType String
+  sortOrder   Int      @default(100)
+  quote       Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@index([quoteId, sortOrder])
+  @@map("quote_line_items")
+}
+
+model QuoteTemplate {
+  id                 String   @id @default(cuid())
+  name               String
+  slug               String   @unique
+  layoutType         String   @default("3-column")
+  sections           Json     @default("[]")
+  highlightMiddle    Boolean  @default(true)
+  showInclusions     Boolean  @default(true)
+  showPriceBreakdown Boolean  @default(true)
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("quote_templates")
+}
+
+// ─── Firm & financial ─────────────────────────────────────────────────────────
+
+model FirmProfile {
+  id               String   @id @default(cuid())
+  brandId          String   @unique
+  legalName        String   @default("")
+  dba              String?
+  addressLine1     String?
+  addressLine2     String?
+  city             String?
+  state            String?
+  postalCode       String?
+  phone            String?
+  email            String?
+  ein              String?
+  sosFileNumber    String?  @map("sos_file_number")
+  stateOfFormation String?
+  logoUrl          String?
+  website          String?
+  qboFirmId        String?  @map("qbo_firm_id")
+  updatedAt        DateTime @updatedAt
+  createdAt        DateTime @default(now())
+
+  @@map("firm_profile")
+}
+
+model CompanyRevenueMonth {
+  id              String   @id @default(cuid())
+  brandId         String
+  monthStart      DateTime
+  grossRevenueUsd Decimal  @db.Decimal(12, 2)
+  notes           String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  @@unique([brandId, monthStart])
+  @@index([brandId])
 }
