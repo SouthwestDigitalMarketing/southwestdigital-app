@@ -4,13 +4,26 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { resolveBrand } from "@/lib/brands/resolve";
 import { MembershipStatus } from "@prisma/client";
-import { getSiteHealth, getTrafficTrend, type SiteHealth } from "@/lib/analytics/ga4";
+import { getSiteHealth, getTrafficTrend, getHourlyTraffic, type SiteHealth } from "@/lib/analytics/ga4";
 import { PeriodSelector } from "./PeriodSelector";
 import { SiteTrafficGraph, type TrafficComparisonRow } from "./SiteTrafficGraph";
+import { RealtimeWidget } from "./RealtimeWidget";
 
 export const dynamic = "force-dynamic";
 
-const PERIOD_DAYS: Record<string, number> = { "7d": 7, "30d": 30, "90d": 90 };
+type PeriodConfig = {
+  granularity: "daily" | "hourly";
+  label: string;
+  subtitleLabel: string;
+};
+
+const PERIOD_CONFIG: Record<string, PeriodConfig> = {
+  yday: { granularity: "hourly", label: "Yesterday", subtitleLabel: "yesterday vs. day before" },
+  "48h": { granularity: "hourly", label: "Last 48 hours", subtitleLabel: "last 48 hours vs. prev. 48 hours" },
+  "7d": { granularity: "daily", label: "Last 7 days", subtitleLabel: "last 7 days vs. prev. 7 days" },
+  "30d": { granularity: "daily", label: "Last 30 days", subtitleLabel: "last 30 days vs. prev. 30 days" },
+  "90d": { granularity: "daily", label: "Last 90 days", subtitleLabel: "last 90 days vs. prev. 90 days" },
+};
 
 export default async function WebsitePage({
   searchParams,
@@ -18,8 +31,9 @@ export default async function WebsitePage({
   searchParams: Promise<{ period?: string }>;
 }) {
   const { period: rawPeriod } = await searchParams;
-  const period = rawPeriod && rawPeriod in PERIOD_DAYS ? rawPeriod : "30d";
-  const days = PERIOD_DAYS[period];
+  const period = rawPeriod && rawPeriod in PERIOD_CONFIG ? rawPeriod : "30d";
+  const config = PERIOD_CONFIG[period];
+
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
@@ -45,38 +59,104 @@ export default async function WebsitePage({
     );
   }
 
-  const now = Date.now();
-  const endDate = new Date(now).toISOString().slice(0, 10);
-  const startDate = new Date(now - (days - 1) * 86400000).toISOString().slice(0, 10);
-  const prevEnd = new Date(now - days * 86400000).toISOString().slice(0, 10);
-  const prevStart = new Date(now - (2 * days - 1) * 86400000).toISOString().slice(0, 10);
-
+  const propertyId = theme.ga4PropertyId;
   const barColor = theme.primaryColor ?? "#17324d";
+  const now = Date.now();
+
+  const todayStr = new Date(now).toISOString().slice(0, 10);
+  const yesterdayStr = new Date(now - 86400000).toISOString().slice(0, 10);
+  const twoDaysAgoStr = new Date(now - 2 * 86400000).toISOString().slice(0, 10);
+  const threeDaysAgoStr = new Date(now - 3 * 86400000).toISOString().slice(0, 10);
+
+  // Compute startDate / endDate for this period (also used by getSiteHealth)
+  let startDate: string;
+  let endDate: string;
+
+  if (period === "yday") {
+    startDate = endDate = yesterdayStr;
+  } else if (period === "48h") {
+    startDate = yesterdayStr;
+    endDate = todayStr;
+  } else {
+    const days = { "7d": 7, "30d": 30, "90d": 90 }[period] ?? 30;
+    endDate = todayStr;
+    startDate = new Date(now - (days - 1) * 86400000).toISOString().slice(0, 10);
+  }
 
   let health: SiteHealth | null = null;
   let trendRows: TrafficComparisonRow[] = [];
   let error: string | null = null;
-  try {
-    const [healthResult, curTrend, prevTrend] = await Promise.all([
-      getSiteHealth(theme.ga4PropertyId, startDate, endDate),
-      getTrafficTrend(theme.ga4PropertyId, startDate, endDate),
-      getTrafficTrend(theme.ga4PropertyId, prevStart, prevEnd),
-    ]);
-    health = healthResult;
 
-    const curMap = new Map(curTrend.map((r) => [r.date, r.activeUsers]));
-    const prevMap = new Map(prevTrend.map((r) => [r.date, r.activeUsers]));
-    const dates = Array.from({ length: days }, (_, i) =>
-      new Date(now - (days - 1 - i) * 86400000).toISOString().slice(0, 10),
-    );
-    const prevDates = Array.from({ length: days }, (_, i) =>
-      new Date(now - (2 * days - 1 - i) * 86400000).toISOString().slice(0, 10),
-    );
-    trendRows = dates.map((date, i) => ({
-      date,
-      current: curMap.get(date) ?? 0,
-      previous: prevMap.get(prevDates[i]) ?? 0,
-    }));
+  try {
+    if (config.granularity === "hourly") {
+      // Yesterday: compare to day before yesterday
+      // 48h: yesterday+today vs 3daysago+2daysago
+      const [prevTrendStart, prevTrendEnd] =
+        period === "yday"
+          ? [twoDaysAgoStr, twoDaysAgoStr]
+          : [threeDaysAgoStr, twoDaysAgoStr];
+
+      const [healthResult, curTrend, prevTrend] = await Promise.all([
+        getSiteHealth(propertyId, startDate, endDate),
+        getHourlyTraffic(propertyId, startDate, endDate),
+        getHourlyTraffic(propertyId, prevTrendStart, prevTrendEnd),
+      ]);
+      health = healthResult;
+
+      const curMap = new Map(curTrend.map((r) => [r.datetime, r.activeUsers]));
+      const prevMap = new Map(prevTrend.map((r) => [r.datetime, r.activeUsers]));
+
+      if (period === "yday") {
+        trendRows = Array.from({ length: 24 }, (_, h) => {
+          const hh = String(h).padStart(2, "0");
+          return {
+            date: `${yesterdayStr}T${hh}:00:00`,
+            current: curMap.get(`${yesterdayStr}T${hh}:00:00`) ?? 0,
+            previous: prevMap.get(`${twoDaysAgoStr}T${hh}:00:00`) ?? 0,
+          };
+        });
+      } else {
+        // 48h: yesterday hours then today hours, each compared to 2 days prior
+        const curDays = [yesterdayStr, todayStr];
+        const prevDays = [threeDaysAgoStr, twoDaysAgoStr];
+        trendRows = curDays.flatMap((curDay, di) =>
+          Array.from({ length: 24 }, (_, h) => {
+            const hh = String(h).padStart(2, "0");
+            return {
+              date: `${curDay}T${hh}:00:00`,
+              current: curMap.get(`${curDay}T${hh}:00:00`) ?? 0,
+              previous: prevMap.get(`${prevDays[di]}T${hh}:00:00`) ?? 0,
+            };
+          }),
+        );
+      }
+    } else {
+      // Daily granularity
+      const days = { "7d": 7, "30d": 30, "90d": 90 }[period] ?? 30;
+      const prevEndStr = new Date(now - days * 86400000).toISOString().slice(0, 10);
+      const prevStartStr = new Date(now - (2 * days - 1) * 86400000).toISOString().slice(0, 10);
+
+      const [healthResult, curTrend, prevTrend] = await Promise.all([
+        getSiteHealth(propertyId, startDate, endDate),
+        getTrafficTrend(propertyId, startDate, endDate),
+        getTrafficTrend(propertyId, prevStartStr, prevEndStr),
+      ]);
+      health = healthResult;
+
+      const curMap = new Map(curTrend.map((r) => [r.date, r.activeUsers]));
+      const prevMap = new Map(prevTrend.map((r) => [r.date, r.activeUsers]));
+      const curDates = Array.from({ length: days }, (_, i) =>
+        new Date(now - (days - 1 - i) * 86400000).toISOString().slice(0, 10),
+      );
+      const prevDates = Array.from({ length: days }, (_, i) =>
+        new Date(now - (2 * days - 1 - i) * 86400000).toISOString().slice(0, 10),
+      );
+      trendRows = curDates.map((date, i) => ({
+        date,
+        current: curMap.get(date) ?? 0,
+        previous: prevMap.get(prevDates[i]) ?? 0,
+      }));
+    }
   } catch (err) {
     console.error("[website] GA4 error:", JSON.stringify(err, Object.getOwnPropertyNames(err instanceof Error ? err : {})));
     error = err instanceof Error ? err.message : String(err);
@@ -103,13 +183,20 @@ export default async function WebsitePage({
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Website</h1>
           <p className="mt-1 text-sm text-slate-500">
-            bookkeepingconroe.com — last {days} days vs. previous {days} days
+            bookkeepingconroe.com — {config.subtitleLabel}
           </p>
         </div>
         <PeriodSelector current={period} />
       </div>
 
-      <SiteTrafficGraph rows={trendRows} barColor={barColor} days={days} />
+      <RealtimeWidget propertyId={propertyId} />
+
+      <SiteTrafficGraph
+        rows={trendRows}
+        barColor={barColor}
+        label={config.label}
+        granularity={config.granularity}
+      />
 
       {/* Headline metrics */}
       <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">

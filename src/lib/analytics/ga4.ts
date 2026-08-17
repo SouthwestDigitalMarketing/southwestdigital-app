@@ -101,6 +101,77 @@ function compare(current: MetricValue, previous: MetricValue): MetricComparison 
   return { current, previous, percentageChange: Math.round(pct * 10) / 10, direction };
 }
 
+export type HourlyTrafficRow = {
+  datetime: string; // "YYYY-MM-DDTHH:00:00"
+  activeUsers: number;
+  sessions: number;
+};
+
+export type RealtimeData = {
+  activeUsers: number;
+  byPage: { page: string; activeUsers: number }[];
+  asOf: string;
+};
+
+export async function getHourlyTraffic(
+  propertyId: string,
+  startDate: string,
+  endDate: string,
+): Promise<HourlyTrafficRow[]> {
+  const ga4 = getClient();
+  if (!ga4) throw new Error("GA4 credentials not configured");
+
+  const [response] = await ga4.runReport({
+    property: `properties/${propertyId}`,
+    dateRanges: [{ startDate, endDate }],
+    dimensions: [{ name: "dateHour" }],
+    metrics: [{ name: "activeUsers" }, { name: "sessions" }],
+    orderBys: [{ dimension: { dimensionName: "dateHour" } }],
+    keepEmptyRows: false,
+  });
+
+  return (response.rows ?? []).map((row) => {
+    const raw = row.dimensionValues?.[0]?.value ?? "";
+    const datetime =
+      raw.length === 10
+        ? `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}T${raw.slice(8, 10)}:00:00`
+        : raw;
+    return {
+      datetime,
+      activeUsers: Number(row.metricValues?.[0]?.value ?? 0),
+      sessions: Number(row.metricValues?.[1]?.value ?? 0),
+    };
+  });
+}
+
+export async function getRealtimeUsers(propertyId: string): Promise<RealtimeData> {
+  const ga4 = getClient();
+  if (!ga4) throw new Error("GA4 credentials not configured");
+
+  const prop = `properties/${propertyId}`;
+  const [totalRes, pagesRes] = await Promise.all([
+    ga4.runRealtimeReport({
+      property: prop,
+      metrics: [{ name: "activeUsers" }],
+    }),
+    ga4.runRealtimeReport({
+      property: prop,
+      dimensions: [{ name: "unifiedPageScreen" }],
+      metrics: [{ name: "activeUsers" }],
+      orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }],
+      limit: 8,
+    }),
+  ]);
+
+  const activeUsers = Number(totalRes[0].rows?.[0]?.metricValues?.[0]?.value ?? 0);
+  const byPage = (pagesRes[0].rows ?? []).map((row) => ({
+    page: row.dimensionValues?.[0]?.value ?? "",
+    activeUsers: Number(row.metricValues?.[0]?.value ?? 0),
+  }));
+
+  return { activeUsers, byPage, asOf: new Date().toISOString() };
+}
+
 export async function getTrafficTrend(
   propertyId: string,
   startDate: string,
