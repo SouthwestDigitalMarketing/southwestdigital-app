@@ -79,7 +79,11 @@ export async function getDailyViews(
   if (!res.ok) throw new Error(`YouTube Analytics API error: ${await res.text()}`);
 
   const json = (await res.json()) as { rows?: [string, number][] };
-  return (json.rows ?? []).map(([date, views]) => ({ date, views }));
+  // API returns dates as YYYYMMDD — normalise to YYYY-MM-DD
+  return (json.rows ?? []).map(([date, views]) => ({
+    date: date.replace(/^(\d{4})(\d{2})(\d{2})$/, "$1-$2-$3"),
+    views,
+  }));
 }
 
 export async function getChannelMetrics(
@@ -202,7 +206,12 @@ export async function getDailyViewsForVideos(
         return [] as DailyViewByVideoRow[];
       }
       const json = (await res.json()) as { rows?: [string, number][] };
-      return (json.rows ?? []).map(([date, views]) => ({ date, videoId, views }));
+      // API returns dates as YYYYMMDD — normalise to YYYY-MM-DD
+      return (json.rows ?? []).map(([date, views]) => ({
+        date: date.replace(/^(\d{4})(\d{2})(\d{2})$/, "$1-$2-$3"),
+        videoId,
+        views,
+      }));
     }),
   );
 
