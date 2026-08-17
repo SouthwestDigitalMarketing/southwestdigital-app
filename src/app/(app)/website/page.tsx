@@ -231,7 +231,7 @@ export default async function WebsitePage({
         <div className="rounded-xl border border-slate-200 bg-white p-5">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Entry points</p>
           <h2 className="mt-1 text-lg font-semibold text-slate-900">Top landing pages</h2>
-          <ReportTable report={landingPages} />
+          <LandingPagesTable report={landingPages} />
         </div>
       </div>
 
@@ -327,6 +327,115 @@ function ReportTable({ report }: ReportTableProps) {
               })}
             </tr>
           ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+const TRACKING_PARAMS = [
+  "fbclid", "gclid", "msclkid", "ttclid", "dclid",
+  "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "utm_id",
+  "_ga", "mc_cid", "mc_eid",
+];
+
+function cleanLandingPage(url: string): string {
+  const qIdx = url.indexOf("?");
+  if (qIdx === -1) return url || "/";
+  const path = url.slice(0, qIdx) || "/";
+  const params = new URLSearchParams(url.slice(qIdx + 1));
+  TRACKING_PARAMS.forEach((p) => params.delete(p));
+  const remaining = params.toString();
+  return remaining ? `${path}?${remaining}` : path;
+}
+
+const SOURCE_MAP: Record<string, string> = {
+  google: "Google",
+  facebook: "Facebook",
+  fb: "Facebook",
+  instagram: "Instagram",
+  ig: "Instagram",
+  twitter: "Twitter",
+  x: "Twitter",
+  linkedin: "LinkedIn",
+  tiktok: "TikTok",
+  email: "Email",
+  newsletter: "Newsletter",
+  bing: "Bing Ads",
+  yahoo: "Yahoo",
+  pinterest: "Pinterest",
+};
+
+const SOURCE_COLORS: Record<string, string> = {
+  Facebook: "bg-blue-100 text-blue-700",
+  "Google Ads": "bg-green-100 text-green-700",
+  Google: "bg-green-100 text-green-700",
+  Instagram: "bg-pink-100 text-pink-700",
+  TikTok: "bg-purple-100 text-purple-700",
+  "Bing Ads": "bg-cyan-100 text-cyan-700",
+  Twitter: "bg-sky-100 text-sky-700",
+  LinkedIn: "bg-blue-100 text-blue-800",
+  Email: "bg-amber-100 text-amber-700",
+  Newsletter: "bg-amber-100 text-amber-700",
+  Pinterest: "bg-rose-100 text-rose-700",
+  Yahoo: "bg-violet-100 text-violet-700",
+};
+
+function detectSource(url: string): string | null {
+  const qIdx = url.indexOf("?");
+  if (qIdx === -1) return null;
+  const params = new URLSearchParams(url.slice(qIdx + 1));
+  if (params.has("fbclid")) return "Facebook";
+  if (params.has("gclid")) return "Google Ads";
+  if (params.has("msclkid")) return "Bing Ads";
+  if (params.has("ttclid")) return "TikTok";
+  const utmSource = params.get("utm_source");
+  if (utmSource) return SOURCE_MAP[utmSource.toLowerCase()] ?? utmSource;
+  return null;
+}
+
+function LandingPagesTable({ report }: ReportTableProps) {
+  if (report.rows.length === 0) {
+    return <p className="mt-3 text-sm text-slate-400">No data for this period.</p>;
+  }
+  return (
+    <div className="mt-4 overflow-x-auto">
+      <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
+        <thead>
+          <tr>
+            <th className="whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Page</th>
+            <th className="whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Source</th>
+            <th className="whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Sessions</th>
+            <th className="whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Users</th>
+            <th className="whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Engagement</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {report.rows.map((row, i) => {
+            const raw = String(row.page ?? "");
+            const page = cleanLandingPage(raw);
+            const source = detectSource(raw);
+            const badge = source ? (SOURCE_COLORS[source] ?? "bg-slate-100 text-slate-600") : null;
+            return (
+              <tr key={i}>
+                <td className="px-3 py-2 text-slate-700 max-w-xs break-words">{page}</td>
+                <td className="px-3 py-2 whitespace-nowrap">
+                  {source && badge && (
+                    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${badge}`}>{source}</span>
+                  )}
+                </td>
+                <td className="px-3 py-2 whitespace-nowrap text-slate-700">
+                  {typeof row.sessions === "number" ? new Intl.NumberFormat("en-US").format(row.sessions) : "—"}
+                </td>
+                <td className="px-3 py-2 whitespace-nowrap text-slate-700">
+                  {typeof row.activeUsers === "number" ? new Intl.NumberFormat("en-US").format(row.activeUsers) : "—"}
+                </td>
+                <td className="px-3 py-2 whitespace-nowrap text-slate-700">
+                  {typeof row.engagementRate === "number" ? `${(row.engagementRate * 100).toFixed(1)}%` : "—"}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
