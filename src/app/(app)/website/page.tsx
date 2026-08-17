@@ -75,10 +75,10 @@ export default async function WebsitePage() {
         <MetricCard label="Active users" value={fmtInt(c.activeUsers)} comparison={cmp.activeUsers} />
         <MetricCard label="Sessions" value={fmtInt(c.sessions)} comparison={cmp.sessions} />
         <MetricCard label="Engagement rate" value={fmtRate(c.engagementRate)} comparison={cmp.engagementRate} />
-        <MetricCard label="Key events" value={fmtInt(c.keyEvents)} comparison={cmp.keyEvents} />
+        <MetricCard label="Bounce rate" value={fmtRate(c.bounceRate)} comparison={cmp.bounceRate} />
         <MetricCard label="New users" value={fmtInt(c.newUsers)} comparison={cmp.newUsers} />
         <MetricCard label="Engaged sessions" value={fmtInt(c.engagedSessions)} comparison={cmp.engagedSessions} />
-        <MetricCard label="Avg. engagement" value={c.avgEngagementTimeSec !== null ? `${Math.round(c.avgEngagementTimeSec)}s` : "—"} comparison={cmp.avgEngagementTimeSec} />
+        <MetricCard label="Engagement time" value={c.engagementDuration !== null ? `${Math.round(c.engagementDuration)}s` : "—"} comparison={cmp.engagementDuration} />
         <MetricCard label="Page views" value={fmtInt(c.pageViews)} comparison={cmp.pageViews} />
       </div>
 

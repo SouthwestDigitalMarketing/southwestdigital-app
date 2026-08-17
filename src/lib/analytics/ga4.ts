@@ -13,11 +13,11 @@ export type HeadlineMetrics = {
   activeUsers: MetricValue;
   sessions: MetricValue;
   engagementRate: MetricValue;
-  keyEvents: MetricValue;
   newUsers: MetricValue;
   engagedSessions: MetricValue;
-  avgEngagementTimeSec: MetricValue;
   pageViews: MetricValue;
+  bounceRate: MetricValue;
+  engagementDuration: MetricValue;
 };
 
 export type MetricComparison = {
@@ -154,11 +154,11 @@ export async function getSiteHealth(
     { name: "activeUsers" },
     { name: "sessions" },
     { name: "engagementRate" },
-    { name: "keyEvents" },
     { name: "newUsers" },
     { name: "engagedSessions" },
-    { name: "averageEngagementTimePerActiveUser" },
     { name: "screenPageViews" },
+    { name: "bounceRate" },
+    { name: "userEngagementDuration" },
   ];
 
   const [headlineCurrent, headlinePrevious, acquisitionRes, landingRes, geoRes] =
@@ -216,22 +216,22 @@ export async function getSiteHealth(
     activeUsers: mv(headlineCurrent[0], 0),
     sessions: mv(headlineCurrent[0], 1),
     engagementRate: mv(headlineCurrent[0], 2),
-    keyEvents: mv(headlineCurrent[0], 3),
-    newUsers: mv(headlineCurrent[0], 4),
-    engagedSessions: mv(headlineCurrent[0], 5),
-    avgEngagementTimeSec: mv(headlineCurrent[0], 6),
-    pageViews: mv(headlineCurrent[0], 7),
+    newUsers: mv(headlineCurrent[0], 3),
+    engagedSessions: mv(headlineCurrent[0], 4),
+    pageViews: mv(headlineCurrent[0], 5),
+    bounceRate: mv(headlineCurrent[0], 6),
+    engagementDuration: mv(headlineCurrent[0], 7),
   };
 
   const prev: HeadlineMetrics = {
     activeUsers: mv(headlinePrevious[0], 0),
     sessions: mv(headlinePrevious[0], 1),
     engagementRate: mv(headlinePrevious[0], 2),
-    keyEvents: mv(headlinePrevious[0], 3),
-    newUsers: mv(headlinePrevious[0], 4),
-    engagedSessions: mv(headlinePrevious[0], 5),
-    avgEngagementTimeSec: mv(headlinePrevious[0], 6),
-    pageViews: mv(headlinePrevious[0], 7),
+    newUsers: mv(headlinePrevious[0], 3),
+    engagedSessions: mv(headlinePrevious[0], 4),
+    pageViews: mv(headlinePrevious[0], 5),
+    bounceRate: mv(headlinePrevious[0], 6),
+    engagementDuration: mv(headlinePrevious[0], 7),
   };
 
   const acquisition: ReportTable = {
@@ -288,11 +288,11 @@ export async function getSiteHealth(
         activeUsers: compare(cur.activeUsers, prev.activeUsers),
         sessions: compare(cur.sessions, prev.sessions),
         engagementRate: compare(cur.engagementRate, prev.engagementRate),
-        keyEvents: compare(cur.keyEvents, prev.keyEvents),
         newUsers: compare(cur.newUsers, prev.newUsers),
         engagedSessions: compare(cur.engagedSessions, prev.engagedSessions),
-        avgEngagementTimeSec: compare(cur.avgEngagementTimeSec, prev.avgEngagementTimeSec),
         pageViews: compare(cur.pageViews, prev.pageViews),
+        bounceRate: compare(cur.bounceRate, prev.bounceRate),
+        engagementDuration: compare(cur.engagementDuration, prev.engagementDuration),
       },
     },
     acquisition,
