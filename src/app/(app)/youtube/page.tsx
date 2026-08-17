@@ -209,7 +209,18 @@ function TopVideosTable({ videos }: { videos: TopVideoRow[] }) {
         <tbody className="divide-y divide-slate-100">
           {videos.map((v) => (
             <tr key={v.videoId}>
-              <td className="max-w-xs break-words px-3 py-2 text-slate-700">{v.title}</td>
+              <td className="px-3 py-2">
+                <div className="flex items-center gap-3">
+                  <img
+                    src={v.thumbnailUrl}
+                    alt={v.title}
+                    width={96}
+                    height={54}
+                    className="shrink-0 rounded object-cover"
+                  />
+                  <span className="text-slate-700">{v.title}</span>
+                </div>
+              </td>
               <td className="whitespace-nowrap px-3 py-2 text-slate-700">
                 {v.views.toLocaleString("en-US")}
               </td>

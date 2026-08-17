@@ -11,6 +11,7 @@ export type ChannelMetrics = {
 export type TopVideoRow = {
   videoId: string;
   title: string;
+  thumbnailUrl: string;
   views: number;
   estimatedMinutesWatched: number;
   averageViewPercentage: number;
@@ -162,6 +163,7 @@ export async function getTopVideos(
   return rows.map(([videoId, views, estimatedMinutesWatched, averageViewPercentage]) => ({
     videoId,
     title: titleMap.get(videoId) ?? videoId,
+    thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
     views,
     estimatedMinutesWatched,
     averageViewPercentage,

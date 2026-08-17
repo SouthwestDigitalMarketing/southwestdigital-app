@@ -9,7 +9,10 @@ const get = (key) => env.match(new RegExp(`^${key}=(.+)$`, "m"))?.[1]?.trim().re
 const CLIENT_ID = get("YOUTUBE_OAUTH_CLIENT_ID");
 const CLIENT_SECRET = get("YOUTUBE_OAUTH_CLIENT_SECRET");
 const REDIRECT_URI = "http://localhost:4567/callback";
-const SCOPE = "https://www.googleapis.com/auth/yt-analytics.readonly";
+const SCOPE = [
+  "https://www.googleapis.com/auth/yt-analytics.readonly",
+  "https://www.googleapis.com/auth/youtube.readonly",
+].join(" ");
 
 if (!CLIENT_ID || !CLIENT_SECRET) {
   console.error("Missing YOUTUBE_OAUTH_CLIENT_ID or YOUTUBE_OAUTH_CLIENT_SECRET in .env.local");
