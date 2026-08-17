@@ -7,8 +7,47 @@ export type DailyTrafficRow = {
   activeUsers: number;
 };
 
+export type MetricValue = number | null;
+
+export type HeadlineMetrics = {
+  activeUsers: MetricValue;
+  sessions: MetricValue;
+  engagementRate: MetricValue;
+  keyEvents: MetricValue;
+  newUsers: MetricValue;
+  engagedSessions: MetricValue;
+  avgEngagementTimeSec: MetricValue;
+  pageViews: MetricValue;
+};
+
+export type MetricComparison = {
+  current: MetricValue;
+  previous: MetricValue;
+  percentageChange: number | null;
+  direction: "increased" | "decreased" | "unchanged" | "unavailable";
+};
+
+export type SiteHeadline = {
+  current: HeadlineMetrics;
+  comparison: Record<keyof HeadlineMetrics, MetricComparison>;
+};
+
+export type TableRow = Record<string, string | number | null>;
+
+export type ReportTable = {
+  columns: { key: string; label: string; type: "dimension" | "metric" }[];
+  rows: TableRow[];
+};
+
+export type SiteHealth = {
+  headline: SiteHeadline;
+  acquisition: ReportTable;
+  landingPages: ReportTable;
+  geographicTraffic: ReportTable;
+  generatedAt: string;
+};
+
 function getCredentials(): { client_email: string; private_key: string } | null {
-  // Preferred: base64-encoded full service account JSON
   const b64 = process.env.GOOGLE_SERVICE_ACCOUNT_JSON_BASE64?.trim();
   if (b64) {
     try {
@@ -21,7 +60,6 @@ function getCredentials(): { client_email: string; private_key: string } | null 
     }
   }
 
-  // Fallback: separate email + key env vars
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim();
   const key = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.trim();
   if (email && key) {
@@ -40,6 +78,27 @@ function getClient(): BetaAnalyticsDataClient | null {
     client = new BetaAnalyticsDataClient({ credentials });
   }
   return client;
+}
+
+function num(v: string | null | undefined): MetricValue {
+  if (!v) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function compare(current: MetricValue, previous: MetricValue): MetricComparison {
+  if (current === null || previous === null) {
+    return { current, previous, percentageChange: null, direction: "unavailable" };
+  }
+  if (previous === 0 && current === 0) {
+    return { current, previous, percentageChange: 0, direction: "unchanged" };
+  }
+  if (previous === 0) {
+    return { current, previous, percentageChange: null, direction: "increased" };
+  }
+  const pct = ((current - previous) / previous) * 100;
+  const direction = pct > 0.5 ? "increased" : pct < -0.5 ? "decreased" : "unchanged";
+  return { current, previous, percentageChange: Math.round(pct * 10) / 10, direction };
 }
 
 export async function getTrafficTrend(
@@ -71,4 +130,174 @@ export async function getTrafficTrend(
       activeUsers: Number(row.metricValues?.[1]?.value ?? 0),
     };
   });
+}
+
+export async function getSiteHealth(
+  propertyId: string,
+  startDate: string,
+  endDate: string,
+): Promise<SiteHealth> {
+  const ga4 = getClient();
+  if (!ga4) throw new Error("GA4 credentials not configured");
+
+  const prop = `properties/${propertyId}`;
+  const prevEnd = new Date(new Date(startDate).getTime() - 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+  const prevStart = new Date(
+    new Date(startDate).getTime() - (new Date(endDate).getTime() - new Date(startDate).getTime()) - 24 * 60 * 60 * 1000,
+  )
+    .toISOString()
+    .slice(0, 10);
+
+  const headlineMetrics = [
+    { name: "activeUsers" },
+    { name: "sessions" },
+    { name: "engagementRate" },
+    { name: "keyEvents" },
+    { name: "newUsers" },
+    { name: "engagedSessions" },
+    { name: "averageEngagementTimePerActiveUser" },
+    { name: "screenPageViews" },
+  ];
+
+  const [headlineCurrent, headlinePrevious, acquisitionRes, landingRes, geoRes] =
+    await Promise.all([
+      ga4.runReport({
+        property: prop,
+        dateRanges: [{ startDate, endDate }],
+        metrics: headlineMetrics,
+        keepEmptyRows: false,
+      }),
+      ga4.runReport({
+        property: prop,
+        dateRanges: [{ startDate: prevStart, endDate: prevEnd }],
+        metrics: headlineMetrics,
+        keepEmptyRows: false,
+      }),
+      ga4.runReport({
+        property: prop,
+        dateRanges: [{ startDate, endDate }],
+        dimensions: [{ name: "sessionDefaultChannelGrouping" }],
+        metrics: [
+          { name: "sessions" },
+          { name: "activeUsers" },
+          { name: "engagementRate" },
+          { name: "keyEvents" },
+        ],
+        orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
+        limit: 10,
+        keepEmptyRows: false,
+      }),
+      ga4.runReport({
+        property: prop,
+        dateRanges: [{ startDate, endDate }],
+        dimensions: [{ name: "landingPagePlusQueryString" }],
+        metrics: [{ name: "sessions" }, { name: "activeUsers" }, { name: "engagementRate" }],
+        orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
+        limit: 10,
+        keepEmptyRows: false,
+      }),
+      ga4.runReport({
+        property: prop,
+        dateRanges: [{ startDate, endDate }],
+        dimensions: [{ name: "country" }, { name: "region" }],
+        metrics: [{ name: "sessions" }, { name: "activeUsers" }],
+        orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
+        limit: 10,
+        keepEmptyRows: false,
+      }),
+    ]);
+
+  const mv = (res: typeof headlineCurrent[0], idx: number) =>
+    num(res.rows?.[0]?.metricValues?.[idx]?.value);
+
+  const cur: HeadlineMetrics = {
+    activeUsers: mv(headlineCurrent[0], 0),
+    sessions: mv(headlineCurrent[0], 1),
+    engagementRate: mv(headlineCurrent[0], 2),
+    keyEvents: mv(headlineCurrent[0], 3),
+    newUsers: mv(headlineCurrent[0], 4),
+    engagedSessions: mv(headlineCurrent[0], 5),
+    avgEngagementTimeSec: mv(headlineCurrent[0], 6),
+    pageViews: mv(headlineCurrent[0], 7),
+  };
+
+  const prev: HeadlineMetrics = {
+    activeUsers: mv(headlinePrevious[0], 0),
+    sessions: mv(headlinePrevious[0], 1),
+    engagementRate: mv(headlinePrevious[0], 2),
+    keyEvents: mv(headlinePrevious[0], 3),
+    newUsers: mv(headlinePrevious[0], 4),
+    engagedSessions: mv(headlinePrevious[0], 5),
+    avgEngagementTimeSec: mv(headlinePrevious[0], 6),
+    pageViews: mv(headlinePrevious[0], 7),
+  };
+
+  const acquisition: ReportTable = {
+    columns: [
+      { key: "channel", label: "Channel", type: "dimension" },
+      { key: "sessions", label: "Sessions", type: "metric" },
+      { key: "activeUsers", label: "Users", type: "metric" },
+      { key: "engagementRate", label: "Engagement rate", type: "metric" },
+      { key: "keyEvents", label: "Key events", type: "metric" },
+    ],
+    rows: (acquisitionRes[0].rows ?? []).map((row) => ({
+      channel: row.dimensionValues?.[0]?.value ?? "",
+      sessions: num(row.metricValues?.[0]?.value),
+      activeUsers: num(row.metricValues?.[1]?.value),
+      engagementRate: num(row.metricValues?.[2]?.value),
+      keyEvents: num(row.metricValues?.[3]?.value),
+    })),
+  };
+
+  const landingPages: ReportTable = {
+    columns: [
+      { key: "page", label: "Page", type: "dimension" },
+      { key: "sessions", label: "Sessions", type: "metric" },
+      { key: "activeUsers", label: "Users", type: "metric" },
+      { key: "engagementRate", label: "Engagement rate", type: "metric" },
+    ],
+    rows: (landingRes[0].rows ?? []).map((row) => ({
+      page: row.dimensionValues?.[0]?.value ?? "",
+      sessions: num(row.metricValues?.[0]?.value),
+      activeUsers: num(row.metricValues?.[1]?.value),
+      engagementRate: num(row.metricValues?.[2]?.value),
+    })),
+  };
+
+  const geographicTraffic: ReportTable = {
+    columns: [
+      { key: "country", label: "Country", type: "dimension" },
+      { key: "region", label: "Region", type: "dimension" },
+      { key: "sessions", label: "Sessions", type: "metric" },
+      { key: "activeUsers", label: "Users", type: "metric" },
+    ],
+    rows: (geoRes[0].rows ?? []).map((row) => ({
+      country: row.dimensionValues?.[0]?.value ?? "",
+      region: row.dimensionValues?.[1]?.value ?? "",
+      sessions: num(row.metricValues?.[0]?.value),
+      activeUsers: num(row.metricValues?.[1]?.value),
+    })),
+  };
+
+  return {
+    headline: {
+      current: cur,
+      comparison: {
+        activeUsers: compare(cur.activeUsers, prev.activeUsers),
+        sessions: compare(cur.sessions, prev.sessions),
+        engagementRate: compare(cur.engagementRate, prev.engagementRate),
+        keyEvents: compare(cur.keyEvents, prev.keyEvents),
+        newUsers: compare(cur.newUsers, prev.newUsers),
+        engagedSessions: compare(cur.engagedSessions, prev.engagedSessions),
+        avgEngagementTimeSec: compare(cur.avgEngagementTimeSec, prev.avgEngagementTimeSec),
+        pageViews: compare(cur.pageViews, prev.pageViews),
+      },
+    },
+    acquisition,
+    landingPages,
+    geographicTraffic,
+    generatedAt: new Date().toISOString(),
+  };
 }
