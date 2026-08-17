@@ -7,23 +7,37 @@ export type DailyTrafficRow = {
   activeUsers: number;
 };
 
-function normalizePrivateKey(value: string) {
-  return value.replace(/\\n/g, "\n");
+function getCredentials(): { client_email: string; private_key: string } | null {
+  // Preferred: base64-encoded full service account JSON
+  const b64 = process.env.GOOGLE_SERVICE_ACCOUNT_JSON_BASE64?.trim();
+  if (b64) {
+    try {
+      const json = JSON.parse(Buffer.from(b64, "base64").toString("utf8"));
+      if (json.client_email && json.private_key) {
+        return { client_email: json.client_email, private_key: json.private_key };
+      }
+    } catch {
+      console.error("[analytics] Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON_BASE64");
+    }
+  }
+
+  // Fallback: separate email + key env vars
+  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim();
+  const key = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.trim();
+  if (email && key) {
+    return { client_email: email, private_key: key.replace(/\\n/g, "\n") };
+  }
+
+  return null;
 }
 
 let client: BetaAnalyticsDataClient | null = null;
 
 function getClient(): BetaAnalyticsDataClient | null {
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim();
-  const key = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.trim();
-  if (!email || !key) return null;
+  const credentials = getCredentials();
+  if (!credentials) return null;
   if (!client) {
-    client = new BetaAnalyticsDataClient({
-      credentials: {
-        client_email: email,
-        private_key: normalizePrivateKey(key),
-      },
-    });
+    client = new BetaAnalyticsDataClient({ credentials });
   }
   return client;
 }
