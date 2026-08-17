@@ -14,6 +14,7 @@ import {
   LogOut,
   BarChart2,
   Globe,
+  PlayCircle,
 } from "lucide-react";
 import { useBrand } from "@/lib/brands/context";
 import { signOutAction } from "./actions";
@@ -22,6 +23,7 @@ const NAV = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, exact: true },
   { label: "Analytics", href: "/analytics", icon: BarChart2 },
   { label: "Website", href: "/website", icon: Globe },
+  { label: "YouTube", href: "/youtube", icon: PlayCircle },
   { label: "Clients", href: "/clients", icon: Building2 },
   { label: "Reviews", href: "/reviews", icon: Star },
   { label: "Pipeline", href: "/pipeline", icon: TrendingUp },

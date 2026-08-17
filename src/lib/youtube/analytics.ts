@@ -2,6 +2,20 @@ import "server-only";
 
 export type DailyViewRow = { date: string; views: number };
 
+export type ChannelMetrics = {
+  views: number;
+  estimatedMinutesWatched: number;
+  averageViewPercentage: number;
+};
+
+export type TopVideoRow = {
+  videoId: string;
+  title: string;
+  views: number;
+  estimatedMinutesWatched: number;
+  averageViewPercentage: number;
+};
+
 type TokenResponse = { access_token: string; expires_in: number };
 
 let cachedToken: { value: string; expiresAt: number } | null = null;
@@ -65,4 +79,91 @@ export async function getDailyViews(
 
   const json = (await res.json()) as { rows?: [string, number][] };
   return (json.rows ?? []).map(([date, views]) => ({ date, views }));
+}
+
+export async function getChannelMetrics(
+  channelId: string,
+  refreshToken: string,
+  startDate: string,
+  endDate: string,
+): Promise<ChannelMetrics> {
+  const accessToken = await getAccessToken(refreshToken);
+
+  const params = new URLSearchParams({
+    ids: `channel==${channelId}`,
+    startDate,
+    endDate,
+    metrics: "views,estimatedMinutesWatched,averageViewPercentage",
+  });
+
+  const res = await fetch(
+    `https://youtubeanalytics.googleapis.com/v2/reports?${params}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+
+  if (!res.ok) throw new Error(`YouTube Analytics API error: ${await res.text()}`);
+
+  const json = (await res.json()) as { rows?: [number, number, number][] };
+  const row = json.rows?.[0];
+  return {
+    views: row?.[0] ?? 0,
+    estimatedMinutesWatched: row?.[1] ?? 0,
+    averageViewPercentage: row?.[2] ?? 0,
+  };
+}
+
+export async function getTopVideos(
+  channelId: string,
+  refreshToken: string,
+  startDate: string,
+  endDate: string,
+  limit = 10,
+): Promise<TopVideoRow[]> {
+  const accessToken = await getAccessToken(refreshToken);
+
+  const params = new URLSearchParams({
+    ids: `channel==${channelId}`,
+    startDate,
+    endDate,
+    dimensions: "video",
+    metrics: "views,estimatedMinutesWatched,averageViewPercentage",
+    sort: "-views",
+    maxResults: String(limit),
+  });
+
+  const res = await fetch(
+    `https://youtubeanalytics.googleapis.com/v2/reports?${params}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+
+  if (!res.ok) throw new Error(`YouTube Analytics API error: ${await res.text()}`);
+
+  const json = (await res.json()) as { rows?: [string, number, number, number][] };
+  const rows = json.rows ?? [];
+  if (rows.length === 0) return [];
+
+  // Fetch video titles from YouTube Data API v3 (same OAuth token)
+  const videoIds = rows.map((r) => r[0]).join(",");
+  let titleMap = new Map<string, string>();
+  try {
+    const titlesRes = await fetch(
+      `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${encodeURIComponent(videoIds)}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    if (titlesRes.ok) {
+      type YTItem = { id: string; snippet: { title: string } };
+      const data = (await titlesRes.json()) as { items?: YTItem[] };
+      titleMap = new Map((data.items ?? []).map((v) => [v.id, v.snippet.title]));
+    }
+  } catch {
+    // Fall through — video IDs used as fallback titles
+  }
+
+  return rows.map(([videoId, views, estimatedMinutesWatched, averageViewPercentage]) => ({
+    videoId,
+    title: titleMap.get(videoId) ?? videoId,
+    views,
+    estimatedMinutesWatched,
+    averageViewPercentage,
+  }));
 }
