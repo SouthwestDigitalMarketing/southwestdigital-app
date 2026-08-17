@@ -107,12 +107,6 @@ export type HourlyTrafficRow = {
   sessions: number;
 };
 
-export type RealtimeData = {
-  activeUsers: number;
-  byLocation: { country: string; device: string; activeUsers: number }[];
-  asOf: string;
-};
-
 export async function getHourlyTraffic(
   propertyId: string,
   startDate: string,
@@ -142,37 +136,6 @@ export async function getHourlyTraffic(
       sessions: Number(row.metricValues?.[1]?.value ?? 0),
     };
   });
-}
-
-export async function getRealtimeUsers(propertyId: string): Promise<RealtimeData> {
-  const ga4 = getClient();
-  if (!ga4) throw new Error("GA4 credentials not configured");
-
-  const prop = `properties/${propertyId}`;
-
-  const [totalRes, locationRes] = await Promise.all([
-    ga4.runRealtimeReport({
-      property: prop,
-      metrics: [{ name: "activeUsers" }],
-    }),
-    ga4.runRealtimeReport({
-      property: prop,
-      dimensions: [{ name: "country" }, { name: "deviceCategory" }],
-      metrics: [{ name: "activeUsers" }],
-      limit: 8,
-    }),
-  ]);
-
-  const activeUsers = Number(totalRes[0].rows?.[0]?.metricValues?.[0]?.value ?? 0);
-  const byLocation = (locationRes[0].rows ?? [])
-    .map((row) => ({
-      country: row.dimensionValues?.[0]?.value ?? "",
-      device: row.dimensionValues?.[1]?.value ?? "",
-      activeUsers: Number(row.metricValues?.[0]?.value ?? 0),
-    }))
-    .sort((a, b) => b.activeUsers - a.activeUsers);
-
-  return { activeUsers, byLocation, asOf: new Date().toISOString() };
 }
 
 export async function getTrafficTrend(

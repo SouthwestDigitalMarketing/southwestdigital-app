@@ -5,11 +5,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 export function LiveButton({ current }: { current: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const isActive = current === "live";
+  const isActive = current === "today";
 
   function activate() {
     const params = new URLSearchParams(searchParams.toString());
-    params.set("period", "live");
+    params.set("period", "today");
     router.push(`?${params.toString()}`);
   }
 
@@ -17,29 +17,19 @@ export function LiveButton({ current }: { current: string }) {
     <div className="relative group">
       <button
         onClick={activate}
-        className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+        className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
           isActive
-            ? "border-emerald-600 bg-emerald-600 text-white"
-            : "border-slate-200 bg-white text-slate-600 hover:border-emerald-400 hover:text-emerald-700"
+            ? "border-slate-900 bg-slate-900 text-white"
+            : "border-slate-200 bg-white text-slate-600 hover:border-slate-400 hover:text-slate-900"
         }`}
       >
-        <span className="relative flex h-1.5 w-1.5 shrink-0">
-          {isActive && (
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75" />
-          )}
-          <span
-            className={`relative inline-flex h-1.5 w-1.5 rounded-full ${
-              isActive ? "bg-white" : "bg-emerald-500"
-            }`}
-          />
-        </span>
-        Live
+        Today
       </button>
 
-      <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-52 rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-600 shadow-lg opacity-0 transition-opacity group-hover:opacity-100">
-        <p className="font-semibold text-slate-800">Real-time visitors</p>
+      <div className="pointer-events-none absolute right-0 top-full z-20 mt-2 w-56 rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-600 shadow-lg opacity-0 transition-opacity group-hover:opacity-100">
+        <p className="font-semibold text-slate-800">Today so far</p>
         <p className="mt-1 leading-relaxed">
-          Shows visitors active on your site in the last 30 minutes. Refreshes automatically every 30 seconds.
+          Hourly activity on your site today, compared to the same hours yesterday.
         </p>
       </div>
     </div>
