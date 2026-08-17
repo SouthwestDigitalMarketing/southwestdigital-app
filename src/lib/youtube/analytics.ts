@@ -172,30 +172,36 @@ export async function getTopVideos(
 
 export type DailyViewByVideoRow = { date: string; videoId: string; views: number };
 
-export async function getDailyViewsByVideo(
+export async function getDailyViewsForVideos(
   channelId: string,
   refreshToken: string,
   startDate: string,
   endDate: string,
+  videoIds: string[],
 ): Promise<DailyViewByVideoRow[]> {
+  if (videoIds.length === 0) return [];
   const accessToken = await getAccessToken(refreshToken);
 
-  const params = new URLSearchParams({
-    ids: `channel==${channelId}`,
-    startDate,
-    endDate,
-    dimensions: "day,video",
-    metrics: "views",
-    sort: "day",
-  });
-
-  const res = await fetch(
-    `https://youtubeanalytics.googleapis.com/v2/reports?${params}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
+  const results = await Promise.all(
+    videoIds.map(async (videoId) => {
+      const params = new URLSearchParams({
+        ids: `channel==${channelId}`,
+        startDate,
+        endDate,
+        dimensions: "day",
+        metrics: "views",
+        sort: "day",
+        filters: `video==${videoId}`,
+      });
+      const res = await fetch(
+        `https://youtubeanalytics.googleapis.com/v2/reports?${params}`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      if (!res.ok) return [] as DailyViewByVideoRow[];
+      const json = (await res.json()) as { rows?: [string, number][] };
+      return (json.rows ?? []).map(([date, views]) => ({ date, videoId, views }));
+    }),
   );
 
-  if (!res.ok) throw new Error(`YouTube Analytics API error: ${await res.text()}`);
-
-  const json = (await res.json()) as { rows?: [string, string, number][] };
-  return (json.rows ?? []).map(([date, videoId, views]) => ({ date, videoId, views }));
+  return results.flat();
 }

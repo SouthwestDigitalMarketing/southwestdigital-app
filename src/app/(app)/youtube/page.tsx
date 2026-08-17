@@ -6,7 +6,7 @@ import { resolveBrand } from "@/lib/brands/resolve";
 import { MembershipStatus } from "@prisma/client";
 import {
   getChannelMetrics,
-  getDailyViewsByVideo,
+  getDailyViewsForVideos,
   getTopVideos,
   type ChannelMetrics,
   type TopVideoRow,
@@ -74,11 +74,14 @@ export default async function YouTubePage() {
   let error: string | null = null;
 
   try {
-    [metrics, dailyByVideo, topVideos] = await Promise.all([
+    // First: headline metrics + top videos in parallel
+    [metrics, topVideos] = await Promise.all([
       getChannelMetrics(channelId, refreshToken, startDate, endDate),
-      getDailyViewsByVideo(channelId, refreshToken, startDate, endDate),
       getTopVideos(channelId, refreshToken, startDate, endDate),
     ]);
+    // Second: per-video daily data (needs top video IDs)
+    const topVideoIds = topVideos.slice(0, TOP_N).map((v) => v.videoId);
+    dailyByVideo = await getDailyViewsForVideos(channelId, refreshToken, startDate, endDate, topVideoIds);
   } catch (err) {
     console.error("[youtube] API error:", err);
     error = err instanceof Error ? err.message : String(err);
