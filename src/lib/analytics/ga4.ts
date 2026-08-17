@@ -238,7 +238,7 @@ export async function getSiteHealth(
       ga4.runReport({
         property: prop,
         dateRanges: [{ startDate, endDate }],
-        dimensions: [{ name: "country" }, { name: "region" }],
+        dimensions: [{ name: "country" }, { name: "region" }, { name: "city" }],
         metrics: [{ name: "sessions" }, { name: "activeUsers" }],
         orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
         limit: 10,
@@ -307,12 +307,14 @@ export async function getSiteHealth(
     columns: [
       { key: "country", label: "Country", type: "dimension" },
       { key: "region", label: "Region", type: "dimension" },
+      { key: "city", label: "City", type: "dimension" },
       { key: "sessions", label: "Sessions", type: "metric" },
       { key: "activeUsers", label: "Users", type: "metric" },
     ],
     rows: (geoRes[0].rows ?? []).map((row) => ({
       country: row.dimensionValues?.[0]?.value ?? "",
       region: row.dimensionValues?.[1]?.value ?? "",
+      city: row.dimensionValues?.[2]?.value ?? "",
       sessions: num(row.metricValues?.[0]?.value),
       activeUsers: num(row.metricValues?.[1]?.value),
     })),
