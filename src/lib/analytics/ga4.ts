@@ -109,7 +109,7 @@ export type HourlyTrafficRow = {
 
 export type RealtimeData = {
   activeUsers: number;
-  byPage: { page: string; activeUsers: number }[];
+  byLocation: { country: string; device: string; activeUsers: number }[];
   asOf: string;
 };
 
@@ -149,45 +149,30 @@ export async function getRealtimeUsers(propertyId: string): Promise<RealtimeData
   if (!ga4) throw new Error("GA4 credentials not configured");
 
   const prop = `properties/${propertyId}`;
-  const minuteRanges = [{ startMinutesAgo: 29, endMinutesAgo: 0 }];
 
-  // Run calls sequentially so we can log which one fails
-  let activeUsers = 0;
-  try {
-    const [res] = await ga4.runRealtimeReport({
+  const [totalRes, locationRes] = await Promise.all([
+    ga4.runRealtimeReport({
       property: prop,
       metrics: [{ name: "activeUsers" }],
-      minuteRanges,
-    });
-    activeUsers = Number(res.rows?.[0]?.metricValues?.[0]?.value ?? 0);
-    console.log("[realtime] total activeUsers:", activeUsers);
-  } catch (err) {
-    console.error("[realtime] total query failed:", JSON.stringify(err, Object.getOwnPropertyNames(err instanceof Error ? err : {})));
-    throw err;
-  }
-
-  let byPage: { page: string; activeUsers: number }[] = [];
-  try {
-    const [res] = await ga4.runRealtimeReport({
+    }),
+    ga4.runRealtimeReport({
       property: prop,
-      dimensions: [{ name: "pageTitle" }],
+      dimensions: [{ name: "country" }, { name: "deviceCategory" }],
       metrics: [{ name: "activeUsers" }],
-      minuteRanges,
-    });
-    byPage = (res.rows ?? [])
-      .map((row) => ({
-        page: row.dimensionValues?.[0]?.value ?? "",
-        activeUsers: Number(row.metricValues?.[0]?.value ?? 0),
-      }))
-      .sort((a, b) => b.activeUsers - a.activeUsers)
-      .slice(0, 8);
-    console.log("[realtime] byPage count:", byPage.length);
-  } catch (err) {
-    console.error("[realtime] pages query failed:", JSON.stringify(err, Object.getOwnPropertyNames(err instanceof Error ? err : {})));
-    // Don't rethrow — show total without page breakdown
-  }
+      limit: 8,
+    }),
+  ]);
 
-  return { activeUsers, byPage, asOf: new Date().toISOString() };
+  const activeUsers = Number(totalRes[0].rows?.[0]?.metricValues?.[0]?.value ?? 0);
+  const byLocation = (locationRes[0].rows ?? [])
+    .map((row) => ({
+      country: row.dimensionValues?.[0]?.value ?? "",
+      device: row.dimensionValues?.[1]?.value ?? "",
+      activeUsers: Number(row.metricValues?.[0]?.value ?? 0),
+    }))
+    .sort((a, b) => b.activeUsers - a.activeUsers);
+
+  return { activeUsers, byLocation, asOf: new Date().toISOString() };
 }
 
 export async function getTrafficTrend(

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 
 type RealtimeData = {
   activeUsers: number;
-  byPage: { page: string; activeUsers: number }[];
+  byLocation: { country: string; device: string; activeUsers: number }[];
   asOf: string;
 };
 
@@ -33,7 +33,7 @@ export function RealtimeWidget({ propertyId }: { propertyId: string }) {
   }, [refresh]);
 
   return (
-    <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5">
+    <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <span className="relative flex h-2.5 w-2.5">
@@ -52,34 +52,41 @@ export function RealtimeWidget({ propertyId }: { propertyId: string }) {
       </div>
 
       {error ? (
-        <p className="mt-3 text-sm text-amber-700">Unable to load real-time data.</p>
+        <p className="mt-4 text-sm text-amber-700">Unable to load real-time data.</p>
       ) : data === null ? (
-        <p className="mt-3 text-sm text-slate-400">Loading...</p>
+        <p className="mt-4 text-sm text-slate-400">Loading...</p>
       ) : (
-        <div className="mt-3 flex flex-wrap gap-8">
+        <div className="mt-4 flex flex-wrap gap-10">
           <div>
-            <p className="text-5xl font-semibold tabular-nums text-slate-900">
+            <p className="text-6xl font-semibold tabular-nums text-slate-900">
               {data.activeUsers}
             </p>
-            <p className="mt-1 text-xs text-slate-500">active users right now</p>
+            <p className="mt-1.5 text-sm text-slate-500">active users right now</p>
           </div>
 
-          {data.byPage.length > 0 && (
-            <div className="flex-1 min-w-48">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                Active pages
+          {data.byLocation.length > 0 && (
+            <div className="flex-1 min-w-52">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Where they are
               </p>
-              <div className="space-y-1">
-                {data.byPage.map((p) => (
-                  <div key={p.page} className="flex items-center gap-2 text-sm">
-                    <span className="flex-1 truncate text-slate-600">{p.page}</span>
-                    <span className="shrink-0 tabular-nums text-slate-900 font-medium">
-                      {p.activeUsers}
+              <div className="space-y-2">
+                {data.byLocation.map((row, i) => (
+                  <div key={i} className="flex items-center gap-3 text-sm">
+                    <span className="flex-1 text-slate-700">
+                      {row.country}
+                      <span className="ml-1.5 text-xs text-slate-400">{row.device}</span>
+                    </span>
+                    <span className="shrink-0 tabular-nums font-medium text-slate-900">
+                      {row.activeUsers}
                     </span>
                   </div>
                 ))}
               </div>
             </div>
+          )}
+
+          {data.activeUsers === 0 && (
+            <p className="self-center text-sm text-slate-400">No active users right now.</p>
           )}
         </div>
       )}
