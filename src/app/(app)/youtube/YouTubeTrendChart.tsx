@@ -1,6 +1,9 @@
 "use client";
 
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { TOP_N, VIDEO_COLORS, OTHER_COLOR } from "./constants";
+
+export { TOP_N, VIDEO_COLORS, OTHER_COLOR };
 
 export type StackedDayRow = Record<string, string | number>;
 
@@ -9,12 +12,6 @@ export type VideoSegment = {
   title: string;
   color: string;
 };
-
-const VIDEO_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444"];
-const OTHER_COLOR = "#cbd5e1";
-
-export const TOP_N = 5;
-export { VIDEO_COLORS, OTHER_COLOR };
 
 function formatK(n: number) {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;

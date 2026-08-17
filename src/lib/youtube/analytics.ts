@@ -201,13 +201,17 @@ export async function getDailyViewsForVideos(
         `https://youtubeanalytics.googleapis.com/v2/reports?${params}`,
         { headers: { Authorization: `Bearer ${accessToken}` } },
       );
+      const rawText = await res.text();
       if (!res.ok) {
-        console.error(`[youtube] getDailyViewsForVideos error for ${videoId}:`, await res.text());
+        console.error(`[youtube] getDailyViewsForVideos error for ${videoId}: status=${res.status}`, rawText);
         return [] as DailyViewByVideoRow[];
       }
-      const json = (await res.json()) as { rows?: [string, number][] };
-      // API returns dates as YYYYMMDD — normalise to YYYY-MM-DD
-      return (json.rows ?? []).map(([date, views]) => ({
+      const json = JSON.parse(rawText) as { rows?: [string, number][] };
+      const rows = json.rows ?? [];
+      if (rows.length === 0) {
+        console.warn(`[youtube] per-video ${videoId}: 0 rows — response:`, rawText.slice(0, 300));
+      }
+      return rows.map(([date, views]) => ({
         date: date.replace(/^(\d{4})(\d{2})(\d{2})$/, "$1-$2-$3"),
         videoId,
         views,

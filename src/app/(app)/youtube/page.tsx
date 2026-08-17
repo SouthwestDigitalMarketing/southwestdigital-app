@@ -13,7 +13,8 @@ import {
   type TopVideoRow,
   type DailyViewByVideoRow,
 } from "@/lib/youtube/analytics";
-import { YouTubeTrendChart, type VideoSegment, type StackedDayRow, TOP_N, VIDEO_COLORS, OTHER_COLOR } from "./YouTubeTrendChart";
+import { YouTubeTrendChart, type VideoSegment, type StackedDayRow } from "./YouTubeTrendChart";
+import { TOP_N, VIDEO_COLORS, OTHER_COLOR } from "./constants";
 
 export const dynamic = "force-dynamic";
 
@@ -168,10 +169,6 @@ export default async function YouTubePage() {
         <p className="mt-1 text-lg font-semibold text-slate-900">
           {metrics.views.toLocaleString("en-US")} total views
         </p>
-        {/* TEMP DEBUG */}
-        <pre className="mt-2 rounded bg-slate-50 p-2 text-xs text-slate-500 overflow-x-auto">
-          {`dailyByVideo: ${dailyByVideo.length} rows | isFallback: ${isFallbackMode} | segments: ${segments.length}\nsample[0]: ${JSON.stringify(dailyByVideo[0] ?? null)}\nstackedRows[0]: ${JSON.stringify(stackedRows[0] ?? null)}`}
-        </pre>
         <div className="mt-4">
           <YouTubeTrendChart stackedRows={stackedRows} segments={segments} />
         </div>
