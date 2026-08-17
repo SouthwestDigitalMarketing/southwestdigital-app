@@ -379,25 +379,62 @@ const SOURCE_COLORS: Record<string, string> = {
   Newsletter: "bg-amber-100 text-amber-700",
   Pinterest: "bg-rose-100 text-rose-700",
   Yahoo: "bg-violet-100 text-violet-700",
+  "Organic / Direct": "bg-slate-100 text-slate-500",
 };
 
-function detectSource(url: string): string | null {
+function detectSource(url: string): string {
   const qIdx = url.indexOf("?");
-  if (qIdx === -1) return null;
-  const params = new URLSearchParams(url.slice(qIdx + 1));
-  if (params.has("fbclid")) return "Facebook";
-  if (params.has("gclid")) return "Google Ads";
-  if (params.has("msclkid")) return "Bing Ads";
-  if (params.has("ttclid")) return "TikTok";
-  const utmSource = params.get("utm_source");
-  if (utmSource) return SOURCE_MAP[utmSource.toLowerCase()] ?? utmSource;
-  return null;
+  if (qIdx !== -1) {
+    const params = new URLSearchParams(url.slice(qIdx + 1));
+    if (params.has("fbclid")) return "Facebook";
+    if (params.has("gclid")) return "Google Ads";
+    if (params.has("msclkid")) return "Bing Ads";
+    if (params.has("ttclid")) return "TikTok";
+    const utmSource = params.get("utm_source");
+    if (utmSource) return SOURCE_MAP[utmSource.toLowerCase()] ?? utmSource;
+  }
+  return "Organic / Direct";
 }
+
+type ProcessedLandingRow = {
+  page: string;
+  source: string;
+  sessions: number;
+  activeUsers: number;
+  engagementRate: number;
+};
 
 function LandingPagesTable({ report }: ReportTableProps) {
   if (report.rows.length === 0) {
     return <p className="mt-3 text-sm text-slate-400">No data for this period.</p>;
   }
+
+  // Deduplicate rows that share the same clean page + source, merging counts
+  const merged = new Map<string, ProcessedLandingRow>();
+  for (const row of report.rows) {
+    const raw = String(row.page ?? "");
+    if (raw === "(not set)") continue;
+    const page = cleanLandingPage(raw);
+    const source = detectSource(raw);
+    const key = `${page}::${source}`;
+    const sessions = typeof row.sessions === "number" ? row.sessions : 0;
+    const activeUsers = typeof row.activeUsers === "number" ? row.activeUsers : 0;
+    const engagementRate = typeof row.engagementRate === "number" ? row.engagementRate : 0;
+    const existing = merged.get(key);
+    if (existing) {
+      const totalSessions = existing.sessions + sessions;
+      existing.engagementRate = totalSessions > 0
+        ? (existing.engagementRate * existing.sessions + engagementRate * sessions) / totalSessions
+        : 0;
+      existing.sessions = totalSessions;
+      existing.activeUsers += activeUsers;
+    } else {
+      merged.set(key, { page, source, sessions, activeUsers, engagementRate });
+    }
+  }
+
+  const rows = Array.from(merged.values()).sort((a, b) => b.sessions - a.sessions);
+
   return (
     <div className="mt-4 overflow-x-auto">
       <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
@@ -411,28 +448,17 @@ function LandingPagesTable({ report }: ReportTableProps) {
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {report.rows.map((row, i) => {
-            const raw = String(row.page ?? "");
-            const page = cleanLandingPage(raw);
-            const source = detectSource(raw);
-            const badge = source ? (SOURCE_COLORS[source] ?? "bg-slate-100 text-slate-600") : null;
+          {rows.map((row, i) => {
+            const badge = SOURCE_COLORS[row.source] ?? "bg-slate-100 text-slate-600";
             return (
               <tr key={i}>
-                <td className="px-3 py-2 text-slate-700 max-w-xs break-words">{page}</td>
+                <td className="px-3 py-2 text-slate-700 max-w-xs break-words">{row.page}</td>
                 <td className="px-3 py-2 whitespace-nowrap">
-                  {source && badge && (
-                    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${badge}`}>{source}</span>
-                  )}
+                  <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${badge}`}>{row.source}</span>
                 </td>
-                <td className="px-3 py-2 whitespace-nowrap text-slate-700">
-                  {typeof row.sessions === "number" ? new Intl.NumberFormat("en-US").format(row.sessions) : "—"}
-                </td>
-                <td className="px-3 py-2 whitespace-nowrap text-slate-700">
-                  {typeof row.activeUsers === "number" ? new Intl.NumberFormat("en-US").format(row.activeUsers) : "—"}
-                </td>
-                <td className="px-3 py-2 whitespace-nowrap text-slate-700">
-                  {typeof row.engagementRate === "number" ? `${(row.engagementRate * 100).toFixed(1)}%` : "—"}
-                </td>
+                <td className="px-3 py-2 whitespace-nowrap text-slate-700">{new Intl.NumberFormat("en-US").format(row.sessions)}</td>
+                <td className="px-3 py-2 whitespace-nowrap text-slate-700">{new Intl.NumberFormat("en-US").format(row.activeUsers)}</td>
+                <td className="px-3 py-2 whitespace-nowrap text-slate-700">{`${(row.engagementRate * 100).toFixed(1)}%`}</td>
               </tr>
             );
           })}
