@@ -4,8 +4,9 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { resolveBrand } from "@/lib/brands/resolve";
 import { MembershipStatus } from "@prisma/client";
-import { getSiteHealth, type SiteHealth } from "@/lib/analytics/ga4";
+import { getSiteHealth, getTrafficTrend, type SiteHealth } from "@/lib/analytics/ga4";
 import { PeriodSelector } from "./PeriodSelector";
+import { SiteTrafficGraph, type TrafficComparisonRow } from "./SiteTrafficGraph";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,7 @@ export default async function WebsitePage({
 
   const theme = await prisma.brandTheme.findUnique({
     where: { brandId: brand.id },
-    select: { ga4PropertyId: true },
+    select: { ga4PropertyId: true, primaryColor: true },
   });
 
   if (!theme?.ga4PropertyId) {
@@ -44,13 +45,38 @@ export default async function WebsitePage({
     );
   }
 
-  const endDate = new Date().toISOString().slice(0, 10);
-  const startDate = new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const now = Date.now();
+  const endDate = new Date(now).toISOString().slice(0, 10);
+  const startDate = new Date(now - (days - 1) * 86400000).toISOString().slice(0, 10);
+  const prevEnd = new Date(now - days * 86400000).toISOString().slice(0, 10);
+  const prevStart = new Date(now - (2 * days - 1) * 86400000).toISOString().slice(0, 10);
+
+  const barColor = theme.primaryColor ?? "#17324d";
 
   let health: SiteHealth | null = null;
+  let trendRows: TrafficComparisonRow[] = [];
   let error: string | null = null;
   try {
-    health = await getSiteHealth(theme.ga4PropertyId, startDate, endDate);
+    const [healthResult, curTrend, prevTrend] = await Promise.all([
+      getSiteHealth(theme.ga4PropertyId, startDate, endDate),
+      getTrafficTrend(theme.ga4PropertyId, startDate, endDate),
+      getTrafficTrend(theme.ga4PropertyId, prevStart, prevEnd),
+    ]);
+    health = healthResult;
+
+    const curMap = new Map(curTrend.map((r) => [r.date, r.activeUsers]));
+    const prevMap = new Map(prevTrend.map((r) => [r.date, r.activeUsers]));
+    const dates = Array.from({ length: days }, (_, i) =>
+      new Date(now - (days - 1 - i) * 86400000).toISOString().slice(0, 10),
+    );
+    const prevDates = Array.from({ length: days }, (_, i) =>
+      new Date(now - (2 * days - 1 - i) * 86400000).toISOString().slice(0, 10),
+    );
+    trendRows = dates.map((date, i) => ({
+      date,
+      current: curMap.get(date) ?? 0,
+      previous: prevMap.get(prevDates[i]) ?? 0,
+    }));
   } catch (err) {
     console.error("[website] GA4 error:", JSON.stringify(err, Object.getOwnPropertyNames(err instanceof Error ? err : {})));
     error = err instanceof Error ? err.message : String(err);
@@ -82,6 +108,8 @@ export default async function WebsitePage({
         </div>
         <PeriodSelector current={period} />
       </div>
+
+      <SiteTrafficGraph rows={trendRows} barColor={barColor} days={days} />
 
       {/* Headline metrics */}
       <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
