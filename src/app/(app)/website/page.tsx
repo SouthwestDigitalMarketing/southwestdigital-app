@@ -42,8 +42,8 @@ export default async function WebsitePage() {
   try {
     health = await getSiteHealth(theme.ga4PropertyId, startDate, endDate);
   } catch (err) {
-    console.error("[website] GA4 error:", err);
-    error = err instanceof Error ? err.message : "Analytics unavailable.";
+    console.error("[website] GA4 error:", JSON.stringify(err, Object.getOwnPropertyNames(err instanceof Error ? err : {})));
+    error = err instanceof Error ? err.message : String(err);
   }
 
   if (error || !health) {
