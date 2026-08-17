@@ -57,8 +57,8 @@ export default async function AnalyticsPage() {
         const found = byDate.get(date);
         return { date, sessions: found?.sessions ?? 0, activeUsers: found?.activeUsers ?? 0 };
       });
-    } catch {
-      // GA4 unavailable — chart shows empty state
+    } catch (err) {
+      console.error("[analytics] GA4 error:", err);
     }
   }
 
@@ -73,8 +73,8 @@ export default async function AnalyticsPage() {
       const raw = await getDailyViews(ytChannelId, ytRefreshToken, windowStartStr, windowEndStr);
       const byDate = new Map(raw.map((r) => [r.date, r.views]));
       ytRows = windowDates.map((date) => ({ date, views: byDate.get(date) ?? 0 }));
-    } catch {
-      // YouTube unavailable — chart shows empty state
+    } catch (err) {
+      console.error("[analytics] YouTube error:", err);
     }
   }
 
