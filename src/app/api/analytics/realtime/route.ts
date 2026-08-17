@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
       headers: { "Cache-Control": "no-store" },
     });
   } catch (err) {
-    console.error("[realtime] GA4 error:", err);
+    console.error("[realtime] GA4 error:", JSON.stringify(err, Object.getOwnPropertyNames(err instanceof Error ? err : {})));
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }
