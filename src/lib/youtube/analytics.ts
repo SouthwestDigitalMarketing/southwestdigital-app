@@ -197,7 +197,10 @@ export async function getDailyViewsForVideos(
         `https://youtubeanalytics.googleapis.com/v2/reports?${params}`,
         { headers: { Authorization: `Bearer ${accessToken}` } },
       );
-      if (!res.ok) return [] as DailyViewByVideoRow[];
+      if (!res.ok) {
+        console.error(`[youtube] getDailyViewsForVideos error for ${videoId}:`, await res.text());
+        return [] as DailyViewByVideoRow[];
+      }
       const json = (await res.json()) as { rows?: [string, number][] };
       return (json.rows ?? []).map(([date, views]) => ({ date, videoId, views }));
     }),

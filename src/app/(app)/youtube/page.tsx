@@ -6,6 +6,7 @@ import { resolveBrand } from "@/lib/brands/resolve";
 import { MembershipStatus } from "@prisma/client";
 import {
   getChannelMetrics,
+  getDailyViews,
   getDailyViewsForVideos,
   getTopVideos,
   type ChannelMetrics,
@@ -82,6 +83,12 @@ export default async function YouTubePage() {
     // Second: per-video daily data (needs top video IDs)
     const topVideoIds = topVideos.slice(0, TOP_N).map((v) => v.videoId);
     dailyByVideo = await getDailyViewsForVideos(channelId, refreshToken, startDate, endDate, topVideoIds);
+    // Fallback: if all per-video calls failed, use channel-level daily totals
+    if (dailyByVideo.length === 0 && topVideoIds.length > 0) {
+      console.warn("[youtube] per-video daily data empty, falling back to channel totals");
+      const channelDaily = await getDailyViews(channelId, refreshToken, startDate, endDate);
+      dailyByVideo = channelDaily.map(({ date, views }) => ({ date, videoId: "__total", views }));
+    }
   } catch (err) {
     console.error("[youtube] API error:", err);
     error = err instanceof Error ? err.message : String(err);
@@ -106,13 +113,14 @@ export default async function YouTubePage() {
     new Date(now - (29 - i) * 86400000).toISOString().slice(0, 10),
   );
   const topVideoIds = topVideos.slice(0, TOP_N).map((v) => v.videoId);
+  const isFallbackMode = dailyByVideo.length > 0 && dailyByVideo[0].videoId === "__total";
   const dateMap = new Map<string, Record<string, number>>();
   for (const date of allDates) dateMap.set(date, {});
   let hasOther = false;
   for (const { date, videoId, views } of dailyByVideo) {
     if (!dateMap.has(date)) dateMap.set(date, {});
     const day = dateMap.get(date)!;
-    if (topVideoIds.includes(videoId)) {
+    if (isFallbackMode || topVideoIds.includes(videoId)) {
       day[videoId] = (day[videoId] ?? 0) + views;
     } else {
       day["other"] = (day["other"] ?? 0) + views;
@@ -120,14 +128,16 @@ export default async function YouTubePage() {
     }
   }
   const stackedRows: StackedDayRow[] = allDates.map((date) => ({ date, ...(dateMap.get(date) ?? {}) }));
-  const segments: VideoSegment[] = [
-    ...topVideoIds.map((id, i) => ({
-      videoId: id,
-      title: topVideos.find((v) => v.videoId === id)?.title ?? id,
-      color: VIDEO_COLORS[i] ?? "#94a3b8",
-    })),
-    ...(hasOther ? [{ videoId: "other", title: "Other videos", color: OTHER_COLOR }] : []),
-  ];
+  const segments: VideoSegment[] = isFallbackMode
+    ? [{ videoId: "__total", title: "Total Views", color: VIDEO_COLORS[0] }]
+    : [
+        ...topVideoIds.map((id, i) => ({
+          videoId: id,
+          title: topVideos.find((v) => v.videoId === id)?.title ?? id,
+          color: VIDEO_COLORS[i] ?? "#94a3b8",
+        })),
+        ...(hasOther ? [{ videoId: "other", title: "Other videos", color: OTHER_COLOR }] : []),
+      ];
 
   return (
     <div className="p-8">
