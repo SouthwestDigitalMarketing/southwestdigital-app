@@ -17,13 +17,16 @@
   },
   "dependencies": {
     "@auth/prisma-adapter": "2.11.3",
+    "@google-analytics/data": "^7.0.0",
     "@prisma/client": "6.19.3",
+    "@types/recharts": "^1.8.29",
     "lucide-react": "^1.31.0",
     "next": "16.3.1",
     "next-auth": "5.0.0-beta.32",
     "nodemailer": "^8.0.11",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "recharts": "^3.10.1",
     "server-only": "^0.0.1",
     "zod": "^4.4.3"
   },
@@ -39,5 +42,14 @@
     "tailwindcss": "^4.1.14",
     "typescript": "^5",
     "vitest": "^4.1.10"
+  },
+  "allowScripts": {
+    "@google-analytics/data@7.0.0": true,
+    "recharts@3.10.1": true,
+    "prisma@6.19.3": true,
+    "protobufjs@7.6.5": true,
+    "unrs-resolver@1.12.2": true,
+    "@prisma/client@6.19.3": true,
+    "@prisma/engines@6.19.3": true
   }
 }

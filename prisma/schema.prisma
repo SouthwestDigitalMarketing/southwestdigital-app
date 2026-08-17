@@ -535,6 +535,8 @@ model BrandTheme {
   supportEmail      String?
   monthlyViewsGoal  Int?
   monthlyClicksGoal Int?
+  ga4PropertyId     String?
+  youtubeChannelId  String?
   brand             Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
