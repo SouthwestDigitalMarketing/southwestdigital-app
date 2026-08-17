@@ -25,7 +25,7 @@ export async function GET() {
   const ga4 = getClient();
   if (!ga4) return NextResponse.json({ error: "No credentials" }, { status: 500 });
 
-  const propertyId = "479310215";
+  const propertyId = "501531577";
   const [response] = await ga4.runReport({
     property: `properties/${propertyId}`,
     dateRanges: [{ startDate: "30daysAgo", endDate: "today" }],
