@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 
 const PERIODS = [
+  { label: "Today", value: "today" },
   { label: "Yesterday", value: "yday" },
   { label: "48 hours", value: "48h" },
   { label: "7 days", value: "7d" },

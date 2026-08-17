@@ -6,7 +6,6 @@ import { resolveBrand } from "@/lib/brands/resolve";
 import { MembershipStatus } from "@prisma/client";
 import { getSiteHealth, getTrafficTrend, getHourlyTraffic, type SiteHealth } from "@/lib/analytics/ga4";
 import { PeriodSelector } from "./PeriodSelector";
-import { LiveButton } from "./LiveButton";
 import { SiteTrafficGraph, type TrafficComparisonRow } from "./SiteTrafficGraph";
 
 export const dynamic = "force-dynamic";
@@ -199,10 +198,7 @@ export default async function WebsitePage({
             bookkeepingconroe.com — {config.subtitleLabel}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <LiveButton current={period} />
-          <PeriodSelector current={period} />
-        </div>
+        <PeriodSelector current={period} />
       </div>
 
       <SiteTrafficGraph
