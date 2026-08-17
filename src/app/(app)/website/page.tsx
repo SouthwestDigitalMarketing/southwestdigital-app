@@ -366,6 +366,22 @@ const SOURCE_MAP: Record<string, string> = {
   pinterest: "Pinterest",
 };
 
+const SOURCE_TOOLTIPS: Record<string, string> = {
+  Facebook: "Visitor clicked a link shared on Facebook",
+  "Google Ads": "Visitor clicked a Google paid search ad",
+  Google: "Visitor arrived via Google organic search",
+  Instagram: "Visitor clicked a link shared on Instagram",
+  TikTok: "Visitor clicked a link shared on TikTok",
+  "Bing Ads": "Visitor clicked a Microsoft Bing paid search ad",
+  Twitter: "Visitor clicked a link shared on Twitter / X",
+  LinkedIn: "Visitor clicked a link shared on LinkedIn",
+  Email: "Visitor clicked a link in an email campaign",
+  Newsletter: "Visitor clicked a link in a newsletter",
+  Pinterest: "Visitor clicked a link shared on Pinterest",
+  Yahoo: "Visitor arrived via Yahoo search",
+  "Organic / Direct": "Arrived via organic search (Google, Bing, etc.), typed the URL directly, or used a bookmark — no ad or campaign tracking detected",
+};
+
 const SOURCE_COLORS: Record<string, string> = {
   Facebook: "bg-blue-100 text-blue-700",
   "Google Ads": "bg-green-100 text-green-700",
@@ -454,7 +470,13 @@ function LandingPagesTable({ report }: ReportTableProps) {
               <tr key={i}>
                 <td className="px-3 py-2 text-slate-700 max-w-xs break-words">{row.page}</td>
                 <td className="px-3 py-2 whitespace-nowrap">
-                  <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${badge}`}>{row.source}</span>
+                  <div className="group relative inline-block">
+                    <span className={`inline-block cursor-default rounded-full px-2 py-0.5 text-xs font-medium ${badge}`}>{row.source}</span>
+                    <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 hidden w-56 -translate-x-1/2 rounded-lg bg-slate-800 px-3 py-2 text-xs text-white shadow-lg group-hover:block">
+                      {SOURCE_TOOLTIPS[row.source] ?? row.source}
+                      <div className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
+                    </div>
+                  </div>
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap text-slate-700">{new Intl.NumberFormat("en-US").format(row.sessions)}</td>
                 <td className="px-3 py-2 whitespace-nowrap text-slate-700">{new Intl.NumberFormat("en-US").format(row.activeUsers)}</td>
