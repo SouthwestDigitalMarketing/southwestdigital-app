@@ -47,7 +47,7 @@ export default async function WebsitePage({
 
   const theme = await prisma.brandTheme.findUnique({
     where: { brandId: brand.id },
-    select: { ga4PropertyId: true, primaryColor: true },
+    select: { ga4PropertyId: true, ga4HostName: true, primaryColor: true },
   });
 
   if (!theme?.ga4PropertyId) {
@@ -60,6 +60,7 @@ export default async function WebsitePage({
   }
 
   const propertyId = theme.ga4PropertyId;
+  const hostname = theme.ga4HostName;
   const barColor = theme.primaryColor ?? "#17324d";
 
   const now = Date.now();
@@ -100,9 +101,9 @@ export default async function WebsitePage({
           : [threeDaysAgoStr, twoDaysAgoStr];
 
       const [healthResult, curTrend, prevTrend] = await Promise.all([
-        getSiteHealth(propertyId, startDate, endDate),
-        getHourlyTraffic(propertyId, startDate, endDate),
-        getHourlyTraffic(propertyId, prevTrendStart, prevTrendEnd),
+        getSiteHealth(propertyId, startDate, endDate, hostname),
+        getHourlyTraffic(propertyId, startDate, endDate, hostname),
+        getHourlyTraffic(propertyId, prevTrendStart, prevTrendEnd, hostname),
       ]);
       health = healthResult;
 
@@ -149,9 +150,9 @@ export default async function WebsitePage({
       const prevStartStr = new Date(now - (2 * days - 1) * 86400000).toISOString().slice(0, 10);
 
       const [healthResult, curTrend, prevTrend] = await Promise.all([
-        getSiteHealth(propertyId, startDate, endDate),
-        getTrafficTrend(propertyId, startDate, endDate),
-        getTrafficTrend(propertyId, prevStartStr, prevEndStr),
+        getSiteHealth(propertyId, startDate, endDate, hostname),
+        getTrafficTrend(propertyId, startDate, endDate, hostname),
+        getTrafficTrend(propertyId, prevStartStr, prevEndStr, hostname),
       ]);
       health = healthResult;
 

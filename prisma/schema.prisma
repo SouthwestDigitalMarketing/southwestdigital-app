@@ -536,6 +536,7 @@ model BrandTheme {
   monthlyViewsGoal  Int?
   monthlyClicksGoal Int?
   ga4PropertyId     String?
+  ga4HostName       String?
   youtubeChannelId  String?
   brand             Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
   createdAt         DateTime @default(now())

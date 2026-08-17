@@ -107,10 +107,21 @@ export type HourlyTrafficRow = {
   sessions: number;
 };
 
+function hostnameFilter(hostname: string | null | undefined) {
+  if (!hostname) return undefined;
+  return {
+    filter: {
+      fieldName: "hostName",
+      stringFilter: { matchType: 1 as const, value: hostname, caseSensitive: false },
+    },
+  };
+}
+
 export async function getHourlyTraffic(
   propertyId: string,
   startDate: string,
   endDate: string,
+  hostname?: string | null,
 ): Promise<HourlyTrafficRow[]> {
   const ga4 = getClient();
   if (!ga4) throw new Error("GA4 credentials not configured");
@@ -121,6 +132,7 @@ export async function getHourlyTraffic(
     dimensions: [{ name: "dateHour" }],
     metrics: [{ name: "activeUsers" }, { name: "sessions" }],
     orderBys: [{ dimension: { dimensionName: "dateHour" } }],
+    dimensionFilter: hostnameFilter(hostname),
     keepEmptyRows: false,
   });
 
@@ -142,6 +154,7 @@ export async function getTrafficTrend(
   propertyId: string,
   startDate: string,
   endDate: string,
+  hostname?: string | null,
 ): Promise<DailyTrafficRow[]> {
   const ga4 = getClient();
   if (!ga4) throw new Error("GA4 credentials not configured");
@@ -152,6 +165,7 @@ export async function getTrafficTrend(
     dimensions: [{ name: "date" }],
     metrics: [{ name: "sessions" }, { name: "activeUsers" }],
     orderBys: [{ dimension: { dimensionName: "date" } }],
+    dimensionFilter: hostnameFilter(hostname),
     keepEmptyRows: false,
   });
 
@@ -173,11 +187,13 @@ export async function getSiteHealth(
   propertyId: string,
   startDate: string,
   endDate: string,
+  hostname?: string | null,
 ): Promise<SiteHealth> {
   const ga4 = getClient();
   if (!ga4) throw new Error("GA4 credentials not configured");
 
   const prop = `properties/${propertyId}`;
+  const hFilter = hostnameFilter(hostname);
   const prevEnd = new Date(new Date(startDate).getTime() - 24 * 60 * 60 * 1000)
     .toISOString()
     .slice(0, 10);
@@ -204,12 +220,14 @@ export async function getSiteHealth(
         property: prop,
         dateRanges: [{ startDate, endDate }],
         metrics: headlineMetrics,
+        dimensionFilter: hFilter,
         keepEmptyRows: false,
       }),
       ga4.runReport({
         property: prop,
         dateRanges: [{ startDate: prevStart, endDate: prevEnd }],
         metrics: headlineMetrics,
+        dimensionFilter: hFilter,
         keepEmptyRows: false,
       }),
       ga4.runReport({
@@ -223,6 +241,7 @@ export async function getSiteHealth(
           { name: "keyEvents" },
         ],
         orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
+        dimensionFilter: hFilter,
         limit: 10,
         keepEmptyRows: false,
       }),
@@ -232,6 +251,7 @@ export async function getSiteHealth(
         dimensions: [{ name: "landingPagePlusQueryString" }],
         metrics: [{ name: "sessions" }, { name: "activeUsers" }, { name: "engagementRate" }],
         orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
+        dimensionFilter: hFilter,
         limit: 10,
         keepEmptyRows: false,
       }),
@@ -241,6 +261,7 @@ export async function getSiteHealth(
         dimensions: [{ name: "country" }, { name: "region" }, { name: "city" }],
         metrics: [{ name: "sessions" }, { name: "activeUsers" }],
         orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
+        dimensionFilter: hFilter,
         limit: 10,
         keepEmptyRows: false,
       }),

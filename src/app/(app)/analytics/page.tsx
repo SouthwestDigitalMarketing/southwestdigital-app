@@ -27,6 +27,7 @@ export default async function AnalyticsPage() {
     where: { brandId: brand.id },
     select: {
       ga4PropertyId: true,
+      ga4HostName: true,
       youtubeChannelId: true,
       monthlyViewsGoal: true,
       monthlyClicksGoal: true,
@@ -49,9 +50,10 @@ export default async function AnalyticsPage() {
   type TrafficRow = { date: string; sessions: number; activeUsers: number };
   let websiteRows: TrafficRow[] = [];
   const ga4PropertyId = theme?.ga4PropertyId;
+  const ga4HostName = theme?.ga4HostName;
   if (ga4PropertyId) {
     try {
-      const raw = await getTrafficTrend(ga4PropertyId, windowStartStr, windowEndStr);
+      const raw = await getTrafficTrend(ga4PropertyId, windowStartStr, windowEndStr, ga4HostName);
       const byDate = new Map(raw.map((r) => [r.date, r]));
       websiteRows = windowDates.map((date) => {
         const found = byDate.get(date);
