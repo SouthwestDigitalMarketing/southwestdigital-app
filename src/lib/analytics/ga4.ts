@@ -112,7 +112,7 @@ function hostnameFilter(hostname: string | null | undefined) {
   return {
     filter: {
       fieldName: "hostName",
-      stringFilter: { matchType: 1 as const, value: hostname, caseSensitive: false },
+      stringFilter: { matchType: 3 as const, value: hostname, caseSensitive: false },
     },
   };
 }
