@@ -5,10 +5,20 @@ import { prisma } from "@/lib/prisma";
 import { resolveBrand } from "@/lib/brands/resolve";
 import { MembershipStatus } from "@prisma/client";
 import { getSiteHealth, type SiteHealth } from "@/lib/analytics/ga4";
+import { PeriodSelector } from "./PeriodSelector";
 
 export const dynamic = "force-dynamic";
 
-export default async function WebsitePage() {
+const PERIOD_DAYS: Record<string, number> = { "7d": 7, "30d": 30, "90d": 90 };
+
+export default async function WebsitePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>;
+}) {
+  const { period: rawPeriod } = await searchParams;
+  const period = rawPeriod && rawPeriod in PERIOD_DAYS ? rawPeriod : "30d";
+  const days = PERIOD_DAYS[period];
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
@@ -35,7 +45,7 @@ export default async function WebsitePage() {
   }
 
   const endDate = new Date().toISOString().slice(0, 10);
-  const startDate = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const startDate = new Date(Date.now() - (days - 1) * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   let health: SiteHealth | null = null;
   let error: string | null = null;
@@ -63,11 +73,14 @@ export default async function WebsitePage() {
 
   return (
     <div className="p-8">
-      <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Website</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          bookkeepingconroe.com — last 30 days vs. previous 30 days
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">Website</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            bookkeepingconroe.com — last {days} days vs. previous {days} days
+          </p>
+        </div>
+        <PeriodSelector current={period} />
       </div>
 
       {/* Headline metrics */}
