@@ -18,6 +18,7 @@ type PeriodConfig = {
 };
 
 const PERIOD_CONFIG: Record<string, PeriodConfig> = {
+  live: { granularity: "daily", label: "Live", subtitleLabel: "active users, last 30 minutes" },
   yday: { granularity: "hourly", label: "Yesterday", subtitleLabel: "yesterday vs. day before" },
   "48h": { granularity: "hourly", label: "Last 48 hours", subtitleLabel: "last 48 hours vs. prev. 48 hours" },
   "7d": { granularity: "daily", label: "Last 7 days", subtitleLabel: "last 7 days vs. prev. 7 days" },
@@ -61,6 +62,25 @@ export default async function WebsitePage({
 
   const propertyId = theme.ga4PropertyId;
   const barColor = theme.primaryColor ?? "#17324d";
+
+  // Live view — skip historical fetching entirely
+  if (period === "live") {
+    return (
+      <div className="p-8">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold text-slate-900">Website</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              bookkeepingconroe.com — active users, last 30 minutes
+            </p>
+          </div>
+          <PeriodSelector current={period} />
+        </div>
+        <RealtimeWidget propertyId={propertyId} />
+      </div>
+    );
+  }
+
   const now = Date.now();
 
   const todayStr = new Date(now).toISOString().slice(0, 10);
@@ -188,8 +208,6 @@ export default async function WebsitePage({
         </div>
         <PeriodSelector current={period} />
       </div>
-
-      <RealtimeWidget propertyId={propertyId} />
 
       <SiteTrafficGraph
         rows={trendRows}

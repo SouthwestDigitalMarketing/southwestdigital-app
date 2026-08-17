@@ -158,16 +158,17 @@ export async function getRealtimeUsers(propertyId: string): Promise<RealtimeData
       property: prop,
       dimensions: [{ name: "unifiedPageScreen" }],
       metrics: [{ name: "activeUsers" }],
-      orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }],
       limit: 8,
     }),
   ]);
 
   const activeUsers = Number(totalRes[0].rows?.[0]?.metricValues?.[0]?.value ?? 0);
-  const byPage = (pagesRes[0].rows ?? []).map((row) => ({
-    page: row.dimensionValues?.[0]?.value ?? "",
-    activeUsers: Number(row.metricValues?.[0]?.value ?? 0),
-  }));
+  const byPage = (pagesRes[0].rows ?? [])
+    .map((row) => ({
+      page: row.dimensionValues?.[0]?.value ?? "",
+      activeUsers: Number(row.metricValues?.[0]?.value ?? 0),
+    }))
+    .sort((a, b) => b.activeUsers - a.activeUsers);
 
   return { activeUsers, byPage, asOf: new Date().toISOString() };
 }
