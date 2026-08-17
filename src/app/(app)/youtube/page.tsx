@@ -6,12 +6,13 @@ import { resolveBrand } from "@/lib/brands/resolve";
 import { MembershipStatus } from "@prisma/client";
 import {
   getChannelMetrics,
-  getDailyViews,
+  getDailyViewsByVideo,
   getTopVideos,
   type ChannelMetrics,
   type TopVideoRow,
+  type DailyViewByVideoRow,
 } from "@/lib/youtube/analytics";
-import { YouTubeTrendChart } from "./YouTubeTrendChart";
+import { YouTubeTrendChart, type VideoSegment, type StackedDayRow, TOP_N, VIDEO_COLORS, OTHER_COLOR } from "./YouTubeTrendChart";
 
 export const dynamic = "force-dynamic";
 
@@ -61,7 +62,6 @@ export default async function YouTubePage() {
   const channelId = theme.youtubeChannelId;
   const viewsGoal = theme.monthlyViewsGoal ?? 10000;
   const watchPctGoal = theme.youtubeWatchPercentageGoal ?? 30;
-  const barColor = theme.primaryColor ?? "#17324d";
 
   const now = Date.now();
   const endDate = new Date(now).toISOString().slice(0, 10);
@@ -69,14 +69,14 @@ export default async function YouTubePage() {
   const rangeLabel = `${new Date(startDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${new Date(endDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
 
   let metrics: ChannelMetrics | null = null;
-  let dailyRows: { date: string; views: number }[] = [];
+  let dailyByVideo: DailyViewByVideoRow[] = [];
   let topVideos: TopVideoRow[] = [];
   let error: string | null = null;
 
   try {
-    [metrics, dailyRows, topVideos] = await Promise.all([
+    [metrics, dailyByVideo, topVideos] = await Promise.all([
       getChannelMetrics(channelId, refreshToken, startDate, endDate),
-      getDailyViews(channelId, refreshToken, startDate, endDate),
+      getDailyViewsByVideo(channelId, refreshToken, startDate, endDate),
       getTopVideos(channelId, refreshToken, startDate, endDate),
     ]);
   } catch (err) {
@@ -97,6 +97,34 @@ export default async function YouTubePage() {
 
   const viewsPct = viewsGoal > 0 ? (metrics.views / viewsGoal) * 100 : 0;
   const watchPct = watchPctGoal > 0 ? (metrics.averageViewPercentage / watchPctGoal) * 100 : 0;
+
+  // Build stacked chart data — top N videos, everything else as "other"
+  const allDates = Array.from({ length: 30 }, (_, i) =>
+    new Date(now - (29 - i) * 86400000).toISOString().slice(0, 10),
+  );
+  const topVideoIds = topVideos.slice(0, TOP_N).map((v) => v.videoId);
+  const dateMap = new Map<string, Record<string, number>>();
+  for (const date of allDates) dateMap.set(date, {});
+  let hasOther = false;
+  for (const { date, videoId, views } of dailyByVideo) {
+    if (!dateMap.has(date)) dateMap.set(date, {});
+    const day = dateMap.get(date)!;
+    if (topVideoIds.includes(videoId)) {
+      day[videoId] = (day[videoId] ?? 0) + views;
+    } else {
+      day["other"] = (day["other"] ?? 0) + views;
+      hasOther = true;
+    }
+  }
+  const stackedRows: StackedDayRow[] = allDates.map((date) => ({ date, ...(dateMap.get(date) ?? {}) }));
+  const segments: VideoSegment[] = [
+    ...topVideoIds.map((id, i) => ({
+      videoId: id,
+      title: topVideos.find((v) => v.videoId === id)?.title ?? id,
+      color: VIDEO_COLORS[i] ?? "#94a3b8",
+    })),
+    ...(hasOther ? [{ videoId: "other", title: "Other videos", color: OTHER_COLOR }] : []),
+  ];
 
   return (
     <div className="p-8">
@@ -128,7 +156,7 @@ export default async function YouTubePage() {
           {metrics.views.toLocaleString("en-US")} total views
         </p>
         <div className="mt-4">
-          <YouTubeTrendChart rows={dailyRows} barColor={barColor} />
+          <YouTubeTrendChart stackedRows={stackedRows} segments={segments} />
         </div>
       </div>
 

@@ -169,3 +169,33 @@ export async function getTopVideos(
     averageViewPercentage,
   }));
 }
+
+export type DailyViewByVideoRow = { date: string; videoId: string; views: number };
+
+export async function getDailyViewsByVideo(
+  channelId: string,
+  refreshToken: string,
+  startDate: string,
+  endDate: string,
+): Promise<DailyViewByVideoRow[]> {
+  const accessToken = await getAccessToken(refreshToken);
+
+  const params = new URLSearchParams({
+    ids: `channel==${channelId}`,
+    startDate,
+    endDate,
+    dimensions: "day,video",
+    metrics: "views",
+    sort: "day",
+  });
+
+  const res = await fetch(
+    `https://youtubeanalytics.googleapis.com/v2/reports?${params}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+
+  if (!res.ok) throw new Error(`YouTube Analytics API error: ${await res.text()}`);
+
+  const json = (await res.json()) as { rows?: [string, string, number][] };
+  return (json.rows ?? []).map(([date, videoId, views]) => ({ date, videoId, views }));
+}
