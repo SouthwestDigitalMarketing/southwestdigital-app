@@ -5,7 +5,7 @@ import { normalizeHostname } from "@/lib/brands/hostname";
 
 const { auth } = NextAuth(authConfig);
 
-const PUBLIC_PATHS = new Set(["/login"]);
+const PUBLIC_PATHS = new Set(["/login", "/privacy-policy", "/terms-of-service"]);
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;
