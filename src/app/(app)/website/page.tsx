@@ -6,6 +6,7 @@ import { resolveBrand } from "@/lib/brands/resolve";
 import { MembershipStatus } from "@prisma/client";
 import { getSiteHealth, getTrafficTrend, getHourlyTraffic, type SiteHealth } from "@/lib/analytics/ga4";
 import { PeriodSelector } from "./PeriodSelector";
+import { LiveButton } from "./LiveButton";
 import { SiteTrafficGraph, type TrafficComparisonRow } from "./SiteTrafficGraph";
 import { RealtimeWidget } from "./RealtimeWidget";
 
@@ -74,7 +75,10 @@ export default async function WebsitePage({
               bookkeepingconroe.com — active users, last 30 minutes
             </p>
           </div>
+          <div className="flex items-center gap-2">
+          <LiveButton current={period} />
           <PeriodSelector current={period} />
+        </div>
         </div>
         <RealtimeWidget propertyId={propertyId} />
       </div>
@@ -206,7 +210,10 @@ export default async function WebsitePage({
             bookkeepingconroe.com — {config.subtitleLabel}
           </p>
         </div>
-        <PeriodSelector current={period} />
+        <div className="flex items-center gap-2">
+          <LiveButton current={period} />
+          <PeriodSelector current={period} />
+        </div>
       </div>
 
       <SiteTrafficGraph
