@@ -7,8 +7,9 @@ function normalizePhone(input: string): string {
 
 export async function sendSms(to: string, content: string): Promise<void> {
   const apiKey = process.env.QUO_API_KEY;
+  const from = process.env.QUO_FROM_NUMBER;
   const phoneNumberId = process.env.QUO_PHONE_NUMBER_ID;
-  if (!apiKey || !phoneNumberId) throw new Error("Quo API not configured");
+  if (!apiKey || !from) throw new Error("Quo API not configured (QUO_API_KEY and QUO_FROM_NUMBER required)");
 
   const normalized = normalizePhone(to);
 
@@ -19,9 +20,10 @@ export async function sendSms(to: string, content: string): Promise<void> {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      content,
-      phoneNumberId,
+      from,
       to: [normalized],
+      content,
+      ...(phoneNumberId ? { phoneNumberId } : {}),
     }),
   });
 
