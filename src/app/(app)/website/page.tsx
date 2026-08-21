@@ -8,6 +8,7 @@ import { getSiteHealth, getTrafficTrend, getHourlyTraffic, type SiteHealth } fro
 import { PeriodSelector } from "./PeriodSelector";
 import { SiteTrafficGraph, type TrafficComparisonRow } from "./SiteTrafficGraph";
 import { LandingPagesTable, type ProcessedLandingRow } from "./LandingPagesTable";
+import { WebsiteGoalCard } from "./WebsiteGoalCard";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +49,7 @@ export default async function WebsitePage({
 
   const theme = await prisma.brandTheme.findUnique({
     where: { brandId: brand.id },
-    select: { ga4PropertyId: true, ga4HostName: true, primaryColor: true },
+    select: { ga4PropertyId: true, ga4HostName: true, primaryColor: true, websiteEngagedSessionsGoal: true },
   });
 
   if (!theme?.ga4PropertyId) {
@@ -190,6 +191,7 @@ export default async function WebsitePage({
   const { headline, acquisition, landingPages, geographicTraffic } = health;
   const c = headline.current;
   const cmp = headline.comparison;
+  const engagedSessionsGoal = theme.websiteEngagedSessionsGoal ?? 500;
 
   const processedLandingPages = (() => {
     const merged = new Map<string, ProcessedLandingRow>();
@@ -227,6 +229,16 @@ export default async function WebsitePage({
           </p>
         </div>
         <PeriodSelector current={period} />
+      </div>
+
+      {/* Goal card */}
+      <div className="mt-6">
+        <WebsiteGoalCard
+          brandId={brand.id}
+          value={c.engagedSessions ?? 0}
+          goal={engagedSessionsGoal}
+          periodLabel={config.label.toLowerCase()}
+        />
       </div>
 
       <SiteTrafficGraph

@@ -18,6 +18,29 @@ function formatK(n: number) {
   return String(n);
 }
 
+function DateTick({ x, y, payload }: { x?: number; y?: number; payload?: { value: string } }) {
+  if (!payload?.value) return null;
+  const date = new Date(String(payload.value) + "T00:00:00");
+  const isMonday = date.getDay() === 1;
+  const label = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text
+        x={0}
+        y={0}
+        dy={4}
+        textAnchor="end"
+        fill={isMonday ? "#334155" : "#94a3b8"}
+        fontSize={9}
+        fontWeight={isMonday ? 700 : 400}
+        transform="rotate(-45)"
+      >
+        {label}
+      </text>
+    </g>
+  );
+}
+
 function truncate(s: string, n: number) {
   return s.length > n ? s.slice(0, n - 1) + "…" : s;
 }
@@ -74,19 +97,13 @@ export function YouTubeTrendChart({
   return (
     <div>
       <ResponsiveContainer width="100%" height={200}>
-        <BarChart data={stackedRows} margin={{ top: 8, right: 4, left: 4, bottom: 4 }} barCategoryGap="25%">
+        <BarChart data={stackedRows} margin={{ top: 8, right: 4, left: 4, bottom: 28 }} barCategoryGap="25%">
           <XAxis
             dataKey="date"
-            tickFormatter={(v) =>
-              new Date(String(v) + "T00:00:00").toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-              })
-            }
-            tick={{ fontSize: 10, fill: "#94a3b8" }}
+            tick={<DateTick />}
             tickLine={false}
             axisLine={false}
-            interval={6}
+            interval={0}
           />
           <YAxis
             tickFormatter={formatK}
@@ -108,15 +125,6 @@ export function YouTubeTrendChart({
         </BarChart>
       </ResponsiveContainer>
 
-      {/* Legend */}
-      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5">
-        {segments.map((seg) => (
-          <div key={seg.videoId} className="flex items-center gap-1.5 text-xs text-slate-500">
-            <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: seg.color }} />
-            {truncate(seg.title, 36)}
-          </div>
-        ))}
-      </div>
     </div>
   );
 }

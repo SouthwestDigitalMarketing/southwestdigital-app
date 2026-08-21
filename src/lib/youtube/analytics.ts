@@ -21,7 +21,7 @@ type TokenResponse = { access_token: string; expires_in: number };
 
 let cachedToken: { value: string; expiresAt: number } | null = null;
 
-async function getAccessToken(refreshToken: string): Promise<string> {
+export async function getAccessToken(refreshToken: string): Promise<string> {
   if (cachedToken && Date.now() < cachedToken.expiresAt) {
     return cachedToken.value;
   }
