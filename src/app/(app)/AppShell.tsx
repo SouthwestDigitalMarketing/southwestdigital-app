@@ -12,7 +12,6 @@ import {
   Settings,
   Menu,
   LogOut,
-  BarChart2,
   Globe,
   PlayCircle,
 } from "lucide-react";
@@ -21,7 +20,6 @@ import { signOutAction } from "./actions";
 
 const NAV = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, exact: true },
-  { label: "Analytics", href: "/analytics", icon: BarChart2 },
   { label: "Website", href: "/website", icon: Globe },
   { label: "YouTube", href: "/youtube", icon: PlayCircle },
   { label: "Clients", href: "/clients", icon: Building2 },

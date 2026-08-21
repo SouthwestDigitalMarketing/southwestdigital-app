@@ -183,6 +183,26 @@ export async function getTrafficTrend(
   });
 }
 
+export async function getTotalKeyEvents(
+  propertyId: string,
+  startDate: string,
+  endDate: string,
+  hostname?: string | null,
+): Promise<number> {
+  const ga4 = getClient();
+  if (!ga4) throw new Error("GA4 credentials not configured");
+
+  const [response] = await ga4.runReport({
+    property: `properties/${propertyId}`,
+    dateRanges: [{ startDate, endDate }],
+    metrics: [{ name: "keyEvents" }],
+    dimensionFilter: hostnameFilter(hostname),
+    keepEmptyRows: false,
+  });
+
+  return Number(response.rows?.[0]?.metricValues?.[0]?.value ?? 0);
+}
+
 export async function getSiteHealth(
   propertyId: string,
   startDate: string,

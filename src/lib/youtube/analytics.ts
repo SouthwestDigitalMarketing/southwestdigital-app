@@ -176,6 +176,32 @@ export async function getTopVideos(
 
 export type DailyViewByVideoRow = { date: string; videoId: string; views: number };
 
+export async function getAverageWatchDuration(
+  channelId: string,
+  refreshToken: string,
+  startDate: string,
+  endDate: string,
+): Promise<number> {
+  const accessToken = await getAccessToken(refreshToken);
+
+  const params = new URLSearchParams({
+    ids: `channel==${channelId}`,
+    startDate,
+    endDate,
+    metrics: "averageViewDuration",
+  });
+
+  const res = await fetch(
+    `https://youtubeanalytics.googleapis.com/v2/reports?${params}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+
+  if (!res.ok) throw new Error(`YouTube Analytics API error: ${await res.text()}`);
+
+  const json = (await res.json()) as { rows?: [number][] };
+  return json.rows?.[0]?.[0] ?? 0;
+}
+
 export async function getDailyViewsForVideos(
   channelId: string,
   refreshToken: string,

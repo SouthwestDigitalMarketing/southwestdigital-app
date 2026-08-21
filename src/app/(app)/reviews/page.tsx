@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { resolveBrand } from "@/lib/brands/resolve";
 import { MembershipStatus, ReviewOutcome } from "@prisma/client";
 import { ReviewsHeader } from "./ReviewsHeader";
+import { formatPhone } from "@/lib/phone";
+import { SendReminderButton } from "./SendReminderButton";
 
 export default async function ReviewsPage() {
   const session = await auth();
@@ -29,6 +31,7 @@ export default async function ReviewsPage() {
       recipientPhone: true,
       channel: true,
       sentAt: true,
+      lastReminderAt: true,
       openedAt: true,
       outcome: true,
       feedbackRating: true,
@@ -72,15 +75,17 @@ export default async function ReviewsPage() {
               <tr className="border-b border-slate-100 text-left">
                 <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Recipient</th>
                 <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Phone</th>
-                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Sent</th>
+                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">First sent</th>
+                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Last reminder</th>
                 <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
+                <th className="px-5 py-3"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {requests.map((r) => (
                 <tr key={r.id} className="hover:bg-slate-50">
                   <td className="px-5 py-3 font-medium text-slate-900">{r.recipientName ?? "—"}</td>
-                  <td className="px-5 py-3 text-slate-500">{r.recipientPhone ?? "—"}</td>
+                  <td className="px-5 py-3 text-slate-500">{r.recipientPhone ? formatPhone(r.recipientPhone) : "—"}</td>
                   <td className="px-5 py-3 text-slate-500">
                     {new Date(r.sentAt).toLocaleDateString("en-US", {
                       month: "short",
@@ -88,8 +93,20 @@ export default async function ReviewsPage() {
                       year: "numeric",
                     })}
                   </td>
+                  <td className="px-5 py-3 text-slate-500">
+                    {r.lastReminderAt
+                      ? new Date(r.lastReminderAt).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })
+                      : "—"}
+                  </td>
                   <td className="px-5 py-3">
                     <StatusChip request={r} />
+                  </td>
+                  <td className="px-5 py-3 text-right">
+                    <SendReminderButton requestId={r.id} />
                   </td>
                 </tr>
               ))}

@@ -533,11 +533,14 @@ model BrandTheme {
   backgroundColor   String   @default("#f7f8fa")
   foregroundColor   String   @default("#17202a")
   supportEmail      String?
-  monthlyViewsGoal  Int?
-  monthlyClicksGoal Int?
+  monthlyViewsGoal     Int?
+  monthlyClicksGoal    Int?
+  avgWatchDurationGoal Int?
+  monthlyKeyEventsGoal Int?
   ga4PropertyId              String?
   ga4HostName                String?
   youtubeChannelId           String?
+  youtubeHandle              String?
   youtubeWatchPercentageGoal Float?
   websiteEngagedSessionsGoal Int?
   brand             Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
@@ -1096,6 +1099,7 @@ model ReviewRequest {
   recipientEmail      String?
   recipientName       String?
   sentAt              DateTime         @default(now())
+  lastReminderAt      DateTime?
   openedAt            DateTime?
   clickedAt           DateTime?
   outcome             ReviewOutcome?
