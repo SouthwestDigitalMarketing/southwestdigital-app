@@ -124,7 +124,7 @@ export function AppShell({
 
   const primary = brand.theme?.primaryColor ?? "#17324d";
   const accent = brand.theme?.accentColor ?? "#d79b3b";
-  const bg = brand.theme?.backgroundColor ?? "#f7f8fa";
+  const mode = brand.theme?.mode === "dark" || brand.theme?.mode === "light" ? brand.theme.mode : "system";
 
   const displayName = user.name ?? user.email ?? "User";
   const initials = displayName
@@ -140,9 +140,14 @@ export function AppShell({
         className="flex h-16 items-center px-5"
         style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}
       >
-        <span className="text-sm font-bold uppercase tracking-widest text-white">
-          {brand.name}
-        </span>
+        {brand.theme?.logoMarkUrl ? (
+          <img src={brand.theme.logoMarkUrl} alt="" className="h-8 w-8 rounded object-contain" />
+        ) : null}
+        {brand.theme?.logoUrl ? (
+          <img src={brand.theme.logoUrl} alt={brand.name} className="max-h-8 max-w-44 object-contain" />
+        ) : (
+          <span className="text-sm font-bold uppercase tracking-widest text-white">{brand.name}</span>
+        )}
       </div>
 
       <nav className="flex-1 space-y-0.5 px-3 py-4">
@@ -207,7 +212,17 @@ export function AppShell({
   );
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: bg }}>
+    <div
+      data-theme={mode}
+      className="flex h-screen overflow-hidden"
+      style={{
+        backgroundColor: "var(--brand-background)",
+        "--brand-primary": primary,
+        "--brand-accent": accent,
+        "--brand-background": brand.theme?.backgroundColor ?? "#f7f8fa",
+        "--brand-foreground": brand.theme?.foregroundColor ?? "#17202a",
+      } as React.CSSProperties}
+    >
       <aside className="hidden lg:flex">{sidebar}</aside>
 
       {open && (

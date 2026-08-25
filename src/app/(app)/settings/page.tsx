@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireStaffBrand } from "@/lib/brands/staff";
 import { mergeToolLinks } from "@/lib/brands/tools";
 import { ToolLinksForm } from "./ToolLinksForm";
+import { BrandAppearanceForm } from "./BrandAppearanceForm";
 
 export default async function SettingsPage() {
   const { brand } = await requireStaffBrand();
@@ -23,6 +24,14 @@ export default async function SettingsPage() {
       </div>
 
       <div className="mt-6 grid max-w-3xl gap-4">
+        <BrandAppearanceForm
+          theme={{
+            primaryColor: brand.theme?.primaryColor ?? "#17324d",
+            mode: brand.theme?.mode ?? "system",
+            logoUrl: brand.theme?.logoUrl ?? null,
+            logoMarkUrl: brand.theme?.logoMarkUrl ?? null,
+          }}
+        />
         <Link
           href="/settings/tags"
           className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-5 py-4 hover:border-slate-300"

@@ -1,10 +1,6 @@
 import type { ReactNode } from "react";
 import { ExternalLink } from "lucide-react";
 
-function goalColor(pct: number): string {
-  return pct >= 100 ? "#6b8e23" : pct >= 60 ? "#f59e0b" : "#cc0000";
-}
-
 type GoalDisplay = {
   pct: number;
   subtitle: string;
@@ -15,20 +11,29 @@ type Attribution = {
   href: string;
 };
 
+function comparisonColor(value: number | null): string {
+  if (value === null || value === 0) return "text-slate-500";
+  return value > 0 ? "text-emerald-700" : "text-rose-700";
+}
+
 export function StatCard({
   label,
   value,
   goal,
+  goalColor = "#17324d",
+  comparison,
   icon,
   attribution,
 }: {
   label: string;
   value: string;
   goal?: GoalDisplay;
+  goalColor?: string;
+  comparison?: number | null;
   icon?: ReactNode;
   attribution?: Attribution;
 }) {
-  const color = goal ? goalColor(goal.pct) : undefined;
+  const color = goal ? goalColor : undefined;
 
   return (
     <div className="flex flex-col rounded-xl border border-slate-200 bg-white p-6">
@@ -51,7 +56,14 @@ export function StatCard({
               )}
             </div>
           </div>
-          <p className="mt-2 text-3xl font-semibold tabular-nums text-slate-900">{value}</p>
+          <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <p className="text-3xl font-semibold tabular-nums text-slate-900">{value}</p>
+            {comparison !== undefined && (
+              <span className={`text-sm font-semibold tabular-nums ${comparisonColor(comparison)}`}>
+                {comparison === null ? "New" : `${comparison > 0 ? "+" : ""}${comparison}%`}
+              </span>
+            )}
+          </div>
           {goal && <p className="mt-0.5 text-xs text-slate-500">{goal.subtitle}</p>}
         </div>
         {goal && (

@@ -15,7 +15,9 @@ export type BrandContextValue = {
       backgroundColor: string;
       foregroundColor: string;
       logoUrl: string | null;
+      logoMarkUrl: string | null;
       logoAlt: string | null;
+      mode: string;
       supportEmail: string | null;
     } | null;
     toolLinks: Array<{

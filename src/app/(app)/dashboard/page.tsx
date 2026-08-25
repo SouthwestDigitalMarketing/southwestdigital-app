@@ -164,6 +164,11 @@ function dateString(value: Date): string {
   return value.toISOString().slice(0, 10);
 }
 
+function percentChange(current: number, previous: number): number | null {
+  if (previous === 0) return current === 0 ? 0 : null;
+  return Math.round(((current - previous) / previous) * 1000) / 10;
+}
+
 async function getOfferStats(brandId: string, selectedPeriod: DashboardPeriod) {
   const offers = await prisma.quote.findMany({
     where: {
@@ -215,7 +220,7 @@ function getDashboardRange(value: string | string[] | undefined): DashboardRange
 }
 
 type PageProps = {
-  searchParams: Promise<{ range?: string | string[]; compare?: string | string[] }>;
+  searchParams: Promise<{ range?: string | string[] }>;
 };
 
 export default async function DashboardPage({ searchParams }: PageProps) {
@@ -231,18 +236,16 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const { brand } = resolved;
   const params = await searchParams;
   const range = getDashboardRange(params.range);
-  const comparePrevious = params.compare === "previous";
   const windowEnd = new Date();
   const selectedPeriod = getDashboardPeriod(range, windowEnd);
-  const previous = comparePrevious
-    ? getPreviousDashboardPeriod(range, windowEnd, selectedPeriod)
-    : undefined;
+  const previous = getPreviousDashboardPeriod(range, windowEnd, selectedPeriod);
 
   const theme = await prisma.brandTheme.findUnique({
     where: { brandId: brand.id },
     select: {
       ga4PropertyId: true,
       ga4HostName: true,
+      primaryColor: true,
       youtubeChannelId: true,
       youtubeHandle: true,
       monthlyViewsGoal: true,
@@ -262,6 +265,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const monthlyClicksGoal = theme?.monthlyClicksGoal ?? 1000;
   const avgWatchDurationGoal = theme?.avgWatchDurationGoal ?? 240;
   const monthlyKeyEventsGoal = theme?.monthlyKeyEventsGoal ?? 50;
+  const brandPrimaryColor = theme?.primaryColor ?? "#17324d";
   const periodGoalMultiplier = periodDays / 30;
   const viewsGoal = Math.round(monthlyViewsGoal * periodGoalMultiplier);
   const visitorsGoal = Math.round(monthlyClicksGoal * periodGoalMultiplier);
@@ -280,27 +284,23 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       const [metrics, duration, previousMetrics, previousDuration] = await Promise.all([
         getChannelMetrics(ytChannelId, ytRefreshToken, windowStartStr, windowEndStr),
         getAverageWatchDuration(ytChannelId, ytRefreshToken, windowStartStr, windowEndStr),
-        previous
-          ? getChannelMetrics(
-              ytChannelId,
-              ytRefreshToken,
-              dateString(previous.start),
-              dateString(addUtcDays(previous.endExclusive, -1)),
-            )
-          : Promise.resolve(undefined),
-        previous
-          ? getAverageWatchDuration(
-              ytChannelId,
-              ytRefreshToken,
-              dateString(previous.start),
-              dateString(addUtcDays(previous.endExclusive, -1)),
-            )
-          : Promise.resolve(undefined),
+        getChannelMetrics(
+          ytChannelId,
+          ytRefreshToken,
+          dateString(previous.start),
+          dateString(addUtcDays(previous.endExclusive, -1)),
+        ),
+        getAverageWatchDuration(
+          ytChannelId,
+          ytRefreshToken,
+          dateString(previous.start),
+          dateString(addUtcDays(previous.endExclusive, -1)),
+        ),
       ]);
       totalYtViews = metrics.views;
       avgWatchDuration = duration;
-      previousYtViews = previousMetrics?.views ?? 0;
-      previousAvgWatchDuration = previousDuration ?? 0;
+      previousYtViews = previousMetrics.views;
+      previousAvgWatchDuration = previousDuration;
     } catch (err) {
       console.error("[dashboard] YouTube error:", err);
     }
@@ -318,27 +318,23 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       const [trafficRows, keyEvents, previousTrafficRows, previousKeyEvents] = await Promise.all([
         getTrafficTrend(ga4PropertyId, windowStartStr, windowEndStr, ga4HostName),
         getTotalKeyEvents(ga4PropertyId, windowStartStr, windowEndStr, ga4HostName),
-        previous
-          ? getTrafficTrend(
-              ga4PropertyId,
-              dateString(previous.start),
-              dateString(addUtcDays(previous.endExclusive, -1)),
-              ga4HostName,
-            )
-          : Promise.resolve(undefined),
-        previous
-          ? getTotalKeyEvents(
-              ga4PropertyId,
-              dateString(previous.start),
-              dateString(addUtcDays(previous.endExclusive, -1)),
-              ga4HostName,
-            )
-          : Promise.resolve(undefined),
+        getTrafficTrend(
+          ga4PropertyId,
+          dateString(previous.start),
+          dateString(addUtcDays(previous.endExclusive, -1)),
+          ga4HostName,
+        ),
+        getTotalKeyEvents(
+          ga4PropertyId,
+          dateString(previous.start),
+          dateString(addUtcDays(previous.endExclusive, -1)),
+          ga4HostName,
+        ),
       ]);
       totalWebsiteVisitors = trafficRows.reduce((s, r) => s + r.activeUsers, 0);
       keyEventCount = keyEvents;
-      previousWebsiteVisitors = previousTrafficRows?.reduce((sum, row) => sum + row.activeUsers, 0) ?? 0;
-      previousKeyEventCount = previousKeyEvents ?? 0;
+      previousWebsiteVisitors = previousTrafficRows.reduce((sum, row) => sum + row.activeUsers, 0);
+      previousKeyEventCount = previousKeyEvents;
     } catch (err) {
       console.error("[dashboard] GA4 error:", err);
     }
@@ -354,13 +350,15 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     ? { label: ga4HostName, href: `https://${ga4HostName}` }
     : undefined;
 
-  const [currentOffers, reviewStats] = await Promise.all([
-    getOfferStats(brand.id, selectedPeriod),
+  const [offerStats, reviewStats] = await Promise.all([
+    Promise.all([getOfferStats(brand.id, selectedPeriod), getOfferStats(brand.id, previous)]),
     Promise.all([
       getReviewStats(brand.id, selectedPeriod),
-      previous ? getReviewStats(brand.id, previous) : Promise.resolve(undefined),
+      getReviewStats(brand.id, previous),
     ]),
   ]);
+  const currentOffers = offerStats[0];
+  const previousOffers = offerStats[1];
   const currentReviews = reviewStats[0];
   const previousReviews = reviewStats[1];
 
@@ -371,58 +369,38 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         <DashboardControls
           options={[...DASHBOARD_RANGES]}
           selectedRange={range}
-          comparePrevious={comparePrevious}
         />
       </div>
 
-      <DashboardSection title="Website" periodLabel={selectedPeriod.label} showPeriod={comparePrevious}>
+      <DashboardSection title="Website">
         {ga4PropertyId ? (
           <>
-            <StatCard label="Website traffic" value={totalWebsiteVisitors.toLocaleString("en-US")} goal={{ pct: goalPct(totalWebsiteVisitors, visitorsGoal), subtitle: `of ${visitorsGoal.toLocaleString("en-US")} visitors goal for this period` }} icon={<Globe size={14} />} attribution={websiteAttribution} />
-            <StatCard label="Key events" value={keyEventCount.toLocaleString("en-US")} goal={{ pct: goalPct(keyEventCount, keyEventsGoal), subtitle: `of ${keyEventsGoal.toLocaleString("en-US")} goal for this period` }} icon={<Target size={14} />} attribution={websiteAttribution} />
+            <StatCard label="Active visitors" value={totalWebsiteVisitors.toLocaleString("en-US")} goal={{ pct: goalPct(totalWebsiteVisitors, visitorsGoal), subtitle: `of ${visitorsGoal.toLocaleString("en-US")} visitors goal for this period` }} goalColor={brandPrimaryColor} comparison={percentChange(totalWebsiteVisitors, previousWebsiteVisitors)} icon={<Globe size={14} />} attribution={websiteAttribution} />
+            <StatCard label="Key events" value={keyEventCount.toLocaleString("en-US")} goal={{ pct: goalPct(keyEventCount, keyEventsGoal), subtitle: `of ${keyEventsGoal.toLocaleString("en-US")} goal for this period` }} goalColor={brandPrimaryColor} comparison={percentChange(keyEventCount, previousKeyEventCount)} icon={<Target size={14} />} attribution={websiteAttribution} />
           </>
         ) : <NotConfiguredCard title="Website" />}
       </DashboardSection>
-      {comparePrevious && previous && ga4PropertyId && (
-        <PreviousPeriodCards label={previous.label}>
-          <StatCard label="Website traffic" value={previousWebsiteVisitors.toLocaleString("en-US")} icon={<Globe size={14} />} attribution={websiteAttribution} />
-          <StatCard label="Key events" value={previousKeyEventCount.toLocaleString("en-US")} icon={<Target size={14} />} attribution={websiteAttribution} />
-        </PreviousPeriodCards>
-      )}
 
-      <DashboardSection title="YouTube" periodLabel={selectedPeriod.label} showPeriod={comparePrevious}>
+      <DashboardSection title="YouTube">
         {ytChannelId ? (
           <>
-            <StatCard label="YouTube views" value={totalYtViews.toLocaleString("en-US")} goal={{ pct: goalPct(totalYtViews, viewsGoal), subtitle: `of ${viewsGoal.toLocaleString("en-US")} goal for this period` }} icon={<PlayCircle size={14} />} attribution={ytAttribution} />
-            <StatCard label="Avg watch time" value={fmtDuration(avgWatchDuration)} goal={{ pct: goalPct(avgWatchDuration, avgWatchDurationGoal), subtitle: `of ${fmtDuration(avgWatchDurationGoal)} goal` }} icon={<Clock size={14} />} attribution={ytAttribution} />
+            <StatCard label="Channel views" value={totalYtViews.toLocaleString("en-US")} goal={{ pct: goalPct(totalYtViews, viewsGoal), subtitle: `of ${viewsGoal.toLocaleString("en-US")} goal for this period` }} goalColor={brandPrimaryColor} comparison={percentChange(totalYtViews, previousYtViews)} icon={<PlayCircle size={14} />} attribution={ytAttribution} />
+            <StatCard label="Avg watch time" value={fmtDuration(avgWatchDuration)} goal={{ pct: goalPct(avgWatchDuration, avgWatchDurationGoal), subtitle: `of ${fmtDuration(avgWatchDurationGoal)} goal` }} goalColor={brandPrimaryColor} comparison={percentChange(avgWatchDuration, previousAvgWatchDuration)} icon={<Clock size={14} />} attribution={ytAttribution} />
           </>
         ) : <NotConfiguredCard title="YouTube" />}
       </DashboardSection>
-      {comparePrevious && previous && ytChannelId && (
-        <PreviousPeriodCards label={previous.label}>
-          <StatCard label="YouTube views" value={previousYtViews.toLocaleString("en-US")} icon={<PlayCircle size={14} />} attribution={ytAttribution} />
-          <StatCard label="Avg watch time" value={fmtDuration(previousAvgWatchDuration)} icon={<Clock size={14} />} attribution={ytAttribution} />
-        </PreviousPeriodCards>
-      )}
 
-      <DashboardSection title="Reviews" periodLabel={selectedPeriod.label} showPeriod={comparePrevious}>
-        <StatCard label="Review requests sent" value={currentReviews.sent.toLocaleString("en-US")} icon={<FileText size={14} />} />
-        <StatCard label="Open rate" value={`${currentReviews.openRate}%`} icon={<Eye size={14} />} />
-        <StatCard label="5-star rate" value={`${currentReviews.fiveStarRate}%`} icon={<Star size={14} />} />
+      <DashboardSection title="Reviews">
+        <StatCard label="Review requests sent" value={currentReviews.sent.toLocaleString("en-US")} comparison={percentChange(currentReviews.sent, previousReviews.sent)} icon={<FileText size={14} />} />
+        <StatCard label="Open rate" value={`${currentReviews.openRate}%`} comparison={percentChange(currentReviews.openRate, previousReviews.openRate)} icon={<Eye size={14} />} />
+        <StatCard label="5-star rate" value={`${currentReviews.fiveStarRate}%`} comparison={percentChange(currentReviews.fiveStarRate, previousReviews.fiveStarRate)} icon={<Star size={14} />} />
       </DashboardSection>
-      {comparePrevious && previous && previousReviews && (
-        <PreviousPeriodCards label={previous.label}>
-          <StatCard label="Review requests sent" value={previousReviews.sent.toLocaleString("en-US")} icon={<FileText size={14} />} />
-          <StatCard label="Open rate" value={`${previousReviews.openRate}%`} icon={<Eye size={14} />} />
-          <StatCard label="5-star rate" value={`${previousReviews.fiveStarRate}%`} icon={<Star size={14} />} />
-        </PreviousPeriodCards>
-      )}
 
-      <DashboardSection title="Offers" periodLabel={selectedPeriod.label} showPeriod={false}>
-        <StatCard label="Sent" value={currentOffers.sent.toLocaleString("en-US")} icon={<FileText size={14} />} />
-        <StatCard label="Accepted" value={currentOffers.accepted.toLocaleString("en-US")} icon={<FileText size={14} />} />
-        <StatCard label="Rejected" value={currentOffers.rejected.toLocaleString("en-US")} icon={<FileText size={14} />} />
-        <StatCard label="Awaiting reply" value={currentOffers.awaiting.toLocaleString("en-US")} icon={<FileText size={14} />} />
+      <DashboardSection title="Offers">
+        <StatCard label="Sent" value={currentOffers.sent.toLocaleString("en-US")} comparison={percentChange(currentOffers.sent, previousOffers.sent)} icon={<FileText size={14} />} />
+        <StatCard label="Accepted" value={currentOffers.accepted.toLocaleString("en-US")} comparison={percentChange(currentOffers.accepted, previousOffers.accepted)} icon={<FileText size={14} />} />
+        <StatCard label="Rejected" value={currentOffers.rejected.toLocaleString("en-US")} comparison={percentChange(currentOffers.rejected, previousOffers.rejected)} icon={<FileText size={14} />} />
+        <StatCard label="Awaiting reply" value={currentOffers.awaiting.toLocaleString("en-US")} comparison={percentChange(currentOffers.awaiting, previousOffers.awaiting)} icon={<FileText size={14} />} />
       </DashboardSection>
     </div>
   );
@@ -430,29 +408,22 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
 function DashboardSection({
   title,
-  periodLabel,
-  showPeriod,
   children,
 }: {
   title: string;
-  periodLabel: string;
-  showPeriod: boolean;
   children: ReactNode;
 }) {
   return (
-    <section className="mt-10">
-      <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-      {showPeriod && <p className="mt-1 text-sm text-slate-500">Current period · {periodLabel}</p>}
-      <div className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">{children}</div>
-    </section>
-  );
-}
-
-function PreviousPeriodCards({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <section className="mt-5">
-      <p className="text-sm font-medium text-slate-500">{label}</p>
-      <div className="mt-3 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">{children}</div>
+    <section className="mt-10 flex items-stretch gap-3">
+      <div className="relative w-14 shrink-0">
+        <h2
+          className="absolute left-1/2 top-1/2 whitespace-nowrap rounded-md bg-slate-50 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-500"
+          style={{ transform: "translate(-50%, -50%) rotate(-60deg)" }}
+        >
+          {title}
+        </h2>
+      </div>
+      <div className="grid min-w-0 flex-1 grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">{children}</div>
     </section>
   );
 }

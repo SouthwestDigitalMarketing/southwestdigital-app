@@ -4,9 +4,32 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
 import { DEFAULT_TOOL_LINKS, parseToolUrl, type ToolLinkKey } from "@/lib/brands/tools";
+import { normalizeBrandColor } from "@/lib/brands/colors";
 
 function clean(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+export async function updateBrandAppearanceAction(formData: FormData) {
+  const { brand } = await requireStaffBrandOrThrow();
+  const primaryColor = normalizeBrandColor(clean(formData.get("primaryColor")));
+  const mode = clean(formData.get("mode"));
+
+  if (!primaryColor) {
+    throw new Error("Enter a HEX color or an RGB value, such as #17324d or rgb(23, 50, 77).");
+  }
+  if (!new Set(["system", "light", "dark"]).has(mode)) {
+    throw new Error("Choose System, Light, or Dark for the portal theme.");
+  }
+
+  await prisma.brandTheme.upsert({
+    where: { brandId: brand.id },
+    create: { brandId: brand.id, primaryColor, mode },
+    update: { primaryColor, mode },
+  });
+
+  revalidatePath("/", "layout");
+  revalidatePath("/settings");
 }
 
 export async function updateToolLinksAction(formData: FormData) {

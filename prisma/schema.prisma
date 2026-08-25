@@ -539,7 +539,9 @@ model BrandTheme {
   id                String   @id @default(cuid())
   brandId           String   @unique
   logoUrl           String?
+  logoMarkUrl       String?
   logoAlt           String?
+  mode              String   @default("system")
   primaryColor      String   @default("#17324d")
   accentColor       String   @default("#d79b3b")
   backgroundColor   String   @default("#f7f8fa")
