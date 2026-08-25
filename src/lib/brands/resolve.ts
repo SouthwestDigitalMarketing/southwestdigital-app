@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { BrandStatus } from "@prisma/client";
+import { mergeToolLinks, visibleToolLinks } from "@/lib/brands/tools";
 
 const DEV_FALLBACK_SLUG = process.env.DEV_BRAND_SLUG ?? "bc";
 
@@ -49,6 +50,10 @@ export async function resolveBrand(hostname: string | null, userId: string) {
             supportEmail: true,
           },
         },
+        toolLinks: {
+          select: { key: true, label: true, url: true, sortOrder: true },
+          orderBy: { sortOrder: "asc" },
+        },
       },
     }),
     prisma.brandMembership.findUnique({
@@ -66,5 +71,12 @@ export async function resolveBrand(hostname: string | null, userId: string) {
 
   if (!brand) return null;
 
-  return { brand, membership };
+  const { toolLinks: storedToolLinks, ...brandFields } = brand;
+  return {
+    brand: {
+      ...brandFields,
+      toolLinks: visibleToolLinks(mergeToolLinks(storedToolLinks)),
+    },
+    membership,
+  };
 }

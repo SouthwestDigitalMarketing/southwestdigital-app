@@ -1,0 +1,111 @@
+"use client";
+
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Fragment } from "react";
+
+export type ProposalAppDemoStep =
+  | "contact"
+  | "scale"
+  | "complexity"
+  | "included"
+  | "pricing"
+  | "add-ons"
+  | "cover"
+  | "preview";
+
+const STEP_ITEMS: Array<{
+  id: ProposalAppDemoStep;
+  label: string;
+  href?: string;
+}> = [
+  { id: "contact", label: "Contact", href: "/quotes/new" },
+  {
+    id: "scale",
+    label: "Scale",
+    href: "/quotes/scale",
+  },
+  {
+    id: "complexity",
+    label: "Complexity",
+    href: "/quotes/pricing",
+  },
+  {
+    id: "pricing",
+    label: "Adjustments",
+    href: "/quotes/calculator",
+  },
+  {
+    id: "add-ons",
+    label: "Add-ons",
+    href: "/quotes/add-ons",
+  },
+];
+
+export default function ProposalAppDemoStepper({
+  currentStep,
+}: {
+  currentStep: ProposalAppDemoStep;
+}) {
+  const searchParams = useSearchParams();
+  const engagementId = searchParams.get("engagementId");
+  const activeIndex = STEP_ITEMS.findIndex((step) => step.id === currentStep);
+
+  return (
+    <div className="flex items-center justify-center">
+      {STEP_ITEMS.map((step, index) => {
+        const state =
+          index === activeIndex ? "active" : index < activeIndex ? "complete" : "inactive";
+
+        return (
+          <Fragment key={step.id}>
+            <StepPill
+              label={step.label}
+              state={state}
+              href={
+                engagementId
+                  ? `${step.href}?engagementId=${engagementId}`
+                  : step.href
+              }
+            />
+            {index < STEP_ITEMS.length - 1 ? (
+              <span className="mx-2 h-px min-w-4 flex-1 bg-slate-200" />
+            ) : null}
+          </Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+function StepPill({
+  label,
+  state,
+  href,
+}: {
+  label: string;
+  state: "complete" | "active" | "inactive";
+  href?: string;
+}) {
+  const pillClass =
+    state === "active"
+      ? "border-slate-950 bg-slate-950 text-white shadow-sm"
+      : state === "complete"
+        ? "border-brandnavy-200 bg-brandnavy-50 text-brandnavy"
+        : "border-slate-300 bg-white text-slate-400";
+  const content = (
+    <span
+      className={`relative z-10 inline-flex h-7 items-center justify-center whitespace-nowrap rounded-full border px-3 text-xs font-semibold transition ${pillClass} ${
+        href ? "cursor-pointer hover:opacity-80" : ""
+      }`}
+    >
+      {label}
+    </span>
+  );
+
+  return (
+    <div className="flex shrink-0 items-center justify-center">
+      {href ? <Link href={href}>{content}</Link> : content}
+    </div>
+  );
+}

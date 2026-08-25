@@ -6,6 +6,15 @@
   --brand-accent: #d79b3b;
   --brand-background: #f7f8fa;
   --brand-foreground: #17202a;
+  --color-brandnavy: #1b263b;
+  --color-brandnavy-50: #f3f5f8;
+  --color-brandnavy-100: #e4e8ef;
+  --color-brandnavy-200: #c5cedb;
+  --color-brandnavy-300: #9aa8bf;
+  --color-brandnavy-500: #51637f;
+  --color-brandnavy-700: #1b263b;
+  --color-brandnavy-900: #10192a;
+  --color-brandnavy-foreground: #ffffff;
 }
 
 * {

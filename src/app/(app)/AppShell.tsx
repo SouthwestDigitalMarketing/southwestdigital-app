@@ -14,20 +14,44 @@ import {
   LogOut,
   Globe,
   PlayCircle,
+  FileText,
+  Contact,
+  Calculator,
+  ListChecks,
+  Calendar,
+  Mail,
+  GraduationCap,
+  ExternalLink,
 } from "lucide-react";
 import { useBrand } from "@/lib/brands/context";
 import { signOutAction } from "./actions";
 
-const NAV = [
+const NAV: Array<{
+  label: string;
+  href: string;
+  icon: React.ElementType;
+  exact?: boolean;
+  dividerAfter?: boolean;
+}> = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, exact: true },
   { label: "Website", href: "/website", icon: Globe },
   { label: "YouTube", href: "/youtube", icon: PlayCircle },
-  { label: "Clients", href: "/clients", icon: Building2 },
-  { label: "Reviews", href: "/reviews", icon: Star },
+  { label: "Reviews", href: "/reviews", icon: Star, dividerAfter: true },
+  { label: "Contacts", href: "/contacts", icon: Contact },
   { label: "Pipeline", href: "/pipeline", icon: TrendingUp },
+  { label: "Quotes", href: "/quotes", icon: FileText, dividerAfter: true },
+  { label: "Clients", href: "/clients", icon: Building2 },
   { label: "Team", href: "/team", icon: Users },
-  { label: "Settings", href: "/settings", icon: Settings },
+  { label: "Settings", href: "/settings", icon: Settings, dividerAfter: true },
 ];
+
+const TOOL_ICONS: Record<string, React.ElementType> = {
+  quickbooks: Calculator,
+  double: ListChecks,
+  calendar: Calendar,
+  mail: Mail,
+  skool: GraduationCap,
+};
 
 function NavItem({
   href,
@@ -59,6 +83,32 @@ function NavItem({
       <Icon size={16} />
       {label}
     </Link>
+  );
+}
+
+function ExternalNavItem({
+  href,
+  icon: Icon,
+  label,
+  onNavigate,
+}: {
+  href: string;
+  icon: React.ElementType;
+  label: string;
+  onNavigate: () => void;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={onNavigate}
+      className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+    >
+      <Icon size={16} />
+      <span className="flex-1 truncate">{label}</span>
+      <ExternalLink size={12} className="shrink-0 opacity-50" />
+    </a>
   );
 }
 
@@ -96,14 +146,30 @@ export function AppShell({
       </div>
 
       <nav className="flex-1 space-y-0.5 px-3 py-4">
-        {NAV.map(({ href, icon, label, exact }) => (
-          <NavItem
-            key={href}
-            href={href}
-            icon={icon}
-            label={label}
-            exact={exact}
-            accent={accent}
+        {NAV.map(({ href, icon, label, exact, dividerAfter }) => (
+          <div key={href}>
+            <NavItem
+              href={href}
+              icon={icon}
+              label={label}
+              exact={exact}
+              accent={accent}
+              onNavigate={() => setOpen(false)}
+            />
+            {dividerAfter ? (
+              <div
+                className="mx-3 my-2"
+                style={{ borderTop: "1px solid rgba(255,255,255,0.12)" }}
+              />
+            ) : null}
+          </div>
+        ))}
+        {(brand.toolLinks ?? []).map((link) => (
+          <ExternalNavItem
+            key={link.key}
+            href={link.url}
+            icon={TOOL_ICONS[link.key] ?? ExternalLink}
+            label={link.label}
             onNavigate={() => setOpen(false)}
           />
         ))}

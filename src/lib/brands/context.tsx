@@ -18,6 +18,11 @@ export type BrandContextValue = {
       logoAlt: string | null;
       supportEmail: string | null;
     } | null;
+    toolLinks: Array<{
+      key: string;
+      label: string;
+      url: string;
+    }>;
   };
   membership: {
     id: string;

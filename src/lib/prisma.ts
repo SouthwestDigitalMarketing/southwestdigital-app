@@ -41,10 +41,10 @@ export const prisma =
   });
 
 if (process.env.NODE_ENV === "development") {
-  const p = prisma as PrismaClient & { brandMembership?: unknown };
-  if (typeof p.brandMembership === "undefined") {
+  const p = prisma as PrismaClient & { brandMembership?: unknown; brandToolLink?: unknown };
+  if (typeof p.brandMembership === "undefined" || typeof p.brandToolLink === "undefined") {
     console.error(
-      "[prisma] Missing brandMembership delegate. Your Prisma client is stale. Run `npm run prisma:generate` and restart the dev server.",
+      "[prisma] Prisma client is stale. Run `npx prisma generate` and restart the dev server.",
     );
   }
 }

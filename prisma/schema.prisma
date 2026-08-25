@@ -149,6 +149,13 @@ enum LeadKind {
   PROSPECT
 }
 
+enum ContactTagKind {
+  CUSTOM
+  PRODUCT_LEAD
+  CLIENT_LEAD
+  INDUSTRY
+}
+
 enum LeadBookkeepingCategory {
   SMALL_BUSINESS
   REAL_ESTATE_INVESTOR
@@ -440,6 +447,11 @@ model Brand {
   domains               BrandDomain[]
   memberships           BrandMembership[]
   theme                 BrandTheme?
+  toolLinks             BrandToolLink[]
+  contacts              Contact[]
+  contactTags           ContactTag[]
+  contactTagAutomations ContactTagAutomation[]
+  relatedContactLinks   ContactBrandLink[]     @relation("ContactRelatedBrands")
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
 
@@ -546,6 +558,21 @@ model BrandTheme {
   brand             Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+}
+
+model BrandToolLink {
+  id        String   @id @default(cuid())
+  brandId   String
+  key       String
+  label     String
+  url       String
+  sortOrder Int      @default(0)
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([brandId, key])
+  @@index([brandId, sortOrder])
 }
 
 // ─── Member profile data ─────────────────────────────────────────────────────
@@ -1161,18 +1188,89 @@ model Contact {
   businessEmail  String?
   personalEmail  String?
   phoneNumber    String?
+  company        String?
+  notes          String?
   roleTitle      String?
   isActive       Boolean              @default(true)
+  brand          Brand                @relation(fields: [brandId], references: [id], onDelete: Cascade)
   clientLinks    ClientContact[]
   leadLinks      LeadContact[]
   meetings       TeamMeetingContact[]
   campaignLinks  CampaignContact[]
   reviewRequests ReviewRequest[]
+  tagLinks       ContactTagLink[]
+  brandLinks     ContactBrandLink[]
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
 
   @@index([brandId, isActive, name])
   @@index([brandId, email])
+  @@index([brandId, company])
+}
+
+model ContactBrandLink {
+  id             String   @id @default(cuid())
+  contactId      String
+  relatedBrandId String
+  createdAt      DateTime @default(now())
+  contact        Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  relatedBrand   Brand    @relation("ContactRelatedBrands", fields: [relatedBrandId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, relatedBrandId])
+  @@index([relatedBrandId])
+  @@map("contact_brand_links")
+}
+
+model ContactTag {
+  id           String                 @id @default(cuid())
+  brandId      String
+  key          String
+  label        String
+  kind         ContactTagKind         @default(CUSTOM)
+  color        String?
+  isActive     Boolean                @default(true)
+  sortOrder    Int                    @default(100)
+  brand        Brand                  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  contacts     ContactTagLink[]
+  automations  ContactTagAutomation[]
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+
+  @@unique([brandId, key])
+  @@index([brandId, isActive, sortOrder])
+  @@map("contact_tags")
+}
+
+model ContactTagLink {
+  id        String     @id @default(cuid())
+  contactId String
+  tagId     String
+  createdAt DateTime   @default(now())
+  contact   Contact    @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tag       ContactTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, tagId])
+  @@index([tagId, createdAt])
+  @@map("contact_tag_links")
+}
+
+model ContactTagAutomation {
+  id         String         @id @default(cuid())
+  brandId    String
+  tagId      String
+  pipelineId String
+  stageId    String?
+  isActive   Boolean        @default(true)
+  brand      Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  tag        ContactTag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  pipeline   Pipeline       @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  stage      PipelineStage? @relation(fields: [stageId], references: [id], onDelete: SetNull)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@unique([tagId, pipelineId])
+  @@index([brandId, isActive])
+  @@map("contact_tag_automations")
 }
 
 model ClientContact {
@@ -1383,6 +1481,7 @@ model Pipeline {
   createdBy             BrandMembership? @relation("PipelineCreatedBy", fields: [createdByMembershipId], references: [id], onDelete: SetNull)
   stages                PipelineStage[]
   items                 PipelineItem[]
+  tagAutomations        ContactTagAutomation[]
   createdAt             DateTime         @default(now())
   updatedAt             DateTime         @updatedAt
 
@@ -1402,6 +1501,7 @@ model PipelineStage {
   isTerminal      Boolean        @default(false)
   pipeline        Pipeline       @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
   items           PipelineItem[]
+  tagAutomations  ContactTagAutomation[]
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
