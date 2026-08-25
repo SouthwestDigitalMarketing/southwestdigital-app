@@ -19,26 +19,26 @@ const STEP_ITEMS: Array<{
   label: string;
   href?: string;
 }> = [
-  { id: "contact", label: "Contact", href: "/quotes/new" },
+  { id: "contact", label: "Contact", href: "/offers/new" },
   {
     id: "scale",
     label: "Scale",
-    href: "/quotes/scale",
+    href: "/offers/scale",
   },
   {
     id: "complexity",
     label: "Complexity",
-    href: "/quotes/pricing",
+    href: "/offers/pricing",
   },
   {
     id: "pricing",
     label: "Adjustments",
-    href: "/quotes/calculator",
+    href: "/offers/calculator",
   },
   {
     id: "add-ons",
     label: "Add-ons",
-    href: "/quotes/add-ons",
+    href: "/offers/add-ons",
   },
 ];
 
@@ -48,7 +48,7 @@ export default function ProposalAppDemoStepper({
   currentStep: ProposalAppDemoStep;
 }) {
   const searchParams = useSearchParams();
-  const engagementId = searchParams.get("engagementId");
+  const query = searchParams.toString();
   const activeIndex = STEP_ITEMS.findIndex((step) => step.id === currentStep);
 
   return (
@@ -62,11 +62,7 @@ export default function ProposalAppDemoStepper({
             <StepPill
               label={step.label}
               state={state}
-              href={
-                engagementId
-                  ? `${step.href}?engagementId=${engagementId}`
-                  : step.href
-              }
+              href={query ? `${step.href}?${query}` : step.href}
             />
             {index < STEP_ITEMS.length - 1 ? (
               <span className="mx-2 h-px min-w-4 flex-1 bg-slate-200" />

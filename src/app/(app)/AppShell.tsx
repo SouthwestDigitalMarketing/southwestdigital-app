@@ -39,7 +39,7 @@ const NAV: Array<{
   { label: "Reviews", href: "/reviews", icon: Star, dividerAfter: true },
   { label: "Contacts", href: "/contacts", icon: Contact },
   { label: "Pipeline", href: "/pipeline", icon: TrendingUp },
-  { label: "Quotes", href: "/quotes", icon: FileText, dividerAfter: true },
+  { label: "Offers", href: "/offers", icon: FileText, dividerAfter: true },
   { label: "Clients", href: "/clients", icon: Building2 },
   { label: "Team", href: "/team", icon: Users },
   { label: "Settings", href: "/settings", icon: Settings, dividerAfter: true },

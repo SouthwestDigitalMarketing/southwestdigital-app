@@ -104,10 +104,18 @@ export default function ProposalContactInfoDemo({
         <div>
           <ProposalAppDemoHeader
             currentStep="contact"
-            nextHref="/quotes/scale"
+            previousHref="/offers/who?kind=bookkeeping"
+            nextHref="/offers/scale"
             onExpandAll={() => setExpandAllSignal({ value: true, token: Date.now() })}
             onCollapseAll={() => setExpandAllSignal({ value: false, token: Date.now() })}
           />
+
+            {contactInfo.owners.some((owner) => owner.crmContactId) ? (
+              <p className="mt-4 text-sm text-slate-500">
+                These people come from Contacts. Saving this offer also updates their contact
+                records (name, email, phone, company, and role).
+              </p>
+            ) : null}
 
             <label className="mt-6 flex items-start gap-2.5 rounded-xl border-2 border-red-300 bg-red-50 px-4 py-3">
               <input

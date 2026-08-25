@@ -2152,6 +2152,7 @@ model Quote {
   brandId        String
   slug           String          @unique
   clientId       String
+  kind           String          @default("bookkeeping")
   status         String          @default("draft")
   packageId      String?
   totalOneTime   Decimal         @default(0) @db.Decimal(12, 2)
@@ -2160,6 +2161,7 @@ model Quote {
   snapshotJson   Json
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
+  sentAt         DateTime?
   expiresAt      DateTime?
   client         QuoteClient     @relation(fields: [clientId], references: [id])
   lineItems      QuoteLineItem[]

@@ -5,9 +5,14 @@ export function scopedProposalStorageKey(baseKey: string, engagementId?: string 
   return engagementId ? `${baseKey}:${engagementId}` : baseKey;
 }
 
+function audienceStorageKey() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get("offer") ?? params.get("contacts") ?? params.get("contact") ?? undefined;
+}
+
 export function readProposalBuilderLocalState(engagementId?: string | null) {
   const parse = (key: string) => {
-    const raw = window.localStorage.getItem(scopedProposalStorageKey(key, engagementId));
+    const raw = window.localStorage.getItem(key);
     if (!raw) return undefined;
     try {
       return JSON.parse(raw) as Record<string, unknown>;
@@ -16,9 +21,14 @@ export function readProposalBuilderLocalState(engagementId?: string | null) {
     }
   };
 
+  const contactsKey = audienceStorageKey();
+  const contactInfoKey = contactsKey
+    ? `${CONTACT_INFO_STORAGE_KEY}:crm:${contactsKey}`
+    : scopedProposalStorageKey(CONTACT_INFO_STORAGE_KEY, engagementId);
+
   return {
-    assessment: parse(ASSESSMENT_STORAGE_KEY),
-    contactInfo: parse(CONTACT_INFO_STORAGE_KEY),
+    assessment: parse(scopedProposalStorageKey(ASSESSMENT_STORAGE_KEY, engagementId)),
+    contactInfo: parse(contactInfoKey),
   };
 }
 

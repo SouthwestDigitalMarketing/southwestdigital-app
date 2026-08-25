@@ -51,10 +51,10 @@ export default async function QuoteDetailPage({ params, searchParams }: PageProp
       <div className="mx-auto max-w-3xl space-y-8">
         <div className="flex items-center justify-between">
           <div>
-            <Link href="/quotes" className="text-xs text-slate-400 hover:underline">
-              ← All Quotes
+            <Link href="/offers" className="text-xs text-slate-400 hover:underline">
+              ← All Offers
             </Link>
-            <h1 className="mt-1 text-2xl font-semibold text-slate-900">Quote</h1>
+            <h1 className="mt-1 text-2xl font-semibold text-slate-900">Offer</h1>
           </div>
           <span
             className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold capitalize ${STATUS_STYLE[quote.status] ?? "bg-slate-100 text-slate-600"}`}

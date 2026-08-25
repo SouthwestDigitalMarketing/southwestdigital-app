@@ -55,7 +55,7 @@ export function ContactActions({
         <button type="button" disabled={pending} onClick={remove} className={`${danger} shrink-0`}>
           Delete
         </button>
-        <Link href={`/quotes/new?contact=${contactId}`} className={`${primary} shrink-0`}>
+        <Link href={`/offers?contact=${contactId}`} className={`${primary} shrink-0`}>
           Build Offer
         </Link>
       </div>
@@ -64,7 +64,7 @@ export function ContactActions({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Link href={`/quotes/new?contact=${contactId}`} className={`${primary} px-4 py-2 text-xs`}>
+      <Link href={`/offers?contact=${contactId}`} className={`${primary} px-4 py-2 text-xs`}>
         Build Offer
       </Link>
       <button type="button" disabled={pending} onClick={archive} className={`${ghost} px-4 py-2 text-xs`}>

@@ -94,8 +94,8 @@ export default function ProposalBonusesDemo() {
       <section className="mx-auto w-full max-w-[1720px] px-5 py-6 lg:px-8">
         <ProposalAppDemoHeader
           currentStep="add-ons"
-          previousHref="/quotes/add-ons"
-          nextHref="/quotes"
+          previousHref="/offers/add-ons"
+          nextHref="/offers"
           onExpandAll={() => undefined}
           onCollapseAll={() => undefined}
         />

@@ -69,7 +69,7 @@ export default function ProposalAddOnsDemo() {
       <section className="mx-auto w-full max-w-[1720px] px-5 py-6 lg:px-8">
         <ProposalAppDemoHeader
           currentStep="add-ons"
-          previousHref="/quotes/calculator"
+          previousHref="/offers/calculator"
           onExpandAll={() => undefined}
           onCollapseAll={() => undefined}
         />

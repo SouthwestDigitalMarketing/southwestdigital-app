@@ -5,6 +5,9 @@ import { useEffect, useState } from "react";
 import { Check, ChevronLeft, ChevronRight, LogOut, Save } from "lucide-react";
 import ProposalAppDemoStepper, { type ProposalAppDemoStep } from "./ProposalAppDemoStepper";
 import ProposalAppExpandAllControl from "./ProposalAppExpandAllControl";
+import { readProposalBuilderLocalState } from "./ProposalBuilderStorage";
+import { saveOfferDraftAction, syncOfferContactsAction } from "../who/actions";
+import type { ContactInfoState } from "./ProposalContactInfoState";
 
 export default function ProposalAppDemoHeader({
   currentStep,
@@ -23,7 +26,7 @@ export default function ProposalAppDemoHeader({
   const router = useRouter();
   const scopedHref = (href: string) => {
     const params = searchParams.toString();
-    if (!params || href === "/quotes") return href;
+    if (!params || href === "/offers" || href.startsWith("/offers?")) return href;
     return `${href}${href.includes("?") ? "&" : "?"}${params}`;
   };
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -35,14 +38,54 @@ export default function ProposalAppDemoHeader({
     return () => window.clearTimeout(timeoutId);
   }, [saveStatus]);
 
-  function saveProposalBuilderState() {
-    setSaveStatus("saved");
-    return true;
+  async function saveProposalBuilderState() {
+    setSaveStatus("saving");
+    try {
+      const localState = readProposalBuilderLocalState();
+      const contactInfo = localState.contactInfo as ContactInfoState | undefined;
+      const people =
+        contactInfo?.owners
+          .map((owner) => ({
+            contactId: owner.crmContactId ?? "",
+            firstName: owner.firstName,
+            lastName: owner.lastName,
+            email: owner.email,
+            phone: owner.phone,
+            roleTitle:
+              contactInfo.primaryContact.ownerId === owner.id
+                ? contactInfo.primaryContact.role
+                : "",
+          }))
+          .filter((person) => person.contactId) ?? [];
+      if (people.length > 0) {
+        await syncOfferContactsAction({
+          companyName: contactInfo?.companyName ?? "",
+          people,
+        });
+      }
+      const offerId = searchParams.get("offer");
+      if (offerId) {
+        await saveOfferDraftAction(offerId, {
+          contactInfo,
+          assessment: localState.assessment,
+        });
+      }
+      setSaveStatus("saved");
+      return true;
+    } catch {
+      setSaveStatus("error");
+      return false;
+    }
   }
 
-  function saveThenNavigate(href: string) {
-    if (!saveProposalBuilderState()) return;
-    router.push(href === "/quotes" ? href : scopedHref(href));
+  async function saveThenNavigate(href: string) {
+    if (!(await saveProposalBuilderState())) return;
+    router.push(href.startsWith("/offers") && !href.includes("/offers/") ? href : scopedHref(href));
+  }
+
+  async function saveThenOpenProposal() {
+    if (!(await saveProposalBuilderState())) return;
+    window.open(scopedHref("/offers/preview"), "_blank", "noopener,noreferrer");
   }
 
   return (
@@ -51,7 +94,7 @@ export default function ProposalAppDemoHeader({
         <div className="flex h-11 items-center gap-3">
           <button
             type="button"
-            onClick={() => void saveThenNavigate("/quotes")}
+            onClick={() => void saveThenNavigate("/offers?bucket=draft")}
             disabled={saveStatus === "saving"}
             className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-500 transition hover:border-slate-400 hover:text-slate-900"
           >
@@ -131,7 +174,24 @@ export default function ProposalAppDemoHeader({
           </div>
         </div>
 
-        <div className="hidden items-center justify-end gap-3 lg:flex" />
+        <div className="flex items-center justify-end gap-3">
+          <button
+            type="button"
+            onClick={() => void saveThenNavigate(scopedHref("/offers/cover"))}
+            disabled={saveStatus === "saving"}
+            className="inline-flex h-11 items-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+          >
+            Email
+          </button>
+          <button
+            type="button"
+            onClick={() => void saveThenOpenProposal()}
+            disabled={saveStatus === "saving"}
+            className="inline-flex h-11 items-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+          >
+            View Proposal
+          </button>
+        </div>
       </div>
     </header>
   );

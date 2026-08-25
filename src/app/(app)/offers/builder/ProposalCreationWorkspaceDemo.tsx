@@ -1635,20 +1635,20 @@ export default function ProposalCreationWorkspaceDemo({
   const isCalculatorStep = step === "calculator";
   const nextStepHref =
     step === "scale"
-        ? "/quotes/pricing"
+        ? "/offers/pricing"
       : step === "pricing"
-        ? "/quotes/included"
+        ? "/offers/included"
         : step === "included"
-          ? "/quotes/calculator"
-          : "/quotes/add-ons";
+          ? "/offers/calculator"
+          : "/offers/add-ons";
   const previousStepHref =
     step === "scale"
-        ? "/quotes/new"
+        ? "/offers/new"
       : step === "pricing"
-        ? "/quotes/scale"
+        ? "/offers/scale"
         : step === "included"
-          ? "/quotes/pricing"
-          : "/quotes/included";
+          ? "/offers/pricing"
+          : "/offers/included";
 
   const showRealEstateFields =
     assessment.bookSetType === "real-estate-only" ||

@@ -5,6 +5,7 @@ import { CONTACT_INFO_STORAGE_KEY } from "./ProposalBuilderStorage";
 
 export type OwnerContact = {
   id: string;
+  crmContactId?: string;
   firstName: string;
   lastName: string;
   email: string;
@@ -49,7 +50,7 @@ export function createOwner(
     email,
     phone,
     ownershipPercentage,
-  };
+  } satisfies OwnerContact;
 }
 
 export function formatPersonName(firstName: string, lastName: string) {
@@ -156,9 +157,18 @@ export function useProposalContactInfoDemoState({
     (typeof window !== "undefined"
       ? new URLSearchParams(window.location.search).get("engagementId") ?? undefined
       : undefined);
-  const storageKey = resolvedEngagementId
-    ? `${CONTACT_INFO_STORAGE_KEY}:${resolvedEngagementId}`
-    : CONTACT_INFO_STORAGE_KEY;
+  const contactsKey =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("offer") ??
+        new URLSearchParams(window.location.search).get("contacts") ??
+        new URLSearchParams(window.location.search).get("contact") ??
+        undefined
+      : undefined;
+  const storageKey = contactsKey
+    ? `${CONTACT_INFO_STORAGE_KEY}:crm:${contactsKey}`
+    : resolvedEngagementId
+      ? `${CONTACT_INFO_STORAGE_KEY}:${resolvedEngagementId}`
+      : CONTACT_INFO_STORAGE_KEY;
   const [contactInfo, setContactInfo] = useState<ContactInfoState>(() =>
     readStoredContactInfo(storageKey, initialContactInfo),
   );
