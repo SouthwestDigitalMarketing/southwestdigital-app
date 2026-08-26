@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Check, Image, Sparkles, Video, Link2 } from "lucide-react";
 import { resolveVideoEmbedUrl } from "./OfferProposalPreview";
 import { getProposalTheme, PROPOSAL_THEMES, BRAND_PRIMARY_SENTINEL, BRAND_ACCENT_SENTINEL } from "./proposalThemes";
@@ -7,6 +8,7 @@ import { useBrand } from "@/lib/brands/context";
 import { ProposalReviewsSection } from "./ProposalReviewsSection";
 import ProposalAppDemoHeader from "./ProposalAppDemoHeader";
 import { useProposalAssessmentDemoState } from "./ProposalCreationWorkspaceDemo";
+import { readProposalBuilderLocalState } from "./ProposalBuilderStorage";
 
 export type BrandMediaItem = {
   id: string;
@@ -73,6 +75,15 @@ export default function ProposalIntroDemo({ mediaItems }: { mediaItems: BrandMed
   const previewAccent = resolveThemeColor(selectedTheme.accent, brandAccent);
   const brandDark = brand.theme?.darkColor ?? previewPrimary;
   const previewHeadingColor = brandDark;
+
+  const [previewCompanyName, setPreviewCompanyName] = useState("");
+  useEffect(() => {
+    try {
+      const state = readProposalBuilderLocalState();
+      const info = state.contactInfo as { companyName?: string } | undefined;
+      setPreviewCompanyName(info?.companyName || "");
+    } catch {}
+  }, []);
 
   return (
     <main className="min-h-screen bg-white">
@@ -311,6 +322,24 @@ export default function ProposalIntroDemo({ mediaItems }: { mediaItems: BrandMed
                     >
                       Shop Options →
                     </span>
+                  </div>
+                </div>
+
+                {/* Proposal header */}
+                <div className="px-6 pt-6 pb-0 sm:px-10" style={{ background: selectedTheme.pageBg }}>
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                      {brand.theme?.logoUrl ? (
+                        <img src={brand.theme.logoUrl} alt={brand.name} className="max-h-10 max-w-44 object-contain" />
+                      ) : (
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{brand.name}</p>
+                      )}
+                      <p className="mt-1 text-xl font-bold" style={{ color: brandDark }}>Bookkeeping Proposal</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Prepared for</p>
+                      <p className="mt-1 font-semibold" style={{ color: brandDark }}>{previewCompanyName || "Your business"}</p>
+                    </div>
                   </div>
                 </div>
 
