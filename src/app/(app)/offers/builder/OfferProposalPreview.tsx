@@ -464,6 +464,7 @@ export default function OfferProposalPreview({
   const theme = getProposalTheme(assessment.proposalTheme || "brand");
   const brandPrimary = brand.theme?.proposalPrimaryColor ?? brand.theme?.primaryColor ?? "#17324d";
   const brandAccent = brand.theme?.proposalAccentColor ?? brand.theme?.accentColor ?? "#d79b3b";
+  const brandDark = brand.theme?.darkColor ?? brandPrimary;
   const primaryColor =
     theme.primary === null ? brandPrimary :
     theme.primary === BRAND_ACCENT_SENTINEL ? brandAccent :
@@ -609,6 +610,7 @@ export default function OfferProposalPreview({
         "--brand-primary": primaryColor,
         "--brand-accent": accentColor,
         "--brand-ink": primaryColor,
+        "--brand-dark": brandDark,
         "--color-accent-500": accentColor,
         "--color-accent-100": `color-mix(in srgb, ${accentColor} 15%, white)`,
       } as React.CSSProperties}
@@ -699,7 +701,7 @@ export default function OfferProposalPreview({
               <div className="pb-12 sm:pb-16">
                 <div className={`grid items-center gap-8 ${hasMedia ? "md:grid-cols-2" : ""}`}>
                   <div>
-                    <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+                    <h1 className="text-3xl font-bold tracking-tight sm:text-4xl" style={{ color: brandDark }}>
                       {customHeadline ?? (
                         <>
                           Expert <span className="text-accent-500">Real Estate</span> Bookkeeping +{" "}
@@ -715,9 +717,10 @@ export default function OfferProposalPreview({
                       <button
                         type="button"
                         onClick={() => setStep(1)}
-                        className="inline-flex items-center gap-2 rounded-lg border-2 border-accent-500 bg-brandnavy px-6 py-3 text-base font-bold text-white transition-all hover:-translate-y-0.5 hover:bg-slate-950 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)]"
+                        className="inline-flex items-center gap-2 rounded-lg border-2 px-6 py-3 text-base font-bold text-white transition-all hover:-translate-y-0.5 hover:brightness-95 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)]"
+                        style={{ backgroundColor: accentColor, borderColor: accentColor }}
                       >
-                        View your options <ChevronRight strokeWidth={3} className="h-4 w-4" />
+                        Shop pricing options <ChevronRight strokeWidth={3} className="h-4 w-4" />
                       </button>
                     </div>
                   </div>
