@@ -334,7 +334,6 @@ export default function ProposalIntroDemo({ mediaItems }: { mediaItems: BrandMed
                       ) : (
                         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{brand.name}</p>
                       )}
-                      <p className="mt-1 text-xl font-bold" style={{ color: brandDark }}>Bookkeeping Proposal</p>
                     </div>
                     <div className="text-right">
                       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Prepared for</p>
