@@ -630,7 +630,7 @@ export default function OfferProposalPreview({
         <nav aria-label="Proposal navigation" className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
           <div className="grid grid-cols-[auto_1fr_auto] items-center gap-4">
             {step === 0 ? <span className="w-[74px]" /> : (
-              <button type="button" onClick={() => setStep((s) => Math.max(0, s - 1))} className="rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-semibold">Back</button>
+              <button type="button" onClick={() => setStep((s) => Math.max(0, s - 1))} className="rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-semibold" style={{ color: brandDark }}>Back</button>
             )}
             <ol className="flex items-start justify-center">
               {clientSteps.map((label, index) => (
