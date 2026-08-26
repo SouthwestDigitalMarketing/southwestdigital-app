@@ -29,6 +29,43 @@ import {
   type HistoricalCleanupPeriod,
 } from "./ProposalCreationWorkspaceDemo";
 
+// ─── Media helpers ─────────────────────────────────────────────────────────────
+
+export type FeaturedMedia =
+  | { type: "youtube"; embedUrl: string }
+  | { type: "vimeo"; embedUrl: string }
+  | { type: "image"; url: string }
+  | null;
+
+export function resolveFeaturedMedia(url: string): FeaturedMedia {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    // YouTube
+    if (u.hostname === "www.youtube.com" || u.hostname === "youtube.com") {
+      if (u.pathname.startsWith("/embed/")) return { type: "youtube", embedUrl: url };
+      const id = u.searchParams.get("v");
+      if (id) return { type: "youtube", embedUrl: `https://www.youtube.com/embed/${id}` };
+    }
+    if (u.hostname === "youtu.be") {
+      const id = u.pathname.slice(1);
+      if (id) return { type: "youtube", embedUrl: `https://www.youtube.com/embed/${id}` };
+    }
+    // Vimeo
+    if (u.hostname === "vimeo.com" || u.hostname === "www.vimeo.com") {
+      const id = u.pathname.replace(/^\//, "");
+      if (id) return { type: "vimeo", embedUrl: `https://player.vimeo.com/video/${id}` };
+    }
+    if (u.hostname === "player.vimeo.com") {
+      return { type: "vimeo", embedUrl: url };
+    }
+    // Treat everything else as an image
+    return { type: "image", url };
+  } catch {
+    return null;
+  }
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type OptionId = "grow" | "improve" | "maintain";
@@ -520,6 +557,31 @@ export default function OfferProposalPreview() {
           {/* Step 0 — Intro */}
           {step === 0 && (
             <div className="pb-12">
+              {(() => {
+                const mediaUrl = assessment.featuredMediaUrl || brand.theme?.proposalFeaturedMediaUrl || "";
+                const media = resolveFeaturedMedia(mediaUrl);
+                if (!media) return null;
+                if (media.type === "image") {
+                  return (
+                    <div className="mb-8 overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={media.url} alt="Featured" className="h-auto max-h-[420px] w-full object-cover" />
+                    </div>
+                  );
+                }
+                return (
+                  <div className="mb-8 overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="aspect-video">
+                      <iframe
+                        src={media.embedUrl}
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        className="h-full w-full"
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
               <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
                 Expert <span className="text-accent-500">Real Estate</span> Bookkeeping +{" "}
                 Great <span className="text-accent-500">Communication</span>

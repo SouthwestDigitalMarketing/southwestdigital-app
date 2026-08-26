@@ -36,6 +36,20 @@ export async function updateBrandAppearanceAction(formData: FormData) {
   revalidatePath("/settings");
 }
 
+export async function updateProposalMediaAction(formData: FormData) {
+  const { brand } = await requireStaffBrandOrThrow();
+  const proposalFeaturedMediaUrl = clean(formData.get("proposalFeaturedMediaUrl")) || null;
+
+  await prisma.brandTheme.upsert({
+    where: { brandId: brand.id },
+    create: { brandId: brand.id, primaryColor: "#17324d", mode: "system", sidebarLogoType: "mark", proposalFeaturedMediaUrl },
+    update: { proposalFeaturedMediaUrl },
+  });
+
+  revalidatePath("/", "layout");
+  revalidatePath("/settings");
+}
+
 export async function updateToolLinksAction(formData: FormData) {
   const { brand } = await requireStaffBrandOrThrow();
 

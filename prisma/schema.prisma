@@ -560,6 +560,7 @@ model BrandTheme {
   youtubeHandle              String?
   youtubeWatchPercentageGoal Float?
   websiteEngagedSessionsGoal Int?
+  proposalFeaturedMediaUrl   String?
   brand             Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt

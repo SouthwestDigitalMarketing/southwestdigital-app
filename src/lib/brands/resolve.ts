@@ -53,6 +53,7 @@ export async function resolveBrand(hostname: string | null, userId: string) {
             logoAlt: true,
             mode: true,
             supportEmail: true,
+            proposalFeaturedMediaUrl: true,
           },
         },
         toolLinks: {

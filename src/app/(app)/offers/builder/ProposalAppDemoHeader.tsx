@@ -81,8 +81,14 @@ export default function ProposalAppDemoHeader({
   }
 
   async function saveThenOpenProposal() {
-    if (!(await saveProposalBuilderState())) return;
-    window.open(scopedHref("/offers/preview"), "_blank", "noopener,noreferrer");
+    // Open the tab synchronously (before await) so popup blockers don't trigger
+    const newTab = window.open("", "_blank");
+    const success = await saveProposalBuilderState();
+    if (success && newTab) {
+      newTab.location.href = scopedHref("/offers/preview");
+    } else {
+      newTab?.close();
+    }
   }
 
   return (
@@ -124,7 +130,7 @@ export default function ProposalAppDemoHeader({
         <div className="flex w-full max-w-[1220px] items-center gap-6">
           <button
             type="button"
-            onClick={() => previousHref && void saveThenNavigate(scopedHref(previousHref))}
+            onClick={() => previousHref && void saveThenNavigate(previousHref)}
             disabled={!previousHref || saveStatus === "saving"}
             className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 xl:inline-flex"
           >
@@ -137,7 +143,7 @@ export default function ProposalAppDemoHeader({
           {viewProposalAsNext ? (
             <button
               type="button"
-              onClick={() => void saveThenNavigate(scopedHref("/offers/preview"))}
+              onClick={() => void saveThenOpenProposal()}
               disabled={saveStatus === "saving"}
               className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 xl:inline-flex"
             >
@@ -147,7 +153,7 @@ export default function ProposalAppDemoHeader({
           ) : (
             <button
               type="button"
-              onClick={() => nextHref && void saveThenNavigate(scopedHref(nextHref))}
+              onClick={() => nextHref && void saveThenNavigate(nextHref)}
               disabled={!nextHref || saveStatus === "saving"}
               className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 xl:inline-flex"
             >
@@ -160,7 +166,7 @@ export default function ProposalAppDemoHeader({
         <div className="flex items-center justify-end gap-6">
           <button
             type="button"
-            onClick={() => void saveThenNavigate(scopedHref("/offers/cover"))}
+            onClick={() => void saveThenNavigate("/offers/cover")}
             disabled={saveStatus === "saving"}
             className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-semibold text-slate-500 transition hover:text-slate-900 hover:opacity-75 disabled:opacity-40"
           >

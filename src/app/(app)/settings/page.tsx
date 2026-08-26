@@ -4,6 +4,7 @@ import { requireStaffBrand } from "@/lib/brands/staff";
 import { mergeToolLinks } from "@/lib/brands/tools";
 import { ToolLinksForm } from "./ToolLinksForm";
 import { BrandAppearanceForm } from "./BrandAppearanceForm";
+import { ProposalMediaSettingsForm } from "./ProposalMediaSettingsForm";
 
 export default async function SettingsPage() {
   const { brand } = await requireStaffBrand();
@@ -47,6 +48,7 @@ export default async function SettingsPage() {
           </div>
           <span className="text-sm font-medium text-slate-500">Open →</span>
         </Link>
+        <ProposalMediaSettingsForm currentUrl={brand.theme?.proposalFeaturedMediaUrl ?? null} />
         <ToolLinksForm links={mergeToolLinks(stored)} />
       </div>
     </div>

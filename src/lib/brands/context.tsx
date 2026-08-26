@@ -22,6 +22,7 @@ export type BrandContextValue = {
       logoAlt: string | null;
       mode: string;
       supportEmail: string | null;
+      proposalFeaturedMediaUrl: string | null;
     } | null;
     toolLinks: Array<{
       key: string;
