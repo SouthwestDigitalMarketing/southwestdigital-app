@@ -635,9 +635,12 @@ export default function OfferProposalPreview({
             <ol className="flex items-start justify-center">
               {clientSteps.map((label, index) => (
                 <li key={label} className="flex items-start">
-                  {index > 0 && <span className={`mt-4 h-0.5 w-5 sm:w-10 ${index <= step ? "bg-brandnavy" : "bg-slate-300"}`} />}
+                  {index > 0 && <span className="mt-4 h-0.5 w-5 sm:w-10" style={{ backgroundColor: index <= step ? brandDark : "#cbd5e1" }} />}
                   <div className="w-16 text-center sm:w-20">
-                    <span className={`mx-auto grid h-8 w-8 place-items-center rounded-full border text-sm font-bold ${index <= step ? "border-brandnavy bg-brandnavy text-white" : "border-slate-300 bg-white text-slate-500"}`}>
+                    <span
+                      className={`mx-auto grid h-8 w-8 place-items-center rounded-full border text-sm font-bold ${index <= step ? "text-white" : "border-slate-300 bg-white text-slate-500"}`}
+                      style={index <= step ? { backgroundColor: brandDark, borderColor: brandDark } : undefined}
+                    >
                       {index < step ? "✓" : index + 1}
                     </span>
                     <span className="mt-1 block text-xs text-slate-500">{label}</span>
@@ -645,12 +648,22 @@ export default function OfferProposalPreview({
                 </li>
               ))}
             </ol>
-            {step < 2 ? (
+            {step === 0 ? (
               <button
                 type="button"
-                disabled={step === 1 && !selectedOptionId}
-                onClick={() => setStep((s) => Math.min(2, s + 1))}
-                className="inline-flex items-center gap-2 rounded-lg border-2 border-accent-500 bg-brandnavy px-5 py-2 text-sm font-bold text-white transition-all hover:-translate-y-0.5 hover:bg-slate-950 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                onClick={() => setStep(1)}
+                className="inline-flex items-center gap-2 rounded-lg border-2 px-5 py-2 text-sm font-bold transition-all hover:-translate-y-0.5 hover:opacity-80"
+                style={{ borderColor: brandDark, color: brandDark }}
+              >
+                Shop Options <ChevronRight strokeWidth={3} className="h-4 w-4" />
+              </button>
+            ) : step === 1 ? (
+              <button
+                type="button"
+                disabled={!selectedOptionId}
+                onClick={() => setStep(2)}
+                className="inline-flex items-center gap-2 rounded-lg border-2 px-5 py-2 text-sm font-bold text-white transition-all hover:-translate-y-0.5 hover:brightness-95 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                style={{ backgroundColor: accentColor, borderColor: accentColor }}
               >
                 Next <ChevronRight strokeWidth={3} className="h-4 w-4" />
               </button>
@@ -679,12 +692,16 @@ export default function OfferProposalPreview({
           {step !== 3 ? (
             <header className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{brand.name}</p>
-                <p className="mt-1 text-xl font-bold text-brandnavy">Bookkeeping Proposal</p>
+                {brand.theme?.logoUrl ? (
+                  <img src={brand.theme.logoUrl} alt={brand.name} className="max-h-10 max-w-44 object-contain" />
+                ) : (
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{brand.name}</p>
+                )}
+                <p className="mt-1 text-xl font-bold" style={{ color: brandDark }}>Bookkeeping Proposal</p>
               </div>
               <div className="text-right">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Prepared for</p>
-                <p className="mt-1 font-semibold">{companyName}</p>
+                <p className="mt-1 font-semibold" style={{ color: brandDark }}>{companyName}</p>
               </div>
             </header>
           ) : null}
