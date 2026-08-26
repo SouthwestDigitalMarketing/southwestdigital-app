@@ -1,6 +1,17 @@
 "use client";
 
-import { Check } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { useState } from "react";
+import {
+  BadgeCheck,
+  Check,
+  ChevronRight,
+  CircleHelp,
+  LineChart,
+  ShieldCheck,
+  Sparkles,
+  X,
+} from "lucide-react";
 import { useBrand } from "@/lib/brands/context";
 import {
   formatPersonName,
@@ -8,286 +19,808 @@ import {
   useProposalContactInfoDemoState,
 } from "./ProposalContactInfoState";
 import {
-  formatCurrency,
   getAdvancedReceiptManagementPrice,
   getBudgetReportingPrice,
-  getProposalPricingSnapshotCleanupCard,
-  getProposalPreviewPackages,
   getProjectTrackingPrice,
+  getProposalPricingSnapshotData,
   getSalesTaxFilingPrice,
   useProposalAssessmentDemoState,
+  type AssessmentState,
+  type HistoricalCleanupPeriod,
 } from "./ProposalCreationWorkspaceDemo";
-import { BONUS_OPTIONS } from "./ProposalBonusesDemo";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type OptionId = "grow" | "improve" | "maintain";
+
+type ServiceRow = {
+  id: string;
+  serviceName: string;
+  billStart: string;
+  billEnd: string;
+  billEvery?: string;
+  invoiceType: string;
+  priceType: string;
+  quantity: number;
+  price: number;
+  note?: string;
+  cleanupPeriodKey?: string;
+  platformTag?: "QBO" | "Stessa";
+};
+
+type ProposalOption = {
+  id: OptionId;
+  name: string;
+  shortDescription: string;
+  partnershipLabel: string;
+  recurringRows: ServiceRow[];
+  oneTimeRows: ServiceRow[];
+  whatsIncluded: string[];
+  whyItMatters: string[];
+};
+
+// ─── Static data ──────────────────────────────────────────────────────────────
+
+const ONBOARDING_BASE_FEE = 500;
+const ONBOARDING_FEE_PER_CLEANUP_MONTH = 20;
+
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+] as const;
+
+const serviceTooltips: Record<string, string> = {
+  "Monthly Bookkeeping": "Includes categorizing transactions, reconciling accounts, generating your Balance Sheet and Profit & Loss statement, and executing our monthly close process. Reports and communication are delivered through your client portal.",
+  "Investor Reporting & KPI Review": "Investor-focused financial reporting and KPI review to support portfolio decisions.",
+  "Concierge Client Support": "24/7 priority access for bookkeeping questions and time-sensitive support needs.",
+  "Priority Client Support": "Same-business-day responses for bookkeeping questions and support requests.",
+  "Standard Client Support": "Responses within 1–2 business days for bookkeeping questions and support requests.",
+  "Monthly Reporting Package": "A recurring financial reporting package that provides clear visibility into performance.",
+  "Advanced Receipt Management": "Enhanced receipt collection, organization, and matching support.",
+  "Monthly Advisory Calls": "A recurring call with your bookkeeper to review the numbers and talk through decisions. Included at no charge with Grow.",
+  "CFO Pack": "Executive-level financial reporting built for owner and investor decision-making. Included at no charge with Grow.",
+  "Cash Flow Analysis": "Ongoing analysis of cash inflows and outflows to support planning and investment decisions. Included at no charge with Grow.",
+  "Budget Setup & Budget vs. Actuals Reporting": "We build the budget and provide recurring budget-vs-actuals reporting to track performance against it.",
+  "Sales Tax Filing & Remittance": "We calculate, file, and remit the client's sales tax payments to the comptroller on their behalf.",
+};
+
+const comparisonFeatures: Array<{ label: string; description: string; includedIn: OptionId[] }> = [
+  { label: "Monthly bookkeeping and reconciliations", description: "Transactions are categorized and the included accounts are reconciled each month.", includedIn: ["grow", "improve", "maintain"] },
+  { label: "Monthly financial statements", description: "Core financial reports are prepared for consistent owner review.", includedIn: ["grow", "improve", "maintain"] },
+  { label: "Real estate-specific reporting structure", description: "Reporting is organized to make portfolio and property performance easier to understand.", includedIn: ["grow", "improve"] },
+  { label: "Expanded monthly reporting", description: "Additional reporting context supports more informed financial decisions.", includedIn: ["grow", "improve"] },
+  { label: "Investor reporting and KPI review", description: "Investor-focused KPIs and reporting are reviewed for trends and opportunities.", includedIn: ["grow"] },
+  { label: "Structured communication and follow-up", description: "A more proactive communication rhythm helps resolve questions and issues faster.", includedIn: ["grow", "improve"] },
+  { label: "Concierge client support", description: "24/7 priority access for bookkeeping questions and time-sensitive support needs.", includedIn: ["grow"] },
+  { label: "Monthly advisory calls", description: "A recurring call with your bookkeeper to review the numbers and talk through decisions.", includedIn: ["grow"] },
+  { label: "CFO Pack", description: "Executive-level financial reporting built for owner and investor decision-making.", includedIn: ["grow"] },
+  { label: "Cash flow analysis", description: "Ongoing analysis of cash inflows and outflows to support planning and investment decisions.", includedIn: ["grow"] },
+  { label: "Per-property class tracking", description: "Income and expenses are tracked by property using classes for property-level reporting.", includedIn: ["grow", "improve"] },
+];
+
+const optionMeta: Array<{ id: OptionId; icon: typeof Sparkles; accentClass: string; serviceLevel: string }> = [
+  { id: "grow",     icon: Sparkles,    accentClass: "text-emerald-600", serviceLevel: "Concierge" },
+  { id: "improve",  icon: LineChart,   accentClass: "text-indigo-600",  serviceLevel: "Priority"  },
+  { id: "maintain", icon: ShieldCheck, accentClass: "text-amber-600",   serviceLevel: "Standard"  },
+];
+
+const baseOptions: Record<OptionId, ProposalOption> = {
+  grow: {
+    id: "grow",
+    name: "Grow",
+    shortDescription: "Higher-touch reporting and guidance for scaling real estate portfolios.",
+    partnershipLabel: "Strategic partnership",
+    recurringRows: [
+      { id: "grow-rec-1", serviceName: "Monthly Bookkeeping",           billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: 1295 },
+      { id: "grow-rec-2", serviceName: "Investor Reporting & KPI Review", billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: 395 },
+      { id: "grow-rec-3", serviceName: "Concierge Client Support",      billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: 225, note: "24/7 priority access for bookkeeping questions and time-sensitive support needs." },
+      { id: "grow-rec-4", serviceName: "Monthly Advisory Calls",        billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: 0, note: "A recurring call with your bookkeeper to review the numbers and talk through decisions. Included at no charge with Grow." },
+      { id: "grow-rec-5", serviceName: "CFO Pack",                      billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: 0, note: "Executive-level financial reporting built for owner and investor decision-making. Included at no charge with Grow." },
+      { id: "grow-rec-6", serviceName: "Cash Flow Analysis",            billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: 0, note: "Ongoing analysis of cash inflows and outflows to support planning and investment decisions. Included at no charge with Grow." },
+    ],
+    oneTimeRows: [],
+    whatsIncluded: [
+      "Monthly bookkeeping with reconciliations and financial review structure",
+      "Expanded reporting package for owners, partners, and decisions",
+      "Concierge communication and our fastest response expectations",
+      "Monthly advisory calls with your bookkeeper",
+      "CFO Pack with executive-level financial reporting",
+      "Cash flow analysis to support investment decisions",
+      "A higher-touch client experience built for scaling investors",
+    ],
+    whyItMatters: [
+      "Supports better investment decisions with clearer reporting",
+      "Keeps communication fast when deals, lenders, or deadlines move quickly",
+      "Creates cleaner internal processes as the business expands",
+      "Reduces bookkeeping bottlenecks as complexity increases",
+    ],
+  },
+  improve: {
+    id: "improve",
+    name: "Improve",
+    shortDescription: "Clearer reporting and more responsive support for investors who want confidence.",
+    partnershipLabel: "Enhanced partnership",
+    recurringRows: [
+      { id: "improve-rec-1", serviceName: "Monthly Bookkeeping",        billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: 895 },
+      { id: "improve-rec-2", serviceName: "Monthly Reporting Package",  billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: 245 },
+      { id: "improve-rec-3", serviceName: "Priority Client Support",    billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: 0, note: "Same-business-day responses for bookkeeping questions and support requests." },
+    ],
+    oneTimeRows: [],
+    whatsIncluded: [
+      "Historical cleanup and book reconstruction where needed",
+      "Real estate-specific reporting structure and cleaner monthly close",
+      "Monthly financial statements with stronger reporting context",
+      "More structured communication and follow-up support",
+    ],
+    whyItMatters: [
+      "Improves visibility into performance without overcomplicating the process",
+      "Helps owners feel more confident in the books each month",
+      "Creates a smoother experience when questions or issues come up",
+      "Supports more disciplined financial review habits",
+    ],
+  },
+  maintain: {
+    id: "maintain",
+    name: "Maintain",
+    shortDescription: "Core monthly bookkeeping for reliable financial clarity and consistency.",
+    partnershipLabel: "Foundational partnership",
+    recurringRows: [
+      { id: "maintain-rec-1", serviceName: "Monthly Bookkeeping",    billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: 649 },
+      { id: "maintain-rec-2", serviceName: "Standard Client Support", billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: 0, note: "Responses within 1–2 business days for bookkeeping questions and support requests." },
+    ],
+    oneTimeRows: [],
+    whatsIncluded: [
+      "Historical cleanup and foundational setup support",
+      "Accurate monthly bookkeeping and reconciliations",
+      "Monthly financial statements and reporting basics",
+      "Dependable ongoing support for cleaner books",
+    ],
+    whyItMatters: [
+      "Stay compliant with lender and tax requirements",
+      "Make confident, data-driven investment decisions",
+      "Save time and reduce bookkeeping stress",
+      "Always know your numbers",
+    ],
+  },
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function fmt(value: number) {
+  return value.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function sectionTotal(rows: ServiceRow[]) {
+  return rows.reduce((sum, row) => sum + row.quantity * row.price, 0);
+}
+
+function periodMonthCount(period: HistoricalCleanupPeriod) {
+  return Math.max(0, period.endMonth - period.startMonth + 1);
+}
+
+function periodRange(period: HistoricalCleanupPeriod) {
+  const start = MONTH_NAMES[period.startMonth - 1] ?? "Unknown";
+  const end   = MONTH_NAMES[period.endMonth   - 1] ?? "Unknown";
+  return start === end ? start : `${start}–${end}`;
+}
+
+function periodEndLabel(period: HistoricalCleanupPeriod) {
+  return `${MONTH_NAMES[period.endMonth - 1] ?? "the selected month"} ${period.year}`;
+}
+
+function nextMonthAfterCleanup(periods: HistoricalCleanupPeriod[]) {
+  const latest = [...periods].sort((a, b) => (b.year * 12 + b.endMonth) - (a.year * 12 + a.endMonth))[0];
+  if (!latest) return null;
+  const monthIndex = latest.endMonth % 12;
+  const year = latest.endMonth === 12 ? latest.year + 1 : latest.year;
+  return `${MONTH_NAMES[monthIndex]} ${year}`;
+}
+
+function platformLabel(platform: HistoricalCleanupPeriod["platform"] | AssessmentState["ongoingBookkeepingPlatform"]) {
+  return platform === "stessa" ? "Stessa" : "QuickBooks Online";
+}
+
+function getTooltip(row: ServiceRow) {
+  return row.note ?? serviceTooltips[row.serviceName] ?? `Details about ${row.serviceName}.`;
+}
+
+function isOnboarding(row: ServiceRow) {
+  return row.serviceName === "Onboarding";
+}
+
+// ─── Option builder ───────────────────────────────────────────────────────────
+
+function buildCleanupRows(periods: HistoricalCleanupPeriod[], maintainMonthly: number, optionId: OptionId): ServiceRow[] {
+  const currentYear = new Date().getFullYear();
+  return [...periods]
+    .sort((a, b) => (a.year * 12 + a.startMonth) - (b.year * 12 + b.startMonth))
+    .map((period) => {
+      const isPrior = period.year < currentYear;
+      const range    = periodRange(period);
+      const platform = platformLabel(period.platform ?? "qbo");
+      return {
+        id: `${optionId}-cleanup-${period.year}-${period.startMonth}-${period.endMonth}`,
+        serviceName: `${period.year} Catch-Up (${range})`,
+        billStart: "On Acceptance",
+        billEnd: "-",
+        invoiceType: "Automatic",
+        priceType: "Fixed",
+        quantity: 1,
+        price: maintainMonthly * periodMonthCount(period),
+        note: isPrior
+          ? `We will complete this work in ${platform}. Includes reconciliation for ${range} ${period.year}, tax-year reports, beginning and ending journal entries, and reasonable tax-preparer coordination.`
+          : `We will complete this work in ${platform} and bring the books current through ${periodEndLabel(period)}. Ongoing monthly bookkeeping begins with ${nextMonthAfterCleanup(periods) ?? "the following month"}.`,
+        cleanupPeriodKey: `${period.year}-${period.startMonth}-${period.endMonth}`,
+        platformTag: period.platform === "stessa" ? "Stessa" : "QBO",
+      };
+    });
+}
+
+function buildOptions(assessment: AssessmentState): Record<OptionId, ProposalOption> {
+  const { packagePricing } = getProposalPricingSnapshotData(assessment);
+  const periods = assessment.historicalCleanupPeriods.filter((p) => periodMonthCount(p) > 0);
+  const maintainMonthly = packagePricing.maintain.monthly;
+
+  const built = Object.fromEntries(optionMeta.map(({ id }) => {
+    const base = baseOptions[id];
+    const recurringRows = base.recurringRows.map((row) => ({ ...row }));
+
+    // Replace monthly bookkeeping price with computed value
+    const nonBookkeeping = recurringRows
+      .filter((r) => r.serviceName !== "Monthly Bookkeeping")
+      .reduce((t, r) => t + r.price * r.quantity, 0);
+    const bkRow = recurringRows.find((r) => r.serviceName === "Monthly Bookkeeping");
+    if (bkRow) {
+      bkRow.price = Math.max(0, packagePricing[id].monthly - nonBookkeeping);
+      bkRow.platformTag = assessment.ongoingBookkeepingPlatform === "stessa" ? "Stessa" : "QBO";
+    }
+
+    // Per-property class tracking for Grow and Improve
+    if (id !== "maintain") {
+      recurringRows.push({
+        id: `${id}-per-property-class-tracking`,
+        serviceName: "Per-Property Class Tracking",
+        billStart: "On Acceptance",
+        billEnd: "Until Cancelled",
+        billEvery: "1 Month",
+        invoiceType: "Automatic",
+        priceType: "Fixed",
+        quantity: 1,
+        price: 0,
+        note: "Included with this package. Track income and expenses by property using classes for property-level reporting.",
+      });
+    }
+
+    // Onboarding row
+    const onboardingRow: ServiceRow = {
+      id: `${id}-onboarding`,
+      serviceName: "Onboarding",
+      billStart: "On Acceptance",
+      billEnd: "-",
+      invoiceType: "Automatic",
+      priceType: "Fixed",
+      quantity: 1,
+      price: ONBOARDING_BASE_FEE + periods.reduce((t, p) => t + periodMonthCount(p) * ONBOARDING_FEE_PER_CLEANUP_MONTH, 0),
+      note: assessment.ongoingBookkeepingPlatform === "qbo"
+        ? "Includes our review and assessment, document collection, QuickBooks setup, and the work needed to begin. The fee is $500 plus $20 for each selected cleanup month."
+        : "Includes our review and assessment, document collection, and the work needed to begin. The fee is $500 plus $20 for each selected cleanup month.",
+    };
+
+    // Bonuses
+    const bonuses = [
+      assessment.platformMigrationEnabled && assessment.ongoingBookkeepingPlatform === "stessa" &&
+      (assessment.bonusPackageSelections?.["stessa-migration"]?.includes(id) ?? assessment.includeConditionalStessaMigration)
+        ? { name: "QuickBooks to Stessa Migration", note: "We will move the client's books to Stessa for free when they buy the cleanup and monthly bookkeeping in this offer." }
+        : null,
+      (assessment.bonusPackageSelections?.["tax-preparer-coordination"]?.includes(id) ?? assessment.includeTaxPreparerCoordinationCall)
+        ? { name: "Tax Pro Call", note: "We will meet with the client's tax pro one time. We will answer book questions and make sure they get what they need for year-end taxes." }
+        : null,
+      (assessment.bonusPackageSelections?.["property-reporting-setup"]?.includes(id) ?? assessment.includePropertyLevelReportingSetup)
+        ? { name: "Reports by Property", note: "We will set up the books so the client can see income and costs for each property." }
+        : null,
+      (assessment.bonusPackageSelections?.["document-organization"]?.includes(id) ?? assessment.includeDocumentOrganizationSetup)
+        ? { name: "Organized, Audit-Ready Records", note: "We replace binders, paper files, and loose digital files with one clear system. The client uploads statements, closing papers, and receipts to the portal. We organize them and link them to the right items in the books." }
+        : null,
+      (assessment.bonusPackageSelections?.["quarterly-review"]?.includes(id) ?? assessment.includeQuarterlyFinancialReview)
+        ? { name: "First Quarterly Review", note: "After the first full quarter, we will meet with the client to review reports, answer questions, and plan the next steps." }
+        : null,
+      (assessment.bonusPackageSelections?.["doublehq-client-portal"]?.includes(id) ?? assessment.includeDoubleHqClientPortal)
+        ? { name: "DoubleHQ Client Portal", note: "The client gets one online place to talk with our team, send files, view requests, and check the work in progress." }
+        : null,
+      (assessment.bonusPackageSelections?.["real-estate-chart-of-accounts"]?.includes(id) ?? assessment.includeRealEstateChartOfAccounts)
+        ? { name: "Real Estate Chart of Accounts", note: "We will add our real estate Chart of Accounts to the client's current QuickBooks file." }
+        : null,
+      assessment.ongoingBookkeepingPlatform === "qbo" &&
+      (assessment.bonusPackageSelections?.["new-quickbooks-file"]?.includes(id) ?? assessment.includeNewQuickBooksFileSetup)
+        ? { name: "New QuickBooks Setup", note: "If a fresh start is best, we will build a new QuickBooks file for monthly bookkeeping. It will include our Real Estate Chart of Accounts." }
+        : null,
+    ].filter((b): b is { name: string; note: string } => b !== null)
+      .map((b, i) => ({
+        id: `${id}-bonus-${i}`,
+        serviceName: b.name,
+        billStart: "On Acceptance",
+        billEnd: "-",
+        invoiceType: "Automatic",
+        priceType: "Fixed",
+        quantity: 1,
+        price: 0,
+        note: b.note,
+      }));
+
+    return [id, {
+      ...base,
+      recurringRows,
+      oneTimeRows: [
+        ...buildCleanupRows(periods, maintainMonthly, id),
+        onboardingRow,
+        ...bonuses,
+      ],
+    }];
+  })) as Record<OptionId, ProposalOption>;
+
+  // Inherit services downward
+  function inheritRecurring(higherTier: OptionId, lowerTier: OptionId) {
+    const higher = built[higherTier];
+    const existing = new Set(higher.recurringRows.map((r) => r.serviceName));
+    const inherited = built[lowerTier].recurringRows
+      .filter((r) => !r.serviceName.endsWith("Client Support"))
+      .filter((r) => !existing.has(r.serviceName))
+      .map((r) => ({ ...r, id: `${higherTier}-inherited-${r.id}`, price: 0, note: r.note ?? `Included from the ${built[lowerTier].name} service level.` }));
+    higher.recurringRows = [...higher.recurringRows, ...inherited];
+  }
+  inheritRecurring("improve", "maintain");
+  inheritRecurring("grow", "improve");
+
+  return built;
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function TooltipIcon({ row }: { row: ServiceRow }) {
+  const tip = getTooltip(row);
+  return (
+    <span className="group relative inline-flex shrink-0">
+      <button type="button" aria-label={`More information about ${row.serviceName}`} className="text-slate-400 hover:text-brandnavy focus:text-brandnavy focus:outline-none">
+        <CircleHelp className="h-3.5 w-3.5" />
+      </button>
+      <span role="tooltip" className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-64 rounded-lg bg-slate-950 px-3 py-2 text-left text-xs font-normal leading-5 text-white shadow-lg group-hover:block group-focus-within:block">
+        {tip}
+      </span>
+    </span>
+  );
+}
+
+function ServiceLine({ row, selected = true, onToggle, showPriceWhenUnselected = false, priceSuffix = "" }: {
+  row: ServiceRow;
+  selected?: boolean;
+  onToggle?: (checked: boolean) => void;
+  showPriceWhenUnselected?: boolean;
+  priceSuffix?: string;
+}) {
+  return (
+    <li>
+      <div className="flex justify-between gap-3">
+        <span className="inline-flex items-center gap-1.5">
+          {onToggle ? <input type="checkbox" checked={selected} onChange={(e) => onToggle(e.target.checked)} aria-label={`${selected ? "Remove" : "Add"} ${row.serviceName}`} className="h-4 w-4 shrink-0 accent-brandnavy" /> : null}
+          <TooltipIcon row={row} />
+          <span className="text-slate-900">{row.serviceName}</span>
+          {row.platformTag && !row.cleanupPeriodKey ? <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brandnavy">{row.platformTag}</span> : null}
+        </span>
+        <span className={`shrink-0 text-right font-medium ${selected ? "text-slate-900" : "text-slate-400"}`}>
+          {selected || showPriceWhenUnselected ? `${fmt(row.price * row.quantity)}${priceSuffix}` : "Not added"}
+        </span>
+      </div>
+    </li>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
 
 export default function OfferProposalPreview() {
   const { brand } = useBrand();
   const { assessment } = useProposalAssessmentDemoState();
   const { contactInfo } = useProposalContactInfoDemoState();
-  const packages = getProposalPreviewPackages(assessment);
-  const cleanupCard = getProposalPricingSnapshotCleanupCard(assessment);
+  const searchParams = useSearchParams();
+
   const primary = resolvePrimaryContact(contactInfo);
-  const recipientFirst =
-    primary.firstName || contactInfo.owners[0]?.firstName || "there";
-  const company = contactInfo.companyName || "your business";
+  const contactName = formatPersonName(primary.firstName, primary.lastName) || contactInfo.owners[0]?.firstName || "";
+  const companyName = contactInfo.companyName || contactName || "Your business";
 
-  const addOns = [
-    assessment.offerAdvancedReceiptManagement && {
-      name: "Advanced Receipt Management",
-      price: formatCurrency(getAdvancedReceiptManagementPrice(assessment), "/mo"),
-      description: "Organized digital receipts matched to transactions in your books.",
-    },
-    assessment.offerProjectTracking && {
-      name: "Project & Job Tracking",
-      price: formatCurrency(getProjectTrackingPrice(assessment), "/mo"),
-      description: "Track income and expenses by project, job, or property renovation.",
-    },
-    assessment.offerBudgetReporting && {
-      name: "Budget vs. Actuals Reporting",
-      price: formatCurrency(getBudgetReportingPrice(assessment), "/mo"),
-      description: "Monthly comparison of your budget against real results.",
-    },
-    assessment.offerSalesTaxFiling && {
-      name: "Sales Tax Filing",
-      price: formatCurrency(getSalesTaxFilingPrice(assessment), "/yr"),
-      description: "Preparation and filing of your sales tax returns.",
-    },
-  ].filter(Boolean) as { name: string; price: string; description: string }[];
+  const options = buildOptions(assessment);
+  const [selectedOptionId, setSelectedOptionId] = useState<OptionId | null>(null);
+  const [step, setStep] = useState(0);
+  const [hasTwelveMonthAgreement, setHasTwelveMonthAgreement] = useState(false);
+  const [comparisonOpen, setComparisonOpen] = useState(false);
+  const [cleanupSelections, setCleanupSelections] = useState<Record<string, boolean>>({});
+  const [addOnSelections, setAddOnSelections] = useState<Record<OptionId, boolean>>({ grow: false, improve: false, maintain: false });
+  const [projectTrackingSelections, setProjectTrackingSelections] = useState<Record<OptionId, boolean>>({ grow: false, improve: false, maintain: false });
+  const [budgetReportingSelections, setBudgetReportingSelections] = useState<Record<OptionId, boolean>>({ grow: false, improve: false, maintain: false });
+  const [salesTaxFilingSelections, setSalesTaxFilingSelections] = useState<Record<OptionId, boolean>>({ grow: false, improve: false, maintain: false });
 
-  const activeComplimentary = [
-    assessment.includeRegisteredAgentService && {
-      name: "Registered Agent Service",
-      description:
-        "We act as your registered agent and forward official state correspondence to your designated contact.",
-    },
-    assessment.includeTaxPreparerCoordinationCall && {
-      name: "Tax Preparer Coordination",
-      description:
-        "We coordinate with your tax preparer, provide organized records, and answer bookkeeping questions during tax prep. Tax preparation and advice are not included.",
-    },
-  ].filter(Boolean) as { name: string; description: string }[];
+  const recurringDiscountMultiplier = hasTwelveMonthAgreement ? 0.8 : 1;
 
-  const activeBonuses = BONUS_OPTIONS.filter((bonus) => {
-    const selections = assessment.bonusPackageSelections?.[bonus.id];
-    if (Array.isArray(selections)) return selections.length > 0;
-    return assessment[bonus.assessmentKey as keyof typeof assessment] === true;
-  }).map((bonus) => {
-    const selections = assessment.bonusPackageSelections?.[bonus.id];
-    const pkgIds = Array.isArray(selections) ? selections : packages.map((p) => p.id);
-    const pkgNames = pkgIds.map((id) => packages.find((p) => p.id === id)?.name).filter(Boolean);
-    return { ...bonus, packages: pkgNames };
-  });
+  const cleanupPeriods = assessment.historicalCleanupPeriods
+    .filter((p) => periodMonthCount(p) > 0)
+    .sort((a, b) => (a.year * 12 + a.startMonth) - (b.year * 12 + b.startMonth));
+
+  const cleanupKey = (optionId: OptionId, periodKey: string) => `${optionId}:${periodKey}`;
+  const cleanupIsSelected = (optionId: OptionId, periodKey: string) => cleanupSelections[cleanupKey(optionId, periodKey)] !== false;
+
+  const advancedReceiptRow: ServiceRow = { id: "addon-arm", serviceName: "Advanced Receipt Management", billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: getAdvancedReceiptManagementPrice(assessment), note: serviceTooltips["Advanced Receipt Management"] };
+  const projectTrackingRow: ServiceRow = { id: "addon-pt", serviceName: "Project Tracking", billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: getProjectTrackingPrice(assessment), note: "Track project income, costs, and profitability separately from routine property operations." };
+  const budgetReportingRow: ServiceRow = { id: "addon-br", serviceName: "Budget Setup & Budget vs. Actuals Reporting", billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: getBudgetReportingPrice(assessment), note: serviceTooltips["Budget Setup & Budget vs. Actuals Reporting"] };
+  const salesTaxRow: ServiceRow = { id: "addon-st", serviceName: "Sales Tax Filing & Remittance", billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: getSalesTaxFilingPrice(assessment), note: serviceTooltips["Sales Tax Filing & Remittance"] };
+
+  const recurringServiceNames = Array.from(new Set(optionMeta.flatMap(({ id }) => options[id].recurringRows.map((r) => r.serviceName))));
+  const oneTimeServiceNames   = Array.from(new Set(optionMeta.flatMap(({ id }) => options[id].oneTimeRows.map((r) => r.serviceName))));
+
+  const clientSteps = ["Intro", "Services", "Done"] as const;
 
   return (
-    <main className="min-h-screen bg-slate-50">
-      <div className="mx-auto max-w-5xl px-5 py-12 lg:px-8">
+    <main className="relative isolate min-h-screen overflow-hidden bg-[linear-gradient(180deg,#f7f8fb_0%,#ffffff_100%)] px-4 py-6 text-brandnavy [&_button:not(:disabled)]:cursor-pointer [&_button:disabled]:cursor-not-allowed sm:px-6 lg:px-10">
+      <svg aria-hidden="true" viewBox="0 0 1600 1000" preserveAspectRatio="none" className="pointer-events-none fixed inset-0 z-0 h-full w-full text-brandnavy opacity-[0.045]">
+        <g fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="M-120 70C120 20 285 115 330 280S220 545-45 610" />
+          <path d="M-145 130C75 75 235 155 270 295S165 490-70 555" />
+          <path d="M1710 235C1490 125 1350 205 1325 350S1435 575 1675 650" />
+          <path d="M1735 305C1535 205 1405 270 1385 385S1480 535 1695 600" />
+        </g>
+      </svg>
 
-        {/* Header */}
-        <div className="mb-10">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-            {brand.name}
-          </p>
-          <h1 className="mt-2 text-3xl font-bold text-slate-950">
-            Bookkeeping Proposal
-          </h1>
-          <p className="mt-1 text-base text-slate-500">{company}</p>
-          <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-600">
-            Hi {recipientFirst}, here are the options we put together for you. Pick the package
-            that fits best, or reply with any questions — we are happy to walk you through it.
-          </p>
-        </div>
+      <section className="relative z-10 mx-auto flex min-h-[calc(100vh-3rem)] max-w-[1180px] flex-col gap-6">
 
-        {/* One-time cleanup */}
-        {cleanupCard ? (
-          <div className="mb-8 rounded-2xl border border-amber-200 bg-amber-50 p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-600">
-                  One-time · Due at start
-                </p>
-                <p className="mt-1 text-lg font-semibold text-slate-900">Historical Cleanup</p>
-                {cleanupCard.baseRow ? (
-                  <p className="mt-1 text-sm text-slate-600">{cleanupCard.baseRow}</p>
-                ) : null}
-                <p className="mt-0.5 text-xs text-slate-500">
-                  Brings your books current before ongoing monthly service begins.
-                </p>
-              </div>
-              <div className="shrink-0 text-right">
-                <p className="text-xl font-bold text-slate-900">{cleanupCard.amountLabel}</p>
-                <p className="mt-0.5 text-xs text-slate-500">Maintain package rate</p>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {/* Package cards */}
-        <div className="grid gap-4 md:grid-cols-3">
-          {packages.map((pkg) => {
-            const isDark = pkg.id === "grow";
-            const isHighlighted = pkg.isRecommended;
-            return (
-              <div
-                key={pkg.id}
-                className={`relative flex flex-col rounded-2xl border p-6 ${
-                  isDark
-                    ? "border-slate-900 bg-slate-950 text-white"
-                    : isHighlighted
-                      ? "border-slate-300 bg-white shadow-md ring-1 ring-slate-900/10"
-                      : "border-slate-200 bg-white"
-                }`}
+        {/* Nav bar */}
+        <nav aria-label="Proposal navigation" className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+          <div className="grid grid-cols-[auto_1fr_auto] items-center gap-4">
+            {step === 0 ? <span className="w-[74px]" /> : (
+              <button type="button" onClick={() => setStep((s) => Math.max(0, s - 1))} className="rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-semibold">Back</button>
+            )}
+            <ol className="flex items-start justify-center">
+              {clientSteps.map((label, index) => (
+                <li key={label} className="flex items-start">
+                  {index > 0 && <span className={`mt-4 h-0.5 w-5 sm:w-10 ${index <= step ? "bg-brandnavy" : "bg-slate-300"}`} />}
+                  <div className="w-16 text-center sm:w-20">
+                    <span className={`mx-auto grid h-8 w-8 place-items-center rounded-full border text-sm font-bold ${index <= step ? "border-brandnavy bg-brandnavy text-white" : "border-slate-300 bg-white text-slate-500"}`}>
+                      {index < step ? "✓" : index + 1}
+                    </span>
+                    <span className="mt-1 block text-xs text-slate-500">{label}</span>
+                  </div>
+                </li>
+              ))}
+            </ol>
+            {step < 2 ? (
+              <button
+                type="button"
+                disabled={step === 1 && !selectedOptionId}
+                onClick={() => setStep((s) => Math.min(2, s + 1))}
+                className="inline-flex items-center gap-2 rounded-lg border-2 border-accent-500 bg-brandnavy px-5 py-2 text-sm font-bold text-white transition-all hover:-translate-y-0.5 hover:bg-slate-950 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
               >
-                {isHighlighted && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-slate-900 px-3 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white">
-                    Recommended
-                  </span>
-                )}
+                Next <ChevronRight strokeWidth={3} className="h-4 w-4" />
+              </button>
+            ) : <span className="w-20" />}
+          </div>
+        </nav>
 
-                <p
-                  className={`text-[11px] font-semibold uppercase tracking-wide ${
-                    isDark ? "text-white/50" : "text-slate-400"
-                  }`}
-                >
-                  Package
-                </p>
-                <p className={`mt-1 text-xl font-bold ${isDark ? "text-white" : "text-slate-950"}`}>
-                  {pkg.name}
-                </p>
+        <article className="space-y-8 bg-transparent">
 
-                <p className={`mt-3 text-2xl font-bold ${isDark ? "text-white" : "text-slate-950"}`}>
-                  {pkg.monthlyLabel}
-                </p>
-                <p className={`text-xs ${isDark ? "text-white/50" : "text-slate-400"}`}>
-                  per month · ongoing
-                </p>
-
-                {pkg.oneTimeLabel ? (
-                  <p
-                    className={`mt-2 text-sm font-medium ${
-                      isDark ? "text-white/70" : "text-slate-500"
-                    }`}
-                  >
-                    + {pkg.oneTimeLabel} one-time cleanup
-                  </p>
-                ) : null}
-
-                <div className={`my-4 border-t ${isDark ? "border-white/10" : "border-slate-100"}`} />
-
-                <p className={`mb-3 text-xs leading-5 ${isDark ? "text-white/60" : "text-slate-500"}`}>
-                  {pkg.description}
-                </p>
-
-                <ul className="space-y-2">
-                  {pkg.includedServices.map((service) => (
-                    <li key={service} className="flex items-start gap-2">
-                      <Check
-                        className={`mt-0.5 h-4 w-4 shrink-0 ${
-                          isDark ? "text-emerald-400" : "text-emerald-600"
-                        }`}
-                        strokeWidth={2.5}
-                      />
-                      <span
-                        className={`text-sm ${isDark ? "text-white/80" : "text-slate-700"}`}
-                      >
-                        {service}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-
-                <div className={`mt-4 border-t pt-4 ${isDark ? "border-white/10" : "border-slate-100"}`}>
-                  <p className={`text-xs leading-5 ${isDark ? "text-white/50" : "text-slate-400"}`}>
-                    {pkg.clientFit}
-                  </p>
-                </div>
+          {/* Header (steps 0–1) */}
+          {step !== 2 ? (
+            <header className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{brand.name}</p>
+                <p className="mt-1 text-xl font-bold text-brandnavy">Bookkeeping Proposal</p>
               </div>
-            );
-          })}
+              <div className="text-right">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Prepared for</p>
+                <p className="mt-1 font-semibold">{companyName}</p>
+              </div>
+            </header>
+          ) : null}
+
+          {/* Step 0 — Intro */}
+          {step === 0 && (
+            <div className="pb-12">
+              <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+                Expert <span className="text-accent-500">Real Estate</span> Bookkeeping +{" "}
+                Great <span className="text-accent-500">Communication</span>
+              </h1>
+              <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">
+                You should not have to chase your bookkeeper or guess what your numbers mean. {brand.name} helps real estate investors with clean books, useful reports, and clear answers from a team that knows your business.
+              </p>
+              <div className="mt-8">
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  className="inline-flex items-center gap-2 rounded-lg border-2 border-accent-500 bg-brandnavy px-6 py-3 text-base font-bold text-white transition-all hover:-translate-y-0.5 hover:bg-slate-950 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)]"
+                >
+                  View your options <ChevronRight strokeWidth={3} className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 1 — Services */}
+          {step === 1 && (
+            <div>
+              <div className="mb-5 text-center">
+                <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Select your services</h1>
+              </div>
+
+              {/* Annual toggle */}
+              <div className="mb-8 flex flex-wrap items-center justify-center gap-4 text-base font-bold sm:text-lg">
+                <span className={hasTwelveMonthAgreement ? "text-slate-400" : "text-brandnavy"}>Month-to-month</span>
+                <button type="button" role="switch" aria-checked={hasTwelveMonthAgreement} onClick={() => setHasTwelveMonthAgreement((v) => !v)} className={`relative h-9 w-16 rounded-full transition ${hasTwelveMonthAgreement ? "bg-brandnavy" : "bg-slate-400"}`}>
+                  <span className={`absolute top-1 h-7 w-7 rounded-full bg-white shadow-sm transition ${hasTwelveMonthAgreement ? "left-8" : "left-1"}`} />
+                  <span className="sr-only">Save 20% with a 12-month agreement</span>
+                </button>
+                <button type="button" aria-pressed={hasTwelveMonthAgreement} onClick={() => setHasTwelveMonthAgreement(true)} className={`inline-flex items-center gap-1.5 rounded-lg border bg-accent-100 px-3 py-1.5 text-brandnavy transition hover:brightness-95 ${hasTwelveMonthAgreement ? "border-brandnavy" : "border-transparent"}`}>
+                  <Sparkles className="h-5 w-5" />
+                  Annual · Save 20%
+                  <Sparkles className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Package cards */}
+              <div className="grid items-stretch gap-5 [grid-template-rows:repeat(7,auto)] lg:grid-cols-3">
+                {optionMeta.map(({ id, serviceLevel }) => {
+                  const option = options[id];
+                  const selected = selectedOptionId === id;
+
+                  const selectedCleanupMonths = cleanupPeriods.reduce(
+                    (t, p) => t + (cleanupIsSelected(id, `${p.year}-${p.startMonth}-${p.endMonth}`) ? periodMonthCount(p) : 0),
+                    0,
+                  );
+
+                  const effectiveOneTimeRows = option.oneTimeRows.map((row) =>
+                    isOnboarding(row)
+                      ? { ...row, price: ONBOARDING_BASE_FEE + selectedCleanupMonths * ONBOARDING_FEE_PER_CLEANUP_MONTH }
+                      : row,
+                  );
+                  const displayedOneTimeRows = effectiveOneTimeRows.filter(
+                    (row) => !row.cleanupPeriodKey || cleanupIsSelected(id, row.cleanupPeriodKey),
+                  );
+
+                  const recurringTotal =
+                    sectionTotal(option.recurringRows) * recurringDiscountMultiplier +
+                    (addOnSelections[id] ? advancedReceiptRow.price : 0) +
+                    (id !== "maintain" && projectTrackingSelections[id] ? projectTrackingRow.price : 0) +
+                    (budgetReportingSelections[id] ? budgetReportingRow.price : 0) +
+                    (salesTaxFilingSelections[id] ? salesTaxRow.price : 0);
+
+                  const paidOneTime      = effectiveOneTimeRows.filter((r) => r.price > 0);
+                  const optionalCleanup  = paidOneTime.filter((r) => r.cleanupPeriodKey);
+                  const requiredOnboard  = paidOneTime.filter((r) => !r.cleanupPeriodKey && isOnboarding(r));
+                  const additionalSetup  = paidOneTime.filter((r) => !r.cleanupPeriodKey && !isOnboarding(r));
+                  const zeroPriceRows    = option.oneTimeRows.filter((r) => r.price === 0);
+
+                  const lowerTierId: OptionId | null = id === "grow" ? "improve" : id === "improve" ? "maintain" : null;
+                  const lowerTierName = lowerTierId ? options[lowerTierId].name : null;
+                  const lowerTierRecurring = new Set(lowerTierId ? options[lowerTierId].recurringRows.map((r) => r.serviceName) : []);
+                  const isNew = (name: string) => lowerTierId !== null && !lowerTierRecurring.has(name);
+                  const lowerTierZero = new Set(lowerTierId ? options[lowerTierId].oneTimeRows.filter((r) => r.price === 0).map((r) => r.serviceName) : []);
+                  const displayedBonuses = lowerTierId ? zeroPriceRows.filter((r) => !lowerTierZero.has(r.serviceName)) : zeroPriceRows;
+
+                  const bkRow      = option.recurringRows.find((r) => r.serviceName === "Monthly Bookkeeping");
+                  const supportRow = option.recurringRows.find((r) => r.serviceName.endsWith("Client Support"));
+                  const otherRecurring = option.recurringRows.filter((r) => r.serviceName !== "Monthly Bookkeeping" && !r.serviceName.endsWith("Client Support"));
+                  const orderedRecurring = lowerTierId ? otherRecurring.filter((r) => isNew(r.serviceName)) : otherRecurring;
+
+                  return (
+                    <section key={id} className={`grid grid-rows-subgrid row-span-7 overflow-hidden rounded-xl border bg-white shadow-sm transition-colors ${selected ? "border-brandnavy" : "border-slate-200"}`}>
+                      {/* Card header */}
+                      <div className="p-5">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <h2 className="text-2xl font-bold">{option.name}</h2>
+                            <button type="button" onClick={() => setComparisonOpen(true)} className="mt-1 text-xs font-semibold text-brandnavy underline decoration-brandnavy/30 underline-offset-2 hover:decoration-brandnavy">
+                              See everything included
+                            </button>
+                          </div>
+                          <div className="space-y-1 text-right text-sm">
+                            <p><span className="font-bold text-brandnavy">{fmt(sectionTotal(displayedOneTimeRows))}</span> <span className="text-slate-500">One-Time</span></p>
+                            <p><span className={`font-bold text-brandnavy ${hasTwelveMonthAgreement ? "rounded bg-accent-100 px-1.5 py-0.5" : ""}`}>{fmt(recurringTotal)}</span> <span className="text-slate-500">/mo</span></p>
+                          </div>
+                        </div>
+                        <p className="mt-4 text-center text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{serviceLevel} service level</p>
+                        <button type="button" onClick={() => { setSelectedOptionId(id); setStep(2); }} aria-pressed={selected} className="mt-4 w-full rounded-lg border border-[#ffd230] bg-[#ffd230] px-4 py-3 text-base font-bold text-brandnavy transition hover:border-[#f2c221] hover:bg-[#f2c221]">
+                          Select {option.name}
+                        </button>
+                      </div>
+
+                      {/* One-time services */}
+                      <section className="border-t border-slate-200">
+                        <p className="bg-[#e4e8ef] px-5 py-3 text-xs font-bold uppercase tracking-[0.12em] text-brandnavy">One-time services</p>
+                        <div className="px-5 py-4">
+                          {requiredOnboard.length ? <div className="mt-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Required to get started</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{requiredOnboard.map((row) => <ServiceLine key={row.id} row={row} />)}</ul></div> : null}
+                          {optionalCleanup.length ? <div className="mt-5 border-t border-slate-200 pt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Optional catch-up</p><ul className="mt-4 space-y-7 text-sm text-slate-600">{optionalCleanup.map((row) => <ServiceLine key={row.id} row={row} selected={cleanupIsSelected(id, row.cleanupPeriodKey!)} onToggle={(checked) => setCleanupSelections((prev) => ({ ...prev, [cleanupKey(id, row.cleanupPeriodKey!)]: checked }))} showPriceWhenUnselected />)}</ul></div> : null}
+                          {additionalSetup.length ? <div className="mt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Additional setup</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{additionalSetup.map((row) => <ServiceLine key={row.id} row={row} />)}</ul></div> : null}
+                        </div>
+                      </section>
+
+                      {/* Recurring services */}
+                      <section>
+                        <p className="bg-[#51637f] px-5 py-3 text-xs font-bold uppercase tracking-[0.12em] text-white">Recurring services</p>
+                        {bkRow && !lowerTierId ? <div className="px-5 pt-4"><p className="text-sm font-semibold text-slate-500">Monthly Bookkeeping</p><p className="mt-1 text-sm leading-6 text-slate-600">{getTooltip(bkRow)}</p></div> : null}
+                        {lowerTierName ? <p className="px-5 pt-4 text-sm font-semibold text-slate-500">Everything in {lowerTierName}, plus:</p> : null}
+                        <ul className="space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600">
+                          {orderedRecurring.map((row) => (
+                            <li key={row.id} className={`flex justify-between gap-3 ${isNew(row.serviceName) ? "font-semibold text-emerald-700" : ""}`}>
+                              <span className="inline-flex items-start gap-1.5">
+                                <span className="group relative inline-flex shrink-0">
+                                  <button type="button" aria-label={`More information about ${row.serviceName}`} className={`${isNew(row.serviceName) ? "text-emerald-600" : "text-slate-400"} hover:text-brandnavy focus:text-brandnavy focus:outline-none`}><CircleHelp className="h-3.5 w-3.5" /></button>
+                                  <span role="tooltip" className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-64 rounded-lg bg-slate-950 px-3 py-2 text-left text-xs font-normal leading-5 text-white shadow-lg group-hover:block group-focus-within:block">{getTooltip(row)}</span>
+                                </span>
+                                <span>{row.serviceName}</span>
+                                {row.platformTag ? <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${isNew(row.serviceName) ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-brandnavy"}`}>{row.platformTag}</span> : null}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
+
+                      {/* Support row */}
+                      {supportRow ? <div className="border-t border-slate-200 px-5 py-4"><p className="text-sm font-semibold text-slate-500">{supportRow.serviceName}</p><p className="mt-1 text-sm leading-6 text-slate-600">{getTooltip(supportRow)}</p></div> : <div />}
+
+                      {/* Add-ons */}
+                      <div>
+                        {assessment.offerAdvancedReceiptManagement ? (
+                          <section>
+                            <p className="bg-accent-100 px-5 py-3 text-xs font-bold uppercase tracking-[0.12em] text-brandnavy">Optional monthly add-ons</p>
+                            <div className="px-5 py-4">
+                              <ul className="space-y-2 text-sm text-slate-600">
+                                <ServiceLine row={{ ...advancedReceiptRow, id: `${id}-arm` }} selected={addOnSelections[id]} onToggle={(checked) => setAddOnSelections((p) => ({ ...p, [id]: checked }))} showPriceWhenUnselected priceSuffix="/mo" />
+                              </ul>
+                            </div>
+                          </section>
+                        ) : null}
+                        {id !== "maintain" && assessment.offerProjectTracking ? <div className="px-5 pb-4"><ul className="space-y-2 text-sm text-slate-600"><ServiceLine row={{ ...projectTrackingRow, id: `${id}-pt` }} selected={projectTrackingSelections[id]} onToggle={(checked) => setProjectTrackingSelections((p) => ({ ...p, [id]: checked }))} showPriceWhenUnselected priceSuffix="/mo" /></ul></div> : null}
+                        {assessment.offerBudgetReporting ? <div className="px-5 pb-4"><ul className="space-y-2 text-sm text-slate-600"><ServiceLine row={{ ...budgetReportingRow, id: `${id}-br` }} selected={budgetReportingSelections[id]} onToggle={(checked) => setBudgetReportingSelections((p) => ({ ...p, [id]: checked }))} showPriceWhenUnselected priceSuffix="/mo" /></ul></div> : null}
+                        {assessment.offerSalesTaxFiling ? <div className="px-5 pb-4"><ul className="space-y-2 text-sm text-slate-600"><ServiceLine row={{ ...salesTaxRow, id: `${id}-st` }} selected={salesTaxFilingSelections[id]} onToggle={(checked) => setSalesTaxFilingSelections((p) => ({ ...p, [id]: checked }))} showPriceWhenUnselected priceSuffix="/mo" /></ul></div> : null}
+                      </div>
+
+                      {/* Bonuses */}
+                      {displayedBonuses.length > 0 ? (
+                        <section>
+                          <p className="bg-emerald-100 px-5 py-3 text-xs font-bold uppercase tracking-[0.12em] text-emerald-900">Included bonuses</p>
+                          {lowerTierName ? <p className="px-5 pt-4 text-sm font-semibold text-slate-500">Everything in {lowerTierName}, plus:</p> : null}
+                          <ul className="space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600">
+                            {displayedBonuses.map((row) => (
+                              <li key={row.id} className="flex justify-between gap-3 font-semibold text-emerald-700">
+                                <span className="inline-flex items-start gap-1.5">
+                                  <span className="group relative inline-flex shrink-0">
+                                    <button type="button" aria-label={`More information about ${row.serviceName}`} className="text-emerald-600 hover:text-brandnavy focus:outline-none"><CircleHelp className="h-3.5 w-3.5" /></button>
+                                    <span role="tooltip" className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-64 rounded-lg bg-slate-950 px-3 py-2 text-left text-xs font-normal leading-5 text-white shadow-lg group-hover:block group-focus-within:block">{getTooltip(row)}</span>
+                                  </span>
+                                  <span>{row.serviceName}</span>
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </section>
+                      ) : <div />}
+
+                      {/* Pricing summary */}
+                      <div className="border-t border-slate-200 p-5">
+                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Your pricing</p>
+                        <div className="mt-3 rounded-xl bg-slate-50 p-4">
+                          <div className="flex items-center justify-between gap-4 text-sm">
+                            <span className="text-slate-600">One-time total</span>
+                            <span className="font-bold text-brandnavy">{fmt(sectionTotal(displayedOneTimeRows))}</span>
+                          </div>
+                          <div className="mt-2 flex items-center justify-between gap-4 border-t border-slate-200 pt-2 text-sm">
+                            <span className="text-slate-600">Ongoing bookkeeping</span>
+                            <span className="font-bold text-brandnavy">{fmt(recurringTotal)}/mo</span>
+                          </div>
+                        </div>
+                        <button type="button" onClick={() => { setSelectedOptionId(id); setStep(2); }} className="mt-4 w-full rounded-lg border border-[#ffd230] bg-[#ffd230] px-4 py-3 text-base font-bold text-brandnavy transition hover:border-[#f2c221] hover:bg-[#f2c221]">
+                          Select {option.name}
+                        </button>
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Step 2 — Confirmation */}
+          {step === 2 && (
+            <div className="mx-auto grid max-w-2xl place-items-center px-7 py-20 text-center">
+              <div className="grid h-16 w-16 place-items-center rounded-full bg-emerald-100 text-emerald-700">
+                <BadgeCheck className="h-8 w-8" />
+              </div>
+              <h1 className="mt-6 text-3xl font-bold">
+                {selectedOptionId ? `${options[selectedOptionId].name} selected` : "Selection received"}
+              </h1>
+              <p className="mt-3 text-slate-600">
+                We have your selection and will be in touch to kick off onboarding. Reach out any time if you have questions.
+              </p>
+              <p className="mt-4 text-sm font-semibold text-slate-700">{brand.name}</p>
+            </div>
+          )}
+
+        </article>
+      </section>
+
+      {/* Comparison modal */}
+      {comparisonOpen ? (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/60 p-4 sm:p-6 lg:p-10">
+          <div role="dialog" aria-modal="true" aria-labelledby="comparison-title" className="mx-auto w-full max-w-[1180px] overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <header className="flex items-start justify-between gap-6 border-b border-slate-200 px-5 py-4 sm:px-7">
+              <div>
+                <h2 id="comparison-title" className="text-2xl font-bold text-brandnavy">Compare everything included</h2>
+                <p className="mt-1 text-sm text-slate-600">Review pricing, services, and support details across all three options.</p>
+              </div>
+              <button type="button" onClick={() => setComparisonOpen(false)} aria-label="Close plan comparison" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-brandnavy">
+                <X className="h-5 w-5" />
+              </button>
+            </header>
+            <div className="max-h-[calc(100vh-10rem)] overflow-y-auto overflow-x-hidden">
+              <table className="w-full table-fixed border-collapse text-sm">
+                <colgroup><col /><col className="w-28" /><col className="w-28" /><col className="w-28" /></colgroup>
+                <thead className="sticky top-0 z-10 bg-white shadow-[0_1px_0_0_#e2e8f0]">
+                  <tr>
+                    <th scope="col" className="px-5 py-4 text-left font-semibold text-slate-500">Service and feature</th>
+                    {optionMeta.map(({ id }) => (
+                      <th scope="col" key={id} className="px-2 py-4 text-center align-top">
+                        <p className="text-xl font-bold text-brandnavy">{options[id].name}</p>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="bg-[#e4e8ef]"><th colSpan={4} className="px-5 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-brandnavy">One-time services</th></tr>
+                  {oneTimeServiceNames.map((name, i) => {
+                    const ref = optionMeta.map(({ id }) => options[id].oneTimeRows.find((r) => r.serviceName === name)).find(Boolean);
+                    return (
+                      <tr key={name} className={`border-b border-slate-100 ${i % 2 === 0 ? "bg-white" : "bg-slate-50"}`}>
+                        <th scope="row" className="px-5 py-3 text-left align-top font-semibold text-brandnavy">
+                          {name}
+                          {ref ? <span className="mt-1 block text-xs font-normal leading-5 text-slate-500">{getTooltip(ref)}</span> : null}
+                        </th>
+                        {optionMeta.map(({ id }) => {
+                          const row = options[id].oneTimeRows.find((r) => r.serviceName === name);
+                          return <td key={id} className="px-4 py-3 text-center align-middle">{row ? <Check aria-label="Included" className="mx-auto h-5 w-5 text-brandnavy" /> : <span className="text-slate-300">—</span>}</td>;
+                        })}
+                      </tr>
+                    );
+                  })}
+                  <tr className="bg-[#51637f]"><th colSpan={4} className="px-5 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-white">Recurring services</th></tr>
+                  {recurringServiceNames.map((name, i) => {
+                    const ref = optionMeta.map(({ id }) => options[id].recurringRows.find((r) => r.serviceName === name)).find(Boolean);
+                    return (
+                      <tr key={name} className={`border-b border-slate-100 ${i % 2 === 0 ? "bg-white" : "bg-slate-50"}`}>
+                        <th scope="row" className="px-5 py-3 text-left align-top font-semibold text-brandnavy">
+                          {name}
+                          {ref ? <span className="mt-1 block text-xs font-normal leading-5 text-slate-500">{getTooltip(ref)}</span> : null}
+                        </th>
+                        {optionMeta.map(({ id }) => {
+                          const row = options[id].recurringRows.find((r) => r.serviceName === name);
+                          return <td key={id} className="px-4 py-3 text-center align-middle">{row ? <Check aria-label="Included" className="mx-auto h-5 w-5 text-brandnavy" /> : <span className="text-slate-300">—</span>}</td>;
+                        })}
+                      </tr>
+                    );
+                  })}
+                  <tr className="bg-slate-100"><th colSpan={4} className="px-5 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-brandnavy">Bookkeeping and support details</th></tr>
+                  {comparisonFeatures.map((feature, i) => (
+                    <tr key={feature.label} className={`border-b border-slate-100 ${i % 2 === 0 ? "bg-white" : "bg-slate-50"}`}>
+                      <th scope="row" className="px-5 py-3 text-left align-top font-semibold text-brandnavy">
+                        {feature.label}
+                        <span className="mt-1 block text-xs font-normal leading-5 text-slate-500">{feature.description}</span>
+                      </th>
+                      {optionMeta.map(({ id }) => (
+                        <td key={id} className="px-4 py-3 text-center align-middle">
+                          {feature.includedIn.includes(id) ? <Check aria-label="Included" className="mx-auto h-5 w-5 text-brandnavy" /> : <span className="text-slate-300">—</span>}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
-
-        {/* Add-ons */}
-        {addOns.length > 0 ? (
-          <div className="mt-10">
-            <h2 className="text-lg font-semibold text-slate-900">Optional Add-ons</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              These services can be added to any package at the prices shown.
-            </p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {addOns.map((addon) => (
-                <div
-                  key={addon.name}
-                  className="flex items-start justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4"
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">{addon.name}</p>
-                    <p className="mt-0.5 text-xs leading-5 text-slate-500">{addon.description}</p>
-                  </div>
-                  <p className="shrink-0 text-sm font-bold text-slate-900">{addon.price}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {/* Free extras / bonuses */}
-        {activeBonuses.length > 0 ? (
-          <div className="mt-10">
-            <h2 className="text-lg font-semibold text-slate-900">Free Extras Included</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              These are included at no additional charge with the packages listed.
-            </p>
-            <div className="mt-4 space-y-3">
-              {activeBonuses.map((bonus) => (
-                <div
-                  key={bonus.id}
-                  className="flex items-start gap-4 rounded-xl border border-slate-200 bg-white p-4"
-                >
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" strokeWidth={2.5} />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-slate-900">{bonus.name}</p>
-                    <p className="mt-0.5 text-xs leading-5 text-slate-500">{bonus.description}</p>
-                  </div>
-                  {bonus.packages.length > 0 && bonus.packages.length < packages.length ? (
-                    <p className="shrink-0 text-xs font-medium text-slate-400">
-                      {bonus.packages.join(", ")}
-                    </p>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {/* Complimentary services */}
-        {activeComplimentary.length > 0 ? (
-          <div className="mt-10">
-            <h2 className="text-lg font-semibold text-slate-900">Complimentary Services</h2>
-            <p className="mt-1 text-sm text-slate-500">Included with your engagement at no charge.</p>
-            <div className="mt-4 space-y-3">
-              {activeComplimentary.map((svc) => (
-                <div
-                  key={svc.name}
-                  className="flex items-start gap-4 rounded-xl border border-slate-200 bg-white p-4"
-                >
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" strokeWidth={2.5} />
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">{svc.name}</p>
-                    <p className="mt-0.5 text-xs leading-5 text-slate-500">{svc.description}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {/* Footer */}
-        <div className="mt-12 border-t border-slate-200 pt-8 text-center">
-          <p className="text-sm text-slate-500">
-            Questions? Reply to this proposal or reach out directly and we will get back to you
-            quickly.
-          </p>
-          <p className="mt-2 text-sm font-semibold text-slate-700">{brand.name}</p>
-        </div>
-      </div>
+      ) : null}
     </main>
   );
 }
