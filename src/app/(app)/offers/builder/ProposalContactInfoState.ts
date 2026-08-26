@@ -32,7 +32,6 @@ export type ContactInfoState = {
   invoicingOwnerId: string;
   owners: OwnerContact[];
   primaryContact: PrimaryContactState;
-  isTestProposal: boolean;
 };
 
 export function createOwner(
@@ -79,7 +78,6 @@ export const INITIAL_CONTACT_INFO: ContactInfoState = {
     phone: "",
     role: "",
   },
-  isTestProposal: false,
 };
 
 

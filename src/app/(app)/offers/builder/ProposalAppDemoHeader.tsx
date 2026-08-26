@@ -2,9 +2,8 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, LogOut, Save } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Eye, LogOut, Save, Send } from "lucide-react";
 import ProposalAppDemoStepper, { type ProposalAppDemoStep } from "./ProposalAppDemoStepper";
-import ProposalAppExpandAllControl from "./ProposalAppExpandAllControl";
 import { readProposalBuilderLocalState } from "./ProposalBuilderStorage";
 import { saveOfferDraftAction, syncOfferContactsAction } from "../who/actions";
 import type { ContactInfoState } from "./ProposalContactInfoState";
@@ -13,14 +12,10 @@ export default function ProposalAppDemoHeader({
   currentStep,
   previousHref,
   nextHref,
-  onExpandAll,
-  onCollapseAll,
 }: {
   currentStep: ProposalAppDemoStep;
   previousHref?: string;
   nextHref?: string;
-  onExpandAll: () => void;
-  onCollapseAll: () => void;
 }) {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -90,13 +85,14 @@ export default function ProposalAppDemoHeader({
 
   return (
     <header className="pb-8 [&_a]:cursor-pointer [&_button:not(:disabled)]:cursor-pointer [&_button:disabled]:cursor-not-allowed">
-      <div className="grid gap-4 lg:grid-cols-[1fr_auto_1fr] lg:items-start">
-        <div className="flex h-11 items-center gap-3">
+      <div>
+        <div className="grid gap-4 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
+        <div className="flex h-11 items-center gap-6">
           <button
             type="button"
             onClick={() => void saveThenNavigate("/offers?bucket=draft")}
             disabled={saveStatus === "saving"}
-            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-500 transition hover:border-slate-400 hover:text-slate-900"
+            className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-semibold text-slate-500 transition hover:text-slate-900 hover:opacity-75 disabled:opacity-40"
           >
             <LogOut className="h-4 w-4 scale-x-[-1]" />
             Save &amp; Exit
@@ -105,12 +101,12 @@ export default function ProposalAppDemoHeader({
             type="button"
             onClick={() => void saveProposalBuilderState()}
             disabled={saveStatus === "saving"}
-            className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+            className={`inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-semibold transition hover:opacity-75 disabled:opacity-40 ${
               saveStatus === "saved"
-                ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                ? "text-emerald-700"
                 : saveStatus === "error"
-                  ? "border-rose-300 bg-rose-50 text-rose-700"
-                : "border-slate-300 text-slate-500 hover:border-slate-400 hover:text-slate-900"
+                  ? "text-rose-700"
+                : "text-slate-500 hover:text-slate-900"
             }`}
             aria-live="polite"
           >
@@ -121,76 +117,52 @@ export default function ProposalAppDemoHeader({
             )}
             {saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved" : saveStatus === "error" ? "Save failed" : "Save"}
           </button>
-          <span className="text-slate-300">|</span>
-          <ProposalAppExpandAllControl
-            onExpandAll={onExpandAll}
-            onCollapseAll={onCollapseAll}
-          />
         </div>
 
-        <div className="relative w-full max-w-[1220px]">
-          <div className="flex items-start gap-2">
-            <button
-              type="button"
-              onClick={() => previousHref && void saveThenNavigate(scopedHref(previousHref))}
-              disabled={!previousHref || saveStatus === "saving"}
-              aria-label="Previous proposal step"
-              className="hidden h-7 w-7 shrink-0 place-items-center rounded-full border border-slate-300 bg-white text-slate-600 transition hover:border-slate-400 hover:text-slate-950 disabled:cursor-default disabled:opacity-30 xl:grid"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <div className="min-w-0 flex-1">
-              <ProposalAppDemoStepper currentStep={currentStep} />
-            </div>
-            <button
-              type="button"
-              onClick={() => nextHref && void saveThenNavigate(scopedHref(nextHref))}
-              disabled={!nextHref || saveStatus === "saving"}
-              aria-label="Next proposal step"
-              className="hidden h-7 w-7 shrink-0 place-items-center rounded-full border border-slate-300 bg-white text-slate-600 transition hover:border-slate-400 hover:text-slate-950 disabled:cursor-default disabled:opacity-30 xl:grid"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
+        <div className="flex w-full max-w-[1220px] items-center gap-6">
+          <button
+            type="button"
+            onClick={() => previousHref && void saveThenNavigate(scopedHref(previousHref))}
+            disabled={!previousHref || saveStatus === "saving"}
+            className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 xl:inline-flex"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Back
+          </button>
+          <div className="min-w-0 flex-1">
+            <ProposalAppDemoStepper currentStep={currentStep} />
           </div>
-          <div className="absolute left-1/2 top-full flex -translate-x-1/2 items-center gap-2 xl:hidden">
-            <button
-              type="button"
-              onClick={() => previousHref && void saveThenNavigate(scopedHref(previousHref))}
-              disabled={!previousHref || saveStatus === "saving"}
-              aria-label="Previous proposal step"
-              className="grid h-7 w-7 place-items-center rounded-full border border-slate-300 bg-white text-slate-600 transition hover:border-slate-400 hover:text-slate-950 disabled:cursor-default disabled:opacity-30"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => nextHref && void saveThenNavigate(scopedHref(nextHref))}
-              disabled={!nextHref || saveStatus === "saving"}
-              aria-label="Next proposal step"
-              className="grid h-7 w-7 place-items-center rounded-full border border-slate-300 bg-white text-slate-600 transition hover:border-slate-400 hover:text-slate-950 disabled:cursor-default disabled:opacity-30"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => nextHref && void saveThenNavigate(scopedHref(nextHref))}
+            disabled={!nextHref || saveStatus === "saving"}
+            className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 xl:inline-flex"
+          >
+            Next
+            <ChevronRight className="h-4 w-4" />
+          </button>
         </div>
 
-        <div className="flex items-center justify-end gap-3">
+        <div className="flex items-center justify-end gap-6">
           <button
             type="button"
             onClick={() => void saveThenNavigate(scopedHref("/offers/cover"))}
             disabled={saveStatus === "saving"}
-            className="inline-flex h-11 items-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+            className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-semibold text-slate-500 transition hover:text-slate-900 hover:opacity-75 disabled:opacity-40"
           >
+            <Send className="h-4 w-4" />
             Email
           </button>
           <button
             type="button"
             onClick={() => void saveThenOpenProposal()}
             disabled={saveStatus === "saving"}
-            className="inline-flex h-11 items-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+            className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-semibold text-slate-500 transition hover:text-slate-900 hover:opacity-75 disabled:opacity-40"
           >
+            <Eye className="h-4 w-4" />
             View Proposal
           </button>
+        </div>
         </div>
       </div>
     </header>

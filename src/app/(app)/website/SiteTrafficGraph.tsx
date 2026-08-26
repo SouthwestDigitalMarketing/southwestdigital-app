@@ -91,7 +91,7 @@ export function SiteTrafficGraph({ rows, barColor, label, granularity }: Props) 
           </span>
           <span className="flex items-center gap-1.5">
             <svg width="18" height="4" className="shrink-0">
-              <line x1="0" y1="2" x2="18" y2="2" stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="4 3" />
+              <line x1="0" y1="2" x2="18" y2="2" stroke="var(--chart-muted)" strokeWidth="1.5" strokeDasharray="4 3" />
             </svg>
             Previous
           </span>
@@ -103,14 +103,14 @@ export function SiteTrafficGraph({ rows, barColor, label, granularity }: Props) 
           <XAxis
             dataKey="date"
             tickFormatter={(v) => fmtAxisTick(String(v), granularity)}
-            tick={{ fontSize: 10, fill: "#94a3b8" }}
+            tick={{ fontSize: 10, fill: "var(--chart-muted)" }}
             tickLine={false}
             axisLine={false}
             interval={tickInterval(rows.length, granularity)}
           />
           <YAxis
             tickFormatter={formatK}
-            tick={{ fontSize: 10, fill: "#94a3b8" }}
+            tick={{ fontSize: 10, fill: "var(--chart-muted)" }}
             tickLine={false}
             axisLine={false}
             width={36}
@@ -128,12 +128,12 @@ export function SiteTrafficGraph({ rows, barColor, label, granularity }: Props) 
                 </div>
               );
             }}
-            cursor={{ fill: "#f8fafc" }}
+            cursor={{ fill: "var(--chart-cursor)" }}
           />
           <Bar dataKey="current" fill={barColor} radius={[3, 3, 0, 0]} />
           <Line
             dataKey="previous"
-            stroke="#94a3b8"
+            stroke="var(--chart-muted)"
             strokeWidth={1.5}
             strokeDasharray="4 3"
             dot={false}

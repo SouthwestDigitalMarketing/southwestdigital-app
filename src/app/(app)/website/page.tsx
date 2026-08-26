@@ -63,7 +63,7 @@ export default async function WebsitePage({
 
   const propertyId = theme.ga4PropertyId;
   const hostname = theme.ga4HostName;
-  const barColor = theme.primaryColor ?? "#17324d";
+  const barColor = "var(--chart-primary)";
 
   const now = Date.now();
 

@@ -594,7 +594,7 @@ export default function IncludedServicesBuilder({
           return (
             <div
               key={section.value}
-              className="overflow-hidden rounded-[1.5rem] border border-slate-300 bg-white shadow-sm"
+              className="proposal-builder-card overflow-hidden rounded-[1.5rem] border border-slate-300 shadow-sm"
             >
               <button
                 type="button"

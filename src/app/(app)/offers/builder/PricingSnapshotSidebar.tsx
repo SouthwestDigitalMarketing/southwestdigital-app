@@ -32,31 +32,27 @@ export default function PricingSnapshotSidebar({
 
   return (
     <aside className="xl:sticky xl:top-8 xl:self-start">
-      <div className="overflow-hidden rounded-[1.25rem] border border-slate-300 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
-        <div className="bg-[linear-gradient(180deg,rgba(2,6,23,1)_0%,rgba(3,7,18,1)_100%)] px-5 py-4 text-white">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/70">
-            Step 4
-          </p>
-          <p className="mt-2 text-lg font-semibold tracking-tight">Pricing calculator</p>
-        </div>
-
+      <p className="px-1 text-sm font-semibold text-slate-500">
+        Pricing calculator
+      </p>
+      <div className="proposal-builder-card mt-3 overflow-hidden rounded-[1.25rem] border border-slate-300 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
         <div className="space-y-3 p-4">
           {cleanupCard ? (
-            <div className="rounded-[1.15rem] border border-slate-200 bg-white px-4 py-3 text-left shadow-sm">
+            <div className="text-left">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-base font-semibold text-slate-900">Historical cleanup</p>
+                  <p className="text-lg font-semibold tracking-tight text-slate-900">Historical cleanup</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                  <p className="text-base font-medium uppercase tracking-[0.12em] text-slate-500">
                     One-Time
                   </p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">
+                  <p className="mt-1 text-lg font-semibold tabular-nums text-slate-900">
                     {cleanupCard.amountLabel}
                   </p>
                 </div>
               </div>
-              <div className="mt-2 space-y-1 text-xs text-slate-500">
+              <div className="mt-3 space-y-1 text-base leading-6 text-slate-500">
                 {cleanupCard.baseRow ? <p>{cleanupCard.baseRow}</p> : null}
                 {cleanupCard.addOnsRow ? <p>{cleanupCard.addOnsRow}</p> : null}
               </div>

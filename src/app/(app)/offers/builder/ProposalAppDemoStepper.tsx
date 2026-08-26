@@ -85,7 +85,7 @@ function StepPill({
 }) {
   const pillClass =
     state === "active"
-      ? "border-slate-950 bg-slate-950 text-white shadow-sm"
+      ? "proposal-step-active border shadow-sm"
       : state === "complete"
         ? "border-brandnavy-200 bg-brandnavy-50 text-brandnavy"
         : "border-slate-300 bg-white text-slate-400";

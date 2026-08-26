@@ -7,6 +7,7 @@ import ProposalAppCollapsibleSection from "./ProposalAppCollapsibleSection";
 import type { ProposalAppCollapsibleForceSignal } from "./ProposalAppCollapsibleSection";
 import type { IncludedCatalogService } from "./IncludedServicesBuilder";
 import ProposalAppDemoHeader from "./ProposalAppDemoHeader";
+import ProposalAppExpandAllControl from "./ProposalAppExpandAllControl";
 import PricingSnapshotSidebar from "./PricingSnapshotSidebar";
 import { ASSESSMENT_STORAGE_KEY } from "./ProposalBuilderStorage";
 import {
@@ -248,6 +249,7 @@ export type AssessmentState = {
   budgetReportingPriceOverride: number | null;
   offerSalesTaxFiling: boolean;
   salesTaxFilingPriceOverride: number | null;
+  includeRegisteredAgentService: boolean;
   ongoingBookkeepingPlatform: BookkeepingPlatform;
   platformMigrationEnabled: boolean;
   platformMigrationEffectiveMonth: string;
@@ -266,7 +268,7 @@ type DemoPricingConfig = {
   recurringPerEntity: number;
   recurringComplexity: Record<DemoComplexityLevel, number>;
   transactionBandMonthly: Record<Exclude<TransactionBand, "">, number>;
-  staffingThresholds: ThresholdAmount;
+  staffingPerPerson: number;
   reconciliationThresholds: ThresholdAmount;
   platformThresholds: ThresholdAmount;
   passThroughThresholds: ThresholdAmount;
@@ -389,32 +391,33 @@ const INITIAL_ASSESSMENT: AssessmentState = {
       purchasedOrSoldPropertiesCount: 0,
     },
   ],
-  includeConditionalStessaMigration: true,
+  includeConditionalStessaMigration: false,
   includeTaxPreparerCoordinationCall: true,
-  includePropertyLevelReportingSetup: true,
-  includeDocumentOrganizationSetup: true,
-  includeQuarterlyFinancialReview: true,
-  includeDoubleHqClientPortal: true,
-  includeRealEstateChartOfAccounts: true,
-  includeNewQuickBooksFileSetup: true,
+  includePropertyLevelReportingSetup: false,
+  includeDocumentOrganizationSetup: false,
+  includeQuarterlyFinancialReview: false,
+  includeDoubleHqClientPortal: false,
+  includeRealEstateChartOfAccounts: false,
+  includeNewQuickBooksFileSetup: false,
   bonusPackageSelections: {
-    "stessa-migration": ["grow", "improve", "maintain"],
-    "tax-preparer-coordination": ["grow", "improve", "maintain"],
-    "property-reporting-setup": ["grow", "improve", "maintain"],
-    "document-organization": ["grow", "improve", "maintain"],
-    "quarterly-review": ["grow", "improve", "maintain"],
-    "doublehq-client-portal": ["grow", "improve", "maintain"],
-    "real-estate-chart-of-accounts": ["grow", "improve", "maintain"],
-    "new-quickbooks-file": ["grow", "improve", "maintain"],
+    "stessa-migration": [],
+    "tax-preparer-coordination": [],
+    "property-reporting-setup": [],
+    "document-organization": [],
+    "quarterly-review": [],
+    "doublehq-client-portal": [],
+    "real-estate-chart-of-accounts": [],
+    "new-quickbooks-file": [],
   },
-  offerAdvancedReceiptManagement: true,
+  offerAdvancedReceiptManagement: false,
   advancedReceiptManagementPriceOverride: null,
-  offerProjectTracking: true,
+  offerProjectTracking: false,
   projectTrackingPriceOverride: null,
-  offerBudgetReporting: true,
+  offerBudgetReporting: false,
   budgetReportingPriceOverride: null,
-  offerSalesTaxFiling: true,
+  offerSalesTaxFiling: false,
   salesTaxFilingPriceOverride: null,
+  includeRegisteredAgentService: false,
   ongoingBookkeepingPlatform: "qbo",
   platformMigrationEnabled: false,
   platformMigrationEffectiveMonth: "",
@@ -478,11 +481,7 @@ const PACKAGES: PackageDefinition[] = [
       recurringPerEntity: 175,
       recurringComplexity: { standard: 0, complex: 275, advanced: 600 },
       transactionBandMonthly: { "0-99": 0, "100-499": 120, "500-999": 260, "1000+": 480, unknown: 0 },
-      staffingThresholds: [
-        { min: 1, amount: 60 },
-        { min: 4, amount: 140 },
-        { min: 8, amount: 260 },
-      ],
+      staffingPerPerson: 60,
       reconciliationThresholds: [
         { min: 6, amount: 90 },
         { min: 12, amount: 180 },
@@ -528,11 +527,7 @@ const PACKAGES: PackageDefinition[] = [
       recurringPerEntity: 125,
       recurringComplexity: { standard: 0, complex: 200, advanced: 450 },
       transactionBandMonthly: { "0-99": 0, "100-499": 90, "500-999": 200, "1000+": 360, unknown: 0 },
-      staffingThresholds: [
-        { min: 1, amount: 45 },
-        { min: 4, amount: 110 },
-        { min: 8, amount: 220 },
-      ],
+      staffingPerPerson: 45,
       reconciliationThresholds: [
         { min: 6, amount: 70 },
         { min: 12, amount: 140 },
@@ -578,11 +573,7 @@ const PACKAGES: PackageDefinition[] = [
       recurringPerEntity: 100,
       recurringComplexity: { standard: 0, complex: 150, advanced: 350 },
       transactionBandMonthly: { "0-99": 0, "100-499": 70, "500-999": 150, "1000+": 280, unknown: 0 },
-      staffingThresholds: [
-        { min: 1, amount: 35 },
-        { min: 4, amount: 85 },
-        { min: 8, amount: 170 },
-      ],
+      staffingPerPerson: 35,
       reconciliationThresholds: [
         { min: 6, amount: 50 },
         { min: 12, amount: 110 },
@@ -886,9 +877,9 @@ function renderPricingBreakdownRows(items: MonthlyRateBreakdownItem[], keyPrefix
   return items.map((item, index) => (
     <div
       key={`${keyPrefix}-${item.label}`}
-      className={`flex items-center justify-between gap-4 py-2 text-sm ${
-        index % 2 === 0 ? "bg-stone-50" : "bg-white"
-      } ${index === 0 ? "border-t border-slate-200" : ""}`}
+      className={`proposal-builder-breakdown-card flex items-center justify-between gap-4 py-2 text-sm ${
+        index === 0 ? "border-t border-slate-200" : ""
+      }`}
     >
       <span className="px-5 text-slate-600">{item.label}</span>
       <span className="px-5 font-medium text-slate-900">{formatCurrency(item.amount)}</span>
@@ -1026,7 +1017,10 @@ function readStoredAssessment(
 }
 
 export function hasCatchUpPricingInputs(assessment: AssessmentState) {
-  return Boolean(assessment.cleanupStartMonth && assessment.cleanupEndMonth);
+  return (
+    assessment.booksOverTwoMonthsBehind === true &&
+    Boolean(assessment.cleanupStartMonth && assessment.cleanupEndMonth)
+  );
 }
 
 export function useProposalAssessmentDemoState({
@@ -1282,7 +1276,7 @@ function getMonthlyRateBreakdown(
   const transactionBandMonthly = assessment.transactionBand
     ? pkg.pricing.transactionBandMonthly[assessment.transactionBand]
     : 0;
-  const staffingAmount = amountForThreshold(headcount, pkg.pricing.staffingThresholds);
+  const staffingAmount = headcount * pkg.pricing.staffingPerPerson;
   const reconciliationAmount = amountForThreshold(
     reconciliationCount,
     pkg.pricing.reconciliationThresholds,
@@ -1381,7 +1375,8 @@ function buildPackagePricing(
     entityCount * pkg.pricing.recurringPerEntity +
     pkg.pricing.recurringComplexity[complexityLevel] +
     transactionBandMonthly +
-    amountForThreshold(countValue(assessment.employeesCount) + countValue(assessment.contractorsCount), pkg.pricing.staffingThresholds) +
+    (countValue(assessment.employeesCount) + countValue(assessment.contractorsCount)) *
+      pkg.pricing.staffingPerPerson +
     amountForThreshold(reconciliationCount, pkg.pricing.reconciliationThresholds) +
     amountForThreshold(knownPaymentPlatformCount(assessment), pkg.pricing.platformThresholds) +
     amountForThreshold(countValue(assessment.zeroBalancePlatformCount), pkg.pricing.passThroughThresholds) +
@@ -1723,14 +1718,18 @@ export default function ProposalCreationWorkspaceDemo({
             }
             previousHref={previousStepHref}
             nextHref={nextStepHref}
-            onExpandAll={() => setExpandAllSignal({ value: true, token: Date.now() })}
-            onCollapseAll={() => setExpandAllSignal({ value: false, token: Date.now() })}
           />
 
           <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_440px] 2xl:grid-cols-[minmax(0,1.55fr)_470px]">
-            <div className="space-y-5">
+            <div className="space-y-3">
+              <div className="flex justify-start px-1">
+                <ProposalAppExpandAllControl
+                  onExpandAll={() => setExpandAllSignal({ value: true, token: Date.now() })}
+                  onCollapseAll={() => setExpandAllSignal({ value: false, token: Date.now() })}
+                />
+              </div>
               <section
-                className={`rounded-[1.5rem] bg-white ${
+                className={`proposal-builder-card rounded-[1.5rem] ${
                   isIncludedStep
                     ? "overflow-visible"
                     : "overflow-hidden border border-slate-300 shadow-sm"
@@ -1739,7 +1738,6 @@ export default function ProposalCreationWorkspaceDemo({
                 {isScaleStep ? (
                   <ProposalAppCollapsibleSection
                     title="Portfolio Scale"
-                    backgroundClass="bg-white"
                     forceOpen={expandAllSignal}
                   >
                     {showRealEstateFields ? (
@@ -1763,7 +1761,6 @@ export default function ProposalCreationWorkspaceDemo({
                 {isComplexityStep ? (
                   <ProposalAppCollapsibleSection
                     title="Connected Accounts"
-                    backgroundClass="bg-white"
                     forceOpen={expandAllSignal}
                   >
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -1816,7 +1813,6 @@ export default function ProposalCreationWorkspaceDemo({
                 {isComplexityStep ? (
                   <ProposalAppCollapsibleSection
                     title="Unconnected Accounts That Require Reconciliation"
-                    backgroundClass="bg-slate-100"
                     forceOpen={expandAllSignal}
                   >
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -1869,7 +1865,6 @@ export default function ProposalCreationWorkspaceDemo({
                 {isComplexityStep ? (
                   <ProposalAppCollapsibleSection
                     title="Payment Platforms / Clearing Channels"
-                    backgroundClass="bg-white"
                     forceOpen={expandAllSignal}
                   >
                     <FieldLabel label="Platforms in Use" className="mt-4">
@@ -1881,7 +1876,7 @@ export default function ProposalCreationWorkspaceDemo({
                               key={platform.value}
                               type="button"
                               onClick={() => togglePaymentPlatform(platform.value)}
-                              className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                              className={`proposal-builder-option rounded-full border px-4 py-2 text-sm font-semibold transition ${
                                 selected
                                   ? "border-brandnavy bg-brandnavy text-white"
                                   : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
@@ -1916,7 +1911,6 @@ export default function ProposalCreationWorkspaceDemo({
                 {isComplexityStep ? (
                   <ProposalAppCollapsibleSection
                     title="Additional Liabilities"
-                    backgroundClass="bg-slate-100"
                     forceOpen={expandAllSignal}
                   >
                     <div className="grid gap-4 md:grid-cols-2">
@@ -1952,7 +1946,6 @@ export default function ProposalCreationWorkspaceDemo({
                 {isComplexityStep ? (
                   <ProposalAppCollapsibleSection
                     title="Payroll & Contractors"
-                    backgroundClass="bg-white"
                     forceOpen={expandAllSignal}
                   >
                     <div className="grid gap-4 md:grid-cols-2">
@@ -2115,7 +2108,7 @@ export default function ProposalCreationWorkspaceDemo({
                                     key={method.value}
                                     type="button"
                                     onClick={() => togglePayrollPaymentMethod(method.value)}
-                                    className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                                  className={`proposal-builder-option rounded-full border px-4 py-2 text-sm font-semibold transition ${
                                       selected
                                         ? "border-brandnavy bg-brandnavy text-white"
                                         : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
@@ -2171,7 +2164,7 @@ export default function ProposalCreationWorkspaceDemo({
                                 key={contractorType.value}
                                 type="button"
                                 onClick={() => toggleContractorType(contractorType.value)}
-                                className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                                className={`proposal-builder-option rounded-full border px-4 py-2 text-sm font-semibold transition ${
                                   selected
                                     ? "border-brandnavy bg-brandnavy text-white"
                                     : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
@@ -2283,7 +2276,6 @@ export default function ProposalCreationWorkspaceDemo({
                 {isComplexityStep ? (
                   <ProposalAppCollapsibleSection
                     title="Customer Invoicing & Banking"
-                    backgroundClass="bg-slate-100"
                     forceOpen={expandAllSignal}
                   >
                     <FieldLabel label="How Do They Invoice Their Customers?">
@@ -2297,7 +2289,7 @@ export default function ProposalCreationWorkspaceDemo({
                               key={method.value}
                               type="button"
                               onClick={() => toggleCustomerInvoicingMethod(method.value)}
-                              className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                            className={`proposal-builder-option rounded-full border px-4 py-2 text-sm font-semibold transition ${
                                 selected
                                   ? "border-brandnavy bg-brandnavy text-white"
                                   : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
@@ -2403,7 +2395,7 @@ export default function ProposalCreationWorkspaceDemo({
                                 key={bank.value}
                                 type="button"
                                 onClick={() => toggleBankUsed(bank.value)}
-                                className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                                className={`proposal-builder-option rounded-full border px-4 py-2 text-sm font-semibold transition ${
                                   selected
                                     ? "border-brandnavy bg-brandnavy text-white"
                                     : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
@@ -2459,7 +2451,6 @@ export default function ProposalCreationWorkspaceDemo({
                 {isScaleStep ? (
                   <ProposalAppCollapsibleSection
                     title="Monthly Activity"
-                    backgroundClass="bg-white"
                     forceOpen={expandAllSignal}
                   >
                     <div className="grid gap-4 md:grid-cols-2">
@@ -2541,7 +2532,6 @@ export default function ProposalCreationWorkspaceDemo({
                 {isScaleStep && needsHistoricalCleanup ? (
                   <ProposalAppCollapsibleSection
                     title="Historical Cleanup"
-                    backgroundClass="bg-slate-100"
                     forceOpen={expandAllSignal}
                   >
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -2703,7 +2693,6 @@ export default function ProposalCreationWorkspaceDemo({
                   <>
                     <ProposalAppCollapsibleSection
                       title="Monthly Base (Maintain)"
-                      backgroundClass="bg-slate-100"
                       forceOpen={expandAllSignal}
                       headerMeta={
                         <p className="text-base font-semibold tracking-tight text-slate-900">
@@ -2717,7 +2706,6 @@ export default function ProposalCreationWorkspaceDemo({
 
                     <ProposalAppCollapsibleSection
                       title="Required Adjustments"
-                      backgroundClass="bg-white"
                       forceOpen={expandAllSignal}
                       headerMeta={
                         <p className="text-base font-semibold tracking-tight text-slate-900">
@@ -2775,7 +2763,6 @@ export default function ProposalCreationWorkspaceDemo({
 
                     <ProposalAppCollapsibleSection
                       title="Internal Assessment Notes"
-                      backgroundClass="bg-slate-100"
                       forceOpen={expandAllSignal}
                       bodyClassName="px-4 pb-4"
                     >

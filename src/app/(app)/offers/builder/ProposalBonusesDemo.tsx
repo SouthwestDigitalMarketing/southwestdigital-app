@@ -16,7 +16,6 @@ export const PACKAGE_COLUMNS: Array<{ id: PackageId; label: string }> = [
 
 export const BONUS_OPTIONS = [
   { id: "stessa-migration", assessmentKey: "includeConditionalStessaMigration", name: "QuickBooks to Stessa Migration", description: "We will move the client's books to Stessa for free when they buy the cleanup and monthly bookkeeping in this offer." },
-  { id: "tax-preparer-coordination", assessmentKey: "includeTaxPreparerCoordinationCall", name: "Tax Pro Call", description: "We will meet with the client's tax pro one time. We will answer book questions and make sure they get what they need for year-end taxes." },
   { id: "property-reporting-setup", assessmentKey: "includePropertyLevelReportingSetup", name: "Reports by Property", description: "We will set up the books so the client can see income and costs for each property." },
   { id: "document-organization", assessmentKey: "includeDocumentOrganizationSetup", name: "Organized, Audit-Ready Records", description: "We replace paper files and loose digital files with one clear system. The client uploads records to the portal. We organize them and link them to the right items in the books." },
   { id: "quarterly-review", assessmentKey: "includeQuarterlyFinancialReview", name: "First Quarterly Review", description: "After the first full quarter, we will meet with the client to review reports, answer questions, and plan the next steps." },
@@ -42,11 +41,16 @@ export default function ProposalBonusesDemo() {
   const { assessment, updateAssessment } = useProposalAssessmentDemoState();
 
   function isApplicable(bonus: (typeof BONUS_OPTIONS)[number]) {
+    const isRealEstateBookSet =
+      assessment.bookSetType === "real-estate-only" || assessment.bookSetType === "mixed-books";
     if (bonus.id === "stessa-migration") {
       return assessment.platformMigrationEnabled && assessment.ongoingBookkeepingPlatform === "stessa";
     }
+    if (bonus.id === "property-reporting-setup" || bonus.id === "real-estate-chart-of-accounts") {
+      return isRealEstateBookSet;
+    }
     if (bonus.id === "new-quickbooks-file") {
-      return assessment.ongoingBookkeepingPlatform === "qbo";
+      return isRealEstateBookSet && assessment.ongoingBookkeepingPlatform === "qbo";
     }
     return true;
   }
@@ -96,8 +100,6 @@ export default function ProposalBonusesDemo() {
           currentStep="add-ons"
           previousHref="/offers/add-ons"
           nextHref="/offers"
-          onExpandAll={() => undefined}
-          onCollapseAll={() => undefined}
         />
 
         <div className="mx-auto mt-8 max-w-5xl">
@@ -108,7 +110,7 @@ export default function ProposalBonusesDemo() {
             </p>
           </div>
 
-          <div className="overflow-hidden rounded-xl border border-slate-200">
+          <div className="proposal-builder-card overflow-hidden rounded-xl border border-slate-200">
             <table className="w-full table-fixed border-collapse">
               <colgroup>
                 <col />

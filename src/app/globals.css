@@ -33,73 +33,351 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+.sidebar-branding-toggle {
+  border: 0;
+  box-shadow: 0 0 0 2px #475569;
+}
+
+[data-theme] {
+  color-scheme: light;
+  --app-canvas: #f5f7fa;
+  --surface: #ffffff;
+  --surface-subtle: #f8fafc;
+  --surface-row-alt: #f3f5f7;
+  --surface-control: #eef2f7;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --text-primary: #172033;
+  --text-secondary: #475569;
+  --text-muted: #718096;
+  --surface-inverse: color-mix(in srgb, var(--brand-primary) 75%, #000000);
+  --brand-ink: var(--brand-primary);
+  --sidebar-background: color-mix(in srgb, var(--brand-primary) 82%, #1e293b);
+  --chart-primary: var(--brand-primary);
+  --chart-muted: #94a3b8;
+  --chart-cursor: #f1f5f9;
+  --proposal-section-odd: #eef2f7;
+  --proposal-section-even: #ffffff;
+}
+
 [data-theme="dark"] {
   color-scheme: dark;
-  --brand-background: #0f172a !important;
-  --brand-foreground: #e2e8f0 !important;
+  --app-canvas: #101113;
+  --surface: #191a1d;
+  --surface-subtle: #202126;
+  --surface-row-alt: #24262b;
+  --surface-control: #292b31;
+  --border: #303239;
+  --border-strong: #484a52;
+  --text-primary: #f7f7f8;
+  --text-secondary: #d5d6da;
+  --text-muted: #9a9ca5;
+  --surface-inverse: color-mix(in srgb, var(--brand-primary) 38%, #090a0b);
+  --brand-ink: color-mix(in srgb, var(--brand-primary) 50%, #f2f3f5);
+  --sidebar-background: color-mix(in srgb, var(--brand-primary) 36%, #17181b);
+  --chart-primary: color-mix(in srgb, var(--brand-primary) 35%, #e5e7eb);
+  --chart-muted: #979aa3;
+  --chart-cursor: rgb(255 255 255 / 0.06);
+  --proposal-section-odd: #202126;
+  --proposal-section-even: #292b31;
 }
 
-[data-theme="dark"] .bg-white {
-  background-color: #111827;
+[data-theme] main {
+  color: var(--text-primary);
 }
 
-[data-theme="dark"] .bg-slate-50,
-[data-theme="dark"] .hover\:bg-slate-50:hover,
-[data-theme="dark"] .hover\:bg-slate-100:hover {
-  background-color: #1e293b;
+[data-theme] .bg-white {
+  background-color: var(--surface);
 }
 
-[data-theme="dark"] .border-slate-100,
-[data-theme="dark"] .border-slate-200,
-[data-theme="dark"] .border-slate-300 {
-  border-color: #334155;
+[data-theme] .bg-slate-50,
+[data-theme] .hover\:bg-slate-50:hover {
+  background-color: var(--surface-subtle);
 }
 
-[data-theme="dark"] .text-slate-900,
-[data-theme="dark"] .text-slate-800,
-[data-theme="dark"] .text-slate-700,
-[data-theme="dark"] .text-slate-600 {
-  color: #e2e8f0;
+[data-theme] .bg-stone-50,
+[data-theme] .bg-slate-50\/60,
+[data-theme] .bg-slate-50\/70 {
+  background-color: var(--surface-row-alt);
 }
 
-[data-theme="dark"] .text-slate-500,
-[data-theme="dark"] .text-slate-400 {
-  color: #94a3b8;
+/* Collapsible builder sections alternate by rendered sibling order, so the pattern
+   stays correct when steps are reordered or sections are added/removed. */
+[data-theme] .proposal-builder-section {
+  /* Every section is its own opaque panel. Never allow the page canvas or its
+     gradient to become the visible background of a section. */
+  background: var(--proposal-section-odd) !important;
+  --proposal-builder-card-surface: var(--surface);
+  --proposal-builder-card-surface-alt: var(--surface-subtle);
+}
+
+[data-theme] .proposal-builder-section:nth-child(even of .proposal-builder-section) {
+  background: var(--proposal-section-even) !important;
+  --proposal-builder-card-surface: var(--surface-row-alt);
+  --proposal-builder-card-surface-alt: var(--surface-control);
+}
+
+/* Nested cards automatically lift away from whichever alternating section
+   contains them, retaining contrast as steps are added or reordered. */
+[data-theme] .proposal-builder-breakdown-card {
+  background-color: var(--proposal-builder-card-surface);
+}
+
+[data-theme] .proposal-builder-breakdown-card:nth-child(even) {
+  background-color: var(--proposal-builder-card-surface-alt);
+}
+
+/* Primary builder cards sit one surface above the page canvas. */
+[data-theme] .proposal-builder-card {
+  background-color: var(--surface-subtle);
+}
+
+[data-theme] .proposal-step-active {
+  background-color: #dcdee2;
+  border-color: #b8bbc2;
+  color: #171717;
+}
+
+[data-theme] .bg-slate-100,
+[data-theme] .hover\:bg-slate-100:hover {
+  background-color: var(--surface-control);
+}
+
+/* Legacy builder utilities inherit the active brand rather than the original
+   Southwest navy palette. This keeps theme presets (including Grok) cohesive. */
+[data-theme] .bg-brandnavy {
+  background-color: var(--brand-primary);
+}
+
+[data-theme] .bg-brandnavy-50,
+[data-theme] .bg-brandnavy-50\/30 {
+  background-color: color-mix(in srgb, var(--brand-primary) 8%, var(--surface));
+}
+
+[data-theme] .border-brandnavy,
+[data-theme] .border-brandnavy-200,
+[data-theme] .border-brandnavy-300,
+[data-theme] .hover\:border-brandnavy-300:hover {
+  border-color: var(--brand-ink);
+}
+
+[data-theme] .text-brandnavy {
+  color: var(--brand-ink);
+}
+
+[data-theme] .focus\:border-brandnavy:focus {
+  border-color: var(--brand-ink);
+}
+
+[data-theme] .focus\:ring-brandnavy:focus,
+[data-theme] .focus\:ring-brandnavy\/10:focus {
+  --tw-ring-color: color-mix(in srgb, var(--brand-ink) 30%, transparent);
+}
+
+[data-theme] .bg-slate-950 {
+  background-color: var(--surface-inverse);
+}
+
+[data-theme] .border-slate-950 {
+  border-color: var(--surface-inverse);
+}
+
+[data-theme] .border-slate-50,
+[data-theme] .border-slate-100,
+[data-theme] .border-slate-200 {
+  border-color: var(--border);
+}
+
+[data-theme] .border-slate-300,
+[data-theme] .border-slate-400,
+[data-theme] .border-slate-500 {
+  border-color: var(--border-strong);
+}
+
+[data-theme] .text-slate-950,
+[data-theme] .text-slate-900,
+[data-theme] .text-slate-800 {
+  color: var(--text-primary);
+}
+
+[data-theme] .text-slate-700,
+[data-theme] .text-slate-600 {
+  color: var(--text-secondary);
+}
+
+[data-theme] .text-slate-500,
+[data-theme] .text-slate-400,
+[data-theme] .text-slate-300 {
+  color: var(--text-muted);
+}
+
+.theme-mode-option-selected {
+  border-width: 2px;
+  border-color: var(--brand-primary);
+  background-color: color-mix(in srgb, var(--brand-primary) 78%, #0b1220);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand-primary) 32%, transparent);
+}
+
+[data-theme="dark"] .sidebar-branding-toggle {
+  box-shadow: 0 0 0 2px #6f727c;
+}
+
+[data-theme="dark"] .bg-slate-800 {
+  background-color: #23252a;
+}
+
+[data-theme="dark"] .bg-slate-700 {
+  background-color: #303239;
+}
+
+/* Builder choice pills remain legible when selected in dark themes. */
+[data-theme="dark"] .proposal-builder-option.bg-brandnavy {
+  background-color: #dcdee2;
+  border-color: #b8bbc2;
+  color: #171717;
+}
+
+[data-theme="dark"] .text-emerald-600,
+[data-theme="dark"] .text-emerald-700 {
+  color: #34d399;
+}
+
+[data-theme="dark"] .text-amber-600,
+[data-theme="dark"] .text-amber-700 {
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .text-rose-600,
+[data-theme="dark"] .text-rose-700 {
+  color: #fb7185;
+}
+
+[data-theme="dark"] .bg-emerald-50 {
+  background-color: #083b31;
+}
+
+[data-theme="dark"] .bg-amber-50 {
+  background-color: #422d08;
+}
+
+[data-theme="dark"] .bg-rose-50 {
+  background-color: #4a1625;
+}
+
+[data-theme="dark"][data-appearance="grok"] input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]),
+[data-theme="dark"][data-appearance="grok"] select {
+  background-color: #dcdee2;
+  border-color: #b8bbc2;
+  color: #171717;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  height: 32px;
+  line-height: 1.25rem;
+}
+
+[data-theme="dark"][data-appearance="grok"] textarea {
+  background-color: #dcdee2;
+  border-color: #b8bbc2;
+  color: #171717;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+}
+
+[data-theme="dark"][data-appearance="grok"] input::placeholder,
+[data-theme="dark"][data-appearance="grok"] textarea::placeholder {
+  color: #78716c;
 }
 
 @media (prefers-color-scheme: dark) {
   [data-theme="system"] {
     color-scheme: dark;
-    --brand-background: #0f172a !important;
-    --brand-foreground: #e2e8f0 !important;
+    --app-canvas: #101113;
+    --surface: #191a1d;
+    --surface-subtle: #202126;
+    --surface-row-alt: #24262b;
+    --surface-control: #292b31;
+    --border: #303239;
+    --border-strong: #484a52;
+    --text-primary: #f7f7f8;
+    --text-secondary: #d5d6da;
+    --text-muted: #9a9ca5;
+    --surface-inverse: color-mix(in srgb, var(--brand-primary) 38%, #090a0b);
+    --brand-ink: color-mix(in srgb, var(--brand-primary) 50%, #f2f3f5);
+    --sidebar-background: color-mix(in srgb, var(--brand-primary) 36%, #17181b);
+    --chart-primary: color-mix(in srgb, var(--brand-primary) 35%, #e5e7eb);
+    --chart-muted: #979aa3;
+    --chart-cursor: rgb(255 255 255 / 0.06);
+    --proposal-section-odd: #202126;
+    --proposal-section-even: #292b31;
   }
 
-  [data-theme="system"] .bg-white {
-    background-color: #111827;
+  [data-theme="system"] .sidebar-branding-toggle {
+    box-shadow: 0 0 0 2px #6f727c;
   }
 
-  [data-theme="system"] .bg-slate-50,
-  [data-theme="system"] .hover\:bg-slate-50:hover,
-  [data-theme="system"] .hover\:bg-slate-100:hover {
-    background-color: #1e293b;
+  [data-theme="system"] .bg-slate-800 {
+    background-color: #23252a;
   }
 
-  [data-theme="system"] .border-slate-100,
-  [data-theme="system"] .border-slate-200,
-  [data-theme="system"] .border-slate-300 {
-    border-color: #334155;
+  [data-theme="system"] .bg-slate-700 {
+    background-color: #303239;
   }
 
-  [data-theme="system"] .text-slate-900,
-  [data-theme="system"] .text-slate-800,
-  [data-theme="system"] .text-slate-700,
-  [data-theme="system"] .text-slate-600 {
-    color: #e2e8f0;
+  [data-theme="system"] .proposal-builder-option.bg-brandnavy {
+    background-color: #dcdee2;
+    border-color: #b8bbc2;
+    color: #171717;
   }
 
-  [data-theme="system"] .text-slate-500,
-  [data-theme="system"] .text-slate-400 {
-    color: #94a3b8;
+  [data-theme="system"] .text-emerald-600,
+  [data-theme="system"] .text-emerald-700 {
+    color: #34d399;
+  }
+
+  [data-theme="system"] .text-amber-600,
+  [data-theme="system"] .text-amber-700 {
+    color: #fbbf24;
+  }
+
+  [data-theme="system"] .text-rose-600,
+  [data-theme="system"] .text-rose-700 {
+    color: #fb7185;
+  }
+
+  [data-theme="system"] .bg-emerald-50 {
+    background-color: #083b31;
+  }
+
+  [data-theme="system"] .bg-amber-50 {
+    background-color: #422d08;
+  }
+
+  [data-theme="system"] .bg-rose-50 {
+    background-color: #4a1625;
+  }
+
+  [data-theme="system"][data-appearance="grok"] input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]),
+  [data-theme="system"][data-appearance="grok"] select {
+    background-color: #dcdee2;
+    border-color: #b8bbc2;
+    color: #171717;
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    height: 32px;
+    line-height: 1.25rem;
+  }
+
+  [data-theme="system"][data-appearance="grok"] textarea {
+    background-color: #dcdee2;
+    border-color: #b8bbc2;
+    color: #171717;
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+  }
+
+  [data-theme="system"][data-appearance="grok"] input::placeholder,
+  [data-theme="system"][data-appearance="grok"] textarea::placeholder {
+    color: #78716c;
   }
 }
 

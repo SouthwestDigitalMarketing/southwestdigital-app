@@ -34,8 +34,15 @@ export default function ProposalAddOnsDemo() {
   const cleanupCard = getProposalPricingSnapshotCleanupCard(assessment);
 
   function bonusIsApplicable(bonus: (typeof BONUS_OPTIONS)[number]) {
+    const isRealEstateBookSet =
+      assessment.bookSetType === "real-estate-only" || assessment.bookSetType === "mixed-books";
     if (bonus.id === "stessa-migration") return assessment.platformMigrationEnabled && assessment.ongoingBookkeepingPlatform === "stessa";
-    if (bonus.id === "new-quickbooks-file") return assessment.ongoingBookkeepingPlatform === "qbo";
+    if (bonus.id === "property-reporting-setup" || bonus.id === "real-estate-chart-of-accounts") {
+      return isRealEstateBookSet;
+    }
+    if (bonus.id === "new-quickbooks-file") {
+      return isRealEstateBookSet && assessment.ongoingBookkeepingPlatform === "qbo";
+    }
     return true;
   }
 
@@ -70,8 +77,6 @@ export default function ProposalAddOnsDemo() {
         <ProposalAppDemoHeader
           currentStep="add-ons"
           previousHref="/offers/calculator"
-          onExpandAll={() => undefined}
-          onCollapseAll={() => undefined}
         />
 
         <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_440px] 2xl:grid-cols-[minmax(0,1.55fr)_470px]">
@@ -82,7 +87,7 @@ export default function ProposalAddOnsDemo() {
           </p>
 
           <h2 className="mt-8 text-lg font-bold text-slate-950">Optional Add-ons</h2>
-          <section className={`mt-3 rounded-xl border p-5 ${offered ? "border-brandnavy-300 bg-brandnavy-50/30" : "border-slate-200 bg-white"}`}>
+          <section className={`mt-3 rounded-xl border p-5 ${offered ? "border-brandnavy-300 bg-brandnavy-50/30" : "border-slate-200 proposal-builder-card"}`}>
             <div className="flex items-start gap-4">
               <button
                 type="button"
@@ -136,7 +141,7 @@ export default function ProposalAddOnsDemo() {
             </div>
           </section>
 
-          <section className={`mt-4 rounded-xl border p-5 ${assessment.offerProjectTracking ? "border-brandnavy-300 bg-brandnavy-50/30" : "border-slate-200 bg-white"}`}>
+          <section className={`mt-4 rounded-xl border p-5 ${assessment.offerProjectTracking ? "border-brandnavy-300 bg-brandnavy-50/30" : "border-slate-200 proposal-builder-card"}`}>
             <div className="flex items-start gap-4">
               <button type="button" role="checkbox" aria-checked={assessment.offerProjectTracking} onClick={() => updateAssessment("offerProjectTracking", !assessment.offerProjectTracking)} className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md border transition ${assessment.offerProjectTracking ? "border-brandnavy bg-brandnavy text-white" : "border-slate-300 bg-white text-transparent"}`}><Check className="h-4 w-4" strokeWidth={3} /></button>
               <div className="min-w-0 flex-1">
@@ -150,7 +155,7 @@ export default function ProposalAddOnsDemo() {
             </div>
           </section>
 
-          <section className={`mt-4 rounded-xl border p-5 ${assessment.offerBudgetReporting ? "border-brandnavy-300 bg-brandnavy-50/30" : "border-slate-200 bg-white"}`}>
+          <section className={`mt-4 rounded-xl border p-5 ${assessment.offerBudgetReporting ? "border-brandnavy-300 bg-brandnavy-50/30" : "border-slate-200 proposal-builder-card"}`}>
             <div className="flex items-start gap-4">
               <button type="button" role="checkbox" aria-checked={assessment.offerBudgetReporting} onClick={() => updateAssessment("offerBudgetReporting", !assessment.offerBudgetReporting)} className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md border transition ${assessment.offerBudgetReporting ? "border-brandnavy bg-brandnavy text-white" : "border-slate-300 bg-white text-transparent"}`}><Check className="h-4 w-4" strokeWidth={3} /></button>
               <div className="min-w-0 flex-1">
@@ -164,7 +169,7 @@ export default function ProposalAddOnsDemo() {
             </div>
           </section>
 
-          <section className={`mt-4 rounded-xl border p-5 ${assessment.offerSalesTaxFiling ? "border-brandnavy-300 bg-brandnavy-50/30" : "border-slate-200 bg-white"}`}>
+          <section className={`mt-4 rounded-xl border p-5 ${assessment.offerSalesTaxFiling ? "border-brandnavy-300 bg-brandnavy-50/30" : "border-slate-200 proposal-builder-card"}`}>
             <div className="flex items-start gap-4">
               <button type="button" role="checkbox" aria-checked={assessment.offerSalesTaxFiling} onClick={() => updateAssessment("offerSalesTaxFiling", !assessment.offerSalesTaxFiling)} className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md border transition ${assessment.offerSalesTaxFiling ? "border-brandnavy bg-brandnavy text-white" : "border-slate-300 bg-white text-transparent"}`}><Check className="h-4 w-4" strokeWidth={3} /></button>
               <div className="min-w-0 flex-1">
@@ -179,9 +184,72 @@ export default function ProposalAddOnsDemo() {
           </section>
 
           <section className="mt-10">
+            <h2 className="text-lg font-bold text-slate-950">Complimentary Services</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Value-adding services that can be included in the offer at no additional charge.
+            </p>
+
+            <div className={`mt-3 rounded-xl border p-5 ${assessment.includeTaxPreparerCoordinationCall ? "border-brandnavy-300 bg-brandnavy-50/30" : "border-slate-200 proposal-builder-card"}`}>
+              <div className="flex items-start gap-4">
+                <button
+                  type="button"
+                  role="checkbox"
+                  aria-checked={assessment.includeTaxPreparerCoordinationCall}
+                  onClick={() => updateAssessment("includeTaxPreparerCoordinationCall", !assessment.includeTaxPreparerCoordinationCall)}
+                  className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md border transition ${assessment.includeTaxPreparerCoordinationCall ? "border-brandnavy bg-brandnavy text-white" : "border-slate-300 bg-white text-transparent"}`}
+                >
+                  <Check className="h-4 w-4" strokeWidth={3} />
+                </button>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <h3 className="font-semibold text-slate-950">Tax Preparer Coordination</h3>
+                      <p className="mt-1 max-w-xl text-sm leading-6 text-slate-600">
+                        We&apos;ll coordinate with the client&apos;s tax preparer, provide organized bookkeeping records, and answer bookkeeping questions that arise during tax preparation. Tax preparation and tax advice are not included.
+                      </p>
+                    </div>
+                    <p className="text-sm font-semibold text-slate-700">Included at no additional charge</p>
+                  </div>
+                  <p className={`mt-4 text-xs font-semibold uppercase tracking-wide ${assessment.includeTaxPreparerCoordinationCall ? "text-emerald-700" : "text-slate-400"}`}>
+                    {assessment.includeTaxPreparerCoordinationCall ? "Included in this proposal" : "Not included in this proposal"}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className={`mt-3 rounded-xl border p-5 ${assessment.includeRegisteredAgentService ? "border-brandnavy-300 bg-brandnavy-50/30" : "border-slate-200 proposal-builder-card"}`}>
+              <div className="flex items-start gap-4">
+                <button
+                  type="button"
+                  role="checkbox"
+                  aria-checked={assessment.includeRegisteredAgentService}
+                  onClick={() => updateAssessment("includeRegisteredAgentService", !assessment.includeRegisteredAgentService)}
+                  className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md border transition ${assessment.includeRegisteredAgentService ? "border-brandnavy bg-brandnavy text-white" : "border-slate-300 bg-white text-transparent"}`}
+                >
+                  <Check className="h-4 w-4" strokeWidth={3} />
+                </button>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <h3 className="font-semibold text-slate-950">Registered Agent Service</h3>
+                      <p className="mt-1 max-w-xl text-sm leading-6 text-slate-600">
+                        We will act as the business&apos;s registered agent and forward official state correspondence to the designated contact.
+                      </p>
+                    </div>
+                    <p className="text-sm font-semibold text-slate-700">Included at no additional charge</p>
+                  </div>
+                  <p className={`mt-4 text-xs font-semibold uppercase tracking-wide ${assessment.includeRegisteredAgentService ? "text-emerald-700" : "text-slate-400"}`}>
+                    {assessment.includeRegisteredAgentService ? "Included in this proposal · $0/year" : "Not included in this proposal"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="mt-10">
             <h2 className="text-lg font-bold text-slate-950">Bonuses</h2>
             <p className="mt-1 text-sm text-slate-500">Check the packages that should include each free extra.</p>
-            <div className="mt-3 overflow-hidden rounded-xl border border-slate-200">
+            <div className="proposal-builder-card mt-3 overflow-hidden rounded-xl border border-slate-200">
               <table className="w-full table-fixed border-collapse">
                 <colgroup><col />{PACKAGE_COLUMNS.map(({ id }) => <col key={id} className="w-20 sm:w-24" />)}</colgroup>
                 <thead><tr className="bg-slate-50"><th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Bonus</th>{PACKAGE_COLUMNS.map(({ id, label }) => {

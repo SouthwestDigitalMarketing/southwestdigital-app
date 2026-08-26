@@ -83,8 +83,6 @@ ${emailBody}`;
         <ProposalAppDemoHeader
           currentStep="cover"
           previousHref="/offers/add-ons"
-          onExpandAll={() => undefined}
-          onCollapseAll={() => undefined}
         />
 
         <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_440px] 2xl:grid-cols-[minmax(0,1.55fr)_470px]">

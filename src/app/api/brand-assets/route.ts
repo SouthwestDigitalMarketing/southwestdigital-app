@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
 import { normalizeBrandColor } from "@/lib/brands/colors";
-import { putPublicBrandAsset } from "@/lib/storage/r2";
+import { getPublicBrandAsset, putPublicBrandAsset } from "@/lib/storage/r2";
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024;
 const ALLOWED_CONTENT_TYPES = new Map([
@@ -18,11 +18,14 @@ export async function POST(request: Request) {
     const { brand } = await requireStaffBrandOrThrow();
     const formData = await request.formData();
     const file = formData.get("file");
-    const kind = formData.get("kind");
+    const kindValue = formData.get("kind");
+    const kind = typeof kindValue === "string" ? kindValue : "";
     const suggestedColor = normalizeBrandColor(String(formData.get("suggestedColor") ?? ""));
 
     if (!(file instanceof File)) return NextResponse.json({ error: "Choose an image to upload." }, { status: 400 });
-    if (kind !== "logo" && kind !== "mark") return NextResponse.json({ error: "Unknown asset type." }, { status: 400 });
+    if (!new Set(["logo", "mark", "logo-dark", "mark-dark"]).has(kind)) {
+      return NextResponse.json({ error: "Unknown asset type." }, { status: 400 });
+    }
     if (!ALLOWED_CONTENT_TYPES.has(file.type)) {
       return NextResponse.json({ error: "Use a PNG, JPEG, WebP, or SVG image." }, { status: 400 });
     }
@@ -48,11 +51,23 @@ export async function POST(request: Request) {
       where: { brandId: brand.id },
       create: {
         brandId: brand.id,
-        ...(kind === "logo" ? { logoUrl: url } : { logoMarkUrl: url }),
+        ...(kind === "logo"
+          ? { logoUrl: url }
+          : kind === "mark"
+            ? { logoMarkUrl: url }
+            : kind === "logo-dark"
+              ? { logoDarkUrl: url }
+              : { logoMarkDarkUrl: url }),
         ...(shouldApplySuggestion ? { primaryColor: suggestedColor! } : {}),
       },
       update: {
-        ...(kind === "logo" ? { logoUrl: url } : { logoMarkUrl: url }),
+        ...(kind === "logo"
+          ? { logoUrl: url }
+          : kind === "mark"
+            ? { logoMarkUrl: url }
+            : kind === "logo-dark"
+              ? { logoDarkUrl: url }
+              : { logoMarkDarkUrl: url }),
         ...(shouldApplySuggestion ? { primaryColor: suggestedColor! } : {}),
       },
     });
@@ -61,5 +76,41 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Brand asset upload failed", error);
     return NextResponse.json({ error: "Could not upload the brand asset." }, { status: 500 });
+  }
+}
+
+export async function GET(request: Request) {
+  try {
+    const { brand } = await requireStaffBrandOrThrow();
+    const kind = new URL(request.url).searchParams.get("kind");
+    if (kind !== "logo" && kind !== "mark" && kind !== "logo-dark" && kind !== "mark-dark") {
+      return NextResponse.json({ error: "Unknown asset type." }, { status: 400 });
+    }
+
+    const theme = await prisma.brandTheme.findUnique({
+      where: { brandId: brand.id },
+      select: { logoUrl: true, logoMarkUrl: true, logoDarkUrl: true, logoMarkDarkUrl: true },
+    });
+    const url =
+      kind === "logo"
+        ? theme?.logoUrl
+        : kind === "mark"
+          ? theme?.logoMarkUrl
+          : kind === "logo-dark"
+            ? theme?.logoDarkUrl
+            : theme?.logoMarkDarkUrl;
+    if (!url) return NextResponse.json({ error: "No logo has been uploaded." }, { status: 404 });
+
+    const asset = await getPublicBrandAsset(url);
+    const body = asset.body.buffer.slice(
+      asset.body.byteOffset,
+      asset.body.byteOffset + asset.body.byteLength,
+    ) as ArrayBuffer;
+    return new NextResponse(body, {
+      headers: { "Content-Type": asset.contentType, "Cache-Control": "private, no-store" },
+    });
+  } catch (error) {
+    console.error("Brand asset read failed", error);
+    return NextResponse.json({ error: "Could not read the brand asset." }, { status: 500 });
   }
 }

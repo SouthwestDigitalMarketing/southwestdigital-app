@@ -540,6 +540,9 @@ model BrandTheme {
   brandId           String   @unique
   logoUrl           String?
   logoMarkUrl       String?
+  logoDarkUrl       String?
+  logoMarkDarkUrl   String?
+  sidebarLogoType   String   @default("mark")
   logoAlt           String?
   mode              String   @default("system")
   primaryColor      String   @default("#17324d")

@@ -30,7 +30,7 @@ function DateTick({ x, y, payload }: { x?: number; y?: number; payload?: { value
         y={0}
         dy={4}
         textAnchor="end"
-        fill={isMonday ? "#334155" : "#94a3b8"}
+        fill={isMonday ? "var(--text-secondary)" : "var(--chart-muted)"}
         fontSize={9}
         fontWeight={isMonday ? 700 : 400}
         transform="rotate(-45)"
@@ -107,12 +107,12 @@ export function YouTubeTrendChart({
           />
           <YAxis
             tickFormatter={formatK}
-            tick={{ fontSize: 10, fill: "#94a3b8" }}
+            tick={{ fontSize: 10, fill: "var(--chart-muted)" }}
             tickLine={false}
             axisLine={false}
             width={36}
           />
-          <Tooltip content={makeTooltip(segments)} cursor={{ fill: "#f8fafc" }} />
+          <Tooltip content={makeTooltip(segments)} cursor={{ fill: "var(--chart-cursor)" }} />
           {segments.map((seg, i) => (
             <Bar
               key={seg.videoId}

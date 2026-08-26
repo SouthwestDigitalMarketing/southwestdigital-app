@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronsDownUp, ChevronsUpDown } from "lucide-react";
 import { useState } from "react";
 
 export const EXPAND_ALL_STORAGE_KEY = "proposal-app-demo-expand-all-v1";
@@ -48,9 +49,19 @@ export default function ProposalAppExpandAllControl({
     <button
       type="button"
       onClick={toggle}
-      className="text-sm font-semibold text-slate-500 transition hover:text-slate-900"
+      className="flex items-center gap-1 text-sm font-semibold text-slate-500 transition hover:text-slate-900"
     >
-      {expanded ? "Collapse All" : "Expand All"}
+      {expanded ? (
+        <>
+          <ChevronsDownUp className="size-4" />
+          Collapse All
+        </>
+      ) : (
+        <>
+          <ChevronsUpDown className="size-4" />
+          Expand All
+        </>
+      )}
     </button>
   );
 }

@@ -13,16 +13,14 @@ export type ProposalAppCollapsibleForceSignal = {
 export default function ProposalAppCollapsibleSection({
   title,
   children,
-  backgroundClass = "bg-white",
   defaultOpen = false,
   forceOpen,
-  bodyClassName = "px-5 pb-4",
-  titleClassName = "text-base font-semibold tracking-tight text-slate-900",
+  bodyClassName = "px-5 pb-7 pt-3",
+  titleClassName = "text-lg font-semibold tracking-tight text-slate-900",
   headerMeta,
 }: {
   title: string;
   children: ReactNode;
-  backgroundClass?: string;
   defaultOpen?: boolean;
   forceOpen?: ProposalAppCollapsibleForceSignal;
   bodyClassName?: string;
@@ -40,8 +38,8 @@ export default function ProposalAppCollapsibleSection({
   }
 
   return (
-    <div className={backgroundClass}>
-      <div className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left">
+    <div className="proposal-builder-section">
+      <div className="flex w-full items-center justify-between gap-4 px-5 py-6 text-left">
         <button
           type="button"
           onClick={() => setOpen((current) => !current)}

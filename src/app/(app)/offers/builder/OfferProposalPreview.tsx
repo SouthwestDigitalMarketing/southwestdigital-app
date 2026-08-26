@@ -52,6 +52,30 @@ export default function OfferProposalPreview() {
           </div>
         ) : null}
 
+        {assessment.includeRegisteredAgentService ? (
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+              Complimentary service
+            </p>
+            <p className="mt-1 text-lg font-semibold text-slate-900">Registered Agent Service</p>
+            <p className="mt-1 text-sm leading-6 text-slate-600">
+              We&apos;ll act as your registered agent and forward official state correspondence to your designated contact, at no additional charge.
+            </p>
+          </div>
+        ) : null}
+
+        {assessment.includeTaxPreparerCoordinationCall ? (
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+              Complimentary service
+            </p>
+            <p className="mt-1 text-lg font-semibold text-slate-900">Tax Preparer Coordination</p>
+            <p className="mt-1 text-sm leading-6 text-slate-600">
+              We&apos;ll coordinate with your tax preparer, provide organized bookkeeping records, and answer bookkeeping questions during tax preparation. Tax preparation and tax advice are not included.
+            </p>
+          </div>
+        ) : null}
+
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           {items.map((item) => (
             <div

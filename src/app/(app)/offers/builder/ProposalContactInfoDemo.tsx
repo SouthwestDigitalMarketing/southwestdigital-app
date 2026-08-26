@@ -6,6 +6,7 @@ import ProposalAppCollapsibleSection from "./ProposalAppCollapsibleSection";
 import type { ProposalAppCollapsibleForceSignal } from "./ProposalAppCollapsibleSection";
 import PricingSnapshotSidebar from "./PricingSnapshotSidebar";
 import ProposalAppDemoHeader from "./ProposalAppDemoHeader";
+import ProposalAppExpandAllControl from "./ProposalAppExpandAllControl";
 import {
   ENTITY_TYPE_OPTIONS,
   BOOK_SET_OPTIONS,
@@ -106,8 +107,6 @@ export default function ProposalContactInfoDemo({
             currentStep="contact"
             previousHref="/offers/who?kind=bookkeeping"
             nextHref="/offers/scale"
-            onExpandAll={() => setExpandAllSignal({ value: true, token: Date.now() })}
-            onCollapseAll={() => setExpandAllSignal({ value: false, token: Date.now() })}
           />
 
             {contactInfo.owners.some((owner) => owner.crmContactId) ? (
@@ -117,25 +116,17 @@ export default function ProposalContactInfoDemo({
               </p>
             ) : null}
 
-            <label className="mt-6 flex items-start gap-2.5 rounded-xl border-2 border-red-300 bg-red-50 px-4 py-3">
-              <input
-                type="checkbox"
-                checked={contactInfo.isTestProposal}
-                onChange={(event) => updateField("isTestProposal", event.target.checked)}
-                className="mt-0.5 h-4 w-4 shrink-0"
-              />
-              <span className="text-sm text-red-800">
-                <span className="font-bold">Create as a $0.50 test proposal.</span>{" "}
-                The onboarding fee on every tier will be forced to $0.50 for this proposal so it can be run through a real Stripe payment for testing. Never use this for an actual client.
-              </span>
-            </label>
-
             <div className="mt-8 grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_440px] 2xl:grid-cols-[minmax(0,1.55fr)_470px]">
-            <div className="space-y-4">
-              <section className="overflow-hidden rounded-[1.5rem] border border-slate-300 bg-white shadow-sm">
+            <div className="space-y-3">
+              <div className="flex justify-start px-1">
+                <ProposalAppExpandAllControl
+                  onExpandAll={() => setExpandAllSignal({ value: true, token: Date.now() })}
+                  onCollapseAll={() => setExpandAllSignal({ value: false, token: Date.now() })}
+                />
+              </div>
+              <section className="proposal-builder-card overflow-hidden rounded-[1.5rem] border border-slate-300 shadow-sm">
                 <ProposalAppCollapsibleSection
                   title="Company / Book Set"
-                  backgroundClass="bg-white"
                   forceOpen={expandAllSignal}
                 >
                   <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
@@ -203,7 +194,6 @@ export default function ProposalContactInfoDemo({
 
                 <ProposalAppCollapsibleSection
                   title="Industry Type"
-                  backgroundClass="bg-slate-100"
                   forceOpen={expandAllSignal}
                 >
                   <FieldLabel label="Book Set Type">
@@ -217,7 +207,7 @@ export default function ProposalContactInfoDemo({
                       <div className="mt-4 flex flex-wrap gap-3">
                         {REAL_ESTATE_OPERATIONS.map((operation) => {
                           const selected = assessment.realEstateOperations.includes(operation.value);
-                          return <button key={operation.value} type="button" onClick={() => toggleOperation(operation.value)} className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${selected ? "border-brandnavy bg-brandnavy text-white" : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"}`}>{operation.label}</button>;
+                          return <button key={operation.value} type="button" onClick={() => toggleOperation(operation.value)} className={`proposal-builder-option rounded-full border px-4 py-2 text-sm font-semibold transition ${selected ? "border-brandnavy bg-brandnavy text-white" : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"}`}>{operation.label}</button>;
                         })}
                       </div>
                     </div>
@@ -226,7 +216,6 @@ export default function ProposalContactInfoDemo({
 
                 <ProposalAppCollapsibleSection
                   title="Business Owners"
-                  backgroundClass="bg-slate-100"
                   forceOpen={expandAllSignal}
                 >
                   {taxElectionOwnerMismatch ? (
@@ -333,7 +322,6 @@ export default function ProposalContactInfoDemo({
 
                 <ProposalAppCollapsibleSection
                   title="Primary Contact"
-                  backgroundClass="bg-white"
                   forceOpen={expandAllSignal}
                 >
                   <label className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
@@ -422,10 +410,9 @@ export default function ProposalContactInfoDemo({
 
                 <ProposalAppCollapsibleSection
                   title="Invoicing Email"
-                  backgroundClass="bg-slate-100"
                   forceOpen={expandAllSignal}
                 >
-                  <div className="mt-3 grid gap-3 xl:grid-cols-[220px_minmax(0,1fr)]">
+                  <div className="mt-3 grid gap-3 xl:grid-cols-[220px_220px_minmax(0,1fr)]">
                     <FieldLabel label="Use">
                       <select
                         value={contactInfo.invoicingRecipientSource}
@@ -444,7 +431,7 @@ export default function ProposalContactInfoDemo({
                     </FieldLabel>
 
                     {contactInfo.invoicingRecipientSource === "business-owner" ? (
-                      <div className="grid gap-3 xl:grid-cols-[220px_minmax(0,1fr)]">
+                      <>
                         <FieldLabel label="Business Owner">
                           <select
                             value={contactInfo.invoicingOwnerId}
@@ -468,9 +455,9 @@ export default function ProposalContactInfoDemo({
                             readOnly
                           />
                         </FieldLabel>
-                      </div>
+                      </>
                     ) : (
-                      <FieldLabel label="Email Address">
+                      <FieldLabel label="Email Address" className="xl:col-span-2">
                         <input
                           type="email"
                           value={
@@ -503,12 +490,14 @@ export default function ProposalContactInfoDemo({
 function FieldLabel({
   label,
   children,
+  className,
 }: {
   label: string;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <label className="grid gap-2">
+    <label className={`grid content-start gap-2 ${className ?? ""}`}>
       <span className={FIELD_LABEL_CLASS}>{label}</span>
       {children}
     </label>

@@ -265,7 +265,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const monthlyClicksGoal = theme?.monthlyClicksGoal ?? 1000;
   const avgWatchDurationGoal = theme?.avgWatchDurationGoal ?? 240;
   const monthlyKeyEventsGoal = theme?.monthlyKeyEventsGoal ?? 50;
-  const brandPrimaryColor = theme?.primaryColor ?? "#17324d";
+  const brandPrimaryColor = "var(--chart-primary)";
   const periodGoalMultiplier = periodDays / 30;
   const viewsGoal = Math.round(monthlyViewsGoal * periodGoalMultiplier);
   const visitorsGoal = Math.round(monthlyClicksGoal * periodGoalMultiplier);

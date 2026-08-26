@@ -23,13 +23,16 @@ export default async function SettingsPage() {
         </p>
       </div>
 
-      <div className="mt-6 grid max-w-3xl gap-4">
+      <div className="mt-6 grid gap-4">
         <BrandAppearanceForm
           theme={{
             primaryColor: brand.theme?.primaryColor ?? "#17324d",
             mode: brand.theme?.mode ?? "system",
             logoUrl: brand.theme?.logoUrl ?? null,
             logoMarkUrl: brand.theme?.logoMarkUrl ?? null,
+            logoDarkUrl: brand.theme?.logoDarkUrl ?? null,
+            logoMarkDarkUrl: brand.theme?.logoMarkDarkUrl ?? null,
+            sidebarLogoType: brand.theme?.sidebarLogoType ?? "mark",
           }}
         />
         <Link

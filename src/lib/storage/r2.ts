@@ -1,6 +1,6 @@
 import "server-only";
 
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { GetObjectCommand, S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
 type R2EnvironmentKey =
   | "CLOUDFLARE_ACCOUNT_ID"
@@ -55,4 +55,23 @@ export async function putPublicBrandAsset({
     }),
   );
   return `${publicBaseUrl}/${key.split("/").map(encodeURIComponent).join("/")}`;
+}
+
+export async function getPublicBrandAsset(url: string) {
+  const { bucket, client, publicBaseUrl } = getR2Config();
+  const prefix = `${publicBaseUrl}/`;
+  if (!url.startsWith(prefix)) throw new Error("Asset URL does not belong to the configured public bucket.");
+
+  const result = await client.send(
+    new GetObjectCommand({
+      Bucket: bucket,
+      Key: decodeURIComponent(url.slice(prefix.length)),
+    }),
+  );
+  if (!result.Body) throw new Error("Asset was not found in storage.");
+
+  return {
+    body: await result.Body.transformToByteArray(),
+    contentType: result.ContentType ?? "application/octet-stream",
+  };
 }

@@ -14,6 +14,7 @@ export async function updateBrandAppearanceAction(formData: FormData) {
   const { brand } = await requireStaffBrandOrThrow();
   const primaryColor = normalizeBrandColor(clean(formData.get("primaryColor")));
   const mode = clean(formData.get("mode"));
+  const sidebarLogoType = clean(formData.get("sidebarLogoType"));
 
   if (!primaryColor) {
     throw new Error("Enter a HEX color or an RGB value, such as #17324d or rgb(23, 50, 77).");
@@ -21,11 +22,14 @@ export async function updateBrandAppearanceAction(formData: FormData) {
   if (!new Set(["system", "light", "dark"]).has(mode)) {
     throw new Error("Choose System, Light, or Dark for the portal theme.");
   }
+  if (!new Set(["mark", "logo"]).has(sidebarLogoType)) {
+    throw new Error("Choose whether the sidebar shows the logo mark or full logo.");
+  }
 
   await prisma.brandTheme.upsert({
     where: { brandId: brand.id },
-    create: { brandId: brand.id, primaryColor, mode },
-    update: { primaryColor, mode },
+    create: { brandId: brand.id, primaryColor, mode, sidebarLogoType },
+    update: { primaryColor, mode, sidebarLogoType },
   });
 
   revalidatePath("/", "layout");
