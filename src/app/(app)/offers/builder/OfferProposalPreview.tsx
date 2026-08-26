@@ -773,7 +773,7 @@ export default function OfferProposalPreview({
           {step === 1 && (
             <div>
               <div className="mb-5 text-center">
-                <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Select your services</h1>
+                <h1 className="text-2xl font-bold tracking-tight sm:text-3xl" style={{ color: brandDark }}>Select your services</h1>
               </div>
 
               {/* Annual toggle */}
@@ -836,19 +836,19 @@ export default function OfferProposalPreview({
                   const orderedRecurring = lowerTierId ? otherRecurring.filter((r) => isNew(r.serviceName)) : otherRecurring;
 
                   return (
-                    <section key={id} className={`grid grid-rows-subgrid row-span-7 overflow-hidden rounded-xl border bg-white shadow-sm transition-colors ${selected ? "border-brandnavy" : "border-slate-200"}`}>
+                    <section key={id} className="grid grid-rows-subgrid row-span-7 overflow-hidden rounded-xl border bg-white shadow-sm transition-colors" style={{ borderColor: selected ? brandDark : "#e2e8f0" }}>
                       {/* Card header */}
                       <div className="p-5">
                         <div className="flex items-start justify-between gap-4">
                           <div>
-                            <h2 className="text-2xl font-bold">{option.name}</h2>
+                            <h2 className="text-2xl font-bold" style={{ color: brandDark }}>{option.name}</h2>
                             <button type="button" onClick={() => setComparisonOpen(true)} className="mt-1 text-xs font-semibold text-brandnavy underline decoration-brandnavy/30 underline-offset-2 hover:decoration-brandnavy">
                               See everything included
                             </button>
                           </div>
                           <div className="space-y-1 text-right text-sm">
-                            <p><span className="font-bold text-brandnavy">{fmt(sectionTotal(displayedOneTimeRows))}</span> <span className="text-slate-500">One-Time</span></p>
-                            <p><span className={`font-bold text-brandnavy ${hasTwelveMonthAgreement ? "rounded bg-accent-100 px-1.5 py-0.5" : ""}`}>{fmt(recurringTotal)}</span> <span className="text-slate-500">/mo</span></p>
+                            <p><span className="font-bold" style={{ color: brandDark }}>{fmt(sectionTotal(displayedOneTimeRows))}</span> <span className="text-slate-500">One-Time</span></p>
+                            <p><span className={`font-bold ${hasTwelveMonthAgreement ? "rounded bg-accent-100 px-1.5 py-0.5" : ""}`} style={{ color: brandDark }}>{fmt(recurringTotal)}</span> <span className="text-slate-500">/mo</span></p>
                           </div>
                         </div>
                         <p className="mt-4 text-center text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{serviceLevel} service level</p>
@@ -868,14 +868,14 @@ export default function OfferProposalPreview({
                                               }),
                                             });
                                           }
-                                        }} aria-pressed={selected} className="mt-4 w-full rounded-lg border border-[#ffd230] bg-[#ffd230] px-4 py-3 text-base font-bold text-brandnavy transition hover:border-[#f2c221] hover:bg-[#f2c221]">
+                                        }} aria-pressed={selected} className="mt-4 w-full rounded-lg border px-4 py-3 text-base font-bold text-white transition hover:opacity-90" style={{ backgroundColor: accentColor, borderColor: accentColor }}>
                           Select {option.name}
                         </button>
                       </div>
 
                       {/* One-time services */}
                       <section className="border-t border-slate-200">
-                        <p className="bg-[#e4e8ef] px-5 py-3 text-xs font-bold uppercase tracking-[0.12em] text-brandnavy">One-time services</p>
+                        <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ backgroundColor: `color-mix(in srgb, ${brandDark} 10%, white)`, color: brandDark }}>One-time services</p>
                         <div className="px-5 py-4">
                           {requiredOnboard.length ? <div className="mt-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Required to get started</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{requiredOnboard.map((row) => <ServiceLine key={row.id} row={row} />)}</ul></div> : null}
                           {optionalCleanup.length ? <div className="mt-5 border-t border-slate-200 pt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Optional catch-up</p><ul className="mt-4 space-y-7 text-sm text-slate-600">{optionalCleanup.map((row) => <ServiceLine key={row.id} row={row} selected={cleanupIsSelected(id, row.cleanupPeriodKey!)} onToggle={(checked) => setCleanupSelections((prev) => ({ ...prev, [cleanupKey(id, row.cleanupPeriodKey!)]: checked }))} showPriceWhenUnselected />)}</ul></div> : null}
@@ -885,7 +885,7 @@ export default function OfferProposalPreview({
 
                       {/* Recurring services */}
                       <section>
-                        <p className="bg-[#51637f] px-5 py-3 text-xs font-bold uppercase tracking-[0.12em] text-white">Recurring services</p>
+                        <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em] text-white" style={{ backgroundColor: brandDark }}>Recurring services</p>
                         {bkRow && !lowerTierId ? <div className="px-5 pt-4"><p className="text-sm font-semibold text-slate-500">Monthly Bookkeeping</p><p className="mt-1 text-sm leading-6 text-slate-600">{getTooltip(bkRow)}</p></div> : null}
                         {lowerTierName ? <p className="px-5 pt-4 text-sm font-semibold text-slate-500">Everything in {lowerTierName}, plus:</p> : null}
                         <ul className="space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600">
@@ -957,11 +957,11 @@ export default function OfferProposalPreview({
                         <div className="mt-3 rounded-xl bg-slate-50 p-4">
                           <div className="flex items-center justify-between gap-4 text-sm">
                             <span className="text-slate-600">One-time total</span>
-                            <span className="font-bold text-brandnavy">{fmt(sectionTotal(displayedOneTimeRows))}</span>
+                            <span className="font-bold" style={{ color: brandDark }}>{fmt(sectionTotal(displayedOneTimeRows))}</span>
                           </div>
                           <div className="mt-2 flex items-center justify-between gap-4 border-t border-slate-200 pt-2 text-sm">
                             <span className="text-slate-600">Ongoing bookkeeping</span>
-                            <span className="font-bold text-brandnavy">{fmt(recurringTotal)}/mo</span>
+                            <span className="font-bold" style={{ color: brandDark }}>{fmt(recurringTotal)}/mo</span>
                           </div>
                         </div>
                         <button type="button" onClick={() => {
@@ -980,7 +980,7 @@ export default function OfferProposalPreview({
                                               }),
                                             });
                                           }
-                                        }} className="mt-4 w-full rounded-lg border border-[#ffd230] bg-[#ffd230] px-4 py-3 text-base font-bold text-brandnavy transition hover:border-[#f2c221] hover:bg-[#f2c221]">
+                                        }} className="mt-4 w-full rounded-lg border px-4 py-3 text-base font-bold text-white transition hover:opacity-90" style={{ backgroundColor: accentColor, borderColor: accentColor }}>
                           Select {option.name}
                         </button>
                       </div>
@@ -1210,7 +1210,7 @@ export default function OfferProposalPreview({
           <div role="dialog" aria-modal="true" aria-labelledby="comparison-title" className="mx-auto w-full max-w-[1180px] overflow-hidden rounded-2xl bg-white shadow-2xl">
             <header className="flex items-start justify-between gap-6 border-b border-slate-200 px-5 py-4 sm:px-7">
               <div>
-                <h2 id="comparison-title" className="text-2xl font-bold text-brandnavy">Compare everything included</h2>
+                <h2 id="comparison-title" className="text-2xl font-bold" style={{ color: brandDark }}>Compare everything included</h2>
                 <p className="mt-1 text-sm text-slate-600">Review pricing, services, and support details across all three options.</p>
               </div>
               <button type="button" onClick={() => setComparisonOpen(false)} aria-label="Close plan comparison" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-brandnavy">
@@ -1225,45 +1225,45 @@ export default function OfferProposalPreview({
                     <th scope="col" className="px-5 py-4 text-left font-semibold text-slate-500">Service and feature</th>
                     {optionMeta.map(({ id }) => (
                       <th scope="col" key={id} className="px-2 py-4 text-center align-top">
-                        <p className="text-xl font-bold text-brandnavy">{options[id].name}</p>
+                        <p className="text-xl font-bold" style={{ color: brandDark }}>{options[id].name}</p>
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  <tr className="bg-[#e4e8ef]"><th colSpan={4} className="px-5 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-brandnavy">One-time services</th></tr>
+                  <tr style={{ backgroundColor: `color-mix(in srgb, ${brandDark} 10%, white)` }}><th colSpan={4} className="px-5 py-2.5 text-left text-xs font-bold uppercase tracking-wide" style={{ color: brandDark }}>One-time services</th></tr>
                   {oneTimeServiceNames.map((name, i) => {
                     const ref = optionMeta.map(({ id }) => options[id].oneTimeRows.find((r) => r.serviceName === name)).find(Boolean);
                     return (
                       <tr key={name} className={`border-b border-slate-100 ${i % 2 === 0 ? "bg-white" : "bg-slate-50"}`}>
-                        <th scope="row" className="px-5 py-3 text-left align-top font-semibold text-brandnavy">
+                        <th scope="row" className="px-5 py-3 text-left align-top font-semibold" style={{ color: brandDark }}>
                           {name}
                           {ref ? <span className="mt-1 block text-xs font-normal leading-5 text-slate-500">{getTooltip(ref)}</span> : null}
                         </th>
                         {optionMeta.map(({ id }) => {
                           const row = options[id].oneTimeRows.find((r) => r.serviceName === name);
-                          return <td key={id} className="px-4 py-3 text-center align-middle">{row ? <Check aria-label="Included" className="mx-auto h-5 w-5 text-brandnavy" /> : <span className="text-slate-300">—</span>}</td>;
+                          return <td key={id} className="px-4 py-3 text-center align-middle">{row ? <Check aria-label="Included" className="mx-auto h-5 w-5" style={{ color: brandDark }} /> : <span className="text-slate-300">—</span>}</td>;
                         })}
                       </tr>
                     );
                   })}
-                  <tr className="bg-[#51637f]"><th colSpan={4} className="px-5 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-white">Recurring services</th></tr>
+                  <tr style={{ backgroundColor: brandDark }}><th colSpan={4} className="px-5 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-white">Recurring services</th></tr>
                   {recurringServiceNames.map((name, i) => {
                     const ref = optionMeta.map(({ id }) => options[id].recurringRows.find((r) => r.serviceName === name)).find(Boolean);
                     return (
                       <tr key={name} className={`border-b border-slate-100 ${i % 2 === 0 ? "bg-white" : "bg-slate-50"}`}>
-                        <th scope="row" className="px-5 py-3 text-left align-top font-semibold text-brandnavy">
+                        <th scope="row" className="px-5 py-3 text-left align-top font-semibold" style={{ color: brandDark }}>
                           {name}
                           {ref ? <span className="mt-1 block text-xs font-normal leading-5 text-slate-500">{getTooltip(ref)}</span> : null}
                         </th>
                         {optionMeta.map(({ id }) => {
                           const row = options[id].recurringRows.find((r) => r.serviceName === name);
-                          return <td key={id} className="px-4 py-3 text-center align-middle">{row ? <Check aria-label="Included" className="mx-auto h-5 w-5 text-brandnavy" /> : <span className="text-slate-300">—</span>}</td>;
+                          return <td key={id} className="px-4 py-3 text-center align-middle">{row ? <Check aria-label="Included" className="mx-auto h-5 w-5" style={{ color: brandDark }} /> : <span className="text-slate-300">—</span>}</td>;
                         })}
                       </tr>
                     );
                   })}
-                  <tr className="bg-slate-100"><th colSpan={4} className="px-5 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-brandnavy">Bookkeeping and support details</th></tr>
+                  <tr style={{ backgroundColor: `color-mix(in srgb, ${brandDark} 8%, white)` }}><th colSpan={4} className="px-5 py-2.5 text-left text-xs font-bold uppercase tracking-wide" style={{ color: brandDark }}>Bookkeeping and support details</th></tr>
                   {comparisonFeatures.map((feature, i) => (
                     <tr key={feature.label} className={`border-b border-slate-100 ${i % 2 === 0 ? "bg-white" : "bg-slate-50"}`}>
                       <th scope="row" className="px-5 py-3 text-left align-top font-semibold text-brandnavy">
@@ -1272,7 +1272,7 @@ export default function OfferProposalPreview({
                       </th>
                       {optionMeta.map(({ id }) => (
                         <td key={id} className="px-4 py-3 text-center align-middle">
-                          {feature.includedIn.includes(id) ? <Check aria-label="Included" className="mx-auto h-5 w-5 text-brandnavy" /> : <span className="text-slate-300">—</span>}
+                          {feature.includedIn.includes(id) ? <Check aria-label="Included" className="mx-auto h-5 w-5" style={{ color: brandDark }} /> : <span className="text-slate-300">—</span>}
                         </td>
                       ))}
                     </tr>
