@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   BadgeCheck,
   Check,
@@ -14,6 +14,10 @@ import {
 } from "lucide-react";
 import { useBrand } from "@/lib/brands/context";
 import { getProposalTheme } from "./proposalThemes";
+import { ProposalReviewsSection } from "./ProposalReviewsSection";
+import AgreementTextView from "./AgreementTextView";
+import DepositPaymentForm from "./DepositPaymentForm";
+import PaypalPaymentButton from "./PaypalPaymentButton";
 import {
   formatPersonName,
   resolvePrimaryContact,
@@ -455,6 +459,7 @@ export default function OfferProposalPreview() {
   const { assessment } = useProposalAssessmentDemoState();
   const { contactInfo } = useProposalContactInfoDemoState();
   const searchParams = useSearchParams();
+  const engagementId = searchParams.get("engagementId") ?? null;
 
   const primary = resolvePrimaryContact(contactInfo);
   const contactName = formatPersonName(primary.firstName, primary.lastName) || contactInfo.owners[0]?.firstName || "";
@@ -473,6 +478,93 @@ export default function OfferProposalPreview() {
   const [addOnSelections, setAddOnSelections] = useState<Record<OptionId, boolean>>({ grow: false, improve: false, maintain: false });
   const [projectTrackingSelections, setProjectTrackingSelections] = useState<Record<OptionId, boolean>>({ grow: false, improve: false, maintain: false });
   const [budgetReportingSelections, setBudgetReportingSelections] = useState<Record<OptionId, boolean>>({ grow: false, improve: false, maintain: false });
+
+  // Signing / payment state
+  const [signerName, setSignerName] = useState(contactName);
+  const [signerTitle, setSignerTitle] = useState("");
+  const [email, setEmail] = useState("");
+  const [consentChecked, setConsentChecked] = useState(false);
+  const [readAndAgreedChecked, setReadAndAgreedChecked] = useState(false);
+  const [hasScrolledToEnd, setHasScrolledToEnd] = useState(false);
+  const [alreadySigned, setAlreadySigned] = useState(false);
+  const [signedSignerName, setSignedSignerName] = useState<string | null>(null);
+  const [signedAt, setSignedAt] = useState<string | null>(null);
+  const [signSubmitting, setSignSubmitting] = useState(false);
+  const [signError, setSignError] = useState<string | null>(null);
+  const [paymentClientSecret, setPaymentClientSecret] = useState<string | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<"succeeded" | "processing" | null>(null);
+  const [agreementText, setAgreementText] = useState("");
+  const [agreementLoading, setAgreementLoading] = useState(false);
+  const agreementScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (step !== 2 || !engagementId) return;
+    setAgreementLoading(true);
+    fetch(`/api/proposal/${engagementId}/agreement`)
+      .then((r) => r.json())
+      .then((result: { text?: string; signed?: boolean; signerName?: string | null; signedAt?: string | null }) => {
+        setAgreementText(result.text ?? "");
+        if (result.signed) {
+          setAlreadySigned(true);
+          setSignedSignerName(result.signerName ?? null);
+          setSignedAt(result.signedAt ?? null);
+          fetch(`/api/proposal/${engagementId}/payment-intent`, { method: "POST" })
+            .then((r) => r.json())
+            .then((pr: { clientSecret?: string }) => { if (pr.clientSecret) setPaymentClientSecret(pr.clientSecret); })
+            .catch(() => {});
+        }
+      })
+      .catch(() => {})
+      .finally(() => setAgreementLoading(false));
+  }, [step, engagementId]);
+
+  function checkAgreementScrolled(el: HTMLDivElement) {
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 20) setHasScrolledToEnd(true);
+  }
+
+  function isValidEmail(value: string) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  }
+
+  const canSignAgreement = signerName.trim().length > 0 && isValidEmail(email) && consentChecked && readAndAgreedChecked && hasScrolledToEnd;
+
+  async function submitSignatureAndContinue() {
+    if (!engagementId) { setStep(3); return; }
+    if (!alreadySigned && !canSignAgreement) return;
+    setSignSubmitting(true);
+    setSignError(null);
+    try {
+      if (!alreadySigned) {
+        const response = await fetch(`/api/proposal/${engagementId}/sign`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            signerName,
+            signerTitle,
+            email,
+            consentToElectronicSignature: consentChecked,
+            confirmedReadAndAgreed: readAndAgreedChecked,
+            confirmedScrolledAgreement: hasScrolledToEnd,
+          }),
+        });
+        const result = await response.json().catch(() => null) as { error?: string; signerName?: string; signedAt?: string } | null;
+        if (!response.ok) { setSignError(result?.error ?? "Something went wrong. Please try again."); return; }
+        setAlreadySigned(true);
+        setSignedSignerName(result?.signerName ?? signerName);
+        setSignedAt(result?.signedAt ?? null);
+      }
+      const paymentResponse = await fetch(`/api/proposal/${engagementId}/payment-intent`, { method: "POST" });
+      const paymentResult = await paymentResponse.json().catch(() => null) as { clientSecret?: string; error?: string } | null;
+      if (!paymentResponse.ok || !paymentResult?.clientSecret) {
+        throw new Error(paymentResult?.error ?? "Unable to start payment");
+      }
+      setPaymentClientSecret(paymentResult.clientSecret);
+    } catch (error) {
+      setSignError(error instanceof Error ? error.message : "Something went wrong. Please try again.");
+    } finally {
+      setSignSubmitting(false);
+    }
+  }
   const [salesTaxFilingSelections, setSalesTaxFilingSelections] = useState<Record<OptionId, boolean>>({ grow: false, improve: false, maintain: false });
 
   const recurringDiscountMultiplier = hasTwelveMonthAgreement ? 0.8 : 1;
@@ -492,7 +584,10 @@ export default function OfferProposalPreview() {
   const recurringServiceNames = Array.from(new Set(optionMeta.flatMap(({ id }) => options[id].recurringRows.map((r) => r.serviceName))));
   const oneTimeServiceNames   = Array.from(new Set(optionMeta.flatMap(({ id }) => options[id].oneTimeRows.map((r) => r.serviceName))));
 
-  const clientSteps = ["Intro", "Services", "Done"] as const;
+  const clientSteps = ["Intro", "Services", "Deposit", "Confirmation"] as const;
+  const selectedOnboardingFee = selectedOptionId
+    ? (options[selectedOptionId].oneTimeRows.find((r) => isOnboarding(r))?.price ?? null)
+    : null;
 
   return (
     <main
@@ -545,14 +640,29 @@ export default function OfferProposalPreview() {
               >
                 Next <ChevronRight strokeWidth={3} className="h-4 w-4" />
               </button>
+            ) : step === 2 && !(paymentClientSecret || alreadySigned) ? (
+              <button
+                type="button"
+                disabled={engagementId ? (!alreadySigned && (!canSignAgreement || signSubmitting)) : false}
+                onClick={() => void submitSignatureAndContinue()}
+                className="inline-flex items-center gap-2 rounded-lg border-2 border-accent-500 bg-brandnavy px-5 py-2 text-sm font-bold text-white transition-all hover:-translate-y-0.5 hover:bg-slate-950 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+              >
+                {!engagementId
+                  ? <>Continue <ChevronRight strokeWidth={3} className="h-4 w-4" /></>
+                  : signSubmitting
+                    ? "Submitting…"
+                    : alreadySigned
+                      ? <>Continue to Payment <ChevronRight strokeWidth={3} className="h-4 w-4" /></>
+                      : <>I Agree — Sign &amp; Continue <ChevronRight strokeWidth={3} className="h-4 w-4" /></>}
+              </button>
             ) : <span className="w-20" />}
           </div>
         </nav>
 
         <article className="space-y-8 bg-transparent">
 
-          {/* Header (steps 0–1) */}
-          {step !== 2 ? (
+          {/* Header (steps 0–2) */}
+          {step !== 3 ? (
             <header className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{brand.name}</p>
@@ -623,6 +733,7 @@ export default function OfferProposalPreview() {
                     />
                   ) : null}
                 </div>
+                <ProposalReviewsSection brandName={brand.name} animate />
               </div>
             );
           })()}
@@ -710,7 +821,23 @@ export default function OfferProposalPreview() {
                           </div>
                         </div>
                         <p className="mt-4 text-center text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{serviceLevel} service level</p>
-                        <button type="button" onClick={() => { setSelectedOptionId(id); setStep(2); }} aria-pressed={selected} className="mt-4 w-full rounded-lg border border-[#ffd230] bg-[#ffd230] px-4 py-3 text-base font-bold text-brandnavy transition hover:border-[#f2c221] hover:bg-[#f2c221]">
+                        <button type="button" onClick={() => {
+                                          setSelectedOptionId(id);
+                                          setStep(2);
+                                          if (engagementId) {
+                                            const onbFee = option.oneTimeRows.find((r) => isOnboarding(r))?.price ?? 0;
+                                            void fetch(`/api/proposal/${engagementId}/select`, {
+                                              method: "POST",
+                                              headers: { "Content-Type": "application/json" },
+                                              body: JSON.stringify({
+                                                tier: id,
+                                                tierLabel: option.name,
+                                                onboardingFee: onbFee,
+                                                recurringMonthlyTotal: option.recurringRows.reduce((s, r) => s + r.price, 0),
+                                              }),
+                                            });
+                                          }
+                                        }} aria-pressed={selected} className="mt-4 w-full rounded-lg border border-[#ffd230] bg-[#ffd230] px-4 py-3 text-base font-bold text-brandnavy transition hover:border-[#f2c221] hover:bg-[#f2c221]">
                           Select {option.name}
                         </button>
                       </div>
@@ -800,7 +927,23 @@ export default function OfferProposalPreview() {
                             <span className="font-bold text-brandnavy">{fmt(recurringTotal)}/mo</span>
                           </div>
                         </div>
-                        <button type="button" onClick={() => { setSelectedOptionId(id); setStep(2); }} className="mt-4 w-full rounded-lg border border-[#ffd230] bg-[#ffd230] px-4 py-3 text-base font-bold text-brandnavy transition hover:border-[#f2c221] hover:bg-[#f2c221]">
+                        <button type="button" onClick={() => {
+                                          setSelectedOptionId(id);
+                                          setStep(2);
+                                          if (engagementId) {
+                                            const onbFee = option.oneTimeRows.find((r) => isOnboarding(r))?.price ?? 0;
+                                            void fetch(`/api/proposal/${engagementId}/select`, {
+                                              method: "POST",
+                                              headers: { "Content-Type": "application/json" },
+                                              body: JSON.stringify({
+                                                tier: id,
+                                                tierLabel: option.name,
+                                                onboardingFee: onbFee,
+                                                recurringMonthlyTotal: option.recurringRows.reduce((s, r) => s + r.price, 0),
+                                              }),
+                                            });
+                                          }
+                                        }} className="mt-4 w-full rounded-lg border border-[#ffd230] bg-[#ffd230] px-4 py-3 text-base font-bold text-brandnavy transition hover:border-[#f2c221] hover:bg-[#f2c221]">
                           Select {option.name}
                         </button>
                       </div>
@@ -811,18 +954,212 @@ export default function OfferProposalPreview() {
             </div>
           )}
 
-          {/* Step 2 — Confirmation */}
+          {/* Step 2 — Deposit / Contract */}
           {step === 2 && (
+            <div className="py-6">
+              {!alreadySigned ? (
+                <div className="space-y-5">
+                  <div>
+                    <h2 className="text-sm font-bold text-slate-900">Bookkeeping Services Agreement</h2>
+                    <p className="mt-1 text-sm font-semibold text-brandnavy">
+                      {engagementId
+                        ? "You must read the entire agreement below before you can sign."
+                        : "Review your agreement. In a live proposal, you would sign here before paying."}
+                    </p>
+                    <div
+                      ref={agreementScrollRef}
+                      onScroll={(event) => checkAgreementScrolled(event.currentTarget)}
+                      tabIndex={0}
+                      role="region"
+                      aria-label="Bookkeeping Services Agreement text, scroll to review"
+                      className="mt-2 max-h-[50vh] overflow-y-auto rounded-lg border border-slate-200 bg-white p-6 focus:outline-none focus:ring-2 focus:ring-brandnavy sm:max-h-[65vh]"
+                    >
+                      {agreementLoading ? (
+                        <p className="text-sm text-slate-500">Loading your agreement…</p>
+                      ) : agreementText ? (
+                        <AgreementTextView text={agreementText} />
+                      ) : (
+                        <p className="text-sm text-slate-500">
+                          {engagementId
+                            ? "Unable to load agreement text. Please refresh and try again."
+                            : "Agreement text will appear here when this proposal is sent to a client."}
+                        </p>
+                      )}
+                    </div>
+                    {!agreementLoading && engagementId ? (
+                      hasScrolledToEnd ? (
+                        <p className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-emerald-600">
+                          <Check className="h-4 w-4" /> You&apos;ve reached the end of the agreement.
+                        </p>
+                      ) : (
+                        <p className="mt-2 flex items-center gap-1.5 text-sm font-bold text-amber-700">
+                          <ChevronRight className="h-4 w-4 rotate-90" /> Keep reading — scroll to the end to unlock signing.
+                        </p>
+                      )
+                    ) : null}
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-semibold text-slate-700" htmlFor="signerName">Full Name</label>
+                    <input
+                      id="signerName"
+                      type="text"
+                      required
+                      value={signerName}
+                      onChange={(e) => setSignerName(e.target.value)}
+                      placeholder="Your full name"
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-brandnavy focus:outline-none focus:ring-1 focus:ring-brandnavy"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-semibold text-slate-700" htmlFor="signerTitle">
+                      Title / Role <span className="font-normal text-slate-400">(optional)</span>
+                    </label>
+                    <input
+                      id="signerTitle"
+                      type="text"
+                      value={signerTitle}
+                      onChange={(e) => setSignerTitle(e.target.value)}
+                      placeholder="e.g. Owner, CFO, Authorized Representative"
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-brandnavy focus:outline-none focus:ring-1 focus:ring-brandnavy"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-semibold text-slate-700" htmlFor="signerEmail">Email</label>
+                    <input
+                      id="signerEmail"
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@yourcompany.com"
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-brandnavy focus:outline-none focus:ring-1 focus:ring-brandnavy"
+                    />
+                    <p className="mt-1 text-xs text-slate-500">We&apos;ll send your payment receipt here.</p>
+                  </div>
+
+                  <div className="flex items-start gap-2.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+                    <input
+                      type="checkbox"
+                      id="readAndAgreed"
+                      checked={readAndAgreedChecked}
+                      onChange={(e) => setReadAndAgreedChecked(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 shrink-0"
+                    />
+                    <label htmlFor="readAndAgreed" className="text-xs leading-5 text-slate-600">
+                      I have read this Agreement in its entirety and agree to be bound by all of its terms and conditions.
+                    </label>
+                  </div>
+                  <div className="flex items-start gap-2.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+                    <input
+                      type="checkbox"
+                      id="consentElectronic"
+                      checked={consentChecked}
+                      onChange={(e) => setConsentChecked(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 shrink-0"
+                    />
+                    <label htmlFor="consentElectronic" className="text-xs leading-5 text-slate-600">
+                      I consent to sign this document electronically and understand that my electronic signature has the same legal effect as a handwritten signature.
+                    </label>
+                  </div>
+                  {signError ? <p className="text-xs text-red-600">{signError}</p> : null}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
+                    Signed by <span className="font-semibold">{signedSignerName}</span>
+                    {signedAt ? ` on ${new Date(signedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}` : null}
+                  </div>
+                  <div className="grid gap-6 md:grid-cols-[1fr_380px] md:items-start">
+                    <div className="order-2 space-y-4 rounded-xl border border-slate-200 p-6 md:order-1">
+                      {paymentClientSecret ? (
+                        <DepositPaymentForm
+                          clientSecret={paymentClientSecret}
+                          onPaid={(status) => { setPaymentStatus(status); setStep(3); }}
+                        />
+                      ) : signError ? (
+                        <div className="space-y-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5">
+                          <p className="text-xs text-red-700">We couldn&apos;t start the payment form: {signError} Please try again.</p>
+                          <button
+                            type="button"
+                            disabled={signSubmitting}
+                            onClick={() => void submitSignatureAndContinue()}
+                            className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+                          >
+                            {signSubmitting ? "Retrying…" : "Retry"}
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-slate-600">Preparing your payment form…</p>
+                      )}
+                      {engagementId && paymentClientSecret ? (
+                        <>
+                          <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                            <div className="h-px flex-1 bg-slate-200" />
+                            or pay with PayPal
+                            <div className="h-px flex-1 bg-slate-200" />
+                          </div>
+                          <PaypalPaymentButton
+                            engagementId={engagementId}
+                            onPaid={(status) => { setPaymentStatus(status); setStep(3); }}
+                          />
+                        </>
+                      ) : null}
+                    </div>
+
+                    <div className="order-1 space-y-4 md:order-2">
+                      <div className="rounded-xl border border-slate-200 bg-white p-5">
+                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Your Deposit</p>
+                        {selectedOptionId ? (
+                          <p className="mt-1 text-sm text-slate-600">{options[selectedOptionId].name} package</p>
+                        ) : null}
+                        <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-3">
+                          <span className="text-sm font-semibold text-slate-700">Total due</span>
+                          <span className="text-2xl font-bold text-brandnavy">
+                            {selectedOnboardingFee !== null ? fmt(selectedOnboardingFee) : "—"}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-xs text-slate-500">Covers onboarding, document collection, and discovery. Earned upon signing and non-refundable.</p>
+                      </div>
+                      <div className="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />
+                        <p className="text-xs leading-5 text-slate-500">
+                          Payments are processed securely by Stripe and PayPal. Your card and bank details are never stored on our servers.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Step 3 — Confirmation */}
+          {step === 3 && (
             <div className="mx-auto grid max-w-2xl place-items-center px-7 py-20 text-center">
               <div className="grid h-16 w-16 place-items-center rounded-full bg-emerald-100 text-emerald-700">
                 <BadgeCheck className="h-8 w-8" />
               </div>
-              <h1 className="mt-6 text-3xl font-bold">
-                {selectedOptionId ? `${options[selectedOptionId].name} selected` : "Selection received"}
-              </h1>
-              <p className="mt-3 text-slate-600">
-                We have your selection and will be in touch to kick off onboarding. Reach out any time if you have questions.
-              </p>
+              {paymentStatus === "processing" ? (
+                <>
+                  <h1 className="mt-6 text-3xl font-bold">Your payment is processing</h1>
+                  <p className="mt-3 text-slate-600">
+                    Your agreement is signed. Your bank transfer is on its way — ACH payments typically take a few business days to clear.
+                    We&apos;ll email a receipt to {email || "the email you provided"} once it&apos;s confirmed, and be in touch to kick off onboarding.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h1 className="mt-6 text-3xl font-bold">
+                    {selectedOptionId ? `${options[selectedOptionId].name} — you&apos;re all set` : "You&apos;re all set"}
+                  </h1>
+                  <p className="mt-3 text-slate-600">
+                    {engagementId
+                      ? `Your agreement is signed and your deposit is paid. We'll be in touch shortly to kick off onboarding.`
+                      : "We have your selection and will be in touch to kick off onboarding. Reach out any time if you have questions."}
+                  </p>
+                </>
+              )}
               <p className="mt-4 text-sm font-semibold text-slate-700">{brand.name}</p>
             </div>
           )}

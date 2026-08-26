@@ -4,6 +4,7 @@ import { Check, Image, Sparkles, Video, Link2 } from "lucide-react";
 import { resolveVideoEmbedUrl } from "./OfferProposalPreview";
 import { getProposalTheme, PROPOSAL_THEMES } from "./proposalThemes";
 import { useBrand } from "@/lib/brands/context";
+import { ProposalReviewsSection } from "./ProposalReviewsSection";
 import ProposalAppDemoHeader from "./ProposalAppDemoHeader";
 import PricingSnapshotSidebar from "./PricingSnapshotSidebar";
 import {
@@ -372,6 +373,7 @@ export default function ProposalIntroDemo({ mediaItems }: { mediaItems: BrandMed
                         style={{ borderColor: "#cbd5e1" }}
                       />
                     ) : null}
+                    <ProposalReviewsSection brandName={brand.name} />
                   </div>
                 </div>
               </div>
