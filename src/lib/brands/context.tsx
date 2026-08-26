@@ -22,7 +22,8 @@ export type BrandContextValue = {
       logoAlt: string | null;
       mode: string;
       supportEmail: string | null;
-      proposalFeaturedMediaUrl: string | null;
+      proposalFeaturedVideoUrl: string | null;
+      proposalFeaturedImageUrl: string | null;
     } | null;
     toolLinks: Array<{
       key: string;
@@ -37,7 +38,7 @@ export type BrandContextValue = {
     accountType: AccountType | null;
     canAccessTickets: boolean;
     canUseFocus: boolean;
-  };
+  } | null;
 };
 
 const BrandContext = createContext<BrandContextValue | null>(null);

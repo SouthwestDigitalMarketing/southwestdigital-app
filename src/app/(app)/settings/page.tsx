@@ -48,7 +48,10 @@ export default async function SettingsPage() {
           </div>
           <span className="text-sm font-medium text-slate-500">Open →</span>
         </Link>
-        <ProposalMediaSettingsForm currentUrl={brand.theme?.proposalFeaturedMediaUrl ?? null} />
+        <ProposalMediaSettingsForm
+          currentVideoUrl={brand.theme?.proposalFeaturedVideoUrl ?? null}
+          currentImageUrl={brand.theme?.proposalFeaturedImageUrl ?? null}
+        />
         <ToolLinksForm links={mergeToolLinks(stored)} />
       </div>
     </div>

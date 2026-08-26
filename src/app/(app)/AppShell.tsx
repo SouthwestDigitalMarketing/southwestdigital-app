@@ -22,6 +22,7 @@ import {
   Mail,
   GraduationCap,
   ExternalLink,
+  ImagePlay,
 } from "lucide-react";
 import { useBrand } from "@/lib/brands/context";
 import { signOutAction } from "./actions";
@@ -42,6 +43,7 @@ const NAV: Array<{
   { label: "Offers", href: "/offers", icon: FileText, dividerAfter: true },
   { label: "Clients", href: "/clients", icon: Building2 },
   { label: "Team", href: "/team", icon: Users },
+  { label: "Media", href: "/media", icon: ImagePlay },
   { label: "Settings", href: "/settings", icon: Settings, dividerAfter: true },
 ];
 

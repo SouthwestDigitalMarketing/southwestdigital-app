@@ -38,12 +38,13 @@ export async function updateBrandAppearanceAction(formData: FormData) {
 
 export async function updateProposalMediaAction(formData: FormData) {
   const { brand } = await requireStaffBrandOrThrow();
-  const proposalFeaturedMediaUrl = clean(formData.get("proposalFeaturedMediaUrl")) || null;
+  const proposalFeaturedVideoUrl = clean(formData.get("proposalFeaturedVideoUrl")) || null;
+  const proposalFeaturedImageUrl = clean(formData.get("proposalFeaturedImageUrl")) || null;
 
   await prisma.brandTheme.upsert({
     where: { brandId: brand.id },
-    create: { brandId: brand.id, primaryColor: "#17324d", mode: "system", sidebarLogoType: "mark", proposalFeaturedMediaUrl },
-    update: { proposalFeaturedMediaUrl },
+    create: { brandId: brand.id, primaryColor: "#17324d", mode: "system", sidebarLogoType: "mark", proposalFeaturedVideoUrl, proposalFeaturedImageUrl },
+    update: { proposalFeaturedVideoUrl, proposalFeaturedImageUrl },
   });
 
   revalidatePath("/", "layout");

@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { useBrand } from "@/lib/brands/context";
+import { getProposalTheme } from "./proposalThemes";
 import {
   formatPersonName,
   resolvePrimaryContact,
@@ -31,36 +32,32 @@ import {
 
 // ─── Media helpers ─────────────────────────────────────────────────────────────
 
-export type FeaturedMedia =
-  | { type: "youtube"; embedUrl: string }
-  | { type: "vimeo"; embedUrl: string }
-  | { type: "image"; url: string }
-  | null;
-
-export function resolveFeaturedMedia(url: string): FeaturedMedia {
+// Returns an iframe-embeddable URL for recognized video platforms, or null if not a valid video URL.
+export function resolveVideoEmbedUrl(url: string): string | null {
   if (!url) return null;
   try {
     const u = new URL(url);
     // YouTube
     if (u.hostname === "www.youtube.com" || u.hostname === "youtube.com") {
-      if (u.pathname.startsWith("/embed/")) return { type: "youtube", embedUrl: url };
+      if (u.pathname.startsWith("/embed/")) return url;
       const id = u.searchParams.get("v");
-      if (id) return { type: "youtube", embedUrl: `https://www.youtube.com/embed/${id}` };
+      if (id) return `https://www.youtube.com/embed/${id}`;
     }
     if (u.hostname === "youtu.be") {
-      const id = u.pathname.slice(1);
-      if (id) return { type: "youtube", embedUrl: `https://www.youtube.com/embed/${id}` };
+      const id = u.pathname.slice(1).split("?")[0];
+      if (id) return `https://www.youtube.com/embed/${id}`;
     }
     // Vimeo
     if (u.hostname === "vimeo.com" || u.hostname === "www.vimeo.com") {
-      const id = u.pathname.replace(/^\//, "");
-      if (id) return { type: "vimeo", embedUrl: `https://player.vimeo.com/video/${id}` };
+      const id = u.pathname.replace(/^\//, "").split("?")[0];
+      if (id) return `https://player.vimeo.com/video/${id}`;
     }
-    if (u.hostname === "player.vimeo.com") {
-      return { type: "vimeo", embedUrl: url };
-    }
-    // Treat everything else as an image
-    return { type: "image", url };
+    if (u.hostname === "player.vimeo.com") return url;
+    // Cloudflare Stream
+    if (u.hostname.endsWith(".cloudflarestream.com")) return url;
+    // Generic iframe embed (path ends with /iframe)
+    if (u.pathname.endsWith("/iframe")) return url;
+    return null;
   } catch {
     return null;
   }
@@ -463,6 +460,10 @@ export default function OfferProposalPreview() {
   const contactName = formatPersonName(primary.firstName, primary.lastName) || contactInfo.owners[0]?.firstName || "";
   const companyName = contactInfo.companyName || contactName || "Your business";
 
+  const theme = getProposalTheme(assessment.proposalTheme || "brand");
+  const primaryColor = theme.primary ?? (brand.theme?.primaryColor ?? "#17324d");
+  const accentColor = theme.accent ?? (brand.theme?.accentColor ?? "#d79b3b");
+
   const options = buildOptions(assessment);
   const [selectedOptionId, setSelectedOptionId] = useState<OptionId | null>(null);
   const [step, setStep] = useState(0);
@@ -494,7 +495,17 @@ export default function OfferProposalPreview() {
   const clientSteps = ["Intro", "Services", "Done"] as const;
 
   return (
-    <main className="relative isolate min-h-screen overflow-hidden bg-[linear-gradient(180deg,#f7f8fb_0%,#ffffff_100%)] px-4 py-6 text-brandnavy [&_button:not(:disabled)]:cursor-pointer [&_button:disabled]:cursor-not-allowed sm:px-6 lg:px-10">
+    <main
+      className="relative isolate min-h-screen overflow-hidden px-4 py-6 text-brandnavy [&_button:not(:disabled)]:cursor-pointer [&_button:disabled]:cursor-not-allowed sm:px-6 lg:px-10"
+      style={{
+        background: theme.pageBg,
+        "--brand-primary": primaryColor,
+        "--brand-accent": accentColor,
+        "--brand-ink": primaryColor,
+        "--color-accent-500": accentColor,
+        "--color-accent-100": `color-mix(in srgb, ${accentColor} 15%, white)`,
+      } as React.CSSProperties}
+    >
       <svg aria-hidden="true" viewBox="0 0 1600 1000" preserveAspectRatio="none" className="pointer-events-none fixed inset-0 z-0 h-full w-full text-brandnavy opacity-[0.045]">
         <g fill="none" stroke="currentColor" strokeWidth="1.5">
           <path d="M-120 70C120 20 285 115 330 280S220 545-45 610" />
@@ -555,51 +566,66 @@ export default function OfferProposalPreview() {
           ) : null}
 
           {/* Step 0 — Intro */}
-          {step === 0 && (
-            <div className="pb-12">
-              {(() => {
-                const mediaUrl = assessment.featuredMediaUrl || brand.theme?.proposalFeaturedMediaUrl || "";
-                const media = resolveFeaturedMedia(mediaUrl);
-                if (!media) return null;
-                if (media.type === "image") {
-                  return (
-                    <div className="mb-8 overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={media.url} alt="Featured" className="h-auto max-h-[420px] w-full object-cover" />
-                    </div>
-                  );
-                }
-                return (
-                  <div className="mb-8 overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
-                    <div className="aspect-video">
-                      <iframe
-                        src={media.embedUrl}
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                        className="h-full w-full"
-                      />
+          {step === 0 && (() => {
+            const videoUrl = assessment.featuredVideoUrl || brand.theme?.proposalFeaturedVideoUrl || "";
+            const imageUrl = assessment.featuredImageUrl || brand.theme?.proposalFeaturedImageUrl || "";
+            const embedUrl = resolveVideoEmbedUrl(videoUrl);
+            const hasMedia = !!(embedUrl || imageUrl);
+            const customHeadline = assessment.introHeadline?.trim() || null;
+            const customBody = assessment.introBody?.trim() || null;
+            return (
+              <div className="pb-12 sm:pb-16">
+                <div className={`grid items-center gap-8 ${hasMedia ? "md:grid-cols-2" : ""}`}>
+                  <div>
+                    <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+                      {customHeadline ?? (
+                        <>
+                          Expert <span className="text-accent-500">Real Estate</span> Bookkeeping +{" "}
+                          Great <span className="text-accent-500">Communication</span>
+                        </>
+                      )}
+                    </h1>
+                    <p className={`mt-6 text-lg leading-8 text-slate-600 ${hasMedia ? "" : "max-w-2xl"}`}>
+                      {customBody ??
+                        `You should not have to chase your bookkeeper or guess what your numbers mean. ${brand.name} helps real estate investors with clean books, useful reports, and clear answers from a team that knows your business.`}
+                    </p>
+                    <div className="mt-8">
+                      <button
+                        type="button"
+                        onClick={() => setStep(1)}
+                        className="inline-flex items-center gap-2 rounded-lg border-2 border-accent-500 bg-brandnavy px-6 py-3 text-base font-bold text-white transition-all hover:-translate-y-0.5 hover:bg-slate-950 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)]"
+                      >
+                        View your options <ChevronRight strokeWidth={3} className="h-4 w-4" />
+                      </button>
                     </div>
                   </div>
-                );
-              })()}
-              <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-                Expert <span className="text-accent-500">Real Estate</span> Bookkeeping +{" "}
-                Great <span className="text-accent-500">Communication</span>
-              </h1>
-              <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">
-                You should not have to chase your bookkeeper or guess what your numbers mean. {brand.name} helps real estate investors with clean books, useful reports, and clear answers from a team that knows your business.
-              </p>
-              <div className="mt-8">
-                <button
-                  type="button"
-                  onClick={() => setStep(1)}
-                  className="inline-flex items-center gap-2 rounded-lg border-2 border-accent-500 bg-brandnavy px-6 py-3 text-base font-bold text-white transition-all hover:-translate-y-0.5 hover:bg-slate-950 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)]"
-                >
-                  View your options <ChevronRight strokeWidth={3} className="h-4 w-4" />
-                </button>
+                  {embedUrl ? (
+                    <div
+                      className="overflow-hidden rounded-xl border shadow-sm"
+                      style={{ borderColor: "#cbd5e1" }}
+                    >
+                      <div className="aspect-video">
+                        <iframe
+                          src={embedUrl}
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                          className="h-full w-full"
+                        />
+                      </div>
+                    </div>
+                  ) : imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={imageUrl}
+                      alt=""
+                      className="max-h-[320px] w-full rounded-xl border object-cover shadow-sm"
+                      style={{ borderColor: "#cbd5e1" }}
+                    />
+                  ) : null}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Step 1 — Services */}
           {step === 1 && (

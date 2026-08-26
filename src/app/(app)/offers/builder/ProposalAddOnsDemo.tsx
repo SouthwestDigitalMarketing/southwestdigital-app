@@ -1,8 +1,6 @@
 "use client";
 
 import { Check, Minus } from "lucide-react";
-import { resolveFeaturedMedia, type FeaturedMedia } from "./OfferProposalPreview";
-import { useBrand } from "@/lib/brands/context";
 import ProposalAppDemoHeader from "./ProposalAppDemoHeader";
 import PricingSnapshotSidebar from "./PricingSnapshotSidebar";
 import {
@@ -19,8 +17,6 @@ import { BONUS_OPTIONS, PACKAGE_COLUMNS } from "./ProposalBonusesDemo";
 
 export default function ProposalAddOnsDemo() {
   const { assessment, updateAssessment } = useProposalAssessmentDemoState();
-  const { brand } = useBrand();
-  const brandDefaultMediaUrl = brand.theme?.proposalFeaturedMediaUrl ?? null;
   const offered = assessment.offerAdvancedReceiptManagement;
   const calculatedPrice = getAdvancedReceiptManagementPrice({
     ...assessment,
@@ -81,7 +77,7 @@ export default function ProposalAddOnsDemo() {
         <ProposalAppDemoHeader
           currentStep="add-ons"
           previousHref="/offers/calculator"
-          viewProposalAsNext
+          nextHref="/offers/intro"
         />
 
         <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_440px] 2xl:grid-cols-[minmax(0,1.55fr)_470px]">
@@ -91,34 +87,7 @@ export default function ProposalAddOnsDemo() {
             Choose which optional paid services the lead may add to their package. Add-ons are not included unless the lead selects them.
           </p>
 
-          <section className="mt-8">
-            <h2 className="text-lg font-bold text-slate-950">Intro Media</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Paste an image URL or a YouTube / Vimeo link to show a featured visual on the first screen of the proposal.
-            </p>
-            <div className="mt-3 rounded-xl border border-slate-200 proposal-builder-card p-5">
-              <label className="block text-sm font-semibold text-slate-700">
-                Image or video URL
-                <input
-                  type="url"
-                  placeholder={brandDefaultMediaUrl ? "Using brand default — paste to override" : "https://…"}
-                  value={assessment.featuredMediaUrl ?? ""}
-                  onChange={(e) => updateAssessment("featuredMediaUrl", e.target.value)}
-                  className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-brandnavy focus:ring-2 focus:ring-brandnavy/20"
-                />
-              </label>
-              {assessment.featuredMediaUrl ? (
-                <FeaturedMediaPreview url={assessment.featuredMediaUrl} />
-              ) : brandDefaultMediaUrl ? (
-                <div className="mt-3">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Brand default</p>
-                  <FeaturedMediaPreview url={brandDefaultMediaUrl} />
-                </div>
-              ) : null}
-            </div>
-          </section>
-
-          <h2 className="mt-10 text-lg font-bold text-slate-950">Optional Add-ons</h2>
+          <h2 className="mt-8 text-lg font-bold text-slate-950">Optional Add-ons</h2>
           <section className={`mt-3 rounded-xl border p-5 ${offered ? "border-brandnavy-300 bg-brandnavy-50/30" : "border-slate-200 proposal-builder-card"}`}>
             <div className="flex items-start gap-4">
               <button
@@ -310,31 +279,3 @@ export default function ProposalAddOnsDemo() {
   );
 }
 
-function FeaturedMediaPreview({ url }: { url: string }) {
-  const media: FeaturedMedia = resolveFeaturedMedia(url);
-  if (!media) {
-    return (
-      <p className="mt-3 text-xs font-semibold text-rose-600">Could not parse this URL as an image or video.</p>
-    );
-  }
-  if (media.type === "image") {
-    return (
-      <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={media.url} alt="Preview" className="h-auto max-h-64 w-full object-cover" />
-      </div>
-    );
-  }
-  return (
-    <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
-      <div className="aspect-video">
-        <iframe
-          src={media.embedUrl}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-          className="h-full w-full"
-        />
-      </div>
-    </div>
-  );
-}

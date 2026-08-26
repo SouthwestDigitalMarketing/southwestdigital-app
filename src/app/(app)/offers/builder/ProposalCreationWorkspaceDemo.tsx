@@ -250,7 +250,12 @@ export type AssessmentState = {
   offerSalesTaxFiling: boolean;
   salesTaxFilingPriceOverride: number | null;
   includeRegisteredAgentService: boolean;
-  featuredMediaUrl: string;
+  featuredImageUrl: string;
+  featuredVideoUrl: string;
+  featuredMediaId: string;
+  introHeadline: string;
+  introBody: string;
+  proposalTheme: string;
   ongoingBookkeepingPlatform: BookkeepingPlatform;
   platformMigrationEnabled: boolean;
   platformMigrationEffectiveMonth: string;
@@ -419,7 +424,12 @@ const INITIAL_ASSESSMENT: AssessmentState = {
   offerSalesTaxFiling: false,
   salesTaxFilingPriceOverride: null,
   includeRegisteredAgentService: false,
-  featuredMediaUrl: "",
+  featuredImageUrl: "",
+  featuredVideoUrl: "",
+  featuredMediaId: "",
+  introHeadline: "",
+  introBody: "",
+  proposalTheme: "brand",
   ongoingBookkeepingPlatform: "qbo",
   platformMigrationEnabled: false,
   platformMigrationEffectiveMonth: "",

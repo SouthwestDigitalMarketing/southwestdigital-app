@@ -11,6 +11,7 @@ export type ProposalAppDemoStep =
   | "included"
   | "pricing"
   | "add-ons"
+  | "intro"
   | "cover"
   | "preview";
 
@@ -39,6 +40,11 @@ const STEP_ITEMS: Array<{
     id: "add-ons",
     label: "Add-ons",
     href: "/offers/add-ons",
+  },
+  {
+    id: "intro",
+    label: "Intro",
+    href: "/offers/intro",
   },
 ];
 

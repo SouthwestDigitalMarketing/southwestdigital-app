@@ -448,6 +448,7 @@ model Brand {
   memberships           BrandMembership[]
   theme                 BrandTheme?
   toolLinks             BrandToolLink[]
+  media                 BrandMedia[]
   contacts              Contact[]
   contactTags           ContactTag[]
   contactTagAutomations ContactTagAutomation[]
@@ -560,7 +561,8 @@ model BrandTheme {
   youtubeHandle              String?
   youtubeWatchPercentageGoal Float?
   websiteEngagedSessionsGoal Int?
-  proposalFeaturedMediaUrl   String?
+  proposalFeaturedVideoUrl   String?
+  proposalFeaturedImageUrl   String?
   brand             Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -578,6 +580,20 @@ model BrandToolLink {
   updatedAt DateTime @updatedAt
 
   @@unique([brandId, key])
+  @@index([brandId, sortOrder])
+}
+
+model BrandMedia {
+  id        String   @id @default(cuid())
+  brandId   String
+  name      String
+  type      String   // "video" | "image"
+  url       String
+  sortOrder Int      @default(0)
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([brandId, sortOrder])
 }
 

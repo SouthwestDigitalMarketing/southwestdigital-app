@@ -4,6 +4,8 @@
   color-scheme: light;
   --brand-primary: #17324d;
   --brand-accent: #d79b3b;
+  --color-accent-500: var(--brand-accent);
+  --color-accent-100: color-mix(in srgb, var(--brand-accent) 15%, white);
   --brand-background: #f7f8fa;
   --brand-foreground: #17202a;
   --color-brandnavy: #1b263b;
