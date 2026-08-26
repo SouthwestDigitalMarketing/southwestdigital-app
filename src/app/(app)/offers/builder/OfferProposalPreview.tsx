@@ -688,8 +688,8 @@ export default function OfferProposalPreview({
 
         <article className="space-y-8 bg-transparent">
 
-          {/* Header (steps 0–2) */}
-          {step !== 3 ? (
+          {/* Header (cover + deposit only) */}
+          {(step === 0 || step === 2) ? (
             <header className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 {brand.theme?.logoUrl ? (
@@ -778,12 +778,12 @@ export default function OfferProposalPreview({
 
               {/* Annual toggle */}
               <div className="mb-8 flex flex-wrap items-center justify-center gap-4 text-base font-bold sm:text-lg">
-                <span className={hasTwelveMonthAgreement ? "text-slate-400" : "text-brandnavy"}>Month-to-month</span>
-                <button type="button" role="switch" aria-checked={hasTwelveMonthAgreement} onClick={() => setHasTwelveMonthAgreement((v) => !v)} className={`relative h-9 w-16 rounded-full transition ${hasTwelveMonthAgreement ? "bg-brandnavy" : "bg-slate-400"}`}>
+                <span className={hasTwelveMonthAgreement ? "text-slate-400" : undefined} style={hasTwelveMonthAgreement ? undefined : { color: brandDark }}>Month-to-month</span>
+                <button type="button" role="switch" aria-checked={hasTwelveMonthAgreement} onClick={() => setHasTwelveMonthAgreement((v) => !v)} className={`relative h-9 w-16 rounded-full transition ${hasTwelveMonthAgreement ? "" : "bg-slate-300"}`} style={hasTwelveMonthAgreement ? { backgroundColor: brandDark } : undefined}>
                   <span className={`absolute top-1 h-7 w-7 rounded-full bg-white shadow-sm transition ${hasTwelveMonthAgreement ? "left-8" : "left-1"}`} />
                   <span className="sr-only">Save 20% with a 12-month agreement</span>
                 </button>
-                <button type="button" aria-pressed={hasTwelveMonthAgreement} onClick={() => setHasTwelveMonthAgreement(true)} className={`inline-flex items-center gap-1.5 rounded-lg border bg-accent-100 px-3 py-1.5 text-brandnavy transition hover:brightness-95 ${hasTwelveMonthAgreement ? "border-brandnavy" : "border-transparent"}`}>
+                <button type="button" aria-pressed={hasTwelveMonthAgreement} onClick={() => setHasTwelveMonthAgreement(true)} className={`inline-flex items-center gap-1.5 rounded-lg border bg-accent-100 px-3 py-1.5 transition hover:brightness-95 ${hasTwelveMonthAgreement ? "" : "border-transparent"}`} style={{ color: brandDark, borderColor: hasTwelveMonthAgreement ? brandDark : undefined }}>
                   <Sparkles className="h-5 w-5" />
                   Annual · Save 20%
                   <Sparkles className="h-4 w-4" />
@@ -842,7 +842,7 @@ export default function OfferProposalPreview({
                         <div className="flex items-start justify-between gap-4">
                           <div>
                             <h2 className="text-2xl font-bold" style={{ color: brandDark }}>{option.name}</h2>
-                            <button type="button" onClick={() => setComparisonOpen(true)} className="mt-1 text-xs font-semibold text-brandnavy underline decoration-brandnavy/30 underline-offset-2 hover:decoration-brandnavy">
+                            <button type="button" onClick={() => setComparisonOpen(true)} className="mt-1 text-xs font-semibold underline underline-offset-2" style={{ color: brandDark }}>
                               See everything included
                             </button>
                           </div>
@@ -909,7 +909,7 @@ export default function OfferProposalPreview({
 
                       {additionalOptionRows.length > 0 ? (
                         <section>
-                          <p className="bg-accent-100 px-5 py-3 text-xs font-bold uppercase tracking-[0.12em] text-brandnavy">Additional options</p>
+                          <p className="bg-accent-100 px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ color: brandDark }}>Additional options</p>
                           <div className="px-5 py-4">
                             <ul className="space-y-2 text-sm text-slate-600">
                               {additionalOptionRows.map((row) => (
