@@ -2181,6 +2181,9 @@ model Quote {
   totalRecurring Decimal         @default(0) @db.Decimal(12, 2)
   onboardingFee  Decimal         @default(0) @db.Decimal(12, 2)
   snapshotJson   Json
+  publishedSnapshotJson Json?
+  publicToken     String?        @unique
+  publishedAt     DateTime?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   sentAt         DateTime?
@@ -2189,6 +2192,7 @@ model Quote {
   lineItems      QuoteLineItem[]
 
   @@index([brandId, clientId, status])
+  @@index([brandId, publishedAt])
   @@index([status, createdAt])
   @@map("quotes")
 }

@@ -19,6 +19,66 @@
   --color-brandnavy-foreground: #ffffff;
 }
 
+/* Keep offer-table copy comfortably readable at every viewport. */
+.proposal-options-editor table th,
+.proposal-options-editor table td,
+.proposal-options-editor table input,
+.proposal-options-editor table textarea,
+.proposal-options-editor table button,
+.proposal-options-editor .text-xs,
+.proposal-options-editor .text-sm,
+.proposal-options-editor .text-\[13px\] {
+  font-size: 1rem !important;
+}
+
+.proposal-options-editor table th {
+  letter-spacing: normal !important;
+  text-transform: capitalize !important;
+}
+
+.proposal-options-editor table td {
+  vertical-align: middle !important;
+}
+
+/* Match the Additional options price values to their column heading. */
+.proposal-options-editor > section:nth-of-type(1) tbody td:nth-child(4) {
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+  text-align: center !important;
+}
+
+.proposal-options-editor > section:nth-of-type(1) thead th:nth-child(4) {
+  text-align: center !important;
+}
+
+.proposal-options-editor > section:nth-of-type(1) thead th:nth-child(6) {
+  text-align: center !important;
+}
+
+.proposal-options-editor > section:nth-of-type(2) thead th:nth-child(7) {
+  text-align: center !important;
+}
+
+/* Keep each Add button flush with its table; only separate the two groups. */
+.proposal-options-editor > :not([hidden]) {
+  margin-block: 0 !important;
+}
+
+.proposal-options-editor > div + section {
+  margin-top: 0.5rem !important;
+}
+
+.proposal-options-editor > section + div {
+  padding-top: 4rem;
+}
+
+/* Center the Include heading and control within one shared column inset. */
+.proposal-options-editor > section:nth-of-type(1) :is(th, td):nth-child(5) {
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+  text-align: center !important;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -135,9 +195,9 @@ body {
 }
 
 [data-theme] .proposal-step-active {
-  background-color: #dcdee2;
-  border-color: #b8bbc2;
-  color: #171717;
+  background-color: var(--brand-primary);
+  border-color: var(--brand-primary);
+  color: #fff;
 }
 
 [data-theme] .bg-slate-100,
@@ -382,4 +442,3 @@ body {
     color: #78716c;
   }
 }
-

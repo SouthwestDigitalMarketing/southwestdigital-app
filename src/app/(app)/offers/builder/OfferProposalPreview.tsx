@@ -22,13 +22,12 @@ import {
   formatPersonName,
   resolvePrimaryContact,
   useProposalContactInfoDemoState,
+  type ContactInfoState,
 } from "./ProposalContactInfoState";
 import {
-  getAdvancedReceiptManagementPrice,
-  getBudgetReportingPrice,
-  getProjectTrackingPrice,
+  getProposalAdditionalOptions,
+  getProposalBonuses,
   getProposalPricingSnapshotData,
-  getSalesTaxFilingPrice,
   useProposalAssessmentDemoState,
   type AssessmentState,
   type HistoricalCleanupPeriod,
@@ -344,45 +343,34 @@ function buildOptions(assessment: AssessmentState): Record<OptionId, ProposalOpt
         : "Includes our review and assessment, document collection, and the work needed to begin. The fee is $500 plus $20 for each selected cleanup month.",
     };
 
-    // Bonuses
-    const bonuses = [
-      assessment.platformMigrationEnabled && assessment.ongoingBookkeepingPlatform === "stessa" &&
-      (assessment.bonusPackageSelections?.["stessa-migration"]?.includes(id) ?? assessment.includeConditionalStessaMigration)
-        ? { name: "QuickBooks to Stessa Migration", note: "We will move the client's books to Stessa for free when they buy the cleanup and monthly bookkeeping in this offer." }
-        : null,
-      (assessment.bonusPackageSelections?.["tax-preparer-coordination"]?.includes(id) ?? assessment.includeTaxPreparerCoordinationCall)
-        ? { name: "Tax Pro Call", note: "We will meet with the client's tax pro one time. We will answer book questions and make sure they get what they need for year-end taxes." }
-        : null,
-      (assessment.bonusPackageSelections?.["property-reporting-setup"]?.includes(id) ?? assessment.includePropertyLevelReportingSetup)
-        ? { name: "Reports by Property", note: "We will set up the books so the client can see income and costs for each property." }
-        : null,
-      (assessment.bonusPackageSelections?.["document-organization"]?.includes(id) ?? assessment.includeDocumentOrganizationSetup)
-        ? { name: "Organized, Audit-Ready Records", note: "We replace binders, paper files, and loose digital files with one clear system. The client uploads statements, closing papers, and receipts to the portal. We organize them and link them to the right items in the books." }
-        : null,
-      (assessment.bonusPackageSelections?.["quarterly-review"]?.includes(id) ?? assessment.includeQuarterlyFinancialReview)
-        ? { name: "First Quarterly Review", note: "After the first full quarter, we will meet with the client to review reports, answer questions, and plan the next steps." }
-        : null,
-      (assessment.bonusPackageSelections?.["doublehq-client-portal"]?.includes(id) ?? assessment.includeDoubleHqClientPortal)
-        ? { name: "DoubleHQ Client Portal", note: "The client gets one online place to talk with our team, send files, view requests, and check the work in progress." }
-        : null,
-      (assessment.bonusPackageSelections?.["real-estate-chart-of-accounts"]?.includes(id) ?? assessment.includeRealEstateChartOfAccounts)
-        ? { name: "Real Estate Chart of Accounts", note: "We will add our real estate Chart of Accounts to the client's current QuickBooks file." }
-        : null,
-      assessment.ongoingBookkeepingPlatform === "qbo" &&
-      (assessment.bonusPackageSelections?.["new-quickbooks-file"]?.includes(id) ?? assessment.includeNewQuickBooksFileSetup)
-        ? { name: "New QuickBooks Setup", note: "If a fresh start is best, we will build a new QuickBooks file for monthly bookkeeping. It will include our Real Estate Chart of Accounts." }
-        : null,
-    ].filter((b): b is { name: string; note: string } => b !== null)
-      .map((b, i) => ({
-        id: `${id}-bonus-${i}`,
-        serviceName: b.name,
+    const legacyBonusIncluded = (bonusId: string) => ({
+      "stessa-migration": assessment.includeConditionalStessaMigration,
+      "property-reporting-setup": assessment.includePropertyLevelReportingSetup,
+      "document-organization": assessment.includeDocumentOrganizationSetup,
+      "quarterly-review": assessment.includeQuarterlyFinancialReview,
+      "doublehq-client-portal": assessment.includeDoubleHqClientPortal,
+      "real-estate-chart-of-accounts": assessment.includeRealEstateChartOfAccounts,
+      "new-quickbooks-file": assessment.includeNewQuickBooksFileSetup,
+    } as Record<string, boolean>)[bonusId] ?? false;
+    const bonuses = getProposalBonuses(assessment)
+      .filter((bonus) => !bonus.archived)
+      .filter((bonus) => {
+        if (bonus.id === "stessa-migration") return assessment.platformMigrationEnabled && assessment.ongoingBookkeepingPlatform === "stessa";
+        if (bonus.id === "property-reporting-setup" || bonus.id === "real-estate-chart-of-accounts") return assessment.bookSetType === "real-estate-only" || assessment.bookSetType === "mixed-books";
+        if (bonus.id === "new-quickbooks-file") return (assessment.bookSetType === "real-estate-only" || assessment.bookSetType === "mixed-books") && assessment.ongoingBookkeepingPlatform === "qbo";
+        return true;
+      })
+      .filter((bonus) => assessment.bonusPackageSelections[bonus.id]?.includes(id) ?? legacyBonusIncluded(bonus.id))
+      .map((bonus) => ({
+        id: `${id}-bonus-${bonus.id}`,
+        serviceName: bonus.name,
         billStart: "On Acceptance",
         billEnd: "-",
         invoiceType: "Automatic",
         priceType: "Fixed",
         quantity: 1,
         price: 0,
-        note: b.note,
+        note: bonus.description,
       }));
 
     return [id, {
@@ -454,10 +442,18 @@ function ServiceLine({ row, selected = true, onToggle, showPriceWhenUnselected =
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function OfferProposalPreview() {
+export default function OfferProposalPreview({
+  initialAssessment,
+  initialContactInfo,
+  live = false,
+}: {
+  initialAssessment?: Partial<AssessmentState>;
+  initialContactInfo?: Partial<ContactInfoState>;
+  live?: boolean;
+} = {}) {
   const { brand } = useBrand();
-  const { assessment } = useProposalAssessmentDemoState();
-  const { contactInfo } = useProposalContactInfoDemoState();
+  const { assessment } = useProposalAssessmentDemoState({ initialAssessment, persist: !live });
+  const { contactInfo } = useProposalContactInfoDemoState({ initialContactInfo, persist: !live });
   const searchParams = useSearchParams();
   const engagementId = searchParams.get("engagementId") ?? null;
 
@@ -475,9 +471,7 @@ export default function OfferProposalPreview() {
   const [hasTwelveMonthAgreement, setHasTwelveMonthAgreement] = useState(false);
   const [comparisonOpen, setComparisonOpen] = useState(false);
   const [cleanupSelections, setCleanupSelections] = useState<Record<string, boolean>>({});
-  const [addOnSelections, setAddOnSelections] = useState<Record<OptionId, boolean>>({ grow: false, improve: false, maintain: false });
-  const [projectTrackingSelections, setProjectTrackingSelections] = useState<Record<OptionId, boolean>>({ grow: false, improve: false, maintain: false });
-  const [budgetReportingSelections, setBudgetReportingSelections] = useState<Record<OptionId, boolean>>({ grow: false, improve: false, maintain: false });
+  const [additionalOptionSelections, setAdditionalOptionSelections] = useState<Record<OptionId, Record<string, boolean>>>({ grow: {}, improve: {}, maintain: {} });
 
   // Signing / payment state
   const [signerName, setSignerName] = useState(contactName);
@@ -565,8 +559,6 @@ export default function OfferProposalPreview() {
       setSignSubmitting(false);
     }
   }
-  const [salesTaxFilingSelections, setSalesTaxFilingSelections] = useState<Record<OptionId, boolean>>({ grow: false, improve: false, maintain: false });
-
   const recurringDiscountMultiplier = hasTwelveMonthAgreement ? 0.8 : 1;
 
   const cleanupPeriods = assessment.historicalCleanupPeriods
@@ -576,10 +568,20 @@ export default function OfferProposalPreview() {
   const cleanupKey = (optionId: OptionId, periodKey: string) => `${optionId}:${periodKey}`;
   const cleanupIsSelected = (optionId: OptionId, periodKey: string) => cleanupSelections[cleanupKey(optionId, periodKey)] !== false;
 
-  const advancedReceiptRow: ServiceRow = { id: "addon-arm", serviceName: "Advanced Receipt Management", billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: getAdvancedReceiptManagementPrice(assessment), note: serviceTooltips["Advanced Receipt Management"] };
-  const projectTrackingRow: ServiceRow = { id: "addon-pt", serviceName: "Project Tracking", billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: getProjectTrackingPrice(assessment), note: "Track project income, costs, and profitability separately from routine property operations." };
-  const budgetReportingRow: ServiceRow = { id: "addon-br", serviceName: "Budget Setup & Budget vs. Actuals Reporting", billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: getBudgetReportingPrice(assessment), note: serviceTooltips["Budget Setup & Budget vs. Actuals Reporting"] };
-  const salesTaxRow: ServiceRow = { id: "addon-st", serviceName: "Sales Tax Filing & Remittance", billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: getSalesTaxFilingPrice(assessment), note: serviceTooltips["Sales Tax Filing & Remittance"] };
+  const additionalOptionRows = getProposalAdditionalOptions(assessment)
+    .filter((option) => option.showInProposal && !option.archived && option.name.trim())
+    .map((option): ServiceRow => ({
+      id: option.id,
+      serviceName: option.name,
+      billStart: "On Acceptance",
+      billEnd: "Until Cancelled",
+      billEvery: "1 Month",
+      invoiceType: "Automatic",
+      priceType: "Fixed",
+      quantity: 1,
+      price: option.monthlyPrice,
+      note: option.description,
+    }));
 
   const recurringServiceNames = Array.from(new Set(optionMeta.flatMap(({ id }) => options[id].recurringRows.map((r) => r.serviceName))));
   const oneTimeServiceNames   = Array.from(new Set(optionMeta.flatMap(({ id }) => options[id].oneTimeRows.map((r) => r.serviceName))));
@@ -781,10 +783,10 @@ export default function OfferProposalPreview() {
 
                   const recurringTotal =
                     sectionTotal(option.recurringRows) * recurringDiscountMultiplier +
-                    (addOnSelections[id] ? advancedReceiptRow.price : 0) +
-                    (id !== "maintain" && projectTrackingSelections[id] ? projectTrackingRow.price : 0) +
-                    (budgetReportingSelections[id] ? budgetReportingRow.price : 0) +
-                    (salesTaxFilingSelections[id] ? salesTaxRow.price : 0);
+                    additionalOptionRows.reduce(
+                      (total, row) => total + (additionalOptionSelections[id][row.id] ? row.price : 0),
+                      0,
+                    );
 
                   const paidOneTime      = effectiveOneTimeRows.filter((r) => r.price > 0);
                   const optionalCleanup  = paidOneTime.filter((r) => r.cleanupPeriodKey);
@@ -876,22 +878,28 @@ export default function OfferProposalPreview() {
                       {/* Support row */}
                       {supportRow ? <div className="border-t border-slate-200 px-5 py-4"><p className="text-sm font-semibold text-slate-500">{supportRow.serviceName}</p><p className="mt-1 text-sm leading-6 text-slate-600">{getTooltip(supportRow)}</p></div> : <div />}
 
-                      {/* Add-ons */}
-                      <div>
-                        {assessment.offerAdvancedReceiptManagement ? (
-                          <section>
-                            <p className="bg-accent-100 px-5 py-3 text-xs font-bold uppercase tracking-[0.12em] text-brandnavy">Optional monthly add-ons</p>
-                            <div className="px-5 py-4">
-                              <ul className="space-y-2 text-sm text-slate-600">
-                                <ServiceLine row={{ ...advancedReceiptRow, id: `${id}-arm` }} selected={addOnSelections[id]} onToggle={(checked) => setAddOnSelections((p) => ({ ...p, [id]: checked }))} showPriceWhenUnselected priceSuffix="/mo" />
-                              </ul>
-                            </div>
-                          </section>
-                        ) : null}
-                        {id !== "maintain" && assessment.offerProjectTracking ? <div className="px-5 pb-4"><ul className="space-y-2 text-sm text-slate-600"><ServiceLine row={{ ...projectTrackingRow, id: `${id}-pt` }} selected={projectTrackingSelections[id]} onToggle={(checked) => setProjectTrackingSelections((p) => ({ ...p, [id]: checked }))} showPriceWhenUnselected priceSuffix="/mo" /></ul></div> : null}
-                        {assessment.offerBudgetReporting ? <div className="px-5 pb-4"><ul className="space-y-2 text-sm text-slate-600"><ServiceLine row={{ ...budgetReportingRow, id: `${id}-br` }} selected={budgetReportingSelections[id]} onToggle={(checked) => setBudgetReportingSelections((p) => ({ ...p, [id]: checked }))} showPriceWhenUnselected priceSuffix="/mo" /></ul></div> : null}
-                        {assessment.offerSalesTaxFiling ? <div className="px-5 pb-4"><ul className="space-y-2 text-sm text-slate-600"><ServiceLine row={{ ...salesTaxRow, id: `${id}-st` }} selected={salesTaxFilingSelections[id]} onToggle={(checked) => setSalesTaxFilingSelections((p) => ({ ...p, [id]: checked }))} showPriceWhenUnselected priceSuffix="/mo" /></ul></div> : null}
-                      </div>
+                      {additionalOptionRows.length > 0 ? (
+                        <section>
+                          <p className="bg-accent-100 px-5 py-3 text-xs font-bold uppercase tracking-[0.12em] text-brandnavy">Additional options</p>
+                          <div className="px-5 py-4">
+                            <ul className="space-y-2 text-sm text-slate-600">
+                              {additionalOptionRows.map((row) => (
+                                <ServiceLine
+                                  key={row.id}
+                                  row={{ ...row, id: `${id}-${row.id}` }}
+                                  selected={additionalOptionSelections[id][row.id] ?? false}
+                                  onToggle={(checked) => setAdditionalOptionSelections((previous) => ({
+                                    ...previous,
+                                    [id]: { ...previous[id], [row.id]: checked },
+                                  }))}
+                                  showPriceWhenUnselected={row.price > 0}
+                                  priceSuffix={row.price > 0 ? "/mo" : undefined}
+                                />
+                              ))}
+                            </ul>
+                          </div>
+                        </section>
+                      ) : null}
 
                       {/* Bonuses */}
                       {displayedBonuses.length > 0 ? (

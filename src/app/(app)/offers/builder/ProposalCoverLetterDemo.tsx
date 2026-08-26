@@ -15,6 +15,7 @@ import {
   useProposalContactInfoDemoState,
 } from "./ProposalContactInfoState";
 import { useBrand } from "@/lib/brands/context";
+import { getOfferPublicPathAction } from "../who/actions";
 
 const INPUT_CLASS_NAME =
   "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm transition focus:border-brandnavy focus:outline-none focus:ring-2 focus:ring-brandnavy/10";
@@ -26,6 +27,7 @@ export default function ProposalCoverLetterDemo() {
   const { assessment } = useProposalAssessmentDemoState();
   const { contactInfo } = useProposalContactInfoDemoState();
   const [copied, setCopied] = useState(false);
+  const [publicPath, setPublicPath] = useState("");
 
   const resolvedPrimaryContact = resolvePrimaryContact(contactInfo);
   const fallbackOwner = contactInfo.owners[0];
@@ -37,16 +39,14 @@ export default function ProposalCoverLetterDemo() {
     (fallbackOwner ? formatPersonName(fallbackOwner.firstName, fallbackOwner.lastName) : "");
   const companyName = contactInfo.companyName || "your business";
   const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const offerQuery =
-    typeof window !== "undefined" ? window.location.search : "";
-  const proposalUrl = `${origin}/offers/preview${offerQuery}`;
+  const proposalUrl = publicPath ? `${origin}${publicPath}` : "";
   const subject = `Your bookkeeping proposal for ${companyName}`;
   const emailBody = `Hi ${recipientFirstName},
 
 Thank you for taking the time to meet with me. I put together a bookkeeping proposal for ${companyName}.
 
 You can review it here:
-${proposalUrl}
+${proposalUrl || "[Publish changes to generate the proposal link]"}
 
 The proposal shows your service options, what each option includes, and the price. You can pick the option that works best for you.
 
@@ -67,6 +67,14 @@ ${emailBody}`;
     const timeout = window.setTimeout(() => setCopied(false), 2000);
     return () => window.clearTimeout(timeout);
   }, [copied]);
+
+  useEffect(() => {
+    const offerId = new URLSearchParams(window.location.search).get("offer");
+    if (!offerId) return;
+    void getOfferPublicPathAction(offerId).then((path) => {
+      setPublicPath(path ?? "");
+    });
+  }, []);
 
   async function handleCopy() {
     try {
@@ -108,16 +116,22 @@ ${emailBody}`;
             <label className="grid gap-2">
               <span className={FIELD_LABEL_CLASS}>Proposal Link</span>
               <span className="flex gap-2">
-                <input readOnly value={proposalUrl} className={INPUT_CLASS_NAME} />
-                <a
-                  href={proposalUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label="Open proposal link"
-                  className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-slate-300 text-slate-600 transition hover:bg-slate-50"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                </a>
+                <input readOnly value={proposalUrl || "Publish changes to generate a client link."} className={INPUT_CLASS_NAME} />
+                {proposalUrl ? (
+                  <a
+                    href={proposalUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label="Open proposal link"
+                    className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-slate-300 text-slate-600 transition hover:bg-slate-50"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                  </a>
+                ) : (
+                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-slate-200 text-slate-300">
+                    <ExternalLink className="h-4 w-4" />
+                  </span>
+                )}
               </span>
             </label>
 
@@ -129,7 +143,8 @@ ${emailBody}`;
             <button
               type="button"
               onClick={() => void handleCopy()}
-              className="inline-flex h-11 items-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-black"
+              disabled={!proposalUrl}
+              className="inline-flex h-11 items-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-40"
             >
               {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
               {copied ? "Copied!" : "Copy Email"}

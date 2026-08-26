@@ -92,9 +92,7 @@ function StepPill({
   const pillClass =
     state === "active"
       ? "proposal-step-active border shadow-sm"
-      : state === "complete"
-        ? "border-brandnavy-200 bg-brandnavy-50 text-brandnavy"
-        : "border-slate-300 bg-white text-slate-400";
+      : "border-slate-300 bg-white text-slate-400";
   const content = (
     <span
       className={`relative z-10 inline-flex h-7 items-center justify-center whitespace-nowrap rounded-full border px-3 text-xs font-semibold transition ${pillClass} ${

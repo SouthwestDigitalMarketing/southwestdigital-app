@@ -170,6 +170,20 @@ type BankOption =
   | "other"
   | "unknown";
 type CountValue = number | "";
+export type ProposalAdditionalOption = {
+  id: string;
+  name: string;
+  description: string;
+  monthlyPrice: number;
+  showInProposal: boolean;
+  archived: boolean;
+};
+export type ProposalBonus = {
+  id: string;
+  name: string;
+  description: string;
+  archived: boolean;
+};
 export type QboAccessStatus =
   | "not_requested"
   | "requested_not_received"
@@ -240,7 +254,7 @@ export type AssessmentState = {
   includeDoubleHqClientPortal: boolean;
   includeRealEstateChartOfAccounts: boolean;
   includeNewQuickBooksFileSetup: boolean;
-  bonusPackageSelections: Record<ProposalBonusId, PackageId[]>;
+  bonusPackageSelections: Record<string, PackageId[]>;
   offerAdvancedReceiptManagement: boolean;
   advancedReceiptManagementPriceOverride: number | null;
   offerProjectTracking: boolean;
@@ -250,6 +264,8 @@ export type AssessmentState = {
   offerSalesTaxFiling: boolean;
   salesTaxFilingPriceOverride: number | null;
   includeRegisteredAgentService: boolean;
+  additionalOptions: ProposalAdditionalOption[];
+  bonuses: ProposalBonus[];
   featuredImageUrl: string;
   featuredVideoUrl: string;
   featuredMediaId: string;
@@ -424,6 +440,8 @@ const INITIAL_ASSESSMENT: AssessmentState = {
   offerSalesTaxFiling: false,
   salesTaxFilingPriceOverride: null,
   includeRegisteredAgentService: false,
+  additionalOptions: [],
+  bonuses: [],
   featuredImageUrl: "",
   featuredVideoUrl: "",
   featuredMediaId: "",
@@ -467,6 +485,33 @@ export function getBudgetReportingPrice(assessment: AssessmentState) {
 
 export function getSalesTaxFilingPrice(assessment: AssessmentState) {
   return assessment.salesTaxFilingPriceOverride ?? 650;
+}
+
+export function getProposalAdditionalOptions(assessment: AssessmentState): ProposalAdditionalOption[] {
+  if (assessment.additionalOptions.length > 0) return assessment.additionalOptions;
+
+  return [
+    { id: "advanced-receipt-management", name: "Advanced Receipt Management", description: "Enhanced receipt collection, organization, and matching support.", monthlyPrice: getAdvancedReceiptManagementPrice(assessment), showInProposal: assessment.offerAdvancedReceiptManagement, archived: false },
+    { id: "project-tracking", name: "Project Tracking", description: "Income, cost, and profitability tracking for Improve and Grow.", monthlyPrice: getProjectTrackingPrice(assessment), showInProposal: assessment.offerProjectTracking, archived: false },
+    { id: "budget-reporting", name: "Budget Setup & Budget vs. Actuals Reporting", description: "Build the client’s budget and provide recurring budget-versus-actuals reporting.", monthlyPrice: getBudgetReportingPrice(assessment), showInProposal: assessment.offerBudgetReporting, archived: false },
+    { id: "sales-tax-filing", name: "Sales Tax Filing & Remittance", description: "Calculate, file, and remit the client’s sales tax payments.", monthlyPrice: getSalesTaxFilingPrice(assessment), showInProposal: assessment.offerSalesTaxFiling, archived: false },
+    { id: "tax-preparer-coordination", name: "Tax Preparer Coordination", description: "Coordinate with the client’s tax preparer and provide organized bookkeeping records.", monthlyPrice: 0, showInProposal: assessment.includeTaxPreparerCoordinationCall, archived: false },
+    { id: "registered-agent-service", name: "Registered Agent Service", description: "Forward official state correspondence to the designated contact.", monthlyPrice: 0, showInProposal: assessment.includeRegisteredAgentService, archived: false },
+  ];
+}
+
+const DEFAULT_PROPOSAL_BONUSES: ProposalBonus[] = [
+  { id: "stessa-migration", name: "QuickBooks to Stessa Migration", description: "We will move the client's books to Stessa for free when they buy the cleanup and monthly bookkeeping in this offer.", archived: false },
+  { id: "property-reporting-setup", name: "Reports by Property", description: "We will set up the books so the client can see income and costs for each property.", archived: false },
+  { id: "document-organization", name: "Organized, Audit-Ready Records", description: "We replace paper files and loose digital files with one clear system. The client uploads records to the portal. We organize them and link them to the right items in the books.", archived: false },
+  { id: "quarterly-review", name: "First Quarterly Review", description: "After the first full quarter, we will meet with the client to review reports, answer questions, and plan the next steps.", archived: false },
+  { id: "doublehq-client-portal", name: "DoubleHQ Client Portal", description: "The client gets one online place to talk with our team, send files, view requests, and check the work in progress.", archived: false },
+  { id: "real-estate-chart-of-accounts", name: "Real Estate Chart of Accounts", description: "We will add our real estate Chart of Accounts to the client's current QuickBooks file. This makes reports easier to read and keeps the books consistent.", archived: false },
+  { id: "new-quickbooks-file", name: "New QuickBooks Setup", description: "If a fresh start is best, we will build a new QuickBooks file for monthly bookkeeping. It will include our Real Estate Chart of Accounts.", archived: false },
+];
+
+export function getProposalBonuses(assessment: AssessmentState): ProposalBonus[] {
+  return assessment.bonuses.length > 0 ? assessment.bonuses : DEFAULT_PROPOSAL_BONUSES;
 }
 
 const PACKAGES: PackageDefinition[] = [
@@ -986,10 +1031,11 @@ function withComplexityUnknownDefaults(assessment: AssessmentState): AssessmentS
 function readStoredAssessment(
   storageKey: string,
   initialAssessment?: Partial<AssessmentState>,
+  readStorage = true,
 ): AssessmentState {
   const initialState = { ...INITIAL_ASSESSMENT, ...initialAssessment };
 
-  if (typeof window === "undefined") {
+  if (typeof window === "undefined" || !readStorage) {
     return withComplexityUnknownDefaults(initialState);
   }
 
@@ -1038,9 +1084,11 @@ export function hasCatchUpPricingInputs(assessment: AssessmentState) {
 export function useProposalAssessmentDemoState({
   engagementId,
   initialAssessment,
+  persist = true,
 }: {
   engagementId?: string;
   initialAssessment?: Partial<AssessmentState>;
+  persist?: boolean;
 } = {}) {
   const resolvedEngagementId =
     engagementId ??
@@ -1051,16 +1099,17 @@ export function useProposalAssessmentDemoState({
     ? `${ASSESSMENT_STORAGE_KEY}:${resolvedEngagementId}`
     : ASSESSMENT_STORAGE_KEY;
   const [assessment, setAssessment] = useState<AssessmentState>(() =>
-    readStoredAssessment(storageKey, initialAssessment),
+    readStoredAssessment(storageKey, initialAssessment, persist),
   );
 
   useEffect(() => {
+    if (!persist) return;
     try {
       window.localStorage.setItem(storageKey, JSON.stringify(assessment));
     } catch {
       // Ignore localStorage failures in demo mode.
     }
-  }, [assessment, storageKey]);
+  }, [assessment, persist, storageKey]);
 
   function updateAssessment<Key extends keyof AssessmentState>(
     key: Key,

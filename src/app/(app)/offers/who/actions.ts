@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { randomBytes } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireQuoteStaffOrThrow } from "@/lib/quotes/access";
@@ -242,4 +243,53 @@ export async function saveOfferDraftAction(
 
   revalidatePath("/offers");
   revalidatePath(`/offers/${existing.id}`);
+}
+
+export async function publishOfferChangesAction(
+  offerId: string,
+  state: { contactInfo?: unknown; assessment?: unknown },
+) {
+  const { brand } = await requireQuoteStaffOrThrow();
+  const existing = await prisma.quote.findFirst({
+    where: { id: offerId, brandId: brand.id },
+    select: { id: true, status: true, snapshotJson: true, kind: true, publicToken: true },
+  });
+  if (!existing) throw new Error("Offer not found.");
+  if (existing.status === "archived") throw new Error("This offer is archived.");
+
+  const previous =
+    existing.snapshotJson && typeof existing.snapshotJson === "object"
+      ? (existing.snapshotJson as Record<string, unknown>)
+      : {};
+  const snapshot = asJsonObject({
+    ...previous,
+    kind: existing.kind,
+    contactInfo: state.contactInfo ?? previous.contactInfo,
+    assessment: state.assessment ?? previous.assessment,
+  });
+  const publicToken = existing.publicToken ?? randomBytes(32).toString("base64url");
+
+  await prisma.quote.update({
+    where: { id: existing.id },
+    data: {
+      snapshotJson: snapshot,
+      publishedSnapshotJson: snapshot,
+      publicToken,
+      publishedAt: new Date(),
+    },
+  });
+
+  revalidatePath("/offers");
+  revalidatePath(`/offers/${existing.id}`);
+  revalidatePath(`/proposal/${publicToken}`);
+  return { publicPath: `/proposal/${publicToken}` };
+}
+
+export async function getOfferPublicPathAction(offerId: string) {
+  const { brand } = await requireQuoteStaffOrThrow();
+  const quote = await prisma.quote.findFirst({
+    where: { id: offerId, brandId: brand.id, publishedAt: { not: null } },
+    select: { publicToken: true },
+  });
+  return quote?.publicToken ? `/proposal/${quote.publicToken}` : null;
 }

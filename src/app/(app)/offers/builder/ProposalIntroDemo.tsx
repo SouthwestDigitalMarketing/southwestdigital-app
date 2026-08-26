@@ -6,12 +6,7 @@ import { getProposalTheme, PROPOSAL_THEMES } from "./proposalThemes";
 import { useBrand } from "@/lib/brands/context";
 import { ProposalReviewsSection } from "./ProposalReviewsSection";
 import ProposalAppDemoHeader from "./ProposalAppDemoHeader";
-import PricingSnapshotSidebar from "./PricingSnapshotSidebar";
-import {
-  getProposalPricingSnapshotCleanupCard,
-  getProposalPricingSnapshotItems,
-  useProposalAssessmentDemoState,
-} from "./ProposalCreationWorkspaceDemo";
+import { useProposalAssessmentDemoState } from "./ProposalCreationWorkspaceDemo";
 
 export type BrandMediaItem = {
   id: string;
@@ -27,8 +22,6 @@ const DEFAULT_BODY =
 export default function ProposalIntroDemo({ mediaItems }: { mediaItems: BrandMediaItem[] }) {
   const { assessment, updateAssessment } = useProposalAssessmentDemoState();
   const { brand } = useBrand();
-  const pricingItems = getProposalPricingSnapshotItems(assessment);
-  const cleanupCard = getProposalPricingSnapshotCleanupCard(assessment);
 
   const brandDefaultVideoUrl = brand.theme?.proposalFeaturedVideoUrl ?? null;
   const brandDefaultImageUrl = brand.theme?.proposalFeaturedImageUrl ?? null;
@@ -80,7 +73,7 @@ export default function ProposalIntroDemo({ mediaItems }: { mediaItems: BrandMed
           viewProposalAsNext
         />
 
-        <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_440px] 2xl:grid-cols-[minmax(0,1.55fr)_470px]">
+        <div className="mt-8">
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-slate-950">Proposal Intro</h1>
             <p className="mt-1 text-sm text-slate-500">
@@ -379,7 +372,6 @@ export default function ProposalIntroDemo({ mediaItems }: { mediaItems: BrandMed
               </div>
             </div>
           </div>
-          <PricingSnapshotSidebar items={pricingItems} cleanupCard={cleanupCard} />
         </div>
       </section>
     </main>

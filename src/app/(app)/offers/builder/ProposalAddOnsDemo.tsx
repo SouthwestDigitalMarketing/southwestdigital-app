@@ -1,281 +1,54 @@
 "use client";
 
-import { Check, Minus } from "lucide-react";
+import { Archive, ArchiveRestore, Check, GripVertical, Minus, Pencil, Plus, Trash2, X } from "lucide-react";
+import { useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import ProposalAppDemoHeader from "./ProposalAppDemoHeader";
-import PricingSnapshotSidebar from "./PricingSnapshotSidebar";
-import {
-  getAdvancedReceiptManagementPrice,
-  getBudgetReportingPrice,
-  getProposalPricingSnapshotCleanupCard,
-  getProposalPricingSnapshotItems,
-  getProjectTrackingPrice,
-  getSalesTaxFilingPrice,
-  useProposalAssessmentDemoState,
-  type PackageId,
-} from "./ProposalCreationWorkspaceDemo";
-import { BONUS_OPTIONS, PACKAGE_COLUMNS } from "./ProposalBonusesDemo";
+import { getProposalAdditionalOptions, getProposalBonuses, useProposalAssessmentDemoState, type PackageId, type ProposalAdditionalOption, type ProposalBonus } from "./ProposalCreationWorkspaceDemo";
+
+const PACKAGES: Array<{ id: PackageId; label: string }> = [{ id: "grow", label: "Grow" }, { id: "improve", label: "Improve" }, { id: "maintain", label: "Maintain" }];
 
 export default function ProposalAddOnsDemo() {
   const { assessment, updateAssessment } = useProposalAssessmentDemoState();
-  const offered = assessment.offerAdvancedReceiptManagement;
-  const calculatedPrice = getAdvancedReceiptManagementPrice({
-    ...assessment,
-    advancedReceiptManagementPriceOverride: null,
-  });
-  const price = getAdvancedReceiptManagementPrice(assessment);
-  const transactionLabel = assessment.transactionBand && assessment.transactionBand !== "unknown"
-    ? `${assessment.transactionBand} monthly transactions`
-    : "transaction volume not yet confirmed";
-  const hasKnownTransactionRange = Boolean(assessment.transactionBand && assessment.transactionBand !== "unknown");
-  const projectTrackingPrice = getProjectTrackingPrice(assessment);
-  const budgetReportingPrice = getBudgetReportingPrice(assessment);
-  const salesTaxFilingPrice = getSalesTaxFilingPrice(assessment);
-  const pricingItems = getProposalPricingSnapshotItems(assessment);
-  const cleanupCard = getProposalPricingSnapshotCleanupCard(assessment);
+  const [editingOptionIds, setEditingOptionIds] = useState<string[]>([]);
+  const [editingBonusIds, setEditingBonusIds] = useState<string[]>([]);
+  const [draggingOptionId, setDraggingOptionId] = useState<string | null>(null);
+  const [draggingBonusId, setDraggingBonusId] = useState<string | null>(null);
+  const additionalOptions = getProposalAdditionalOptions(assessment);
+  const bonuses = getProposalBonuses(assessment);
+  const visibleOptions = additionalOptions.filter((item) => !item.archived);
+  const archivedOptions = additionalOptions.filter((item) => item.archived);
+  const visibleBonuses = bonuses.filter((item) => !item.archived);
+  const archivedBonuses = bonuses.filter((item) => item.archived);
 
-  function bonusIsApplicable(bonus: (typeof BONUS_OPTIONS)[number]) {
-    const isRealEstateBookSet =
-      assessment.bookSetType === "real-estate-only" || assessment.bookSetType === "mixed-books";
-    if (bonus.id === "stessa-migration") return assessment.platformMigrationEnabled && assessment.ongoingBookkeepingPlatform === "stessa";
-    if (bonus.id === "property-reporting-setup" || bonus.id === "real-estate-chart-of-accounts") {
-      return isRealEstateBookSet;
-    }
-    if (bonus.id === "new-quickbooks-file") {
-      return isRealEstateBookSet && assessment.ongoingBookkeepingPlatform === "qbo";
-    }
-    return true;
-  }
+  function updateOption(id: string, changes: Partial<ProposalAdditionalOption>) { updateAssessment("additionalOptions", additionalOptions.map((item) => item.id === id ? { ...item, ...changes } : item)); }
+  function addOption() { const id = `additional-${crypto.randomUUID()}`; updateAssessment("additionalOptions", [...additionalOptions, { id, name: "New additional option", description: "Describe what the client can select.", monthlyPrice: 0, showInProposal: true, archived: false }]); setEditingOptionIds((ids) => [...ids, id]); }
+  function deleteOption(id: string) { updateAssessment("additionalOptions", additionalOptions.filter((item) => item.id !== id)); }
+  function moveOption(targetId: string) { if (!draggingOptionId || draggingOptionId === targetId) return; const next = moveItem(additionalOptions, draggingOptionId, targetId); updateAssessment("additionalOptions", next); setDraggingOptionId(null); }
+  function isBonusApplicable(bonus: ProposalBonus) { const realEstate = assessment.bookSetType === "real-estate-only" || assessment.bookSetType === "mixed-books"; if (bonus.id === "stessa-migration") return assessment.platformMigrationEnabled && assessment.ongoingBookkeepingPlatform === "stessa"; if (bonus.id === "property-reporting-setup" || bonus.id === "real-estate-chart-of-accounts") return realEstate; if (bonus.id === "new-quickbooks-file") return realEstate && assessment.ongoingBookkeepingPlatform === "qbo"; return true; }
+  function legacyBonusIncluded(id: string) { return ({ "stessa-migration": assessment.includeConditionalStessaMigration, "property-reporting-setup": assessment.includePropertyLevelReportingSetup, "document-organization": assessment.includeDocumentOrganizationSetup, "quarterly-review": assessment.includeQuarterlyFinancialReview, "doublehq-client-portal": assessment.includeDoubleHqClientPortal, "real-estate-chart-of-accounts": assessment.includeRealEstateChartOfAccounts, "new-quickbooks-file": assessment.includeNewQuickBooksFileSetup } as Record<string, boolean>)[id] ?? false; }
+  function selectedBonusPackages(bonus: ProposalBonus) { if (!isBonusApplicable(bonus)) return []; const saved = assessment.bonusPackageSelections[bonus.id]; return Array.isArray(saved) ? saved : legacyBonusIncluded(bonus.id) ? PACKAGES.map(({ id }) => id) : []; }
+  function updateBonus(id: string, changes: Partial<ProposalBonus>) { updateAssessment("bonuses", bonuses.map((item) => item.id === id ? { ...item, ...changes } : item)); }
+  function addBonus() { const id = `bonus-${crypto.randomUUID()}`; updateAssessment("bonuses", [...bonuses, { id, name: "New bonus", description: "Describe the included benefit.", archived: false }]); updateAssessment("bonusPackageSelections", { ...assessment.bonusPackageSelections, [id]: PACKAGES.map(({ id: packageId }) => packageId) }); setEditingBonusIds((ids) => [...ids, id]); }
+  function deleteBonus(id: string) { updateAssessment("bonuses", bonuses.filter((item) => item.id !== id)); const selections = Object.fromEntries(Object.entries(assessment.bonusPackageSelections).filter(([selectionId]) => selectionId !== id)); updateAssessment("bonusPackageSelections", selections); }
+  function moveBonus(targetId: string) { if (!draggingBonusId || draggingBonusId === targetId) return; const next = moveItem(bonuses, draggingBonusId, targetId); updateAssessment("bonuses", next); setDraggingBonusId(null); }
+  function toggleBonusPackage(bonus: ProposalBonus, packageId: PackageId) { const selected = selectedBonusPackages(bonus); const next = selected.includes(packageId) ? selected.filter((id) => id !== packageId) : [...selected, packageId]; updateAssessment("bonusPackageSelections", { ...assessment.bonusPackageSelections, [bonus.id]: next }); }
+  function setAllBonusesForPackage(packageId: PackageId, checked: boolean) { const next = { ...assessment.bonusPackageSelections }; for (const bonus of visibleBonuses) { if (!isBonusApplicable(bonus)) continue; const selected = selectedBonusPackages(bonus); next[bonus.id] = checked ? Array.from(new Set([...selected, packageId])) : selected.filter((id) => id !== packageId); } updateAssessment("bonusPackageSelections", next); }
 
-  function selectedBonusPackages(bonus: (typeof BONUS_OPTIONS)[number]) {
-    if (!bonusIsApplicable(bonus)) return [];
-    const saved = assessment.bonusPackageSelections?.[bonus.id];
-    if (Array.isArray(saved)) return saved;
-    return assessment[bonus.assessmentKey] ? PACKAGE_COLUMNS.map(({ id }) => id) : [];
-  }
-
-  function toggleBonusPackage(bonus: (typeof BONUS_OPTIONS)[number], packageId: PackageId) {
-    const current = selectedBonusPackages(bonus);
-    const next = current.includes(packageId) ? current.filter((id) => id !== packageId) : [...current, packageId];
-    updateAssessment("bonusPackageSelections", { ...assessment.bonusPackageSelections, [bonus.id]: next });
-    updateAssessment(bonus.assessmentKey, next.length > 0);
-  }
-
-  function setAllBonusesForPackage(packageId: PackageId, checked: boolean) {
-    const nextSelections = { ...assessment.bonusPackageSelections };
-    for (const bonus of BONUS_OPTIONS) {
-      if (!bonusIsApplicable(bonus)) continue;
-      const current = selectedBonusPackages(bonus);
-      nextSelections[bonus.id] = checked ? Array.from(new Set([...current, packageId])) : current.filter((id) => id !== packageId);
-    }
-    updateAssessment("bonusPackageSelections", nextSelections);
-    for (const bonus of BONUS_OPTIONS) updateAssessment(bonus.assessmentKey, (nextSelections[bonus.id]?.length ?? 0) > 0);
-  }
-
-  return (
-    <main className="min-h-screen bg-white">
-      <section className="mx-auto w-full max-w-[1720px] px-5 py-6 lg:px-8">
-        <ProposalAppDemoHeader
-          currentStep="add-ons"
-          previousHref="/offers/calculator"
-          nextHref="/offers/intro"
-        />
-
-        <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_440px] 2xl:grid-cols-[minmax(0,1.55fr)_470px]">
-          <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-slate-950">Add-ons</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Choose which optional paid services the lead may add to their package. Add-ons are not included unless the lead selects them.
-          </p>
-
-          <h2 className="mt-8 text-lg font-bold text-slate-950">Optional Add-ons</h2>
-          <section className={`mt-3 rounded-xl border p-5 ${offered ? "border-brandnavy-300 bg-brandnavy-50/30" : "border-slate-200 proposal-builder-card"}`}>
-            <div className="flex items-start gap-4">
-              <button
-                type="button"
-                role="checkbox"
-                aria-checked={offered}
-                onClick={() => updateAssessment("offerAdvancedReceiptManagement", !offered)}
-                className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md border transition ${offered ? "border-brandnavy bg-brandnavy text-white" : "border-slate-300 bg-white text-transparent"}`}
-              >
-                <Check className="h-4 w-4" strokeWidth={3} />
-              </button>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <h2 className="font-semibold text-slate-950">Advanced Receipt Management</h2>
-                    <p className="mt-1 max-w-xl text-sm leading-6 text-slate-600">
-                      Enhanced receipt collection, organization, and matching support. The lead decides whether to add it after selecting a package.
-                    </p>
-                  </div>
-                  <label className="text-sm font-semibold text-slate-700">
-                    Monthly price
-                    <span className="mt-1 flex items-center rounded-lg border border-slate-300 bg-white px-3 py-2">
-                      <span className="mr-1 text-slate-400">$</span>
-                      <input
-                        type="number"
-                        min={calculatedPrice}
-                        step="1"
-                        disabled={!offered}
-                        value={price}
-                        onChange={(event) => updateAssessment("advancedReceiptManagementPriceOverride", Math.max(calculatedPrice, Number(event.target.value) || 0))}
-                        className="w-24 bg-transparent text-right outline-none disabled:text-slate-400"
-                      />
-                    </span>
-                  </label>
-                </div>
-                <div className="mt-4 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
-                  Minimum based on <span className="font-semibold text-slate-900">{transactionLabel}</span>{hasKnownTransactionRange ? " at $1 per transaction, using the top of the selected range" : " using the temporary default until a range is selected"}: <span className="font-semibold text-slate-900">${calculatedPrice.toLocaleString("en-US")}/mo</span>
-                  {assessment.advancedReceiptManagementPriceOverride !== null ? (
-                    <button
-                      type="button"
-                      onClick={() => updateAssessment("advancedReceiptManagementPriceOverride", null)}
-                      className="ml-3 font-semibold text-brandnavy underline underline-offset-2"
-                    >
-                      Use calculated price
-                    </button>
-                  ) : null}
-                </div>
-                <p className={`mt-4 text-xs font-semibold uppercase tracking-wide ${offered ? "text-emerald-700" : "text-slate-400"}`}>
-                  {offered ? "Offered to the lead — not included by default" : "Not offered in this proposal"}
-                </p>
-              </div>
-            </div>
-          </section>
-
-          <section className={`mt-4 rounded-xl border p-5 ${assessment.offerProjectTracking ? "border-brandnavy-300 bg-brandnavy-50/30" : "border-slate-200 proposal-builder-card"}`}>
-            <div className="flex items-start gap-4">
-              <button type="button" role="checkbox" aria-checked={assessment.offerProjectTracking} onClick={() => updateAssessment("offerProjectTracking", !assessment.offerProjectTracking)} className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md border transition ${assessment.offerProjectTracking ? "border-brandnavy bg-brandnavy text-white" : "border-slate-300 bg-white text-transparent"}`}><Check className="h-4 w-4" strokeWidth={3} /></button>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div><h2 className="font-semibold text-slate-950">Project Tracking</h2><p className="mt-1 max-w-xl text-sm leading-6 text-slate-600">Offer project income, cost, and profitability tracking to leads who choose Improve or Grow. This add-on is not available with Maintain.</p></div>
-                  <label className="text-sm font-semibold text-slate-700">Monthly price<span className="mt-1 flex items-center rounded-lg border border-slate-300 bg-white px-3 py-2"><span className="mr-1 text-slate-400">$</span><input type="number" min="0" step="1" disabled={!assessment.offerProjectTracking} value={projectTrackingPrice} onChange={(event) => updateAssessment("projectTrackingPriceOverride", Math.max(0, Number(event.target.value) || 0))} className="w-24 bg-transparent text-right outline-none disabled:text-slate-400" /></span></label>
-                </div>
-                <div className="mt-4 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">Default monthly price: <span className="font-semibold text-slate-900">$150</span>{assessment.projectTrackingPriceOverride !== null ? <button type="button" onClick={() => updateAssessment("projectTrackingPriceOverride", null)} className="ml-3 font-semibold text-brandnavy underline underline-offset-2">Use default price</button> : null}</div>
-                <p className={`mt-4 text-xs font-semibold uppercase tracking-wide ${assessment.offerProjectTracking ? "text-emerald-700" : "text-slate-400"}`}>{assessment.offerProjectTracking ? "Offered with Improve and Grow · unavailable with Maintain" : "Not offered in this proposal"}</p>
-              </div>
-            </div>
-          </section>
-
-          <section className={`mt-4 rounded-xl border p-5 ${assessment.offerBudgetReporting ? "border-brandnavy-300 bg-brandnavy-50/30" : "border-slate-200 proposal-builder-card"}`}>
-            <div className="flex items-start gap-4">
-              <button type="button" role="checkbox" aria-checked={assessment.offerBudgetReporting} onClick={() => updateAssessment("offerBudgetReporting", !assessment.offerBudgetReporting)} className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md border transition ${assessment.offerBudgetReporting ? "border-brandnavy bg-brandnavy text-white" : "border-slate-300 bg-white text-transparent"}`}><Check className="h-4 w-4" strokeWidth={3} /></button>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div><h2 className="font-semibold text-slate-950">Budget Setup &amp; Budget vs. Actuals Reporting</h2><p className="mt-1 max-w-xl text-sm leading-6 text-slate-600">We build the client's budget and provide recurring budget-vs-actuals reporting to track performance against it. The lead decides whether to add it after selecting a package.</p></div>
-                  <label className="text-sm font-semibold text-slate-700">Monthly price<span className="mt-1 flex items-center rounded-lg border border-slate-300 bg-white px-3 py-2"><span className="mr-1 text-slate-400">$</span><input type="number" min="0" step="1" disabled={!assessment.offerBudgetReporting} value={budgetReportingPrice} onChange={(event) => updateAssessment("budgetReportingPriceOverride", Math.max(0, Number(event.target.value) || 0))} className="w-24 bg-transparent text-right outline-none disabled:text-slate-400" /></span></label>
-                </div>
-                <div className="mt-4 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">Default monthly price: <span className="font-semibold text-slate-900">$150</span>{assessment.budgetReportingPriceOverride !== null ? <button type="button" onClick={() => updateAssessment("budgetReportingPriceOverride", null)} className="ml-3 font-semibold text-brandnavy underline underline-offset-2">Use default price</button> : null}</div>
-                <p className={`mt-4 text-xs font-semibold uppercase tracking-wide ${assessment.offerBudgetReporting ? "text-emerald-700" : "text-slate-400"}`}>{assessment.offerBudgetReporting ? "Offered to the lead — not included by default" : "Not offered in this proposal"}</p>
-              </div>
-            </div>
-          </section>
-
-          <section className={`mt-4 rounded-xl border p-5 ${assessment.offerSalesTaxFiling ? "border-brandnavy-300 bg-brandnavy-50/30" : "border-slate-200 proposal-builder-card"}`}>
-            <div className="flex items-start gap-4">
-              <button type="button" role="checkbox" aria-checked={assessment.offerSalesTaxFiling} onClick={() => updateAssessment("offerSalesTaxFiling", !assessment.offerSalesTaxFiling)} className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md border transition ${assessment.offerSalesTaxFiling ? "border-brandnavy bg-brandnavy text-white" : "border-slate-300 bg-white text-transparent"}`}><Check className="h-4 w-4" strokeWidth={3} /></button>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div><h2 className="font-semibold text-slate-950">Sales Tax Filing &amp; Remittance</h2><p className="mt-1 max-w-xl text-sm leading-6 text-slate-600">We calculate, file, and remit the client's sales tax payments to the comptroller on their behalf. The lead decides whether to add it after selecting a package.</p></div>
-                  <label className="text-sm font-semibold text-slate-700">Monthly price<span className="mt-1 flex items-center rounded-lg border border-slate-300 bg-white px-3 py-2"><span className="mr-1 text-slate-400">$</span><input type="number" min="0" step="1" disabled={!assessment.offerSalesTaxFiling} value={salesTaxFilingPrice} onChange={(event) => updateAssessment("salesTaxFilingPriceOverride", Math.max(0, Number(event.target.value) || 0))} className="w-24 bg-transparent text-right outline-none disabled:text-slate-400" /></span></label>
-                </div>
-                <div className="mt-4 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">Default monthly price: <span className="font-semibold text-slate-900">$650</span>{assessment.salesTaxFilingPriceOverride !== null ? <button type="button" onClick={() => updateAssessment("salesTaxFilingPriceOverride", null)} className="ml-3 font-semibold text-brandnavy underline underline-offset-2">Use default price</button> : null}</div>
-                <p className={`mt-4 text-xs font-semibold uppercase tracking-wide ${assessment.offerSalesTaxFiling ? "text-emerald-700" : "text-slate-400"}`}>{assessment.offerSalesTaxFiling ? "Offered to the lead — not included by default" : "Not offered in this proposal"}</p>
-              </div>
-            </div>
-          </section>
-
-          <section className="mt-10">
-            <h2 className="text-lg font-bold text-slate-950">Complimentary Services</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Value-adding services that can be included in the offer at no additional charge.
-            </p>
-
-            <div className={`mt-3 rounded-xl border p-5 ${assessment.includeTaxPreparerCoordinationCall ? "border-brandnavy-300 bg-brandnavy-50/30" : "border-slate-200 proposal-builder-card"}`}>
-              <div className="flex items-start gap-4">
-                <button
-                  type="button"
-                  role="checkbox"
-                  aria-checked={assessment.includeTaxPreparerCoordinationCall}
-                  onClick={() => updateAssessment("includeTaxPreparerCoordinationCall", !assessment.includeTaxPreparerCoordinationCall)}
-                  className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md border transition ${assessment.includeTaxPreparerCoordinationCall ? "border-brandnavy bg-brandnavy text-white" : "border-slate-300 bg-white text-transparent"}`}
-                >
-                  <Check className="h-4 w-4" strokeWidth={3} />
-                </button>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                      <h3 className="font-semibold text-slate-950">Tax Preparer Coordination</h3>
-                      <p className="mt-1 max-w-xl text-sm leading-6 text-slate-600">
-                        We&apos;ll coordinate with the client&apos;s tax preparer, provide organized bookkeeping records, and answer bookkeeping questions that arise during tax preparation. Tax preparation and tax advice are not included.
-                      </p>
-                    </div>
-                    <p className="text-sm font-semibold text-slate-700">Included at no additional charge</p>
-                  </div>
-                  <p className={`mt-4 text-xs font-semibold uppercase tracking-wide ${assessment.includeTaxPreparerCoordinationCall ? "text-emerald-700" : "text-slate-400"}`}>
-                    {assessment.includeTaxPreparerCoordinationCall ? "Included in this proposal" : "Not included in this proposal"}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className={`mt-3 rounded-xl border p-5 ${assessment.includeRegisteredAgentService ? "border-brandnavy-300 bg-brandnavy-50/30" : "border-slate-200 proposal-builder-card"}`}>
-              <div className="flex items-start gap-4">
-                <button
-                  type="button"
-                  role="checkbox"
-                  aria-checked={assessment.includeRegisteredAgentService}
-                  onClick={() => updateAssessment("includeRegisteredAgentService", !assessment.includeRegisteredAgentService)}
-                  className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md border transition ${assessment.includeRegisteredAgentService ? "border-brandnavy bg-brandnavy text-white" : "border-slate-300 bg-white text-transparent"}`}
-                >
-                  <Check className="h-4 w-4" strokeWidth={3} />
-                </button>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                      <h3 className="font-semibold text-slate-950">Registered Agent Service</h3>
-                      <p className="mt-1 max-w-xl text-sm leading-6 text-slate-600">
-                        We will act as the business&apos;s registered agent and forward official state correspondence to the designated contact.
-                      </p>
-                    </div>
-                    <p className="text-sm font-semibold text-slate-700">Included at no additional charge</p>
-                  </div>
-                  <p className={`mt-4 text-xs font-semibold uppercase tracking-wide ${assessment.includeRegisteredAgentService ? "text-emerald-700" : "text-slate-400"}`}>
-                    {assessment.includeRegisteredAgentService ? "Included in this proposal · $0/year" : "Not included in this proposal"}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section className="mt-10">
-            <h2 className="text-lg font-bold text-slate-950">Bonuses</h2>
-            <p className="mt-1 text-sm text-slate-500">Check the packages that should include each free extra.</p>
-            <div className="proposal-builder-card mt-3 overflow-hidden rounded-xl border border-slate-200">
-              <table className="w-full table-fixed border-collapse">
-                <colgroup><col />{PACKAGE_COLUMNS.map(({ id }) => <col key={id} className="w-20 sm:w-24" />)}</colgroup>
-                <thead><tr className="bg-slate-50"><th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Bonus</th>{PACKAGE_COLUMNS.map(({ id, label }) => {
-                  const applicable = BONUS_OPTIONS.filter(bonusIsApplicable);
-                  const selectedCount = applicable.filter((bonus) => selectedBonusPackages(bonus).includes(id)).length;
-                  const allChecked = applicable.length > 0 && selectedCount === applicable.length;
-                  const partlyChecked = selectedCount > 0 && !allChecked;
-                  return <th key={id} className="px-1 py-2 text-center text-sm font-bold text-brandnavy"><span className="block">{label}</span><button type="button" role="checkbox" aria-checked={partlyChecked ? "mixed" : allChecked} onClick={() => setAllBonusesForPackage(id, !allChecked)} className={`mx-auto mt-1 grid h-7 w-7 place-items-center rounded-md border transition ${allChecked || partlyChecked ? "border-brandnavy bg-brandnavy text-white" : "border-slate-300 bg-white text-transparent"}`}>{partlyChecked ? <Minus className="h-4 w-4" strokeWidth={3} /> : <Check className="h-4 w-4" strokeWidth={3} />}</button></th>;
-                })}</tr></thead>
-                <tbody>{BONUS_OPTIONS.map((bonus, index) => {
-                  const selected = selectedBonusPackages(bonus);
-                  return <tr key={bonus.id} className={`border-t border-slate-200 ${index % 2 === 0 ? "bg-white" : "bg-slate-50/60"}`}><td className="px-4 py-3"><p className="font-semibold text-slate-950">{bonus.name}</p><p className="mt-0.5 text-xs leading-4 text-slate-500">{bonus.description}</p></td>{PACKAGE_COLUMNS.map(({ id, label }) => {
-                    const applicable = bonusIsApplicable(bonus);
-                    const checked = selected.includes(id);
-                    return <td key={id} className="px-1 py-3 text-center">{applicable ? <button type="button" role="checkbox" aria-checked={checked} aria-label={`${checked ? "Remove" : "Add"} ${bonus.name} ${checked ? "from" : "to"} ${label}`} onClick={() => toggleBonusPackage(bonus, id)} className={`mx-auto grid h-7 w-7 place-items-center rounded-md border transition ${checked ? "border-brandnavy bg-brandnavy text-white" : "border-slate-300 bg-white text-transparent"}`}><Check className="h-4 w-4" strokeWidth={3} /></button> : <span className="text-xs font-medium text-slate-300">N/A</span>}</td>;
-                  })}</tr>;
-                })}</tbody>
-              </table>
-            </div>
-          </section>
-          </div>
-          <PricingSnapshotSidebar items={pricingItems} cleanupCard={cleanupCard} />
-        </div>
-      </section>
-    </main>
-  );
+  return <main className="min-h-screen bg-white"><section className="mx-auto w-full max-w-[1720px] px-5 py-6 lg:px-8"><ProposalAppDemoHeader currentStep="add-ons" previousHref="/offers/calculator" nextHref="/offers/intro" /><div className="proposal-options-editor mt-8 min-w-0 space-y-10">
+    <TableHeader title="Additional options" description="Choose what this lead can select in their proposal." buttonLabel="Add option" onAdd={addOption} />
+    <section className="-mt-7"><div className="proposal-builder-card overflow-x-auto rounded-xl border border-slate-200"><table className="min-w-[940px] w-full border-collapse"><thead><tr className="border-b border-slate-200 bg-slate-50"><Heading className="w-12"><span className="sr-only">Reorder</span></Heading><Heading>Service</Heading><Heading>Description</Heading><Heading>Price / mo</Heading><Heading className="text-center">Include</Heading><Heading className="w-28 text-right">Actions</Heading></tr></thead><tbody>{visibleOptions.map((option, index) => { const isEditing = editingOptionIds.includes(option.id); return <tr key={option.id} onDragOver={(event) => event.preventDefault()} onDrop={() => moveOption(option.id)} className={rowClass(index)}><td className="w-12 px-2 py-4 text-center align-top"><DragHandle label={`Reorder ${option.name || "additional option"}`} onDragStart={() => setDraggingOptionId(option.id)} onDragEnd={() => setDraggingOptionId(null)} /></td><EditableCells editing={isEditing} item={option} onChange={(changes) => updateOption(option.id, changes)} /><td className="w-32 px-3 py-4 align-top">{isEditing ? <span className="flex rounded-md border border-slate-300 bg-white px-2.5 py-2 text-sm"><span className="mr-1 text-slate-400">$</span><input aria-label={`${option.name || "Additional option"} monthly price`} type="number" min="0" step="1" value={option.monthlyPrice} onChange={(event) => updateOption(option.id, { monthlyPrice: Math.max(0, Number(event.target.value) || 0) })} className="w-16 bg-transparent text-right outline-none" /></span> : <p className="text-sm font-medium tabular-nums text-slate-900">${option.monthlyPrice.toLocaleString("en-US")}</p>}</td><td className="px-3 py-4 text-center align-top"><Toggle checked={option.showInProposal} label={`Show ${option.name || "additional option"} in proposal`} onToggle={() => updateOption(option.id, { showInProposal: !option.showInProposal })} /></td><Actions editing={isEditing} itemLabel={option.name || "additional option"} setEditing={setEditingOptionIds} id={option.id} onArchive={() => updateOption(option.id, { archived: true })} onDelete={() => deleteOption(option.id)} /></tr>; })}</tbody></table></div><ArchivedItems items={archivedOptions} noun="option" onRestore={(id) => updateOption(id, { archived: false })} onDelete={deleteOption} /></section>
+    <TableHeader title="Bonuses" description="Include a bonus in the packages where it adds the most value." buttonLabel="Add bonus" onAdd={addBonus} />
+    <section className="-mt-7"><div className="proposal-builder-card overflow-x-auto rounded-xl border border-slate-200"><table className="min-w-[1040px] w-full border-collapse"><thead><tr className="border-b border-slate-200 bg-slate-50"><Heading className="w-12"><span className="sr-only">Reorder</span></Heading><Heading>Service</Heading><Heading>Description</Heading>{PACKAGES.map(({ id, label }) => { const applicable = visibleBonuses.filter(isBonusApplicable); const selectedCount = applicable.filter((bonus) => selectedBonusPackages(bonus).includes(id)).length; const allChecked = applicable.length > 0 && selectedCount === applicable.length; const partlyChecked = selectedCount > 0 && !allChecked; return <th key={id} className="w-20 px-2 py-3 text-center text-xs font-semibold uppercase tracking-[0.08em] text-slate-500"><span className="block text-sm font-semibold normal-case tracking-normal text-slate-700">{label}</span><button type="button" role="checkbox" aria-checked={partlyChecked ? "mixed" : allChecked} aria-label={`${allChecked ? "Remove all bonuses from" : "Add all bonuses to"} ${label}`} onClick={() => setAllBonusesForPackage(id, !allChecked)} className={checkboxClass(allChecked || partlyChecked)}>{partlyChecked ? <Minus className="h-4 w-4" strokeWidth={3} /> : <Check className="h-4 w-4" strokeWidth={3} />}</button></th>; })}<Heading className="w-28 text-right">Actions</Heading></tr></thead><tbody>{visibleBonuses.map((bonus, index) => { const isEditing = editingBonusIds.includes(bonus.id); const applicable = isBonusApplicable(bonus); const selected = selectedBonusPackages(bonus); return <tr key={bonus.id} onDragOver={(event) => event.preventDefault()} onDrop={() => moveBonus(bonus.id)} className={rowClass(index)}><td className="w-12 px-2 py-4 text-center align-top"><DragHandle label={`Reorder ${bonus.name || "bonus"}`} onDragStart={() => setDraggingBonusId(bonus.id)} onDragEnd={() => setDraggingBonusId(null)} /></td><EditableCells editing={isEditing} item={bonus} onChange={(changes) => updateBonus(bonus.id, changes)} />{PACKAGES.map(({ id, label }) => <td key={id} className="px-2 py-4 text-center align-top">{applicable ? <button type="button" role="checkbox" aria-checked={selected.includes(id)} aria-label={`${selected.includes(id) ? "Remove" : "Add"} ${bonus.name} ${selected.includes(id) ? "from" : "to"} ${label}`} onClick={() => toggleBonusPackage(bonus, id)} className={checkboxClass(selected.includes(id))}><Check className="h-4 w-4" strokeWidth={3} /></button> : <span className="text-xs font-medium text-slate-300">N/A</span>}</td>)}<Actions editing={isEditing} itemLabel={bonus.name || "bonus"} setEditing={setEditingBonusIds} id={bonus.id} onArchive={() => updateBonus(bonus.id, { archived: true })} onDelete={() => deleteBonus(bonus.id)} /></tr>; })}</tbody></table></div><ArchivedItems items={archivedBonuses} noun="bonus" onRestore={(id) => updateBonus(id, { archived: false })} onDelete={deleteBonus} /></section>
+  </div></section></main>;
 }
 
+function TableHeader({ title, description, buttonLabel, onAdd }: { title: string; description: string; buttonLabel: string; onAdd: () => void }) { return <div className="px-1"><div className="flex flex-wrap items-baseline gap-x-3 gap-y-1"><h1 className="text-lg font-semibold tracking-tight text-slate-950">{title}</h1><p className="text-sm leading-5 text-slate-500">{description}</p></div><button type="button" onClick={onAdd} className="mt-3 mb-2 inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-base font-medium text-slate-700 transition hover:bg-slate-50"><Plus className="h-3.5 w-3.5" /> {buttonLabel}</button></div>; }
+function Heading({ children, className = "" }: { children: ReactNode; className?: string }) { return <th className={`px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 ${className}`}>{children}</th>; }
+function EditableCells<T extends Pick<ProposalAdditionalOption, "name" | "description">>({ editing, item, onChange }: { editing: boolean; item: T; onChange: (changes: Partial<T>) => void }) { return <><td className="w-[25%] px-4 py-3 align-top">{editing ? <input aria-label="Service name" value={item.name} onChange={(event) => onChange({ name: event.target.value } as Partial<T>)} className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 font-medium text-slate-900 outline-none focus:border-brandnavy" /> : <p className="font-medium leading-5 text-slate-900">{item.name || "Untitled service"}</p>}</td><td className="w-[40%] px-4 py-3 align-top">{editing ? <textarea aria-label={`${item.name || "Service"} description`} value={item.description} onChange={(event) => onChange({ description: event.target.value } as Partial<T>)} rows={2} className="w-full resize-y rounded-md border border-slate-300 bg-white px-2.5 py-1.5 leading-5 text-slate-700 outline-none focus:border-brandnavy" /> : <p className="leading-5 text-slate-500">{item.description || "No description"}</p>}</td></>; }
+function DragHandle({ label, onDragStart, onDragEnd }: { label: string; onDragStart: () => void; onDragEnd: () => void }) { return <button type="button" draggable aria-label={label} title={label} onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; onDragStart(); }} onDragEnd={onDragEnd} className="cursor-grab rounded-md border border-slate-300 bg-white p-1.5 text-slate-500 transition hover:border-slate-400 hover:bg-slate-50 hover:text-slate-700 active:cursor-grabbing"><GripVertical className="h-4 w-4" /></button>; }
+function Actions({ editing, itemLabel, id, setEditing, onArchive, onDelete }: { editing: boolean; itemLabel: string; id: string; setEditing: Dispatch<SetStateAction<string[]>>; onArchive: () => void; onDelete: () => void }) { const toggle = () => setEditing((ids) => ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]); return <td className="px-3 py-3 text-right align-top"><div className="flex justify-end gap-1"><button type="button" aria-label={`${editing ? "Done editing" : "Edit"} ${itemLabel}`} onClick={toggle} className={`inline-flex h-8 items-center gap-1 rounded-md px-2 text-xs font-semibold transition ${editing ? "bg-brandnavy text-white hover:opacity-90" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"}`}>{editing ? <><Check className="h-3.5 w-3.5" /> Done</> : <><Pencil className="h-3.5 w-3.5" /> Edit</>}</button><button type="button" aria-label={`Archive ${itemLabel}`} onClick={onArchive} className="rounded-md p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-900"><Archive className="h-4 w-4" /></button><button type="button" aria-label={`Delete ${itemLabel}`} onClick={onDelete} className="rounded-md p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-700"><Trash2 className="h-4 w-4" /></button></div></td>; }
+function ArchivedItems({ items, noun, onRestore, onDelete }: { items: Array<ProposalAdditionalOption | ProposalBonus>; noun: string; onRestore: (id: string) => void; onDelete: (id: string) => void }) { return items.length > 0 ? <section className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3"><p className="text-sm font-medium text-slate-700">Archived {noun}s</p><div className="mt-2 flex flex-wrap gap-2">{items.map((item) => <span key={item.id} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">{item.name || `Untitled ${noun}`}<button type="button" aria-label={`Restore ${item.name || noun}`} onClick={() => onRestore(item.id)} className="text-brandnavy hover:opacity-70"><ArchiveRestore className="h-4 w-4" /></button><button type="button" aria-label={`Delete ${item.name || noun}`} onClick={() => onDelete(item.id)} className="text-slate-400 hover:text-rose-700"><X className="h-4 w-4" /></button></span>)}</div></section> : null; }
+function Toggle({ checked, label, onToggle }: { checked: boolean; label: string; onToggle: () => void }) { return <button type="button" role="checkbox" aria-checked={checked} aria-label={label} onClick={onToggle} className={checkboxClass(checked)}><Check className="h-4 w-4" strokeWidth={3} /></button>; }
+function checkboxClass(checked: boolean) { return `mx-auto grid h-6 w-6 cursor-pointer place-items-center rounded-md border transition ${checked ? "border-brandnavy bg-brandnavy text-white" : "border-slate-300 bg-white text-transparent hover:border-brandnavy-300"}`; }
+function rowClass(index: number) { return `border-b border-slate-200 last:border-0 [&>td]:!py-3 ${index % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`; }
+function moveItem<T extends { id: string }>(items: T[], sourceId: string, targetId: string) { const sourceIndex = items.findIndex((item) => item.id === sourceId); const targetIndex = items.findIndex((item) => item.id === targetId); if (sourceIndex < 0 || targetIndex < 0) return items; const next = [...items]; const [moved] = next.splice(sourceIndex, 1); next.splice(targetIndex, 0, moved); return next; }

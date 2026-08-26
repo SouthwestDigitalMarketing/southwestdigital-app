@@ -84,6 +84,7 @@ export const INITIAL_CONTACT_INFO: ContactInfoState = {
 function readStoredContactInfo(
   storageKey: string,
   initialContactInfo?: Partial<ContactInfoState>,
+  readStorage = true,
 ): ContactInfoState {
   const initialState = {
     ...INITIAL_CONTACT_INFO,
@@ -98,7 +99,7 @@ function readStoredContactInfo(
     },
   };
 
-  if (typeof window === "undefined") {
+  if (typeof window === "undefined" || !readStorage) {
     return initialState;
   }
 
@@ -146,9 +147,11 @@ export function resolvePrimaryContact(contactInfo: ContactInfoState) {
 export function useProposalContactInfoDemoState({
   engagementId,
   initialContactInfo,
+  persist = true,
 }: {
   engagementId?: string;
   initialContactInfo?: Partial<ContactInfoState>;
+  persist?: boolean;
 } = {}) {
   const resolvedEngagementId =
     engagementId ??
@@ -168,16 +171,17 @@ export function useProposalContactInfoDemoState({
       ? `${CONTACT_INFO_STORAGE_KEY}:${resolvedEngagementId}`
       : CONTACT_INFO_STORAGE_KEY;
   const [contactInfo, setContactInfo] = useState<ContactInfoState>(() =>
-    readStoredContactInfo(storageKey, initialContactInfo),
+    readStoredContactInfo(storageKey, initialContactInfo, persist),
   );
 
   useEffect(() => {
+    if (!persist) return;
     try {
       window.localStorage.setItem(storageKey, JSON.stringify(contactInfo));
     } catch {
       // Ignore localStorage failures in demo mode.
     }
-  }, [contactInfo, storageKey]);
+  }, [contactInfo, persist, storageKey]);
 
   function updateField<Key extends keyof ContactInfoState>(key: Key, value: ContactInfoState[Key]) {
     setContactInfo((current) => ({ ...current, [key]: value }));
