@@ -4,6 +4,7 @@ import { mergeToolLinks, visibleToolLinks } from "@/lib/brands/tools";
 
 const BRAND_THEME_SELECT = {
   primaryColor: true,
+  darkColor: true,
   accentColor: true,
   backgroundColor: true,
   foregroundColor: true,
@@ -17,6 +18,8 @@ const BRAND_THEME_SELECT = {
   supportEmail: true,
   proposalFeaturedVideoUrl: true,
   proposalFeaturedImageUrl: true,
+  proposalPrimaryColor: true,
+  proposalAccentColor: true,
 } as const;
 
 const DEV_FALLBACK_SLUG = process.env.DEV_BRAND_SLUG ?? "bc";
@@ -59,6 +62,7 @@ export async function resolveBrand(hostname: string | null, userId: string) {
         theme: {
           select: {
             primaryColor: true,
+            darkColor: true,
             accentColor: true,
             backgroundColor: true,
             foregroundColor: true,
@@ -72,6 +76,8 @@ export async function resolveBrand(hostname: string | null, userId: string) {
             supportEmail: true,
             proposalFeaturedVideoUrl: true,
             proposalFeaturedImageUrl: true,
+            proposalPrimaryColor: true,
+            proposalAccentColor: true,
           },
         },
         toolLinks: {

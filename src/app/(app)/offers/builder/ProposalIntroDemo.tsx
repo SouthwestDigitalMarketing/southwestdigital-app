@@ -2,7 +2,7 @@
 
 import { Check, Image, Sparkles, Video, Link2 } from "lucide-react";
 import { resolveVideoEmbedUrl } from "./OfferProposalPreview";
-import { getProposalTheme, PROPOSAL_THEMES } from "./proposalThemes";
+import { getProposalTheme, PROPOSAL_THEMES, BRAND_PRIMARY_SENTINEL, BRAND_ACCENT_SENTINEL } from "./proposalThemes";
 import { useBrand } from "@/lib/brands/context";
 import { ProposalReviewsSection } from "./ProposalReviewsSection";
 import ProposalAppDemoHeader from "./ProposalAppDemoHeader";
@@ -61,8 +61,18 @@ export default function ProposalIntroDemo({ mediaItems }: { mediaItems: BrandMed
 
   // Theme
   const selectedTheme = getProposalTheme(assessment.proposalTheme || "brand");
-  const previewPrimary = selectedTheme.primary ?? (brand.theme?.primaryColor ?? "#17324d");
-  const previewAccent = selectedTheme.accent ?? (brand.theme?.accentColor ?? "#d79b3b");
+  const brandPrimary = brand.theme?.proposalPrimaryColor ?? brand.theme?.primaryColor ?? "#17324d";
+  const brandAccent = brand.theme?.proposalAccentColor ?? brand.theme?.accentColor ?? "#d79b3b";
+  function resolveThemeColor(value: string | null, fallback: string): string {
+    if (value === null) return fallback;
+    if (value === BRAND_ACCENT_SENTINEL) return brandAccent;
+    if (value === BRAND_PRIMARY_SENTINEL) return brandPrimary;
+    return value;
+  }
+  const previewPrimary = resolveThemeColor(selectedTheme.primary, brandPrimary);
+  const previewAccent = resolveThemeColor(selectedTheme.accent, brandAccent);
+  const brandDark = brand.theme?.darkColor ?? previewPrimary;
+  const previewHeadingColor = brandDark;
 
   return (
     <main className="min-h-screen bg-white">
@@ -75,7 +85,7 @@ export default function ProposalIntroDemo({ mediaItems }: { mediaItems: BrandMed
 
         <div className="mt-8">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-slate-950">Proposal Intro</h1>
+            <h1 className="text-2xl font-bold text-slate-950">Proposal Cover</h1>
             <p className="mt-1 text-sm text-slate-500">
               Customize the first screen the lead sees when they open the proposal.
             </p>
@@ -113,7 +123,7 @@ export default function ProposalIntroDemo({ mediaItems }: { mediaItems: BrandMed
 
               {/* Media picker */}
               <div className="rounded-xl border border-slate-200 proposal-builder-card p-5">
-                <p className="text-sm font-semibold text-slate-700">Intro Media</p>
+                <p className="text-sm font-semibold text-slate-700">Cover Media</p>
                 <p className="mt-0.5 text-xs text-slate-500">
                   Video or image shown on the first screen. Video takes priority over image.
                   Manage your library in{" "}
@@ -204,12 +214,12 @@ export default function ProposalIntroDemo({ mediaItems }: { mediaItems: BrandMed
             <div className="mt-8">
               <p className="mb-1 text-sm font-semibold text-slate-700">Theme</p>
               <p className="mb-3 text-xs text-slate-400">
-                Proposal color scheme — <span className="font-medium">Brand</span> uses your colors from Settings
+                Proposal color scheme — <span className="font-medium">Brand</span> variants use your colors from Settings
               </p>
               <div className="flex flex-wrap gap-3">
                 {PROPOSAL_THEMES.map((theme) => {
-                  const swatchPrimary = theme.primary ?? (brand.theme?.primaryColor ?? "#17324d");
-                  const swatchAccent = theme.accent ?? (brand.theme?.accentColor ?? "#d79b3b");
+                  const swatchPrimary = resolveThemeColor(theme.primary, brandPrimary);
+                  const swatchAccent = resolveThemeColor(theme.accent, brandAccent);
                   const active = (assessment.proposalTheme || "brand") === theme.id;
                   return (
                     <button
@@ -217,10 +227,11 @@ export default function ProposalIntroDemo({ mediaItems }: { mediaItems: BrandMed
                       type="button"
                       title={theme.description}
                       onClick={() => updateAssessment("proposalTheme", theme.id)}
-                      className={`relative flex flex-col items-center gap-2 rounded-xl border-2 p-2 pb-2.5 transition ${
+                      style={theme.swatchBg ? { backgroundColor: theme.swatchBg } : undefined}
+                      className={`relative flex flex-col cursor-pointer items-center gap-2 rounded-xl border-2 p-2 pb-2.5 transition ${
                         active
-                          ? "border-brandnavy shadow-sm"
-                          : "border-slate-200 hover:border-slate-300"
+                          ? "border-slate-900 shadow-sm"
+                          : "border-slate-200 hover:border-slate-400"
                       }`}
                     >
                       {/* Color preview block */}
@@ -242,7 +253,7 @@ export default function ProposalIntroDemo({ mediaItems }: { mediaItems: BrandMed
                       </div>
                       <span
                         className={`text-xs font-semibold leading-none ${
-                          active ? "text-brandnavy" : "text-slate-600"
+                          active ? "text-slate-900" : "text-slate-600"
                         }`}
                       >
                         {theme.label}
@@ -262,6 +273,7 @@ export default function ProposalIntroDemo({ mediaItems }: { mediaItems: BrandMed
                   "--brand-primary": previewPrimary,
                   "--brand-accent": previewAccent,
                   "--brand-ink": previewPrimary,
+                  "--brand-dark": brandDark,
                   "--color-accent-500": previewAccent,
                   "--color-accent-100": `color-mix(in srgb, ${previewAccent} 15%, white)`,
                 } as React.CSSProperties}
@@ -273,16 +285,15 @@ export default function ProposalIntroDemo({ mediaItems }: { mediaItems: BrandMed
                       Back
                     </span>
                     <ol className="flex items-center">
-                      {["Intro", "Services", "Done"].map((label, i) => (
+                      {["Cover", "Services", "Done"].map((label, i) => (
                         <li key={label} className="flex items-center">
                           {i > 0 && <span className="h-0.5 w-6 bg-slate-200" />}
                           <div className="w-14 text-center">
                             <span
                               className={`mx-auto grid h-7 w-7 place-items-center rounded-full border text-xs font-bold ${
-                                i === 0
-                                  ? "border-brandnavy bg-brandnavy text-white"
-                                  : "border-slate-200 bg-white text-slate-400"
+                                i === 0 ? "text-white" : "border-slate-200 bg-white text-slate-400"
                               }`}
+                              style={i === 0 ? { backgroundColor: brandDark, borderColor: brandDark } : undefined}
                             >
                               {i + 1}
                             </span>
@@ -292,13 +303,13 @@ export default function ProposalIntroDemo({ mediaItems }: { mediaItems: BrandMed
                       ))}
                     </ol>
                     <span
-                      className="inline-flex items-center gap-1 rounded-lg border-2 px-3 py-1.5 text-xs font-bold text-white"
+                      className="inline-flex items-center gap-1 rounded-lg border-2 px-3 py-1.5 text-xs font-bold"
                       style={{
-                        borderColor: "var(--brand-accent, #d79b3b)",
-                        backgroundColor: "var(--brand-primary, #17324d)",
+                        borderColor: brandDark,
+                        color: brandDark,
                       }}
                     >
-                      Next →
+                      Shop Options →
                     </span>
                   </div>
                 </div>
@@ -311,7 +322,7 @@ export default function ProposalIntroDemo({ mediaItems }: { mediaItems: BrandMed
                     <div>
                       <h2
                         className="text-2xl font-bold tracking-tight sm:text-3xl"
-                        style={{ color: "var(--brand-primary, #17324d)" }}
+                        style={{ color: previewHeadingColor }}
                       >
                         {customHeadline ?? (
                           <>
@@ -332,13 +343,13 @@ export default function ProposalIntroDemo({ mediaItems }: { mediaItems: BrandMed
                       </p>
                       <div className="mt-6">
                         <span
-                          className="inline-flex cursor-default items-center gap-1.5 rounded-lg border-2 px-5 py-2.5 text-sm font-bold text-white"
+                          className="inline-flex cursor-default items-center gap-1.5 rounded-lg border-2 px-5 py-2.5 text-base font-bold text-white"
                           style={{
                             borderColor: "var(--brand-accent, #d79b3b)",
-                            backgroundColor: "var(--brand-primary, #17324d)",
+                            backgroundColor: "var(--brand-accent, #d79b3b)",
                           }}
                         >
-                          View your options →
+                          Shop pricing options →
                         </span>
                       </div>
                     </div>
@@ -366,6 +377,8 @@ export default function ProposalIntroDemo({ mediaItems }: { mediaItems: BrandMed
                         style={{ borderColor: "#cbd5e1" }}
                       />
                     ) : null}
+                  </div>
+                  <div className="mx-auto max-w-4xl">
                     <ProposalReviewsSection brandName={brand.name} />
                   </div>
                 </div>

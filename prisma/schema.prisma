@@ -547,6 +547,7 @@ model BrandTheme {
   logoAlt           String?
   mode              String   @default("system")
   primaryColor      String   @default("#17324d")
+  darkColor         String?
   accentColor       String   @default("#d79b3b")
   backgroundColor   String   @default("#f7f8fa")
   foregroundColor   String   @default("#17202a")
@@ -563,6 +564,8 @@ model BrandTheme {
   websiteEngagedSessionsGoal Int?
   proposalFeaturedVideoUrl   String?
   proposalFeaturedImageUrl   String?
+  proposalPrimaryColor       String?
+  proposalAccentColor        String?
   brand             Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt

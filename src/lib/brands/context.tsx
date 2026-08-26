@@ -11,6 +11,7 @@ export type BrandContextValue = {
     status: BrandStatus;
     theme: {
       primaryColor: string;
+      darkColor: string | null;
       accentColor: string;
       backgroundColor: string;
       foregroundColor: string;
@@ -24,6 +25,8 @@ export type BrandContextValue = {
       supportEmail: string | null;
       proposalFeaturedVideoUrl: string | null;
       proposalFeaturedImageUrl: string | null;
+      proposalPrimaryColor: string | null;
+      proposalAccentColor: string | null;
     } | null;
     toolLinks: Array<{
       key: string;

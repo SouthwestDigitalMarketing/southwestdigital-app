@@ -13,14 +13,24 @@ function clean(value: FormDataEntryValue | null) {
 export async function updateBrandAppearanceAction(formData: FormData) {
   const { brand } = await requireStaffBrandOrThrow();
   const primaryColor = normalizeBrandColor(clean(formData.get("primaryColor")));
+  const rawDark = clean(formData.get("darkColor"));
+  const darkColor = rawDark ? normalizeBrandColor(rawDark) : null;
+  const rawAccent = clean(formData.get("accentColor"));
+  const accentColor = rawAccent ? normalizeBrandColor(rawAccent) : null;
   const mode = clean(formData.get("mode"));
   const sidebarLogoType = clean(formData.get("sidebarLogoType"));
 
   if (!primaryColor) {
     throw new Error("Enter a HEX color or an RGB value, such as #17324d or rgb(23, 50, 77).");
   }
-  if (!new Set(["system", "light", "dark"]).has(mode)) {
-    throw new Error("Choose System, Light, or Dark for the portal theme.");
+  if (rawDark && !darkColor) {
+    throw new Error("Enter a valid HEX color for the Dark brand color.");
+  }
+  if (rawAccent && !accentColor) {
+    throw new Error("Enter a valid HEX color for the Accent brand color.");
+  }
+  if (!new Set(["light", "dark"]).has(mode)) {
+    throw new Error("Choose Light or Dark for the portal theme.");
   }
   if (!new Set(["mark", "logo"]).has(sidebarLogoType)) {
     throw new Error("Choose whether the sidebar shows the logo mark or full logo.");
@@ -28,8 +38,8 @@ export async function updateBrandAppearanceAction(formData: FormData) {
 
   await prisma.brandTheme.upsert({
     where: { brandId: brand.id },
-    create: { brandId: brand.id, primaryColor, mode, sidebarLogoType },
-    update: { primaryColor, mode, sidebarLogoType },
+    create: { brandId: brand.id, primaryColor, darkColor, accentColor: accentColor ?? "#d79b3b", mode, sidebarLogoType },
+    update: { primaryColor, darkColor, accentColor: accentColor ?? undefined, mode, sidebarLogoType },
   });
 
   revalidatePath("/", "layout");

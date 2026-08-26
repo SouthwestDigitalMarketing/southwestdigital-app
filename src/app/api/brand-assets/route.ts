@@ -79,6 +79,33 @@ export async function POST(request: Request) {
   }
 }
 
+export async function DELETE(request: Request) {
+  try {
+    const { brand } = await requireStaffBrandOrThrow();
+    const kind = new URL(request.url).searchParams.get("kind");
+    if (kind !== "logo" && kind !== "mark" && kind !== "logo-dark" && kind !== "mark-dark") {
+      return NextResponse.json({ error: "Unknown asset type." }, { status: 400 });
+    }
+
+    await prisma.brandTheme.update({
+      where: { brandId: brand.id },
+      data:
+        kind === "logo"
+          ? { logoUrl: null }
+          : kind === "mark"
+            ? { logoMarkUrl: null }
+            : kind === "logo-dark"
+              ? { logoDarkUrl: null }
+              : { logoMarkDarkUrl: null },
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error("Brand asset remove failed", error);
+    return NextResponse.json({ error: "Could not remove the brand asset." }, { status: 500 });
+  }
+}
+
 export async function GET(request: Request) {
   try {
     const { brand } = await requireStaffBrandOrThrow();

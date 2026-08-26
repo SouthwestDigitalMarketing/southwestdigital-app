@@ -23,6 +23,7 @@ import {
   GraduationCap,
   ExternalLink,
   ImagePlay,
+  Tag,
 } from "lucide-react";
 import { useBrand } from "@/lib/brands/context";
 import { signOutAction } from "./actions";
@@ -44,6 +45,7 @@ const NAV: Array<{
   { label: "Clients", href: "/clients", icon: Building2 },
   { label: "Team", href: "/team", icon: Users },
   { label: "Media", href: "/media", icon: ImagePlay },
+  { label: "Tags", href: "/tags", icon: Tag },
   { label: "Settings", href: "/settings", icon: Settings, dividerAfter: true },
 ];
 
@@ -61,6 +63,8 @@ function NavItem({
   label,
   exact = false,
   accent,
+  isLight,
+  navTextColor,
   onNavigate,
 }: {
   href: string;
@@ -68,6 +72,8 @@ function NavItem({
   label: string;
   exact?: boolean;
   accent: string;
+  isLight: boolean;
+  navTextColor: string;
   onNavigate: () => void;
 }) {
   const pathname = usePathname();
@@ -78,9 +84,12 @@ function NavItem({
       href={href}
       onClick={onNavigate}
       className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-        active ? "text-white" : "text-white/70 hover:bg-white/10 hover:text-white"
+        active ? "" : isLight ? "hover:bg-black/5" : "hover:bg-white/10"
       }`}
-      style={active ? { backgroundColor: accent } : undefined}
+      style={{
+        backgroundColor: active ? accent : undefined,
+        color: active ? "#ffffff" : navTextColor,
+      }}
     >
       <Icon size={16} />
       {label}
@@ -92,11 +101,15 @@ function ExternalNavItem({
   href,
   icon: Icon,
   label,
+  isLight,
+  navTextColor,
   onNavigate,
 }: {
   href: string;
   icon: React.ElementType;
   label: string;
+  isLight: boolean;
+  navTextColor: string;
   onNavigate: () => void;
 }) {
   return (
@@ -105,7 +118,10 @@ function ExternalNavItem({
       target="_blank"
       rel="noopener noreferrer"
       onClick={onNavigate}
-      className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+        isLight ? "hover:bg-black/5" : "hover:bg-white/10"
+      }`}
+      style={{ color: navTextColor }}
     >
       <Icon size={16} />
       <span className="flex-1 truncate">{label}</span>
@@ -127,13 +143,25 @@ export function AppShell({
   const primary = brand.theme?.primaryColor ?? "#17324d";
   const accent = brand.theme?.accentColor ?? "#d79b3b";
   const mode = brand.theme?.mode === "dark" || brand.theme?.mode === "light" ? brand.theme.mode : "system";
+  const isLight = mode === "light";
   const sidebarLogoType = brand.theme?.sidebarLogoType === "logo" ? "logo" : "mark";
   const appearance = primary.toLowerCase() === "#111111" ? "grok" : "standard";
+
   const sidebarLightLogo = sidebarLogoType === "logo" ? brand.theme?.logoUrl : brand.theme?.logoMarkUrl;
   const sidebarDarkLogo = sidebarLogoType === "logo" ? brand.theme?.logoDarkUrl : brand.theme?.logoMarkDarkUrl;
-  const sidebarDisplayLogo = sidebarDarkLogo ?? sidebarLightLogo;
+  // Light mode: prefer light logo; dark mode: prefer dark logo; fall back to the other variant
+  const sidebarDisplayLogo = isLight
+    ? (sidebarLightLogo ?? sidebarDarkLogo)
+    : (sidebarDarkLogo ?? sidebarLightLogo);
   const sidebarLogoClass =
     sidebarLogoType === "logo" ? "max-h-8 max-w-44 object-contain" : "h-8 w-8 rounded object-contain";
+
+  const darkColor = brand.theme?.darkColor ?? primary;
+  const navTextColor = isLight ? darkColor : "rgba(255,255,255,0.7)";
+  const navMutedColor = isLight ? `${darkColor}80` : "rgba(255,255,255,0.5)";
+  const sidebarBg = isLight ? "#ffffff" : "var(--sidebar-background)";
+  const dividerColor = isLight ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.1)";
+  const dividerNavColor = isLight ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.12)";
 
   const displayName = user.name ?? user.email ?? "User";
   const initials = displayName
@@ -144,10 +172,10 @@ export function AppShell({
     .toUpperCase();
 
   const sidebar = (
-    <div className="flex h-full w-64 shrink-0 flex-col" style={{ backgroundColor: "var(--sidebar-background)" }}>
+    <div className="flex h-full w-64 shrink-0 flex-col" style={{ backgroundColor: sidebarBg }}>
       <div
         className="flex h-16 items-center px-5"
-        style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}
+        style={{ borderBottom: `1px solid ${dividerColor}` }}
       >
         {sidebarDisplayLogo ? (
           <img
@@ -157,7 +185,9 @@ export function AppShell({
           />
         ) : null}
         {!sidebarDisplayLogo ? (
-          <span className="text-sm font-bold uppercase tracking-widest text-white">{brand.name}</span>
+          <span className="text-sm font-bold uppercase tracking-widest" style={{ color: navTextColor }}>
+            {brand.name}
+          </span>
         ) : null}
       </div>
 
@@ -170,12 +200,14 @@ export function AppShell({
               label={label}
               exact={exact}
               accent={accent}
+              isLight={isLight}
+              navTextColor={navTextColor}
               onNavigate={() => setOpen(false)}
             />
             {dividerAfter ? (
               <div
                 className="mx-3 my-2"
-                style={{ borderTop: "1px solid rgba(255,255,255,0.12)" }}
+                style={{ borderTop: `1px solid ${dividerNavColor}` }}
               />
             ) : null}
           </div>
@@ -186,6 +218,8 @@ export function AppShell({
             href={link.url}
             icon={TOOL_ICONS[link.key] ?? ExternalLink}
             label={link.label}
+            isLight={isLight}
+            navTextColor={navTextColor}
             onNavigate={() => setOpen(false)}
           />
         ))}
@@ -193,7 +227,7 @@ export function AppShell({
 
       <div
         className="px-3 py-4"
-        style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}
+        style={{ borderTop: `1px solid ${dividerColor}` }}
       >
         <div className="flex items-center gap-3 px-3 py-2">
           <div
@@ -203,16 +237,17 @@ export function AppShell({
             {initials}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-white">{displayName}</p>
+            <p className="truncate text-sm font-medium" style={{ color: navTextColor }}>{displayName}</p>
             {user.name && user.email && (
-              <p className="truncate text-xs text-white/50">{user.email}</p>
+              <p className="truncate text-xs" style={{ color: navMutedColor }}>{user.email}</p>
             )}
           </div>
           <form action={signOutAction}>
             <button
               type="submit"
               title="Sign out"
-              className="rounded p-1 text-white/50 transition-colors hover:text-white"
+              className="rounded p-1 opacity-60 transition-opacity hover:opacity-100"
+              style={{ color: navTextColor }}
             >
               <LogOut size={15} />
             </button>

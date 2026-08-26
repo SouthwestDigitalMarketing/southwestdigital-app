@@ -43,7 +43,7 @@ const STEP_ITEMS: Array<{
   },
   {
     id: "intro",
-    label: "Intro",
+    label: "Cover",
     href: "/offers/intro",
   },
 ];

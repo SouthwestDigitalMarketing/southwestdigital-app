@@ -122,6 +122,11 @@ body {
   --proposal-section-even: #ffffff;
 }
 
+[data-theme="dark"] .proposal-step-active {
+  background-color: var(--brand-primary);
+  border-color: var(--brand-primary);
+}
+
 [data-theme="dark"] {
   color-scheme: dark;
   --app-canvas: #101113;
@@ -195,8 +200,8 @@ body {
 }
 
 [data-theme] .proposal-step-active {
-  background-color: var(--brand-primary);
-  border-color: var(--brand-primary);
+  background-color: color-mix(in srgb, var(--brand-primary) 50%, #000000);
+  border-color: color-mix(in srgb, var(--brand-primary) 50%, #000000);
   color: #fff;
 }
 
@@ -371,6 +376,11 @@ body {
     --chart-cursor: rgb(255 255 255 / 0.06);
     --proposal-section-odd: #202126;
     --proposal-section-even: #292b31;
+  }
+
+  [data-theme="system"] .proposal-step-active {
+    background-color: var(--brand-primary);
+    border-color: var(--brand-primary);
   }
 
   [data-theme="system"] .sidebar-branding-toggle {

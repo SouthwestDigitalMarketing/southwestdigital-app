@@ -13,7 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { useBrand } from "@/lib/brands/context";
-import { getProposalTheme } from "./proposalThemes";
+import { getProposalTheme, BRAND_PRIMARY_SENTINEL, BRAND_ACCENT_SENTINEL } from "./proposalThemes";
 import { ProposalReviewsSection } from "./ProposalReviewsSection";
 import AgreementTextView from "./AgreementTextView";
 import DepositPaymentForm from "./DepositPaymentForm";
@@ -462,8 +462,18 @@ export default function OfferProposalPreview({
   const companyName = contactInfo.companyName || contactName || "Your business";
 
   const theme = getProposalTheme(assessment.proposalTheme || "brand");
-  const primaryColor = theme.primary ?? (brand.theme?.primaryColor ?? "#17324d");
-  const accentColor = theme.accent ?? (brand.theme?.accentColor ?? "#d79b3b");
+  const brandPrimary = brand.theme?.proposalPrimaryColor ?? brand.theme?.primaryColor ?? "#17324d";
+  const brandAccent = brand.theme?.proposalAccentColor ?? brand.theme?.accentColor ?? "#d79b3b";
+  const primaryColor =
+    theme.primary === null ? brandPrimary :
+    theme.primary === BRAND_ACCENT_SENTINEL ? brandAccent :
+    theme.primary === BRAND_PRIMARY_SENTINEL ? brandPrimary :
+    theme.primary;
+  const accentColor =
+    theme.accent === null ? brandAccent :
+    theme.accent === BRAND_ACCENT_SENTINEL ? brandAccent :
+    theme.accent === BRAND_PRIMARY_SENTINEL ? brandPrimary :
+    theme.accent;
 
   const options = buildOptions(assessment);
   const [selectedOptionId, setSelectedOptionId] = useState<OptionId | null>(null);
@@ -586,7 +596,7 @@ export default function OfferProposalPreview({
   const recurringServiceNames = Array.from(new Set(optionMeta.flatMap(({ id }) => options[id].recurringRows.map((r) => r.serviceName))));
   const oneTimeServiceNames   = Array.from(new Set(optionMeta.flatMap(({ id }) => options[id].oneTimeRows.map((r) => r.serviceName))));
 
-  const clientSteps = ["Intro", "Services", "Deposit", "Confirmation"] as const;
+  const clientSteps = ["Cover", "Services", "Deposit", "Confirmation"] as const;
   const selectedOnboardingFee = selectedOptionId
     ? (options[selectedOptionId].oneTimeRows.find((r) => isOnboarding(r))?.price ?? null)
     : null;

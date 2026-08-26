@@ -186,7 +186,7 @@ export default function ProposalAppDemoHeader({
             ) : (
               <Save className="h-4 w-4" />
             )}
-            {saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Draft saved" : saveStatus === "error" ? "Save failed" : "Save draft"}
+            {saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved" : saveStatus === "error" ? "Save failed" : "Save"}
           </button>
           <button
             type="button"
@@ -197,12 +197,12 @@ export default function ProposalAppDemoHeader({
                 ? "text-emerald-700"
                 : publishStatus === "error"
                   ? "text-rose-700"
-                  : "text-brandnavy hover:text-slate-900"
+                  : "text-slate-500 hover:text-slate-900"
             }`}
             aria-live="polite"
           >
             {publishStatus === "published" ? <Check className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
-            {publishStatus === "publishing" ? "Publishing…" : publishStatus === "published" ? "Published" : publishStatus === "error" ? "Publish failed" : "Publish changes"}
+            {publishStatus === "publishing" ? "Publishing…" : publishStatus === "published" ? "Published" : publishStatus === "error" ? "Publish failed" : "Publish"}
           </button>
         </div>
 

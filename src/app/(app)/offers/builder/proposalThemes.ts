@@ -1,21 +1,52 @@
-export type ProposalThemeId = "brand" | "classic" | "executive" | "modern" | "prestige";
+export type ProposalThemeId = "brand" | "brand-light" | "brand-dark" | "brand-accent" | "classic" | "executive" | "modern" | "prestige";
+
+// Sentinel values for primary/accent: resolved against brand colors at render time.
+export const BRAND_PRIMARY_SENTINEL = "__brand-primary__";
+export const BRAND_ACCENT_SENTINEL = "__brand-accent__";
 
 export type ProposalTheme = {
   id: ProposalThemeId;
   label: string;
   description: string;
-  primary: string | null; // null = use brand CSS var
-  accent: string | null;  // null = use brand CSS var
+  primary: string | null; // null = brand primary; BRAND_ACCENT_SENTINEL = brand accent
+  accent: string | null;  // null = brand accent; BRAND_PRIMARY_SENTINEL = brand primary
   pageBg: string;
+  swatchBg?: string; // optional card background in the theme picker swatch
 };
 
 export const PROPOSAL_THEMES: ProposalTheme[] = [
   {
     id: "brand",
     label: "Brand",
-    description: "Your configured brand colors from Settings",
+    description: "Your brand colors on a soft light background",
     primary: null,
     accent: null,
+    pageBg: "linear-gradient(180deg,#f7f8fb 0%,#ffffff 100%)",
+  },
+  {
+    id: "brand-light",
+    label: "Brand Light",
+    description: "Your brand colors on a pure white background",
+    primary: null,
+    accent: null,
+    pageBg: "#ffffff",
+    swatchBg: "#ffffff",
+  },
+  {
+    id: "brand-dark",
+    label: "Brand Dark",
+    description: "Your brand colors on a deeper, richer page tone",
+    primary: null,
+    accent: null,
+    pageBg: "linear-gradient(180deg,#dde3ed 0%,#f0f3f8 100%)",
+    swatchBg: "#dde3ed",
+  },
+  {
+    id: "brand-accent",
+    label: "Brand Accent",
+    description: "Your accent color leads, brand primary as the supporting tone",
+    primary: BRAND_ACCENT_SENTINEL,
+    accent: BRAND_PRIMARY_SENTINEL,
     pageBg: "linear-gradient(180deg,#f7f8fb 0%,#ffffff 100%)",
   },
   {

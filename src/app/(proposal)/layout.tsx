@@ -16,8 +16,8 @@ export default async function ProposalLayout({ children }: { children: React.Rea
     );
   }
 
-  const primary = brand.theme?.primaryColor ?? "#17324d";
-  const accent = brand.theme?.accentColor ?? "#d79b3b";
+  const primary = brand.theme?.proposalPrimaryColor ?? brand.theme?.primaryColor ?? "#17324d";
+  const accent = brand.theme?.proposalAccentColor ?? brand.theme?.accentColor ?? "#d79b3b";
 
   return (
     <BrandProvider value={{ brand, membership: null }}>
