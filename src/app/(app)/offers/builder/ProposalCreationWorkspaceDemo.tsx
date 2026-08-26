@@ -869,7 +869,7 @@ const BANK_OPTIONS: Array<{ value: BankOption; label: string }> = [
   { value: "unknown", label: "Unknown" },
 ];
 
-function formatCurrency(value: number, suffix = "") {
+export function formatCurrency(value: number, suffix = "") {
   return `$${value.toLocaleString("en-US")}${suffix}`;
 }
 
@@ -1602,6 +1602,25 @@ export function getProposalPricingSnapshotCleanupCard(assessment: AssessmentStat
     baseRow,
     addOnsRow: `${formatCurrency(maintainPricing.assessmentOneTimeAdjustments)} required adjustments`,
   };
+}
+
+export function getProposalPreviewPackages(assessment: AssessmentState) {
+  const { packagePricing, recommendation, hasCatchUpPricing } = getProposalPricingSnapshotData(assessment);
+  const hasMonthly = hasMonthlyPricingInputs(assessment);
+
+  return PACKAGES.map((pkg) => {
+    const pricing = packagePricing[pkg.id];
+    return {
+      id: pkg.id,
+      name: pkg.name,
+      description: pkg.description,
+      clientFit: pkg.clientFit,
+      includedServices: pkg.includedServices,
+      monthlyLabel: hasMonthly ? formatCurrency(pricing.monthly, "/mo") : "— /mo",
+      isRecommended: hasMonthly && recommendation.packageId === pkg.id,
+      oneTimeLabel: hasCatchUpPricing && pricing.totalOneTime > 0 ? formatCurrency(pricing.totalOneTime) : null,
+    };
+  });
 }
 
 export default function ProposalCreationWorkspaceDemo({

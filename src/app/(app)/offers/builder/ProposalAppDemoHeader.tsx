@@ -12,10 +12,12 @@ export default function ProposalAppDemoHeader({
   currentStep,
   previousHref,
   nextHref,
+  viewProposalAsNext,
 }: {
   currentStep: ProposalAppDemoStep;
   previousHref?: string;
   nextHref?: string;
+  viewProposalAsNext?: boolean;
 }) {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -132,15 +134,27 @@ export default function ProposalAppDemoHeader({
           <div className="min-w-0 flex-1">
             <ProposalAppDemoStepper currentStep={currentStep} />
           </div>
-          <button
-            type="button"
-            onClick={() => nextHref && void saveThenNavigate(scopedHref(nextHref))}
-            disabled={!nextHref || saveStatus === "saving"}
-            className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 xl:inline-flex"
-          >
-            Next
-            <ChevronRight className="h-4 w-4" />
-          </button>
+          {viewProposalAsNext ? (
+            <button
+              type="button"
+              onClick={() => void saveThenNavigate(scopedHref("/offers/preview"))}
+              disabled={saveStatus === "saving"}
+              className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 xl:inline-flex"
+            >
+              <Eye className="h-4 w-4" />
+              View Proposal
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => nextHref && void saveThenNavigate(scopedHref(nextHref))}
+              disabled={!nextHref || saveStatus === "saving"}
+              className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 xl:inline-flex"
+            >
+              Next
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          )}
         </div>
 
         <div className="flex items-center justify-end gap-6">

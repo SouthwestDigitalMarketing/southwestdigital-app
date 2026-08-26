@@ -77,6 +77,7 @@ export default function ProposalAddOnsDemo() {
         <ProposalAppDemoHeader
           currentStep="add-ons"
           previousHref="/offers/calculator"
+          viewProposalAsNext
         />
 
         <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_440px] 2xl:grid-cols-[minmax(0,1.55fr)_470px]">
