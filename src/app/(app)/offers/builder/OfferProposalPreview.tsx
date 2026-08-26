@@ -652,7 +652,7 @@ export default function OfferProposalPreview({
               <button
                 type="button"
                 onClick={() => setStep(1)}
-                className="inline-flex items-center gap-2 rounded-lg border-2 px-5 py-2 text-sm font-bold transition-all hover:-translate-y-0.5 hover:opacity-80"
+                className="inline-flex items-center gap-2 rounded-lg border px-5 py-2 text-sm font-semibold transition-all hover:-translate-y-0.5 hover:opacity-80"
                 style={{ borderColor: brandDark, color: brandDark }}
               >
                 Shop Options <ChevronRight strokeWidth={3} className="h-4 w-4" />

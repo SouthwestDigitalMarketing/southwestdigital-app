@@ -314,7 +314,7 @@ export default function ProposalIntroDemo({ mediaItems }: { mediaItems: BrandMed
                       ))}
                     </ol>
                     <span
-                      className="inline-flex items-center gap-1 rounded-lg border-2 px-3 py-1.5 text-xs font-bold"
+                      className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-semibold"
                       style={{
                         borderColor: brandDark,
                         color: brandDark,
