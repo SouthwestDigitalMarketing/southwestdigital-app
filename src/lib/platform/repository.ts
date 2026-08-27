@@ -115,7 +115,7 @@ export async function listBrandsForAdministration() {
         orderBy: { purpose: "asc" },
         select: { hostname: true, purpose: true, status: true },
       },
-      _count: { select: { memberships: true, contacts: true, leads: true } },
+      _count: { select: { memberships: true } },
     },
   });
 }

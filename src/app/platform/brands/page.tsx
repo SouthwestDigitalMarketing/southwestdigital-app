@@ -49,8 +49,7 @@ export default async function PlatformBrandsPage() {
                   </div>
                   <div className="flex gap-4 text-sm text-slate-600">
                     <span>{brand._count.memberships} users</span>
-                    <span>{brand._count.contacts} contacts</span>
-                    <span>{brand._count.leads} leads</span>
+                    <span>CRM counts available inside each brand portal</span>
                   </div>
                 </Link>
               </li>

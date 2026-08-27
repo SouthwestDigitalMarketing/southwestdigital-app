@@ -98,6 +98,11 @@ INSERT INTO "CustomerAccount" (id, "brandId", code, name, status, "createdAt", "
 '@ | & docker.exe exec -i $taskContainer psql -U postgres -d southwestdigital *> $null
   if ($LASTEXITCODE -ne 0) { throw "Seed failed" }
 
+  Get-Content -Raw (Join-Path (Get-Location).Path "scripts/sql/configure-disposable-runtime-role.sql") | `
+    & docker.exe exec -i $taskContainer psql -U postgres -d southwestdigital *> $null
+  if ($LASTEXITCODE -ne 0) { throw "Disposable runtime role setup failed" }
+  $env:DATABASE_URL = "postgresql://southwest_app_runtime:test-runtime-password@127.0.0.1:$taskDbPort/southwestdigital?connection_limit=1"
+
   & npm.cmd run build *> $null
   if ($LASTEXITCODE -ne 0) { throw "Application build failed" }
 

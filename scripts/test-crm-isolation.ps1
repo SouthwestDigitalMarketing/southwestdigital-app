@@ -106,6 +106,141 @@ END $$;
 SELECT 'CRM isolation constraints verified' AS result;
 '@ | & docker.exe exec -i $taskContainer psql -U postgres -d southwestdigital
   if ($LASTEXITCODE -ne 0) { throw "CRM isolation verification failed" }
+
+  Get-Content -Raw (Join-Path (Get-Location).Path "scripts/sql/configure-disposable-runtime-role.sql") | `
+    & docker.exe exec -i $taskContainer psql -U postgres -d southwestdigital *> $null
+  if ($LASTEXITCODE -ne 0) { throw "Disposable runtime role setup failed" }
+
+  @'
+\set ON_ERROR_STOP on
+
+DO $$
+DECLARE
+  table_name text;
+  visible_rows bigint;
+BEGIN
+  FOREACH table_name IN ARRAY ARRAY[
+    'CustomerAccount', 'Contact', 'CustomerContact', 'Lead', 'LeadContact', 'LeadAttributionTouch'
+  ]
+  LOOP
+    EXECUTE format('SELECT count(*) FROM %I', table_name) INTO visible_rows;
+    IF visible_rows <> 0 THEN
+      RAISE EXCEPTION 'unscoped runtime query exposed % rows from %', visible_rows, table_name;
+    END IF;
+  END LOOP;
+END $$;
+
+BEGIN;
+SELECT set_config('app.current_brand_id', 'brand-a', true);
+
+DO $$
+DECLARE
+  visible_rows bigint;
+  affected_rows bigint;
+BEGIN
+  SELECT count(*) INTO visible_rows FROM "Contact";
+  IF visible_rows <> 2 THEN
+    RAISE EXCEPTION 'brand-a context saw % contacts instead of 2', visible_rows;
+  END IF;
+
+  INSERT INTO "Contact" (id, "brandId", "displayName", status, "marketingConsent", "createdAt", "updatedAt")
+  VALUES ('rls-positive-a', 'brand-a', 'RLS Positive A', 'ACTIVE', 'UNKNOWN', now(), now());
+
+  BEGIN
+    INSERT INTO "Contact" (id, "brandId", "displayName", status, "marketingConsent", "createdAt", "updatedAt")
+    VALUES ('rls-cross-brand', 'brand-b', 'RLS Cross Brand', 'ACTIVE', 'UNKNOWN', now(), now());
+    RAISE EXCEPTION 'cross-brand insert was not rejected by RLS';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
+  UPDATE "Contact" SET "displayName" = 'RLS Cross Update' WHERE id = 'contact-b';
+  GET DIAGNOSTICS affected_rows = ROW_COUNT;
+  IF affected_rows <> 0 THEN
+    RAISE EXCEPTION 'cross-brand update affected % rows', affected_rows;
+  END IF;
+
+  BEGIN
+    UPDATE "Contact" SET "brandId" = 'brand-b' WHERE id = 'contact-a';
+    RAISE EXCEPTION 'brand-changing update was not rejected by RLS';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
+  DELETE FROM "Contact" WHERE id = 'contact-b';
+  GET DIAGNOSTICS affected_rows = ROW_COUNT;
+  IF affected_rows <> 0 THEN
+    RAISE EXCEPTION 'cross-brand delete affected % rows', affected_rows;
+  END IF;
+END $$;
+
+COMMIT;
+
+DO $$
+DECLARE
+  visible_rows bigint;
+BEGIN
+  SELECT count(*) INTO visible_rows FROM "Contact";
+  IF visible_rows <> 0 THEN
+    RAISE EXCEPTION 'brand context leaked beyond its transaction';
+  END IF;
+END $$;
+
+BEGIN;
+SELECT set_config('app.current_brand_id', 'brand-b', true);
+ROLLBACK;
+
+DO $$
+DECLARE
+  visible_rows bigint;
+BEGIN
+  SELECT count(*) INTO visible_rows FROM "Lead";
+  IF visible_rows <> 0 THEN
+    RAISE EXCEPTION 'rolled-back brand context leaked to a reused connection';
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  BEGIN
+    EXECUTE 'ALTER TABLE "Contact" DISABLE ROW LEVEL SECURITY';
+    RAISE EXCEPTION 'runtime role disabled row-level security';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
+  BEGIN
+    EXECUTE 'SET ROLE postgres';
+    RAISE EXCEPTION 'runtime role assumed the migration role';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
+  BEGIN
+    PERFORM 1 FROM public._prisma_migrations LIMIT 1;
+    RAISE EXCEPTION 'runtime role read Prisma migration history';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+END $$;
+
+SELECT 'CRM row-level security verified' AS result;
+'@ | & docker.exe exec -i -e PGPASSWORD=test-runtime-password $taskContainer `
+    psql -h 127.0.0.1 -U southwest_app_runtime -d southwestdigital
+  if ($LASTEXITCODE -ne 0) { throw "CRM row-level security verification failed" }
+
+  $taskRlsCatalogQuery = @'
+SELECT count(*)
+FROM pg_class
+WHERE relname IN ('CustomerAccount', 'Contact', 'CustomerContact', 'Lead', 'LeadContact', 'LeadAttributionTouch')
+  AND relrowsecurity
+  AND relforcerowsecurity;
+'@
+  $taskRlsTableCount = (($taskRlsCatalogQuery | & docker.exe exec -i $taskContainer psql -U postgres -d southwestdigital -tA) -join "").Trim()
+  if ($taskRlsTableCount -ne "6") { throw "Not every CRM table has forced RLS" }
+
+  $taskRuntimeRoleQuery = "SELECT (NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolreplication AND NOT rolbypassrls) FROM pg_roles WHERE rolname = 'southwest_app_runtime';"
+  $taskRuntimeRoleSafe = (($taskRuntimeRoleQuery | & docker.exe exec -i $taskContainer psql -U postgres -d southwestdigital -tA) -join "").Trim()
+  if ($taskRuntimeRoleSafe -ne "t") { throw "Disposable runtime role can bypass isolation" }
+
+  $taskRuntimeOwnershipQuery = "SELECT count(*) FROM pg_class c JOIN pg_roles r ON r.oid = c.relowner WHERE r.rolname = 'southwest_app_runtime' AND c.relkind IN ('r', 'p');"
+  $taskRuntimeOwnedTables = (($taskRuntimeOwnershipQuery | & docker.exe exec -i $taskContainer psql -U postgres -d southwestdigital -tA) -join "").Trim()
+  if ($taskRuntimeOwnedTables -ne "0") { throw "Disposable runtime role owns application tables" }
 }
 finally {
   if ($taskContainerStarted) {

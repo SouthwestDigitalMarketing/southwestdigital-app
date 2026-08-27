@@ -1,6 +1,5 @@
 import "server-only";
-import { prisma } from "@/lib/prisma";
-import type { BrandDataContext } from "@/lib/tenancy/context";
+import { withBrandDataTransaction, type BrandDataContext } from "@/lib/tenancy/context";
 import {
   createContactSchema,
   createCustomerAccountSchema,
@@ -9,93 +8,103 @@ import {
 
 export async function listCustomerAccounts(context: BrandDataContext, search?: string) {
   const query = search?.trim();
-  return prisma.customerAccount.findMany({
-    where: {
-      brandId: context.brandId,
-      ...(query
-        ? {
-            OR: [
-              { name: { contains: query, mode: "insensitive" } },
-              { legalName: { contains: query, mode: "insensitive" } },
-              { code: { contains: query, mode: "insensitive" } },
-              { communicationEmail: { contains: query, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-    },
-    include: {
-      contacts: {
-        where: { isPrimary: true },
-        include: { contact: true },
-        take: 1,
+  return withBrandDataTransaction(context, (transaction) =>
+    transaction.customerAccount.findMany({
+      where: {
+        brandId: context.brandId,
+        ...(query
+          ? {
+              OR: [
+                { name: { contains: query, mode: "insensitive" } },
+                { legalName: { contains: query, mode: "insensitive" } },
+                { code: { contains: query, mode: "insensitive" } },
+                { communicationEmail: { contains: query, mode: "insensitive" } },
+              ],
+            }
+          : {}),
       },
-    },
-    orderBy: [{ status: "asc" }, { name: "asc" }],
-    take: 200,
-  });
+      include: {
+        contacts: {
+          where: { isPrimary: true },
+          include: { contact: true },
+          take: 1,
+        },
+      },
+      orderBy: [{ status: "asc" }, { name: "asc" }],
+      take: 200,
+    }),
+  );
 }
 
 export async function createCustomerAccount(context: BrandDataContext, input: unknown) {
   const customer = createCustomerAccountSchema.parse(input);
-  return prisma.customerAccount.create({
-    data: { brandId: context.brandId, ...customer },
-  });
+  return withBrandDataTransaction(context, (transaction) =>
+    transaction.customerAccount.create({
+      data: { brandId: context.brandId, ...customer },
+    }),
+  );
 }
 
 export async function listContacts(context: BrandDataContext, search?: string) {
   const query = search?.trim();
-  return prisma.contact.findMany({
-    where: {
-      brandId: context.brandId,
-      ...(query
-        ? {
-            OR: [
-              { displayName: { contains: query, mode: "insensitive" } },
-              { normalizedEmail: { contains: query.toLowerCase() } },
-              { phoneNumber: { contains: query } },
-            ],
-          }
-        : {}),
-    },
-    orderBy: [{ status: "asc" }, { displayName: "asc" }],
-    take: 200,
-  });
+  return withBrandDataTransaction(context, (transaction) =>
+    transaction.contact.findMany({
+      where: {
+        brandId: context.brandId,
+        ...(query
+          ? {
+              OR: [
+                { displayName: { contains: query, mode: "insensitive" } },
+                { normalizedEmail: { contains: query.toLowerCase() } },
+                { phoneNumber: { contains: query } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ status: "asc" }, { displayName: "asc" }],
+      take: 200,
+    }),
+  );
 }
 
 export async function createContact(context: BrandDataContext, input: unknown) {
   const contact = createContactSchema.parse(input);
-  return prisma.contact.create({
-    data: {
-      brandId: context.brandId,
-      ...contact,
-      normalizedEmail: contact.email,
-      marketingConsentAt:
-        contact.marketingConsent === "GRANTED"
-          ? contact.marketingConsentAt ?? new Date()
-          : contact.marketingConsentAt,
-    },
-  });
+  return withBrandDataTransaction(context, (transaction) =>
+    transaction.contact.create({
+      data: {
+        brandId: context.brandId,
+        ...contact,
+        normalizedEmail: contact.email,
+        marketingConsentAt:
+          contact.marketingConsent === "GRANTED"
+            ? contact.marketingConsentAt ?? new Date()
+            : contact.marketingConsentAt,
+      },
+    }),
+  );
 }
 
 export async function listLeads(context: BrandDataContext) {
-  return prisma.lead.findMany({
-    where: { brandId: context.brandId },
-    include: {
-      attributionTouches: {
-        orderBy: { capturedAt: "asc" },
-        take: 5,
+  return withBrandDataTransaction(context, (transaction) =>
+    transaction.lead.findMany({
+      where: { brandId: context.brandId },
+      include: {
+        attributionTouches: {
+          orderBy: { capturedAt: "asc" },
+          take: 5,
+        },
       },
-    },
-    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
-    take: 200,
-  });
+      orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+      take: 200,
+    }),
+  );
 }
 
 export async function createLead(context: BrandDataContext, input: unknown) {
   const leadInput = createLeadSchema.parse(input);
   const { attribution, estimatedValue, ...lead } = leadInput;
 
-  return prisma.$transaction(async (transaction) => {
+  return withBrandDataTransaction(context, async (transaction) => {
     const createdLead = await transaction.lead.create({
       data: {
         brandId: context.brandId,

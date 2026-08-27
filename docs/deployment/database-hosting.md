@@ -21,11 +21,13 @@ Production provides two distinct secrets:
 
 Supabase documents the appropriate [runtime and migration connection modes](https://supabase.com/docs/guides/database/connecting-to-postgres). Never run `prisma migrate dev`, `prisma migrate reset`, `prisma db push`, the initial seed, or ad hoc SQL against production.
 
+Use the explicit [database role provisioning runbook](database-role-provisioning.md); the fixed disposable role script is test-only.
+
 The runtime role must not be a superuser and must not have `CREATEDB`, `CREATEROLE`, or `BYPASSRLS`. Preview deployments must not receive production database credentials.
 
 ## Required defense in depth
 
-Before migrating additional tenant-owned modules or production client data, add PostgreSQL row-level security to every brand-owned table. The runtime transaction must set a server-derived, transaction-local brand context; policies must deny access when that context is absent. Platform administration and background workers require separate, explicit paths and roles.
+The CRM phase now enforces PostgreSQL row-level security through a server-derived, transaction-local brand context. The remaining brand-owned tables still require narrow bootstrap, platform, and worker paths before they can receive the same deny-by-default protection. See [database tenant isolation](../architecture/database-tenant-isolation.md).
 
 Composite brand foreign keys remain required because they stop cross-brand relationships. RLS serves a different purpose: it prevents a future query that accidentally omits `brandId` from reading or changing another brand's otherwise valid rows.
 
@@ -36,10 +38,12 @@ Before the first production migration:
 1. Confirm the project owner organization, region, plan, PostgreSQL version, compute size, connection limits, backup retention, and point-in-time recovery decision.
 2. Record a non-secret project fingerprint and require it in the deployment/seed preflight.
 3. Create separate migration and runtime roles; verify the runtime role cannot create schemas or bypass RLS.
+   Use an explicit grant matrix; do not copy the disposable test-role script into production.
 4. Configure managed backups and make an encrypted logical backup. Supabase documents [managed and logical backups](https://supabase.com/docs/guides/platform/backups).
 5. Deploy all migrations and run the seed in a disposable project first.
 6. Run the unit, build, database-constraint, authentication/tenancy, and seed-rehearsal suites against the candidate project.
 7. Verify the database contains no legacy Bookkeeping tables or migration records.
-8. Enable production credentials only on the production deployment.
+8. Revoke application-table access from Supabase `anon`, `authenticated`, and `service_role`, and remove the application schema from Data API exposure where supported.
+9. Enable production credentials only on the production deployment.
 
 No production Supabase project, database, or backup was changed while making this decision.
