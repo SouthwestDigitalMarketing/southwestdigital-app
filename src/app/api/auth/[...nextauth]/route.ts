@@ -1,5 +1,5 @@
-import type { NextRequest } from "next/server";
 import { handlers } from "@/auth";
+import { NextRequest } from "next/server";
 import { isPlatformHostname } from "@/lib/brands/active-brand";
 import { resolveAppBrandByHostname } from "@/lib/brands/repository";
 import { effectiveRequestHostname } from "@/lib/brands/request";
@@ -15,20 +15,22 @@ async function isTrustedAuthHost(request: NextRequest): Promise<boolean> {
   return Boolean(await resolveAppBrandByHostname(hostname));
 }
 
-async function handleTrustedAuthRequest(
-  request: NextRequest,
-  handler: (request: NextRequest) => Promise<Response>,
-) {
-  if (!(await isTrustedAuthHost(request))) {
-    return new Response("Not Found", { status: 404 });
-  }
-  return handler(request);
+function withForwardedOrigin(req: NextRequest) {
+  const forwardedHost = req.headers.get("x-forwarded-host");
+  const forwardedProto = req.headers.get("x-forwarded-proto");
+  if (!forwardedHost || !forwardedProto) return req;
+  const url = new URL(req.url);
+  const nextUrl = `${forwardedProto}://${forwardedHost}${url.pathname}${url.search}`;
+  if (nextUrl === req.url) return req;
+  return new NextRequest(nextUrl, req);
 }
 
-export function GET(request: NextRequest) {
-  return handleTrustedAuthRequest(request, handlers.GET);
+export async function GET(req: NextRequest) {
+  if (!(await isTrustedAuthHost(req))) return new Response("Not Found", { status: 404 });
+  return handlers.GET(withForwardedOrigin(req));
 }
 
-export function POST(request: NextRequest) {
-  return handleTrustedAuthRequest(request, handlers.POST);
+export async function POST(req: NextRequest) {
+  if (!(await isTrustedAuthHost(req))) return new Response("Not Found", { status: 404 });
+  return handlers.POST(withForwardedOrigin(req));
 }

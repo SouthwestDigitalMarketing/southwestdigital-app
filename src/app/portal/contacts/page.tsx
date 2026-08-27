@@ -37,7 +37,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Con
               {contacts.map((contact) => (
                 <li key={contact.id} className="flex flex-wrap items-center gap-4 px-6 py-5">
                   <div className="min-w-52 flex-1">
-                    <p className="font-semibold text-slate-900">{contact.displayName}</p>
+                    <p className="font-semibold text-slate-900">{contact.name}</p>
                     <p className="mt-1 text-sm text-slate-500">{contact.roleTitle ?? "No role recorded"}</p>
                   </div>
                   <div className="text-sm text-slate-600">
@@ -45,7 +45,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Con
                     <p>{contact.phoneNumber ?? contact.phoneE164 ?? "No phone"}</p>
                   </div>
                   <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                    {contact.marketingConsent.toLowerCase()} consent
+                    {contact.isActive ? "active" : "archived"}
                   </span>
                 </li>
               ))}

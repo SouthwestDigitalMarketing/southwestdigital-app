@@ -29,13 +29,6 @@ TO PUBLIC
 USING ("brandId" = NULLIF(current_setting('app.current_brand_id', true), ''))
 WITH CHECK ("brandId" = NULLIF(current_setting('app.current_brand_id', true), ''));
 
-ALTER TABLE "LeadContact" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "LeadContact" FORCE ROW LEVEL SECURITY;
-CREATE POLICY "lead_contact_brand_context" ON "LeadContact"
-TO PUBLIC
-USING ("brandId" = NULLIF(current_setting('app.current_brand_id', true), ''))
-WITH CHECK ("brandId" = NULLIF(current_setting('app.current_brand_id', true), ''));
-
 ALTER TABLE "LeadAttributionTouch" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "LeadAttributionTouch" FORCE ROW LEVEL SECURITY;
 CREATE POLICY "lead_attribution_brand_context" ON "LeadAttributionTouch"

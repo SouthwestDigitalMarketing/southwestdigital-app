@@ -54,14 +54,14 @@ export async function listContacts(context: BrandDataContext, search?: string) {
         ...(query
           ? {
               OR: [
-                { displayName: { contains: query, mode: "insensitive" } },
-                { normalizedEmail: { contains: query.toLowerCase() } },
+                { name: { contains: query, mode: "insensitive" } },
+                { email: { contains: query.toLowerCase(), mode: "insensitive" } },
                 { phoneNumber: { contains: query } },
               ],
             }
           : {}),
       },
-      orderBy: [{ status: "asc" }, { displayName: "asc" }],
+      orderBy: [{ isActive: "desc" }, { name: "asc" }],
       take: 200,
     }),
   );
@@ -73,12 +73,17 @@ export async function createContact(context: BrandDataContext, input: unknown) {
     transaction.contact.create({
       data: {
         brandId: context.brandId,
-        ...contact,
-        normalizedEmail: contact.email,
-        marketingConsentAt:
-          contact.marketingConsent === "GRANTED"
-            ? contact.marketingConsentAt ?? new Date()
-            : contact.marketingConsentAt,
+        name: contact.displayName,
+        firstName: contact.firstName,
+        lastName: contact.lastName,
+        email: contact.email,
+        secondaryEmail: contact.secondaryEmail,
+        businessEmail: contact.businessEmail,
+        personalEmail: contact.personalEmail,
+        phoneE164: contact.phoneE164,
+        phoneNumber: contact.phoneNumber,
+        roleTitle: contact.roleTitle,
+        isActive: contact.status !== "ARCHIVED",
       },
     }),
   );

@@ -43,10 +43,10 @@ INSERT INTO "CustomerAccount" (id, "brandId", code, name, status, "createdAt", "
   ('customer-a', 'brand-a', 'CLIENT-1', 'Customer A', 'ACTIVE', now(), now()),
   ('customer-b', 'brand-b', 'CLIENT-1', 'Customer B', 'ACTIVE', now(), now());
 
-INSERT INTO "Contact" (id, "brandId", "displayName", email, "normalizedEmail", status, "marketingConsent", "createdAt", "updatedAt") VALUES
-  ('contact-a', 'brand-a', 'Shared Person A', 'shared@example.test', 'shared@example.test', 'ACTIVE', 'UNKNOWN', now(), now()),
-  ('contact-a2', 'brand-a', 'Second Person A', 'second@example.test', 'second@example.test', 'ACTIVE', 'UNKNOWN', now(), now()),
-  ('contact-b', 'brand-b', 'Shared Person B', 'shared@example.test', 'shared@example.test', 'ACTIVE', 'UNKNOWN', now(), now());
+INSERT INTO "Contact" (id, "brandId", name, "displayName", email, "normalizedEmail", status, "marketingConsent", "createdAt", "updatedAt") VALUES
+  ('contact-a', 'brand-a', 'Shared Person A', 'Shared Person A', 'shared@example.test', 'shared@example.test', 'ACTIVE', 'UNKNOWN', now(), now()),
+  ('contact-a2', 'brand-a', 'Second Person A', 'Second Person A', 'second@example.test', 'second@example.test', 'ACTIVE', 'UNKNOWN', now(), now()),
+  ('contact-b', 'brand-b', 'Shared Person B', 'Shared Person B', 'shared@example.test', 'shared@example.test', 'ACTIVE', 'UNKNOWN', now(), now());
 
 INSERT INTO "Lead" (id, "brandId", name, status, "createdAt", "updatedAt") VALUES
   ('lead-a', 'brand-a', 'Lead A', 'NEW', now(), now()),
@@ -143,12 +143,12 @@ BEGIN
     RAISE EXCEPTION 'brand-a context saw % contacts instead of 2', visible_rows;
   END IF;
 
-  INSERT INTO "Contact" (id, "brandId", "displayName", status, "marketingConsent", "createdAt", "updatedAt")
-  VALUES ('rls-positive-a', 'brand-a', 'RLS Positive A', 'ACTIVE', 'UNKNOWN', now(), now());
+  INSERT INTO "Contact" (id, "brandId", name, "displayName", status, "marketingConsent", "createdAt", "updatedAt")
+  VALUES ('rls-positive-a', 'brand-a', 'RLS Positive A', 'RLS Positive A', 'ACTIVE', 'UNKNOWN', now(), now());
 
   BEGIN
-    INSERT INTO "Contact" (id, "brandId", "displayName", status, "marketingConsent", "createdAt", "updatedAt")
-    VALUES ('rls-cross-brand', 'brand-b', 'RLS Cross Brand', 'ACTIVE', 'UNKNOWN', now(), now());
+    INSERT INTO "Contact" (id, "brandId", name, "displayName", status, "marketingConsent", "createdAt", "updatedAt")
+    VALUES ('rls-cross-brand', 'brand-b', 'RLS Cross Brand', 'RLS Cross Brand', 'ACTIVE', 'UNKNOWN', now(), now());
     RAISE EXCEPTION 'cross-brand insert was not rejected by RLS';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;

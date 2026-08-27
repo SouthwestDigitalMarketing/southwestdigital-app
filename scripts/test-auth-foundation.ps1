@@ -84,9 +84,9 @@ VALUES
   ('session-viewer', 'test-viewer-session-token', 'viewer', now() + interval '1 day'),
   ('session-platform', 'test-platform-session-token', 'platform-owner', now() + interval '1 day');
 
-INSERT INTO "Contact" (id, "brandId", "displayName", status, "marketingConsent", "createdAt", "updatedAt") VALUES
-  ('contigo-contact', 'contigo', 'Contigo Only Contact', 'ACTIVE', 'UNKNOWN', now(), now()),
-  ('melbourne-contact', 'melbourne', 'Melbourne Only Contact', 'ACTIVE', 'UNKNOWN', now(), now());
+INSERT INTO "Contact" (id, "brandId", name, "displayName", status, "marketingConsent", "createdAt", "updatedAt") VALUES
+  ('contigo-contact', 'contigo', 'Contigo Only Contact', 'Contigo Only Contact', 'ACTIVE', 'UNKNOWN', now(), now()),
+  ('melbourne-contact', 'melbourne', 'Melbourne Only Contact', 'Melbourne Only Contact', 'ACTIVE', 'UNKNOWN', now(), now());
 
 INSERT INTO "Lead" (id, "brandId", name, status, "createdAt", "updatedAt") VALUES
   ('contigo-lead', 'contigo', 'Contigo Only Lead', 'NEW', now(), now()),
@@ -716,7 +716,7 @@ WHERE b.id = 'bookkeeping'
 
   $taskCrmRoleBoundaryQuery = @'
 SELECT
-  (SELECT count(*) FROM "Contact" WHERE "brandId" = 'contigo' AND "displayName" = 'CRM role boundary contact')::text || ',' ||
+  (SELECT count(*) FROM "Contact" WHERE "brandId" = 'contigo' AND name = 'CRM role boundary contact')::text || ',' ||
   (SELECT count(*) FROM "CustomerAccount" WHERE "brandId" = 'contigo' AND name = 'CRM role boundary customer')::text || ',' ||
   (SELECT count(*) FROM "Lead" WHERE "brandId" = 'contigo' AND name = 'CRM role boundary lead')::text;
 '@
