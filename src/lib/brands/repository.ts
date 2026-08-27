@@ -65,18 +65,7 @@ export async function resolveAppBrandByHostname(
   return domain?.brand ?? null;
 }
 
-export async function getAccessibleBrands(
-  userId: string,
-  platformRole: PlatformRole,
-): Promise<BrandSummary[]> {
-  if (platformRole === PlatformRole.ADMIN || platformRole === PlatformRole.OWNER) {
-    return prisma.brand.findMany({
-      where: { status: { not: BrandStatus.DELETED } },
-      select: brandSummarySelect,
-      orderBy: { name: "asc" },
-    });
-  }
-
+export async function getAccessibleBrands(userId: string): Promise<BrandSummary[]> {
   const memberships = await prisma.brandMembership.findMany({
     where: {
       userId,

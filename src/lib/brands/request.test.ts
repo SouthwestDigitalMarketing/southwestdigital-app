@@ -19,6 +19,26 @@ describe("effectiveRequestHostname", () => {
       }),
     ).toBe("app.contigoaccounting.com");
   });
+
+  it("extracts the hostname from a URL-shaped development override", () => {
+    expect(
+      effectiveRequestHostname({
+        requestHostname: "localhost:3000",
+        developmentOverride: "https://app.bookkeepingconroe.com",
+        nodeEnv: "development",
+      }),
+    ).toBe("app.bookkeepingconroe.com");
+  });
+
+  it("falls back to the request hostname when the development override is invalid", () => {
+    expect(
+      effectiveRequestHostname({
+        requestHostname: "localhost:3000",
+        developmentOverride: "not a hostname",
+        nodeEnv: "development",
+      }),
+    ).toBe("localhost");
+  });
 });
 
 describe("safeRequestOrigin", () => {

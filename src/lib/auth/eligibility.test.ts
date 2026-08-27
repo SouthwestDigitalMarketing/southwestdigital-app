@@ -56,5 +56,17 @@ describe("isSignInEligible", () => {
       }),
     ).toBe(false);
   });
+
+  it("allows Google identities when verified status is omitted", () => {
+    expect(
+      isSignInEligible({
+        userExists: true,
+        userStatus: UserStatus.ACTIVE,
+        platformRole: PlatformRole.OWNER,
+        eligibleMembershipCount: 1,
+        isGoogleProvider: true,
+      }),
+    ).toBe(true);
+  });
 });
 

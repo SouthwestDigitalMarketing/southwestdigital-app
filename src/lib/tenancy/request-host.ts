@@ -8,13 +8,17 @@ import { resolveAppBrandByHostname } from "@/lib/brands/repository";
 import { effectiveRequestHostname } from "@/lib/brands/request";
 import { isPlatformAdministrator } from "@/lib/platform/access";
 
-export async function requireTrustedPortalHost(platformRole: PlatformRole) {
+export async function currentRequestHostname() {
   const requestHeaders = await headers();
-  const hostname = effectiveRequestHostname({
-    requestHostname: requestHeaders.get("host"),
+  return effectiveRequestHostname({
+    requestHostname: requestHeaders.get("x-hostname") ?? requestHeaders.get("host"),
     developmentOverride: process.env.DEV_BRAND_HOST,
     nodeEnv: process.env.NODE_ENV,
   });
+}
+
+export async function requireTrustedPortalHost(platformRole: PlatformRole) {
+  const hostname = await currentRequestHostname();
 
   if (isPlatformHostname(hostname, process.env.PLATFORM_BASE_URL)) {
     if (!isPlatformAdministrator(platformRole)) redirect("/access-denied");

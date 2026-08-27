@@ -1,10 +1,9 @@
 import "server-only";
 
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
-import { auth } from "@/auth";
-import { resolveBrand } from "@/lib/brands/resolve";
 import { BrandRole, MembershipStatus, PlatformRole } from "@prisma/client";
+import { resolveBrandById } from "@/lib/brands/resolve";
+import { requireActiveBrandContext } from "@/lib/tenancy/current";
 
 export function isPlatformOperator(role: PlatformRole | undefined) {
   return role === PlatformRole.OWNER || role === PlatformRole.ADMIN;
@@ -12,46 +11,41 @@ export function isPlatformOperator(role: PlatformRole | undefined) {
 
 const STAFF_ROLES: BrandRole[] = [BrandRole.OWNER, BrandRole.ADMIN, BrandRole.MEMBER];
 
-export async function requireStaffBrand() {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
+async function loadActiveAppBrand() {
+  const { session, activeBrand, accessibleBrands } = await requireActiveBrandContext();
+  const resolved = await resolveBrandById(activeBrand.id, session.user.id);
+  if (!resolved) redirect("/select-brand");
 
-  const headersList = await headers();
-  const resolved = await resolveBrand(headersList.get("x-hostname"), session.user.id);
-  if (!resolved?.membership || resolved.membership.status !== MembershipStatus.ACTIVE) {
-    redirect("/dashboard");
-  }
-  if (!STAFF_ROLES.includes(resolved.membership.role)) {
-    redirect("/dashboard");
-  }
+  const operator = isPlatformOperator(session.user.platformRole);
+  const activeMembership = resolved.membership?.status === MembershipStatus.ACTIVE;
+  if (!operator && !activeMembership) redirect("/login?error=AccessDenied");
 
   return {
     session,
     brand: resolved.brand,
     membership: resolved.membership,
+    accessibleBrands,
     platformRole: session.user.platformRole,
-    isPlatformOperator: isPlatformOperator(session.user.platformRole),
+    isPlatformOperator: operator,
   };
 }
 
+export async function requireAppBrand() {
+  return loadActiveAppBrand();
+}
+
+export async function requireStaffBrand() {
+  const ctx = await loadActiveAppBrand();
+  const staffMembership =
+    ctx.membership?.status === MembershipStatus.ACTIVE && STAFF_ROLES.includes(ctx.membership.role);
+  if (!ctx.isPlatformOperator && !staffMembership) redirect("/dashboard");
+  return ctx;
+}
+
 export async function requireStaffBrandOrThrow() {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
-
-  const headersList = await headers();
-  const resolved = await resolveBrand(headersList.get("x-hostname"), session.user.id);
-  if (!resolved?.membership || resolved.membership.status !== MembershipStatus.ACTIVE) {
-    throw new Error("Unauthorized");
-  }
-  if (!STAFF_ROLES.includes(resolved.membership.role)) {
-    throw new Error("Unauthorized");
-  }
-
-  return {
-    session,
-    brand: resolved.brand,
-    membership: resolved.membership,
-    platformRole: session.user.platformRole,
-    isPlatformOperator: isPlatformOperator(session.user.platformRole),
-  };
+  const ctx = await loadActiveAppBrand();
+  const staffMembership =
+    ctx.membership?.status === MembershipStatus.ACTIVE && STAFF_ROLES.includes(ctx.membership.role);
+  if (!ctx.isPlatformOperator && !staffMembership) throw new Error("Unauthorized");
+  return ctx;
 }

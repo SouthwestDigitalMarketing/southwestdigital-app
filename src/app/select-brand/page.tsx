@@ -12,7 +12,7 @@ export default async function SelectBrandPage() {
 
   const [, brands] = await Promise.all([
     requireTrustedPortalHost(session.user.platformRole),
-    getAccessibleBrands(session.user.id, session.user.platformRole),
+    getAccessibleBrands(session.user.id),
   ]);
   if (brands.length === 0) redirect("/login?error=AccessDenied");
 

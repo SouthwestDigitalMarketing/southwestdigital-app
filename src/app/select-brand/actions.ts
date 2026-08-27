@@ -20,12 +20,12 @@ export async function selectBrand(formData: FormData) {
 
   const [, accessibleBrands] = await Promise.all([
     requireTrustedPortalHost(session.user.platformRole),
-    getAccessibleBrands(session.user.id, session.user.platformRole),
+    getAccessibleBrands(session.user.id),
   ]);
   if (!accessibleBrands.some(({ id }) => id === parsed.data)) {
     redirect("/select-brand?error=denied");
   }
 
   (await cookies()).set(activeBrandCookie(parsed.data));
-  redirect("/portal");
+  redirect("/dashboard");
 }

@@ -25,6 +25,7 @@ import {
   ImagePlay,
   Tag,
 } from "lucide-react";
+import { selectBrand } from "@/app/select-brand/actions";
 import { useBrand } from "@/lib/brands/context";
 import { signOutAction } from "./actions";
 
@@ -133,9 +134,13 @@ function ExternalNavItem({
 export function AppShell({
   children,
   user,
+  accessibleBrands,
+  activeBrandId,
 }: {
   children: React.ReactNode;
   user: { name?: string | null; email?: string | null };
+  accessibleBrands: Array<{ id: string; name: string }>;
+  activeBrandId: string;
 }) {
   const { brand } = useBrand();
   const [open, setOpen] = useState(false);
@@ -190,6 +195,31 @@ export function AppShell({
           </span>
         ) : null}
       </div>
+      {accessibleBrands.length > 1 ? (
+        <form action={selectBrand} className="px-3 pb-3">
+          <label className="sr-only" htmlFor="active-brand">
+            Switch brand
+          </label>
+          <select
+            id="active-brand"
+            name="brandId"
+            defaultValue={activeBrandId}
+            onChange={(event) => event.currentTarget.form?.requestSubmit()}
+            className="w-full rounded-lg border px-3 py-2 text-sm"
+            style={{
+              color: navTextColor,
+              backgroundColor: isLight ? "#ffffff" : "transparent",
+              borderColor: dividerColor,
+            }}
+          >
+            {accessibleBrands.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+        </form>
+      ) : null}
 
       <nav className="flex-1 space-y-0.5 px-3 py-4">
         {NAV.map(({ href, icon, label, exact, dividerAfter }) => (

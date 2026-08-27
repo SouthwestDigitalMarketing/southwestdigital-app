@@ -1,9 +1,5 @@
-import { redirect } from "next/navigation";
-import { headers } from "next/headers";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { resolveBrand } from "@/lib/brands/resolve";
-import { MembershipStatus } from "@prisma/client";
+import { requireAppBrand } from "@/lib/brands/staff";
 import { getSiteHealth, getTrafficTrend, getHourlyTraffic, type SiteHealth } from "@/lib/analytics/ga4";
 import { PeriodSelector } from "./PeriodSelector";
 import { SiteTrafficGraph, type TrafficComparisonRow } from "./SiteTrafficGraph";
@@ -36,16 +32,7 @@ export default async function WebsitePage({
   const period = rawPeriod && rawPeriod in PERIOD_CONFIG ? rawPeriod : "30d";
   const config = PERIOD_CONFIG[period];
 
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-
-  const headersList = await headers();
-  const resolved = await resolveBrand(headersList.get("x-hostname"), session.user.id);
-  if (!resolved?.membership || resolved.membership.status !== MembershipStatus.ACTIVE) {
-    redirect("/dashboard");
-  }
-
-  const { brand } = resolved;
+  const { brand } = await requireAppBrand();
 
   const theme = await prisma.brandTheme.findUnique({
     where: { brandId: brand.id },

@@ -1,10 +1,7 @@
-import { redirect } from "next/navigation";
-import { headers } from "next/headers";
 import type { ReactNode } from "react";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { resolveBrand } from "@/lib/brands/resolve";
-import { MembershipStatus, ReviewOutcome } from "@prisma/client";
+import { requireAppBrand } from "@/lib/brands/staff";
+import { ReviewOutcome } from "@prisma/client";
 import { getTrafficTrend, getTotalKeyEvents } from "@/lib/analytics/ga4";
 import { getChannelMetrics, getAverageWatchDuration } from "@/lib/youtube/analytics";
 import { PlayCircle, Clock, Globe, Target, FileText, Eye, Star } from "lucide-react";
@@ -224,16 +221,7 @@ type PageProps = {
 };
 
 export default async function DashboardPage({ searchParams }: PageProps) {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-
-  const headersList = await headers();
-  const resolved = await resolveBrand(headersList.get("x-hostname"), session.user.id);
-  if (!resolved?.membership || resolved.membership.status !== MembershipStatus.ACTIVE) {
-    redirect("/login");
-  }
-
-  const { brand } = resolved;
+  const { brand } = await requireAppBrand();
   const params = await searchParams;
   const range = getDashboardRange(params.range);
   const windowEnd = new Date();

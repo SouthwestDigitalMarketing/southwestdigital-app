@@ -20,7 +20,7 @@ export function GoogleSignInButton({ callbackUrl }: { callbackUrl: string }) {
       type="button"
       onClick={handleClick}
       disabled={submitting}
-      className="flex w-full cursor-pointer items-center justify-center gap-3 rounded-full border border-slate-300 bg-white px-5 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+      className="flex w-full cursor-pointer items-center justify-center gap-3 rounded-full border border-slate-300 bg-white px-5 py-3 font-semibold text-slate-800 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
     >
       <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
         <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>

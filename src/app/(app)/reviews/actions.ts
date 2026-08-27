@@ -1,17 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { resolveBrand } from "@/lib/brands/resolve";
+import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
 import { sendSms } from "@/lib/quo";
 import { ReviewChannel } from "@prisma/client";
 import { normalizePhone } from "@/lib/phone";
 
 export async function sendReviewRequest(formData: FormData) {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
+  const { brand, membership } = await requireStaffBrandOrThrow();
+  if (!membership) throw new Error("No brand access");
 
   const recipientName = (formData.get("recipientName") as string | null)?.trim() ?? "";
   const rawPhone = (formData.get("recipientPhone") as string | null)?.trim() ?? "";
@@ -19,13 +17,6 @@ export async function sendReviewRequest(formData: FormData) {
   if (!recipientName || !rawPhone) throw new Error("Name and phone are required");
 
   const recipientPhone = normalizePhone(rawPhone);
-
-  const headersList = await headers();
-  const hostname = headersList.get("x-hostname");
-  const resolved = await resolveBrand(hostname, session.user.id);
-  if (!resolved?.membership) throw new Error("No brand access");
-
-  const { brand, membership } = resolved;
 
   const request = await prisma.reviewRequest.create({
     data: {
@@ -49,14 +40,7 @@ export async function sendReviewRequest(formData: FormData) {
 }
 
 export async function sendReminder(requestId: string) {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Unauthorized");
-
-  const headersList = await headers();
-  const resolved = await resolveBrand(headersList.get("x-hostname"), session.user.id);
-  if (!resolved?.membership) throw new Error("No brand access");
-
-  const { brand } = resolved;
+  const { brand } = await requireStaffBrandOrThrow();
 
   const request = await prisma.reviewRequest.findUnique({
     where: { id: requestId },

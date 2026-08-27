@@ -108,6 +108,15 @@ describe("selectInitialBrand", () => {
     ).toBe("melbourne");
   });
 
+  it("starts on Southwest Digital when that owner also belongs to Bookkeeping Conroe", () => {
+    expect(
+      selectInitialBrand({
+        accessibleBrandIds: ["southwest-digital", "bookkeeping-conroe"],
+        entryBrandId: "southwest-digital",
+      }),
+    ).toBe("southwest-digital");
+  });
+
   it("does not select an unauthorized entry-host brand", () => {
     expect(
       selectInitialBrand({

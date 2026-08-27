@@ -38,22 +38,23 @@ export async function GET(request: NextRequest) {
 
   const [entryBrand, accessibleBrands] = await Promise.all([
     resolveAppBrandByHostname(hostname),
-    getAccessibleBrands(session.user.id, session.user.platformRole),
+    getAccessibleBrands(session.user.id),
   ]);
   if (!entryBrand) {
     return NextResponse.redirect(new URL("/login?error=InvalidHost", requestOrigin));
   }
-  const selectedBrandId = selectInitialBrand({
-    accessibleBrandIds: accessibleBrands.map(({ id }) => id),
-    entryBrandId: entryBrand?.id,
-  });
+  const selectedBrandId =
+    selectInitialBrand({
+      accessibleBrandIds: accessibleBrands.map(({ id }) => id),
+      entryBrandId: entryBrand.id,
+    }) ?? (isPlatformAdministrator(session.user.platformRole) ? entryBrand.id : null);
 
   if (!selectedBrandId) {
     const destination = accessibleBrands.length > 1 ? "/select-brand" : "/login?error=AccessDenied";
     return NextResponse.redirect(new URL(destination, requestOrigin));
   }
 
-  const response = NextResponse.redirect(new URL("/portal", requestOrigin));
+  const response = NextResponse.redirect(new URL("/dashboard", requestOrigin));
   response.cookies.set(activeBrandCookie(selectedBrandId));
   return response;
 }

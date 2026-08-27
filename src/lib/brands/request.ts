@@ -1,12 +1,28 @@
 import { normalizeHostname } from "./hostname";
 
+function hostnameFromDevelopmentOverride(value: string | null | undefined): string | null {
+  const candidate = value?.trim();
+  if (!candidate) return null;
+
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(candidate)) {
+    try {
+      return normalizeHostname(new URL(candidate).hostname);
+    } catch {
+      return null;
+    }
+  }
+
+  return normalizeHostname(candidate);
+}
+
 export function effectiveRequestHostname(input: {
   requestHostname: string | null | undefined;
   developmentOverride?: string | null;
   nodeEnv?: string;
 }): string | null {
-  if (input.nodeEnv === "development" && input.developmentOverride) {
-    return normalizeHostname(input.developmentOverride);
+  if (input.nodeEnv === "development") {
+    const override = hostnameFromDevelopmentOverride(input.developmentOverride);
+    if (override) return override;
   }
   return normalizeHostname(input.requestHostname);
 }

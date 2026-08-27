@@ -1,11 +1,11 @@
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth, authProviderAvailability } from "@/auth";
 import { BrandShell } from "@/components/brand-shell";
 import { isPlatformHostname } from "@/lib/brands/active-brand";
-import { effectiveRequestHostname } from "@/lib/brands/request";
 import { resolveAppBrandByHostname } from "@/lib/brands/repository";
-import { requestMagicLink, signInWithGoogle } from "./actions";
+import { currentRequestHostname } from "@/lib/tenancy/request-host";
+import { GoogleSignInButton } from "./GoogleSignInButton";
+import { requestMagicLink } from "./actions";
 
 type LoginSearchParams = Promise<{ error?: string }>;
 
@@ -14,15 +14,15 @@ const errorMessages: Record<string, string> = {
   InvalidHost: "This hostname is not connected to an active Southwest Digital App portal.",
   InvalidEmail: "Enter a valid email address.",
   OAuthAccountNotLinked: "Use the same sign-in method associated with this account.",
+  Configuration: "Authentication is misconfigured for this environment.",
+  OAuthSignin: "Google sign-in could not be started. Try again.",
+  OAuthCallback: "Google sign-in did not complete. Try email sign-in, or try Google again.",
+  Callback: "Sign-in could not be completed. Try again.",
+  CredentialsSignin: "This account does not have access to the requested portal.",
 };
 
 export default async function LoginPage({ searchParams }: { searchParams: LoginSearchParams }) {
-  const headerStore = await headers();
-  const hostname = effectiveRequestHostname({
-    requestHostname: headerStore.get("host"),
-    developmentOverride: process.env.DEV_BRAND_HOST,
-    nodeEnv: process.env.NODE_ENV,
-  });
+  const hostname = await currentRequestHostname();
   const brand = await resolveAppBrandByHostname(hostname);
   const isPlatform = isPlatformHostname(hostname, process.env.PLATFORM_BASE_URL);
   const params = await searchParams;
@@ -48,9 +48,13 @@ export default async function LoginPage({ searchParams }: { searchParams: LoginS
   return (
     <BrandShell brand={brand}>
       <section className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-        <h1 className="text-3xl font-semibold tracking-tight">Welcome</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">
+          {brand ? `Sign in to ${brand.name}` : "Sign in"}
+        </h1>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          Sign in with Google or request a secure email link.
+          {brand
+            ? "Use the Google or email account that has access to this brand. If you belong to more than one brand, you can switch after signing in."
+            : "Sign in with Google or request a secure email link."}
         </p>
 
         {message ? (
@@ -59,14 +63,7 @@ export default async function LoginPage({ searchParams }: { searchParams: LoginS
 
         <div className="mt-7 space-y-4">
           {authProviderAvailability.google ? (
-            <form action={signInWithGoogle}>
-              <button
-                type="submit"
-                className="w-full cursor-pointer rounded-full border border-slate-300 bg-white px-5 py-3 font-semibold text-slate-800 transition hover:bg-slate-50"
-              >
-                Continue with Google
-              </button>
-            </form>
+            <GoogleSignInButton callbackUrl="/auth/complete" />
           ) : null}
 
           {authProviderAvailability.google && authProviderAvailability.email ? (
@@ -95,7 +92,7 @@ export default async function LoginPage({ searchParams }: { searchParams: LoginS
                 type="submit"
                 className="w-full cursor-pointer rounded-full bg-[var(--brand-primary)] px-5 py-3 font-semibold text-white transition hover:opacity-90"
               >
-                Email me a sign-in link
+                {authProviderAvailability.instantEmail ? "Sign in" : "Email me a sign-in link"}
               </button>
             </form>
           ) : null}

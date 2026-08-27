@@ -1,9 +1,5 @@
-import { redirect } from "next/navigation";
-import { headers } from "next/headers";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { resolveBrand } from "@/lib/brands/resolve";
-import { MembershipStatus } from "@prisma/client";
+import { requireAppBrand } from "@/lib/brands/staff";
 import {
   getChannelMetrics,
   getDailyViews,
@@ -31,16 +27,7 @@ function YouTubeIcon({ className }: { className?: string }) {
 export const dynamic = "force-dynamic";
 
 export default async function YouTubePage() {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-
-  const headersList = await headers();
-  const resolved = await resolveBrand(headersList.get("x-hostname"), session.user.id);
-  if (!resolved?.membership || resolved.membership.status !== MembershipStatus.ACTIVE) {
-    redirect("/dashboard");
-  }
-
-  const { brand } = resolved;
+  const { brand } = await requireAppBrand();
 
   const [theme, redirectDomainRecord] = await Promise.all([
     prisma.brandTheme.findUnique({

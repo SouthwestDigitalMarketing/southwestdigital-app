@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { selectCurrentBrand } from "@/lib/brands/access";
 import { ACTIVE_BRAND_COOKIE } from "@/lib/brands/active-brand";
 import { getAccessibleBrands, getBrandAccessDecision } from "@/lib/brands/repository";
+import { isPlatformAdministrator } from "@/lib/platform/access";
 import { createBrandDataContext } from "./context";
 import { requireTrustedPortalHost } from "./request-host";
 
@@ -13,11 +14,21 @@ export async function requireActiveBrandContext(options?: { minimumRole?: BrandR
   const session = await auth();
   if (!session?.user || session.user.status !== UserStatus.ACTIVE) redirect("/login");
 
-  const [cookieStore, accessibleBrands, requestEntry] = await Promise.all([
+  const [cookieStore, membershipBrands, requestEntry] = await Promise.all([
     cookies(),
-    getAccessibleBrands(session.user.id, session.user.platformRole),
+    getAccessibleBrands(session.user.id),
     requireTrustedPortalHost(session.user.platformRole),
   ]);
+
+  const accessibleBrands = [...membershipBrands];
+  if (
+    isPlatformAdministrator(session.user.platformRole) &&
+    requestEntry.entryBrand &&
+    !accessibleBrands.some(({ id }) => id === requestEntry.entryBrand.id)
+  ) {
+    accessibleBrands.push(requestEntry.entryBrand);
+  }
+
   const activeBrandId = selectCurrentBrand({
     accessibleBrandIds: accessibleBrands.map(({ id }) => id),
     activeBrandId: cookieStore.get(ACTIVE_BRAND_COOKIE)?.value,
@@ -35,7 +46,7 @@ export async function requireActiveBrandContext(options?: { minimumRole?: BrandR
     platformRole: session.user.platformRole,
     minimumRole: options?.minimumRole ?? BrandRole.MEMBER,
   });
-  if (options?.minimumRole && !decision.allowed) redirect("/portal?error=Forbidden");
+  if (options?.minimumRole && !decision.allowed) redirect("/dashboard?error=Forbidden");
 
   return {
     session,

@@ -8,7 +8,7 @@ export function isSignInEligible(input: {
   isGoogleProvider: boolean;
   isGoogleEmailVerified?: boolean;
 }): boolean {
-  if (input.isGoogleProvider && !input.isGoogleEmailVerified) return false;
+  if (input.isGoogleProvider && input.isGoogleEmailVerified === false) return false;
   if (
     !input.userExists ||
     (input.userStatus !== UserStatus.INVITED && input.userStatus !== UserStatus.ACTIVE)

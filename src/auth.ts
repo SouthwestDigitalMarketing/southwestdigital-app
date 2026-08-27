@@ -1,5 +1,7 @@
 import NextAuth, { type NextAuthConfig } from "next-auth";
 import Google, { type GoogleProfile } from "next-auth/providers/google";
+import Credentials from "next-auth/providers/credentials";
+import Nodemailer from "next-auth/providers/nodemailer";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { MembershipStatus, PlatformRole, UserStatus } from "@prisma/client";
 import { isPlatformHostname } from "@/lib/brands/active-brand";
@@ -43,12 +45,33 @@ const authCookieOptions = {
   secure: secureAuthCookies,
 };
 
+function isEmailServerConfigured(value: string): boolean {
+  if (!value) return false;
+  if (value.startsWith("{")) return true;
+  try {
+    return Boolean(new URL(value).hostname);
+  } catch {
+    return false;
+  }
+}
+
 const googleConfigured = Boolean(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET);
-const emailConfigured = Boolean(process.env.AUTH_RESEND_KEY && process.env.AUTH_EMAIL_FROM);
+const rawEmailServer = process.env.AUTH_EMAIL_SERVER?.trim() ?? "";
+const nodemailerConfigured = isEmailServerConfigured(rawEmailServer) && Boolean(process.env.AUTH_EMAIL_FROM?.trim());
+const resendConfigured = Boolean(process.env.AUTH_RESEND_KEY && process.env.AUTH_EMAIL_FROM);
+const devBypassConfigured = process.env.NODE_ENV === "development";
 
 export const authProviderAvailability = {
   google: googleConfigured,
-  email: emailConfigured,
+  email: nodemailerConfigured || resendConfigured || devBypassConfigured,
+  emailProviderId: devBypassConfigured
+    ? "dev-bypass"
+    : resendConfigured
+      ? "resend"
+      : nodemailerConfigured
+        ? "email"
+        : null,
+  instantEmail: devBypassConfigured,
 };
 
 const providers: NextAuthConfig["providers"] = [];
@@ -59,7 +82,10 @@ if (googleConfigured) {
       clientId: process.env.AUTH_GOOGLE_ID,
       clientSecret: process.env.AUTH_GOOGLE_SECRET,
       allowDangerousEmailAccountLinking: true,
-      redirectProxyUrl: process.env.AUTH_REDIRECT_PROXY_URL || undefined,
+      redirectProxyUrl:
+        process.env.NODE_ENV === "development"
+          ? undefined
+          : process.env.AUTH_REDIRECT_PROXY_URL || undefined,
       authorization: { params: { prompt: "select_account" } },
       profile(profile: GoogleProfile) {
         return {
@@ -73,11 +99,70 @@ if (googleConfigured) {
   );
 }
 
-if (emailConfigured) {
+if (resendConfigured) {
   providers.push(
     BrandedResend({
       apiKey: process.env.AUTH_RESEND_KEY as string,
       from: process.env.AUTH_EMAIL_FROM as string,
+    }),
+  );
+} else if (nodemailerConfigured) {
+  providers.push(
+    Nodemailer({
+      id: "email",
+      server: rawEmailServer.startsWith("{") ? JSON.parse(rawEmailServer) : rawEmailServer,
+      from: process.env.AUTH_EMAIL_FROM as string,
+      maxAge: 20 * 60,
+    }),
+  );
+}
+
+if (devBypassConfigured) {
+  providers.push(
+    Credentials({
+      id: "dev-bypass",
+      name: "Dev Bypass",
+      credentials: { email: { label: "Email", type: "email" } },
+      async authorize(credentials) {
+        if (process.env.NODE_ENV !== "development") return null;
+        const email =
+          typeof credentials?.email === "string" ? normalizeEmail(credentials.email) : "";
+        if (!email) return null;
+
+        const selectFields = {
+          id: true,
+          name: true,
+          email: true,
+          platformRole: true,
+          status: true,
+        } as const;
+
+        let user = await prisma.user.findUnique({ where: { email }, select: selectFields });
+        if (!user) {
+          user = await prisma.user.create({
+            data: {
+              email,
+              name: email.split("@")[0],
+              platformRole: PlatformRole.OWNER,
+              status: UserStatus.ACTIVE,
+            },
+            select: selectFields,
+          });
+        }
+
+        if (user.status !== UserStatus.ACTIVE) {
+          console.error("[dev-bypass] User is not ACTIVE:", email);
+          return null;
+        }
+
+        return {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          platformRole: user.platformRole,
+          status: user.status,
+        };
+      },
     }),
   );
 }
@@ -137,12 +222,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     error: "/login",
   },
   session: {
-    strategy: "database",
+    strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60,
     updateAge: 24 * 60 * 60,
   },
   callbacks: {
     async signIn({ user, account, profile }) {
+      if (account?.provider === "dev-bypass") {
+        return process.env.NODE_ENV === "development";
+      }
       if (!user.email) return false;
       const googleProfile = profile as GoogleProfile | undefined;
 
@@ -169,10 +257,50 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         isGoogleEmailVerified: googleProfile?.email_verified,
       });
     },
-    async session({ session, user }) {
-      session.user.id = user.id;
-      session.user.status = (user as typeof user & { status: UserStatus }).status;
-      session.user.platformRole = (user as typeof user & { platformRole: PlatformRole }).platformRole;
+    async jwt({ token, user }) {
+      if (user) {
+        const nextUser = user as {
+          id?: string;
+          platformRole?: PlatformRole;
+          status?: UserStatus;
+          email?: string | null;
+        };
+        if (nextUser.id) token.sub = nextUser.id;
+        if (nextUser.platformRole) token.platformRole = nextUser.platformRole;
+        if (nextUser.status) token.status = nextUser.status;
+        if (nextUser.email) token.email = nextUser.email;
+      }
+
+      const email = typeof token.email === "string" ? token.email : null;
+      const userId = typeof token.sub === "string" ? token.sub : null;
+      const dbUser = email
+        ? await prisma.user.findUnique({
+            where: { email: normalizeEmail(email) },
+            select: { id: true, platformRole: true, status: true },
+          })
+        : userId
+          ? await prisma.user.findUnique({
+              where: { id: userId },
+              select: { id: true, platformRole: true, status: true },
+            })
+          : null;
+
+      if (dbUser) {
+        token.sub = dbUser.id;
+        token.platformRole = dbUser.platformRole;
+        token.status = dbUser.status;
+      } else {
+        token.platformRole = (token.platformRole as PlatformRole | undefined) ?? PlatformRole.NONE;
+        token.status = (token.status as UserStatus | undefined) ?? UserStatus.INVITED;
+      }
+
+      return token;
+    },
+    async session({ session, token }) {
+      if (!session.user || !token.sub) return session;
+      session.user.id = token.sub;
+      session.user.platformRole = (token.platformRole as PlatformRole | undefined) ?? PlatformRole.NONE;
+      session.user.status = (token.status as UserStatus | undefined) ?? UserStatus.INVITED;
       return session;
     },
     async redirect({ url, baseUrl }) {

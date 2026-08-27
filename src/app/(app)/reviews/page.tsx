@@ -1,24 +1,12 @@
-import { redirect } from "next/navigation";
-import { headers } from "next/headers";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { resolveBrand } from "@/lib/brands/resolve";
-import { MembershipStatus, ReviewOutcome } from "@prisma/client";
+import { requireAppBrand } from "@/lib/brands/staff";
+import { ReviewOutcome } from "@prisma/client";
 import { ReviewsHeader } from "./ReviewsHeader";
 import { formatPhone } from "@/lib/phone";
 import { SendReminderButton } from "./SendReminderButton";
 
 export default async function ReviewsPage() {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
-
-  const headersList = await headers();
-  const resolved = await resolveBrand(headersList.get("x-hostname"), session.user.id);
-  if (!resolved?.membership || resolved.membership.status !== MembershipStatus.ACTIVE) {
-    redirect("/dashboard");
-  }
-
-  const { brand } = resolved;
+  const { brand } = await requireAppBrand();
 
   const requests = await prisma.reviewRequest.findMany({
     where: { brandId: brand.id },
