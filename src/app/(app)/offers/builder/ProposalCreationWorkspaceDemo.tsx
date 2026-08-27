@@ -246,6 +246,8 @@ export type AssessmentState = {
   cleanupStartMonth: string;
   cleanupEndMonth: string;
   historicalCleanupPeriods: HistoricalCleanupPeriod[];
+  waiveOnboardingFee: boolean;
+  onboardingFeeOverride: number | null;
   includeConditionalStessaMigration: boolean;
   includeTaxPreparerCoordinationCall: boolean;
   includePropertyLevelReportingSetup: boolean;
@@ -413,6 +415,8 @@ const INITIAL_ASSESSMENT: AssessmentState = {
       purchasedOrSoldPropertiesCount: 0,
     },
   ],
+  waiveOnboardingFee: false,
+  onboardingFeeOverride: null,
   includeConditionalStessaMigration: false,
   includeTaxPreparerCoordinationCall: true,
   includePropertyLevelReportingSetup: false,
@@ -2838,6 +2842,36 @@ export default function ProposalCreationWorkspaceDemo({
                             ) : (
                               <div />
                             )}
+                          </div>
+                          <div className="border-t border-slate-200 px-5 py-4">
+                            <FieldLabel label="Onboarding Fee Override">
+                              <input
+                                type="number"
+                                min={0}
+                                step={1}
+                                placeholder="Use standard calculated fee"
+                                value={assessment.onboardingFeeOverride ?? ""}
+                                onChange={(event) => {
+                                  const value = event.target.value;
+                                  updateAssessment("onboardingFeeOverride", value === "" ? null : Math.max(0, Number(value) || 0));
+                                  if (value !== "") updateAssessment("waiveOnboardingFee", false);
+                                }}
+                                className={INPUT_CLASS_NAME}
+                              />
+                            </FieldLabel>
+                            <p className="mt-2 text-xs text-slate-500">Leave blank for the calculated fee. Enter $0 to waive it.</p>
+                            <label className="mt-3 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700">
+                              <input
+                                type="checkbox"
+                                checked={assessment.waiveOnboardingFee}
+                                onChange={(event) => {
+                                  updateAssessment("waiveOnboardingFee", event.target.checked);
+                                  if (event.target.checked) updateAssessment("onboardingFeeOverride", null);
+                                }}
+                                className="h-4 w-4 rounded border-slate-300 text-brandnavy focus:ring-brandnavy"
+                              />
+                              <span><span className="block">Waive onboarding fee</span><span className="block text-xs font-normal text-slate-500">Removes the standard one-time onboarding charge from the proposal.</span></span>
+                            </label>
                           </div>
                     </ProposalAppCollapsibleSection>
 

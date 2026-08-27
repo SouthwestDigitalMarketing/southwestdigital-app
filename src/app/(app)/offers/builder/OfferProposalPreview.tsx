@@ -8,6 +8,7 @@ import {
   ChevronRight,
   CircleHelp,
   LineChart,
+  Play,
   ShieldCheck,
   Sparkles,
   X,
@@ -28,10 +29,26 @@ import {
   getProposalAdditionalOptions,
   getProposalBonuses,
   getProposalPricingSnapshotData,
+  hasCatchUpPricingInputs,
   useProposalAssessmentDemoState,
   type AssessmentState,
   type HistoricalCleanupPeriod,
 } from "./ProposalCreationWorkspaceDemo";
+
+type CloudflareStreamPlayer = {
+  play: () => Promise<void>;
+  muted: boolean;
+  addEventListener: (event: "play", listener: () => void) => void;
+  removeEventListener: (event: "play", listener: () => void) => void;
+};
+
+type CloudflareStreamFactory = (iframe: HTMLIFrameElement) => CloudflareStreamPlayer;
+
+declare global {
+  interface Window {
+    Stream?: CloudflareStreamFactory;
+  }
+}
 
 // ─── Media helpers ─────────────────────────────────────────────────────────────
 
@@ -56,14 +73,47 @@ export function resolveVideoEmbedUrl(url: string): string | null {
       if (id) return `https://player.vimeo.com/video/${id}`;
     }
     if (u.hostname === "player.vimeo.com") return url;
-    // Cloudflare Stream
-    if (u.hostname.endsWith(".cloudflarestream.com")) return url;
+    // Cloudflare Stream. Media settings may store a share URL ending in /watch,
+    // but the embedded player and its JavaScript API require /iframe.
+    if (u.hostname.endsWith(".cloudflarestream.com")) {
+      if (u.pathname.endsWith("/watch")) {
+        u.pathname = `${u.pathname.slice(0, -"/watch".length)}/iframe`;
+      }
+      return u.toString();
+    }
     // Generic iframe embed (path ends with /iframe)
     if (u.pathname.endsWith("/iframe")) return url;
     return null;
   } catch {
     return null;
   }
+}
+
+function isCloudflareStreamEmbed(url: string): boolean {
+  try {
+    const videoUrl = new URL(url);
+    return videoUrl.hostname.endsWith(".cloudflarestream.com") && videoUrl.pathname.endsWith("/iframe");
+  } catch {
+    return false;
+  }
+}
+
+let cloudflareStreamSdk: Promise<CloudflareStreamFactory> | null = null;
+
+function loadCloudflareStreamSdk(): Promise<CloudflareStreamFactory> {
+  if (window.Stream) return Promise.resolve(window.Stream);
+  if (cloudflareStreamSdk) return cloudflareStreamSdk;
+
+  cloudflareStreamSdk = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://embed.cloudflarestream.com/embed/sdk.latest.js";
+    script.async = true;
+    script.onload = () => window.Stream ? resolve(window.Stream) : reject(new Error("Cloudflare Stream SDK did not load."));
+    script.onerror = () => reject(new Error("Unable to load the Cloudflare Stream SDK."));
+    document.head.appendChild(script);
+  });
+
+  return cloudflareStreamSdk;
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -100,6 +150,12 @@ type ProposalOption = {
 
 const ONBOARDING_BASE_FEE = 500;
 const ONBOARDING_FEE_PER_CLEANUP_MONTH = 20;
+
+function getOnboardingFee(assessment: AssessmentState, cleanupMonths: number) {
+  if (assessment.onboardingFeeOverride !== null) return Math.max(0, assessment.onboardingFeeOverride);
+  if (assessment.waiveOnboardingFee) return 0;
+  return ONBOARDING_BASE_FEE + cleanupMonths * ONBOARDING_FEE_PER_CLEANUP_MONTH;
+}
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -295,7 +351,9 @@ function buildCleanupRows(periods: HistoricalCleanupPeriod[], maintainMonthly: n
 
 function buildOptions(assessment: AssessmentState): Record<OptionId, ProposalOption> {
   const { packagePricing } = getProposalPricingSnapshotData(assessment);
-  const periods = assessment.historicalCleanupPeriods.filter((p) => periodMonthCount(p) > 0);
+  const periods = hasCatchUpPricingInputs(assessment)
+    ? assessment.historicalCleanupPeriods.filter((p) => periodMonthCount(p) > 0)
+    : [];
   const maintainMonthly = packagePricing.maintain.monthly;
 
   const built = Object.fromEntries(optionMeta.map(({ id }) => {
@@ -337,7 +395,7 @@ function buildOptions(assessment: AssessmentState): Record<OptionId, ProposalOpt
       invoiceType: "Automatic",
       priceType: "Fixed",
       quantity: 1,
-      price: ONBOARDING_BASE_FEE + periods.reduce((t, p) => t + periodMonthCount(p) * ONBOARDING_FEE_PER_CLEANUP_MONTH, 0),
+      price: getOnboardingFee(assessment, periods.reduce((t, p) => t + periodMonthCount(p), 0)),
       note: assessment.ongoingBookkeepingPlatform === "qbo"
         ? "Includes our review and assessment, document collection, QuickBooks setup, and the work needed to begin. The fee is $500 plus $20 for each selected cleanup month."
         : "Includes our review and assessment, document collection, and the work needed to begin. The fee is $500 plus $20 for each selected cleanup month.",
@@ -479,6 +537,9 @@ export default function OfferProposalPreview({
   const options = buildOptions(assessment);
   const [selectedOptionId, setSelectedOptionId] = useState<OptionId | null>(null);
   const [step, setStep] = useState(0);
+  const [hasStartedIntroVideo, setHasStartedIntroVideo] = useState(false);
+  const [introVideoError, setIntroVideoError] = useState<string | null>(null);
+  const [streamSdkReady, setStreamSdkReady] = useState(false);
   const [hasTwelveMonthAgreement, setHasTwelveMonthAgreement] = useState(false);
   const [comparisonOpen, setComparisonOpen] = useState(false);
   const [cleanupSelections, setCleanupSelections] = useState<Record<string, boolean>>({});
@@ -501,6 +562,65 @@ export default function OfferProposalPreview({
   const [agreementText, setAgreementText] = useState("");
   const [agreementLoading, setAgreementLoading] = useState(false);
   const agreementScrollRef = useRef<HTMLDivElement>(null);
+  const streamIframeRef = useRef<HTMLIFrameElement>(null);
+  const streamPlayerRef = useRef<CloudflareStreamPlayer | null>(null);
+  const playRequestedRef = useRef(false);
+  const introVideoUrl = assessment.featuredVideoUrl || brand.theme?.proposalFeaturedVideoUrl || "";
+  const introEmbedUrl = resolveVideoEmbedUrl(introVideoUrl);
+
+  useEffect(() => {
+    if (!introEmbedUrl || !isCloudflareStreamEmbed(introEmbedUrl)) return;
+
+    void loadCloudflareStreamSdk()
+      .then(() => setStreamSdkReady(true))
+      .catch(() => setIntroVideoError("Unable to load the testimonial player. Please refresh and try again."));
+  }, [introEmbedUrl]);
+
+  useEffect(() => {
+    const iframe = streamIframeRef.current;
+    if (!iframe || !streamSdkReady || !introEmbedUrl || !isCloudflareStreamEmbed(introEmbedUrl)) return;
+
+    let disposed = false;
+    const handlePlay = () => {
+      setHasStartedIntroVideo(true);
+      setIntroVideoError(null);
+    };
+
+    const startPlayback = (player: CloudflareStreamPlayer) => {
+      void player.play().catch(() => {
+        player.muted = true;
+        return player.play().catch(() => setIntroVideoError("Unable to start the testimonial. Please use the video controls to play it."));
+      });
+    };
+
+    void loadCloudflareStreamSdk()
+      .then((Stream) => {
+        if (disposed) return;
+        const player = Stream(iframe);
+        streamPlayerRef.current = player;
+        player.addEventListener("play", handlePlay);
+        if (playRequestedRef.current) startPlayback(player);
+      })
+      .catch(() => setIntroVideoError("Unable to load the testimonial player. Please refresh and try again."));
+
+    return () => {
+      disposed = true;
+      streamPlayerRef.current?.removeEventListener("play", handlePlay);
+      streamPlayerRef.current = null;
+    };
+  }, [introEmbedUrl, streamSdkReady]);
+
+  function playIntroVideo() {
+    playRequestedRef.current = true;
+    setHasStartedIntroVideo(true);
+    setIntroVideoError(null);
+    const player = streamPlayerRef.current;
+    if (!player) return;
+    void player.play().catch(() => {
+      player.muted = true;
+      return player.play().catch(() => setIntroVideoError("Unable to start the testimonial. Please use the video controls to play it."));
+    });
+  }
 
   useEffect(() => {
     if (step !== 2 || !engagementId) return;
@@ -513,15 +633,17 @@ export default function OfferProposalPreview({
           setAlreadySigned(true);
           setSignedSignerName(result.signerName ?? null);
           setSignedAt(result.signedAt ?? null);
-          fetch(`/api/proposal/${engagementId}/payment-intent`, { method: "POST" })
-            .then((r) => r.json())
-            .then((pr: { clientSecret?: string }) => { if (pr.clientSecret) setPaymentClientSecret(pr.clientSecret); })
-            .catch(() => {});
+          if (!assessment.waiveOnboardingFee && assessment.onboardingFeeOverride !== 0) {
+            fetch(`/api/proposal/${engagementId}/payment-intent`, { method: "POST" })
+              .then((r) => r.json())
+              .then((pr: { clientSecret?: string }) => { if (pr.clientSecret) setPaymentClientSecret(pr.clientSecret); })
+              .catch(() => {});
+          }
         }
       })
       .catch(() => {})
       .finally(() => setAgreementLoading(false));
-  }, [step, engagementId]);
+  }, [step, engagementId, assessment.waiveOnboardingFee, assessment.onboardingFeeOverride]);
 
   function checkAgreementScrolled(el: HTMLDivElement) {
     if (el.scrollTop + el.clientHeight >= el.scrollHeight - 20) setHasScrolledToEnd(true);
@@ -558,6 +680,10 @@ export default function OfferProposalPreview({
         setSignedSignerName(result?.signerName ?? signerName);
         setSignedAt(result?.signedAt ?? null);
       }
+      if (selectedOnboardingFee === 0) {
+        setStep(3);
+        return;
+      }
       const paymentResponse = await fetch(`/api/proposal/${engagementId}/payment-intent`, { method: "POST" });
       const paymentResult = await paymentResponse.json().catch(() => null) as { clientSecret?: string; error?: string } | null;
       if (!paymentResponse.ok || !paymentResult?.clientSecret) {
@@ -572,9 +698,11 @@ export default function OfferProposalPreview({
   }
   const recurringDiscountMultiplier = hasTwelveMonthAgreement ? 0.8 : 1;
 
-  const cleanupPeriods = assessment.historicalCleanupPeriods
-    .filter((p) => periodMonthCount(p) > 0)
-    .sort((a, b) => (a.year * 12 + a.startMonth) - (b.year * 12 + b.startMonth));
+  const cleanupPeriods = hasCatchUpPricingInputs(assessment)
+    ? assessment.historicalCleanupPeriods
+      .filter((p) => periodMonthCount(p) > 0)
+      .sort((a, b) => (a.year * 12 + a.startMonth) - (b.year * 12 + b.startMonth))
+    : [];
 
   const cleanupKey = (optionId: OptionId, periodKey: string) => `${optionId}:${periodKey}`;
   const cleanupIsSelected = (optionId: OptionId, periodKey: string) => cleanupSelections[cleanupKey(optionId, periodKey)] !== false;
@@ -648,16 +776,7 @@ export default function OfferProposalPreview({
                 </li>
               ))}
             </ol>
-            {step === 0 ? (
-              <button
-                type="button"
-                onClick={() => setStep(1)}
-                className="inline-flex items-center gap-2 rounded-lg border px-5 py-2 text-sm font-semibold transition-all hover:-translate-y-0.5 hover:opacity-80"
-                style={{ borderColor: brandDark, color: brandDark }}
-              >
-                Shop Options <ChevronRight strokeWidth={3} className="h-4 w-4" />
-              </button>
-            ) : step === 1 ? (
+            {step === 0 ? <span className="w-20" /> : step === 1 ? (
               <button
                 type="button"
                 disabled={!selectedOptionId}
@@ -707,12 +826,17 @@ export default function OfferProposalPreview({
 
           {/* Step 0 — Intro */}
           {step === 0 && (() => {
-            const videoUrl = assessment.featuredVideoUrl || brand.theme?.proposalFeaturedVideoUrl || "";
             const imageUrl = assessment.featuredImageUrl || brand.theme?.proposalFeaturedImageUrl || "";
-            const embedUrl = resolveVideoEmbedUrl(videoUrl);
+            const embedUrl = introEmbedUrl;
             const hasMedia = !!(embedUrl || imageUrl);
-            const customHeadline = assessment.introHeadline?.trim() || null;
+            const customHeadline = assessment.introHeadline?.trim().replace("Professional local bookkeeping and registered agent services", "Professional local accounting and registered agent services") || null;
             const customBody = assessment.introBody?.trim() || null;
+            const introBody = (customBody ?? `You should not have to chase your bookkeeper or guess what your numbers mean. ${brand.name} helps real estate investors with clean books, useful reports, and clear answers from a team that knows your business.`)
+              .replace("Your responsible accounting partner.", "")
+              .replace("Get monthly reports to improve business decisions and enjoy our proactive coordination with your tax preparer.", "Your partner for monthly accounting, professional reports, and proactive coordination with your tax preparer.");
+            const registeredAgentMessage = "Registered agent services included at no additional charge.";
+            const includesRegisteredAgentMessage = /registered agent services included at no charge\.?/i.test(introBody);
+            const introBodyCopy = introBody.replace(/\s*registered agent services included at no charge\.?/i, "").trim();
             return (
               <div className="pb-12 sm:pb-16">
                 <div className={`grid items-center gap-8 ${hasMedia ? "md:grid-cols-2" : ""}`}>
@@ -726,32 +850,48 @@ export default function OfferProposalPreview({
                       )}
                     </h1>
                     <p className={`mt-6 text-lg leading-8 text-slate-600 ${hasMedia ? "" : "max-w-2xl"}`}>
-                      {customBody ??
-                        `You should not have to chase your bookkeeper or guess what your numbers mean. ${brand.name} helps real estate investors with clean books, useful reports, and clear answers from a team that knows your business.`}
+                      {introBodyCopy}
+                      {includesRegisteredAgentMessage ? <span className="mt-3 flex items-center gap-2 pt-2 text-base font-semibold text-slate-600"><span className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-white" style={{ backgroundColor: brandDark }}><Check className="h-3 w-3" /></span>{registeredAgentMessage}</span> : null}
                     </p>
-                    <div className="mt-8">
+                    <div className="mt-8 space-y-3">
+                      {embedUrl ? (
+                        <button
+                          type="button"
+                          onClick={playIntroVideo}
+                          className={`inline-flex w-full items-center justify-center gap-2 rounded-lg border px-6 py-3 text-lg font-bold transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)] ${hasStartedIntroVideo ? "border-slate-300 bg-white text-slate-500" : "text-white hover:brightness-95"}`}
+                          style={hasStartedIntroVideo ? undefined : { backgroundColor: accentColor, borderColor: accentColor }}
+                        >
+                          Client Testimonial <Play className="h-5 w-5 fill-current" />
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => setStep(1)}
-                        className="inline-flex items-center gap-2 rounded-lg border-2 px-6 py-3 text-base font-bold text-white transition-all hover:-translate-y-0.5 hover:brightness-95 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)]"
-                        style={{ backgroundColor: accentColor, borderColor: accentColor }}
+                        className={`inline-flex w-full items-center justify-center gap-2 rounded-lg border px-6 py-3 text-lg font-bold transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)] ${hasStartedIntroVideo ? "text-white hover:brightness-95" : "border-slate-300 bg-white text-slate-500"}`}
+                        style={hasStartedIntroVideo ? { backgroundColor: accentColor, borderColor: accentColor } : undefined}
                       >
-                        Shop pricing options <ChevronRight strokeWidth={3} className="h-4 w-4" />
+                        Shop pricing
                       </button>
+                      {introVideoError ? <p role="alert" className="mt-2 text-sm text-red-700">{introVideoError}</p> : null}
                     </div>
                   </div>
                   {embedUrl ? (
                     <div
-                      className="overflow-hidden rounded-xl border shadow-sm"
+                      className="relative overflow-hidden rounded-xl border shadow-sm"
                       style={{ borderColor: "#cbd5e1" }}
                     >
                       <div className="aspect-video">
-                        <iframe
-                          src={embedUrl}
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
-                          className="h-full w-full"
-                        />
+                        {isCloudflareStreamEmbed(embedUrl) && !streamSdkReady ? (
+                          <div className="grid h-full place-items-center bg-slate-100 text-sm font-medium text-slate-500">Loading video…</div>
+                        ) : (
+                          <iframe
+                            ref={streamIframeRef}
+                            src={embedUrl}
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                            className="h-full w-full"
+                          />
+                        )}
                       </div>
                     </div>
                   ) : imageUrl ? (
@@ -803,7 +943,7 @@ export default function OfferProposalPreview({
 
                   const effectiveOneTimeRows = option.oneTimeRows.map((row) =>
                     isOnboarding(row)
-                      ? { ...row, price: ONBOARDING_BASE_FEE + selectedCleanupMonths * ONBOARDING_FEE_PER_CLEANUP_MONTH }
+                      ? { ...row, price: getOnboardingFee(assessment, selectedCleanupMonths) }
                       : row,
                   );
                   const displayedOneTimeRows = effectiveOneTimeRows.filter(
@@ -842,7 +982,7 @@ export default function OfferProposalPreview({
                         <div className="flex items-start justify-between gap-4">
                           <div>
                             <h2 className="text-2xl font-bold" style={{ color: brandDark }}>{option.name}</h2>
-                            <button type="button" onClick={() => setComparisonOpen(true)} className="mt-1 text-xs font-semibold underline underline-offset-2" style={{ color: brandDark }}>
+                            <button type="button" onClick={() => setComparisonOpen(true)} className="mt-1 hidden text-xs font-semibold underline underline-offset-2" style={{ color: brandDark }}>
                               See everything included
                             </button>
                           </div>
