@@ -248,6 +248,7 @@ export type AssessmentState = {
   historicalCleanupPeriods: HistoricalCleanupPeriod[];
   waiveOnboardingFee: boolean;
   onboardingFeeOverride: number | null;
+  annualSavingsPercent: number;
   includeConditionalStessaMigration: boolean;
   includeTaxPreparerCoordinationCall: boolean;
   includePropertyLevelReportingSetup: boolean;
@@ -417,6 +418,7 @@ const INITIAL_ASSESSMENT: AssessmentState = {
   ],
   waiveOnboardingFee: false,
   onboardingFeeOverride: null,
+  annualSavingsPercent: 20,
   includeConditionalStessaMigration: false,
   includeTaxPreparerCoordinationCall: true,
   includePropertyLevelReportingSetup: false,
@@ -1011,6 +1013,26 @@ function parseMultiplierInput(value: string) {
   return Math.max(0, parsed);
 }
 
+export const DEFAULT_ANNUAL_SAVINGS_PERCENT = 20;
+
+export function getAnnualSavingsPercent(assessment: Pick<AssessmentState, "annualSavingsPercent">) {
+  const value = assessment.annualSavingsPercent;
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return DEFAULT_ANNUAL_SAVINGS_PERCENT;
+  }
+
+  return Math.min(100, Math.max(0, value));
+}
+
+function parseAnnualSavingsPercentInput(value: string) {
+  if (value === "") return 0;
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return DEFAULT_ANNUAL_SAVINGS_PERCENT;
+
+  return Math.min(100, Math.max(0, parsed));
+}
+
 function roundUpToNearestIncrement(value: number, increment = 5) {
   if (!Number.isFinite(value) || increment <= 0) return value;
   return Math.ceil(value / increment) * increment;
@@ -1037,7 +1059,16 @@ function readStoredAssessment(
   initialAssessment?: Partial<AssessmentState>,
   readStorage = true,
 ): AssessmentState {
-  const initialState = { ...INITIAL_ASSESSMENT, ...initialAssessment };
+  const initialState = {
+    ...INITIAL_ASSESSMENT,
+    ...initialAssessment,
+    annualSavingsPercent: getAnnualSavingsPercent({
+      annualSavingsPercent:
+        typeof initialAssessment?.annualSavingsPercent === "number"
+          ? initialAssessment.annualSavingsPercent
+          : INITIAL_ASSESSMENT.annualSavingsPercent,
+    }),
+  };
 
   if (typeof window === "undefined" || !readStorage) {
     return withComplexityUnknownDefaults(initialState);
@@ -1051,6 +1082,12 @@ function readStoredAssessment(
     return withComplexityUnknownDefaults({
       ...initialState,
       ...parsed,
+      annualSavingsPercent: getAnnualSavingsPercent({
+        annualSavingsPercent:
+          typeof parsed.annualSavingsPercent === "number"
+            ? parsed.annualSavingsPercent
+            : initialState.annualSavingsPercent,
+      }),
       realEstateOperations: Array.isArray(parsed.realEstateOperations)
         ? parsed.realEstateOperations
         : initialState.realEstateOperations,
@@ -2842,6 +2879,32 @@ export default function ProposalCreationWorkspaceDemo({
                             ) : (
                               <div />
                             )}
+                          </div>
+                          <div className="grid gap-4 border-t border-slate-200 px-5 py-4 md:grid-cols-[220px_minmax(0,1fr)]">
+                            <FieldLabel label="Annual Savings">
+                              <div className="relative">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={100}
+                                  step={1}
+                                  value={assessment.annualSavingsPercent}
+                                  onChange={(event) =>
+                                    updateAssessment(
+                                      "annualSavingsPercent",
+                                      parseAnnualSavingsPercentInput(event.target.value),
+                                    )
+                                  }
+                                  className={`${INPUT_CLASS_NAME} pr-10`}
+                                />
+                                <span className="pointer-events-none absolute inset-y-0 right-3 inline-flex items-center text-sm font-semibold text-slate-400">
+                                  %
+                                </span>
+                              </div>
+                            </FieldLabel>
+                            <p className="self-end text-xs text-slate-500">
+                              Discount applied to monthly recurring services when the client chooses a 12-month agreement. Default 20%.
+                            </p>
                           </div>
                           <div className="border-t border-slate-200 px-5 py-4">
                             <FieldLabel label="Onboarding Fee Override">

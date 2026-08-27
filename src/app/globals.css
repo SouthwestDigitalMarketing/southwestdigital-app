@@ -153,6 +153,24 @@ body {
   color: var(--text-primary);
 }
 
+.offer-kind-icon {
+  background-color: var(--brand-dark, var(--brand-primary));
+  color: #ffffff;
+}
+
+.offer-funnel-goal {
+  background-color: #e2e8f0;
+}
+
+[data-theme="dark"] .offer-funnel-goal {
+  background-color: var(--surface-control);
+}
+
+[data-theme="dark"] .offer-kind-icon {
+  background-color: #ffffff;
+  color: var(--brand-dark, var(--brand-primary));
+}
+
 [data-theme] .bg-white {
   background-color: var(--surface);
 }
@@ -356,6 +374,15 @@ body {
 }
 
 @media (prefers-color-scheme: dark) {
+  [data-theme="system"] .offer-kind-icon {
+    background-color: #ffffff;
+    color: var(--brand-dark, var(--brand-primary));
+  }
+
+  [data-theme="system"] .offer-funnel-goal {
+    background-color: var(--surface-control);
+  }
+
   [data-theme="system"] {
     color-scheme: dark;
     --app-canvas: #101113;

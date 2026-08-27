@@ -8,6 +8,7 @@ import {
   ChevronRight,
   CircleHelp,
   LineChart,
+  Pause,
   Play,
   ShieldCheck,
   Sparkles,
@@ -26,6 +27,7 @@ import {
   type ContactInfoState,
 } from "./ProposalContactInfoState";
 import {
+  getAnnualSavingsPercent,
   getProposalAdditionalOptions,
   getProposalBonuses,
   getProposalPricingSnapshotData,
@@ -35,11 +37,15 @@ import {
   type HistoricalCleanupPeriod,
 } from "./ProposalCreationWorkspaceDemo";
 
+type CloudflareStreamEvent = "play" | "pause" | "ended";
+
 type CloudflareStreamPlayer = {
   play: () => Promise<void>;
+  pause: () => void;
   muted: boolean;
-  addEventListener: (event: "play", listener: () => void) => void;
-  removeEventListener: (event: "play", listener: () => void) => void;
+  paused: boolean;
+  addEventListener: (event: CloudflareStreamEvent, listener: () => void) => void;
+  removeEventListener: (event: CloudflareStreamEvent, listener: () => void) => void;
 };
 
 type CloudflareStreamFactory = (iframe: HTMLIFrameElement) => CloudflareStreamPlayer;
@@ -151,10 +157,18 @@ type ProposalOption = {
 const ONBOARDING_BASE_FEE = 500;
 const ONBOARDING_FEE_PER_CLEANUP_MONTH = 20;
 
+function getStandardOnboardingFee(cleanupMonths: number) {
+  return ONBOARDING_BASE_FEE + cleanupMonths * ONBOARDING_FEE_PER_CLEANUP_MONTH;
+}
+
+function isOnboardingFeeWaived(assessment: AssessmentState) {
+  return assessment.waiveOnboardingFee || assessment.onboardingFeeOverride === 0;
+}
+
 function getOnboardingFee(assessment: AssessmentState, cleanupMonths: number) {
   if (assessment.onboardingFeeOverride !== null) return Math.max(0, assessment.onboardingFeeOverride);
   if (assessment.waiveOnboardingFee) return 0;
-  return ONBOARDING_BASE_FEE + cleanupMonths * ONBOARDING_FEE_PER_CLEANUP_MONTH;
+  return getStandardOnboardingFee(cleanupMonths);
 }
 
 const MONTH_NAMES = [
@@ -474,13 +488,17 @@ function TooltipIcon({ row }: { row: ServiceRow }) {
   );
 }
 
-function ServiceLine({ row, selected = true, onToggle, showPriceWhenUnselected = false, priceSuffix = "" }: {
+function ServiceLine({ row, selected = true, onToggle, showPriceWhenUnselected = false, priceSuffix = "", originalPrice, waivedLabel }: {
   row: ServiceRow;
   selected?: boolean;
   onToggle?: (checked: boolean) => void;
   showPriceWhenUnselected?: boolean;
   priceSuffix?: string;
+  originalPrice?: number;
+  waivedLabel?: string;
 }) {
+  const currentPrice = row.price * row.quantity;
+  const showWaivedPrice = originalPrice != null && originalPrice > currentPrice;
   return (
     <li>
       <div className="flex justify-between gap-3">
@@ -488,10 +506,20 @@ function ServiceLine({ row, selected = true, onToggle, showPriceWhenUnselected =
           {onToggle ? <input type="checkbox" checked={selected} onChange={(e) => onToggle(e.target.checked)} aria-label={`${selected ? "Remove" : "Add"} ${row.serviceName}`} className="h-4 w-4 shrink-0 accent-brandnavy" /> : null}
           <TooltipIcon row={row} />
           <span className="text-slate-900">{row.serviceName}</span>
+          {waivedLabel ? <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800">{waivedLabel}</span> : null}
           {row.platformTag && !row.cleanupPeriodKey ? <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brandnavy">{row.platformTag}</span> : null}
         </span>
         <span className={`shrink-0 text-right font-medium ${selected ? "text-slate-900" : "text-slate-400"}`}>
-          {selected || showPriceWhenUnselected ? `${fmt(row.price * row.quantity)}${priceSuffix}` : "Not added"}
+          {selected || showPriceWhenUnselected ? (
+            showWaivedPrice ? (
+              <>
+                <span className="mr-1.5 text-slate-400 line-through">{fmt(originalPrice)}{priceSuffix}</span>
+                {fmt(currentPrice)}{priceSuffix}
+              </>
+            ) : (
+              `${fmt(currentPrice)}${priceSuffix}`
+            )
+          ) : "Not added"}
         </span>
       </div>
     </li>
@@ -504,13 +532,21 @@ export default function OfferProposalPreview({
   initialAssessment,
   initialContactInfo,
   live = false,
+  embedded = false,
+  assessment: assessmentOverride,
 }: {
   initialAssessment?: Partial<AssessmentState>;
   initialContactInfo?: Partial<ContactInfoState>;
   live?: boolean;
+  embedded?: boolean;
+  assessment?: AssessmentState;
 } = {}) {
   const { brand } = useBrand();
-  const { assessment } = useProposalAssessmentDemoState({ initialAssessment, persist: !live });
+  const { assessment: storedAssessment } = useProposalAssessmentDemoState({
+    initialAssessment,
+    persist: !live && !assessmentOverride,
+  });
+  const assessment = assessmentOverride ?? storedAssessment;
   const { contactInfo } = useProposalContactInfoDemoState({ initialContactInfo, persist: !live });
   const searchParams = useSearchParams();
   const engagementId = searchParams.get("engagementId") ?? null;
@@ -522,6 +558,7 @@ export default function OfferProposalPreview({
   const theme = getProposalTheme(assessment.proposalTheme || "brand");
   const brandPrimary = brand.theme?.proposalPrimaryColor ?? brand.theme?.primaryColor ?? "#17324d";
   const brandAccent = brand.theme?.proposalAccentColor ?? brand.theme?.accentColor ?? "#d79b3b";
+  const brandAccentDark = brand.theme?.accentDarkColor ?? brandAccent;
   const brandDark = brand.theme?.darkColor ?? brandPrimary;
   const primaryColor =
     theme.primary === null ? brandPrimary :
@@ -533,11 +570,13 @@ export default function OfferProposalPreview({
     theme.accent === BRAND_ACCENT_SENTINEL ? brandAccent :
     theme.accent === BRAND_PRIMARY_SENTINEL ? brandPrimary :
     theme.accent;
+  const actionColor = theme.id === "brand-light" ? brandAccentDark : accentColor;
 
   const options = buildOptions(assessment);
   const [selectedOptionId, setSelectedOptionId] = useState<OptionId | null>(null);
   const [step, setStep] = useState(0);
   const [hasStartedIntroVideo, setHasStartedIntroVideo] = useState(false);
+  const [isIntroVideoPlaying, setIsIntroVideoPlaying] = useState(false);
   const [introVideoError, setIntroVideoError] = useState<string | null>(null);
   const [streamSdkReady, setStreamSdkReady] = useState(false);
   const [hasTwelveMonthAgreement, setHasTwelveMonthAgreement] = useState(false);
@@ -583,13 +622,18 @@ export default function OfferProposalPreview({
     let disposed = false;
     const handlePlay = () => {
       setHasStartedIntroVideo(true);
+      setIsIntroVideoPlaying(true);
       setIntroVideoError(null);
     };
+    const handlePauseOrEnded = () => setIsIntroVideoPlaying(false);
 
     const startPlayback = (player: CloudflareStreamPlayer) => {
       void player.play().catch(() => {
         player.muted = true;
-        return player.play().catch(() => setIntroVideoError("Unable to start the testimonial. Please use the video controls to play it."));
+        return player.play().catch(() => {
+          setIsIntroVideoPlaying(false);
+          setIntroVideoError("Unable to start the testimonial. Please use the video controls to play it.");
+        });
       });
     };
 
@@ -599,6 +643,8 @@ export default function OfferProposalPreview({
         const player = Stream(iframe);
         streamPlayerRef.current = player;
         player.addEventListener("play", handlePlay);
+        player.addEventListener("pause", handlePauseOrEnded);
+        player.addEventListener("ended", handlePauseOrEnded);
         if (playRequestedRef.current) startPlayback(player);
       })
       .catch(() => setIntroVideoError("Unable to load the testimonial player. Please refresh and try again."));
@@ -606,19 +652,36 @@ export default function OfferProposalPreview({
     return () => {
       disposed = true;
       streamPlayerRef.current?.removeEventListener("play", handlePlay);
+      streamPlayerRef.current?.removeEventListener("pause", handlePauseOrEnded);
+      streamPlayerRef.current?.removeEventListener("ended", handlePauseOrEnded);
       streamPlayerRef.current = null;
     };
   }, [introEmbedUrl, streamSdkReady]);
 
-  function playIntroVideo() {
+  function toggleIntroVideo() {
+    const player = streamPlayerRef.current;
+    const playing = player && typeof player.paused === "boolean"
+      ? !player.paused
+      : isIntroVideoPlaying;
+
+    if (playing) {
+      playRequestedRef.current = false;
+      player?.pause();
+      setIsIntroVideoPlaying(false);
+      return;
+    }
+
     playRequestedRef.current = true;
     setHasStartedIntroVideo(true);
+    setIsIntroVideoPlaying(true);
     setIntroVideoError(null);
-    const player = streamPlayerRef.current;
     if (!player) return;
     void player.play().catch(() => {
       player.muted = true;
-      return player.play().catch(() => setIntroVideoError("Unable to start the testimonial. Please use the video controls to play it."));
+      return player.play().catch(() => {
+        setIsIntroVideoPlaying(false);
+        setIntroVideoError("Unable to start the testimonial. Please use the video controls to play it.");
+      });
     });
   }
 
@@ -696,7 +759,10 @@ export default function OfferProposalPreview({
       setSignSubmitting(false);
     }
   }
-  const recurringDiscountMultiplier = hasTwelveMonthAgreement ? 0.8 : 1;
+  const annualSavingsPercent = getAnnualSavingsPercent(assessment);
+  const recurringDiscountMultiplier = hasTwelveMonthAgreement
+    ? 1 - annualSavingsPercent / 100
+    : 1;
 
   const cleanupPeriods = hasCatchUpPricingInputs(assessment)
     ? assessment.historicalCleanupPeriods
@@ -732,7 +798,9 @@ export default function OfferProposalPreview({
 
   return (
     <main
-      className="relative isolate min-h-screen overflow-hidden px-4 py-6 text-brandnavy [&_button:not(:disabled)]:cursor-pointer [&_button:disabled]:cursor-not-allowed sm:px-6 lg:px-10"
+      className={`relative isolate overflow-hidden px-4 py-6 text-brandnavy [&_button:not(:disabled)]:cursor-pointer [&_button:disabled]:cursor-not-allowed sm:px-6 lg:px-10 ${
+        embedded ? "min-h-[40rem]" : "min-h-screen"
+      }`}
       style={{
         background: theme.pageBg,
         "--brand-primary": primaryColor,
@@ -743,7 +811,7 @@ export default function OfferProposalPreview({
         "--color-accent-100": `color-mix(in srgb, ${accentColor} 15%, white)`,
       } as React.CSSProperties}
     >
-      <svg aria-hidden="true" viewBox="0 0 1600 1000" preserveAspectRatio="none" className="pointer-events-none fixed inset-0 z-0 h-full w-full text-brandnavy opacity-[0.045]">
+      <svg aria-hidden="true" viewBox="0 0 1600 1000" preserveAspectRatio="none" className={`pointer-events-none inset-0 z-0 h-full w-full text-brandnavy opacity-[0.045] ${embedded ? "absolute" : "fixed"}`}>
         <g fill="none" stroke="currentColor" strokeWidth="1.5">
           <path d="M-120 70C120 20 285 115 330 280S220 545-45 610" />
           <path d="M-145 130C75 75 235 155 270 295S165 490-70 555" />
@@ -752,7 +820,7 @@ export default function OfferProposalPreview({
         </g>
       </svg>
 
-      <section className="relative z-10 mx-auto flex min-h-[calc(100vh-3rem)] max-w-[1180px] flex-col gap-6">
+      <section className={`relative z-10 mx-auto flex max-w-[1180px] flex-col gap-6 ${embedded ? "" : "min-h-[calc(100vh-3rem)]"}`}>
 
         {/* Nav bar */}
         <nav aria-label="Proposal navigation" className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
@@ -782,7 +850,7 @@ export default function OfferProposalPreview({
                 disabled={!selectedOptionId}
                 onClick={() => setStep(2)}
                 className="inline-flex items-center gap-2 rounded-lg border-2 px-5 py-2 text-sm font-bold text-white transition-all hover:-translate-y-0.5 hover:brightness-95 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
-                style={{ backgroundColor: accentColor, borderColor: accentColor }}
+                style={{ backgroundColor: actionColor, borderColor: actionColor }}
               >
                 Next <ChevronRight strokeWidth={3} className="h-4 w-4" />
               </button>
@@ -857,18 +925,20 @@ export default function OfferProposalPreview({
                       {embedUrl ? (
                         <button
                           type="button"
-                          onClick={playIntroVideo}
+                          onClick={toggleIntroVideo}
+                          aria-pressed={isIntroVideoPlaying}
+                          aria-label={isIntroVideoPlaying ? "Pause client testimonial" : "Play client testimonial"}
                           className={`inline-flex w-full items-center justify-center gap-2 rounded-lg border px-6 py-3 text-lg font-bold transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)] ${hasStartedIntroVideo ? "border-slate-300 bg-white text-slate-500" : "text-white hover:brightness-95"}`}
-                          style={hasStartedIntroVideo ? undefined : { backgroundColor: accentColor, borderColor: accentColor }}
+                          style={hasStartedIntroVideo ? undefined : { backgroundColor: actionColor, borderColor: actionColor }}
                         >
-                          Client Testimonial <Play className="h-5 w-5 fill-current" />
+                          Client Testimonial {isIntroVideoPlaying ? <Pause className="h-5 w-5 fill-current" /> : <Play className="h-5 w-5 fill-current" />}
                         </button>
                       ) : null}
                       <button
                         type="button"
                         onClick={() => setStep(1)}
                         className={`inline-flex w-full items-center justify-center gap-2 rounded-lg border px-6 py-3 text-lg font-bold transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)] ${hasStartedIntroVideo ? "text-white hover:brightness-95" : "border-slate-300 bg-white text-slate-500"}`}
-                        style={hasStartedIntroVideo ? { backgroundColor: accentColor, borderColor: accentColor } : undefined}
+                        style={hasStartedIntroVideo ? { backgroundColor: actionColor, borderColor: actionColor } : undefined}
                       >
                         Shop pricing
                       </button>
@@ -921,11 +991,15 @@ export default function OfferProposalPreview({
                 <span className={hasTwelveMonthAgreement ? "text-slate-400" : undefined} style={hasTwelveMonthAgreement ? undefined : { color: brandDark }}>Month-to-month</span>
                 <button type="button" role="switch" aria-checked={hasTwelveMonthAgreement} onClick={() => setHasTwelveMonthAgreement((v) => !v)} className={`relative h-9 w-16 rounded-full transition ${hasTwelveMonthAgreement ? "" : "bg-slate-300"}`} style={hasTwelveMonthAgreement ? { backgroundColor: brandDark } : undefined}>
                   <span className={`absolute top-1 h-7 w-7 rounded-full bg-white shadow-sm transition ${hasTwelveMonthAgreement ? "left-8" : "left-1"}`} />
-                  <span className="sr-only">Save 20% with a 12-month agreement</span>
+                  <span className="sr-only">
+                    {annualSavingsPercent > 0
+                      ? `Save ${annualSavingsPercent}% with a 12-month agreement`
+                      : "Choose a 12-month agreement"}
+                  </span>
                 </button>
                 <button type="button" aria-pressed={hasTwelveMonthAgreement} onClick={() => setHasTwelveMonthAgreement(true)} className={`inline-flex items-center gap-1.5 rounded-lg border bg-accent-100 px-3 py-1.5 transition hover:brightness-95 ${hasTwelveMonthAgreement ? "" : "border-transparent"}`} style={{ color: brandDark, borderColor: hasTwelveMonthAgreement ? brandDark : undefined }}>
                   <Sparkles className="h-5 w-5" />
-                  Annual · Save 20%
+                  {annualSavingsPercent > 0 ? `Annual · Save ${annualSavingsPercent}%` : "Annual"}
                   <Sparkles className="h-4 w-4" />
                 </button>
               </div>
@@ -957,11 +1031,15 @@ export default function OfferProposalPreview({
                       0,
                     );
 
+                  const onboardingWaived = isOnboardingFeeWaived(assessment);
+                  const standardOnboardingFee = getStandardOnboardingFee(selectedCleanupMonths);
+                  const oneTimeTotal = sectionTotal(displayedOneTimeRows);
+                  const originalOneTimeTotal = onboardingWaived ? oneTimeTotal + standardOnboardingFee : oneTimeTotal;
                   const paidOneTime      = effectiveOneTimeRows.filter((r) => r.price > 0);
                   const optionalCleanup  = paidOneTime.filter((r) => r.cleanupPeriodKey);
-                  const requiredOnboard  = paidOneTime.filter((r) => !r.cleanupPeriodKey && isOnboarding(r));
+                  const requiredOnboard  = effectiveOneTimeRows.filter((r) => !r.cleanupPeriodKey && isOnboarding(r) && (r.price > 0 || onboardingWaived));
                   const additionalSetup  = paidOneTime.filter((r) => !r.cleanupPeriodKey && !isOnboarding(r));
-                  const zeroPriceRows    = option.oneTimeRows.filter((r) => r.price === 0);
+                  const zeroPriceRows    = option.oneTimeRows.filter((r) => r.price === 0 && !isOnboarding(r));
 
                   const lowerTierId: OptionId | null = id === "grow" ? "improve" : id === "improve" ? "maintain" : null;
                   const lowerTierName = lowerTierId ? options[lowerTierId].name : null;
@@ -987,7 +1065,15 @@ export default function OfferProposalPreview({
                             </button>
                           </div>
                           <div className="space-y-1 text-right text-sm">
-                            <p><span className="font-bold" style={{ color: brandDark }}>{fmt(sectionTotal(displayedOneTimeRows))}</span> <span className="text-slate-500">One-Time</span></p>
+                            <p>
+                              {onboardingWaived && standardOnboardingFee > 0 ? (
+                                <span className="mr-1.5 text-slate-400 line-through">{fmt(originalOneTimeTotal)}</span>
+                              ) : null}
+                              <span className="font-bold" style={{ color: brandDark }}>{fmt(oneTimeTotal)}</span> <span className="text-slate-500">One-Time</span>
+                            </p>
+                            {onboardingWaived ? (
+                              <p className="text-xs font-semibold text-emerald-700">Onboarding fee waived</p>
+                            ) : null}
                             <p><span className={`font-bold ${hasTwelveMonthAgreement ? "rounded bg-accent-100 px-1.5 py-0.5" : ""}`} style={{ color: brandDark }}>{fmt(recurringTotal)}</span> <span className="text-slate-500">/mo</span></p>
                           </div>
                         </div>
@@ -1008,7 +1094,7 @@ export default function OfferProposalPreview({
                                               }),
                                             });
                                           }
-                                        }} aria-pressed={selected} className="mt-4 w-full rounded-lg border px-4 py-3 text-base font-bold text-white transition hover:opacity-90" style={{ backgroundColor: accentColor, borderColor: accentColor }}>
+                                        }} aria-pressed={selected} className="mt-4 w-full rounded-lg border px-4 py-3 text-base font-bold text-white transition hover:opacity-90" style={{ backgroundColor: actionColor, borderColor: actionColor }}>
                           Select {option.name}
                         </button>
                       </div>
@@ -1017,7 +1103,7 @@ export default function OfferProposalPreview({
                       <section className="border-t border-slate-200">
                         <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ backgroundColor: `color-mix(in srgb, ${brandDark} 10%, white)`, color: brandDark }}>One-time services</p>
                         <div className="px-5 py-4">
-                          {requiredOnboard.length ? <div className="mt-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Required to get started</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{requiredOnboard.map((row) => <ServiceLine key={row.id} row={row} />)}</ul></div> : null}
+                          {requiredOnboard.length ? <div className="mt-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Required to get started</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{requiredOnboard.map((row) => <ServiceLine key={row.id} row={row} originalPrice={onboardingWaived && isOnboarding(row) ? standardOnboardingFee : undefined} waivedLabel={onboardingWaived && isOnboarding(row) ? "Waived" : undefined} />)}</ul></div> : null}
                           {optionalCleanup.length ? <div className="mt-5 border-t border-slate-200 pt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Optional catch-up</p><ul className="mt-4 space-y-7 text-sm text-slate-600">{optionalCleanup.map((row) => <ServiceLine key={row.id} row={row} selected={cleanupIsSelected(id, row.cleanupPeriodKey!)} onToggle={(checked) => setCleanupSelections((prev) => ({ ...prev, [cleanupKey(id, row.cleanupPeriodKey!)]: checked }))} showPriceWhenUnselected />)}</ul></div> : null}
                           {additionalSetup.length ? <div className="mt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Additional setup</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{additionalSetup.map((row) => <ServiceLine key={row.id} row={row} />)}</ul></div> : null}
                         </div>
@@ -1096,8 +1182,16 @@ export default function OfferProposalPreview({
                         <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Your pricing</p>
                         <div className="mt-3 rounded-xl bg-slate-50 p-4">
                           <div className="flex items-center justify-between gap-4 text-sm">
-                            <span className="text-slate-600">One-time total</span>
-                            <span className="font-bold" style={{ color: brandDark }}>{fmt(sectionTotal(displayedOneTimeRows))}</span>
+                            <span className="text-slate-600">
+                              One-time total
+                              {onboardingWaived ? <span className="mt-0.5 block text-xs font-semibold text-emerald-700">Onboarding fee waived</span> : null}
+                            </span>
+                            <span className="text-right font-bold" style={{ color: brandDark }}>
+                              {onboardingWaived && standardOnboardingFee > 0 ? (
+                                <span className="mr-1.5 font-medium text-slate-400 line-through">{fmt(originalOneTimeTotal)}</span>
+                              ) : null}
+                              {fmt(oneTimeTotal)}
+                            </span>
                           </div>
                           <div className="mt-2 flex items-center justify-between gap-4 border-t border-slate-200 pt-2 text-sm">
                             <span className="text-slate-600">Ongoing bookkeeping</span>
@@ -1120,7 +1214,7 @@ export default function OfferProposalPreview({
                                               }),
                                             });
                                           }
-                                        }} className="mt-4 w-full rounded-lg border px-4 py-3 text-base font-bold text-white transition hover:opacity-90" style={{ backgroundColor: accentColor, borderColor: accentColor }}>
+                                        }} className="mt-4 w-full rounded-lg border px-4 py-3 text-base font-bold text-white transition hover:opacity-90" style={{ backgroundColor: actionColor, borderColor: actionColor }}>
                           Select {option.name}
                         </button>
                       </div>

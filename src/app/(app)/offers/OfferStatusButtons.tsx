@@ -28,7 +28,7 @@ export function OfferStatusButtons({
   }
 
   const btn =
-    "rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide disabled:opacity-50";
+    "inline-flex h-9 items-center justify-center rounded-full border border-slate-300 px-3 text-base font-medium leading-none text-slate-600 disabled:opacity-50";
 
   return (
     <div className="flex flex-wrap justify-end gap-1">
@@ -52,7 +52,7 @@ export function OfferStatusButtons({
           </button>
         </>
       ) : null}
-      {bucket === "completed" && status === "sent" ? (
+      {bucket === "sent" ? (
         <>
           <button
             type="button"
@@ -72,7 +72,7 @@ export function OfferStatusButtons({
           </button>
         </>
       ) : null}
-      {bucket === "completed" ? (
+      {bucket === "completed" || bucket === "sent" ? (
         <button
           type="button"
           disabled={pending}
@@ -89,7 +89,7 @@ export function OfferStatusButtons({
           onClick={() => setStatus("draft")}
           className={`${btn} border-slate-300 text-slate-700 hover:bg-slate-50`}
         >
-          Restore
+          Unarchive
         </button>
       ) : null}
     </div>

@@ -134,7 +134,7 @@ export function ProposalReviewsSection({
   }, [animate]);
 
   return (
-    <div className="mt-16 border-t pt-14" style={{ borderColor: "#e2e8f0" }}>
+    <div className="mt-16 pt-14">
       <p
         className="text-center text-xs font-semibold uppercase tracking-[0.16em]"
         style={{ color: "color-mix(in srgb, var(--brand-dark, #17324d) 50%, var(--brand-primary, #17324d))" }}

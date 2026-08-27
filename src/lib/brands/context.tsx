@@ -13,6 +13,7 @@ export type BrandContextValue = {
       primaryColor: string;
       darkColor: string | null;
       accentColor: string;
+      accentDarkColor: string | null;
       backgroundColor: string;
       foregroundColor: string;
       logoUrl: string | null;

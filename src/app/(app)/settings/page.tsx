@@ -25,6 +25,7 @@ export default async function SettingsPage() {
             primaryColor: brand.theme?.primaryColor ?? "#17324d",
             darkColor: brand.theme?.darkColor ?? null,
             accentColor: brand.theme?.accentColor ?? "#d79b3b",
+            accentDarkColor: brand.theme?.accentDarkColor ?? null,
             mode: brand.theme?.mode ?? "system",
             logoUrl: brand.theme?.logoUrl ?? null,
             logoMarkUrl: brand.theme?.logoMarkUrl ?? null,

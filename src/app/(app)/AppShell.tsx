@@ -147,8 +147,10 @@ export function AppShell({
 
   const primary = brand.theme?.primaryColor ?? "#17324d";
   const accent = brand.theme?.accentColor ?? "#d79b3b";
+  const accentDark = brand.theme?.accentDarkColor ?? accent;
   const mode = brand.theme?.mode === "dark" || brand.theme?.mode === "light" ? brand.theme.mode : "system";
   const isLight = mode === "light";
+  const activeNavBackground = isLight ? accentDark : accent;
   const sidebarLogoType = brand.theme?.sidebarLogoType === "logo" ? "logo" : "mark";
   const appearance = primary.toLowerCase() === "#111111" ? "grok" : "standard";
 
@@ -229,7 +231,7 @@ export function AppShell({
               icon={icon}
               label={label}
               exact={exact}
-              accent={accent}
+              accent={activeNavBackground}
               isLight={isLight}
               navTextColor={navTextColor}
               onNavigate={() => setOpen(false)}
@@ -295,6 +297,7 @@ export function AppShell({
       style={{
         backgroundColor: "var(--app-canvas)",
         "--brand-primary": primary,
+        "--brand-dark": darkColor,
         "--brand-accent": accent,
       } as React.CSSProperties}
     >

@@ -19,6 +19,7 @@ type Theme = {
   primaryColor: string;
   darkColor: string | null;
   accentColor: string;
+  accentDarkColor: string | null;
   mode: string;
   logoUrl: string | null;
   logoMarkUrl: string | null;
@@ -247,10 +248,11 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
   const [sidebarLogoType, setSidebarLogoType] = useState(theme.sidebarLogoType === "logo" ? "logo" : "mark");
   const [darkColor, setDarkColor] = useState(theme.darkColor ?? "");
   const [accentColor, setAccentColor] = useState(theme.accentColor);
+  const [accentDarkColor, setAccentDarkColor] = useState(theme.accentDarkColor ?? "");
   const [uploading, setUploading] = useState<AssetKind | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const savedAppearance = useRef(`${normalizeBrandColor(theme.primaryColor) ?? "#17324d"}:${theme.darkColor ?? ""}:${theme.accentColor}:${mode}:${sidebarLogoType}`);
+  const savedAppearance = useRef(`${normalizeBrandColor(theme.primaryColor) ?? "#17324d"}:${theme.darkColor ?? ""}:${theme.accentColor}:${theme.accentDarkColor ?? ""}:${mode}:${sidebarLogoType}`);
 
   const colorValue = normalizeBrandColor(primaryColor) ?? "#17324d";
 
@@ -259,7 +261,8 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
     if (!normalized) return;
     const normalizedDark = darkColor ? (normalizeBrandColor(darkColor) ?? "") : "";
     const normalizedAccent = normalizeBrandColor(accentColor) ?? "";
-    const appearance = `${normalized}:${normalizedDark}:${normalizedAccent}:${mode}:${sidebarLogoType}`;
+    const normalizedAccentDark = accentDarkColor ? (normalizeBrandColor(accentDarkColor) ?? "") : "";
+    const appearance = `${normalized}:${normalizedDark}:${normalizedAccent}:${normalizedAccentDark}:${mode}:${sidebarLogoType}`;
     if (appearance === savedAppearance.current) return;
 
     const timeout = window.setTimeout(() => {
@@ -269,6 +272,7 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
           formData.set("primaryColor", normalized);
           formData.set("darkColor", normalizedDark);
           formData.set("accentColor", normalizedAccent);
+          formData.set("accentDarkColor", normalizedAccentDark);
           formData.set("mode", mode);
           formData.set("sidebarLogoType", sidebarLogoType);
           await updateBrandAppearanceAction(formData);
@@ -283,7 +287,7 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
     }, 500);
 
     return () => window.clearTimeout(timeout);
-  }, [accentColor, darkColor, mode, primaryColor, router, sidebarLogoType, startTransition]);
+  }, [accentColor, accentDarkColor, darkColor, mode, primaryColor, router, sidebarLogoType, startTransition]);
 
   async function uploadAsset(kind: AssetKind, file: File) {
     setError(null);
@@ -348,7 +352,7 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
       {/* Brand Colors */}
       <section className="rounded-xl border border-slate-200 bg-white p-6">
         <h2 className="text-xl font-semibold text-slate-800">Brand Colors</h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+        <div className="mt-4 grid grid-cols-4 gap-4">
           {/* Light */}
           <div className="rounded-xl border border-slate-200 bg-white p-4">
             <div className="h-16 w-full rounded-lg" style={{ backgroundColor: colorValue }} />
@@ -406,10 +410,10 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
             </div>
           </div>
 
-          {/* Accent */}
+          {/* Accent Light */}
           <div className="rounded-xl border border-slate-200 bg-white p-4">
             <div className="h-16 w-full rounded-lg" style={{ backgroundColor: normalizeBrandColor(accentColor) ?? "#d79b3b" }} />
-            <p className="mt-3 text-base font-semibold text-slate-600">Accent</p>
+            <p className="mt-3 text-base font-semibold text-slate-600">Accent Light</p>
             <div className="mt-2 flex gap-2">
               <input
                 id="brand-accent-color"
@@ -417,7 +421,7 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
                 value={normalizeBrandColor(accentColor) ?? "#d79b3b"}
                 onChange={(e) => { setSaved(false); setAccentColor(e.target.value); }}
                 className="h-9 w-10 cursor-pointer rounded border border-slate-300 bg-white p-1"
-                aria-label="Choose accent brand color"
+                aria-label="Choose accent light brand color"
               />
               <input
                 value={accentColor}
@@ -425,11 +429,40 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
                 onBlur={() => {
                   const n = normalizeBrandColor(accentColor);
                   if (n) { setError(null); setAccentColor(n); }
-                  else setError("Enter a HEX color or RGB value for Accent.");
+                  else setError("Enter a HEX color or RGB value for Accent Light.");
                 }}
                 className="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1.5 font-mono text-base text-slate-800 focus:border-slate-500 focus:outline-none"
                 placeholder="#d79b3b"
-                aria-label="Accent brand color as HEX"
+                aria-label="Accent light brand color as HEX"
+              />
+            </div>
+          </div>
+
+          {/* Accent Dark */}
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="h-16 w-full rounded-lg" style={{ backgroundColor: normalizeBrandColor(accentDarkColor) ?? "#8a5a12" }} />
+            <p className="mt-3 text-base font-semibold text-slate-600">Accent Dark</p>
+            <div className="mt-2 flex gap-2">
+              <input
+                id="brand-accent-dark-color"
+                type="color"
+                value={normalizeBrandColor(accentDarkColor) ?? "#8a5a12"}
+                onChange={(e) => { setSaved(false); setAccentDarkColor(e.target.value); }}
+                className="h-9 w-10 cursor-pointer rounded border border-slate-300 bg-white p-1"
+                aria-label="Choose accent dark brand color"
+              />
+              <input
+                value={accentDarkColor}
+                onChange={(e) => { setSaved(false); setAccentDarkColor(e.target.value); }}
+                onBlur={() => {
+                  if (!accentDarkColor) return;
+                  const n = normalizeBrandColor(accentDarkColor);
+                  if (n) { setError(null); setAccentDarkColor(n); }
+                  else setError("Enter a HEX color or RGB value for Accent Dark.");
+                }}
+                className="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1.5 font-mono text-base text-slate-800 focus:border-slate-500 focus:outline-none"
+                placeholder="#8a5a12"
+                aria-label="Accent dark brand color as HEX"
               />
             </div>
           </div>

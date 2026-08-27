@@ -660,6 +660,7 @@ model BrandTheme {
   primaryColor               String   @default("#17324d")
   darkColor                  String?
   accentColor                String   @default("#d79b3b")
+  accentDarkColor            String?
   backgroundColor            String   @default("#f7f8fa")
   foregroundColor            String   @default("#17202a")
   supportEmail               String?

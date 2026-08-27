@@ -1,14 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Check, Image, Sparkles, Video, Link2 } from "lucide-react";
-import { resolveVideoEmbedUrl } from "./OfferProposalPreview";
-import { getProposalTheme, PROPOSAL_THEMES, BRAND_PRIMARY_SENTINEL, BRAND_ACCENT_SENTINEL } from "./proposalThemes";
+import OfferProposalPreview from "./OfferProposalPreview";
+import { PROPOSAL_THEMES, BRAND_PRIMARY_SENTINEL, BRAND_ACCENT_SENTINEL } from "./proposalThemes";
 import { useBrand } from "@/lib/brands/context";
-import { ProposalReviewsSection } from "./ProposalReviewsSection";
 import ProposalAppDemoHeader from "./ProposalAppDemoHeader";
 import { useProposalAssessmentDemoState } from "./ProposalCreationWorkspaceDemo";
-import { readProposalBuilderLocalState } from "./ProposalBuilderStorage";
 
 export type BrandMediaItem = {
   id: string;
@@ -51,18 +48,6 @@ export default function ProposalIntroDemo({ mediaItems }: { mediaItems: BrandMed
     updateAssessment("featuredMediaId", "custom");
   }
 
-  // Resolve preview values
-  const previewVideoUrl =
-    selectedMediaId === "" ? brandDefaultVideoUrl ?? "" : assessment.featuredVideoUrl ?? "";
-  const previewImageUrl =
-    selectedMediaId === "" ? brandDefaultImageUrl ?? "" : assessment.featuredImageUrl ?? "";
-  const previewEmbedUrl = resolveVideoEmbedUrl(previewVideoUrl);
-  const hasMedia = !!(previewEmbedUrl || previewImageUrl);
-  const customHeadline = assessment.introHeadline?.trim() || null;
-  const customBody = assessment.introBody?.trim() || null;
-
-  // Theme
-  const selectedTheme = getProposalTheme(assessment.proposalTheme || "brand");
   const brandPrimary = brand.theme?.proposalPrimaryColor ?? brand.theme?.primaryColor ?? "#17324d";
   const brandAccent = brand.theme?.proposalAccentColor ?? brand.theme?.accentColor ?? "#d79b3b";
   function resolveThemeColor(value: string | null, fallback: string): string {
@@ -71,19 +56,6 @@ export default function ProposalIntroDemo({ mediaItems }: { mediaItems: BrandMed
     if (value === BRAND_PRIMARY_SENTINEL) return brandPrimary;
     return value;
   }
-  const previewPrimary = resolveThemeColor(selectedTheme.primary, brandPrimary);
-  const previewAccent = resolveThemeColor(selectedTheme.accent, brandAccent);
-  const brandDark = brand.theme?.darkColor ?? previewPrimary;
-  const previewHeadingColor = brandDark;
-
-  const [previewCompanyName, setPreviewCompanyName] = useState("");
-  useEffect(() => {
-    try {
-      const state = readProposalBuilderLocalState();
-      const info = state.contactInfo as { companyName?: string } | undefined;
-      setPreviewCompanyName(info?.companyName || "");
-    } catch {}
-  }, []);
 
   return (
     <main className="min-h-screen bg-white">
@@ -275,141 +247,10 @@ export default function ProposalIntroDemo({ mediaItems }: { mediaItems: BrandMed
               </div>
             </div>
 
-            {/* ── Intro screen preview ─────────────────────────────────────── */}
             <div className="mt-8">
               <p className="mb-3 text-sm font-semibold text-slate-500 uppercase tracking-wide">Preview</p>
-              <div
-                className="overflow-hidden rounded-2xl border border-slate-200 shadow-sm"
-                style={{
-                  "--brand-primary": previewPrimary,
-                  "--brand-accent": previewAccent,
-                  "--brand-ink": previewPrimary,
-                  "--brand-dark": brandDark,
-                  "--color-accent-500": previewAccent,
-                  "--color-accent-100": `color-mix(in srgb, ${previewAccent} 15%, white)`,
-                } as React.CSSProperties}
-              >
-                {/* Mock proposal nav */}
-                <div className="border-b border-slate-200 bg-white px-5 py-3">
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="w-16 rounded-lg border border-slate-200 px-3 py-1.5 text-center text-xs font-semibold text-slate-300">
-                      Back
-                    </span>
-                    <ol className="flex items-center">
-                      {["Cover", "Services", "Done"].map((label, i) => (
-                        <li key={label} className="flex items-center">
-                          {i > 0 && <span className="h-0.5 w-6 bg-slate-200" />}
-                          <div className="w-14 text-center">
-                            <span
-                              className={`mx-auto grid h-7 w-7 place-items-center rounded-full border text-xs font-bold ${
-                                i === 0 ? "text-white" : "border-slate-200 bg-white text-slate-400"
-                              }`}
-                              style={i === 0 ? { backgroundColor: brandDark, borderColor: brandDark } : undefined}
-                            >
-                              {i + 1}
-                            </span>
-                            <span className="mt-1 block text-xs text-slate-400">{label}</span>
-                          </div>
-                        </li>
-                      ))}
-                    </ol>
-                    <span
-                      className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-semibold"
-                      style={{
-                        borderColor: brandDark,
-                        color: brandDark,
-                      }}
-                    >
-                      Shop Options →
-                    </span>
-                  </div>
-                </div>
-
-                {/* Proposal header */}
-                <div className="px-6 pt-6 pb-0 sm:px-10" style={{ background: selectedTheme.pageBg }}>
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div>
-                      {brand.theme?.logoUrl ? (
-                        <img src={brand.theme.logoUrl} alt={brand.name} className="max-h-10 max-w-44 object-contain" />
-                      ) : (
-                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{brand.name}</p>
-                      )}
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Prepared for</p>
-                      <p className="mt-1 font-semibold" style={{ color: brandDark }}>{previewCompanyName || "Your business"}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Intro content */}
-                <div className="px-6 py-10 sm:px-10" style={{ background: selectedTheme.pageBg }}>
-                  <div
-                    className={`mx-auto grid max-w-4xl items-center gap-8 ${hasMedia ? "md:grid-cols-2" : ""}`}
-                  >
-                    <div>
-                      <h2
-                        className="text-2xl font-bold tracking-tight sm:text-3xl"
-                        style={{ color: previewHeadingColor }}
-                      >
-                        {customHeadline ?? (
-                          <>
-                            Expert{" "}
-                            <span style={{ color: "var(--brand-accent, #d79b3b)" }}>
-                              Real Estate
-                            </span>{" "}
-                            Bookkeeping + Great{" "}
-                            <span style={{ color: "var(--brand-accent, #d79b3b)" }}>
-                              Communication
-                            </span>
-                          </>
-                        )}
-                      </h2>
-                      <p className="mt-4 text-sm leading-7 text-slate-600">
-                        {customBody ??
-                          `You should not have to chase your bookkeeper or guess what your numbers mean. ${brand.name} helps real estate investors with clean books, useful reports, and clear answers from a team that knows your business.`}
-                      </p>
-                      <div className="mt-6">
-                        <span
-                          className="inline-flex cursor-default items-center gap-1.5 rounded-lg border-2 px-5 py-2.5 text-base font-bold text-white"
-                          style={{
-                            borderColor: "var(--brand-accent, #d79b3b)",
-                            backgroundColor: "var(--brand-accent, #d79b3b)",
-                          }}
-                        >
-                          Shop pricing options →
-                        </span>
-                      </div>
-                    </div>
-
-                    {previewEmbedUrl ? (
-                      <div
-                        className="overflow-hidden rounded-xl border shadow-sm"
-                        style={{ borderColor: "#cbd5e1" }}
-                      >
-                        <div className="aspect-video">
-                          <iframe
-                            src={previewEmbedUrl}
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowFullScreen
-                            className="h-full w-full"
-                          />
-                        </div>
-                      </div>
-                    ) : previewImageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={previewImageUrl}
-                        alt=""
-                        className="max-h-64 w-full rounded-xl border object-cover shadow-sm"
-                        style={{ borderColor: "#cbd5e1" }}
-                      />
-                    ) : null}
-                  </div>
-                  <div className="mx-auto max-w-4xl">
-                    <ProposalReviewsSection brandName={brand.name} />
-                  </div>
-                </div>
+              <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
+                <OfferProposalPreview embedded assessment={assessment} />
               </div>
             </div>
           </div>

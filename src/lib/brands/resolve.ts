@@ -6,6 +6,7 @@ const BRAND_THEME_SELECT = {
   primaryColor: true,
   darkColor: true,
   accentColor: true,
+  accentDarkColor: true,
   backgroundColor: true,
   foregroundColor: true,
   logoUrl: true,
