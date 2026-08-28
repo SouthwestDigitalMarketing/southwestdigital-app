@@ -8,8 +8,8 @@ export function ReviewsHeader() {
   return (
     <div className="flex items-center justify-between">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Reviews</h1>
-        <p className="mt-1 text-sm text-slate-500">Send review requests and track outcomes</p>
+        <h1 className="sr-only">Reviews</h1>
+        <h2 className="text-lg font-semibold text-slate-900">Review requests</h2>
       </div>
       <SendReviewDialog onSent={() => router.refresh()} />
     </div>

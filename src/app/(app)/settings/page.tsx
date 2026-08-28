@@ -15,11 +15,8 @@ export default async function SettingsPage() {
 
   return (
     <div className="p-8">
-      <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Settings</h1>
-      </div>
-
-      <div className="mt-6 grid gap-4">
+      <h1 className="sr-only">Settings</h1>
+      <div className="grid gap-4">
         <BrandAppearanceForm
           theme={{
             primaryColor: brand.theme?.primaryColor ?? "#17324d",
@@ -34,7 +31,7 @@ export default async function SettingsPage() {
             sidebarLogoType: brand.theme?.sidebarLogoType ?? "mark",
           }}
         />
-<ToolLinksForm links={mergeToolLinks(stored)} />
+        <ToolLinksForm links={mergeToolLinks(stored)} />
       </div>
     </div>
   );

@@ -49,8 +49,9 @@ export default async function YouTubePage() {
   if (!theme?.youtubeChannelId) {
     return (
       <div className="p-8">
-        <h1 className="text-2xl font-semibold text-slate-900">YouTube</h1>
-        <p className="mt-4 text-sm text-slate-400">YouTube channel not configured for this brand.</p>
+        <h1 className="sr-only">YouTube</h1>
+        <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
+        <p className="mt-2 text-sm text-slate-400">YouTube channel not configured for this brand.</p>
       </div>
     );
   }
@@ -61,8 +62,9 @@ export default async function YouTubePage() {
   if (!refreshToken) {
     return (
       <div className="p-8">
-        <h1 className="text-2xl font-semibold text-slate-900">YouTube</h1>
-        <p className="mt-4 text-sm text-slate-400">YouTube credentials not configured.</p>
+        <h1 className="sr-only">YouTube</h1>
+        <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
+        <p className="mt-2 text-sm text-slate-400">YouTube credentials not configured.</p>
       </div>
     );
   }
@@ -121,8 +123,9 @@ export default async function YouTubePage() {
   if (error || !metrics) {
     return (
       <div className="p-8">
-        <h1 className="text-2xl font-semibold text-slate-900">YouTube</h1>
-        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <h1 className="sr-only">YouTube</h1>
+        <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
+        <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           {error ?? "Analytics unavailable."}
         </div>
       </div>
@@ -165,15 +168,16 @@ export default async function YouTubePage() {
 
   return (
     <div className="p-8">
+      <h1 className="sr-only">YouTube</h1>
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">YouTube</h1>
+        <h2 className="text-lg font-semibold text-slate-900">Channel performance</h2>
         <p className="mt-1 text-sm text-slate-500">
           {rangeLabel} · Analytics data typically lags 2–3 days
         </p>
       </div>
 
       {/* Goal cards */}
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+      <div className="mt-4 grid gap-6 lg:grid-cols-2">
         <YouTubeGoalCard
           brandId={brand.id}
           label="Views"
@@ -280,9 +284,9 @@ function LinkClicksTable({
       <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
         <thead>
           <tr>
-            <th className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Video</th>
-            <th className="whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Link</th>
-            <th className="whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Clicks</th>
+            <th className="px-3 py-2 text-sm font-semibold normal-case text-slate-700">Video</th>
+            <th className="whitespace-nowrap px-3 py-2 text-sm font-semibold normal-case text-slate-700">Link</th>
+            <th className="whitespace-nowrap px-3 py-2 text-sm font-semibold normal-case text-slate-700">Clicks</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -330,10 +334,10 @@ function TopVideosTable({ videos }: { videos: TopVideoRow[] }) {
       <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
         <thead>
           <tr>
-            <th className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Title</th>
-            <th className="whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Views</th>
-            <th className="whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Avg View %</th>
-            <th className="whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Watch Time</th>
+            <th className="px-3 py-2 text-sm font-semibold normal-case text-slate-700">Title</th>
+            <th className="whitespace-nowrap px-3 py-2 text-sm font-semibold normal-case text-slate-700">Views</th>
+            <th className="whitespace-nowrap px-3 py-2 text-sm font-semibold normal-case text-slate-700">Avg View %</th>
+            <th className="whitespace-nowrap px-3 py-2 text-sm font-semibold normal-case text-slate-700">Watch Time</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">

@@ -133,14 +133,11 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
   return (
     <div className="p-8">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Contacts</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          People this brand knows — leads, clients, bookkeepers, and industry contacts. Tag them
-          to filter and, later, to place them on a pipeline.
-        </p>
+        <h1 className="sr-only">Contacts</h1>
+        <h2 className="text-lg font-semibold text-slate-900">Contact directory</h2>
       </div>
 
-      <div className="mt-6 grid grid-cols-3 gap-4">
+      <div className="mt-4 grid grid-cols-3 gap-4">
         {[
           { label: "Showing", value: total },
           { label: "Tags", value: tags.length },
@@ -186,6 +183,9 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
       </div>
 
       <div className="mt-3 rounded-xl border border-slate-200 bg-white">
+        <div className="border-b border-slate-100 px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Contact list</p>
+        </div>
         {contacts.length === 0 ? (
           <div className="px-6 py-12 text-center text-sm text-slate-400">
             No contacts match these filters.
@@ -194,19 +194,19 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
           <table className="w-full table-fixed text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-left">
-                <th className="w-[20%] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="w-[20%] px-4 py-2 text-sm font-semibold normal-case text-slate-700">
                   Name
                 </th>
-                <th className="w-[16%] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="w-[16%] px-4 py-2 text-sm font-semibold normal-case text-slate-700">
                   Role
                 </th>
-                <th className="w-[22%] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="w-[22%] px-4 py-2 text-sm font-semibold normal-case text-slate-700">
                   Email
                 </th>
-                <th className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-4 py-2 text-sm font-semibold normal-case text-slate-700">
                   Tags
                 </th>
-                <th className="w-[22rem] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="w-[22rem] px-4 py-2 text-sm font-semibold normal-case text-slate-700">
                   Actions
                 </th>
               </tr>

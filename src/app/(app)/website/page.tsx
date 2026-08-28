@@ -42,8 +42,9 @@ export default async function WebsitePage({
   if (!theme?.ga4PropertyId) {
     return (
       <div className="p-8">
-        <h1 className="text-2xl font-semibold text-slate-900">Website</h1>
-        <p className="mt-4 text-sm text-slate-400">GA4 property not configured for this brand.</p>
+        <h1 className="sr-only">Website</h1>
+        <h2 className="text-lg font-semibold text-slate-900">Website analytics</h2>
+        <p className="mt-2 text-sm text-slate-400">GA4 property not configured for this brand.</p>
       </div>
     );
   }
@@ -167,8 +168,9 @@ export default async function WebsitePage({
   if (error || !health) {
     return (
       <div className="p-8">
-        <h1 className="text-2xl font-semibold text-slate-900">Website</h1>
-        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <h1 className="sr-only">Website</h1>
+        <h2 className="text-lg font-semibold text-slate-900">Website analytics</h2>
+        <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           {error ?? "Analytics unavailable."}
         </div>
       </div>
@@ -208,9 +210,10 @@ export default async function WebsitePage({
 
   return (
     <div className="p-8">
+      <h1 className="sr-only">Website</h1>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Website</h1>
+          <h2 className="text-lg font-semibold text-slate-900">Traffic overview</h2>
           <p className="mt-1 text-sm text-slate-500">
             bookkeepingconroe.com — {config.subtitleLabel}
           </p>
@@ -219,7 +222,7 @@ export default async function WebsitePage({
       </div>
 
       {/* Goal card */}
-      <div className="mt-6">
+      <div className="mt-4">
         <WebsiteGoalCard
           brandId={brand.id}
           value={c.engagedSessions ?? 0}
@@ -326,7 +329,7 @@ function ReportTable({ report }: ReportTableProps) {
         <thead>
           <tr>
             {report.columns.map((col) => (
-              <th key={col.key} className="whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <th key={col.key} className="whitespace-nowrap px-3 py-2 text-sm font-semibold normal-case text-slate-700">
                 {col.label}
               </th>
             ))}

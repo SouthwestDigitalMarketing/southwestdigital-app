@@ -26,7 +26,7 @@ export function DashboardControls({
   }
 
   return (
-    <div className="mt-4">
+    <div>
       <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-600">
         Reporting period
         <select

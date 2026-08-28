@@ -57,11 +57,11 @@ export function LandingPagesTable({ rows }: { rows: ProcessedLandingRow[] }) {
         <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
           <thead>
             <tr>
-              <th className="whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Page</th>
-              <th className="whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Source</th>
-              <th className="whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Sessions</th>
-              <th className="whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Users</th>
-              <th className="whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Engagement</th>
+              <th className="whitespace-nowrap px-3 py-2 text-sm font-semibold normal-case text-slate-700">Page</th>
+              <th className="whitespace-nowrap px-3 py-2 text-sm font-semibold normal-case text-slate-700">Source</th>
+              <th className="whitespace-nowrap px-3 py-2 text-sm font-semibold normal-case text-slate-700">Sessions</th>
+              <th className="whitespace-nowrap px-3 py-2 text-sm font-semibold normal-case text-slate-700">Users</th>
+              <th className="whitespace-nowrap px-3 py-2 text-sm font-semibold normal-case text-slate-700">Engagement</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">

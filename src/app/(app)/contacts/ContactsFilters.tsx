@@ -62,6 +62,7 @@ export function ContactsFilters({
 
   return (
     <div className="mt-6 space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filters</p>
       <form
         className="flex flex-wrap gap-3"
         onSubmit={(event) => {

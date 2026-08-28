@@ -13,16 +13,16 @@ export default async function MediaPage() {
 
   return (
     <div className="p-8">
-      <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Media Library</h1>
+      <h1 className="sr-only">Media</h1>
+      <section className="max-w-2xl">
+        <h2 className="text-lg font-semibold text-slate-900">Proposal media</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Videos and images you can use in proposal intros. These are link references — the files
-          themselves stay on YouTube, Vimeo, Cloudflare, or wherever they&apos;re hosted.
+          Videos and images available for proposal intros.
         </p>
-      </div>
-      <div className="mt-6 max-w-2xl">
-        <MediaLibraryClient items={items} />
-      </div>
+        <div className="mt-4">
+          <MediaLibraryClient items={items} />
+        </div>
+      </section>
     </div>
   );
 }

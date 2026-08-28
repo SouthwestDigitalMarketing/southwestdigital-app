@@ -1453,10 +1453,10 @@ export default function OfferProposalPreview({
                 <colgroup><col /><col className="w-28" /><col className="w-28" /><col className="w-28" /></colgroup>
                 <thead className="sticky top-0 z-10 bg-white shadow-[0_1px_0_0_#e2e8f0]">
                   <tr>
-                    <th scope="col" className="px-5 py-4 text-left font-semibold text-slate-500">Service and feature</th>
+                    <th scope="col" className="px-5 py-4 text-left text-sm font-semibold normal-case text-slate-700">Service and Feature</th>
                     {optionMeta.map(({ id }) => (
-                      <th scope="col" key={id} className="px-2 py-4 text-center align-top">
-                        <p className="text-xl font-bold" style={{ color: brandDark }}>{options[id].name}</p>
+                      <th scope="col" key={id} className="px-2 py-4 text-center align-top text-sm font-semibold normal-case text-slate-700">
+                        <p>{options[id].name}</p>
                       </th>
                     ))}
                   </tr>

@@ -197,7 +197,7 @@ function AssetDropzone({
         )}
       </div>
       <div className="border-t border-slate-100 p-4">
-        <p className="text-base font-semibold text-slate-600">{label}</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
         <p className="mt-1 text-base text-slate-400">{dims}</p>
         <p className="text-base text-slate-400">{types}</p>
         <input
@@ -340,7 +340,7 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
     <div className="grid gap-4">
       {/* Logo */}
       <section className="rounded-xl border border-slate-200 bg-white p-6">
-        <h2 className="text-xl font-semibold text-slate-800">Logo</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Logo</h2>
         <div className="mt-5 grid grid-cols-2 gap-4 xl:grid-cols-4">
           <AssetDropzone kind="mark" url={logoMarkUrl} uploading={uploading === "mark"} onUpload={uploadAsset} onRemove={removeAsset} brandPrimary={colorValue} brandDark={normalizeBrandColor(darkColor) ?? colorValue} />
           <AssetDropzone kind="logo" url={logoUrl} uploading={uploading === "logo"} onUpload={uploadAsset} onRemove={removeAsset} brandPrimary={colorValue} brandDark={normalizeBrandColor(darkColor) ?? colorValue} />
@@ -351,12 +351,12 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
 
       {/* Brand Colors */}
       <section className="rounded-xl border border-slate-200 bg-white p-6">
-        <h2 className="text-xl font-semibold text-slate-800">Brand Colors</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Brand Colors</h2>
         <div className="mt-4 grid grid-cols-4 gap-4">
           {/* Light */}
           <div className="rounded-xl border border-slate-200 bg-white p-4">
             <div className="h-16 w-full rounded-lg" style={{ backgroundColor: colorValue }} />
-            <p className="mt-3 text-base font-semibold text-slate-600">Light</p>
+            <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Light</p>
             <div className="mt-2 flex gap-2">
               <input
                 id="brand-primary-color"
@@ -384,7 +384,7 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
           {/* Dark */}
           <div className="rounded-xl border border-slate-200 bg-white p-4">
             <div className="h-16 w-full rounded-lg" style={{ backgroundColor: normalizeBrandColor(darkColor) ?? "#0f1d2e" }} />
-            <p className="mt-3 text-base font-semibold text-slate-600">Dark</p>
+            <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Dark</p>
             <div className="mt-2 flex gap-2">
               <input
                 id="brand-dark-color"
@@ -413,7 +413,7 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
           {/* Accent Light */}
           <div className="rounded-xl border border-slate-200 bg-white p-4">
             <div className="h-16 w-full rounded-lg" style={{ backgroundColor: normalizeBrandColor(accentColor) ?? "#d79b3b" }} />
-            <p className="mt-3 text-base font-semibold text-slate-600">Accent Light</p>
+            <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Accent Light</p>
             <div className="mt-2 flex gap-2">
               <input
                 id="brand-accent-color"
@@ -441,7 +441,7 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
           {/* Accent Dark */}
           <div className="rounded-xl border border-slate-200 bg-white p-4">
             <div className="h-16 w-full rounded-lg" style={{ backgroundColor: normalizeBrandColor(accentDarkColor) ?? "#8a5a12" }} />
-            <p className="mt-3 text-base font-semibold text-slate-600">Accent Dark</p>
+            <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Accent Dark</p>
             <div className="mt-2 flex gap-2">
               <input
                 id="brand-accent-dark-color"
@@ -471,12 +471,12 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
 
       {/* Theme */}
       <section className="rounded-xl border border-slate-200 bg-white p-6">
-        <h2 className="text-xl font-semibold text-slate-800">Theme</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Theme</h2>
 
         <div className="mt-4 grid gap-4 grid-cols-3">
           {/* Starting themes */}
           <div className="rounded-xl border border-slate-200 p-4">
-            <p className="text-base font-semibold text-slate-600">Starting themes</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Starting themes</p>
             <p className="mt-1 text-base text-slate-500">Choose a clean starting point, then fine-tune brand colors above.</p>
             <div className="mt-3 flex flex-col gap-2">
               {THEME_PRESETS.map((preset) => {
@@ -504,7 +504,7 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
 
           {/* Sidebar branding */}
           <div className="rounded-xl border border-slate-200 p-4">
-            <p className="text-base font-semibold text-slate-600">Sidebar branding</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sidebar branding</p>
             <p className="mt-1 text-base text-slate-500">
               The sidebar is always a dark branded surface, so it uses the Dark mode version. Light mode assets remain available for future light-surface placements.
             </p>
@@ -534,7 +534,7 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
 
           {/* Portal theme */}
           <div className="rounded-xl border border-slate-200 p-4">
-            <p className="text-base font-semibold text-slate-600">Portal theme</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Portal theme</p>
             <div className="mt-3 inline-flex rounded-lg border border-slate-200 bg-slate-100 p-1">
               {(["light", "dark"] as const).map((value) => (
                 <button

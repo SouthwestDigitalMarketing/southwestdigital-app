@@ -76,20 +76,23 @@ export function ServicesCatalog({
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3 text-base font-medium">
-          <span className={archived ? "text-slate-400" : "text-slate-900"}>Current</span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={archived}
-            aria-label="Show archived services"
-            onClick={() => router.push(archived ? "/services" : "/services?archived=1")}
-            className="relative h-7 w-12 cursor-pointer rounded-full transition-colors"
-            style={{ backgroundColor: archived ? "var(--brand-dark, var(--brand-primary))" : "#64748b" }}
-          >
-            <span className={`absolute top-1 h-5 w-5 rounded-full border border-slate-300 bg-white shadow-sm transition-transform ${archived ? "left-6" : "left-1"}`} />
-          </button>
-          <span className={archived ? "text-slate-900" : "text-slate-400"}>Archived</span>
+        <div className="flex flex-wrap items-center gap-5">
+          <h2 className="text-lg font-semibold text-slate-900">Service catalogue</h2>
+          <div className="flex items-center gap-3 text-base font-medium">
+            <span className={archived ? "text-slate-400" : "text-slate-900"}>Current</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={archived}
+              aria-label="Show archived services"
+              onClick={() => router.push(archived ? "/services" : "/services?archived=1")}
+              className="relative h-7 w-12 cursor-pointer rounded-full transition-colors"
+              style={{ backgroundColor: archived ? "var(--brand-dark, var(--brand-primary))" : "#64748b" }}
+            >
+              <span className={`absolute top-1 h-5 w-5 rounded-full border border-slate-300 bg-white shadow-sm transition-transform ${archived ? "left-6" : "left-1"}`} />
+            </button>
+            <span className={archived ? "text-slate-900" : "text-slate-400"}>Archived</span>
+          </div>
         </div>
         {archived ? null : (
           <button type="button" onClick={() => { setCreating(true); setEditingId(null); }} className={primary}>
@@ -110,17 +113,24 @@ export function ServicesCatalog({
       ) : null}
 
       {services.length === 0 && !creating ? (
-        <div className="rounded-xl border border-slate-200 bg-white px-6 py-16 text-center text-base text-slate-500">
-          {archived ? "No archived services yet." : "No services in the catalogue yet."}
+        <div className="rounded-xl border border-slate-200 bg-white px-6 py-16 text-center">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Service list</p>
+          <p className="mt-3 text-base text-slate-500">
+            {archived ? "No archived services yet." : "No services in the catalogue yet."}
+          </p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-          <table className="w-full text-base">
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="border-b border-slate-100 px-5 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Service list</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-base">
             <thead>
               <tr className="border-b border-slate-100 text-left">
-                <th className="px-5 py-3.5 font-medium tracking-wide text-slate-400">Service title</th>
-                <th className="px-5 py-3.5 font-medium tracking-wide text-slate-400">Description</th>
-                <th className="px-5 py-3.5 font-medium tracking-wide text-slate-400">Tags</th>
+                <th className="px-5 py-3.5 text-sm font-semibold normal-case text-slate-700">Service Title</th>
+                <th className="px-5 py-3.5 text-sm font-semibold normal-case text-slate-700">Description</th>
+                <th className="px-5 py-3.5 text-sm font-semibold normal-case text-slate-700">Tags</th>
                 <th className="px-5 py-3.5"></th>
               </tr>
             </thead>
@@ -207,7 +217,8 @@ export function ServicesCatalog({
                 ),
               )}
             </tbody>
-          </table>
+            </table>
+          </div>
         </div>
       )}
     </div>
@@ -238,6 +249,9 @@ function ServiceForm({
         onSubmit(new FormData(event.currentTarget));
       }}
     >
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {service ? "Edit service" : "New service"}
+      </p>
       <div className="grid gap-3 md:grid-cols-2">
         <label className="grid gap-1 text-sm font-medium text-slate-600">
           Name

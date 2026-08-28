@@ -66,7 +66,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
 
       {contact ? (
         <div className="rounded-xl border border-slate-200 bg-white px-5 py-4">
-          <p className="text-base font-medium tracking-wide text-slate-400">Building for</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Building for</p>
           <p className="mt-1 text-xl font-semibold text-slate-900">{contact.name}</p>
           <p className="mt-1 text-base text-slate-500">
             {[contact.company, contact.email].filter(Boolean).join(" · ") || "No company or email on file"}
@@ -80,51 +80,60 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
         </div>
       )}
 
-      <h2 className={`${contact || params.sent === "1" ? "mt-12" : ""} text-2xl font-medium text-slate-500`}>
-        Create an offer
-      </h2>
-      <div className="mt-4 grid gap-4 md:grid-cols-2">
-        {OFFER_KINDS.map((kind) => {
-          const Icon = KIND_ICONS[kind.key] ?? FileText;
-          return (
-            <Link
-              key={kind.key}
-              href={whoHref(kind.key, contact?.id)}
-              className="group flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition hover:border-slate-400"
-            >
-              <div className="flex items-center gap-3">
-                <div className="offer-kind-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-full">
-                  <Icon size={18} />
+      <section
+        className={`${contact || params.sent === "1" ? "mt-10" : ""} -mx-8 bg-[var(--app-canvas)] px-8 py-5`}
+      >
+        <h2 className="text-lg font-semibold text-slate-700">Create an offer</h2>
+        <div className="mt-3 grid gap-4 md:grid-cols-2">
+          {OFFER_KINDS.map((kind) => {
+            const Icon = KIND_ICONS[kind.key] ?? FileText;
+            return (
+              <Link
+                key={kind.key}
+                href={whoHref(kind.key, contact?.id)}
+                className="group flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition hover:border-slate-400"
+              >
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Offer type</p>
+                <div className="mt-3 flex items-center gap-3">
+                  <div className="offer-kind-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-full">
+                    <Icon size={18} />
+                  </div>
+                  <p className="text-xl font-semibold text-slate-900">{kind.name}</p>
                 </div>
-                <p className="text-xl font-semibold text-slate-900">{kind.name}</p>
-              </div>
-              <p className="mt-4 flex-1 text-base leading-6 text-slate-500">{kind.summary}</p>
-              <span className="mt-5 inline-flex w-fit max-w-full items-center gap-1.5 rounded-full border border-slate-300 bg-transparent px-3 py-2 text-base font-medium leading-5 text-slate-900">
-                Create & send a {kind.name.toLowerCase()} offer to a contact
-                <ArrowRight size={16} className="shrink-0 transition group-hover:translate-x-0.5" />
-              </span>
-            </Link>
-          );
-        })}
-      </div>
+                <p className="mt-4 flex-1 text-base leading-6 text-slate-500">{kind.summary}</p>
+                <span className="mt-5 inline-flex w-fit max-w-full items-center gap-1.5 rounded-full border border-slate-300 bg-transparent px-3 py-2 text-base font-medium leading-5 text-slate-900">
+                  Create & send a {kind.name.toLowerCase()} offer to a contact
+                  <ArrowRight size={16} className="shrink-0 transition group-hover:translate-x-0.5" />
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
 
-      <h2 className="mt-12 text-2xl font-medium text-slate-500">Offers tracking</h2>
-      <div className="mt-4">
-        <OffersFunnel />
-      </div>
+      <section className="-mx-8 bg-[var(--surface-control)] px-8 py-5">
+        <h2 className="text-lg font-semibold text-slate-700">Offers tracking</h2>
+        <div className="mt-3">
+          <OffersFunnel />
+        </div>
+      </section>
 
-      <h2 className="mt-12 text-2xl font-medium text-slate-500">
-        {archived ? "Archived offers" : "Offers"}
-      </h2>
-      <div className="mt-4">
-        <OffersListControls
-          archived={archived}
-          statusFilter={statusFilter}
-          kindFilter={kindFilter}
-          contactId={contact?.id}
-        />
-      </div>
-      <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <section className="-mx-8 bg-[var(--app-canvas)] px-8 py-5">
+        <h2 className="text-lg font-semibold text-slate-700">
+          {archived ? "Archived offers" : "Offers"}
+        </h2>
+        <div className="mt-3">
+          <OffersListControls
+            archived={archived}
+            statusFilter={statusFilter}
+            kindFilter={kindFilter}
+            contactId={contact?.id}
+          />
+        </div>
+        <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="border-b border-slate-100 px-5 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Offer list</p>
+        </div>
         {listed.length === 0 ? (
           <div className="px-6 py-16 text-center">
             <p className="text-base text-slate-500">
@@ -135,11 +144,11 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
           <table className="w-full text-base">
             <thead>
               <tr className="border-b border-slate-100 text-left">
-                <th className="px-5 py-3.5 font-medium tracking-wide text-slate-400">Client</th>
-                <th className="px-5 py-3.5 font-medium tracking-wide text-slate-400">Type</th>
-                <th className="px-5 py-3.5 font-medium tracking-wide text-slate-400">Status</th>
-                <th className="px-5 py-3.5 font-medium tracking-wide text-slate-400">Updated</th>
-                <th className="px-5 py-3.5 font-medium tracking-wide text-slate-400">Amount</th>
+                <th className="px-5 py-3.5 text-sm font-semibold normal-case text-slate-700">Client</th>
+                <th className="px-5 py-3.5 text-sm font-semibold normal-case text-slate-700">Type</th>
+                <th className="px-5 py-3.5 text-sm font-semibold normal-case text-slate-700">Status</th>
+                <th className="px-5 py-3.5 text-sm font-semibold normal-case text-slate-700">Updated</th>
+                <th className="px-5 py-3.5 text-sm font-semibold normal-case text-slate-700">Amount</th>
                 <th className="px-5 py-3.5"></th>
               </tr>
             </thead>
@@ -212,7 +221,8 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
             </tbody>
           </table>
         )}
-      </div>
+        </div>
+      </section>
     </div>
   );
 }

@@ -43,15 +43,9 @@ export default async function TagsPage() {
 
   return (
     <div className="p-8">
-      <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Tags</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Shared tag list for {brand.name}. Contacts and catalogue services pick from this list;
-          editing a tag updates it everywhere.
-        </p>
-      </div>
-
-      <div className="mt-6 w-full">
+      <h1 className="sr-only">Tags</h1>
+      <h2 className="text-lg font-semibold text-slate-900">Tag catalogue</h2>
+      <div className="mt-4">
         <TagsCatalog
           tags={tags.map((tag) => ({
             id: tag.id,

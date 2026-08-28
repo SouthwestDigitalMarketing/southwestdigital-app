@@ -352,8 +352,9 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
   return (
     <div className="p-8">
-      <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Dashboard</h1>
+      <h1 className="sr-only">Dashboard</h1>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <h2 className="text-lg font-semibold text-slate-900">Performance overview</h2>
         <DashboardControls
           options={[...DASHBOARD_RANGES]}
           selectedRange={range}
@@ -402,7 +403,7 @@ function DashboardSection({
   children: ReactNode;
 }) {
   return (
-    <section className="mt-10 flex items-stretch gap-3">
+    <section className="mt-6 flex items-stretch gap-3">
       <div className="relative w-14 shrink-0">
         <h2
           className="absolute left-1/2 top-1/2 whitespace-nowrap rounded-md bg-slate-50 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-500"

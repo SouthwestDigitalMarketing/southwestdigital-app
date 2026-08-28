@@ -229,8 +229,8 @@ export default function ProposalAddOnsDemo({ catalog: initialCatalog = [] }: { c
                     <Heading className="w-16"><span className="sr-only">Reorder</span></Heading>
                     <Heading>Service</Heading>
                     <Heading>Description</Heading>
-                    <Heading className="whitespace-nowrap">Offer as</Heading>
-                    <Heading className="text-center">Price / mo</Heading>
+                    <Heading className="whitespace-nowrap">Offer As</Heading>
+                    <Heading className="text-center">Price / Mo</Heading>
                     <Heading className="text-center">Include</Heading>
                     {PACKAGES.map(({ id, label }) => (
                       <Heading key={id} className="w-20 text-center">{label}</Heading>
@@ -392,7 +392,7 @@ function KindSelect({
 }
 
 function Heading({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <th className={`px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 ${className}`}>{children}</th>;
+  return <th className={`px-4 py-3 text-left text-sm font-semibold normal-case text-slate-700 ${className}`}>{children}</th>;
 }
 
 function EditableCells({

@@ -92,19 +92,19 @@ export function TagsCatalog({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-left">
-                <th className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-4 py-2 text-sm font-semibold normal-case text-slate-700">
                   Tag
                 </th>
-                <th className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-4 py-2 text-sm font-semibold normal-case text-slate-700">
                   Kind
                 </th>
-                <th className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-4 py-2 text-sm font-semibold normal-case text-slate-700">
                   Contacts
                 </th>
-                <th className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-4 py-2 text-sm font-semibold normal-case text-slate-700">
                   Pipeline
                 </th>
-                <th className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-4 py-2 text-sm font-semibold normal-case text-slate-700">
                   Actions
                 </th>
               </tr>

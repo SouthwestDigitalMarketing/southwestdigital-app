@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Image, Plus, Trash2, Video, X, Check, Pencil } from "lucide-react";
+import { Image as ImageIcon, Plus, Trash2, Video, X, Check, Pencil } from "lucide-react";
 import { createBrandMediaAction, deleteBrandMediaAction, updateBrandMediaAction } from "./actions";
 
 type MediaItem = {
@@ -72,7 +72,8 @@ export default function MediaLibraryClient({ items: initialItems }: { items: Med
 
       {items.length === 0 && !showAddForm && (
         <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
-          <p className="text-sm font-medium text-slate-500">No media saved yet.</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Media library</p>
+          <p className="mt-3 text-sm font-medium text-slate-500">No media saved yet.</p>
           <p className="mt-1 text-sm text-slate-400">Add videos and images to use in proposal intros.</p>
         </div>
       )}
@@ -135,10 +136,13 @@ function MediaItemRow({
           item.type === "video" ? "bg-brandnavy-50 text-brandnavy" : "bg-amber-50 text-amber-700"
         }`}
       >
-        {item.type === "video" ? <Video className="h-5 w-5" /> : <Image className="h-5 w-5" />}
+        {item.type === "video" ? <Video className="h-5 w-5" /> : <ImageIcon className="h-5 w-5" />}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-slate-900">{item.name}</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          {item.type === "video" ? "Video" : "Image"}
+        </p>
+        <p className="mt-0.5 truncate text-sm font-semibold text-slate-900">{item.name}</p>
         <p className="truncate text-xs text-slate-400">{item.url}</p>
       </div>
       <div className="flex shrink-0 items-center gap-2">
@@ -183,7 +187,7 @@ function AddItemForm({
       className="rounded-xl border border-brandnavy bg-white p-5"
     >
       <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold text-slate-900">New media item</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">New media item</p>
         <button type="button" onClick={onCancel} className="rounded p-1 text-slate-400 hover:text-slate-700">
           <X className="h-4 w-4" />
         </button>
@@ -230,7 +234,7 @@ function EditItemForm({
       className="rounded-xl border border-brandnavy bg-white p-5"
     >
       <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold text-slate-900">Edit media item</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Edit media item</p>
         <button type="button" onClick={onCancel} className="rounded p-1 text-slate-400 hover:text-slate-700">
           <X className="h-4 w-4" />
         </button>

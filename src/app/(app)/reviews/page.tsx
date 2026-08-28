@@ -38,7 +38,7 @@ export default async function ReviewsPage() {
       <ReviewsHeader />
 
       {/* Stats */}
-      <div className="mt-6 grid grid-cols-3 gap-4">
+      <div className="mt-4 grid grid-cols-3 gap-4">
         {[
           { label: "Total sent", value: total },
           { label: "Open rate", value: `${openRate}%` },
@@ -53,6 +53,9 @@ export default async function ReviewsPage() {
 
       {/* Table */}
       <div className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="border-b border-slate-100 px-5 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Request history</p>
+        </div>
         {requests.length === 0 ? (
           <div className="px-6 py-12 text-center text-sm text-slate-400">
             No review requests sent yet.
@@ -61,11 +64,11 @@ export default async function ReviewsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-left">
-                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Recipient</th>
-                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Phone</th>
-                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">First sent</th>
-                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Last reminder</th>
-                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
+                <th className="px-5 py-3 text-sm font-semibold normal-case text-slate-700">Recipient</th>
+                <th className="px-5 py-3 text-sm font-semibold normal-case text-slate-700">Phone</th>
+                <th className="px-5 py-3 text-sm font-semibold normal-case text-slate-700">First Sent</th>
+                <th className="px-5 py-3 text-sm font-semibold normal-case text-slate-700">Last Reminder</th>
+                <th className="px-5 py-3 text-sm font-semibold normal-case text-slate-700">Status</th>
                 <th className="px-5 py-3"></th>
               </tr>
             </thead>

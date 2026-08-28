@@ -138,7 +138,7 @@ export default async function QuoteDetailPage({ params, searchParams }: PageProp
           </div>
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
+              <tr className="border-b border-slate-50 text-left text-sm font-semibold normal-case text-slate-700">
                 <th className="px-6 py-2">Label</th>
                 <th className="px-6 py-2">Type</th>
                 <th className="px-6 py-2 text-right">Amount</th>

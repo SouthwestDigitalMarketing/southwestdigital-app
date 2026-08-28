@@ -118,14 +118,14 @@ export default function ProposalBonusesDemo() {
               </colgroup>
               <thead>
                 <tr className="bg-slate-50">
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Bonus</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold normal-case text-slate-700">Bonus</th>
                   {PACKAGE_COLUMNS.map(({ id, label }) => {
                     const applicableBonuses = BONUS_OPTIONS.filter(isApplicable);
                     const selectedCount = applicableBonuses.filter((bonus) => selectedPackages(bonus).includes(id)).length;
                     const allChecked = applicableBonuses.length > 0 && selectedCount === applicableBonuses.length;
                     const partlyChecked = selectedCount > 0 && !allChecked;
                     return (
-                      <th key={id} className="px-1 py-2 text-center text-sm font-bold text-brandnavy">
+                      <th key={id} className="px-1 py-2 text-center text-sm font-semibold normal-case text-slate-700">
                         <span className="block">{label}</span>
                         <button
                           type="button"

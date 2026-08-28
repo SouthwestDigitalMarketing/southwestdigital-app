@@ -52,18 +52,13 @@ export default async function ClientsPage({ searchParams }: { searchParams: Sear
 
   return (
     <div className="p-8">
+      <h1 className="sr-only">Clients</h1>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Clients</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Companies this brand works with. People live on Contacts; attach them here when they
-            belong to a client.
-          </p>
-        </div>
+        <h2 className="text-lg font-semibold text-slate-900">Client directory</h2>
         <CreateClientDialog />
       </div>
 
-      <div className="mt-6 grid grid-cols-2 gap-4">
+      <div className="mt-4 grid grid-cols-2 gap-4">
         <div className="rounded-xl border border-slate-200 bg-white p-5">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Clients</p>
           <p className="mt-1 text-3xl font-semibold text-slate-900">{total}</p>
@@ -77,47 +72,53 @@ export default async function ClientsPage({ searchParams }: { searchParams: Sear
         </div>
       </div>
 
-      <form className="mt-6 flex flex-wrap gap-3 rounded-xl border border-slate-200 bg-white p-4" method="get">
-        <input
-          name="q"
-          defaultValue={q}
-          placeholder="Search name or code"
-          className="min-w-[16rem] flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
-        />
-        <select
-          name="status"
-          defaultValue={status}
-          className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
-        >
-          <option value="all">All statuses</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-        </select>
-        <button
-          type="submit"
-          className="rounded-full border border-slate-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-700 hover:bg-slate-50"
-        >
-          Search
-        </button>
+      <form className="mt-6 rounded-xl border border-slate-200 bg-white p-4" method="get">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filters</p>
+        <div className="mt-3 flex flex-wrap gap-3">
+          <input
+            name="q"
+            defaultValue={q}
+            placeholder="Search name or code"
+            className="min-w-[16rem] flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
+          />
+          <select
+            name="status"
+            defaultValue={status}
+            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+          >
+            <option value="all">All statuses</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+          <button
+            type="submit"
+            className="rounded-full border border-slate-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-700 hover:bg-slate-50"
+          >
+            Search
+          </button>
+        </div>
       </form>
 
       <div className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="border-b border-slate-100 px-5 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Client list</p>
+        </div>
         {clients.length === 0 ? (
           <div className="px-6 py-12 text-center text-sm text-slate-400">No clients yet.</div>
         ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-left">
-                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-5 py-3 text-sm font-semibold normal-case text-slate-700">
                   Client
                 </th>
-                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-5 py-3 text-sm font-semibold normal-case text-slate-700">
                   Code
                 </th>
-                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-5 py-3 text-sm font-semibold normal-case text-slate-700">
                   People
                 </th>
-                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-5 py-3 text-sm font-semibold normal-case text-slate-700">
                   Status
                 </th>
                 <th className="px-5 py-3"></th>

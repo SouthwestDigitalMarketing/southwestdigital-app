@@ -36,7 +36,7 @@ export function ToolLinksForm({ links }: { links: ToolLink[] }) {
       }}
     >
       <div>
-        <h2 className="text-xl font-semibold text-slate-800">Sidebar tools</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sidebar tools</h2>
         <p className="mt-1 text-base text-slate-500">
           These open in a new tab under Settings. Change the URL if this brand uses a different
           platform. Clear a URL to hide that item from the sidebar.
