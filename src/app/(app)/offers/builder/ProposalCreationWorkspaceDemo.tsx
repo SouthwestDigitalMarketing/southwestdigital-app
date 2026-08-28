@@ -269,6 +269,7 @@ export type AssessmentState = {
   includeRegisteredAgentService: boolean;
   additionalOptions: ProposalAdditionalOption[];
   bonuses: ProposalBonus[];
+  optionsCatalogOrder: string[];
   featuredImageUrl: string;
   featuredVideoUrl: string;
   featuredMediaId: string;
@@ -448,6 +449,7 @@ const INITIAL_ASSESSMENT: AssessmentState = {
   includeRegisteredAgentService: false,
   additionalOptions: [],
   bonuses: [],
+  optionsCatalogOrder: [],
   featuredImageUrl: "",
   featuredVideoUrl: "",
   featuredMediaId: "",
@@ -518,6 +520,15 @@ const DEFAULT_PROPOSAL_BONUSES: ProposalBonus[] = [
 
 export function getProposalBonuses(assessment: AssessmentState): ProposalBonus[] {
   return assessment.bonuses.length > 0 ? assessment.bonuses : DEFAULT_PROPOSAL_BONUSES;
+}
+
+export function getOptionsCatalogOrder(assessment: AssessmentState): string[] {
+  const optionIds = getProposalAdditionalOptions(assessment).map((item) => item.id);
+  const bonusIds = getProposalBonuses(assessment).map((item) => item.id);
+  const known = new Set([...optionIds, ...bonusIds]);
+  const stored = assessment.optionsCatalogOrder.filter((id) => known.has(id));
+  const missing = [...optionIds, ...bonusIds].filter((id) => !stored.includes(id));
+  return [...stored, ...missing];
 }
 
 const PACKAGES: PackageDefinition[] = [
@@ -1014,6 +1025,30 @@ function parseMultiplierInput(value: string) {
 }
 
 export const DEFAULT_ANNUAL_SAVINGS_PERCENT = 20;
+export const ONBOARDING_BASE_FEE = 500;
+export const ONBOARDING_FEE_PER_CLEANUP_MONTH = 20;
+
+export function getCleanupMonthCount(assessment: Pick<AssessmentState, "historicalCleanupPeriods">) {
+  return assessment.historicalCleanupPeriods.reduce(
+    (total, period) => total + Math.max(0, period.endMonth - period.startMonth + 1),
+    0,
+  );
+}
+
+export function getStandardOnboardingFee(cleanupMonths: number) {
+  return ONBOARDING_BASE_FEE + cleanupMonths * ONBOARDING_FEE_PER_CLEANUP_MONTH;
+}
+
+export function getListedOnboardingFee(
+  assessment: Pick<AssessmentState, "onboardingFeeOverride" | "historicalCleanupPeriods">,
+  cleanupMonths = getCleanupMonthCount(assessment),
+) {
+  if (assessment.onboardingFeeOverride !== null && assessment.onboardingFeeOverride > 0) {
+    return assessment.onboardingFeeOverride;
+  }
+
+  return getStandardOnboardingFee(cleanupMonths);
+}
 
 export function getAnnualSavingsPercent(assessment: Pick<AssessmentState, "annualSavingsPercent">) {
   const value = assessment.annualSavingsPercent;
@@ -1109,6 +1144,9 @@ function readStoredAssessment(
       historicalCleanupPeriods: Array.isArray(parsed.historicalCleanupPeriods)
         ? parsed.historicalCleanupPeriods
         : initialState.historicalCleanupPeriods,
+      optionsCatalogOrder: Array.isArray(parsed.optionsCatalogOrder)
+        ? parsed.optionsCatalogOrder.filter((id): id is string => typeof id === "string")
+        : initialState.optionsCatalogOrder,
     });
   } catch {
     return withComplexityUnknownDefaults(initialState);
@@ -1140,17 +1178,24 @@ export function useProposalAssessmentDemoState({
     ? `${ASSESSMENT_STORAGE_KEY}:${resolvedEngagementId}`
     : ASSESSMENT_STORAGE_KEY;
   const [assessment, setAssessment] = useState<AssessmentState>(() =>
-    readStoredAssessment(storageKey, initialAssessment, persist),
+    readStoredAssessment(storageKey, initialAssessment, false),
   );
+  const [storageReady, setStorageReady] = useState(!persist);
 
   useEffect(() => {
     if (!persist) return;
+    setAssessment(readStoredAssessment(storageKey, initialAssessment, true));
+    setStorageReady(true);
+  }, [persist, storageKey]);
+
+  useEffect(() => {
+    if (!persist || !storageReady) return;
     try {
       window.localStorage.setItem(storageKey, JSON.stringify(assessment));
     } catch {
       // Ignore localStorage failures in demo mode.
     }
-  }, [assessment, persist, storageKey]);
+  }, [assessment, persist, storageKey, storageReady]);
 
   function updateAssessment<Key extends keyof AssessmentState>(
     key: Key,
@@ -2807,6 +2852,9 @@ export default function ProposalCreationWorkspaceDemo({
                   <IncludedServicesBuilder
                     catalogServices={catalogServices}
                     forceOpen={expandAllSignal}
+                    realEstateBookSet={
+                      assessment.bookSetType === "real-estate-only" || assessment.bookSetType === "mixed-books"
+                    }
                   />
                 ) : null}
 
@@ -2917,23 +2965,28 @@ export default function ProposalCreationWorkspaceDemo({
                                 onChange={(event) => {
                                   const value = event.target.value;
                                   updateAssessment("onboardingFeeOverride", value === "" ? null : Math.max(0, Number(value) || 0));
-                                  if (value !== "") updateAssessment("waiveOnboardingFee", false);
                                 }}
                                 className={INPUT_CLASS_NAME}
                               />
                             </FieldLabel>
-                            <p className="mt-2 text-xs text-slate-500">Leave blank for the calculated fee. Enter $0 to waive it.</p>
+                            <p className="mt-2 text-xs text-slate-500">Leave blank for the calculated fee. If waived, this amount is shown with a strikethrough on the proposal.</p>
                             <label className="mt-3 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700">
                               <input
                                 type="checkbox"
                                 checked={assessment.waiveOnboardingFee}
                                 onChange={(event) => {
-                                  updateAssessment("waiveOnboardingFee", event.target.checked);
-                                  if (event.target.checked) updateAssessment("onboardingFeeOverride", null);
+                                  const checked = event.target.checked;
+                                  updateAssessment("waiveOnboardingFee", checked);
+                                  if (checked && assessment.onboardingFeeOverride === null) {
+                                    updateAssessment(
+                                      "onboardingFeeOverride",
+                                      getStandardOnboardingFee(getCleanupMonthCount(assessment)),
+                                    );
+                                  }
                                 }}
                                 className="h-4 w-4 rounded border-slate-300 text-brandnavy focus:ring-brandnavy"
                               />
-                              <span><span className="block">Waive onboarding fee</span><span className="block text-xs font-normal text-slate-500">Removes the standard one-time onboarding charge from the proposal.</span></span>
+                              <span><span className="block">Waive onboarding fee</span><span className="block text-xs font-normal text-slate-500">Keeps the amount above and strikes it through on the proposal.</span></span>
                             </label>
                           </div>
                     </ProposalAppCollapsibleSection>

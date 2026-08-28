@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireQuoteStaff } from "@/lib/quotes/access";
 import { formatUsd, SCENARIO_LABELS } from "@/lib/quotes/format";
+import { resumeOfferHref } from "@/lib/quotes/kinds";
 import { markQuoteSentAction } from "../actions";
 import type { QuoteSnapshot } from "@/lib/quotes/types";
 
@@ -34,7 +35,18 @@ export default async function QuoteDetailPage({ params, searchParams }: PageProp
   if (!quote) notFound();
 
   const snapshot = quote.snapshotJson as QuoteSnapshot;
-  if (!snapshot?.package || !snapshot.client) notFound();
+  if (!snapshot?.package || !snapshot.client) {
+    redirect(
+      resumeOfferHref({
+        id: quote.id,
+        kind: quote.kind,
+        snapshot:
+          quote.snapshotJson && typeof quote.snapshotJson === "object"
+            ? (quote.snapshotJson as { contactIds?: string | string[]; kind?: string })
+            : null,
+      }),
+    );
+  }
 
   const banner =
     sp.created === "1"

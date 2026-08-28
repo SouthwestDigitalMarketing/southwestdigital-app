@@ -58,6 +58,7 @@ export default async function QuotesIncludedPage() {
         clientBenefit: true,
         defaultInclusion: true,
         priority: true,
+        realEstateSpecific: true,
       },
     });
     if (services.length) {
@@ -71,6 +72,7 @@ export default async function QuotesIncludedPage() {
         clientBenefit: service.clientBenefit ?? "",
         defaultInclusion: service.defaultInclusion ?? "",
         priority: service.priority,
+        realEstateSpecific: service.realEstateSpecific,
       }));
     }
   } catch {

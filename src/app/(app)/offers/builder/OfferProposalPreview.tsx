@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useBrand } from "@/lib/brands/context";
 import { getProposalTheme, BRAND_PRIMARY_SENTINEL, BRAND_ACCENT_SENTINEL } from "./proposalThemes";
+import { extraIsRealEstateSpecific } from "@/lib/quotes/catalog";
 import { ProposalReviewsSection } from "./ProposalReviewsSection";
 import AgreementTextView from "./AgreementTextView";
 import DepositPaymentForm from "./DepositPaymentForm";
@@ -28,9 +29,11 @@ import {
 } from "./ProposalContactInfoState";
 import {
   getAnnualSavingsPercent,
+  getListedOnboardingFee,
   getProposalAdditionalOptions,
   getProposalBonuses,
   getProposalPricingSnapshotData,
+  getStandardOnboardingFee,
   hasCatchUpPricingInputs,
   useProposalAssessmentDemoState,
   type AssessmentState,
@@ -154,20 +157,13 @@ type ProposalOption = {
 
 // ─── Static data ──────────────────────────────────────────────────────────────
 
-const ONBOARDING_BASE_FEE = 500;
-const ONBOARDING_FEE_PER_CLEANUP_MONTH = 20;
-
-function getStandardOnboardingFee(cleanupMonths: number) {
-  return ONBOARDING_BASE_FEE + cleanupMonths * ONBOARDING_FEE_PER_CLEANUP_MONTH;
-}
-
 function isOnboardingFeeWaived(assessment: AssessmentState) {
   return assessment.waiveOnboardingFee || assessment.onboardingFeeOverride === 0;
 }
 
 function getOnboardingFee(assessment: AssessmentState, cleanupMonths: number) {
-  if (assessment.onboardingFeeOverride !== null) return Math.max(0, assessment.onboardingFeeOverride);
   if (assessment.waiveOnboardingFee) return 0;
+  if (assessment.onboardingFeeOverride !== null) return Math.max(0, assessment.onboardingFeeOverride);
   return getStandardOnboardingFee(cleanupMonths);
 }
 
@@ -427,10 +423,11 @@ function buildOptions(assessment: AssessmentState): Record<OptionId, ProposalOpt
     const bonuses = getProposalBonuses(assessment)
       .filter((bonus) => !bonus.archived)
       .filter((bonus) => {
+        const realEstate = assessment.bookSetType === "real-estate-only" || assessment.bookSetType === "mixed-books";
         if (bonus.id === "stessa-migration") return assessment.platformMigrationEnabled && assessment.ongoingBookkeepingPlatform === "stessa";
-        if (bonus.id === "property-reporting-setup" || bonus.id === "real-estate-chart-of-accounts") return assessment.bookSetType === "real-estate-only" || assessment.bookSetType === "mixed-books";
-        if (bonus.id === "new-quickbooks-file") return (assessment.bookSetType === "real-estate-only" || assessment.bookSetType === "mixed-books") && assessment.ongoingBookkeepingPlatform === "qbo";
-        return true;
+        if (!extraIsRealEstateSpecific(bonus, [])) return true;
+        if (bonus.id === "new-quickbooks-file") return realEstate && assessment.ongoingBookkeepingPlatform === "qbo";
+        return realEstate;
       })
       .filter((bonus) => assessment.bonusPackageSelections[bonus.id]?.includes(id) ?? legacyBonusIncluded(bonus.id))
       .map((bonus) => ({
@@ -1032,9 +1029,9 @@ export default function OfferProposalPreview({
                     );
 
                   const onboardingWaived = isOnboardingFeeWaived(assessment);
-                  const standardOnboardingFee = getStandardOnboardingFee(selectedCleanupMonths);
+                  const originalOnboardingFee = getListedOnboardingFee(assessment, selectedCleanupMonths);
                   const oneTimeTotal = sectionTotal(displayedOneTimeRows);
-                  const originalOneTimeTotal = onboardingWaived ? oneTimeTotal + standardOnboardingFee : oneTimeTotal;
+                  const originalOneTimeTotal = onboardingWaived ? oneTimeTotal + originalOnboardingFee : oneTimeTotal;
                   const paidOneTime      = effectiveOneTimeRows.filter((r) => r.price > 0);
                   const optionalCleanup  = paidOneTime.filter((r) => r.cleanupPeriodKey);
                   const requiredOnboard  = effectiveOneTimeRows.filter((r) => !r.cleanupPeriodKey && isOnboarding(r) && (r.price > 0 || onboardingWaived));
@@ -1066,7 +1063,7 @@ export default function OfferProposalPreview({
                           </div>
                           <div className="space-y-1 text-right text-sm">
                             <p>
-                              {onboardingWaived && standardOnboardingFee > 0 ? (
+                              {onboardingWaived && originalOnboardingFee > 0 ? (
                                 <span className="mr-1.5 text-slate-400 line-through">{fmt(originalOneTimeTotal)}</span>
                               ) : null}
                               <span className="font-bold" style={{ color: brandDark }}>{fmt(oneTimeTotal)}</span> <span className="text-slate-500">One-Time</span>
@@ -1103,7 +1100,7 @@ export default function OfferProposalPreview({
                       <section className="border-t border-slate-200">
                         <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ backgroundColor: `color-mix(in srgb, ${brandDark} 10%, white)`, color: brandDark }}>One-time services</p>
                         <div className="px-5 py-4">
-                          {requiredOnboard.length ? <div className="mt-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Required to get started</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{requiredOnboard.map((row) => <ServiceLine key={row.id} row={row} originalPrice={onboardingWaived && isOnboarding(row) ? standardOnboardingFee : undefined} waivedLabel={onboardingWaived && isOnboarding(row) ? "Waived" : undefined} />)}</ul></div> : null}
+                          {requiredOnboard.length ? <div className="mt-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Required to get started</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{requiredOnboard.map((row) => <ServiceLine key={row.id} row={row} originalPrice={onboardingWaived && isOnboarding(row) ? originalOnboardingFee : undefined} waivedLabel={onboardingWaived && isOnboarding(row) ? "Waived" : undefined} />)}</ul></div> : null}
                           {optionalCleanup.length ? <div className="mt-5 border-t border-slate-200 pt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Optional catch-up</p><ul className="mt-4 space-y-7 text-sm text-slate-600">{optionalCleanup.map((row) => <ServiceLine key={row.id} row={row} selected={cleanupIsSelected(id, row.cleanupPeriodKey!)} onToggle={(checked) => setCleanupSelections((prev) => ({ ...prev, [cleanupKey(id, row.cleanupPeriodKey!)]: checked }))} showPriceWhenUnselected />)}</ul></div> : null}
                           {additionalSetup.length ? <div className="mt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Additional setup</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{additionalSetup.map((row) => <ServiceLine key={row.id} row={row} />)}</ul></div> : null}
                         </div>
@@ -1187,7 +1184,7 @@ export default function OfferProposalPreview({
                               {onboardingWaived ? <span className="mt-0.5 block text-xs font-semibold text-emerald-700">Onboarding fee waived</span> : null}
                             </span>
                             <span className="text-right font-bold" style={{ color: brandDark }}>
-                              {onboardingWaived && standardOnboardingFee > 0 ? (
+                              {onboardingWaived && originalOnboardingFee > 0 ? (
                                 <span className="mr-1.5 font-medium text-slate-400 line-through">{fmt(originalOneTimeTotal)}</span>
                               ) : null}
                               {fmt(oneTimeTotal)}

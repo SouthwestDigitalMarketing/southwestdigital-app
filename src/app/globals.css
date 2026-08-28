@@ -40,43 +40,47 @@
   vertical-align: middle !important;
 }
 
-/* Match the Additional options price values to their column heading. */
-.proposal-options-editor > section:nth-of-type(1) tbody td:nth-child(4) {
-  padding-left: 1rem !important;
-  padding-right: 1rem !important;
-  text-align: center !important;
-}
-
-.proposal-options-editor > section:nth-of-type(1) thead th:nth-child(4) {
-  text-align: center !important;
-}
-
-.proposal-options-editor > section:nth-of-type(1) thead th:nth-child(6) {
-  text-align: center !important;
-}
-
-.proposal-options-editor > section:nth-of-type(2) thead th:nth-child(7) {
-  text-align: center !important;
-}
-
-/* Keep each Add button flush with its table; only separate the two groups. */
-.proposal-options-editor > :not([hidden]) {
-  margin-block: 0 !important;
-}
-
 .proposal-options-editor > div + section {
   margin-top: 0.5rem !important;
 }
 
-.proposal-options-editor > section + div {
-  padding-top: 4rem;
+.proposal-options-editor .proposal-options-check {
+  background-color: var(--brand-dark, var(--brand-primary));
+  border-color: var(--brand-dark, var(--brand-primary));
 }
 
-/* Center the Include heading and control within one shared column inset. */
-.proposal-options-editor > section:nth-of-type(1) :is(th, td):nth-child(5) {
-  padding-left: 1rem !important;
-  padding-right: 1rem !important;
-  text-align: center !important;
+.proposal-options-editor .proposal-options-kind {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23475569'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2.5' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+  background-position: right 0.55rem center;
+  background-repeat: no-repeat;
+  background-size: 0.95rem;
+  padding-right: 2.25rem;
+  white-space: nowrap;
+}
+
+.proposal-options-editor .proposal-options-kind-optional {
+  background-color: var(--brand-dark, var(--brand-primary));
+  border-color: var(--brand-dark, var(--brand-primary));
+  color: #ffffff;
+}
+
+.proposal-options-editor .proposal-options-kind.proposal-options-kind-optional {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23ffffff'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2.5' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+}
+
+.proposal-options-editor .proposal-options-kind-optional:hover {
+  filter: brightness(1.08);
+}
+
+[data-theme="dark"] .proposal-options-editor .proposal-options-kind-optional {
+  background-color: #ffffff;
+  border-color: #ffffff;
+  color: var(--brand-dark, var(--brand-primary));
+}
+
+[data-theme="dark"] .proposal-options-editor .proposal-options-kind.proposal-options-kind-optional {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23171717'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2.5' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
 }
 
 * {
@@ -360,6 +364,14 @@ body {
   line-height: 1.25rem;
 }
 
+[data-theme="dark"][data-appearance="grok"] .proposal-options-editor .proposal-options-kind-optional {
+  background-color: #ffffff;
+  border-color: #ffffff;
+  color: var(--brand-dark, var(--brand-primary));
+  height: auto;
+  padding: 0.375rem 2.25rem 0.375rem 0.625rem;
+}
+
 [data-theme="dark"][data-appearance="grok"] textarea {
   background-color: #dcdee2;
   border-color: #b8bbc2;
@@ -377,6 +389,16 @@ body {
   [data-theme="system"] .offer-kind-icon {
     background-color: #ffffff;
     color: var(--brand-dark, var(--brand-primary));
+  }
+
+  [data-theme="system"] .proposal-options-editor .proposal-options-kind-optional {
+    background-color: #ffffff;
+    border-color: #ffffff;
+    color: var(--brand-dark, var(--brand-primary));
+  }
+
+  [data-theme="system"] .proposal-options-editor .proposal-options-kind.proposal-options-kind-optional {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23171717'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2.5' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
   }
 
   [data-theme="system"] .offer-funnel-goal {

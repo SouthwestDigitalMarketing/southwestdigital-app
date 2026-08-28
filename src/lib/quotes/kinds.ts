@@ -40,6 +40,16 @@ export function builderHref(kind: OfferKindKey, contactIds: string[], offerId?: 
   return qs ? `${href}?${qs}` : href;
 }
 
+export function resumeOfferHref(input: {
+  id: string;
+  kind: string;
+  snapshot?: { contactIds?: string | string[]; kind?: string } | null;
+}) {
+  const snapshotKind = input.snapshot?.kind ?? input.kind;
+  const offerKind = isOfferKindKey(snapshotKind) ? snapshotKind : "bookkeeping";
+  return builderHref(offerKind, parseContactIds(input.snapshot?.contactIds), input.id);
+}
+
 export function offerHref(href: string, contactId?: string) {
   if (!contactId) return href;
   return `${href}${href.includes("?") ? "&" : "?"}contact=${contactId}`;

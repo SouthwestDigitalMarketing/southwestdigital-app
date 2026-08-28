@@ -38,12 +38,12 @@ const STEP_ITEMS: Array<{
   },
   {
     id: "add-ons",
-    label: "Add-ons",
+    label: "Options",
     href: "/offers/add-ons",
   },
   {
     id: "intro",
-    label: "Cover",
+    label: "Preview",
     href: "/offers/intro",
   },
 ];

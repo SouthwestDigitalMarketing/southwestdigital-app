@@ -3,7 +3,7 @@ import { FileText, Handshake, ArrowRight } from "lucide-react";
 import { requireQuoteStaff } from "@/lib/quotes/access";
 import { prisma } from "@/lib/prisma";
 import { formatUsd } from "@/lib/quotes/format";
-import { OFFER_KINDS, builderHref, isOfferKindKey, parseContactIds, whoHref } from "@/lib/quotes/kinds";
+import { OFFER_KINDS, isOfferKindKey, resumeOfferHref, whoHref } from "@/lib/quotes/kinds";
 import {
   bucketForStatus,
   outcomeLabel,
@@ -29,11 +29,6 @@ const KIND_ICONS: Record<string, typeof FileText> = {
   bookkeeping: FileText,
   "referral-network": Handshake,
 };
-
-function resumeHref(kind: string, contactIds: string[], offerId: string) {
-  const offerKind = isOfferKindKey(kind) ? kind : "bookkeeping";
-  return builderHref(offerKind, contactIds, offerId);
-}
 
 export default async function QuotesPage({ searchParams }: { searchParams: SearchParams }) {
   const { brand } = await requireQuoteStaff();
@@ -154,7 +149,6 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                   quote.snapshotJson && typeof quote.snapshotJson === "object"
                     ? (quote.snapshotJson as { contactIds?: string[]; kind?: string; package?: unknown })
                     : {};
-                const contactIds = parseContactIds(snapshot.contactIds);
                 const kind = snapshot.kind ?? quote.kind;
                 const kindLabel =
                   OFFER_KINDS.find((item) => item.key === kind)?.name ?? "Offer";
@@ -197,7 +191,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                         <Link
                           href={
                             canResume
-                              ? resumeHref(kind, contactIds, quote.id)
+                              ? resumeOfferHref({ id: quote.id, kind, snapshot })
                               : `/offers/${quote.id}`
                           }
                           className={

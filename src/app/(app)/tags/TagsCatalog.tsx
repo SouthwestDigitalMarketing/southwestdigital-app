@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { Fragment, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   createContactTagAction,
@@ -8,6 +8,7 @@ import {
   saveTagAutomationAction,
   updateContactTagAction,
 } from "../contacts/actions";
+import { setCatalogServicesForTagAction } from "../services/actions";
 import { TAG_KIND_LABELS, type ContactTagKindName } from "@/lib/contacts/tags";
 
 type TagRow = {
@@ -15,7 +16,16 @@ type TagRow = {
   label: string;
   kind: ContactTagKindName;
   usageCount: number;
+  serviceCount: number;
   pipelineId: string | null;
+};
+
+type CatalogServiceRow = {
+  id: string;
+  name: string;
+  code: string | null;
+  active: boolean;
+  tagIds: string[];
 };
 
 const inputClass =
@@ -42,13 +52,16 @@ function KindSelect({ name, defaultValue }: { name: string; defaultValue?: strin
 export function TagsCatalog({
   tags,
   pipelines,
+  services,
 }: {
   tags: TagRow[];
   pipelines: Array<{ id: string; name: string }>;
+  services: CatalogServiceRow[];
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [managingServicesTagId, setManagingServicesTagId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   function run(action: () => Promise<void>) {
@@ -111,7 +124,8 @@ export function TagsCatalog({
             </thead>
             <tbody className="divide-y divide-slate-100">
               {tags.map((tag) => (
-                <tr key={tag.id}>
+                <Fragment key={tag.id}>
+                <tr>
                   {editingId === tag.id ? (
                     <td colSpan={5} className="px-4 py-3">
                       <form
@@ -173,6 +187,15 @@ export function TagsCatalog({
                           <button
                             type="button"
                             disabled={pending}
+                            aria-expanded={managingServicesTagId === tag.id}
+                            onClick={() => setManagingServicesTagId((current) => (current === tag.id ? null : tag.id))}
+                            className={ghost}
+                          >
+                            Services ({tag.serviceCount})
+                          </button>
+                          <button
+                            type="button"
+                            disabled={pending}
                             className={danger}
                             onClick={() => {
                               const extra =
@@ -192,6 +215,66 @@ export function TagsCatalog({
                     </>
                   )}
                 </tr>
+                {managingServicesTagId === tag.id ? (
+                  <tr>
+                    <td colSpan={5} className="bg-slate-50 px-4 py-4">
+                      <form
+                        className="rounded-lg border border-slate-200 bg-white p-4"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          const data = new FormData(event.currentTarget);
+                          run(async () => {
+                            await setCatalogServicesForTagAction(data);
+                            setManagingServicesTagId(null);
+                          });
+                        }}
+                      >
+                        <input type="hidden" name="tagId" value={tag.id} />
+                        <div className="flex flex-wrap items-baseline justify-between gap-2">
+                          <div>
+                            <h2 className="font-semibold text-slate-900">Apply “{tag.label}” to services</h2>
+                            <p className="mt-1 text-xs text-slate-500">
+                              Select every catalogue service that should have this tag, then save once.
+                            </p>
+                          </div>
+                          <span className="text-xs text-slate-500">{services.length} services</span>
+                        </div>
+                        {services.length === 0 ? (
+                          <p className="mt-4 text-sm text-slate-500">No catalogue services exist yet.</p>
+                        ) : (
+                          <div className="mt-4 grid max-h-72 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
+                            {services.map((service) => (
+                              <label key={service.id} className="flex cursor-pointer items-center gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                                <input
+                                  type="checkbox"
+                                  name="serviceIds"
+                                  value={service.id}
+                                  defaultChecked={service.tagIds.includes(tag.id)}
+                                  className="h-4 w-4 rounded border-slate-300"
+                                />
+                                <span className="min-w-0">
+                                  <span className="block truncate font-medium text-slate-900">{service.name}</span>
+                                  <span className="block truncate text-xs text-slate-500">
+                                    {service.active ? service.code || "Active" : `${service.code ? `${service.code} · ` : ""}Archived`}
+                                  </span>
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <button type="submit" disabled={pending} className={primary}>
+                            {pending ? "Saving…" : "Save service assignments"}
+                          </button>
+                          <button type="button" disabled={pending} className={ghost} onClick={() => setManagingServicesTagId(null)}>
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    </td>
+                  </tr>
+                ) : null}
+                </Fragment>
               ))}
             </tbody>
           </table>

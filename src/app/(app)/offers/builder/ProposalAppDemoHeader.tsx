@@ -148,7 +148,7 @@ export default function ProposalAppDemoHeader({
     const newTab = window.open("", "_blank");
     const success = await saveProposalBuilderState();
     if (success && newTab) {
-      newTab.location.href = scopedHref("/offers/preview");
+      newTab.location.href = scopedHref("/proposal/preview");
     } else {
       newTab?.close();
     }

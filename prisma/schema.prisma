@@ -564,6 +564,8 @@ model Brand {
   leadAttributionTouches LeadAttributionTouch[]
   offboardingPlans       BrandOffboardingPlan[]
   dataExports            BrandDataExport[]
+  catalogServices        CatalogService[]
+  catalogServiceTags     CatalogServiceTag[]
   createdAt              DateTime               @default(now())
   updatedAt              DateTime               @updatedAt
 
@@ -1371,8 +1373,10 @@ model ContactTag {
   sortOrder   Int                    @default(100)
   brand       Brand                  @relation(fields: [brandId], references: [id], onDelete: Cascade)
   contacts    ContactTagLink[]
-  automations ContactTagAutomation[]
-  createdAt   DateTime               @default(now())
+  automations          ContactTagAutomation[]
+  catalogServices      CatalogService[]
+  catalogServiceTags   CatalogServiceTag[]
+  createdAt            DateTime               @default(now())
   updatedAt   DateTime               @updatedAt
 
   @@unique([brandId, key])
@@ -2211,13 +2215,35 @@ model CatalogService {
   estimatedHours      Decimal?         @db.Decimal(6, 2)
   internalNotes       String?          @map("internal_notes")
   active              Boolean          @default(true)
+  realEstateSpecific  Boolean          @default(false)
+  tagId               String?
+  brand               Brand            @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  tag                 ContactTag?      @relation(fields: [tagId], references: [id], onDelete: SetNull)
+  tags                CatalogServiceTag[]
   packageServices     PackageService[]
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 
   @@unique([brandId, code])
   @@index([brandId, active, category])
+  @@index([brandId, realEstateSpecific])
+  @@index([brandId, tagId])
   @@map("catalog_services")
+}
+
+model CatalogServiceTag {
+  id        String         @id @default(cuid())
+  brandId   String
+  serviceId String
+  tagId     String
+  createdAt DateTime       @default(now())
+  brand     Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  service   CatalogService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  tag       ContactTag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceId, tagId])
+  @@index([brandId, tagId])
+  @@map("catalog_service_tags")
 }
 
 model PackageService {

@@ -23,7 +23,9 @@ import {
   GraduationCap,
   ExternalLink,
   ImagePlay,
+  Package,
   Tag,
+  ChevronDown,
 } from "lucide-react";
 import { selectBrand } from "@/app/select-brand/actions";
 import { useBrand } from "@/lib/brands/context";
@@ -42,7 +44,8 @@ const NAV: Array<{
   { label: "Reviews", href: "/reviews", icon: Star, dividerAfter: true },
   { label: "Contacts", href: "/contacts", icon: Contact },
   { label: "Pipeline", href: "/pipeline", icon: TrendingUp },
-  { label: "Offers", href: "/offers", icon: FileText, dividerAfter: true },
+  { label: "Offers", href: "/offers", icon: FileText },
+  { label: "Services", href: "/services", icon: Package, dividerAfter: true },
   { label: "Clients", href: "/clients", icon: Building2 },
   { label: "Team", href: "/team", icon: Users },
   { label: "Media", href: "/media", icon: ImagePlay },
@@ -179,7 +182,7 @@ export function AppShell({
     .toUpperCase();
 
   const sidebar = (
-    <div className="flex h-full w-64 shrink-0 flex-col" style={{ backgroundColor: sidebarBg }}>
+    <div className="flex h-full w-64 shrink-0 flex-col" style={{ backgroundColor: sidebarBg, borderRight: `1px solid ${dividerColor}` }}>
       <div
         className="flex h-16 items-center px-5"
         style={{ borderBottom: `1px solid ${dividerColor}` }}
@@ -198,28 +201,35 @@ export function AppShell({
         ) : null}
       </div>
       {accessibleBrands.length > 1 ? (
-        <form action={selectBrand} className="px-3 pb-3">
+        <form action={selectBrand} className="px-3 pb-3 pt-3">
           <label className="sr-only" htmlFor="active-brand">
             Switch brand
           </label>
-          <select
-            id="active-brand"
-            name="brandId"
-            defaultValue={activeBrandId}
-            onChange={(event) => event.currentTarget.form?.requestSubmit()}
-            className="w-full rounded-lg border px-3 py-2 text-sm"
-            style={{
-              color: navTextColor,
-              backgroundColor: isLight ? "#ffffff" : "transparent",
-              borderColor: dividerColor,
-            }}
-          >
-            {accessibleBrands.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              id="active-brand"
+              name="brandId"
+              defaultValue={activeBrandId}
+              onChange={(event) => event.currentTarget.form?.requestSubmit()}
+              className="w-full appearance-none rounded-lg border py-2 pl-3 pr-10 text-sm"
+              style={{
+                color: navTextColor,
+                backgroundColor: isLight ? "#ffffff" : "transparent",
+                borderColor: dividerColor,
+              }}
+            >
+              {accessibleBrands.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              aria-hidden="true"
+              className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2"
+              style={{ color: navMutedColor }}
+            />
+          </div>
         </form>
       ) : null}
 

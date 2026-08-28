@@ -16,6 +16,7 @@ export type IncludedCatalogService = {
   clientBenefit: string;
   defaultInclusion: string;
   priority: number;
+  realEstateSpecific?: boolean;
 };
 
 type PackageSelections = Record<PackageId, string[]>;
@@ -314,12 +315,20 @@ function sortServices(services: IncludedCatalogService[]) {
 export default function IncludedServicesBuilder({
   catalogServices,
   forceOpen,
+  realEstateBookSet = false,
 }: {
   catalogServices: IncludedCatalogService[];
   forceOpen?: ProposalAppCollapsibleForceSignal;
+  realEstateBookSet?: boolean;
 }) {
   const hydratedRef = useRef(false);
-  const sortedServices = useMemo(() => sortServices(catalogServices), [catalogServices]);
+  const sortedServices = useMemo(
+    () =>
+      sortServices(
+        realEstateBookSet ? catalogServices : catalogServices.filter((service) => !service.realEstateSpecific),
+      ),
+    [catalogServices, realEstateBookSet],
+  );
   const builtInTemplates = useMemo(
     () => buildBuiltInTemplates(sortedServices),
     [sortedServices],
