@@ -60,7 +60,7 @@ export default function ProposalAddOnsDemo({ catalog: initialCatalog = [] }: { c
   const catalogOrder = getOptionsCatalogOrder(assessment);
   const optionById = new Map(additionalOptions.map((item) => [item.id, item]));
   const bonusById = new Map(bonuses.map((item) => [item.id, item]));
-  const rows: CatalogRow[] = catalogOrder.flatMap((id) => {
+  const rows = catalogOrder.flatMap<CatalogRow>((id) => {
     const option = optionById.get(id);
     if (option) return [{ id, name: option.name, description: option.description, archived: option.archived, kind: "optional", option }];
     const bonus = bonusById.get(id);
