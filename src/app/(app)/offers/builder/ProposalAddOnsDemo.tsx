@@ -26,10 +26,15 @@ const PACKAGES: Array<{ id: PackageId; label: string }> = [
 ];
 
 type CatalogKind = "optional" | "included";
+type BonusCadence = "monthly" | "one-time";
 
 const KIND_OPTIONS: Array<{ value: CatalogKind; label: string }> = [
   { value: "optional", label: "Optional" },
   { value: "included", label: "Included" },
+];
+const CADENCE_OPTIONS: Array<{ value: BonusCadence; label: string }> = [
+  { value: "one-time", label: "One-time" },
+  { value: "monthly", label: "Recurring" },
 ];
 type CatalogRow = {
   id: string;
@@ -37,6 +42,8 @@ type CatalogRow = {
   description: string;
   archived: boolean;
   kind: CatalogKind;
+  realEstateSpecific: boolean;
+  cadence: BonusCadence;
   option?: ProposalAdditionalOption;
   bonus?: ProposalBonus;
   applicabilityReason?: string;
@@ -57,9 +64,42 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
     const applicabilityReason = catalogItem
       ? proposalCatalogItemApplicability(catalogItem, assessment).reason
       : undefined;
-    if (option) return [{ id, name: option.name, description: option.description, archived: option.archived, kind: "optional", option, applicabilityReason }];
+    if (option) {
+      const realEstateSpecific =
+        typeof option.realEstateSpecific === "boolean"
+          ? option.realEstateSpecific
+          : extraIsRealEstateSpecific(option, catalog);
+      return [{
+        id,
+        name: option.name,
+        description: option.description,
+        archived: option.archived,
+        kind: "optional",
+        realEstateSpecific,
+        cadence: "monthly",
+        option,
+        applicabilityReason,
+      }];
+    }
     const bonus = bonusById.get(id);
-    if (bonus) return [{ id, name: bonus.name, description: bonus.description, archived: bonus.archived, kind: "included", bonus, applicabilityReason }];
+    if (bonus) {
+      const realEstateSpecific =
+        typeof bonus.realEstateSpecific === "boolean"
+          ? bonus.realEstateSpecific
+          : extraIsRealEstateSpecific(bonus, catalog);
+      const cadence: BonusCadence = bonus.billingCadence === "monthly" ? "monthly" : "one-time";
+      return [{
+        id,
+        name: bonus.name,
+        description: bonus.description,
+        archived: bonus.archived,
+        kind: "included",
+        realEstateSpecific,
+        cadence,
+        bonus,
+        applicabilityReason,
+      }];
+    }
     return [];
   });
   const eligibleRows = rows.filter((row) => {
@@ -160,9 +200,18 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
 
   function setKind(row: CatalogRow, kind: CatalogKind) {
     if (row.kind === kind) return;
+    const carriedRealEstateSpecific =
+      row.option?.realEstateSpecific ?? row.bonus?.realEstateSpecific;
     if (kind === "included") {
       persistOptions(additionalOptions.filter((item) => item.id !== row.id));
-      persistBonuses([...bonuses, { id: row.id, name: row.name, description: row.description, archived: row.archived }]);
+      persistBonuses([...bonuses, {
+        id: row.id,
+        name: row.name,
+        description: row.description,
+        archived: row.archived,
+        realEstateSpecific: carriedRealEstateSpecific,
+        billingCadence: row.bonus?.billingCadence ?? "one-time",
+      }]);
       updateAssessment("bonusPackageSelections", {
         ...assessment.bonusPackageSelections,
         [row.id]: PACKAGES.map(({ id }) => id),
@@ -178,6 +227,7 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
           monthlyPrice: row.option?.monthlyPrice ?? 0,
           showInProposal: row.option?.showInProposal ?? true,
           archived: row.archived,
+          realEstateSpecific: carriedRealEstateSpecific,
         },
       ]);
       const selections = Object.fromEntries(
@@ -187,9 +237,22 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
     }
   }
 
+  function toggleRealEstate(row: CatalogRow) {
+    const next = !row.realEstateSpecific;
+    if (row.kind === "optional") updateOption(row.id, { realEstateSpecific: next });
+    else updateBonus(row.id, { realEstateSpecific: next });
+  }
+
+  function setBonusCadence(row: CatalogRow, cadence: BonusCadence) {
+    if (row.kind !== "included") return;
+    updateBonus(row.id, { billingCadence: cadence });
+  }
+
   function isBonusApplicable(bonus: ProposalBonus) {
     const catalogItem = catalogByKey.get(bonus.id);
-    if (catalogItem) return proposalCatalogItemApplicability(catalogItem, assessment).applicable;
+    if (catalogItem && typeof bonus.realEstateSpecific !== "boolean") {
+      return proposalCatalogItemApplicability(catalogItem, assessment).applicable;
+    }
     const realEstate = assessment.bookSetType === "real-estate-only" || assessment.bookSetType === "mixed-books";
     if (bonus.id === "stessa-migration") return assessment.platformMigrationEnabled && assessment.ongoingBookkeepingPlatform === "stessa";
     if (!extraIsRealEstateSpecific(bonus, catalog)) return true;
@@ -251,6 +314,8 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
                     <Heading>Service</Heading>
                     <Heading>Description</Heading>
                     <Heading className="whitespace-nowrap">Offer As</Heading>
+                    <Heading className="whitespace-nowrap">Cadence</Heading>
+                    <Heading className="w-24 text-center">Real estate</Heading>
                     <Heading className="text-center">Price / Mo</Heading>
                     {PACKAGES.map(({ id, label }) => (
                       <Heading key={id} className="w-20 text-center">{label}</Heading>
@@ -299,6 +364,24 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
                             name={row.name || "item"}
                             value={row.kind}
                             onChange={(kind) => setKind(row, kind)}
+                          />
+                        </td>
+                        <td className="w-0 whitespace-nowrap px-3 py-4 align-middle">
+                          {row.kind === "included" ? (
+                            <CadenceSelect
+                              name={row.name || "included extra"}
+                              value={row.cadence}
+                              onChange={(cadence) => setBonusCadence(row, cadence)}
+                            />
+                          ) : (
+                            <span className="text-sm text-slate-300">—</span>
+                          )}
+                        </td>
+                        <td className="w-24 px-3 py-4 text-center align-middle">
+                          <Toggle
+                            checked={row.realEstateSpecific}
+                            label={`${row.realEstateSpecific ? "Remove" : "Mark"} ${row.name || "item"} ${row.realEstateSpecific ? "from" : "as"} real-estate only`}
+                            onToggle={() => toggleRealEstate(row)}
                           />
                         </td>
                         <td className="w-32 px-3 py-4 text-center align-middle">
@@ -408,6 +491,42 @@ function KindSelect({
         }`}
       >
         {KIND_OPTIONS.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function CadenceSelect({
+  name,
+  value,
+  onChange,
+}: {
+  name: string;
+  value: BonusCadence;
+  onChange: (cadence: BonusCadence) => void;
+}) {
+  return (
+    <div className="grid">
+      {CADENCE_OPTIONS.map((option) => (
+        <span
+          key={option.value}
+          aria-hidden
+          className="invisible col-start-1 row-start-1 whitespace-nowrap rounded-md border border-transparent py-1.5 pl-2.5 pr-9 font-semibold"
+        >
+          {option.label}
+        </span>
+      ))}
+      <select
+        aria-label={`Billing cadence for ${name}`}
+        value={value}
+        onChange={(event) => onChange(event.target.value as BonusCadence)}
+        className="proposal-options-kind col-start-1 row-start-1 w-full cursor-pointer rounded-md border border-slate-300 bg-slate-100 py-1.5 pl-2.5 font-semibold text-slate-800 outline-none hover:border-slate-500"
+      >
+        {CADENCE_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
           </option>

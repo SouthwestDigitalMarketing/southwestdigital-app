@@ -63,7 +63,8 @@ CROSS JOIN (
     ('quarterly-review', 'OFFER-QUARTERLY-REVIEW', 'First Quarterly Review', 'After the first full quarter, we will meet with the client to review reports, answer questions, and plan the next steps.', 'proposal-extra', 230, 'included', 0.00, 'one-time', false, NULL, 'Available as an included advisory benefit.', false),
     ('doublehq-client-portal', 'OFFER-DOUBLEHQ', 'DoubleHQ Client Portal', 'The client gets one online place to talk with our team, send files, view requests, and check the work in progress.', 'proposal-extra', 240, 'included', 0.00, 'one-time', false, NULL, 'Available as an included client-experience benefit.', false),
     ('real-estate-chart-of-accounts', 'OFFER-RE-COA', 'Real Estate Chart of Accounts', 'We will add our real estate Chart of Accounts to the client''s current QuickBooks file. This makes reports easier to read and keeps the books consistent.', 'proposal-extra', 250, 'included', 0.00, 'one-time', false, NULL, 'Available for real-estate book sets using an existing QuickBooks file.', true),
-    ('new-quickbooks-file', 'OFFER-NEW-QBO', 'New QuickBooks Setup', 'If a fresh start is best, we will build a new QuickBooks file for monthly bookkeeping. It will include our Real Estate Chart of Accounts.', 'proposal-extra', 260, 'included', 0.00, 'one-time', false, 'qbo', 'Available for real-estate book sets whose ongoing platform is QuickBooks.', true)
+    ('new-quickbooks-file', 'OFFER-NEW-QBO', 'New QuickBooks Setup', 'If a fresh start is best, we will build a new QuickBooks file for monthly bookkeeping. It will include our Real Estate Chart of Accounts.', 'proposal-extra', 260, 'included', 0.00, 'one-time', false, 'qbo', 'Available for real-estate book sets whose ongoing platform is QuickBooks.', true),
+    ('per-property-class-tracking', 'OFFER-PPCT', 'Per-Property Class Tracking', 'Track income and expenses by property using classes for property-level reporting.', 'proposal-extra', 270, 'included', 0.00, 'monthly', false, NULL, 'Included recurring benefit for real-estate book sets.', true)
 ) AS item(
   offer_key, code, name, description, item_type, priority, default_inclusion,
   default_price, billing_cadence, requires_platform_migration,
@@ -163,7 +164,8 @@ WHERE service."offer_key" IN (
   'stessa-migration',
   'property-reporting-setup',
   'real-estate-chart-of-accounts',
-  'new-quickbooks-file'
+  'new-quickbooks-file',
+  'per-property-class-tracking'
 )
 ON CONFLICT ("serviceId", "tagId") DO NOTHING;
 

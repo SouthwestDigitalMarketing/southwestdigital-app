@@ -37,7 +37,6 @@ export async function applyTagPipelineAutomation(args: {
               where: { isActive: true },
               orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
               select: { id: true },
-              take: 1,
             },
           },
         },
@@ -46,8 +45,9 @@ export async function applyTagPipelineAutomation(args: {
 
     if (!automation || !automation.pipeline.isActive) return;
 
-    const stageId =
-      automation.stageId ?? automation.pipeline.stages[0]?.id ?? null;
+    const stageId = automation.pipeline.stages.some((stage) => stage.id === automation.stageId)
+      ? automation.stageId
+      : automation.pipeline.stages[0]?.id ?? null;
     if (!stageId) return;
 
     const contact = await transaction.contact.findFirst({

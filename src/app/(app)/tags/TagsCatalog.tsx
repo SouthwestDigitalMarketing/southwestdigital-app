@@ -18,7 +18,10 @@ type TagRow = {
   usageCount: number;
   serviceCount: number;
   pipelineId: string | null;
+  stageId: string | null;
 };
+
+type PipelineRow = { id: string; name: string; stages: Array<{ id: string; name: string }> };
 
 type CatalogServiceRow = {
   id: string;
@@ -36,6 +39,86 @@ const danger =
   "rounded-full border border-rose-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-rose-700 hover:bg-rose-50 disabled:opacity-50";
 const primary =
   "rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-slate-700 disabled:opacity-50";
+
+function TagAutomationForm({
+  tag,
+  pipelines,
+  pending,
+  onSubmit,
+  inputClass,
+  ghost,
+}: {
+  tag: TagRow;
+  pipelines: PipelineRow[];
+  pending: boolean;
+  onSubmit: (data: FormData) => void;
+  inputClass: string;
+  ghost: string;
+}) {
+  const [pipelineId, setPipelineId] = useState<string>(tag.pipelineId ?? "");
+  const [stageId, setStageId] = useState<string>(tag.stageId ?? "");
+  const selectedPipeline = pipelines.find((p) => p.id === pipelineId) ?? null;
+  const selectedPipelineHasStages = Boolean(selectedPipeline?.stages.length);
+  const validStageIds = new Set(selectedPipeline?.stages.map((s) => s.id) ?? []);
+  const effectiveStageId = stageId && validStageIds.has(stageId)
+    ? stageId
+    : selectedPipeline?.stages[0]?.id ?? "";
+  const saveDisabled = pending || (Boolean(selectedPipeline) && !selectedPipelineHasStages) ||
+    (pipelineId === (tag.pipelineId ?? "") && effectiveStageId === (tag.stageId ?? ""));
+  return (
+    <form
+      className="flex flex-wrap items-center gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const data = new FormData();
+        data.set("tagId", tag.id);
+        data.set("pipelineId", pipelineId);
+        data.set("stageId", effectiveStageId);
+        onSubmit(data);
+      }}
+    >
+      <select
+        value={pipelineId}
+        onChange={(event) => {
+          const nextPipelineId = event.target.value;
+          const nextPipeline = pipelines.find((pipeline) => pipeline.id === nextPipelineId);
+          setPipelineId(nextPipelineId);
+          setStageId(nextPipeline?.stages[0]?.id ?? "");
+        }}
+        className={`${inputClass} bg-white`}
+        aria-label="Pipeline"
+      >
+        <option value="">None yet</option>
+        {pipelines.map((pipeline) => (
+          <option key={pipeline.id} value={pipeline.id}>
+            {pipeline.name}
+          </option>
+        ))}
+      </select>
+      {selectedPipeline ? (
+        selectedPipelineHasStages ? (
+          <select
+            value={effectiveStageId}
+            onChange={(event) => setStageId(event.target.value)}
+            className={`${inputClass} bg-white`}
+            aria-label="Stage"
+          >
+            {selectedPipeline.stages.map((stage, index) => (
+              <option key={stage.id} value={stage.id}>
+                {stage.name}{index === 0 ? " (first stage)" : ""}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className="text-xs text-amber-700">Add an active stage first</span>
+        )
+      ) : null}
+      <button type="submit" disabled={saveDisabled} className={ghost}>
+        Save
+      </button>
+    </form>
+  );
+}
 
 function KindSelect({ name, defaultValue }: { name: string; defaultValue?: string }) {
   return (
@@ -55,7 +138,7 @@ export function TagsCatalog({
   services,
 }: {
   tags: TagRow[];
-  pipelines: Array<{ id: string; name: string }>;
+  pipelines: PipelineRow[];
   services: CatalogServiceRow[];
 }) {
   const router = useRouter();
@@ -198,31 +281,14 @@ export function TagsCatalog({
                       <td className="px-4 py-3 text-slate-600">{TAG_KIND_LABELS[tag.kind]}</td>
                       <td className="px-4 py-3 text-slate-600">{tag.usageCount}</td>
                       <td className="px-4 py-3">
-                        <form
-                          className="flex items-center gap-2"
-                          onSubmit={(event) => {
-                            event.preventDefault();
-                            const data = new FormData(event.currentTarget);
-                            run(() => saveTagAutomationAction(data));
-                          }}
-                        >
-                          <input type="hidden" name="tagId" value={tag.id} />
-                          <select
-                            name="pipelineId"
-                            defaultValue={tag.pipelineId ?? ""}
-                            className={`${inputClass} bg-white`}
-                          >
-                            <option value="">None yet</option>
-                            {pipelines.map((pipeline) => (
-                              <option key={pipeline.id} value={pipeline.id}>
-                                {pipeline.name}
-                              </option>
-                            ))}
-                          </select>
-                          <button type="submit" disabled={pending} className={ghost}>
-                            Save
-                          </button>
-                        </form>
+                        <TagAutomationForm
+                          tag={tag}
+                          pipelines={pipelines}
+                          pending={pending}
+                          onSubmit={(data) => run(() => saveTagAutomationAction(data))}
+                          inputClass={inputClass}
+                          ghost={ghost}
+                        />
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-2">

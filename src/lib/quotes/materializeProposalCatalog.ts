@@ -3,6 +3,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
 import { proposalCatalogItemApplicability } from "@/lib/quotes/catalog";
+import { slugifyTagKey } from "@/lib/contacts/tags";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -82,12 +83,11 @@ export async function materializeProposalCatalog(
     where: {
       brandId,
       active: true,
-      offerSection: "options",
-      offerKey: { not: null },
     },
     orderBy: [{ priority: "asc" }, { name: "asc" }],
     select: {
       offerKey: true,
+      code: true,
       name: true,
       clientBenefit: true,
       internalDescription: true,
@@ -104,11 +104,12 @@ export async function materializeProposalCatalog(
 
   const applicabilityById = new Map(
     catalog.flatMap((item) => {
-      if (!item.offerKey) return [];
+      const effectiveOfferKey = item.offerKey ?? slugifyTagKey(item.code ?? item.name);
+      if (!effectiveOfferKey) return [];
       const result = proposalCatalogItemApplicability(
         {
-          id: item.offerKey,
-          offerKey: item.offerKey,
+          id: effectiveOfferKey,
+          offerKey: effectiveOfferKey,
           name: item.name,
           code: null,
           description: item.clientBenefit ?? item.internalDescription ?? "",
@@ -135,7 +136,7 @@ export async function materializeProposalCatalog(
           ),
         },
       );
-      return [[item.offerKey, result] as const];
+      return [[effectiveOfferKey, result] as const];
     }),
   );
   const withPublicationApplicability = (items: unknown[]) =>
@@ -179,6 +180,7 @@ export async function materializeProposalCatalog(
               ),
               showInProposal: optionSelected(item.offerKey!, value),
               archived: false,
+              realEstateSpecific: item.realEstateSpecific,
             })),
         );
   const bonuses =
@@ -194,6 +196,8 @@ export async function materializeProposalCatalog(
               name: item.name,
               description: item.clientBenefit ?? item.internalDescription ?? "",
               archived: false,
+              realEstateSpecific: item.realEstateSpecific,
+              billingCadence: item.billingCadence === "monthly" ? "monthly" : "one-time",
             })),
         );
   const knownIds = [

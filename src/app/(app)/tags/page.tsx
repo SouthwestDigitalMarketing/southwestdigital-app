@@ -17,7 +17,7 @@ export default async function TagsPage() {
         kind: true,
         automations: {
           where: { isActive: true },
-          select: { pipelineId: true },
+          select: { pipelineId: true, stageId: true },
           take: 1,
         },
         _count: { select: { contacts: true, catalogServiceTags: true } },
@@ -26,7 +26,15 @@ export default async function TagsPage() {
     prisma.pipeline.findMany({
       where: { brandId: brand.id, isActive: true },
       orderBy: { name: "asc" },
-      select: { id: true, name: true },
+      select: {
+        id: true,
+        name: true,
+        stages: {
+          where: { isActive: true },
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+          select: { id: true, name: true },
+        },
+      },
     }),
     prisma.catalogService.findMany({
       where: { brandId: brand.id },
@@ -54,6 +62,7 @@ export default async function TagsPage() {
             usageCount: tag._count.contacts,
             serviceCount: tag._count.catalogServiceTags,
             pipelineId: tag.automations[0]?.pipelineId ?? null,
+            stageId: tag.automations[0]?.stageId ?? null,
           }))}
           pipelines={pipelines}
           services={services.map((service) => ({

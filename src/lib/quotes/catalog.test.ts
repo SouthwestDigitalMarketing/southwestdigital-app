@@ -55,6 +55,56 @@ describe("real-estate catalog markers", () => {
       ),
     ).toBe(true);
   });
+
+  it("filters real-estate default extras from other-business proposals when the catalog is empty", () => {
+    // Simulates a pre-migration proposal where DEFAULT_PROPOSAL_BONUSES is the seed
+    // and the DB catalog hasn't been loaded yet. Real-estate-specific defaults must
+    // still be hidden for non-real-estate customers via the fallback / bonus flag.
+    const realEstateDefaults = [
+      { id: "stessa-migration", name: "QuickBooks to Stessa Migration", realEstateSpecific: true },
+      { id: "property-reporting-setup", name: "Reports by Property", realEstateSpecific: true },
+      { id: "real-estate-chart-of-accounts", name: "Real Estate Chart of Accounts", realEstateSpecific: true },
+      { id: "new-quickbooks-file", name: "New QuickBooks Setup", realEstateSpecific: true },
+      { id: "per-property-class-tracking", name: "Per-Property Class Tracking", realEstateSpecific: true },
+    ];
+    for (const extra of realEstateDefaults) {
+      expect(extraIsAvailableForBookSet(extra, [], "other-business"), extra.id).toBe(false);
+      expect(extraIsAvailableForBookSet(extra, [], "real-estate-only"), extra.id).toBe(true);
+    }
+
+    const nonRealEstateDefaults = [
+      { id: "document-organization", name: "Organized, Audit-Ready Records" },
+      { id: "quarterly-review", name: "First Quarterly Review" },
+      { id: "doublehq-client-portal", name: "DoubleHQ Client Portal" },
+    ];
+    for (const extra of nonRealEstateDefaults) {
+      expect(extraIsAvailableForBookSet(extra, [], "other-business"), extra.id).toBe(true);
+    }
+  });
+
+  it("still filters legacy stored bonuses without the realEstateSpecific flag", () => {
+    // Simulates an older localStorage payload where a proposal was edited before
+    // realEstateSpecific was added to ProposalBonus. The fallback set must catch
+    // known real-estate IDs so the filter still hides them.
+    const legacyStessa = { id: "stessa-migration", name: "QuickBooks to Stessa Migration" };
+    expect(extraIsAvailableForBookSet(legacyStessa, [], "other-business")).toBe(false);
+  });
+
+  it("lets an explicit realEstateSpecific flag on the extra override the catalog default", () => {
+    expect(
+      extraIsRealEstateSpecific(
+        { id: "option-1", name: "Property reporting", realEstateSpecific: false },
+        [{ id: "service-1", code: "option-1", name: "Property reporting", realEstateSpecific: true }],
+      ),
+    ).toBe(false);
+
+    expect(
+      extraIsRealEstateSpecific(
+        { id: "option-1", name: "Property reporting", realEstateSpecific: true },
+        [{ id: "service-1", code: "option-1", name: "Property reporting", realEstateSpecific: false }],
+      ),
+    ).toBe(true);
+  });
 });
 
 describe("proposal catalog applicability", () => {

@@ -1,7 +1,7 @@
 "use client";
 
-import { Archive, ArchiveRestore, Pencil, Trash2 } from "lucide-react";
-import { useState, useTransition } from "react";
+import { Archive, ArchiveRestore, ChevronDown, ChevronsUpDown, ChevronUp, Pencil, Trash2 } from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -44,6 +44,68 @@ export type ServiceRow = {
   packageCount: number;
 };
 
+type SortColumn = "name" | "description" | "tags";
+type SortDirection = "asc" | "desc";
+
+function serviceDescription(service: ServiceRow) {
+  return service.clientBenefit || service.internalDescription || "";
+}
+
+function sortServices(
+  services: ServiceRow[],
+  column: SortColumn,
+  direction: SortDirection,
+): ServiceRow[] {
+  const collator = new Intl.Collator("en", { sensitivity: "base", numeric: true });
+  const factor = direction === "asc" ? 1 : -1;
+  return [...services].sort((a, b) => {
+    if (column === "tags") {
+      const diff = a.tags.length - b.tags.length;
+      if (diff !== 0) return diff * factor;
+    } else {
+      const aValue = column === "name" ? a.name : serviceDescription(a);
+      const bValue = column === "name" ? b.name : serviceDescription(b);
+      if (!aValue && bValue) return 1;
+      if (aValue && !bValue) return -1;
+      const diff = collator.compare(aValue, bValue);
+      if (diff !== 0) return diff * factor;
+    }
+    return collator.compare(a.name, b.name);
+  });
+}
+
+function SortHeader({
+  label,
+  column,
+  sort,
+  onSort,
+}: {
+  label: string;
+  column: SortColumn;
+  sort: { column: SortColumn; direction: SortDirection };
+  onSort: (column: SortColumn) => void;
+}) {
+  const isActive = sort.column === column;
+  const nextDirection: SortDirection = isActive && sort.direction === "asc" ? "desc" : "asc";
+  const Icon = !isActive ? ChevronsUpDown : sort.direction === "asc" ? ChevronUp : ChevronDown;
+  return (
+    <th className="px-5 py-3.5 text-sm font-semibold normal-case text-slate-700">
+      <button
+        type="button"
+        onClick={() => onSort(column)}
+        aria-sort={isActive ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}
+        aria-label={`Sort by ${label} ${nextDirection === "asc" ? "ascending" : "descending"}`}
+        className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md px-1 py-0.5 -mx-1 transition-colors hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 ${
+          isActive ? "text-slate-900" : "text-slate-600"
+        }`}
+      >
+        <span>{label}</span>
+        <Icon className={`h-3.5 w-3.5 ${isActive ? "text-slate-700" : "text-slate-400"}`} strokeWidth={2.5} />
+      </button>
+    </th>
+  );
+}
+
 const inputClass =
   "rounded-md border border-slate-300 px-3 py-2 text-base text-slate-800 focus:border-slate-500 focus:outline-none";
 const ghost =
@@ -65,6 +127,23 @@ export function ServicesCatalog({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [sort, setSort] = useState<{ column: SortColumn; direction: SortDirection }>({
+    column: "name",
+    direction: "asc",
+  });
+
+  const sortedServices = useMemo(() => sortServices(services, sort.column, sort.direction), [
+    services,
+    sort,
+  ]);
+
+  function toggleSort(column: SortColumn) {
+    setSort((prev) =>
+      prev.column === column
+        ? { column, direction: prev.direction === "asc" ? "desc" : "asc" }
+        : { column, direction: "asc" },
+    );
+  }
 
   function run(action: () => Promise<void>) {
     setError(null);
@@ -135,14 +214,14 @@ export function ServicesCatalog({
             <table className="w-full text-base">
             <thead>
               <tr className="border-b border-slate-100 text-left">
-                <th className="px-5 py-3.5 text-sm font-semibold normal-case text-slate-700">Service Title</th>
-                <th className="px-5 py-3.5 text-sm font-semibold normal-case text-slate-700">Description</th>
-                <th className="px-5 py-3.5 text-sm font-semibold normal-case text-slate-700">Tags</th>
+                <SortHeader label="Service Title" column="name" sort={sort} onSort={toggleSort} />
+                <SortHeader label="Description" column="description" sort={sort} onSort={toggleSort} />
+                <SortHeader label="Tags" column="tags" sort={sort} onSort={toggleSort} />
                 <th className="px-5 py-3.5"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {services.map((service, index) =>
+              {sortedServices.map((service, index) =>
                 editingId === service.id ? (
                   <tr key={service.id} className={index % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
                     <td colSpan={4} className="px-5 py-4">
@@ -284,13 +363,6 @@ function ServiceForm({
         <label className="grid gap-1 text-sm font-medium text-slate-600">
           Priority
           <input name="priority" type="number" min={0} step={1} defaultValue={service?.priority ?? 500} className={inputClass} />
-        </label>
-        <label className="grid gap-1 text-sm font-medium text-slate-600">
-          Catalogue section
-          <select name="offerSection" defaultValue={service?.offerSection ?? "included-services"} className={`${inputClass} bg-white`}>
-            <option value="included-services">Included services</option>
-            <option value="options">Proposal options</option>
-          </select>
         </label>
         <label className="grid gap-1 text-sm font-medium text-slate-600">
           Default offer treatment

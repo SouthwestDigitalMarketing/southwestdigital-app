@@ -3,13 +3,14 @@ import { prisma } from "@/lib/prisma";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
 import { requireQuoteStaff } from "@/lib/quotes/access";
 import { tagMarksRealEstate, type ProposalOptionCatalogItem } from "@/lib/quotes/catalog";
+import { slugifyTagKey } from "@/lib/contacts/tags";
 import ProposalAddOnsDemo from "../builder/ProposalAddOnsDemo";
 
 export default async function QuotesAddOnsPage() {
   const { brand } = await requireQuoteStaff();
   const { proposalCatalog } = await getSchemaCapabilities();
   const services = proposalCatalog ? await prisma.catalogService.findMany({
-    where: { brandId: brand.id, active: true, offerSection: "options", offerKey: { not: null } },
+    where: { brandId: brand.id, active: true },
     orderBy: [{ priority: "asc" }, { name: "asc" }],
     select: {
       id: true,
@@ -32,10 +33,11 @@ export default async function QuotesAddOnsPage() {
     },
   }) : [];
   const catalog = services.flatMap<ProposalOptionCatalogItem>((service) => {
-    if (!service.offerKey) return [];
+    const effectiveOfferKey = service.offerKey ?? slugifyTagKey(service.code ?? service.name);
+    if (!effectiveOfferKey) return [];
     return [{
       id: service.id,
-      offerKey: service.offerKey,
+      offerKey: effectiveOfferKey,
       name: service.name,
       code: service.code,
       description: service.clientBenefit ?? service.internalDescription ?? "",

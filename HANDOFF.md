@@ -16,19 +16,18 @@ The Offers → Options step should be catalog-backed and visually clear about wh
 
 ## Important current database state
 
-The connected database does **not** yet have `catalog_services.offer_key` or the other new catalog columns. It also has migration-history drift: the database contains `20260817205118_init`, while this repository has a different migration history. Do not run `prisma migrate deploy` blindly.
+The `20260829120000_catalog_options_and_quote_revisions` migration was applied against Supabase on 2026-08-29 (raw SQL, wrapped in a single transaction, recorded in `_prisma_migrations`). A pre-migration `pg_dump` is at `backups/backup-pre-catalog-options-20260829T182501Z.sql` (gitignored) for rollback via `psql`.
 
-The current brand’s data was inspected read-only:
+Migration history drift persists: the DB contains a consolidated `20260817205118_init` (plus the 3 theme migrations and now this one), while the repo has 17 migration folders whose schema is already present in the DB via that init. **Do not run `prisma migrate deploy` blindly** — it will try to reapply the 13 consolidated migrations. For new schema changes, keep using `prisma db push` (dev) or raw-SQL migrations with a manual `_prisma_migrations` row.
 
-- canonical active tag `real-estate`: 0 service assignments
-- duplicate active tag `real-estate-bookeeper`: 10 service assignments
-- 29 existing catalog services
-
-The additive/data-reconciliation migration is staged at `prisma/migrations/20260829120000_catalog_options_and_quote_revisions/migration.sql`, but has not been applied. Before applying it, take a backup, rehearse on a restored copy, baseline/reconcile the divergent migration history, run the included reconciliation queries, and document rollback. The migration archives the duplicate tag rather than deleting it.
+Post-migration reconciliation (BC brand):
+- 43 catalog services (29 pre-existing + 14 seeded proposal options), 15 real-estate-specific
+- Canonical `real-estate` tag active; duplicate `real-estate-bookeeper` archived (isActive=false, not deleted)
+- 1 `quote_revisions` row backfilled from the 1 published quote snapshot
 
 ## Known follow-up
 
-`Per-Property Class Tracking` is still hard-coded in `OfferProposalPreview.tsx` for Grow and Improve. The desired end state is to move it into catalog/package rules and make its visibility depend on the relevant real-estate applicability, instead of injecting it whenever the package is not Maintain.
+None open. `Per-Property Class Tracking` is now a catalog-backed bonus with real-estate applicability and monthly billing cadence — configurable via `/offers/add-ons` per-proposal and via `/services` at the brand-catalog level.
 
 ## Verification already run
 

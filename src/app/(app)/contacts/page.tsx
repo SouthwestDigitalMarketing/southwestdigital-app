@@ -16,6 +16,7 @@ import { ContactsFilters } from "./ContactsFilters";
 import { CreateContactDialog } from "./CreateContactDialog";
 import { ContactActions } from "./ContactActions";
 import { CopyEmail } from "./CopyEmail";
+import { ImportContactsDialog } from "./ImportContactsDialog";
 
 
 type SearchParams = Promise<{
@@ -174,6 +175,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
           clients={clientOptions}
           brands={brandOptions}
         />
+        <ImportContactsDialog tags={tags.map((tag) => ({ id: tag.id, label: tag.label }))} />
         <Link
           href="/settings/tags"
           className="flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-700 hover:bg-slate-50"

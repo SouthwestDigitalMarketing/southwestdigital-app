@@ -198,7 +198,6 @@ const comparisonFeatures: Array<{ label: string; description: string; includedIn
   { label: "Monthly advisory calls", description: "A recurring call with your bookkeeper to review the numbers and talk through decisions.", includedIn: ["grow"] },
   { label: "CFO Pack", description: "Executive-level financial reporting built for owner and investor decision-making.", includedIn: ["grow"] },
   { label: "Cash flow analysis", description: "Ongoing analysis of cash inflows and outflows to support planning and investment decisions.", includedIn: ["grow"] },
-  { label: "Per-property class tracking", description: "Income and expenses are tracked by property using classes for property-level reporting.", includedIn: ["grow", "improve"] },
 ];
 
 const optionMeta: Array<{ id: OptionId; icon: typeof Sparkles; accentClass: string; serviceLevel: string }> = [
@@ -380,22 +379,6 @@ function buildOptions(assessment: AssessmentState): Record<OptionId, ProposalOpt
       bkRow.platformTag = assessment.ongoingBookkeepingPlatform === "stessa" ? "Stessa" : "QBO";
     }
 
-    // Per-property class tracking for Grow and Improve
-    if (id !== "maintain") {
-      recurringRows.push({
-        id: `${id}-per-property-class-tracking`,
-        serviceName: "Per-Property Class Tracking",
-        billStart: "On Acceptance",
-        billEnd: "Until Cancelled",
-        billEvery: "1 Month",
-        invoiceType: "Automatic",
-        priceType: "Fixed",
-        quantity: 1,
-        price: 0,
-        note: "Included with this package. Track income and expenses by property using classes for property-level reporting.",
-      });
-    }
-
     // Onboarding row
     const onboardingRow: ServiceRow = {
       id: `${id}-onboarding`,
@@ -420,7 +403,7 @@ function buildOptions(assessment: AssessmentState): Record<OptionId, ProposalOpt
       "real-estate-chart-of-accounts": assessment.includeRealEstateChartOfAccounts,
       "new-quickbooks-file": assessment.includeNewQuickBooksFileSetup,
     } as Record<string, boolean>)[bonusId] ?? false;
-    const bonuses = getProposalBonuses(assessment)
+    const eligibleBonuses = getProposalBonuses(assessment)
       .filter((bonus) => !bonus.archived)
       .filter((bonus) => bonus.applicable !== false)
       .filter((bonus) => {
@@ -430,8 +413,26 @@ function buildOptions(assessment: AssessmentState): Record<OptionId, ProposalOpt
         if (bonus.id === "new-quickbooks-file") return realEstate && assessment.ongoingBookkeepingPlatform === "qbo";
         return realEstate;
       })
-      .filter((bonus) => assessment.bonusPackageSelections[bonus.id]?.includes(id) ?? legacyBonusIncluded(bonus.id))
-      .map((bonus) => ({
+      .filter((bonus) => assessment.bonusPackageSelections[bonus.id]?.includes(id) ?? legacyBonusIncluded(bonus.id));
+
+    const recurringBonuses = eligibleBonuses
+      .filter((bonus) => bonus.billingCadence === "monthly")
+      .map((bonus): ServiceRow => ({
+        id: `${id}-bonus-${bonus.id}`,
+        serviceName: bonus.name,
+        billStart: "On Acceptance",
+        billEnd: "Until Cancelled",
+        billEvery: "1 Month",
+        invoiceType: "Automatic",
+        priceType: "Fixed",
+        quantity: 1,
+        price: 0,
+        note: bonus.description,
+      }));
+
+    const oneTimeBonuses = eligibleBonuses
+      .filter((bonus) => bonus.billingCadence !== "monthly")
+      .map((bonus): ServiceRow => ({
         id: `${id}-bonus-${bonus.id}`,
         serviceName: bonus.name,
         billStart: "On Acceptance",
@@ -445,11 +446,11 @@ function buildOptions(assessment: AssessmentState): Record<OptionId, ProposalOpt
 
     return [id, {
       ...base,
-      recurringRows,
+      recurringRows: [...recurringRows, ...recurringBonuses],
       oneTimeRows: [
         ...buildCleanupRows(periods, maintainMonthly, id),
         onboardingRow,
-        ...bonuses,
+        ...oneTimeBonuses,
       ],
     }];
   })) as Record<OptionId, ProposalOption>;

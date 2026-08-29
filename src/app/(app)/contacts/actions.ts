@@ -184,6 +184,131 @@ export async function updateContactAction(formData: FormData) {
   revalidatePath(`/contacts/${contactId}`);
 }
 
+type ImportContactRow = {
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  company?: string;
+  notes?: string;
+};
+
+export type ImportContactsResult = {
+  created: number;
+  skipped: number;
+  errors: Array<{ row: number; message: string }>;
+};
+
+export async function importContactsAction(input: {
+  rows: ImportContactRow[];
+  tagId?: string | null;
+}): Promise<ImportContactsResult> {
+  const { session, brand } = await requireStaffBrandOrThrow();
+  const result: ImportContactsResult = { created: 0, skipped: 0, errors: [] };
+
+  if (!Array.isArray(input.rows) || input.rows.length === 0) {
+    throw new Error("The import does not contain any contact rows.");
+  }
+  if (input.rows.length > 1_000) {
+    throw new Error("Import up to 1,000 contacts at a time.");
+  }
+
+  const tagId = input.tagId?.trim() || null;
+  let tag: { id: string } | null = null;
+  if (tagId) {
+    tag = await prisma.contactTag.findFirst({
+      where: { id: tagId, brandId: brand.id, isActive: true },
+      select: { id: true },
+    });
+    if (!tag) throw new Error("Selected tag is not available.");
+  }
+
+  for (let index = 0; index < input.rows.length; index += 1) {
+    const raw = input.rows[index] ?? {};
+    const rowNumber = index + 2; // header is row 1
+    try {
+      const fullName = typeof raw.name === "string" ? raw.name.trim() : "";
+      let firstName = typeof raw.firstName === "string" ? raw.firstName.trim() : "";
+      let lastName = typeof raw.lastName === "string" ? raw.lastName.trim() : "";
+      if (!firstName && !lastName && fullName) {
+        const nameParts = fullName.split(/\s+/);
+        firstName = nameParts.shift() ?? "";
+        lastName = nameParts.join(" ");
+      }
+      if (!firstName && !lastName) {
+        result.skipped += 1;
+        continue;
+      }
+      const name = fullName || `${firstName} ${lastName}`.replace(/\s+/g, " ").trim();
+      const email = typeof raw.email === "string" && raw.email.trim()
+        ? parseEmailOrThrow(raw.email)
+        : null;
+      const phoneE164 = typeof raw.phone === "string" && raw.phone.trim()
+        ? parseSubmittedPhone(raw.phone)
+        : null;
+      const company = typeof raw.company === "string" ? raw.company.trim() || null : null;
+      const notes = typeof raw.notes === "string" ? raw.notes.trim() || null : null;
+
+      if (email || phoneE164) {
+        const existing = await prisma.contact.findFirst({
+          where: {
+            brandId: brand.id,
+            OR: [
+              ...(email ? [{ email }] : []),
+              ...(phoneE164 ? [{ phoneE164 }] : []),
+            ],
+          },
+          select: { id: true },
+        });
+        if (existing) {
+          result.skipped += 1;
+          continue;
+        }
+      }
+
+      const contact = await prisma.contact.create({
+        data: {
+          brandId: brand.id,
+          name,
+          firstName: firstName || name,
+          lastName: lastName || "",
+          email,
+          phoneE164,
+          company,
+          notes,
+          isActive: true,
+          tagLinks: tag ? { create: [{ tagId: tag.id }] } : undefined,
+        },
+        select: { id: true },
+      });
+
+      if (tag) {
+        await applyTagPipelineAutomation({
+          brandId: brand.id,
+          actorUserId: session.user.id,
+          contactId: contact.id,
+          tagId: tag.id,
+        });
+      }
+
+      result.created += 1;
+    } catch (err) {
+      result.errors.push({
+        row: rowNumber,
+        message: err instanceof Error ? err.message : "Unknown import error",
+      });
+      result.skipped += 1;
+    }
+  }
+
+  revalidatePath("/contacts");
+  revalidatePath("/tags");
+  revalidatePath("/settings/tags");
+  revalidatePath("/pipeline");
+  return result;
+}
+
 export async function archiveContactAction(formData: FormData) {
   const { brand } = await requireStaffBrandOrThrow();
   const contactId = clean(formData.get("contactId"));
@@ -453,6 +578,7 @@ export async function saveTagAutomationAction(formData: FormData) {
   const { brand } = await requireStaffBrandOrThrow();
   const tagId = clean(formData.get("tagId"));
   const pipelineId = clean(formData.get("pipelineId"));
+  const requestedStageId = clean(formData.get("stageId"));
   if (!tagId) throw new Error("Tag is required.");
 
   const tag = await prisma.contactTag.findFirst({
@@ -461,11 +587,10 @@ export async function saveTagAutomationAction(formData: FormData) {
   });
   if (!tag) throw new Error("Tag not found.");
 
-  await prisma.contactTagAutomation.deleteMany({
-    where: { brandId: brand.id, tagId },
-  });
-
   if (!pipelineId) {
+    await prisma.contactTagAutomation.deleteMany({
+      where: { brandId: brand.id, tagId },
+    });
     revalidateTagPaths();
     return;
   }
@@ -476,23 +601,33 @@ export async function saveTagAutomationAction(formData: FormData) {
       id: true,
       stages: {
         where: { isActive: true },
-        orderBy: { sortOrder: "asc" },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
         select: { id: true },
-        take: 1,
       },
     },
   });
   if (!pipeline) throw new Error("Pipeline not found.");
+  if (pipeline.stages.length === 0) throw new Error("Add an active pipeline stage before enabling this automation.");
 
-  await prisma.contactTagAutomation.create({
-    data: {
-      brandId: brand.id,
-      tagId,
-      pipelineId: pipeline.id,
-      stageId: pipeline.stages[0]?.id ?? null,
-      isActive: true,
-    },
-  });
+  const firstStageId = pipeline.stages[0]?.id ?? null;
+  const stageId = requestedStageId && pipeline.stages.some((s) => s.id === requestedStageId)
+    ? requestedStageId
+    : firstStageId;
+
+  await prisma.$transaction([
+    prisma.contactTagAutomation.deleteMany({
+      where: { brandId: brand.id, tagId },
+    }),
+    prisma.contactTagAutomation.create({
+      data: {
+        brandId: brand.id,
+        tagId,
+        pipelineId: pipeline.id,
+        stageId,
+        isActive: true,
+      },
+    }),
+  ]);
 
   revalidateTagPaths();
 }

@@ -36,7 +36,8 @@ export type ProposalBonusId =
   | "quarterly-review"
   | "doublehq-client-portal"
   | "real-estate-chart-of-accounts"
-  | "new-quickbooks-file";
+  | "new-quickbooks-file"
+  | "per-property-class-tracking";
 type BookSetType = "" | "real-estate-only" | "mixed-books" | "other-business" | "unknown";
 type RealEstateOperation =
   | "buy-hold"
@@ -178,14 +179,18 @@ export type ProposalAdditionalOption = {
   monthlyPrice: number;
   showInProposal: boolean;
   archived: boolean;
+  realEstateSpecific?: boolean;
   applicable?: boolean;
   applicabilityReason?: string;
 };
+export type ProposalBonusCadence = "monthly" | "one-time";
 export type ProposalBonus = {
   id: string;
   name: string;
   description: string;
   archived: boolean;
+  realEstateSpecific?: boolean;
+  billingCadence?: ProposalBonusCadence;
   applicable?: boolean;
   applicabilityReason?: string;
 };
@@ -442,6 +447,7 @@ const INITIAL_ASSESSMENT: AssessmentState = {
     "doublehq-client-portal": [],
     "real-estate-chart-of-accounts": [],
     "new-quickbooks-file": [],
+    "per-property-class-tracking": ["grow", "improve"],
   },
   offerAdvancedReceiptManagement: false,
   advancedReceiptManagementPriceOverride: null,
@@ -534,6 +540,7 @@ export function getProposalAdditionalOptions(
       monthlyPrice: catalogOptionPrice(item, assessment),
       showInProposal: catalogOptionSelected(item, assessment),
       archived: false,
+      realEstateSpecific: item.realEstateSpecific,
     }));
   }
 
@@ -548,13 +555,14 @@ export function getProposalAdditionalOptions(
 }
 
 const DEFAULT_PROPOSAL_BONUSES: ProposalBonus[] = [
-  { id: "stessa-migration", name: "QuickBooks to Stessa Migration", description: "We will move the client's books to Stessa for free when they buy the cleanup and monthly bookkeeping in this offer.", archived: false },
-  { id: "property-reporting-setup", name: "Reports by Property", description: "We will set up the books so the client can see income and costs for each property.", archived: false },
+  { id: "stessa-migration", name: "QuickBooks to Stessa Migration", description: "We will move the client's books to Stessa for free when they buy the cleanup and monthly bookkeeping in this offer.", archived: false, realEstateSpecific: true },
+  { id: "property-reporting-setup", name: "Reports by Property", description: "We will set up the books so the client can see income and costs for each property.", archived: false, realEstateSpecific: true },
   { id: "document-organization", name: "Organized, Audit-Ready Records", description: "We replace paper files and loose digital files with one clear system. The client uploads records to the portal. We organize them and link them to the right items in the books.", archived: false },
   { id: "quarterly-review", name: "First Quarterly Review", description: "After the first full quarter, we will meet with the client to review reports, answer questions, and plan the next steps.", archived: false },
   { id: "doublehq-client-portal", name: "DoubleHQ Client Portal", description: "The client gets one online place to talk with our team, send files, view requests, and check the work in progress.", archived: false },
-  { id: "real-estate-chart-of-accounts", name: "Real Estate Chart of Accounts", description: "We will add our real estate Chart of Accounts to the client's current QuickBooks file. This makes reports easier to read and keeps the books consistent.", archived: false },
-  { id: "new-quickbooks-file", name: "New QuickBooks Setup", description: "If a fresh start is best, we will build a new QuickBooks file for monthly bookkeeping. It will include our Real Estate Chart of Accounts.", archived: false },
+  { id: "real-estate-chart-of-accounts", name: "Real Estate Chart of Accounts", description: "We will add our real estate Chart of Accounts to the client's current QuickBooks file. This makes reports easier to read and keeps the books consistent.", archived: false, realEstateSpecific: true },
+  { id: "new-quickbooks-file", name: "New QuickBooks Setup", description: "If a fresh start is best, we will build a new QuickBooks file for monthly bookkeeping. It will include our Real Estate Chart of Accounts.", archived: false, realEstateSpecific: true },
+  { id: "per-property-class-tracking", name: "Per-Property Class Tracking", description: "Track income and expenses by property using classes for property-level reporting.", archived: false, realEstateSpecific: true, billingCadence: "monthly" },
 ];
 
 export function getProposalBonuses(
@@ -569,6 +577,8 @@ export function getProposalBonuses(
       name: item.name,
       description: item.description,
       archived: false,
+      realEstateSpecific: item.realEstateSpecific,
+      billingCadence: item.billingCadence === "monthly" ? "monthly" : "one-time",
     }));
   }
   return DEFAULT_PROPOSAL_BONUSES;

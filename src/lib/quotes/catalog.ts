@@ -62,9 +62,11 @@ export function proposalCatalogItemApplicability(
 }
 
 const FALLBACK_REAL_ESTATE_EXTRA_IDS = new Set([
+  "stessa-migration",
   "property-reporting-setup",
   "real-estate-chart-of-accounts",
   "new-quickbooks-file",
+  "per-property-class-tracking",
 ]);
 
 function normalize(value: string) {
@@ -75,6 +77,7 @@ export function extraIsRealEstateSpecific(
   extra: { id: string; name: string; realEstateSpecific?: boolean },
   catalog: CatalogRealEstateMarker[],
 ) {
+  if (typeof extra.realEstateSpecific === "boolean") return extra.realEstateSpecific;
   const extraName = normalize(extra.name);
   const match = catalog.find(
     (item) =>
@@ -83,7 +86,6 @@ export function extraIsRealEstateSpecific(
       normalize(item.name) === extraName,
   );
   if (match) return match.realEstateSpecific;
-  if (typeof extra.realEstateSpecific === "boolean") return extra.realEstateSpecific;
   return FALLBACK_REAL_ESTATE_EXTRA_IDS.has(extra.id);
 }
 

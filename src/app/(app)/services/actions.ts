@@ -50,9 +50,7 @@ async function readServiceFields(formData: FormData, brandId: string) {
   const rawDefaultInclusion = clean(formData.get("defaultInclusion"));
   const defaultInclusion = rawDefaultInclusion === "optional" || rawDefaultInclusion === "included" ? rawDefaultInclusion : null;
   const offerSection = clean(formData.get("offerSection")) === "options" ? "options" : "included-services";
-  const offerKey = offerSection === "options"
-    ? slugifyTagKey(clean(formData.get("offerKey")) || code || name)
-    : null;
+  const offerKey = slugifyTagKey(clean(formData.get("offerKey")) || code || name) || null;
   const defaultPrice = parseOptionalPrice(clean(formData.get("defaultPrice")));
   const rawBillingCadence = clean(formData.get("billingCadence"));
   const billingCadence = rawBillingCadence === "one-time" || rawBillingCadence === "no-charge" ? rawBillingCadence : "monthly";
@@ -159,6 +157,7 @@ export async function createCatalogServiceAction(formData: FormData) {
         create: tagIds.map((tagId) => ({ brandId: brand.id, tagId })),
       },
     },
+    select: { id: true },
   });
   revalidateServicePaths();
 }
@@ -188,7 +187,11 @@ export async function updateCatalogServiceAction(formData: FormData) {
 
   await prisma.$transaction([
     prisma.catalogServiceTag.deleteMany({ where: { serviceId: id, brandId: brand.id } }),
-    prisma.catalogService.update({ where: { id }, data: fieldsForAvailableSchema(fields, proposalCatalog) }),
+    prisma.catalogService.update({
+      where: { id },
+      data: fieldsForAvailableSchema(fields, proposalCatalog),
+      select: { id: true },
+    }),
     ...tagIds.map((tagId) =>
       prisma.catalogServiceTag.create({
         data: { brandId: brand.id, serviceId: id, tagId },
@@ -260,6 +263,7 @@ export async function setCatalogServicesForTagAction(formData: FormData) {
           tagId: update.tagId,
           realEstateSpecific: update.realEstateSpecific,
         },
+        select: { id: true },
       }),
     ),
     ...serviceIds.map((serviceId) =>
@@ -281,6 +285,7 @@ export async function setCatalogServiceActiveAction(formData: FormData) {
   await prisma.catalogService.update({
     where: { id },
     data: { active },
+    select: { id: true },
   });
   revalidateServicePaths();
 }
@@ -293,6 +298,6 @@ export async function deleteCatalogServiceAction(formData: FormData) {
   if (service._count.packageServices > 0) {
     throw new Error("This service is used on a package. Archive it instead of deleting.");
   }
-  await prisma.catalogService.delete({ where: { id } });
+  await prisma.catalogService.delete({ where: { id }, select: { id: true } });
   revalidateServicePaths();
 }

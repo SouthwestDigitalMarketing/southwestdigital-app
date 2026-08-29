@@ -28,6 +28,9 @@ next-env.d.ts
 # prisma generated client
 /generated/prisma
 
+# local database backups
+/backups
+
 
 # Local Netlify folder
 .netlify
