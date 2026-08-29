@@ -9,6 +9,8 @@ import { contactSearchWhere } from "@/lib/contacts/query";
 import { parseEmailOrThrow } from "@/lib/email";
 import { parseSubmittedPhone } from "@/lib/phone";
 import { isOfferKindKey, type OfferKindKey } from "@/lib/quotes/kinds";
+import { materializeProposalCatalog } from "@/lib/quotes/materializeProposalCatalog";
+import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
 
 export type OfferAudienceContact = {
   id: string;
@@ -228,6 +230,10 @@ export async function saveOfferDraftAction(
     existing.snapshotJson && typeof existing.snapshotJson === "object"
       ? (existing.snapshotJson as Record<string, unknown>)
       : {};
+  const assessment = await materializeProposalCatalog(
+    brand.id,
+    state.assessment ?? previous.assessment,
+  );
 
   await prisma.quote.update({
     where: { id: existing.id },
@@ -236,7 +242,7 @@ export async function saveOfferDraftAction(
         ...previous,
         kind: existing.kind,
         contactInfo: state.contactInfo ?? previous.contactInfo,
-        assessment: state.assessment ?? previous.assessment,
+        assessment,
       }),
     },
   });
@@ -261,28 +267,73 @@ export async function publishOfferChangesAction(
     existing.snapshotJson && typeof existing.snapshotJson === "object"
       ? (existing.snapshotJson as Record<string, unknown>)
       : {};
+  const assessment = await materializeProposalCatalog(
+    brand.id,
+    state.assessment ?? previous.assessment,
+    { freezeApplicability: true },
+  );
   const snapshot = asJsonObject({
     ...previous,
     kind: existing.kind,
     contactInfo: state.contactInfo ?? previous.contactInfo,
-    assessment: state.assessment ?? previous.assessment,
+    assessment,
   });
   const publicToken = existing.publicToken ?? randomBytes(32).toString("base64url");
+  const { quoteRevisions } = await getSchemaCapabilities();
+  const publishedAt = new Date();
 
-  await prisma.quote.update({
-    where: { id: existing.id },
-    data: {
-      snapshotJson: snapshot,
-      publishedSnapshotJson: snapshot,
-      publicToken,
-      publishedAt: new Date(),
-    },
+  if (!quoteRevisions) {
+    await prisma.quote.update({
+      where: { id: existing.id },
+      data: {
+        snapshotJson: snapshot,
+        publishedSnapshotJson: snapshot,
+        publicToken,
+        publishedAt,
+      },
+    });
+    revalidatePath("/offers");
+    revalidatePath(`/offers/${existing.id}`);
+    revalidatePath(`/proposal/${publicToken}`);
+    return { publicPath: `/proposal/${publicToken}`, version: 1 };
+  }
+
+  const latestRevision = await prisma.quoteRevision.findFirst({
+    where: { brandId: brand.id, quoteId: existing.id },
+    orderBy: { version: "desc" },
+    select: { version: true },
   });
+  const version = (latestRevision?.version ?? 0) + 1;
+
+  await prisma.$transaction([
+    prisma.quoteRevision.updateMany({
+      where: { brandId: brand.id, quoteId: existing.id, supersededAt: null },
+      data: { supersededAt: publishedAt },
+    }),
+    prisma.quoteRevision.create({
+      data: {
+        brandId: brand.id,
+        quoteId: existing.id,
+        version,
+        snapshotJson: snapshot,
+        publishedAt,
+      },
+    }),
+    prisma.quote.update({
+      where: { id: existing.id },
+      data: {
+        snapshotJson: snapshot,
+        publishedSnapshotJson: snapshot,
+        publicToken,
+        publishedAt,
+      },
+    }),
+  ]);
 
   revalidatePath("/offers");
   revalidatePath(`/offers/${existing.id}`);
   revalidatePath(`/proposal/${publicToken}`);
-  return { publicPath: `/proposal/${publicToken}` };
+  return { publicPath: `/proposal/${publicToken}`, version };
 }
 
 export async function getOfferPublicPathAction(offerId: string) {

@@ -31,6 +31,13 @@ export type ServiceRow = {
   clientBenefit: string | null;
   internalDescription: string | null;
   defaultInclusion: string | null;
+  offerKey: string | null;
+  offerSection: string;
+  defaultPrice: number | null;
+  billingCadence: string;
+  requiresPlatformMigration: boolean;
+  requiredTargetPlatform: string | null;
+  applicabilityNote: string | null;
   priority: number;
   realEstateSpecific: boolean;
   active: boolean;
@@ -158,8 +165,13 @@ export function ServicesCatalog({
                       {service.clientBenefit || service.internalDescription || <span className="text-slate-400">—</span>}
                     </td>
                     <td className="px-5 py-4">
-                      {service.tags.length ? (
+                      {service.tags.length || service.offerSection === "options" ? (
                         <div className="flex flex-wrap gap-1.5">
+                          {service.offerSection === "options" ? (
+                            <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-sm font-medium text-amber-900">
+                              Proposal option
+                            </span>
+                          ) : null}
                           {service.tags.map((tag) => (
                             <span key={tag.id} className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-sm font-medium text-slate-700">
                               {tag.label}
@@ -272,6 +284,63 @@ function ServiceForm({
         <label className="grid gap-1 text-sm font-medium text-slate-600">
           Priority
           <input name="priority" type="number" min={0} step={1} defaultValue={service?.priority ?? 500} className={inputClass} />
+        </label>
+        <label className="grid gap-1 text-sm font-medium text-slate-600">
+          Catalogue section
+          <select name="offerSection" defaultValue={service?.offerSection ?? "included-services"} className={`${inputClass} bg-white`}>
+            <option value="included-services">Included services</option>
+            <option value="options">Proposal options</option>
+          </select>
+        </label>
+        <label className="grid gap-1 text-sm font-medium text-slate-600">
+          Default offer treatment
+          <select name="defaultInclusion" defaultValue={service?.defaultInclusion ?? "included"} className={`${inputClass} bg-white`}>
+            <option value="included">Included extra</option>
+            <option value="optional">Optional service</option>
+          </select>
+        </label>
+        <label className="grid gap-1 text-sm font-medium text-slate-600">
+          Stable proposal key
+          <input name="offerKey" defaultValue={service?.offerKey ?? ""} placeholder="Generated from name when needed" className={inputClass} />
+        </label>
+        <label className="grid gap-1 text-sm font-medium text-slate-600">
+          Default price
+          <input name="defaultPrice" type="number" min={0} step="0.01" defaultValue={service?.defaultPrice ?? ""} className={inputClass} />
+        </label>
+        <label className="grid gap-1 text-sm font-medium text-slate-600">
+          Billing cadence
+          <select name="billingCadence" defaultValue={service?.billingCadence ?? "monthly"} className={`${inputClass} bg-white`}>
+            <option value="monthly">Monthly</option>
+            <option value="one-time">One time</option>
+            <option value="no-charge">No charge</option>
+          </select>
+        </label>
+        <label className="grid gap-1 text-sm font-medium text-slate-600">
+          Required ongoing platform
+          <select name="requiredTargetPlatform" defaultValue={service?.requiredTargetPlatform ?? ""} className={`${inputClass} bg-white`}>
+            <option value="">Any platform</option>
+            <option value="qbo">QuickBooks</option>
+            <option value="stessa">Stessa</option>
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-sm font-medium text-slate-600 md:col-span-2">
+          <input
+            type="checkbox"
+            name="requiresPlatformMigration"
+            value="1"
+            defaultChecked={service?.requiresPlatformMigration ?? false}
+            className="h-4 w-4 rounded border-slate-300"
+          />
+          Only applicable when this offer includes a platform migration
+        </label>
+        <label className="grid gap-1 text-sm font-medium text-slate-600 md:col-span-2">
+          Applicability explanation
+          <input
+            name="applicabilityNote"
+            defaultValue={service?.applicabilityNote ?? ""}
+            placeholder="Shown to staff as the reason this item is available"
+            className={inputClass}
+          />
         </label>
         <label className="grid gap-1 text-sm font-medium text-slate-600 md:col-span-2">
           Internal description

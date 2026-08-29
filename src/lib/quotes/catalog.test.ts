@@ -1,5 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { extraIsAvailableForBookSet, extraIsRealEstateSpecific, tagMarksRealEstate } from "./catalog";
+import {
+  extraIsAvailableForBookSet,
+  extraIsRealEstateSpecific,
+  proposalCatalogItemApplicability,
+  tagMarksRealEstate,
+  type ProposalOptionCatalogItem,
+} from "./catalog";
+
+const STESSA_MIGRATION: ProposalOptionCatalogItem = {
+  id: "service-stessa",
+  offerKey: "stessa-migration",
+  code: "OFFER-STESSA-MIGRATION",
+  name: "QuickBooks to Stessa Migration",
+  description: "Move the books to Stessa.",
+  defaultInclusion: "included",
+  defaultPrice: 0,
+  billingCadence: "one-time",
+  requiresPlatformMigration: true,
+  requiredTargetPlatform: "stessa",
+  applicabilityNote: "Shown because this offer moves the books to Stessa.",
+  realEstateSpecific: true,
+};
 
 describe("real-estate catalog markers", () => {
   it("recognizes the Real estate service tag", () => {
@@ -33,5 +54,48 @@ describe("real-estate catalog markers", () => {
         "other-business",
       ),
     ).toBe(true);
+  });
+});
+
+describe("proposal catalog applicability", () => {
+  it("explains why the Stessa migration is available", () => {
+    expect(
+      proposalCatalogItemApplicability(STESSA_MIGRATION, {
+        bookSetType: "real-estate-only",
+        ongoingBookkeepingPlatform: "stessa",
+        platformMigrationEnabled: true,
+      }),
+    ).toEqual({
+      applicable: true,
+      reason: "Shown because this offer moves the books to Stessa.",
+    });
+  });
+
+  it("requires both a migration and the configured target platform", () => {
+    expect(
+      proposalCatalogItemApplicability(STESSA_MIGRATION, {
+        bookSetType: "real-estate-only",
+        ongoingBookkeepingPlatform: "stessa",
+        platformMigrationEnabled: false,
+      }),
+    ).toEqual({ applicable: false, reason: "Requires a platform migration in this offer." });
+
+    expect(
+      proposalCatalogItemApplicability(STESSA_MIGRATION, {
+        bookSetType: "real-estate-only",
+        ongoingBookkeepingPlatform: "qbo",
+        platformMigrationEnabled: true,
+      }).applicable,
+    ).toBe(false);
+  });
+
+  it("does not offer real-estate-only items to other-business book sets", () => {
+    expect(
+      proposalCatalogItemApplicability(STESSA_MIGRATION, {
+        bookSetType: "other-business",
+        ongoingBookkeepingPlatform: "stessa",
+        platformMigrationEnabled: true,
+      }).applicable,
+    ).toBe(false);
   });
 });

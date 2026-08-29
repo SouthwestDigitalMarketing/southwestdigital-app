@@ -18,6 +18,49 @@ export type CatalogRealEstateMarker = {
   realEstateSpecific: boolean;
 };
 
+export type ProposalOptionCatalogItem = CatalogRealEstateMarker & {
+  offerKey: string;
+  description: string;
+  defaultInclusion: "optional" | "included";
+  defaultPrice: number;
+  billingCadence: string;
+  requiresPlatformMigration: boolean;
+  requiredTargetPlatform: string | null;
+  applicabilityNote: string | null;
+};
+
+export type ProposalApplicabilityContext = {
+  bookSetType: string;
+  ongoingBookkeepingPlatform: string;
+  platformMigrationEnabled: boolean;
+};
+
+export function proposalCatalogItemApplicability(
+  item: ProposalOptionCatalogItem,
+  context: ProposalApplicabilityContext,
+) {
+  if (item.realEstateSpecific && context.bookSetType === "other-business") {
+    return { applicable: false, reason: "Only available for real-estate book sets." };
+  }
+  if (item.requiresPlatformMigration && !context.platformMigrationEnabled) {
+    return { applicable: false, reason: "Requires a platform migration in this offer." };
+  }
+  if (
+    item.requiredTargetPlatform &&
+    item.requiredTargetPlatform !== context.ongoingBookkeepingPlatform
+  ) {
+    const platform = item.requiredTargetPlatform === "qbo" ? "QuickBooks" : "Stessa";
+    return { applicable: false, reason: `Requires ${platform} as the ongoing platform.` };
+  }
+
+  return {
+    applicable: true,
+    reason:
+      item.applicabilityNote ??
+      (item.realEstateSpecific ? "Available because this offer includes real-estate books." : "Available for this offer."),
+  };
+}
+
 const FALLBACK_REAL_ESTATE_EXTRA_IDS = new Set([
   "property-reporting-setup",
   "real-estate-chart-of-accounts",

@@ -9,6 +9,7 @@ import { applyTagPipelineAutomation } from "@/lib/contacts/automation";
 import { slugifyTagKey } from "@/lib/contacts/tags";
 import { parseSubmittedPhone } from "@/lib/phone";
 import { parseEmailOrThrow } from "@/lib/email";
+import { tagMarksRealEstate } from "@/lib/quotes/catalog";
 
 function clean(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
@@ -33,8 +34,12 @@ function ids(formData: FormData, key: string) {
 
 function revalidateTagPaths(contactId?: string) {
   revalidatePath("/contacts");
+  revalidatePath("/tags");
   revalidatePath("/settings");
   revalidatePath("/settings/tags");
+  revalidatePath("/services");
+  revalidatePath("/offers/included");
+  revalidatePath("/offers/add-ons");
   if (contactId) revalidatePath(`/contacts/${contactId}`);
 }
 
@@ -336,12 +341,25 @@ export async function createContactTagAction(formData: FormData) {
   if (!label) throw new Error("Tag name is required.");
 
   const kind = parseKind(clean(formData.get("kind")));
-  let key = slugifyTagKey(label);
-  const collision = await prisma.contactTag.findUnique({
-    where: { brandId_key: { brandId: brand.id, key } },
-    select: { id: true },
+  const key = slugifyTagKey(label);
+  const collision = await prisma.contactTag.findFirst({
+    where: {
+      brandId: brand.id,
+      OR: [
+        { key },
+        { label: { equals: label, mode: "insensitive" } },
+      ],
+    },
+    select: { label: true },
   });
-  if (collision) key = `${key}-${Math.random().toString(36).slice(2, 6)}`;
+  if (collision) throw new Error(`A similar tag already exists: “${collision.label}”.`);
+  if (tagMarksRealEstate({ key, label })) {
+    const canonical = await prisma.contactTag.findFirst({
+      where: { brandId: brand.id, key: "real-estate" },
+      select: { label: true },
+    });
+    if (canonical) throw new Error(`Use the existing “${canonical.label}” tag for real-estate services.`);
+  }
 
   const tag = await prisma.contactTag.create({
     data: {
@@ -387,6 +405,23 @@ export async function updateContactTagAction(formData: FormData) {
     select: { id: true },
   });
   if (!existing) throw new Error("Tag not found.");
+  const duplicate = await prisma.contactTag.findFirst({
+    where: {
+      brandId: brand.id,
+      id: { not: tagId },
+      label: { equals: label, mode: "insensitive" },
+    },
+    select: { label: true },
+  });
+  if (duplicate) throw new Error(`A similar tag already exists: “${duplicate.label}”.`);
+  const nextKey = slugifyTagKey(label);
+  if (tagMarksRealEstate({ key: nextKey, label })) {
+    const canonical = await prisma.contactTag.findFirst({
+      where: { brandId: brand.id, key: "real-estate", id: { not: tagId } },
+      select: { label: true },
+    });
+    if (canonical) throw new Error(`Use the existing “${canonical.label}” tag for real-estate services.`);
+  }
 
   await prisma.contactTag.update({
     where: { id: tagId },

@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
+import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
 import { requireQuoteStaff } from "@/lib/quotes/access";
 import ProposalCreationWorkspaceDemo from "../builder/ProposalCreationWorkspaceDemo";
 import type { IncludedCatalogService } from "../builder/IncludedServicesBuilder";
@@ -42,11 +43,16 @@ const FALLBACK_CATALOG_SERVICES: IncludedCatalogService[] = [
 
 export default async function QuotesIncludedPage() {
   const { brand } = await requireQuoteStaff();
+  const { proposalCatalog } = await getSchemaCapabilities();
 
   let catalogServices = FALLBACK_CATALOG_SERVICES;
   try {
     const services = await prisma.catalogService.findMany({
-      where: { brandId: brand.id, active: true },
+      where: {
+        brandId: brand.id,
+        active: true,
+        ...(proposalCatalog ? { offerSection: "included-services" } : {}),
+      },
       orderBy: [{ priority: "asc" }, { category: "asc" }, { name: "asc" }],
       select: {
         id: true,

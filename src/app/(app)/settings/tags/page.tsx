@@ -10,7 +10,7 @@ export default async function SettingsTagsPage() {
 
   const [tags, pipelines] = await Promise.all([
     prisma.contactTag.findMany({
-      where: { brandId: brand.id },
+      where: { brandId: brand.id, isActive: true },
       orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
       select: {
         id: true,

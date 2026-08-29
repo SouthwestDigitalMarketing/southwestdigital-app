@@ -62,8 +62,28 @@ export function TagsCatalog({
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [managingServicesTagId, setManagingServicesTagId] = useState<string | null>(null);
+  const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
   const [pending, startTransition] = useTransition();
   const managingServicesTag = tags.find((tag) => tag.id === managingServicesTagId) ?? null;
+  const savedServiceIds = managingServicesTag
+    ? services.filter((service) => service.tagIds.includes(managingServicesTag.id)).map((service) => service.id)
+    : [];
+  const serviceAssignmentsDirty =
+    selectedServiceIds.length !== savedServiceIds.length ||
+    selectedServiceIds.some((id) => !savedServiceIds.includes(id));
+
+  function openServiceManager(tagId: string) {
+    setError(null);
+    setSelectedServiceIds(
+      services.filter((service) => service.tagIds.includes(tagId)).map((service) => service.id),
+    );
+    setManagingServicesTagId(tagId);
+  }
+
+  function closeServiceManager() {
+    if (serviceAssignmentsDirty && !confirm("Discard unsaved service assignments?")) return;
+    setManagingServicesTagId(null);
+  }
 
   useEffect(() => {
     if (!managingServicesTagId) return;
@@ -72,7 +92,9 @@ export function TagsCatalog({
     document.body.style.overflow = "hidden";
 
     function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setManagingServicesTagId(null);
+      if (event.key !== "Escape") return;
+      if (serviceAssignmentsDirty && !confirm("Discard unsaved service assignments?")) return;
+      setManagingServicesTagId(null);
     }
 
     document.addEventListener("keydown", closeOnEscape);
@@ -80,7 +102,7 @@ export function TagsCatalog({
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", closeOnEscape);
     };
-  }, [managingServicesTagId]);
+  }, [managingServicesTagId, serviceAssignmentsDirty]);
 
   function run(action: () => Promise<void>) {
     setError(null);
@@ -211,7 +233,7 @@ export function TagsCatalog({
                             type="button"
                             disabled={pending}
                             aria-expanded={managingServicesTagId === tag.id}
-                            onClick={() => setManagingServicesTagId((current) => (current === tag.id ? null : tag.id))}
+                            onClick={() => openServiceManager(tag.id)}
                             className={ghost}
                           >
                             Services ({tag.serviceCount})
@@ -291,7 +313,7 @@ export function TagsCatalog({
                   autoFocus
                   aria-label="Close service assignments"
                   className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                  onClick={() => setManagingServicesTagId(null)}
+                  onClick={closeServiceManager}
                 >
                   Close
                 </button>
@@ -307,7 +329,9 @@ export function TagsCatalog({
                 ) : null}
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <p className="text-sm font-medium text-slate-700">Service catalogue</p>
-                  <span className="text-sm text-slate-500">{services.length} services</span>
+                  <span className="text-sm text-slate-500">
+                    {selectedServiceIds.length} selected · {services.length} services
+                  </span>
                 </div>
 
                 {services.length === 0 ? (
@@ -325,7 +349,14 @@ export function TagsCatalog({
                           type="checkbox"
                           name="serviceIds"
                           value={service.id}
-                          defaultChecked={service.tagIds.includes(managingServicesTag.id)}
+                          checked={selectedServiceIds.includes(service.id)}
+                          onChange={(event) => {
+                            setSelectedServiceIds((current) =>
+                              event.target.checked
+                                ? [...current, service.id]
+                                : current.filter((id) => id !== service.id),
+                            );
+                          }}
                           className="h-4 w-4 shrink-0 rounded border-slate-300"
                         />
                         <span className="min-w-0">
@@ -345,14 +376,14 @@ export function TagsCatalog({
 
             <footer className="shrink-0 border-t border-slate-200 bg-white px-5 py-4 shadow-[0_-8px_24px_rgba(15,23,42,0.06)] sm:px-8">
               <div className="mx-auto flex max-w-7xl flex-wrap gap-2">
-                <button type="submit" disabled={pending} className={primary}>
-                  {pending ? "Saving…" : "Save service assignments"}
+                <button type="submit" disabled={pending || !serviceAssignmentsDirty} className={primary}>
+                  {pending ? "Saving…" : serviceAssignmentsDirty ? "Save service assignments" : "Assignments saved"}
                 </button>
                 <button
                   type="button"
                   disabled={pending}
                   className={ghost}
-                  onClick={() => setManagingServicesTagId(null)}
+                  onClick={closeServiceManager}
                 >
                   Cancel
                 </button>

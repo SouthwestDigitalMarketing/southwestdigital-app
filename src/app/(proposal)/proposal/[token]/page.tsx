@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
+import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
 import { resolvePublicBrand } from "@/lib/brands/resolve";
 import OfferProposalPreview from "@/app/(app)/offers/builder/OfferProposalPreview";
 import type { AssessmentState } from "@/app/(app)/offers/builder/ProposalCreationWorkspaceDemo";
@@ -15,11 +16,24 @@ export default async function PublicProposalPage({ params }: { params: Promise<{
   const hostname = (await headers()).get("x-hostname");
   const brand = await resolvePublicBrand(hostname);
   if (!brand) notFound();
+  const { quoteRevisions } = await getSchemaCapabilities();
   const quote = await prisma.quote.findFirst({
     where: { brandId: brand.id, publicToken: token, publishedAt: { not: null } },
-    select: { publishedSnapshotJson: true },
+    select: { id: true, publishedSnapshotJson: true },
   });
-  const snapshot = isRecord(quote?.publishedSnapshotJson) ? quote.publishedSnapshotJson : null;
+  const revision = quote && quoteRevisions
+    ? await prisma.quoteRevision.findFirst({
+        where: { brandId: brand.id, quoteId: quote.id },
+        orderBy: { version: "desc" },
+        select: { snapshotJson: true },
+      })
+    : null;
+  const revisionSnapshot = revision?.snapshotJson;
+  const snapshot = isRecord(revisionSnapshot)
+    ? revisionSnapshot
+    : isRecord(quote?.publishedSnapshotJson)
+      ? quote.publishedSnapshotJson
+      : null;
   if (!snapshot) notFound();
 
   return (

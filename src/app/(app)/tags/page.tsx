@@ -9,7 +9,7 @@ export default async function TagsPage() {
 
   const [tags, pipelines, services] = await Promise.all([
     prisma.contactTag.findMany({
-      where: { brandId: brand.id },
+      where: { brandId: brand.id, isActive: true },
       orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
       select: {
         id: true,
@@ -36,7 +36,7 @@ export default async function TagsPage() {
         name: true,
         code: true,
         active: true,
-        tags: { select: { tagId: true } },
+        tags: { where: { tag: { isActive: true } }, select: { tagId: true } },
       },
     }),
   ]);

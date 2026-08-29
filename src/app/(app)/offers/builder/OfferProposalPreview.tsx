@@ -422,6 +422,7 @@ function buildOptions(assessment: AssessmentState): Record<OptionId, ProposalOpt
     } as Record<string, boolean>)[bonusId] ?? false;
     const bonuses = getProposalBonuses(assessment)
       .filter((bonus) => !bonus.archived)
+      .filter((bonus) => bonus.applicable !== false)
       .filter((bonus) => {
         const realEstate = assessment.bookSetType === "real-estate-only" || assessment.bookSetType === "mixed-books";
         if (bonus.id === "stessa-migration") return assessment.platformMigrationEnabled && assessment.ongoingBookkeepingPlatform === "stessa";
@@ -771,7 +772,7 @@ export default function OfferProposalPreview({
   const cleanupIsSelected = (optionId: OptionId, periodKey: string) => cleanupSelections[cleanupKey(optionId, periodKey)] !== false;
 
   const additionalOptionRows = getProposalAdditionalOptions(assessment)
-    .filter((option) => option.showInProposal && !option.archived && option.name.trim())
+    .filter((option) => option.applicable !== false && option.showInProposal && !option.archived && option.name.trim())
     .map((option): ServiceRow => ({
       id: option.id,
       serviceName: option.name,

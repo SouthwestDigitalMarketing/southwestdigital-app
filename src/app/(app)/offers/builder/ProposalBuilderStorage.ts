@@ -27,7 +27,7 @@ export function readProposalBuilderLocalState(engagementId?: string | null) {
     : scopedProposalStorageKey(CONTACT_INFO_STORAGE_KEY, engagementId);
 
   return {
-    assessment: parse(scopedProposalStorageKey(ASSESSMENT_STORAGE_KEY, engagementId)),
+    assessment: parse(scopedProposalStorageKey(ASSESSMENT_STORAGE_KEY, engagementId ?? contactsKey)),
     contactInfo: parse(contactInfoKey),
   };
 }

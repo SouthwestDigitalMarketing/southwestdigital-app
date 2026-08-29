@@ -1,7 +1,7 @@
 "use client";
 
 import { Archive, ArchiveRestore, Check, ChevronDown, ChevronUp, Pencil, Plus, Trash2, X } from "lucide-react";
-import { useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import ProposalAppDemoHeader from "./ProposalAppDemoHeader";
 import {
   getOptionsCatalogOrder,
@@ -12,7 +12,12 @@ import {
   type ProposalAdditionalOption,
   type ProposalBonus,
 } from "./ProposalCreationWorkspaceDemo";
-import { extraIsAvailableForBookSet, extraIsRealEstateSpecific, type CatalogRealEstateMarker } from "@/lib/quotes/catalog";
+import {
+  extraIsAvailableForBookSet,
+  extraIsRealEstateSpecific,
+  proposalCatalogItemApplicability,
+  type ProposalOptionCatalogItem,
+} from "@/lib/quotes/catalog";
 
 const PACKAGES: Array<{ id: PackageId; label: string }> = [
   { id: "grow", label: "Grow" },
@@ -34,30 +39,60 @@ type CatalogRow = {
   kind: CatalogKind;
   option?: ProposalAdditionalOption;
   bonus?: ProposalBonus;
+  applicabilityReason?: string;
 };
 
-export default function ProposalAddOnsDemo({ catalog: initialCatalog = [] }: { catalog?: CatalogRealEstateMarker[] }) {
-  const { assessment, updateAssessment } = useProposalAssessmentDemoState();
+export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: ProposalOptionCatalogItem[] }) {
+  const { assessment, setAssessment, storageReady, updateAssessment } = useProposalAssessmentDemoState();
   const [editingIds, setEditingIds] = useState<string[]>([]);
-  const catalog = initialCatalog;
-  const additionalOptions = getProposalAdditionalOptions(assessment);
-  const bonuses = getProposalBonuses(assessment);
-  const catalogOrder = getOptionsCatalogOrder(assessment);
+  const additionalOptions = getProposalAdditionalOptions(assessment, catalog);
+  const bonuses = getProposalBonuses(assessment, catalog);
+  const catalogOrder = getOptionsCatalogOrder(assessment, catalog);
+  const catalogByKey = new Map(catalog.map((item) => [item.offerKey, item]));
   const optionById = new Map(additionalOptions.map((item) => [item.id, item]));
   const bonusById = new Map(bonuses.map((item) => [item.id, item]));
   const rows = catalogOrder.flatMap<CatalogRow>((id) => {
     const option = optionById.get(id);
-    if (option) return [{ id, name: option.name, description: option.description, archived: option.archived, kind: "optional", option }];
+    const catalogItem = catalogByKey.get(id);
+    const applicabilityReason = catalogItem
+      ? proposalCatalogItemApplicability(catalogItem, assessment).reason
+      : undefined;
+    if (option) return [{ id, name: option.name, description: option.description, archived: option.archived, kind: "optional", option, applicabilityReason }];
     const bonus = bonusById.get(id);
-    if (bonus) return [{ id, name: bonus.name, description: bonus.description, archived: bonus.archived, kind: "included", bonus }];
+    if (bonus) return [{ id, name: bonus.name, description: bonus.description, archived: bonus.archived, kind: "included", bonus, applicabilityReason }];
     return [];
   });
   const eligibleRows = rows.filter((row) => {
+    const catalogItem = catalogByKey.get(row.id);
+    if (catalogItem) return proposalCatalogItemApplicability(catalogItem, assessment).applicable;
     const item = row.option ?? row.bonus;
     return !item || extraIsAvailableForBookSet(item, catalog, assessment.bookSetType);
   });
   const visibleRows = eligibleRows.filter((row) => !row.archived);
   const archivedRows = eligibleRows.filter((row) => row.archived);
+
+  useEffect(() => {
+    if (!storageReady || catalog.length === 0) return;
+    setAssessment((current) => {
+      const additionalOptions = getProposalAdditionalOptions(current, catalog);
+      const bonuses = getProposalBonuses(current, catalog);
+      const next = {
+        ...current,
+        additionalOptions,
+        bonuses,
+      };
+      const optionsCatalogOrder = getOptionsCatalogOrder(next, catalog);
+      if (
+        current.additionalOptions.length > 0 &&
+        current.bonuses.length > 0 &&
+        current.optionsCatalogOrder.length === optionsCatalogOrder.length &&
+        current.optionsCatalogOrder.every((id, index) => id === optionsCatalogOrder[index])
+      ) {
+        return current;
+      }
+      return { ...next, optionsCatalogOrder };
+    });
+  }, [catalog, setAssessment, storageReady]);
 
   function persistOrder(order: string[]) {
     updateAssessment("optionsCatalogOrder", order);
@@ -153,6 +188,8 @@ export default function ProposalAddOnsDemo({ catalog: initialCatalog = [] }: { c
   }
 
   function isBonusApplicable(bonus: ProposalBonus) {
+    const catalogItem = catalogByKey.get(bonus.id);
+    if (catalogItem) return proposalCatalogItemApplicability(catalogItem, assessment).applicable;
     const realEstate = assessment.bookSetType === "real-estate-only" || assessment.bookSetType === "mixed-books";
     if (bonus.id === "stessa-migration") return assessment.platformMigrationEnabled && assessment.ongoingBookkeepingPlatform === "stessa";
     if (!extraIsRealEstateSpecific(bonus, catalog)) return true;
@@ -209,12 +246,12 @@ export default function ProposalAddOnsDemo({ catalog: initialCatalog = [] }: { c
               <table className="min-w-[1180px] w-full border-collapse">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50">
-                    <Heading className="w-16"><span className="sr-only">Reorder</span></Heading>
+                    <Heading className="w-20"><span className="sr-only">Reorder</span></Heading>
+                    <Heading className="w-20 text-center">Include</Heading>
                     <Heading>Service</Heading>
                     <Heading>Description</Heading>
                     <Heading className="whitespace-nowrap">Offer As</Heading>
                     <Heading className="text-center">Price / Mo</Heading>
-                    <Heading className="text-center">Include</Heading>
                     {PACKAGES.map(({ id, label }) => (
                       <Heading key={id} className="w-20 text-center">{label}</Heading>
                     ))}
@@ -228,9 +265,10 @@ export default function ProposalAddOnsDemo({ catalog: initialCatalog = [] }: { c
                     const bonus = row.bonus;
                     const applicable = bonus ? isBonusApplicable(bonus) : false;
                     const selected = bonus ? selectedBonusPackages(bonus) : [];
+                    const isRowIncluded = row.kind !== "optional" || Boolean(option?.showInProposal);
                     return (
-                      <tr key={row.id} className={rowClass(index)}>
-                        <td className="w-16 px-2 py-4 text-center align-middle">
+                      <tr key={row.id} className={rowClass(isRowIncluded)}>
+                        <td className="w-20 px-2 py-4 text-center align-middle">
                           <MoveButtons
                             label={row.name || (row.kind === "optional" ? "optional service" : "included extra")}
                             disableUp={index === 0}
@@ -239,7 +277,23 @@ export default function ProposalAddOnsDemo({ catalog: initialCatalog = [] }: { c
                             onMoveDown={() => moveRow(row.id, 1)}
                           />
                         </td>
-                        <EditableCells editing={isEditing} item={row} onChange={(changes) => updateRow(row, changes)} />
+                        <td className="proposal-options-include-cell w-20 px-3 py-4 text-center align-middle">
+                          {row.kind === "optional" && option ? (
+                            <Toggle
+                              checked={option.showInProposal}
+                              label={`Show ${row.name || "optional service"} in proposal`}
+                              onToggle={() => updateOption(row.id, { showInProposal: !option.showInProposal })}
+                            />
+                          ) : (
+                            <span className="text-sm text-slate-300">—</span>
+                          )}
+                        </td>
+                        <EditableCells
+                          editing={isEditing}
+                          item={row}
+                          applicabilityReason={row.applicabilityReason}
+                          onChange={(changes) => updateRow(row, changes)}
+                        />
                         <td className="w-0 whitespace-nowrap px-3 py-4 align-middle">
                           <KindSelect
                             name={row.name || "item"}
@@ -265,17 +319,6 @@ export default function ProposalAddOnsDemo({ catalog: initialCatalog = [] }: { c
                             ) : (
                               <p className="text-sm font-medium tabular-nums text-slate-900">${option.monthlyPrice.toLocaleString("en-US")}</p>
                             )
-                          ) : (
-                            <span className="text-sm text-slate-300">—</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-4 text-center align-middle">
-                          {row.kind === "optional" && option ? (
-                            <Toggle
-                              checked={option.showInProposal}
-                              label={`Show ${row.name || "optional service"} in proposal`}
-                              onToggle={() => updateOption(row.id, { showInProposal: !option.showInProposal })}
-                            />
                           ) : (
                             <span className="text-sm text-slate-300">—</span>
                           )}
@@ -381,10 +424,12 @@ function Heading({ children, className = "" }: { children: ReactNode; className?
 function EditableCells({
   editing,
   item,
+  applicabilityReason,
   onChange,
 }: {
   editing: boolean;
   item: { name: string; description: string };
+  applicabilityReason?: string;
   onChange: (changes: { name?: string; description?: string }) => void;
 }) {
   return (
@@ -411,7 +456,12 @@ function EditableCells({
             className="w-full resize-y rounded-md border border-slate-300 bg-white px-2.5 py-1.5 leading-5 text-slate-700 outline-none focus:border-brandnavy"
           />
         ) : (
-          <p className="leading-5 text-slate-500">{item.description || "No description"}</p>
+          <div>
+            <p className="leading-5 text-slate-500">{item.description || "No description"}</p>
+            {applicabilityReason ? (
+              <p className="mt-1 text-sm font-medium text-slate-400">Why shown: {applicabilityReason}</p>
+            ) : null}
+          </div>
         )}
       </td>
     </>
@@ -432,18 +482,18 @@ function MoveButtons({
   onMoveDown: () => void;
 }) {
   const buttonClass = (disabled: boolean) =>
-    `grid h-6 w-6 place-items-center rounded-md border transition ${
+    `grid h-8 w-8 place-items-center rounded-md border-0 bg-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brandnavy focus-visible:ring-offset-1 ${
       disabled
-        ? "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-300"
-        : "cursor-pointer border-slate-300 bg-white text-slate-500 hover:border-slate-500 hover:bg-slate-100 hover:text-slate-900"
+        ? "cursor-not-allowed text-slate-300"
+        : "cursor-pointer text-slate-600 hover:bg-slate-100 hover:text-slate-950"
     }`;
   return (
     <div className="inline-flex items-center gap-0.5">
       <button type="button" aria-label={`Move ${label} up`} disabled={disableUp} onClick={onMoveUp} className={buttonClass(disableUp)}>
-        <ChevronUp className="h-3.5 w-3.5" />
+        <ChevronUp className="h-5 w-5" strokeWidth={2.75} />
       </button>
       <button type="button" aria-label={`Move ${label} down`} disabled={disableDown} onClick={onMoveDown} className={buttonClass(disableDown)}>
-        <ChevronDown className="h-3.5 w-3.5" />
+        <ChevronDown className="h-5 w-5" strokeWidth={2.75} />
       </button>
     </div>
   );
@@ -535,8 +585,10 @@ function checkboxClass(checked: boolean) {
   }`;
 }
 
-function rowClass(index: number) {
-  return `border-b border-slate-200 last:border-0 [&>td]:!py-3 ${index % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`;
+function rowClass(isIncluded: boolean) {
+  const backgroundClass = isIncluded ? "bg-white" : "proposal-options-row-not-included bg-slate-100";
+
+  return `border-b border-slate-200 transition-colors last:border-0 [&>td]:!py-3 ${backgroundClass}`;
 }
 
 function moveOrderId(order: string[], id: string, direction: -1 | 1, visibleIds: string[]) {

@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
 import { tagMarksRealEstate } from "@/lib/quotes/catalog";
+import { slugifyTagKey } from "@/lib/contacts/tags";
+import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
 
 function clean(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
@@ -14,6 +16,13 @@ function parsePriority(raw: string) {
   const parsed = Number(raw);
   if (!Number.isFinite(parsed)) throw new Error("Priority must be a number.");
   return Math.max(0, Math.round(parsed));
+}
+
+function parseOptionalPrice(raw: string) {
+  if (!raw) return null;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) throw new Error("Default price must be zero or greater.");
+  return parsed;
 }
 
 function revalidateServicePaths() {
@@ -38,7 +47,21 @@ async function readServiceFields(formData: FormData, brandId: string) {
   const cardLabel = clean(formData.get("cardLabel")) || null;
   const clientBenefit = clean(formData.get("clientBenefit")) || null;
   const internalDescription = clean(formData.get("internalDescription")) || null;
-  const defaultInclusion = clean(formData.get("defaultInclusion")) || null;
+  const rawDefaultInclusion = clean(formData.get("defaultInclusion"));
+  const defaultInclusion = rawDefaultInclusion === "optional" || rawDefaultInclusion === "included" ? rawDefaultInclusion : null;
+  const offerSection = clean(formData.get("offerSection")) === "options" ? "options" : "included-services";
+  const offerKey = offerSection === "options"
+    ? slugifyTagKey(clean(formData.get("offerKey")) || code || name)
+    : null;
+  const defaultPrice = parseOptionalPrice(clean(formData.get("defaultPrice")));
+  const rawBillingCadence = clean(formData.get("billingCadence"));
+  const billingCadence = rawBillingCadence === "one-time" || rawBillingCadence === "no-charge" ? rawBillingCadence : "monthly";
+  const requiresPlatformMigration = clean(formData.get("requiresPlatformMigration")) === "1";
+  const rawRequiredTargetPlatform = clean(formData.get("requiredTargetPlatform"));
+  const requiredTargetPlatform = rawRequiredTargetPlatform === "qbo" || rawRequiredTargetPlatform === "stessa"
+    ? rawRequiredTargetPlatform
+    : null;
+  const applicabilityNote = clean(formData.get("applicabilityNote")) || null;
   const priority = parsePriority(clean(formData.get("priority")));
   const tagIds = [...new Set(formData.getAll("tagIds").filter((value): value is string => typeof value === "string" && value.trim().length > 0))];
 
@@ -66,10 +89,37 @@ async function readServiceFields(formData: FormData, brandId: string) {
       clientBenefit,
       internalDescription,
       defaultInclusion,
+      offerKey,
+      offerSection,
+      defaultPrice,
+      billingCadence,
+      requiresPlatformMigration,
+      requiredTargetPlatform,
+      applicabilityNote,
       realEstateSpecific: tags.some((tag) => tagMarksRealEstate(tag)),
       priority,
     },
     tagIds: tags.map((tag) => tag.id),
+  };
+}
+
+function fieldsForAvailableSchema(
+  fields: Awaited<ReturnType<typeof readServiceFields>>["fields"],
+  proposalCatalog: boolean,
+) {
+  if (proposalCatalog) return fields;
+  return {
+    name: fields.name,
+    category: fields.category,
+    service: fields.service,
+    tagId: fields.tagId,
+    code: fields.code,
+    cardLabel: fields.cardLabel,
+    clientBenefit: fields.clientBenefit,
+    internalDescription: fields.internalDescription,
+    defaultInclusion: fields.defaultInclusion,
+    realEstateSpecific: fields.realEstateSpecific,
+    priority: fields.priority,
   };
 }
 
@@ -84,6 +134,7 @@ export async function listCatalogRealEstateMarkersAction() {
 export async function createCatalogServiceAction(formData: FormData) {
   const { brand } = await requireStaffBrandOrThrow();
   const { fields, tagIds } = await readServiceFields(formData, brand.id);
+  const { proposalCatalog } = await getSchemaCapabilities();
 
   if (fields.code) {
     const existing = await prisma.catalogService.findFirst({
@@ -92,11 +143,18 @@ export async function createCatalogServiceAction(formData: FormData) {
     });
     if (existing) throw new Error("A service with that code already exists.");
   }
+  if (proposalCatalog && fields.offerKey) {
+    const existing = await prisma.catalogService.findFirst({
+      where: { brandId: brand.id, offerKey: fields.offerKey },
+      select: { id: true },
+    });
+    if (existing) throw new Error("A proposal item with that key already exists.");
+  }
 
   await prisma.catalogService.create({
     data: {
       brandId: brand.id,
-      ...fields,
+      ...fieldsForAvailableSchema(fields, proposalCatalog),
       tags: {
         create: tagIds.map((tagId) => ({ brandId: brand.id, tagId })),
       },
@@ -111,6 +169,7 @@ export async function updateCatalogServiceAction(formData: FormData) {
   if (!id) throw new Error("Service id is required.");
   await serviceForBrand(id, brand.id);
   const { fields, tagIds } = await readServiceFields(formData, brand.id);
+  const { proposalCatalog } = await getSchemaCapabilities();
 
   if (fields.code) {
     const existing = await prisma.catalogService.findFirst({
@@ -119,10 +178,17 @@ export async function updateCatalogServiceAction(formData: FormData) {
     });
     if (existing) throw new Error("A service with that code already exists.");
   }
+  if (proposalCatalog && fields.offerKey) {
+    const existing = await prisma.catalogService.findFirst({
+      where: { brandId: brand.id, offerKey: fields.offerKey, NOT: { id } },
+      select: { id: true },
+    });
+    if (existing) throw new Error("A proposal item with that key already exists.");
+  }
 
   await prisma.$transaction([
     prisma.catalogServiceTag.deleteMany({ where: { serviceId: id, brandId: brand.id } }),
-    prisma.catalogService.update({ where: { id }, data: fields }),
+    prisma.catalogService.update({ where: { id }, data: fieldsForAvailableSchema(fields, proposalCatalog) }),
     ...tagIds.map((tagId) =>
       prisma.catalogServiceTag.create({
         data: { brandId: brand.id, serviceId: id, tagId },

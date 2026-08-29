@@ -40,6 +40,15 @@
   vertical-align: middle !important;
 }
 
+.proposal-options-editor .proposal-options-row-not-included > td {
+  opacity: 0.55;
+  transition: opacity 150ms ease;
+}
+
+.proposal-options-editor .proposal-options-row-not-included > .proposal-options-include-cell {
+  opacity: 1;
+}
+
 .proposal-options-editor > div + section {
   margin-top: 0.5rem !important;
 }

@@ -28,6 +28,7 @@ export default function ProposalAppDemoHeader({
   };
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [publishStatus, setPublishStatus] = useState<"idle" | "publishing" | "published" | "error">("idle");
+  const [publishedVersion, setPublishedVersion] = useState<number | null>(null);
   const [isExitDialogOpen, setIsExitDialogOpen] = useState(false);
   const savedSnapshotRef = useRef<string | null>(null);
 
@@ -117,6 +118,7 @@ export default function ProposalAppDemoHeader({
         assessment: localState.assessment,
       });
       window.localStorage.setItem(`proposal-public-path:${offerId}`, result.publicPath);
+      setPublishedVersion(result.version);
       savedSnapshotRef.current = getBuilderSnapshot();
       setPublishStatus("published");
       window.setTimeout(() => setPublishStatus("idle"), 2500);
@@ -202,7 +204,7 @@ export default function ProposalAppDemoHeader({
             aria-live="polite"
           >
             {publishStatus === "published" ? <Check className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
-            {publishStatus === "publishing" ? "Publishing…" : publishStatus === "published" ? "Published" : publishStatus === "error" ? "Publish failed" : "Publish"}
+            {publishStatus === "publishing" ? "Publishing…" : publishStatus === "published" ? `Published v${publishedVersion}` : publishStatus === "error" ? "Publish failed" : "Publish"}
           </button>
         </div>
 

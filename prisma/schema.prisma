@@ -566,6 +566,7 @@ model Brand {
   dataExports            BrandDataExport[]
   catalogServices        CatalogService[]
   catalogServiceTags     CatalogServiceTag[]
+  quoteRevisions         QuoteRevision[]
   createdAt              DateTime               @default(now())
   updatedAt              DateTime               @updatedAt
 
@@ -1363,21 +1364,21 @@ model ContactBrandLink {
 }
 
 model ContactTag {
-  id          String                 @id @default(cuid())
-  brandId     String
-  key         String
-  label       String
-  kind        ContactTagKind         @default(CUSTOM)
-  color       String?
-  isActive    Boolean                @default(true)
-  sortOrder   Int                    @default(100)
-  brand       Brand                  @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  contacts    ContactTagLink[]
-  automations          ContactTagAutomation[]
-  catalogServices      CatalogService[]
-  catalogServiceTags   CatalogServiceTag[]
-  createdAt            DateTime               @default(now())
-  updatedAt   DateTime               @updatedAt
+  id                 String                 @id @default(cuid())
+  brandId            String
+  key                String
+  label              String
+  kind               ContactTagKind         @default(CUSTOM)
+  color              String?
+  isActive           Boolean                @default(true)
+  sortOrder          Int                    @default(100)
+  brand              Brand                  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  contacts           ContactTagLink[]
+  automations        ContactTagAutomation[]
+  catalogServices    CatalogService[]
+  catalogServiceTags CatalogServiceTag[]
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
 
   @@unique([brandId, key])
   @@index([brandId, isActive, sortOrder])
@@ -2201,31 +2202,40 @@ model ProposalPackageFeature {
 }
 
 model CatalogService {
-  id                  String           @id @default(cuid())
-  brandId             String
-  code                String?
-  name                String
-  internalDescription String?          @map("description")
-  cardLabel           String?          @map("card_label")
-  clientBenefit       String?          @map("client_benefit")
-  service             String           @default("cleanup") @map("itemType")
-  category            String
-  priority            Int              @default(500)
-  defaultInclusion    String?          @map("default_inclusion")
-  estimatedHours      Decimal?         @db.Decimal(6, 2)
-  internalNotes       String?          @map("internal_notes")
-  active              Boolean          @default(true)
-  realEstateSpecific  Boolean          @default(false)
-  tagId               String?
-  brand               Brand            @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  tag                 ContactTag?      @relation(fields: [tagId], references: [id], onDelete: SetNull)
-  tags                CatalogServiceTag[]
-  packageServices     PackageService[]
-  createdAt           DateTime         @default(now())
-  updatedAt           DateTime         @updatedAt
+  id                        String              @id @default(cuid())
+  brandId                   String
+  code                      String?
+  name                      String
+  internalDescription       String?             @map("description")
+  cardLabel                 String?             @map("card_label")
+  clientBenefit             String?             @map("client_benefit")
+  service                   String              @default("cleanup") @map("itemType")
+  category                  String
+  priority                  Int                 @default(500)
+  defaultInclusion          String?             @map("default_inclusion")
+  offerKey                  String?             @map("offer_key")
+  offerSection              String              @default("included-services") @map("offer_section")
+  defaultPrice              Decimal?            @map("default_price") @db.Decimal(12, 2)
+  billingCadence            String              @default("monthly") @map("billing_cadence")
+  requiresPlatformMigration Boolean             @default(false) @map("requires_platform_migration")
+  requiredTargetPlatform    String?             @map("required_target_platform")
+  applicabilityNote         String?             @map("applicability_note")
+  estimatedHours            Decimal?            @db.Decimal(6, 2)
+  internalNotes             String?             @map("internal_notes")
+  active                    Boolean             @default(true)
+  realEstateSpecific        Boolean             @default(false)
+  tagId                     String?
+  brand                     Brand               @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  tag                       ContactTag?         @relation(fields: [tagId], references: [id], onDelete: SetNull)
+  tags                      CatalogServiceTag[]
+  packageServices           PackageService[]
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
 
   @@unique([brandId, code])
+  @@unique([brandId, offerKey])
   @@index([brandId, active, category])
+  @@index([brandId, offerSection, active, priority])
   @@index([brandId, realEstateSpecific])
   @@index([brandId, tagId])
   @@map("catalog_services")
@@ -2335,11 +2345,30 @@ model Quote {
   expiresAt             DateTime?
   client                QuoteClient     @relation(fields: [clientId], references: [id])
   lineItems             QuoteLineItem[]
+  revisions             QuoteRevision[]
 
   @@index([brandId, clientId, status])
   @@index([brandId, publishedAt])
   @@index([status, createdAt])
   @@map("quotes")
+}
+
+model QuoteRevision {
+  id           String    @id @default(cuid())
+  brandId      String
+  quoteId      String
+  version      Int
+  snapshotJson Json
+  publishedAt  DateTime  @default(now())
+  supersededAt DateTime?
+  createdAt    DateTime  @default(now())
+  brand        Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  quote        Quote     @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@unique([quoteId, version])
+  @@index([brandId, quoteId, version])
+  @@index([brandId, publishedAt])
+  @@map("quote_revisions")
 }
 
 model QuoteLineItem {

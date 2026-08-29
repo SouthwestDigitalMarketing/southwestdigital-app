@@ -1,62 +1,42 @@
-# Southwest Digital App — Proposal Builder Handoff
+# Coding-agent handoff
 
-## Current state
+## Current product issue
 
-The offer builder has been updated through the Add-ons/Bonuses workflow. Additional options and bonuses are now managed in condensed, editable tables with drag handles, reorder support, centered controls, archive/delete actions, and explicit edit modes. The proposal preview uses the same ordering as the builder.
+The Offers → Options step should be catalog-backed and visually clear about which rows are included. The current UI now dims unchecked optional rows, has no zebra striping, places Include before Service, and uses borderless but large/focusable up/down chevrons.
 
-The Add-ons page now:
+## Implemented in this branch
 
-- Uses “Additional options” and “Bonuses” sections.
-- Uses editable Service and Description columns.
-- Uses Include, Price / mo, and Actions columns with consistent alignment.
-- Supports adding, editing, reordering, archiving, restoring, and deleting rows.
-- Vertically centers row content and keeps controls compact.
-- Keeps a compact gap between an Add button and its table, with a larger gap between the two table sections.
+- Proposal option catalog fields and applicability rules were added to `CatalogService`.
+- The Options page reads catalog options when the database supports the new schema and falls back safely while the migration is pending.
+- “QuickBooks to Stessa Migration” is represented as a catalog option with real-estate, migration, and Stessa applicability rules.
+- Tag assignment editing is controlled, persistent, shows the saved count, warns before discarding changes, and rejects duplicate real-estate tags.
+- Published proposals use immutable numbered `QuoteRevision` snapshots. Catalog edits do not mutate an already-published snapshot; an intentional republish creates the next version.
+- A `schemaCapabilities` compatibility check allows the app to run against the current pre-migration database without Prisma P2022/P1012 runtime failures.
+- `<body suppressHydrationWarning>` handles the `cz-shortcut-listen` attribute injected by a browser extension.
 
-The builder header now has:
+## Important current database state
 
-- Save draft: writes the private working state to the draft Quote snapshot.
-- Publish changes: writes a separate published snapshot and creates a stable public proposal URL.
-- Exit: prompts when the builder has changed, with Continue editing, Exit without saving, and Save & exit.
+The connected database does **not** yet have `catalog_services.offer_key` or the other new catalog columns. It also has migration-history drift: the database contains `20260817205118_init`, while this repository has a different migration history. Do not run `prisma migrate deploy` blindly.
 
-## Publication boundary
+The current brand’s data was inspected read-only:
 
-Draft edits do not update the client-facing proposal. Publishing writes `publishedSnapshotJson`, `publishedAt`, and a random `publicToken` on `Quote`. The public route is `/proposal/[token]` and reads only the published snapshot. It is scoped to the active public Brand resolved from the request hostname.
+- canonical active tag `real-estate`: 0 service assignments
+- duplicate active tag `real-estate-bookeeper`: 10 service assignments
+- 29 existing catalog services
 
-The cover-letter page does not show a client link until the offer has been published. After publishing, it retrieves the stable public path from the server.
+The additive/data-reconciliation migration is staged at `prisma/migrations/20260829120000_catalog_options_and_quote_revisions/migration.sql`, but has not been applied. Before applying it, take a backup, rehearse on a restored copy, baseline/reconcile the divergent migration history, run the included reconciliation queries, and document rollback. The migration archives the duplicate tag rather than deleting it.
 
-## Database/deployment requirement
+## Known follow-up
 
-Apply `prisma/migrations/20260826000000_add_quote_publication_snapshot/migration.sql` to the deployed database before using Publish changes in Vercel. The schema adds:
+`Per-Property Class Tracking` is still hard-coded in `OfferProposalPreview.tsx` for Grow and Improve. The desired end state is to move it into catalog/package rules and make its visibility depend on the relevant real-estate applicability, instead of injecting it whenever the package is not Maintain.
 
-- `Quote.publishedSnapshotJson`
-- `Quote.publicToken`
-- `Quote.publishedAt`
-- publication indexes
+## Verification already run
 
-`prisma generate` hit a Windows query-engine rename/lock error in this workspace, but the Next production build and TypeScript check completed successfully.
+- `npm test`: 114 tests passed
+- `npm run typecheck`: passed
+- focused ESLint on changed files: passed
+- `npm exec dotenv -- -e .env.local -- prisma validate`: passed
+- `npm exec next -- build`: passed
+- authenticated local Offers → Options request returned HTTP 200 after the compatibility layer and Prisma regeneration
 
-## Validation
-
-- `npm.cmd run typecheck` passes.
-- `npm.cmd exec next build` passes, including `/proposal/[token]`.
-- Targeted lint passes except for the pre-existing React lint warning/error in `OfferProposalPreview.tsx` where `setAgreementLoading(true)` is called synchronously inside an effect (around line 496). Do not treat that as caused by the publication work.
-
-## Important existing architecture notes
-
-- The project uses Brand as the only tenant boundary; published proposal lookup is filtered by the active Brand.
-- Payment and agreement APIs currently use `engagementId`. The new Quote publication route is separate and currently renders the published proposal snapshot; wiring a newly published Quote directly to an Engagement/payment lifecycle may still be needed for production sending/signing.
-- The existing `/offers/preview` route remains the staff/browser preview. The client-facing published route is `/proposal/[token]`.
-- Do not expose provider secrets through `NEXT_PUBLIC_*` variables.
-
-## Likely next work
-
-1. Apply the new Prisma migration in the target Vercel database and deploy.
-2. Test the complete flow with a real draft: edit → Save draft → verify the public URL is unchanged → Publish changes → verify the public URL reflects the published snapshot.
-3. Confirm whether published Quote data should create/link an Engagement so the client can use the existing agreement, Stripe, and PayPal APIs from the public proposal.
-4. Decide whether to rename or consolidate the old `/offers/preview` staff preview versus the new public route.
-5. Clean up the existing `OfferProposalPreview` effect lint issue when convenient.
-
-## Recent UI requests completed
-
-Intro no longer shows the pricing calculator. Light-mode stepper states were inverted as requested. Add-on/bonus typography, tracking, header casing, checkbox sizing/cursors, handle borders/cursors, alignment, button spacing, row vertical alignment, and condensed layout were all adjusted in the builder files and `src/app/globals.css`.
+The dev server may be running on port 3000. The Vercel CLI is not installed in this environment.

@@ -6,6 +6,7 @@ import IncludedServicesBuilder from "./IncludedServicesBuilder";
 import ProposalAppCollapsibleSection from "./ProposalAppCollapsibleSection";
 import type { ProposalAppCollapsibleForceSignal } from "./ProposalAppCollapsibleSection";
 import type { IncludedCatalogService } from "./IncludedServicesBuilder";
+import type { ProposalOptionCatalogItem } from "@/lib/quotes/catalog";
 import ProposalAppDemoHeader from "./ProposalAppDemoHeader";
 import ProposalAppExpandAllControl from "./ProposalAppExpandAllControl";
 import PricingSnapshotSidebar from "./PricingSnapshotSidebar";
@@ -177,12 +178,16 @@ export type ProposalAdditionalOption = {
   monthlyPrice: number;
   showInProposal: boolean;
   archived: boolean;
+  applicable?: boolean;
+  applicabilityReason?: string;
 };
 export type ProposalBonus = {
   id: string;
   name: string;
   description: string;
   archived: boolean;
+  applicable?: boolean;
+  applicabilityReason?: string;
 };
 export type QboAccessStatus =
   | "not_requested"
@@ -495,8 +500,42 @@ export function getSalesTaxFilingPrice(assessment: AssessmentState) {
   return assessment.salesTaxFilingPriceOverride ?? 650;
 }
 
-export function getProposalAdditionalOptions(assessment: AssessmentState): ProposalAdditionalOption[] {
+function catalogOptionPrice(item: ProposalOptionCatalogItem, assessment: AssessmentState) {
+  if (item.offerKey === "advanced-receipt-management") return getAdvancedReceiptManagementPrice(assessment);
+  if (item.offerKey === "project-tracking") return getProjectTrackingPrice(assessment);
+  if (item.offerKey === "budget-reporting") return getBudgetReportingPrice(assessment);
+  if (item.offerKey === "sales-tax-filing") return getSalesTaxFilingPrice(assessment);
+  return item.defaultPrice;
+}
+
+function catalogOptionSelected(item: ProposalOptionCatalogItem, assessment: AssessmentState) {
+  const legacySelections: Record<string, boolean> = {
+    "advanced-receipt-management": assessment.offerAdvancedReceiptManagement,
+    "project-tracking": assessment.offerProjectTracking,
+    "budget-reporting": assessment.offerBudgetReporting,
+    "sales-tax-filing": assessment.offerSalesTaxFiling,
+    "tax-preparer-coordination": assessment.includeTaxPreparerCoordinationCall,
+    "registered-agent-service": assessment.includeRegisteredAgentService,
+  };
+  return legacySelections[item.offerKey] ?? true;
+}
+
+export function getProposalAdditionalOptions(
+  assessment: AssessmentState,
+  catalogItems: ProposalOptionCatalogItem[] = [],
+): ProposalAdditionalOption[] {
   if (assessment.additionalOptions.length > 0) return assessment.additionalOptions;
+  const catalogOptions = catalogItems.filter((item) => item.defaultInclusion === "optional");
+  if (catalogOptions.length > 0) {
+    return catalogOptions.map((item) => ({
+      id: item.offerKey,
+      name: item.name,
+      description: item.description,
+      monthlyPrice: catalogOptionPrice(item, assessment),
+      showInProposal: catalogOptionSelected(item, assessment),
+      archived: false,
+    }));
+  }
 
   return [
     { id: "advanced-receipt-management", name: "Advanced Receipt Management", description: "Enhanced receipt collection, organization, and matching support.", monthlyPrice: getAdvancedReceiptManagementPrice(assessment), showInProposal: assessment.offerAdvancedReceiptManagement, archived: false },
@@ -518,13 +557,29 @@ const DEFAULT_PROPOSAL_BONUSES: ProposalBonus[] = [
   { id: "new-quickbooks-file", name: "New QuickBooks Setup", description: "If a fresh start is best, we will build a new QuickBooks file for monthly bookkeeping. It will include our Real Estate Chart of Accounts.", archived: false },
 ];
 
-export function getProposalBonuses(assessment: AssessmentState): ProposalBonus[] {
-  return assessment.bonuses.length > 0 ? assessment.bonuses : DEFAULT_PROPOSAL_BONUSES;
+export function getProposalBonuses(
+  assessment: AssessmentState,
+  catalogItems: ProposalOptionCatalogItem[] = [],
+): ProposalBonus[] {
+  if (assessment.bonuses.length > 0) return assessment.bonuses;
+  const catalogBonuses = catalogItems.filter((item) => item.defaultInclusion === "included");
+  if (catalogBonuses.length > 0) {
+    return catalogBonuses.map((item) => ({
+      id: item.offerKey,
+      name: item.name,
+      description: item.description,
+      archived: false,
+    }));
+  }
+  return DEFAULT_PROPOSAL_BONUSES;
 }
 
-export function getOptionsCatalogOrder(assessment: AssessmentState): string[] {
-  const optionIds = getProposalAdditionalOptions(assessment).map((item) => item.id);
-  const bonusIds = getProposalBonuses(assessment).map((item) => item.id);
+export function getOptionsCatalogOrder(
+  assessment: AssessmentState,
+  catalogItems: ProposalOptionCatalogItem[] = [],
+): string[] {
+  const optionIds = getProposalAdditionalOptions(assessment, catalogItems).map((item) => item.id);
+  const bonusIds = getProposalBonuses(assessment, catalogItems).map((item) => item.id);
   const known = new Set([...optionIds, ...bonusIds]);
   const stored = assessment.optionsCatalogOrder.filter((id) => known.has(id));
   const missing = [...optionIds, ...bonusIds].filter((id) => !stored.includes(id));
@@ -1169,13 +1224,16 @@ export function useProposalAssessmentDemoState({
   initialAssessment?: Partial<AssessmentState>;
   persist?: boolean;
 } = {}) {
-  const resolvedEngagementId =
+  const resolvedScopeId =
     engagementId ??
     (typeof window !== "undefined"
-      ? new URLSearchParams(window.location.search).get("engagementId") ?? undefined
+      ? (() => {
+          const params = new URLSearchParams(window.location.search);
+          return params.get("engagementId") ?? params.get("offer") ?? params.get("contacts") ?? params.get("contact") ?? undefined;
+        })()
       : undefined);
-  const storageKey = resolvedEngagementId
-    ? `${ASSESSMENT_STORAGE_KEY}:${resolvedEngagementId}`
+  const storageKey = resolvedScopeId
+    ? `${ASSESSMENT_STORAGE_KEY}:${resolvedScopeId}`
     : ASSESSMENT_STORAGE_KEY;
   const [assessment, setAssessment] = useState<AssessmentState>(() =>
     readStoredAssessment(storageKey, initialAssessment, false),
@@ -1184,9 +1242,12 @@ export function useProposalAssessmentDemoState({
 
   useEffect(() => {
     if (!persist) return;
-    setAssessment(readStoredAssessment(storageKey, initialAssessment, true));
-    setStorageReady(true);
-  }, [persist, storageKey]);
+    const timeoutId = window.setTimeout(() => {
+      setAssessment(readStoredAssessment(storageKey, initialAssessment, true));
+      setStorageReady(true);
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [initialAssessment, persist, storageKey]);
 
   useEffect(() => {
     if (!persist || !storageReady) return;
@@ -1295,6 +1356,7 @@ export function useProposalAssessmentDemoState({
   return {
     assessment,
     setAssessment,
+    storageReady,
     updateAssessment,
     toggleOperation,
     togglePaymentPlatform,
