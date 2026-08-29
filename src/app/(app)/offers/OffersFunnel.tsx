@@ -239,13 +239,46 @@ export function OffersFunnel() {
         <p className="text-base text-slate-500">Sample data · {rangeLabel(selected)}</p>
       </div>
 
-      <section className="rounded-xl border border-slate-200 bg-white px-5 py-5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Daily activity</p>
-      <p className="mt-1 text-xl font-semibold text-slate-900">
-        What happened on each day
-      </p>
-      <div className="mt-4">
-        <ResponsiveContainer width="100%" height={220}>
+      <section className="rounded-xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
+        <div className="border-b border-slate-200 pb-5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Conversion</p>
+          <p className="mt-1 text-xl font-semibold text-slate-900">
+            {sentTotal.toLocaleString("en-US")} sent of {selected.goal} goal
+          </p>
+          <div className="mt-3 overflow-x-auto">
+            <div className="flex min-w-[56rem] items-end gap-2">
+              {STEPS.map((step, index) => {
+                const count = funnelCounts[index] ?? 0;
+                const previous = index === 0 ? selected.goal : (funnelCounts[index - 1] ?? 0);
+                const conversion = previous > 0 ? Math.round((count / previous) * 100) : 0;
+                const heightPct = selected.goal > 0 ? Math.max((count / selected.goal) * 100, count > 0 ? 2 : 0) : 0;
+                const isSent = index === 0;
+                return (
+                  <div
+                    key={step.key}
+                    className="flex min-w-0 flex-1 flex-col items-center"
+                    title={isSent ? `${count} sent of ${selected.goal} goal` : `${count} · ${conversion}% of previous step`}
+                  >
+                    <p className="mb-1 text-sm font-semibold tabular-nums text-slate-900">{count}</p>
+                    <div className="relative w-full max-w-16" style={{ height: CHART_HEIGHT_PX }}>
+                      {isSent ? <div className="offer-funnel-goal absolute inset-0 rounded-t-md" /> : null}
+                      <div
+                        className="absolute bottom-0 left-0 right-0 rounded-t-md"
+                        style={{ height: `${heightPct}%`, backgroundColor: step.color }}
+                      />
+                    </div>
+                    <p className="mt-2 text-center text-xs leading-4 text-slate-500">{step.label}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="pt-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Daily activity</p>
+          <div className="mt-4">
+            <ResponsiveContainer width="100%" height={220}>
             <BarChart data={dailyRows} margin={{ top: 8, right: 8, left: 4, bottom: 28 }} barCategoryGap="25%">
               <XAxis
                 dataKey="date"
@@ -288,44 +321,10 @@ export function OffersFunnel() {
                   radius={index === STEPS.length - 1 ? [3, 3, 0, 0] : undefined}
                 />
               ))}
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-      <StepLegend />
-    </section>
-
-    <section className="rounded-xl border border-slate-200 bg-white px-5 py-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Conversion</p>
-      <p className="mt-1 text-xl font-semibold text-slate-900">
-        {sentTotal.toLocaleString("en-US")} sent of {selected.goal} goal
-      </p>
-      <div className="mt-3 overflow-x-auto">
-        <div className="flex min-w-[56rem] items-end gap-2">
-            {STEPS.map((step, index) => {
-              const count = funnelCounts[index] ?? 0;
-              const previous = index === 0 ? selected.goal : (funnelCounts[index - 1] ?? 0);
-              const conversion = previous > 0 ? Math.round((count / previous) * 100) : 0;
-              const heightPct = selected.goal > 0 ? Math.max((count / selected.goal) * 100, count > 0 ? 2 : 0) : 0;
-              const isSent = index === 0;
-              return (
-                <div
-                  key={step.key}
-                  className="flex min-w-0 flex-1 flex-col items-center"
-                  title={isSent ? `${count} sent of ${selected.goal} goal` : `${count} · ${conversion}% of previous step`}
-                >
-              <p className="mb-1 text-sm font-semibold tabular-nums text-slate-900">{count}</p>
-                  <div className="relative w-full max-w-16" style={{ height: CHART_HEIGHT_PX }}>
-                    {isSent ? <div className="offer-funnel-goal absolute inset-0 rounded-t-md" /> : null}
-                    <div
-                      className="absolute bottom-0 left-0 right-0 rounded-t-md"
-                      style={{ height: `${heightPct}%`, backgroundColor: step.color }}
-                    />
-                  </div>
-              <p className="mt-2 text-center text-xs leading-4 text-slate-500">{step.label}</p>
-                </div>
-              );
-            })}
+            </BarChart>
+            </ResponsiveContainer>
           </div>
+          <StepLegend />
         </div>
       </section>
     </div>

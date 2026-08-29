@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, LabelList, ResponsiveContainer } from "recharts";
 import { TOP_N, VIDEO_COLORS, OTHER_COLOR } from "./constants";
 
 export { TOP_N, VIDEO_COLORS, OTHER_COLOR };
@@ -94,10 +94,15 @@ export function YouTubeTrendChart({
     return <p className="py-8 text-center text-sm text-slate-400">No data for this period.</p>;
   }
 
+  const chartRows = stackedRows.map((row) => ({
+    ...row,
+    dailyTotal: segments.reduce((total, segment) => total + Number(row[segment.videoId] ?? 0), 0),
+  }));
+
   return (
     <div>
-      <ResponsiveContainer width="100%" height={200}>
-        <BarChart data={stackedRows} margin={{ top: 8, right: 4, left: 4, bottom: 28 }} barCategoryGap="25%">
+      <ResponsiveContainer width="100%" height={216}>
+        <BarChart data={chartRows} margin={{ top: 24, right: 4, left: 4, bottom: 28 }} barCategoryGap="25%">
           <XAxis
             dataKey="date"
             tick={<DateTick />}
@@ -120,7 +125,16 @@ export function YouTubeTrendChart({
               stackId="a"
               fill={seg.color}
               radius={i === segments.length - 1 ? [3, 3, 0, 0] : undefined}
-            />
+            >
+              {i === segments.length - 1 ? (
+                <LabelList
+                  dataKey="dailyTotal"
+                  position="top"
+                  fill="var(--text-secondary)"
+                  fontSize={9}
+                />
+              ) : null}
+            </Bar>
           ))}
         </BarChart>
       </ResponsiveContainer>

@@ -5,6 +5,7 @@ export type DailyTrafficRow = {
   date: string;
   sessions: number;
   activeUsers: number;
+  engagedSessions: number;
 };
 
 export type MetricValue = number | null;
@@ -105,6 +106,7 @@ export type HourlyTrafficRow = {
   datetime: string; // "YYYY-MM-DDTHH:00:00"
   activeUsers: number;
   sessions: number;
+  engagedSessions: number;
 };
 
 function hostnameFilter(hostname: string | null | undefined) {
@@ -130,7 +132,7 @@ export async function getHourlyTraffic(
     property: `properties/${propertyId}`,
     dateRanges: [{ startDate, endDate }],
     dimensions: [{ name: "dateHour" }],
-    metrics: [{ name: "activeUsers" }, { name: "sessions" }],
+    metrics: [{ name: "activeUsers" }, { name: "sessions" }, { name: "engagedSessions" }],
     orderBys: [{ dimension: { dimensionName: "dateHour" } }],
     dimensionFilter: hostnameFilter(hostname),
     keepEmptyRows: false,
@@ -146,6 +148,7 @@ export async function getHourlyTraffic(
       datetime,
       activeUsers: Number(row.metricValues?.[0]?.value ?? 0),
       sessions: Number(row.metricValues?.[1]?.value ?? 0),
+      engagedSessions: Number(row.metricValues?.[2]?.value ?? 0),
     };
   });
 }
@@ -163,7 +166,7 @@ export async function getTrafficTrend(
     property: `properties/${propertyId}`,
     dateRanges: [{ startDate, endDate }],
     dimensions: [{ name: "date" }],
-    metrics: [{ name: "sessions" }, { name: "activeUsers" }],
+    metrics: [{ name: "sessions" }, { name: "activeUsers" }, { name: "engagedSessions" }],
     orderBys: [{ dimension: { dimensionName: "date" } }],
     dimensionFilter: hostnameFilter(hostname),
     keepEmptyRows: false,
@@ -179,6 +182,7 @@ export async function getTrafficTrend(
       date,
       sessions: Number(row.metricValues?.[0]?.value ?? 0),
       activeUsers: Number(row.metricValues?.[1]?.value ?? 0),
+      engagedSessions: Number(row.metricValues?.[2]?.value ?? 0),
     };
   });
 }

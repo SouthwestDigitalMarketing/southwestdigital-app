@@ -57,7 +57,12 @@ export function StatCard({
             </div>
           </div>
           <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <p className="text-3xl font-semibold tabular-nums text-slate-900">{value}</p>
+            <p
+              className="text-3xl font-semibold tabular-nums"
+              style={{ color: "var(--text-primary)" }}
+            >
+              {value}
+            </p>
             {comparison !== undefined && (
               <span className={`text-sm font-semibold tabular-nums ${comparisonColor(comparison)}`}>
                 {comparison === null ? "New" : `${comparison > 0 ? "+" : ""}${comparison}%`}
@@ -68,7 +73,10 @@ export function StatCard({
         </div>
         {goal && (
           <div className="shrink-0 text-right">
-            <span className="text-2xl font-bold tabular-nums" style={{ color }}>
+            <span
+              className="text-2xl font-bold tabular-nums"
+              style={{ color: "var(--text-primary)" }}
+            >
               {goal.pct}%
             </span>
             <p className="text-xs text-slate-400">of goal</p>

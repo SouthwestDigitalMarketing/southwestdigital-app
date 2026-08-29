@@ -11,16 +11,15 @@ export const dynamic = "force-dynamic";
 type PeriodConfig = {
   granularity: "daily" | "hourly";
   label: string;
-  subtitleLabel: string;
 };
 
 const PERIOD_CONFIG: Record<string, PeriodConfig> = {
-  today: { granularity: "hourly", label: "Today so far", subtitleLabel: "today vs. same hours yesterday" },
-  yday: { granularity: "hourly", label: "Yesterday", subtitleLabel: "yesterday vs. day before" },
-  "48h": { granularity: "hourly", label: "Last 48 hours", subtitleLabel: "last 48 hours vs. prev. 48 hours" },
-  "7d": { granularity: "daily", label: "Last 7 days", subtitleLabel: "last 7 days vs. prev. 7 days" },
-  "30d": { granularity: "daily", label: "Last 30 days", subtitleLabel: "last 30 days vs. prev. 30 days" },
-  "90d": { granularity: "daily", label: "Last 90 days", subtitleLabel: "last 90 days vs. prev. 90 days" },
+  today: { granularity: "hourly", label: "Today so far" },
+  yday: { granularity: "hourly", label: "Yesterday" },
+  "48h": { granularity: "hourly", label: "Last 48 hours" },
+  "7d": { granularity: "daily", label: "Last 7 days" },
+  "30d": { granularity: "daily", label: "Last 30 days" },
+  "90d": { granularity: "daily", label: "Last 90 days" },
 };
 
 export default async function WebsitePage({
@@ -51,8 +50,6 @@ export default async function WebsitePage({
 
   const propertyId = theme.ga4PropertyId;
   const hostname = theme.ga4HostName;
-  const barColor = "var(--chart-primary)";
-
   const now = Date.now();
 
   const todayStr = new Date(now).toISOString().slice(0, 10);
@@ -97,8 +94,8 @@ export default async function WebsitePage({
       ]);
       health = healthResult;
 
-      const curMap = new Map(curTrend.map((r) => [r.datetime, r.activeUsers]));
-      const prevMap = new Map(prevTrend.map((r) => [r.datetime, r.activeUsers]));
+      const curMap = new Map(curTrend.map((r) => [r.datetime, r.engagedSessions]));
+      const prevMap = new Map(prevTrend.map((r) => [r.datetime, r.engagedSessions]));
 
       if (period === "today") {
         trendRows = Array.from({ length: 24 }, (_, h) => {
@@ -146,8 +143,8 @@ export default async function WebsitePage({
       ]);
       health = healthResult;
 
-      const curMap = new Map(curTrend.map((r) => [r.date, r.activeUsers]));
-      const prevMap = new Map(prevTrend.map((r) => [r.date, r.activeUsers]));
+      const curMap = new Map(curTrend.map((r) => [r.date, r.engagedSessions]));
+      const prevMap = new Map(prevTrend.map((r) => [r.date, r.engagedSessions]));
       const curDates = Array.from({ length: days }, (_, i) =>
         new Date(now - (days - 1 - i) * 86400000).toISOString().slice(0, 10),
       );
@@ -211,14 +208,11 @@ export default async function WebsitePage({
   return (
     <div className="p-8">
       <h1 className="sr-only">Website</h1>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">Traffic overview</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            bookkeepingconroe.com — {config.subtitleLabel}
-          </p>
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900">Traffic overview</h2>
+        <div className="mt-3 w-fit max-w-full overflow-x-auto">
+          <PeriodSelector current={period} />
         </div>
-        <PeriodSelector current={period} />
       </div>
 
       {/* Goal card */}
@@ -233,7 +227,7 @@ export default async function WebsitePage({
 
       <SiteTrafficGraph
         rows={trendRows}
-        barColor={barColor}
+        goal={engagedSessionsGoal}
         label={config.label}
         granularity={config.granularity}
       />

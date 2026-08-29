@@ -182,7 +182,14 @@ export function AppShell({
     .toUpperCase();
 
   const sidebar = (
-    <div className="flex h-full w-64 shrink-0 flex-col" style={{ backgroundColor: sidebarBg, borderRight: `1px solid ${dividerColor}` }}>
+    <div
+      className="flex h-full w-64 shrink-0 flex-col"
+      style={{
+        backgroundColor: sidebarBg,
+        borderRight: `1px solid ${dividerColor}`,
+        boxShadow: "var(--card-shadow)",
+      }}
+    >
       <div
         className="flex h-16 items-center px-5"
         style={{ borderBottom: `1px solid ${dividerColor}` }}
@@ -309,6 +316,7 @@ export function AppShell({
         "--brand-primary": primary,
         "--brand-dark": darkColor,
         "--brand-accent": accent,
+        ...(isLight ? { "--app-canvas": primary } : {}),
       } as React.CSSProperties}
     >
       <aside className="hidden lg:flex">{sidebar}</aside>

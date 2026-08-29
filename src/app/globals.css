@@ -122,6 +122,7 @@ body {
   --chart-primary: var(--brand-primary);
   --chart-muted: #94a3b8;
   --chart-cursor: #f1f5f9;
+  --card-shadow: 0 1px 2px rgb(15 23 42 / 0.06), 0 6px 18px rgb(15 23 42 / 0.06);
   --proposal-section-odd: #eef2f7;
   --proposal-section-even: #ffffff;
 }
@@ -149,6 +150,7 @@ body {
   --chart-primary: color-mix(in srgb, var(--brand-primary) 35%, #e5e7eb);
   --chart-muted: #979aa3;
   --chart-cursor: rgb(255 255 255 / 0.06);
+  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 18px rgb(0 0 0 / 0.18);
   --proposal-section-odd: #202126;
   --proposal-section-even: #292b31;
 }
@@ -177,6 +179,13 @@ body {
 
 [data-theme] .bg-white {
   background-color: var(--surface);
+}
+
+/* Standard app cards share a soft default elevation. Components with an
+   intentional shadow utility retain their custom elevation. */
+[data-theme]
+  :is(.rounded-xl, .rounded-2xl, .rounded-3xl).border.bg-white:not(.shadow):not(.shadow-sm):not(.shadow-md):not(.shadow-lg):not(.shadow-xl):not(.shadow-2xl) {
+  box-shadow: var(--card-shadow);
 }
 
 [data-theme] .bg-slate-50,
@@ -423,6 +432,7 @@ body {
     --chart-primary: color-mix(in srgb, var(--brand-primary) 35%, #e5e7eb);
     --chart-muted: #979aa3;
     --chart-cursor: rgb(255 255 255 / 0.06);
+    --card-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 18px rgb(0 0 0 / 0.18);
     --proposal-section-odd: #202126;
     --proposal-section-even: #292b31;
   }

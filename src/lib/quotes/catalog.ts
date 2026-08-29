@@ -3,7 +3,12 @@ export const REAL_ESTATE_TAG_KEY = "real-estate";
 export function tagMarksRealEstate(tag: { key: string; label?: string | null }) {
   const key = tag.key.trim().toLowerCase();
   const label = (tag.label ?? "").trim().toLowerCase();
-  return key === REAL_ESTATE_TAG_KEY || key.includes("real-estate") || label === "real estate";
+  return (
+    key === REAL_ESTATE_TAG_KEY ||
+    key.includes("real-estate") ||
+    label === "real estate" ||
+    label === "real estate service"
+  );
 }
 
 export type CatalogRealEstateMarker = {
@@ -37,4 +42,12 @@ export function extraIsRealEstateSpecific(
   if (match) return match.realEstateSpecific;
   if (typeof extra.realEstateSpecific === "boolean") return extra.realEstateSpecific;
   return FALLBACK_REAL_ESTATE_EXTRA_IDS.has(extra.id);
+}
+
+export function extraIsAvailableForBookSet(
+  extra: { id: string; name: string; realEstateSpecific?: boolean },
+  catalog: CatalogRealEstateMarker[],
+  bookSetType: string,
+) {
+  return bookSetType !== "other-business" || !extraIsRealEstateSpecific(extra, catalog);
 }

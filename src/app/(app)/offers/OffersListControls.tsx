@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { OFFER_KINDS } from "@/lib/quotes/kinds";
+import { OFFER_KINDS, whoHref } from "@/lib/quotes/kinds";
 import type { OfferStatusFilter } from "@/lib/quotes/status";
 
 export function OffersListControls({
@@ -34,9 +35,8 @@ export function OffersListControls({
     "rounded-full border border-slate-300 bg-transparent px-3 py-2 text-base text-slate-700 focus:border-slate-500 focus:outline-none";
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-5 py-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filters</p>
-      <div className="mt-3 flex flex-wrap items-center gap-3">
+    <div className="px-5 py-4">
+      <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2 text-base text-slate-500">
           Type
           <select
@@ -86,6 +86,13 @@ export function OffersListControls({
           </button>
           <span className={archived ? "text-slate-900" : "text-slate-400"}>Archived</span>
         </div>
+        <Link
+          href={whoHref("bookkeeping", contactId)}
+          className="ml-auto inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-full px-4 py-2 text-base font-semibold text-white transition hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2"
+          style={{ backgroundColor: "var(--brand-dark, var(--brand-primary))" }}
+        >
+          Create offer
+        </Link>
       </div>
     </div>
   );

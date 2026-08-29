@@ -1,7 +1,7 @@
 "use client";
 
 import { Archive, ArchiveRestore, Check, ChevronDown, ChevronUp, Pencil, Plus, Trash2, X } from "lucide-react";
-import { useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import ProposalAppDemoHeader from "./ProposalAppDemoHeader";
 import {
   getOptionsCatalogOrder,
@@ -12,8 +12,7 @@ import {
   type ProposalAdditionalOption,
   type ProposalBonus,
 } from "./ProposalCreationWorkspaceDemo";
-import { extraIsRealEstateSpecific, type CatalogRealEstateMarker } from "@/lib/quotes/catalog";
-import { listCatalogRealEstateMarkersAction } from "@/app/(app)/services/actions";
+import { extraIsAvailableForBookSet, extraIsRealEstateSpecific, type CatalogRealEstateMarker } from "@/lib/quotes/catalog";
 
 const PACKAGES: Array<{ id: PackageId; label: string }> = [
   { id: "grow", label: "Grow" },
@@ -40,21 +39,7 @@ type CatalogRow = {
 export default function ProposalAddOnsDemo({ catalog: initialCatalog = [] }: { catalog?: CatalogRealEstateMarker[] }) {
   const { assessment, updateAssessment } = useProposalAssessmentDemoState();
   const [editingIds, setEditingIds] = useState<string[]>([]);
-  const [catalog, setCatalog] = useState<CatalogRealEstateMarker[]>(initialCatalog);
-
-  useEffect(() => {
-    let cancelled = false;
-    listCatalogRealEstateMarkersAction()
-      .then((items) => {
-        if (!cancelled) setCatalog(items);
-      })
-      .catch(() => {
-        if (!cancelled) setCatalog([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const catalog = initialCatalog;
   const additionalOptions = getProposalAdditionalOptions(assessment);
   const bonuses = getProposalBonuses(assessment);
   const catalogOrder = getOptionsCatalogOrder(assessment);
@@ -67,8 +52,12 @@ export default function ProposalAddOnsDemo({ catalog: initialCatalog = [] }: { c
     if (bonus) return [{ id, name: bonus.name, description: bonus.description, archived: bonus.archived, kind: "included", bonus }];
     return [];
   });
-  const visibleRows = rows.filter((row) => !row.archived);
-  const archivedRows = rows.filter((row) => row.archived);
+  const eligibleRows = rows.filter((row) => {
+    const item = row.option ?? row.bonus;
+    return !item || extraIsAvailableForBookSet(item, catalog, assessment.bookSetType);
+  });
+  const visibleRows = eligibleRows.filter((row) => !row.archived);
+  const archivedRows = eligibleRows.filter((row) => row.archived);
 
   function persistOrder(order: string[]) {
     updateAssessment("optionsCatalogOrder", order);
@@ -205,13 +194,7 @@ export default function ProposalAddOnsDemo({ catalog: initialCatalog = [] }: { c
         <ProposalAppDemoHeader currentStep="add-ons" previousHref="/offers/calculator" nextHref="/offers/intro" />
         <div className="proposal-options-editor mt-8 min-w-0">
           <div className="px-1">
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <h1 className="text-lg font-semibold tracking-tight text-slate-950">Services and extras</h1>
-              <p className="text-sm leading-5 text-slate-500">
-                Optional services can be selected on the proposal. Included extras are bundled into a package at no extra charge.
-              </p>
-            </div>
-            <div className="mt-3 mb-2 flex flex-wrap gap-2">
+            <div className="mb-2 flex flex-wrap gap-2">
               <button type="button" onClick={() => addRow("optional")} className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-base font-medium text-slate-700 transition hover:border-slate-500 hover:bg-slate-100 hover:text-slate-900">
                 <Plus className="h-3.5 w-3.5" /> Add optional service
               </button>

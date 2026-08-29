@@ -2,12 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { updateWebsiteGoal } from "./actions";
-
-function goalColors(pct: number) {
-  if (pct >= 100) return { bar: "#10b981", text: "text-emerald-600" };
-  if (pct >= 70) return { bar: "#f59e0b", text: "text-amber-600" };
-  return { bar: "#f43f5e", text: "text-rose-600" };
-}
+import { goalColors } from "./goal-colors";
 
 export function WebsiteGoalCard({
   brandId,

@@ -1,9 +1,8 @@
 import Link from "next/link";
-import { FileText, Handshake, ArrowRight } from "lucide-react";
 import { requireQuoteStaff } from "@/lib/quotes/access";
 import { prisma } from "@/lib/prisma";
 import { formatUsd } from "@/lib/quotes/format";
-import { OFFER_KINDS, isOfferKindKey, resumeOfferHref, whoHref } from "@/lib/quotes/kinds";
+import { OFFER_KINDS, isOfferKindKey, resumeOfferHref } from "@/lib/quotes/kinds";
 import {
   bucketForStatus,
   outcomeLabel,
@@ -23,11 +22,6 @@ const BUCKET_STYLE: Record<OfferBucket, string> = {
   sent: "bg-blue-50 text-blue-700",
   completed: "bg-emerald-50 text-emerald-700",
   archived: "bg-slate-50 text-slate-500",
-};
-
-const KIND_ICONS: Record<string, typeof FileText> = {
-  bookkeeping: FileText,
-  "referral-network": Handshake,
 };
 
 export default async function QuotesPage({ searchParams }: { searchParams: SearchParams }) {
@@ -61,11 +55,11 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
   const accentDark = brand.theme?.accentDarkColor ?? brand.theme?.accentColor ?? "#8a5a12";
 
   return (
-    <div className="p-8">
+    <div className="px-8 pb-8">
       <h1 className="sr-only">Offers</h1>
 
       {contact ? (
-        <div className="rounded-xl border border-slate-200 bg-white px-5 py-4">
+        <div className="mt-8 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Building for</p>
           <p className="mt-1 text-xl font-semibold text-slate-900">{contact.name}</p>
           <p className="mt-1 text-base text-slate-500">
@@ -75,65 +69,29 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
       ) : null}
 
       {params.sent === "1" && (
-        <div className={`${contact ? "mt-8" : ""} rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-base font-medium text-blue-800`}>
+        <div className="mt-8 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-base font-medium text-blue-800">
           Offer marked as sent.
         </div>
       )}
 
       <section
-        className={`${contact || params.sent === "1" ? "mt-10" : ""} -mx-8 bg-[var(--app-canvas)] px-8 py-5`}
+        className={`${contact || params.sent === "1" ? "mt-10" : ""} -mx-8 px-8 pb-10 pt-8`}
       >
-        <h2 className="text-lg font-semibold text-slate-700">Create an offer</h2>
-        <div className="mt-3 grid gap-4 md:grid-cols-2">
-          {OFFER_KINDS.map((kind) => {
-            const Icon = KIND_ICONS[kind.key] ?? FileText;
-            return (
-              <Link
-                key={kind.key}
-                href={whoHref(kind.key, contact?.id)}
-                className="group flex flex-col rounded-xl border border-slate-200 bg-white p-6 transition hover:border-slate-400"
-              >
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Offer type</p>
-                <div className="mt-3 flex items-center gap-3">
-                  <div className="offer-kind-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-full">
-                    <Icon size={18} />
-                  </div>
-                  <p className="text-xl font-semibold text-slate-900">{kind.name}</p>
-                </div>
-                <p className="mt-4 flex-1 text-base leading-6 text-slate-500">{kind.summary}</p>
-                <span className="mt-5 inline-flex w-fit max-w-full items-center gap-1.5 rounded-full border border-slate-300 bg-transparent px-3 py-2 text-base font-medium leading-5 text-slate-900">
-                  Create & send a {kind.name.toLowerCase()} offer to a contact
-                  <ArrowRight size={16} className="shrink-0 transition group-hover:translate-x-0.5" />
-                </span>
-              </Link>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="-mx-8 bg-[var(--surface-control)] px-8 py-5">
         <h2 className="text-lg font-semibold text-slate-700">Offers tracking</h2>
         <div className="mt-3">
           <OffersFunnel />
         </div>
       </section>
 
-      <section className="-mx-8 bg-[var(--app-canvas)] px-8 py-5">
-        <h2 className="text-lg font-semibold text-slate-700">
-          {archived ? "Archived offers" : "Offers"}
-        </h2>
-        <div className="mt-3">
+      <section className="-mx-8 px-8 pb-10 pt-8">
+        <h2 className="text-lg font-semibold text-slate-700">Manage offers</h2>
+        <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <OffersListControls
             archived={archived}
             statusFilter={statusFilter}
             kindFilter={kindFilter}
             contactId={contact?.id}
           />
-        </div>
-        <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white">
-        <div className="border-b border-slate-100 px-5 py-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Offer list</p>
-        </div>
         {listed.length === 0 ? (
           <div className="px-6 py-16 text-center">
             <p className="text-base text-slate-500">
@@ -143,13 +101,13 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
         ) : (
           <table className="w-full text-base">
             <thead>
-              <tr className="border-b border-slate-100 text-left">
-                <th className="px-5 py-3.5 text-sm font-semibold normal-case text-slate-700">Client</th>
-                <th className="px-5 py-3.5 text-sm font-semibold normal-case text-slate-700">Type</th>
-                <th className="px-5 py-3.5 text-sm font-semibold normal-case text-slate-700">Status</th>
-                <th className="px-5 py-3.5 text-sm font-semibold normal-case text-slate-700">Updated</th>
-                <th className="px-5 py-3.5 text-sm font-semibold normal-case text-slate-700">Amount</th>
-                <th className="px-5 py-3.5"></th>
+              <tr className="bg-slate-50 text-left">
+                <th className="px-5 py-2 text-sm font-semibold normal-case text-slate-700">Client</th>
+                <th className="px-5 py-2 text-sm font-semibold normal-case text-slate-700">Type</th>
+                <th className="px-5 py-2 text-sm font-semibold normal-case text-slate-700">Status</th>
+                <th className="px-5 py-2 text-sm font-semibold normal-case text-slate-700">Updated</th>
+                <th className="px-5 py-2 text-sm font-semibold normal-case text-slate-700">Amount</th>
+                <th className="px-5 py-2"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
