@@ -191,6 +191,7 @@ export type ProposalBonus = {
   archived: boolean;
   realEstateSpecific?: boolean;
   billingCadence?: ProposalBonusCadence;
+  defaultPackageIds?: PackageId[];
   applicable?: boolean;
   applicabilityReason?: string;
 };
@@ -569,17 +570,28 @@ export function getProposalBonuses(
   assessment: AssessmentState,
   catalogItems: ProposalOptionCatalogItem[] = [],
 ): ProposalBonus[] {
-  if (assessment.bonuses.length > 0) return assessment.bonuses;
   const catalogBonuses = catalogItems.filter((item) => item.defaultInclusion === "included");
+  const mapCatalogBonus = (item: ProposalOptionCatalogItem): ProposalBonus => ({
+    id: item.offerKey,
+    name: item.name,
+    description: item.description,
+    archived: false,
+    realEstateSpecific: item.realEstateSpecific,
+    billingCadence: item.billingCadence === "monthly" ? "monthly" : "one-time",
+    defaultPackageIds: item.defaultPackageIds,
+  });
+  if (assessment.bonuses.length > 0 || assessment.additionalOptions.length > 0) {
+    const existingIds = new Set([
+      ...assessment.bonuses.map((item) => item.id),
+      ...assessment.additionalOptions.map((item) => item.id),
+    ]);
+    const newlyCatalogedCoreServices = catalogBonuses
+      .filter((item) => item.offerSection === "core-services" && !existingIds.has(item.offerKey))
+      .map(mapCatalogBonus);
+    return [...assessment.bonuses, ...newlyCatalogedCoreServices];
+  }
   if (catalogBonuses.length > 0) {
-    return catalogBonuses.map((item) => ({
-      id: item.offerKey,
-      name: item.name,
-      description: item.description,
-      archived: false,
-      realEstateSpecific: item.realEstateSpecific,
-      billingCadence: item.billingCadence === "monthly" ? "monthly" : "one-time",
-    }));
+    return catalogBonuses.map(mapCatalogBonus);
   }
   return DEFAULT_PROPOSAL_BONUSES;
 }

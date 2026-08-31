@@ -147,12 +147,9 @@ type ServiceRow = {
 type ProposalOption = {
   id: OptionId;
   name: string;
-  shortDescription: string;
-  partnershipLabel: string;
+  monthlyPrice: number;
   recurringRows: ServiceRow[];
   oneTimeRows: ServiceRow[];
-  whatsIncluded: string[];
-  whyItMatters: string[];
 };
 
 // ─── Static data ──────────────────────────────────────────────────────────────
@@ -172,34 +169,6 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ] as const;
 
-const serviceTooltips: Record<string, string> = {
-  "Monthly Bookkeeping": "Includes categorizing transactions, reconciling accounts, generating your Balance Sheet and Profit & Loss statement, and executing our monthly close process. Reports and communication are delivered through your client portal.",
-  "Investor Reporting & KPI Review": "Investor-focused financial reporting and KPI review to support portfolio decisions.",
-  "Concierge Client Support": "24/7 priority access for bookkeeping questions and time-sensitive support needs.",
-  "Priority Client Support": "Same-business-day responses for bookkeeping questions and support requests.",
-  "Standard Client Support": "Responses within 1–2 business days for bookkeeping questions and support requests.",
-  "Monthly Reporting Package": "A recurring financial reporting package that provides clear visibility into performance.",
-  "Advanced Receipt Management": "Enhanced receipt collection, organization, and matching support.",
-  "Monthly Advisory Calls": "A recurring call with your bookkeeper to review the numbers and talk through decisions. Included at no charge with Grow.",
-  "CFO Pack": "Executive-level financial reporting built for owner and investor decision-making. Included at no charge with Grow.",
-  "Cash Flow Analysis": "Ongoing analysis of cash inflows and outflows to support planning and investment decisions. Included at no charge with Grow.",
-  "Budget Setup & Budget vs. Actuals Reporting": "We build the budget and provide recurring budget-vs-actuals reporting to track performance against it.",
-  "Sales Tax Filing & Remittance": "We calculate, file, and remit the client's sales tax payments to the comptroller on their behalf.",
-};
-
-const comparisonFeatures: Array<{ label: string; description: string; includedIn: OptionId[] }> = [
-  { label: "Monthly bookkeeping and reconciliations", description: "Transactions are categorized and the included accounts are reconciled each month.", includedIn: ["grow", "improve", "maintain"] },
-  { label: "Monthly financial statements", description: "Core financial reports are prepared for consistent owner review.", includedIn: ["grow", "improve", "maintain"] },
-  { label: "Real estate-specific reporting structure", description: "Reporting is organized to make portfolio and property performance easier to understand.", includedIn: ["grow", "improve"] },
-  { label: "Expanded monthly reporting", description: "Additional reporting context supports more informed financial decisions.", includedIn: ["grow", "improve"] },
-  { label: "Investor reporting and KPI review", description: "Investor-focused KPIs and reporting are reviewed for trends and opportunities.", includedIn: ["grow"] },
-  { label: "Structured communication and follow-up", description: "A more proactive communication rhythm helps resolve questions and issues faster.", includedIn: ["grow", "improve"] },
-  { label: "Concierge client support", description: "24/7 priority access for bookkeeping questions and time-sensitive support needs.", includedIn: ["grow"] },
-  { label: "Monthly advisory calls", description: "A recurring call with your bookkeeper to review the numbers and talk through decisions.", includedIn: ["grow"] },
-  { label: "CFO Pack", description: "Executive-level financial reporting built for owner and investor decision-making.", includedIn: ["grow"] },
-  { label: "Cash flow analysis", description: "Ongoing analysis of cash inflows and outflows to support planning and investment decisions.", includedIn: ["grow"] },
-];
-
 const optionMeta: Array<{ id: OptionId; icon: typeof Sparkles; accentClass: string; serviceLevel: string }> = [
   { id: "grow",     icon: Sparkles,    accentClass: "text-emerald-600", serviceLevel: "Concierge" },
   { id: "improve",  icon: LineChart,   accentClass: "text-indigo-600",  serviceLevel: "Priority"  },
@@ -210,79 +179,23 @@ const baseOptions: Record<OptionId, ProposalOption> = {
   grow: {
     id: "grow",
     name: "Grow",
-    shortDescription: "Higher-touch reporting and guidance for scaling real estate portfolios.",
-    partnershipLabel: "Strategic partnership",
-    recurringRows: [
-      { id: "grow-rec-1", serviceName: "Monthly Bookkeeping",           billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: 1295 },
-      { id: "grow-rec-2", serviceName: "Investor Reporting & KPI Review", billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: 395 },
-      { id: "grow-rec-3", serviceName: "Concierge Client Support",      billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: 225, note: "24/7 priority access for bookkeeping questions and time-sensitive support needs." },
-      { id: "grow-rec-4", serviceName: "Monthly Advisory Calls",        billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: 0, note: "A recurring call with your bookkeeper to review the numbers and talk through decisions. Included at no charge with Grow." },
-      { id: "grow-rec-5", serviceName: "CFO Pack",                      billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: 0, note: "Executive-level financial reporting built for owner and investor decision-making. Included at no charge with Grow." },
-      { id: "grow-rec-6", serviceName: "Cash Flow Analysis",            billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: 0, note: "Ongoing analysis of cash inflows and outflows to support planning and investment decisions. Included at no charge with Grow." },
-    ],
+    monthlyPrice: 0,
+    recurringRows: [],
     oneTimeRows: [],
-    whatsIncluded: [
-      "Monthly bookkeeping with reconciliations and financial review structure",
-      "Expanded reporting package for owners, partners, and decisions",
-      "Concierge communication and our fastest response expectations",
-      "Monthly advisory calls with your bookkeeper",
-      "CFO Pack with executive-level financial reporting",
-      "Cash flow analysis to support investment decisions",
-      "A higher-touch client experience built for scaling investors",
-    ],
-    whyItMatters: [
-      "Supports better investment decisions with clearer reporting",
-      "Keeps communication fast when deals, lenders, or deadlines move quickly",
-      "Creates cleaner internal processes as the business expands",
-      "Reduces bookkeeping bottlenecks as complexity increases",
-    ],
   },
   improve: {
     id: "improve",
     name: "Improve",
-    shortDescription: "Clearer reporting and more responsive support for investors who want confidence.",
-    partnershipLabel: "Enhanced partnership",
-    recurringRows: [
-      { id: "improve-rec-1", serviceName: "Monthly Bookkeeping",        billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: 895 },
-      { id: "improve-rec-2", serviceName: "Monthly Reporting Package",  billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: 245 },
-      { id: "improve-rec-3", serviceName: "Priority Client Support",    billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: 0, note: "Same-business-day responses for bookkeeping questions and support requests." },
-    ],
+    monthlyPrice: 0,
+    recurringRows: [],
     oneTimeRows: [],
-    whatsIncluded: [
-      "Historical cleanup and book reconstruction where needed",
-      "Real estate-specific reporting structure and cleaner monthly close",
-      "Monthly financial statements with stronger reporting context",
-      "More structured communication and follow-up support",
-    ],
-    whyItMatters: [
-      "Improves visibility into performance without overcomplicating the process",
-      "Helps owners feel more confident in the books each month",
-      "Creates a smoother experience when questions or issues come up",
-      "Supports more disciplined financial review habits",
-    ],
   },
   maintain: {
     id: "maintain",
     name: "Maintain",
-    shortDescription: "Core monthly bookkeeping for reliable financial clarity and consistency.",
-    partnershipLabel: "Foundational partnership",
-    recurringRows: [
-      { id: "maintain-rec-1", serviceName: "Monthly Bookkeeping",    billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: 649 },
-      { id: "maintain-rec-2", serviceName: "Standard Client Support", billStart: "On Acceptance", billEnd: "Until Cancelled", billEvery: "1 Month", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: 0, note: "Responses within 1–2 business days for bookkeeping questions and support requests." },
-    ],
+    monthlyPrice: 0,
+    recurringRows: [],
     oneTimeRows: [],
-    whatsIncluded: [
-      "Historical cleanup and foundational setup support",
-      "Accurate monthly bookkeeping and reconciliations",
-      "Monthly financial statements and reporting basics",
-      "Dependable ongoing support for cleaner books",
-    ],
-    whyItMatters: [
-      "Stay compliant with lender and tax requirements",
-      "Make confident, data-driven investment decisions",
-      "Save time and reduce bookkeeping stress",
-      "Always know your numbers",
-    ],
   },
 };
 
@@ -323,7 +236,7 @@ function platformLabel(platform: HistoricalCleanupPeriod["platform"] | Assessmen
 }
 
 function getTooltip(row: ServiceRow) {
-  return row.note ?? serviceTooltips[row.serviceName] ?? `Details about ${row.serviceName}.`;
+  return row.note ?? `Details about ${row.serviceName}.`;
 }
 
 function isOnboarding(row: ServiceRow) {
@@ -365,19 +278,8 @@ function buildOptions(assessment: AssessmentState): Record<OptionId, ProposalOpt
     : [];
   const maintainMonthly = packagePricing.maintain.monthly;
 
-  const built = Object.fromEntries(optionMeta.map(({ id }) => {
+  return Object.fromEntries(optionMeta.map(({ id }) => {
     const base = baseOptions[id];
-    const recurringRows = base.recurringRows.map((row) => ({ ...row }));
-
-    // Replace monthly bookkeeping price with computed value
-    const nonBookkeeping = recurringRows
-      .filter((r) => r.serviceName !== "Monthly Bookkeeping")
-      .reduce((t, r) => t + r.price * r.quantity, 0);
-    const bkRow = recurringRows.find((r) => r.serviceName === "Monthly Bookkeeping");
-    if (bkRow) {
-      bkRow.price = Math.max(0, packagePricing[id].monthly - nonBookkeeping);
-      bkRow.platformTag = assessment.ongoingBookkeepingPlatform === "stessa" ? "Stessa" : "QBO";
-    }
 
     // Onboarding row
     const onboardingRow: ServiceRow = {
@@ -413,7 +315,12 @@ function buildOptions(assessment: AssessmentState): Record<OptionId, ProposalOpt
         if (bonus.id === "new-quickbooks-file") return realEstate && assessment.ongoingBookkeepingPlatform === "qbo";
         return realEstate;
       })
-      .filter((bonus) => assessment.bonusPackageSelections[bonus.id]?.includes(id) ?? legacyBonusIncluded(bonus.id));
+      .filter((bonus) => {
+        const selectedPackages = assessment.bonusPackageSelections[bonus.id];
+        if (Array.isArray(selectedPackages)) return selectedPackages.includes(id);
+        if (bonus.defaultPackageIds) return bonus.defaultPackageIds.includes(id);
+        return legacyBonusIncluded(bonus.id);
+      });
 
     const recurringBonuses = eligibleBonuses
       .filter((bonus) => bonus.billingCadence === "monthly")
@@ -446,7 +353,15 @@ function buildOptions(assessment: AssessmentState): Record<OptionId, ProposalOpt
 
     return [id, {
       ...base,
-      recurringRows: [...recurringRows, ...recurringBonuses],
+      monthlyPrice: packagePricing[id].monthly,
+      recurringRows: recurringBonuses.map((row) =>
+        row.serviceName === "Monthly Bookkeeping"
+          ? {
+              ...row,
+              platformTag: assessment.ongoingBookkeepingPlatform === "stessa" ? "Stessa" as const : "QBO" as const,
+            }
+          : row,
+      ),
       oneTimeRows: [
         ...buildCleanupRows(periods, maintainMonthly, id),
         onboardingRow,
@@ -454,21 +369,6 @@ function buildOptions(assessment: AssessmentState): Record<OptionId, ProposalOpt
       ],
     }];
   })) as Record<OptionId, ProposalOption>;
-
-  // Inherit services downward
-  function inheritRecurring(higherTier: OptionId, lowerTier: OptionId) {
-    const higher = built[higherTier];
-    const existing = new Set(higher.recurringRows.map((r) => r.serviceName));
-    const inherited = built[lowerTier].recurringRows
-      .filter((r) => !r.serviceName.endsWith("Client Support"))
-      .filter((r) => !existing.has(r.serviceName))
-      .map((r) => ({ ...r, id: `${higherTier}-inherited-${r.id}`, price: 0, note: r.note ?? `Included from the ${built[lowerTier].name} service level.` }));
-    higher.recurringRows = [...higher.recurringRows, ...inherited];
-  }
-  inheritRecurring("improve", "maintain");
-  inheritRecurring("grow", "improve");
-
-  return built;
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -1024,7 +924,7 @@ export default function OfferProposalPreview({
                   );
 
                   const recurringTotal =
-                    sectionTotal(option.recurringRows) * recurringDiscountMultiplier +
+                    option.monthlyPrice * recurringDiscountMultiplier +
                     additionalOptionRows.reduce(
                       (total, row) => total + (additionalOptionSelections[id][row.id] ? row.price : 0),
                       0,
@@ -1043,14 +943,26 @@ export default function OfferProposalPreview({
                   const lowerTierId: OptionId | null = id === "grow" ? "improve" : id === "improve" ? "maintain" : null;
                   const lowerTierName = lowerTierId ? options[lowerTierId].name : null;
                   const lowerTierRecurring = new Set(lowerTierId ? options[lowerTierId].recurringRows.map((r) => r.serviceName) : []);
-                  const isNew = (name: string) => lowerTierId !== null && !lowerTierRecurring.has(name);
+                  const currentRecurring = new Set(option.recurringRows.map((row) => row.serviceName));
+                  const inheritsLowerTierRecurring = lowerTierId !== null && options[lowerTierId].recurringRows
+                    .filter((row) => !row.serviceName.endsWith("Client Support"))
+                    .every((row) => currentRecurring.has(row.serviceName));
+                  const recurringLeadInName = inheritsLowerTierRecurring ? lowerTierName : null;
+                  const isNew = (name: string) => inheritsLowerTierRecurring && !lowerTierRecurring.has(name);
                   const lowerTierZero = new Set(lowerTierId ? options[lowerTierId].oneTimeRows.filter((r) => r.price === 0).map((r) => r.serviceName) : []);
-                  const displayedBonuses = lowerTierId ? zeroPriceRows.filter((r) => !lowerTierZero.has(r.serviceName)) : zeroPriceRows;
+                  const currentZero = new Set(zeroPriceRows.map((row) => row.serviceName));
+                  const inheritsLowerTierBonuses = lowerTierId !== null && [...lowerTierZero].every((name) => currentZero.has(name));
+                  const bonusLeadInName = inheritsLowerTierBonuses ? lowerTierName : null;
+                  const displayedBonuses = inheritsLowerTierBonuses
+                    ? zeroPriceRows.filter((r) => !lowerTierZero.has(r.serviceName))
+                    : zeroPriceRows;
 
                   const bkRow      = option.recurringRows.find((r) => r.serviceName === "Monthly Bookkeeping");
                   const supportRow = option.recurringRows.find((r) => r.serviceName.endsWith("Client Support"));
                   const otherRecurring = option.recurringRows.filter((r) => r.serviceName !== "Monthly Bookkeeping" && !r.serviceName.endsWith("Client Support"));
-                  const orderedRecurring = lowerTierId ? otherRecurring.filter((r) => isNew(r.serviceName)) : otherRecurring;
+                  const orderedRecurring = inheritsLowerTierRecurring
+                    ? otherRecurring.filter((r) => isNew(r.serviceName))
+                    : otherRecurring;
 
                   return (
                     <section key={id} className="grid grid-rows-subgrid row-span-7 overflow-hidden rounded-xl border bg-white shadow-sm transition-colors" style={{ borderColor: selected ? brandDark : "#e2e8f0" }}>
@@ -1089,7 +1001,7 @@ export default function OfferProposalPreview({
                                                 tier: id,
                                                 tierLabel: option.name,
                                                 onboardingFee: onbFee,
-                                                recurringMonthlyTotal: option.recurringRows.reduce((s, r) => s + r.price, 0),
+                                                recurringMonthlyTotal: option.monthlyPrice,
                                               }),
                                             });
                                           }
@@ -1112,7 +1024,7 @@ export default function OfferProposalPreview({
                       <section>
                         <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em] text-white" style={{ backgroundColor: brandDark }}>Recurring services</p>
                         {bkRow && !lowerTierId ? <div className="px-5 pt-4"><p className="text-sm font-semibold text-slate-500">Monthly Bookkeeping</p><p className="mt-1 text-sm leading-6 text-slate-600">{getTooltip(bkRow)}</p></div> : null}
-                        {lowerTierName ? <p className="px-5 pt-4 text-sm font-semibold text-slate-500">Everything in {lowerTierName}, plus:</p> : null}
+                        {recurringLeadInName ? <p className="px-5 pt-4 text-sm font-semibold text-slate-500">Everything in {recurringLeadInName}, plus:</p> : null}
                         <ul className="space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600">
                           {orderedRecurring.map((row) => (
                             <li key={row.id} className={`flex justify-between gap-3 ${isNew(row.serviceName) ? "font-semibold text-emerald-700" : ""}`}>
@@ -1159,7 +1071,7 @@ export default function OfferProposalPreview({
                       {displayedBonuses.length > 0 ? (
                         <section>
                           <p className="bg-emerald-100 px-5 py-3 text-xs font-bold uppercase tracking-[0.12em] text-emerald-900">Included bonuses</p>
-                          {lowerTierName ? <p className="px-5 pt-4 text-sm font-semibold text-slate-500">Everything in {lowerTierName}, plus:</p> : null}
+                          {bonusLeadInName ? <p className="px-5 pt-4 text-sm font-semibold text-slate-500">Everything in {bonusLeadInName}, plus:</p> : null}
                           <ul className="space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600">
                             {displayedBonuses.map((row) => (
                               <li key={row.id} className="flex justify-between gap-3 font-semibold text-emerald-700">
@@ -1209,7 +1121,7 @@ export default function OfferProposalPreview({
                                                 tier: id,
                                                 tierLabel: option.name,
                                                 onboardingFee: onbFee,
-                                                recurringMonthlyTotal: option.recurringRows.reduce((s, r) => s + r.price, 0),
+                                                recurringMonthlyTotal: option.monthlyPrice,
                                               }),
                                             });
                                           }
@@ -1496,20 +1408,6 @@ export default function OfferProposalPreview({
                       </tr>
                     );
                   })}
-                  <tr style={{ backgroundColor: `color-mix(in srgb, ${brandDark} 8%, white)` }}><th colSpan={4} className="px-5 py-2.5 text-left text-xs font-bold uppercase tracking-wide" style={{ color: brandDark }}>Bookkeeping and support details</th></tr>
-                  {comparisonFeatures.map((feature, i) => (
-                    <tr key={feature.label} className={`border-b border-slate-100 ${i % 2 === 0 ? "bg-white" : "bg-slate-50"}`}>
-                      <th scope="row" className="px-5 py-3 text-left align-top font-semibold text-brandnavy">
-                        {feature.label}
-                        <span className="mt-1 block text-xs font-normal leading-5 text-slate-500">{feature.description}</span>
-                      </th>
-                      {optionMeta.map(({ id }) => (
-                        <td key={id} className="px-4 py-3 text-center align-middle">
-                          {feature.includedIn.includes(id) ? <Check aria-label="Included" className="mx-auto h-5 w-5" style={{ color: brandDark }} /> : <span className="text-slate-300">—</span>}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
                 </tbody>
               </table>
             </div>

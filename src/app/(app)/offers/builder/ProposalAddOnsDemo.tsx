@@ -42,11 +42,9 @@ type CatalogRow = {
   description: string;
   archived: boolean;
   kind: CatalogKind;
-  realEstateSpecific: boolean;
   cadence: BonusCadence;
   option?: ProposalAdditionalOption;
   bonus?: ProposalBonus;
-  applicabilityReason?: string;
 };
 
 export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: ProposalOptionCatalogItem[] }) {
@@ -60,33 +58,19 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
   const bonusById = new Map(bonuses.map((item) => [item.id, item]));
   const rows = catalogOrder.flatMap<CatalogRow>((id) => {
     const option = optionById.get(id);
-    const catalogItem = catalogByKey.get(id);
-    const applicabilityReason = catalogItem
-      ? proposalCatalogItemApplicability(catalogItem, assessment).reason
-      : undefined;
     if (option) {
-      const realEstateSpecific =
-        typeof option.realEstateSpecific === "boolean"
-          ? option.realEstateSpecific
-          : extraIsRealEstateSpecific(option, catalog);
       return [{
         id,
         name: option.name,
         description: option.description,
         archived: option.archived,
         kind: "optional",
-        realEstateSpecific,
         cadence: "monthly",
         option,
-        applicabilityReason,
       }];
     }
     const bonus = bonusById.get(id);
     if (bonus) {
-      const realEstateSpecific =
-        typeof bonus.realEstateSpecific === "boolean"
-          ? bonus.realEstateSpecific
-          : extraIsRealEstateSpecific(bonus, catalog);
       const cadence: BonusCadence = bonus.billingCadence === "monthly" ? "monthly" : "one-time";
       return [{
         id,
@@ -94,10 +78,8 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
         description: bonus.description,
         archived: bonus.archived,
         kind: "included",
-        realEstateSpecific,
         cadence,
         bonus,
-        applicabilityReason,
       }];
     }
     return [];
@@ -116,10 +98,20 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
     setAssessment((current) => {
       const additionalOptions = getProposalAdditionalOptions(current, catalog);
       const bonuses = getProposalBonuses(current, catalog);
+      const bonusPackageSelections = { ...current.bonusPackageSelections };
+      for (const bonus of bonuses) {
+        if (
+          !Object.prototype.hasOwnProperty.call(bonusPackageSelections, bonus.id) &&
+          bonus.defaultPackageIds
+        ) {
+          bonusPackageSelections[bonus.id] = bonus.defaultPackageIds;
+        }
+      }
       const next = {
         ...current,
         additionalOptions,
         bonuses,
+        bonusPackageSelections,
       };
       const optionsCatalogOrder = getOptionsCatalogOrder(next, catalog);
       if (
@@ -178,6 +170,10 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
   }
 
   function deleteRow(row: CatalogRow) {
+    if (catalogByKey.has(row.id)) {
+      archiveRow(row, true);
+      return;
+    }
     if (row.kind === "optional") persistOptions(additionalOptions.filter((item) => item.id !== row.id));
     else {
       persistBonuses(bonuses.filter((item) => item.id !== row.id));
@@ -237,12 +233,6 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
     }
   }
 
-  function toggleRealEstate(row: CatalogRow) {
-    const next = !row.realEstateSpecific;
-    if (row.kind === "optional") updateOption(row.id, { realEstateSpecific: next });
-    else updateBonus(row.id, { realEstateSpecific: next });
-  }
-
   function setBonusCadence(row: CatalogRow, cadence: BonusCadence) {
     if (row.kind !== "included") return;
     updateBonus(row.id, { billingCadence: cadence });
@@ -279,7 +269,9 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
   function selectedBonusPackages(bonus: ProposalBonus) {
     if (!isBonusApplicable(bonus)) return [];
     const saved = assessment.bonusPackageSelections[bonus.id];
-    return Array.isArray(saved) ? saved : legacyBonusIncluded(bonus.id) ? PACKAGES.map(({ id }) => id) : [];
+    return Array.isArray(saved)
+      ? saved
+      : bonus.defaultPackageIds ?? (legacyBonusIncluded(bonus.id) ? PACKAGES.map(({ id }) => id) : []);
   }
 
   function toggleBonusPackage(bonus: ProposalBonus, packageId: PackageId) {
@@ -299,14 +291,14 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
                 <Plus className="h-3.5 w-3.5" /> Add optional service
               </button>
               <button type="button" onClick={() => addRow("included")} className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-base font-medium text-slate-700 transition hover:border-slate-500 hover:bg-slate-100 hover:text-slate-900">
-                <Plus className="h-3.5 w-3.5" /> Add included extra
+                <Plus className="h-3.5 w-3.5" /> Add included service
               </button>
             </div>
           </div>
 
           <section>
             <div className="proposal-builder-card overflow-x-auto rounded-xl border border-slate-200">
-              <table className="min-w-[1180px] w-full border-collapse">
+              <table className="min-w-[1080px] w-full border-collapse">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50">
                     <Heading className="w-20"><span className="sr-only">Reorder</span></Heading>
@@ -315,7 +307,6 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
                     <Heading>Description</Heading>
                     <Heading className="whitespace-nowrap">Offer As</Heading>
                     <Heading className="whitespace-nowrap">Cadence</Heading>
-                    <Heading className="w-24 text-center">Real estate</Heading>
                     <Heading className="text-center">Price / Mo</Heading>
                     {PACKAGES.map(({ id, label }) => (
                       <Heading key={id} className="w-20 text-center">{label}</Heading>
@@ -356,7 +347,6 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
                         <EditableCells
                           editing={isEditing}
                           item={row}
-                          applicabilityReason={row.applicabilityReason}
                           onChange={(changes) => updateRow(row, changes)}
                         />
                         <td className="w-0 whitespace-nowrap px-3 py-4 align-middle">
@@ -376,13 +366,6 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
                           ) : (
                             <span className="text-sm text-slate-300">—</span>
                           )}
-                        </td>
-                        <td className="w-24 px-3 py-4 text-center align-middle">
-                          <Toggle
-                            checked={row.realEstateSpecific}
-                            label={`${row.realEstateSpecific ? "Remove" : "Mark"} ${row.name || "item"} ${row.realEstateSpecific ? "from" : "as"} real-estate only`}
-                            onToggle={() => toggleRealEstate(row)}
-                          />
                         </td>
                         <td className="w-32 px-3 py-4 text-center align-middle">
                           {row.kind === "optional" && option ? (
@@ -543,12 +526,10 @@ function Heading({ children, className = "" }: { children: ReactNode; className?
 function EditableCells({
   editing,
   item,
-  applicabilityReason,
   onChange,
 }: {
   editing: boolean;
   item: { name: string; description: string };
-  applicabilityReason?: string;
   onChange: (changes: { name?: string; description?: string }) => void;
 }) {
   return (
@@ -575,12 +556,7 @@ function EditableCells({
             className="w-full resize-y rounded-md border border-slate-300 bg-white px-2.5 py-1.5 leading-5 text-slate-700 outline-none focus:border-brandnavy"
           />
         ) : (
-          <div>
-            <p className="leading-5 text-slate-500">{item.description || "No description"}</p>
-            {applicabilityReason ? (
-              <p className="mt-1 text-sm font-medium text-slate-400">Why shown: {applicabilityReason}</p>
-            ) : null}
-          </div>
+          <p className="leading-5 text-slate-500">{item.description || "No description"}</p>
         )}
       </td>
     </>
@@ -640,12 +616,13 @@ function Actions({
         <button
           type="button"
           aria-label={`${editing ? "Done editing" : "Edit"} ${itemLabel}`}
+          title={editing ? "Done editing" : "Edit"}
           onClick={toggle}
-          className={`inline-flex h-8 cursor-pointer items-center gap-1 rounded-md px-2 text-xs font-semibold transition ${
+          className={`inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md transition ${
             editing ? "bg-brandnavy text-white hover:opacity-90" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
           }`}
         >
-          {editing ? <><Check className="h-3.5 w-3.5" /> Done</> : <><Pencil className="h-3.5 w-3.5" /> Edit</>}
+          {editing ? <Check className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
         </button>
         <button type="button" aria-label={`Archive ${itemLabel}`} onClick={onArchive} className="cursor-pointer rounded-md p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-900">
           <Archive className="h-4 w-4" />

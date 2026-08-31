@@ -8,7 +8,7 @@ import ProposalAddOnsDemo from "../builder/ProposalAddOnsDemo";
 
 export default async function QuotesAddOnsPage() {
   const { brand } = await requireQuoteStaff();
-  const { proposalCatalog } = await getSchemaCapabilities();
+  const { proposalCatalog, proposalPackageDefaults } = await getSchemaCapabilities();
   const services = proposalCatalog ? await prisma.catalogService.findMany({
     where: { brandId: brand.id, active: true },
     orderBy: [{ priority: "asc" }, { name: "asc" }],
@@ -21,6 +21,8 @@ export default async function QuotesAddOnsPage() {
       clientBenefit: true,
       internalDescription: true,
       defaultInclusion: true,
+      offerSection: true,
+      ...(proposalPackageDefaults ? { defaultPackageKeys: true } : {}),
       defaultPrice: true,
       billingCadence: true,
       requiresPlatformMigration: true,
@@ -42,6 +44,13 @@ export default async function QuotesAddOnsPage() {
       code: service.code,
       description: service.clientBenefit ?? service.internalDescription ?? "",
       defaultInclusion: service.defaultInclusion === "optional" ? "optional" : "included",
+      offerSection: service.offerSection,
+      defaultPackageIds: "defaultPackageKeys" in service && Array.isArray(service.defaultPackageKeys)
+        ? service.defaultPackageKeys.filter(
+            (key): key is "grow" | "improve" | "maintain" =>
+              key === "grow" || key === "improve" || key === "maintain",
+          )
+        : [],
       defaultPrice: service.defaultPrice == null ? 0 : Number(service.defaultPrice),
       billingCadence: service.billingCadence,
       requiresPlatformMigration: service.requiresPlatformMigration,

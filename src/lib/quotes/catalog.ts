@@ -20,8 +20,10 @@ export type CatalogRealEstateMarker = {
 
 export type ProposalOptionCatalogItem = CatalogRealEstateMarker & {
   offerKey: string;
+  offerSection?: string;
   description: string;
   defaultInclusion: "optional" | "included";
+  defaultPackageIds?: Array<"grow" | "improve" | "maintain">;
   defaultPrice: number;
   billingCadence: string;
   requiresPlatformMigration: boolean;

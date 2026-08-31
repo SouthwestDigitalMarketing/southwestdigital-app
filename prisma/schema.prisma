@@ -2220,6 +2220,7 @@ model CatalogService {
   requiresPlatformMigration Boolean             @default(false) @map("requires_platform_migration")
   requiredTargetPlatform    String?             @map("required_target_platform")
   applicabilityNote         String?             @map("applicability_note")
+  defaultPackageKeys        Json?               @map("default_package_keys")
   estimatedHours            Decimal?            @db.Decimal(6, 2)
   internalNotes             String?             @map("internal_notes")
   active                    Boolean             @default(true)

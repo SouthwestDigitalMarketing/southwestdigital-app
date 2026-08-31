@@ -76,7 +76,7 @@ export async function materializeProposalCatalog(
   { freezeApplicability = false }: { freezeApplicability?: boolean } = {},
 ) {
   if (!isRecord(value)) return value;
-  const { proposalCatalog } = await getSchemaCapabilities();
+  const { proposalCatalog, proposalPackageDefaults } = await getSchemaCapabilities();
   if (!proposalCatalog) return value;
 
   const catalog = await prisma.catalogService.findMany({
@@ -92,6 +92,8 @@ export async function materializeProposalCatalog(
       clientBenefit: true,
       internalDescription: true,
       defaultInclusion: true,
+      offerSection: true,
+      ...(proposalPackageDefaults ? { defaultPackageKeys: true } : {}),
       defaultPrice: true,
       billingCadence: true,
       requiresPlatformMigration: true,
@@ -183,23 +185,48 @@ export async function materializeProposalCatalog(
               realEstateSpecific: item.realEstateSpecific,
             })),
         );
-  const bonuses =
-    existingBonuses.length > 0
-      ? withPublicationApplicability(existingBonuses)
-      : withPublicationApplicability(
-          catalog
-            .filter(
-              (item) => item.defaultInclusion !== "optional" && item.offerKey,
-            )
-            .map((item) => ({
-              id: item.offerKey,
-              name: item.name,
-              description: item.clientBenefit ?? item.internalDescription ?? "",
-              archived: false,
-              realEstateSpecific: item.realEstateSpecific,
-              billingCadence: item.billingCadence === "monthly" ? "monthly" : "one-time",
-            })),
-        );
+  const catalogBonuses = catalog
+    .filter((item) => item.defaultInclusion !== "optional" && item.offerKey)
+    .map((item) => ({
+      id: item.offerKey!,
+      name: item.name,
+      description: item.clientBenefit ?? item.internalDescription ?? "",
+      archived: false,
+      realEstateSpecific: item.realEstateSpecific,
+      billingCadence: item.billingCadence === "monthly" ? "monthly" : "one-time",
+      defaultPackageIds: "defaultPackageKeys" in item && Array.isArray(item.defaultPackageKeys)
+        ? item.defaultPackageKeys.filter(
+            (key): key is "grow" | "improve" | "maintain" =>
+              key === "grow" || key === "improve" || key === "maintain",
+          )
+        : [],
+      offerSection: item.offerSection,
+    }));
+  const existingBonusIds = new Set(
+    [...existingBonuses, ...existingOptions].flatMap((item) =>
+      isRecord(item) && typeof item.id === "string" ? [item.id] : [],
+    ),
+  );
+  const newlyCatalogedCoreServices = catalogBonuses.filter(
+    (item) => item.offerSection === "core-services" && !existingBonusIds.has(item.id),
+  );
+  const bonuses = withPublicationApplicability(
+    existingBonuses.length > 0 || existingOptions.length > 0
+      ? [...existingBonuses, ...newlyCatalogedCoreServices]
+      : catalogBonuses,
+  );
+  const existingBonusPackageSelections = isRecord(value.bonusPackageSelections)
+    ? value.bonusPackageSelections
+    : {};
+  const bonusPackageSelections: JsonRecord = { ...existingBonusPackageSelections };
+  for (const item of catalogBonuses) {
+    if (
+      !Object.prototype.hasOwnProperty.call(bonusPackageSelections, item.id) &&
+      item.defaultPackageIds.length > 0
+    ) {
+      bonusPackageSelections[item.id] = item.defaultPackageIds;
+    }
+  }
   const knownIds = [
     ...additionalOptions.flatMap((item) =>
       isRecord(item) && typeof item.id === "string" ? [item.id] : [],
@@ -218,6 +245,7 @@ export async function materializeProposalCatalog(
     ...value,
     additionalOptions,
     bonuses,
+    bonusPackageSelections,
     optionsCatalogOrder: [
       ...storedOrder,
       ...knownIds.filter((id) => !storedOrder.includes(id)),
