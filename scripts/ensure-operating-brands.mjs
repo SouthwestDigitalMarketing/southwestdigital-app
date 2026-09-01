@@ -63,7 +63,28 @@ const brands = [
       foregroundColor: "#ffffff",
     },
   },
+  {
+    slug: "treb",
+    name: "The Real Estate Bookkeeper",
+    appHostname: "app.realestatebookkeeper.com",
+    ownerEmail: "thomas@bookkeepingconroe.com",
+    supportEmail: "contact@realestatebookkeeper.com",
+    theme: {
+      primaryColor: "#1f3a2e",
+      accentColor: "#c9a86a",
+      backgroundColor: "#f7f8fa",
+      foregroundColor: "#17202a",
+    },
+  },
 ];
+
+const THOMAS_EMAILS = [
+  "thomas@bookkeepingconroe.com",
+  "thomas@realestatebookkeeper.com",
+  "tmacdonald7@gmail.com",
+];
+
+const THOMAS_OWNED_BRAND_SLUGS = ["bc", "treb"];
 
 async function ensureUser(email, name) {
   const existing = await prisma.user.findUnique({ where: { email } });
@@ -146,10 +167,45 @@ async function ensureBrand(definition) {
   return { slug: brand.slug, hostname: definition.appHostname, ownerEmail: definition.ownerEmail };
 }
 
+async function ensureThomasCoOwnership() {
+  const targetBrands = await prisma.brand.findMany({
+    where: { slug: { in: THOMAS_OWNED_BRAND_SLUGS } },
+    select: { id: true, slug: true },
+  });
+  const foundSlugs = new Set(targetBrands.map(({ slug }) => slug));
+  for (const slug of THOMAS_OWNED_BRAND_SLUGS) {
+    if (!foundSlugs.has(slug)) throw new Error(`Brand "${slug}" was not seeded — cannot assign co-ownership`);
+  }
+
+  const memberships = [];
+  for (const email of THOMAS_EMAILS) {
+    const user = await ensureUser(email, "Thomas MacDonald");
+    for (const brand of targetBrands) {
+      const membership = await prisma.brandMembership.upsert({
+        where: { brandId_userId: { brandId: brand.id, userId: user.id } },
+        create: {
+          brandId: brand.id,
+          userId: user.id,
+          role: BrandRole.OWNER,
+          status: MembershipStatus.ACTIVE,
+        },
+        update: {
+          role: BrandRole.OWNER,
+          status: MembershipStatus.ACTIVE,
+        },
+        select: { role: true, status: true },
+      });
+      memberships.push({ email, brand: brand.slug, ...membership });
+    }
+  }
+  return memberships;
+}
+
 const result = [];
 for (const definition of brands) {
   result.push(await ensureBrand(definition));
 }
+const thomasMemberships = await ensureThomasCoOwnership();
 
-console.log(JSON.stringify({ ensured: result }, null, 2));
+console.log(JSON.stringify({ ensured: result, thomasMemberships }, null, 2));
 await prisma.$disconnect();
