@@ -32,11 +32,13 @@ export function BrandShell({
           {brand?.theme?.logoUrl ? (
             // Brand administrators control this URL; alt text remains explicit.
             // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={brand.theme.logoUrl}
-              alt={brand.theme.logoAlt ?? `${brand.name} logo`}
-              className="mx-auto max-h-16 max-w-64 object-contain"
-            />
+            <div className="mx-auto h-16 w-full max-w-64">
+              <img
+                src={brand.theme.logoUrl}
+                alt={brand.theme.logoAlt ?? `${brand.name} logo`}
+                className="brand-asset-fit"
+              />
+            </div>
           ) : (
             <p className="text-sm font-bold uppercase tracking-[0.22em] text-[var(--brand-primary)]">
               {brand?.name ?? "Southwest Digital App"}

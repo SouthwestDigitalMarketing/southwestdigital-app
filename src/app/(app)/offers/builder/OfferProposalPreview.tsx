@@ -779,7 +779,9 @@ export default function OfferProposalPreview({
             <header className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 {brand.theme?.logoUrl ? (
-                  <img src={brand.theme.logoUrl} alt={brand.name} className="max-h-10 max-w-44 object-contain" />
+                  <div className="h-10 w-full max-w-44">
+                    <img src={brand.theme.logoUrl} alt={brand.name} className="brand-asset-fit brand-asset-fit-left" />
+                  </div>
                 ) : (
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{brand.name}</p>
                 )}

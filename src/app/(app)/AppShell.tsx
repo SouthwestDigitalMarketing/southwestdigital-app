@@ -164,7 +164,9 @@ export function AppShell({
     ? (sidebarLightLogo ?? sidebarDarkLogo)
     : (sidebarDarkLogo ?? sidebarLightLogo);
   const sidebarLogoClass =
-    sidebarLogoType === "logo" ? "max-h-8 max-w-44 object-contain" : "h-8 w-8 rounded object-contain";
+    sidebarLogoType === "logo"
+      ? "brand-asset-fit brand-asset-fit-left"
+      : "h-8 w-8 rounded object-contain";
 
   const darkColor = brand.theme?.darkColor ?? primary;
   const navTextColor = isLight ? darkColor : "rgba(255,255,255,0.7)";
@@ -191,15 +193,17 @@ export function AppShell({
       }}
     >
       <div
-        className="flex h-16 items-center px-5"
+        className="flex h-16 w-full min-w-0 items-center px-5"
         style={{ borderBottom: `1px solid ${dividerColor}` }}
       >
         {sidebarDisplayLogo ? (
-          <img
-            src={sidebarDisplayLogo}
-            alt={sidebarLogoType === "logo" ? brand.name : ""}
-            className={sidebarLogoClass}
-          />
+          <div className={sidebarLogoType === "logo" ? "h-8 min-w-0 w-full" : "h-8 w-8 shrink-0"}>
+            <img
+              src={sidebarDisplayLogo}
+              alt={sidebarLogoType === "logo" ? brand.name : ""}
+              className={sidebarLogoClass}
+            />
+          </div>
         ) : null}
         {!sidebarDisplayLogo ? (
           <span className="text-sm font-bold uppercase tracking-widest" style={{ color: navTextColor }}>

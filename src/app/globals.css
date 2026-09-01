@@ -1,5 +1,27 @@
 @import "tailwindcss";
 
+/* Beat Tailwind preflight `img { height: auto }` so wide wordmarks scale inside their box. */
+img.brand-asset-fit {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+img.brand-asset-fit-left {
+  object-position: left center;
+}
+
+img.brand-asset-mark {
+  display: block;
+  width: 4rem;
+  height: 4rem;
+  margin-inline: auto;
+  object-fit: contain;
+}
+
 :root {
   color-scheme: light;
   --brand-primary: #17324d;

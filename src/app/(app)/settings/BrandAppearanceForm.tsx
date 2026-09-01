@@ -172,7 +172,7 @@ function AssetDropzone({
   const previewBg = isDark ? brandDark : "#ffffff";
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+    <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white">
       <div
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => {
@@ -181,19 +181,23 @@ function AssetDropzone({
           if (file) onUpload(kind, file);
         }}
         onClick={() => inputRef.current?.click()}
-        className="flex h-40 cursor-pointer items-center justify-center p-6 transition-opacity hover:opacity-80"
+        className="h-40 min-w-0 cursor-pointer p-6 transition-opacity hover:opacity-80"
         style={{ backgroundColor: previewBg }}
       >
         {url ? (
           <img
             src={url}
             alt={label}
-            className={`max-w-full object-contain ${isMark ? "h-16 w-16" : "max-h-12"}`}
+            className={isMark ? "brand-asset-mark" : "brand-asset-fit"}
           />
-        ) : isMark ? (
-          <ExampleMarkPair onDark={isDark} brandColor={brandPrimary} />
         ) : (
-          <ExampleLogoPair onDark={isDark} brandColor={brandPrimary} />
+          <div className="flex h-full w-full items-center justify-center">
+            {isMark ? (
+              <ExampleMarkPair onDark={isDark} brandColor={brandPrimary} />
+            ) : (
+              <ExampleLogoPair onDark={isDark} brandColor={brandPrimary} />
+            )}
+          </div>
         )}
       </div>
       <div className="border-t border-slate-100 p-4">
@@ -341,7 +345,7 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
       {/* Logo */}
       <section className="rounded-xl border border-slate-200 bg-white p-6">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Logo</h2>
-        <div className="mt-5 grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <div className="mt-5 grid min-w-0 grid-cols-2 gap-4 xl:grid-cols-4">
           <AssetDropzone kind="mark" url={logoMarkUrl} uploading={uploading === "mark"} onUpload={uploadAsset} onRemove={removeAsset} brandPrimary={colorValue} brandDark={normalizeBrandColor(darkColor) ?? colorValue} />
           <AssetDropzone kind="logo" url={logoUrl} uploading={uploading === "logo"} onUpload={uploadAsset} onRemove={removeAsset} brandPrimary={colorValue} brandDark={normalizeBrandColor(darkColor) ?? colorValue} />
           <AssetDropzone kind="mark-dark" url={logoMarkDarkUrl} uploading={uploading === "mark-dark"} onUpload={uploadAsset} onRemove={removeAsset} brandPrimary={colorValue} brandDark={normalizeBrandColor(darkColor) ?? colorValue} />
