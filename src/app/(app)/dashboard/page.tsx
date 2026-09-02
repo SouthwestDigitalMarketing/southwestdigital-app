@@ -4,6 +4,7 @@ import { requireAppBrand } from "@/lib/brands/staff";
 import { ReviewOutcome } from "@prisma/client";
 import { getTrafficTrend, getTotalKeyEvents } from "@/lib/analytics/ga4";
 import { getChannelMetrics, getAverageWatchDuration } from "@/lib/youtube/analytics";
+import { getYouTubeRefreshToken } from "@/lib/youtube/credentials";
 import { PlayCircle, Clock, Globe, Target, FileText, Eye, Star } from "lucide-react";
 import { StatCard } from "./StatCards";
 import { DashboardControls } from "./DashboardControls";
@@ -279,8 +280,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   let previousYtViews = 0;
   let previousAvgWatchDuration = 0;
   const ytChannelId = theme?.youtubeChannelId;
-  const slugEnvKey = `YOUTUBE_REFRESH_TOKEN_${brand.slug.toUpperCase().replace(/-/g, "_")}`;
-  const ytRefreshToken = process.env[slugEnvKey]?.trim();
+  const ytRefreshToken = await getYouTubeRefreshToken(brand.id, brand.slug);
   if (ytChannelId && ytRefreshToken) {
     try {
       const [metrics, duration, previousMetrics, previousDuration] = await Promise.all([

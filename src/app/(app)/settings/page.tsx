@@ -14,11 +14,12 @@ import { requestOrigin } from "@/lib/stripe/requestOrigin";
 import { ToolLinksForm } from "./ToolLinksForm";
 import { BrandAppearanceForm } from "./BrandAppearanceForm";
 import { StripeConnectForm } from "./StripeConnectForm";
+import { YouTubeIntegrationForm } from "./YouTubeIntegrationForm";
 
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ stripe?: string }>;
+  searchParams: Promise<{ stripe?: string; youtube?: string }>;
 }) {
   const { brand } = await requireStaffBrand();
   const query = await searchParams;
@@ -47,6 +48,10 @@ export default async function SettingsPage({
   let connect = await prisma.brandIntegration.findUnique({
     where: { brandId_key: { brandId: brand.id, key: STRIPE_CONNECT_KEY } },
     select: { status: true, externalAccountId: true },
+  });
+  const youtube = await prisma.brandIntegration.findUnique({
+    where: { brandId_key: { brandId: brand.id, key: "youtube" } },
+    select: { status: true, externalAccountId: true, publicIdentifier: true },
   });
   if ((query.stripe === "return" || query.stripe === "refresh") && connect?.externalAccountId) {
     await syncConnectedAccountStatus(connect.externalAccountId);
@@ -78,6 +83,12 @@ export default async function SettingsPage({
                 ? "return"
                 : null
           }
+        />
+        <YouTubeIntegrationForm
+          status={youtube?.status === IntegrationStatus.ACTIVE ? "active" : youtube?.status === IntegrationStatus.ERROR ? "error" : "missing"}
+          channelName={youtube?.publicIdentifier ?? null}
+          channelId={youtube?.externalAccountId ?? null}
+          notice={query.youtube}
         />
         <BrandAppearanceForm
           theme={{

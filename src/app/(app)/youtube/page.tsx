@@ -15,6 +15,7 @@ import { YouTubeGoalCard } from "./YouTubeGoalCard";
 import { getSourceTagClicksCumulative, type SourceTagClickReport } from "@/lib/cloudflare/clickSnapshots";
 import { getSourceTagVideos, type SourceTagVideo } from "@/lib/youtube/sourceTagVideos";
 import { DomainPurpose } from "@prisma/client";
+import { getYouTubeRefreshToken } from "@/lib/youtube/credentials";
 
 function YouTubeIcon({ className }: { className?: string }) {
   return (
@@ -51,20 +52,19 @@ export default async function YouTubePage() {
       <div className="p-8">
         <h1 className="sr-only">YouTube</h1>
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
-        <p className="mt-2 text-sm text-slate-400">YouTube channel not configured for this brand.</p>
+        <p className="mt-2 text-sm text-slate-400">YouTube channel not configured for this brand. <a className="font-semibold underline" href="/api/youtube/connect">Connect YouTube</a>.</p>
       </div>
     );
   }
 
-  const slugEnvKey = `YOUTUBE_REFRESH_TOKEN_${brand.slug.toUpperCase().replace(/-/g, "_")}`;
-  const refreshToken = process.env[slugEnvKey]?.trim();
+  const refreshToken = await getYouTubeRefreshToken(brand.id, brand.slug);
 
   if (!refreshToken) {
     return (
       <div className="p-8">
         <h1 className="sr-only">YouTube</h1>
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
-        <p className="mt-2 text-sm text-slate-400">YouTube credentials not configured.</p>
+        <p className="mt-2 text-sm text-slate-400">YouTube is not connected for this brand. <a className="font-semibold underline" href="/api/youtube/connect">Connect YouTube</a>.</p>
       </div>
     );
   }
@@ -127,7 +127,9 @@ export default async function YouTubePage() {
         <h1 className="sr-only">YouTube</h1>
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
         <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          {error ?? "Analytics unavailable."}
+          {/refresh token (expired|revoked)/i.test(error ?? "") ? (
+            <>YouTube authorization has expired. <a className="font-semibold underline" href="/api/youtube/connect">Reconnect YouTube</a> to restore analytics.</>
+          ) : error ?? "Analytics unavailable."}
         </div>
       </div>
     );

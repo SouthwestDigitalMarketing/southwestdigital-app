@@ -19,10 +19,10 @@ export type TopVideoRow = {
 
 type TokenResponse = { access_token: string; expires_in: number };
 
-let cachedToken: { value: string; expiresAt: number } | null = null;
+let cachedToken: { refreshToken: string; value: string; expiresAt: number } | null = null;
 
 export async function getAccessToken(refreshToken: string): Promise<string> {
-  if (cachedToken && Date.now() < cachedToken.expiresAt) {
+  if (cachedToken?.refreshToken === refreshToken && Date.now() < cachedToken.expiresAt) {
     return cachedToken.value;
   }
 
@@ -63,6 +63,7 @@ export async function getAccessToken(refreshToken: string): Promise<string> {
 
   const data = (await res.json()) as TokenResponse;
   cachedToken = {
+    refreshToken,
     value: data.access_token,
     expiresAt: Date.now() + (data.expires_in - 60) * 1000,
   };
