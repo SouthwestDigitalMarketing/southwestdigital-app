@@ -558,6 +558,7 @@ model Brand {
   relatedContactLinks    ContactBrandLink[]     @relation("ContactRelatedBrands")
   features               BrandFeature[]
   integrations           BrandIntegration[]
+  agreementTemplates     AgreementTemplate[]
   auditEvents            AuditEvent[]
   customerAccounts       CustomerAccount[]
   leads                  Lead[]
@@ -662,10 +663,10 @@ model BrandTheme {
   sidebarLogoType            String   @default("mark")
   logoAlt                    String?
   mode                       String   @default("system")
-  primaryColor               String   @default("#17324d")
+  themePreset                String   @default("brand-colors")
+  lightColor                 String   @default("#17324d") @map("primaryColor")
   darkColor                  String?
   accentColor                String   @default("#d79b3b")
-  accentDarkColor            String?
   backgroundColor            String   @default("#f7f8fa")
   foregroundColor            String   @default("#17202a")
   supportEmail               String?
@@ -686,8 +687,9 @@ model BrandTheme {
   monthlyOffersAcceptedGoal  Int?
   proposalFeaturedVideoUrl   String?
   proposalFeaturedImageUrl   String?
-  proposalPrimaryColor       String?
+  proposalLightColor         String? @map("proposalPrimaryColor")
   proposalAccentColor        String?
+  accentForegroundColor      String   @default("#ffffff")
   brand                      Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
@@ -2536,6 +2538,25 @@ model BrandIntegration {
   @@unique([brandId, key])
   @@index([brandId, provider, status])
   @@index([brandId, assetOwner])
+}
+
+model AgreementTemplate {
+  id          String    @id @default(cuid())
+  brandId     String
+  key         String
+  name        String
+  description String?
+  content     String    @db.Text
+  status      String    @default("active")
+  isDefault   Boolean   @default(false)
+  archivedAt  DateTime?
+  brand       Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([brandId, key])
+  @@index([brandId, status, name])
+  @@index([brandId, isDefault, status])
 }
 
 model AuditEvent {

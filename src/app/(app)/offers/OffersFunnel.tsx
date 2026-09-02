@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 const STEPS = [
-  { key: "sent", label: "Sent", color: "var(--brand-dark, var(--brand-primary))" },
+  { key: "sent", label: "Sent", color: "var(--brand-dark, var(--brand-light))" },
   { key: "openedEmail", label: "Opened email", color: "#2563eb" },
   { key: "openedProposal", label: "Opened proposal", color: "var(--brand-accent, #d79b3b)" },
   { key: "continued", label: "Continued from cover", color: "#7c3aed" },
@@ -301,10 +301,10 @@ export function OffersFunnel() {
                   const entries = payload.filter((entry) => Number(entry.value) > 0);
                   if (!entries.length) return null;
                   return (
-                    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-base shadow-sm">
-                      <p className="mb-1.5 font-semibold text-slate-700">{tooltipDate(String(label))}</p>
+                    <div className="ui-tooltip rounded-lg px-3 py-2 text-base shadow-sm">
+                      <p className="mb-1.5 font-semibold">{tooltipDate(String(label))}</p>
                       {entries.map((entry) => (
-                        <p key={String(entry.dataKey)} className="text-slate-600">
+                        <p key={String(entry.dataKey)} className="opacity-80">
                           {STEPS.find((step) => step.key === entry.dataKey)?.label}: {Number(entry.value ?? 0)}
                         </p>
                       ))}

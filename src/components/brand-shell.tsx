@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from "react";
 import type { BrandSummary } from "@/lib/brands/repository";
 
 type BrandCssProperties = CSSProperties & {
-  "--brand-primary": string;
+  "--brand-light": string;
   "--brand-accent": string;
   "--brand-background": string;
   "--brand-foreground": string;
@@ -16,7 +16,7 @@ export function BrandShell({
   children: ReactNode;
 }) {
   const style: BrandCssProperties = {
-    "--brand-primary": brand?.theme?.primaryColor ?? "#17324d",
+    "--brand-light": brand?.theme?.lightColor ?? "#17324d",
     "--brand-accent": brand?.theme?.accentColor ?? "#d79b3b",
     "--brand-background": brand?.theme?.backgroundColor ?? "#f7f8fa",
     "--brand-foreground": brand?.theme?.foregroundColor ?? "#17202a",
@@ -40,7 +40,7 @@ export function BrandShell({
               />
             </div>
           ) : (
-            <p className="text-sm font-bold uppercase tracking-[0.22em] text-[var(--brand-primary)]">
+            <p className="text-sm font-bold uppercase tracking-[0.22em] text-[var(--brand-light)]">
               {brand?.name ?? "Southwest Digital App"}
             </p>
           )}

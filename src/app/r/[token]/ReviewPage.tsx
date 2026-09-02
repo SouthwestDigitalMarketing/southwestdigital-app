@@ -9,14 +9,14 @@ export function ReviewPage({
   token,
   recipientName,
   brandName,
-  primaryColor,
+  lightColor,
   accentColor,
   googleReviewUrl,
 }: {
   token: string;
   recipientName: string | null;
   brandName: string;
-  primaryColor: string;
+  lightColor: string;
   accentColor: string;
   googleReviewUrl: string;
 }) {
@@ -50,7 +50,7 @@ export function ReviewPage({
       <div className="w-full max-w-sm">
         <p
           className="text-center text-xs font-bold uppercase tracking-widest"
-          style={{ color: primaryColor }}
+          style={{ color: lightColor }}
         >
           {brandName}
         </p>
@@ -121,7 +121,7 @@ export function ReviewPage({
               type="submit"
               disabled={!rating || pending}
               className="mt-4 w-full rounded-full py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-              style={{ backgroundColor: primaryColor }}
+              style={{ backgroundColor: lightColor }}
             >
               {pending ? "Submitting…" : "Submit feedback"}
             </button>

@@ -282,7 +282,7 @@ export default function ProposalAppDemoHeader({
             <div className="mt-6 flex flex-wrap justify-end gap-3">
               <button type="button" onClick={() => setIsExitDialogOpen(false)} className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">Continue editing</button>
               <button type="button" onClick={() => { setIsExitDialogOpen(false); exitToOffers(); }} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Exit without saving</button>
-              <button type="button" onClick={() => void saveAndExit()} disabled={saveStatus === "saving"} className="rounded-lg bg-brandnavy px-3 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50">{saveStatus === "saving" ? "Saving…" : "Save & exit"}</button>
+              <button type="button" onClick={() => void saveAndExit()} disabled={saveStatus === "saving"} className="ui-action-primary rounded-lg px-3 py-2 text-sm font-semibold transition disabled:opacity-50">{saveStatus === "saving" ? "Saving…" : "Save & exit"}</button>
             </div>
           </div>
         </div>

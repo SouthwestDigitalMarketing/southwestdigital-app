@@ -30,7 +30,7 @@ export function SendReviewDialog({ onSent }: { onSent: () => void }) {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-slate-700"
+        className="ui-action-primary flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide transition"
       >
         <Send size={13} />
         Send Review Request
@@ -90,7 +90,7 @@ export function SendReviewDialog({ onSent }: { onSent: () => void }) {
                 <button
                   type="submit"
                   disabled={pending}
-                  className="flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-slate-700 disabled:opacity-50"
+                  className="ui-action-primary flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide transition disabled:opacity-50"
                 >
                   <Send size={13} />
                   {pending ? "Sending…" : "Send"}

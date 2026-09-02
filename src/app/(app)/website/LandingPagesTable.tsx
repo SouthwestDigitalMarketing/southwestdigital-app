@@ -95,7 +95,7 @@ export function LandingPagesTable({ rows }: { rows: ProcessedLandingRow[] }) {
 
       {tooltip && (
         <div
-          className="pointer-events-none fixed z-50 w-56 -translate-x-1/2 -translate-y-full rounded-lg bg-slate-800 px-3 py-2 text-xs text-white shadow-lg"
+          className="ui-tooltip pointer-events-none fixed z-50 w-56 -translate-x-1/2 -translate-y-full rounded-lg px-3 py-2 text-xs shadow-lg"
           style={{ left: tooltip.x, top: tooltip.y - 8 }}
         >
           {tooltip.text}

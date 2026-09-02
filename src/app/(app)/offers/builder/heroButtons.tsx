@@ -149,14 +149,9 @@ export function HeroVideoButtonToggle({
             aria-checked={value.visible}
             aria-label="Show video button"
             onClick={() => onChange({ ...value, visible: !value.visible })}
-            className="relative h-7 w-12 rounded-full transition-colors"
-            style={{ backgroundColor: value.visible ? "var(--brand-primary)" : "#64748b" }}
+            className="ui-toggle-switch"
           >
-            <span
-              className={`absolute left-1 top-1 h-5 w-5 rounded-full border border-slate-300 bg-white shadow-sm transition-transform ${
-                value.visible ? "translate-x-5" : "translate-x-0.5"
-              }`}
-            />
+            <span className="ui-toggle-switch-thumb" />
           </button>
           <span className={`text-xs font-semibold ${value.visible ? "text-slate-900" : "text-slate-400"}`}>
             Show

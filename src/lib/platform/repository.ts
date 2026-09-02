@@ -164,7 +164,7 @@ export async function createBrandOnboarding(
           create: {
             logoUrl: values.logoUrl,
             logoAlt: `${values.name} logo`,
-            primaryColor: values.primaryColor,
+            lightColor: values.lightColor,
             accentColor: values.accentColor,
             backgroundColor: values.backgroundColor,
             foregroundColor: values.foregroundColor,
@@ -273,7 +273,7 @@ export async function updateBrandTheme(
         logoUrl: values.logoUrl,
         logoAlt: `${brand.name} logo`,
         supportEmail: values.supportEmail,
-        primaryColor: values.primaryColor,
+        lightColor: values.lightColor,
         accentColor: values.accentColor,
         backgroundColor: values.backgroundColor,
         foregroundColor: values.foregroundColor,
@@ -281,7 +281,7 @@ export async function updateBrandTheme(
       update: {
         logoUrl: values.logoUrl,
         supportEmail: values.supportEmail,
-        primaryColor: values.primaryColor,
+        lightColor: values.lightColor,
         accentColor: values.accentColor,
         backgroundColor: values.backgroundColor,
         foregroundColor: values.foregroundColor,

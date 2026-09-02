@@ -391,7 +391,7 @@ function AddItemForm({
         <button
           type="submit"
           disabled={isPending}
-          className="flex items-center gap-1.5 rounded-lg bg-brandnavy px-4 py-2 text-sm font-semibold text-white transition hover:bg-brandnavy/90 disabled:opacity-50"
+          className="ui-action-primary flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold transition disabled:opacity-50"
         >
           <Plus className="h-4 w-4" />
           Add
@@ -442,7 +442,7 @@ function EditItemForm({
         <button
           type="submit"
           disabled={isPending}
-          className="flex items-center gap-1.5 rounded-lg bg-brandnavy px-4 py-2 text-sm font-semibold text-white transition hover:bg-brandnavy/90 disabled:opacity-50"
+          className="ui-action-primary flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold transition disabled:opacity-50"
         >
           <Check className="h-4 w-4" />
           Save

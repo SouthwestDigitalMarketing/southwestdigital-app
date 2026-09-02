@@ -13,6 +13,7 @@ import {
 import { requestOrigin } from "@/lib/stripe/requestOrigin";
 import { DEFAULT_TOOL_LINKS, parseToolUrl, type ToolLinkKey } from "@/lib/brands/tools";
 import { normalizeBrandColor } from "@/lib/brands/colors";
+import { BRAND_COLORS_CHOICE, normalizeThemeChoice } from "@/lib/brands/themePresets";
 
 function clean(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
@@ -20,27 +21,28 @@ function clean(value: FormDataEntryValue | null) {
 
 export async function updateBrandAppearanceAction(formData: FormData) {
   const { brand } = await requireStaffBrandOrThrow();
-  const primaryColor = normalizeBrandColor(clean(formData.get("primaryColor")));
+  const lightColor = normalizeBrandColor(clean(formData.get("lightColor")));
   const rawDark = clean(formData.get("darkColor"));
   const darkColor = rawDark ? normalizeBrandColor(rawDark) : null;
   const rawAccent = clean(formData.get("accentColor"));
   const accentColor = rawAccent ? normalizeBrandColor(rawAccent) : null;
-  const rawAccentDark = clean(formData.get("accentDarkColor"));
-  const accentDarkColor = rawAccentDark ? normalizeBrandColor(rawAccentDark) : null;
+  const accentForegroundColor = clean(formData.get("accentForegroundColor"));
   const mode = clean(formData.get("mode"));
   const sidebarLogoType = clean(formData.get("sidebarLogoType"));
+  const rawThemePreset = clean(formData.get("themePreset"));
+  const themePreset = rawThemePreset ? normalizeThemeChoice(rawThemePreset) : BRAND_COLORS_CHOICE;
 
-  if (!primaryColor) {
+  if (!lightColor) {
     throw new Error("Enter a HEX color or an RGB value, such as #17324d or rgb(23, 50, 77).");
   }
   if (rawDark && !darkColor) {
     throw new Error("Enter a valid HEX color for the Dark brand color.");
   }
   if (rawAccent && !accentColor) {
-    throw new Error("Enter a valid HEX color for the Accent Light brand color.");
+    throw new Error("Enter a valid HEX color for the Accent brand color.");
   }
-  if (rawAccentDark && !accentDarkColor) {
-    throw new Error("Enter a valid HEX color for the Accent Dark brand color.");
+  if (!["#ffffff", "#111827"].includes(accentForegroundColor)) {
+    throw new Error("Choose white or black text for accent buttons.");
   }
   if (!new Set(["light", "dark"]).has(mode)) {
     throw new Error("Choose Light or Dark for the portal theme.");
@@ -51,8 +53,8 @@ export async function updateBrandAppearanceAction(formData: FormData) {
 
   await prisma.brandTheme.upsert({
     where: { brandId: brand.id },
-    create: { brandId: brand.id, primaryColor, darkColor, accentColor: accentColor ?? "#d79b3b", accentDarkColor, mode, sidebarLogoType },
-    update: { primaryColor, darkColor, accentColor: accentColor ?? undefined, accentDarkColor, mode, sidebarLogoType },
+    create: { brandId: brand.id, lightColor, darkColor, accentColor: accentColor ?? "#d79b3b", accentForegroundColor, mode, sidebarLogoType, themePreset },
+    update: { lightColor, darkColor, accentColor: accentColor ?? undefined, accentForegroundColor, mode, sidebarLogoType, themePreset },
   });
 
   revalidatePath("/", "layout");
@@ -66,7 +68,7 @@ export async function updateProposalMediaAction(formData: FormData) {
 
   await prisma.brandTheme.upsert({
     where: { brandId: brand.id },
-    create: { brandId: brand.id, primaryColor: "#17324d", mode: "system", sidebarLogoType: "mark", proposalFeaturedVideoUrl, proposalFeaturedImageUrl },
+    create: { brandId: brand.id, lightColor: "#17324d", mode: "system", sidebarLogoType: "mark", proposalFeaturedVideoUrl, proposalFeaturedImageUrl },
     update: { proposalFeaturedVideoUrl, proposalFeaturedImageUrl },
   });
 

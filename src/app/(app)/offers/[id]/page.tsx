@@ -203,7 +203,7 @@ export default async function QuoteDetailPage({ params, searchParams }: PageProp
               <input type="hidden" name="id" value={quote.id} />
               <button
                 type="submit"
-                className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+                className="ui-action-primary rounded-md px-4 py-2 text-sm font-medium transition"
               >
                 Mark as sent
               </button>

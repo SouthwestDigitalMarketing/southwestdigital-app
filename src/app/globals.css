@@ -24,7 +24,7 @@ img.brand-asset-mark {
 
 :root {
   color-scheme: light;
-  --brand-primary: #17324d;
+  --brand-light: #17324d;
   --brand-accent: #d79b3b;
   --color-accent-500: var(--brand-accent);
   --color-accent-100: color-mix(in srgb, var(--brand-accent) 15%, white);
@@ -39,6 +39,17 @@ img.brand-asset-mark {
   --color-brandnavy-700: #1b263b;
   --color-brandnavy-900: #10192a;
   --color-brandnavy-foreground: #ffffff;
+  --action-primary-background: var(--brand-accent);
+  --action-primary-foreground: #111827;
+  --action-secondary-background: #ffffff;
+  --action-secondary-foreground: #334155;
+  --action-secondary-border: #cbd5e1;
+  --action-danger-background: #ffffff;
+  --action-danger-foreground: #b91c1c;
+  --action-danger-border: #fecaca;
+  --surface-overlay: var(--brand-dark, var(--brand-light));
+  --text-on-overlay: #ffffff;
+  --border-on-overlay: color-mix(in srgb, var(--surface-overlay) 82%, #ffffff);
 }
 
 /* Keep offer-table copy comfortably readable at every viewport. */
@@ -76,8 +87,8 @@ img.brand-asset-mark {
 }
 
 .proposal-options-editor .proposal-options-check {
-  background-color: var(--brand-dark, var(--brand-primary));
-  border-color: var(--brand-dark, var(--brand-primary));
+  background-color: var(--brand-dark, var(--brand-light));
+  border-color: var(--brand-dark, var(--brand-light));
 }
 
 .proposal-options-editor .proposal-options-kind {
@@ -91,8 +102,8 @@ img.brand-asset-mark {
 }
 
 .proposal-options-editor .proposal-options-kind-optional {
-  background-color: var(--brand-dark, var(--brand-primary));
-  border-color: var(--brand-dark, var(--brand-primary));
+  background-color: var(--brand-dark, var(--brand-light));
+  border-color: var(--brand-dark, var(--brand-light));
   color: #ffffff;
 }
 
@@ -107,7 +118,7 @@ img.brand-asset-mark {
 [data-theme="dark"] .proposal-options-editor .proposal-options-kind-optional {
   background-color: #ffffff;
   border-color: #ffffff;
-  color: var(--brand-dark, var(--brand-primary));
+  color: var(--brand-dark, var(--brand-light));
 }
 
 [data-theme="dark"] .proposal-options-editor .proposal-options-kind.proposal-options-kind-optional {
@@ -123,6 +134,83 @@ body {
   min-height: 100%;
 }
 
+/* Semantic action variants. Pages supply theme tokens; controls consume these
+   classes and never choose their own foreground/background pairing. */
+:is(.ui-action-primary, .ui-action-secondary, .ui-action-danger, .ui-action-ghost) {
+  cursor: pointer;
+}
+
+:is(.ui-action-primary, .ui-action-secondary, .ui-action-danger, .ui-action-ghost):focus-visible {
+  outline: 2px solid var(--action-primary-background);
+  outline-offset: 2px;
+}
+
+:is(.ui-action-primary, .ui-action-secondary, .ui-action-danger, .ui-action-ghost):disabled {
+  cursor: not-allowed;
+}
+
+.ui-action-primary {
+  background-color: var(--action-primary-background);
+  border-color: var(--action-primary-background);
+  color: var(--action-primary-foreground);
+}
+
+.ui-action-primary:not(:disabled):hover {
+  filter: brightness(0.94);
+}
+
+.ui-action-secondary {
+  background-color: var(--action-secondary-background);
+  border-color: var(--action-secondary-border);
+  color: var(--action-secondary-foreground);
+}
+
+.ui-action-secondary:not(:disabled):hover,
+.ui-action-ghost:not(:disabled):hover {
+  background-color: var(--surface-subtle, #f8fafc);
+}
+
+.ui-action-danger {
+  background-color: var(--action-danger-background);
+  border-color: var(--action-danger-border);
+  color: var(--action-danger-foreground);
+}
+
+.ui-action-danger:not(:disabled):hover {
+  background-color: color-mix(in srgb, var(--action-danger-foreground) 8%, var(--action-danger-background));
+}
+
+.ui-action-ghost {
+  background-color: transparent;
+  border-color: transparent;
+  color: var(--action-secondary-foreground);
+}
+
+/* Overlay components consume semantic, brand-derived theme roles. */
+.ui-tooltip {
+  background-color: var(--surface-overlay);
+  border: 1px solid var(--border-on-overlay);
+  color: var(--text-on-overlay);
+}
+
+.ui-contrast-badge[data-rating="AAA"] {
+  background-color: #ecfdf5;
+  border-color: #6ee7b7;
+  color: #064e3b;
+}
+
+.ui-contrast-badge[data-rating="AA"] {
+  background-color: #eff6ff;
+  border-color: #93c5fd;
+  color: #1e3a8a;
+}
+
+.ui-contrast-badge[data-rating="Fail"] {
+  background-color: #fff1f2;
+  border-color: #fda4af;
+  color: #881337;
+}
+
 body {
   margin: 0;
   background: var(--brand-background);
@@ -130,9 +218,44 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-.sidebar-branding-toggle {
-  border: 0;
-  box-shadow: 0 0 0 2px #475569;
+/* Toggle switch: shared appearance across the app. State is driven by
+   aria-checked so consumers don't need inline styles. In dark themes the
+   track is white regardless of position, and the thumb inverts to dark. */
+.ui-toggle-switch {
+  position: relative;
+  height: 1.75rem;
+  width: 3rem;
+  border-radius: 9999px;
+  background-color: #64748b;
+  transition: background-color 0.15s;
+  cursor: pointer;
+}
+.ui-toggle-switch[aria-checked="true"] {
+  background-color: var(--brand-light);
+}
+[data-theme="dark"] .ui-toggle-switch,
+[data-theme="dark"] .ui-toggle-switch[aria-checked="true"] {
+  background-color: #ffffff;
+}
+
+.ui-toggle-switch-thumb {
+  position: absolute;
+  top: 0.25rem;
+  left: 0.25rem;
+  height: 1.25rem;
+  width: 1.25rem;
+  border-radius: 9999px;
+  border: 1px solid #cbd5e1;
+  background-color: #ffffff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+  transition: transform 0.15s;
+}
+.ui-toggle-switch[aria-checked="true"] .ui-toggle-switch-thumb {
+  transform: translateX(1.25rem);
+}
+[data-theme="dark"] .ui-toggle-switch-thumb {
+  background-color: #0f172a;
+  border-color: #334155;
 }
 
 [data-theme] {
@@ -147,20 +270,26 @@ body {
   --text-primary: #172033;
   --text-secondary: #475569;
   --text-muted: #718096;
-  --surface-inverse: color-mix(in srgb, var(--brand-primary) 75%, #000000);
-  --brand-ink: var(--brand-primary);
-  --sidebar-background: color-mix(in srgb, var(--brand-primary) 82%, #1e293b);
-  --chart-primary: var(--brand-primary);
+  --surface-inverse: color-mix(in srgb, var(--brand-light) 75%, #000000);
+  --brand-ink: var(--brand-light);
+  --sidebar-background: color-mix(in srgb, var(--brand-light) 82%, #1e293b);
+  --chart-primary: var(--brand-light);
   --chart-muted: #94a3b8;
   --chart-cursor: #f1f5f9;
   --card-shadow: 0 1px 2px rgb(15 23 42 / 0.06), 0 6px 18px rgb(15 23 42 / 0.06);
   --proposal-section-odd: #eef2f7;
   --proposal-section-even: #ffffff;
+  --action-secondary-background: var(--surface);
+  --action-secondary-foreground: var(--text-secondary);
+  --action-secondary-border: var(--border-strong);
+  --action-danger-background: var(--surface);
+  --action-danger-foreground: #b91c1c;
+  --action-danger-border: #fecaca;
 }
 
 [data-theme="dark"] .proposal-step-active {
-  background-color: var(--brand-primary);
-  border-color: var(--brand-primary);
+  background-color: var(--brand-light);
+  border-color: var(--brand-light);
 }
 
 [data-theme="dark"] {
@@ -175,15 +304,17 @@ body {
   --text-primary: #f7f7f8;
   --text-secondary: #d5d6da;
   --text-muted: #9a9ca5;
-  --surface-inverse: color-mix(in srgb, var(--brand-primary) 38%, #090a0b);
-  --brand-ink: color-mix(in srgb, var(--brand-primary) 50%, #f2f3f5);
-  --sidebar-background: color-mix(in srgb, var(--brand-primary) 36%, #17181b);
-  --chart-primary: color-mix(in srgb, var(--brand-primary) 35%, #e5e7eb);
+  --surface-inverse: color-mix(in srgb, var(--brand-light) 38%, #090a0b);
+  --brand-ink: color-mix(in srgb, var(--brand-light) 50%, #f2f3f5);
+  --sidebar-background: color-mix(in srgb, var(--brand-light) 36%, #17181b);
+  --chart-primary: color-mix(in srgb, var(--brand-light) 35%, #e5e7eb);
   --chart-muted: #979aa3;
   --chart-cursor: rgb(255 255 255 / 0.06);
   --card-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 18px rgb(0 0 0 / 0.18);
   --proposal-section-odd: #202126;
   --proposal-section-even: #292b31;
+  --action-danger-foreground: #fca5a5;
+  --action-danger-border: #7f1d1d;
 }
 
 [data-theme] main {
@@ -191,7 +322,7 @@ body {
 }
 
 .offer-kind-icon {
-  background-color: var(--brand-dark, var(--brand-primary));
+  background-color: var(--brand-dark, var(--brand-light));
   color: #ffffff;
 }
 
@@ -205,11 +336,17 @@ body {
 
 [data-theme="dark"] .offer-kind-icon {
   background-color: #ffffff;
-  color: var(--brand-dark, var(--brand-primary));
+  color: var(--brand-dark, var(--brand-light));
 }
 
 [data-theme] .bg-white {
   background-color: var(--surface);
+}
+
+/* Proposal testimonials are intentionally white even when the surrounding
+   preview uses dark surfaces. */
+[data-theme] .proposal-review-card {
+  background-color: #ffffff;
 }
 
 /* Standard app cards share a soft default elevation. Components with an
@@ -262,8 +399,8 @@ body {
 }
 
 [data-theme] .proposal-step-active {
-  background-color: color-mix(in srgb, var(--brand-primary) 50%, #000000);
-  border-color: color-mix(in srgb, var(--brand-primary) 50%, #000000);
+  background-color: color-mix(in srgb, var(--brand-light) 50%, #000000);
+  border-color: color-mix(in srgb, var(--brand-light) 50%, #000000);
   color: #fff;
 }
 
@@ -275,12 +412,12 @@ body {
 /* Legacy builder utilities inherit the active brand rather than the original
    Southwest navy palette. This keeps theme presets (including Grok) cohesive. */
 [data-theme] .bg-brandnavy {
-  background-color: var(--brand-primary);
+  background-color: var(--brand-light);
 }
 
 [data-theme] .bg-brandnavy-50,
 [data-theme] .bg-brandnavy-50\/30 {
-  background-color: color-mix(in srgb, var(--brand-primary) 8%, var(--surface));
+  background-color: color-mix(in srgb, var(--brand-light) 8%, var(--surface));
 }
 
 [data-theme] .border-brandnavy,
@@ -342,13 +479,9 @@ body {
 
 .theme-mode-option-selected {
   border-width: 2px;
-  border-color: var(--brand-primary);
-  background-color: color-mix(in srgb, var(--brand-primary) 78%, #0b1220);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand-primary) 32%, transparent);
-}
-
-[data-theme="dark"] .sidebar-branding-toggle {
-  box-shadow: 0 0 0 2px #6f727c;
+  border-color: var(--brand-light);
+  background-color: color-mix(in srgb, var(--brand-light) 78%, #0b1220);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand-light) 32%, transparent);
 }
 
 [data-theme="dark"] .bg-slate-800 {
@@ -407,7 +540,7 @@ body {
 [data-theme="dark"][data-appearance="grok"] .proposal-options-editor .proposal-options-kind-optional {
   background-color: #ffffff;
   border-color: #ffffff;
-  color: var(--brand-dark, var(--brand-primary));
+  color: var(--brand-dark, var(--brand-light));
   height: auto;
   padding: 0.375rem 2.25rem 0.375rem 0.625rem;
 }
@@ -428,13 +561,13 @@ body {
 @media (prefers-color-scheme: dark) {
   [data-theme="system"] .offer-kind-icon {
     background-color: #ffffff;
-    color: var(--brand-dark, var(--brand-primary));
+    color: var(--brand-dark, var(--brand-light));
   }
 
   [data-theme="system"] .proposal-options-editor .proposal-options-kind-optional {
     background-color: #ffffff;
     border-color: #ffffff;
-    color: var(--brand-dark, var(--brand-primary));
+    color: var(--brand-dark, var(--brand-light));
   }
 
   [data-theme="system"] .proposal-options-editor .proposal-options-kind.proposal-options-kind-optional {
@@ -457,24 +590,22 @@ body {
     --text-primary: #f7f7f8;
     --text-secondary: #d5d6da;
     --text-muted: #9a9ca5;
-    --surface-inverse: color-mix(in srgb, var(--brand-primary) 38%, #090a0b);
-    --brand-ink: color-mix(in srgb, var(--brand-primary) 50%, #f2f3f5);
-    --sidebar-background: color-mix(in srgb, var(--brand-primary) 36%, #17181b);
-    --chart-primary: color-mix(in srgb, var(--brand-primary) 35%, #e5e7eb);
+    --surface-inverse: color-mix(in srgb, var(--brand-light) 38%, #090a0b);
+    --brand-ink: color-mix(in srgb, var(--brand-light) 50%, #f2f3f5);
+    --sidebar-background: color-mix(in srgb, var(--brand-light) 36%, #17181b);
+    --chart-primary: color-mix(in srgb, var(--brand-light) 35%, #e5e7eb);
     --chart-muted: #979aa3;
     --chart-cursor: rgb(255 255 255 / 0.06);
     --card-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 18px rgb(0 0 0 / 0.18);
     --proposal-section-odd: #202126;
     --proposal-section-even: #292b31;
+    --action-danger-foreground: #fca5a5;
+    --action-danger-border: #7f1d1d;
   }
 
   [data-theme="system"] .proposal-step-active {
-    background-color: var(--brand-primary);
-    border-color: var(--brand-primary);
-  }
-
-  [data-theme="system"] .sidebar-branding-toggle {
-    box-shadow: 0 0 0 2px #6f727c;
+    background-color: var(--brand-light);
+    border-color: var(--brand-light);
   }
 
   [data-theme="system"] .bg-slate-800 {

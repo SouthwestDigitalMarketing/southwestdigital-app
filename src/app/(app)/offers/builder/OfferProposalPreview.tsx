@@ -13,7 +13,9 @@ import {
   X,
 } from "lucide-react";
 import { useBrand } from "@/lib/brands/context";
-import { getProposalTheme, BRAND_PRIMARY_SENTINEL, BRAND_ACCENT_SENTINEL } from "./proposalThemes";
+import { readableForegroundColor } from "@/lib/brands/colors";
+import { overlaySurfaceCssVariables, primaryActionCssVariables } from "@/lib/brands/themeTokens";
+import { getProposalTheme, DEFAULT_PROPOSAL_THEME_ID, DEFAULT_PROPOSAL_MODE, type ProposalMode } from "./proposalThemes";
 import { extraIsRealEstateSpecific } from "@/lib/quotes/catalog";
 import { ProposalReviewsSection } from "./ProposalReviewsSection";
 import AgreementTextView from "./AgreementTextView";
@@ -46,6 +48,12 @@ import {
 import { resolveCoverMedia } from "./coverMedia";
 import { DEFAULT_URGENCY_OFFER, getUrgencyOfferDisplay } from "./urgencyOffer";
 import { ProposalUrgencyBanner, ProposalUrgencyNote } from "./ProposalUrgencyBanner";
+import {
+  DEFAULT_AGREEMENT_TEMPLATE_NAME,
+  DEFAULT_BOOKKEEPING_AGREEMENT_TEMPLATE,
+  renderAgreementTemplate,
+} from "@/lib/agreements/template";
+import type { AgreementTemplateOption } from "@/lib/agreements/types";
 
 type CloudflareStreamEvent = "play" | "pause" | "ended";
 
@@ -387,7 +395,7 @@ function TooltipIcon({ row }: { row: ServiceRow }) {
       <button type="button" aria-label={`More information about ${row.serviceName}`} className="text-slate-400 hover:text-brandnavy focus:text-brandnavy focus:outline-none">
         <CircleHelp className="h-3.5 w-3.5" />
       </button>
-      <span role="tooltip" className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-64 rounded-lg bg-slate-950 px-3 py-2 text-left text-xs font-normal leading-5 text-white shadow-lg group-hover:block group-focus-within:block">
+      <span role="tooltip" className="ui-tooltip pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-64 rounded-lg px-3 py-2 text-left text-xs font-normal leading-5 shadow-lg group-hover:block group-focus-within:block">
         {tip}
       </span>
     </span>
@@ -442,6 +450,7 @@ export default function OfferProposalPreview({
   assessment: assessmentOverride,
   catalogOffer = null,
   engagementId: engagementIdProp = null,
+  agreementTemplate = null,
 }: {
   initialAssessment?: Partial<AssessmentState>;
   initialContactInfo?: Partial<ContactInfoState>;
@@ -451,6 +460,7 @@ export default function OfferProposalPreview({
   issuedAt?: Date | string | null;
   catalogOffer?: ReturnType<typeof getUrgencyOfferDisplay> | null;
   engagementId?: string | null;
+  agreementTemplate?: AgreementTemplateOption | null;
 } = {}) {
   const { brand } = useBrand();
   const { assessment: storedAssessment } = useProposalAssessmentDemoState({
@@ -466,22 +476,49 @@ export default function OfferProposalPreview({
   const contactName = formatPersonName(primary.firstName, primary.lastName) || contactInfo.owners[0]?.firstName || "";
   const companyName = contactInfo.companyName || contactName || "Your business";
 
-  const theme = getProposalTheme(assessment.proposalTheme || "brand");
-  const brandPrimary = brand.theme?.proposalPrimaryColor ?? brand.theme?.primaryColor ?? "#17324d";
+  const theme = getProposalTheme(assessment.proposalTheme || DEFAULT_PROPOSAL_THEME_ID);
+  const proposalMode: ProposalMode = assessment.proposalMode ?? DEFAULT_PROPOSAL_MODE;
+  const brandLight = brand.theme?.proposalLightColor ?? brand.theme?.lightColor ?? "#17324d";
   const brandAccent = brand.theme?.proposalAccentColor ?? brand.theme?.accentColor ?? "#d79b3b";
-  const brandAccentDark = brand.theme?.accentDarkColor ?? brandAccent;
-  const brandDark = brand.theme?.darkColor ?? brandPrimary;
-  const primaryColor =
-    theme.primary === null ? brandPrimary :
-    theme.primary === BRAND_ACCENT_SENTINEL ? brandAccent :
-    theme.primary === BRAND_PRIMARY_SENTINEL ? brandPrimary :
-    theme.primary;
+  const configuredBrandDark = brand.theme?.darkColor ?? brandLight;
+  const lightColor =
+    proposalMode === "dark" && theme.darkLight ? theme.darkLight : theme.light ?? brandLight;
   const accentColor =
-    theme.accent === null ? brandAccent :
-    theme.accent === BRAND_ACCENT_SENTINEL ? brandAccent :
-    theme.accent === BRAND_PRIMARY_SENTINEL ? brandPrimary :
-    theme.accent;
-  const actionColor = theme.id === "brand-light" ? brandAccentDark : accentColor;
+    proposalMode === "dark" && theme.darkAccent ? theme.darkAccent : theme.accent ?? brandAccent;
+  const brandDark = theme.light === null ? configuredBrandDark : lightColor;
+  const brandDarkForeground = readableForegroundColor(brandDark);
+  const actionColor = accentColor;
+  const pageBg = theme.pageBg[proposalMode];
+  const accentForegroundColor = brand.theme?.accentForegroundColor === "#111827" ? "#111827" : "#ffffff";
+  const primaryActionVariables = primaryActionCssVariables(actionColor, accentForegroundColor);
+  const overlayVariables = overlaySurfaceCssVariables({ mode: proposalMode, dark: brandDark });
+  // Ink color for text and glyphs. brandDark is a dark shade — readable on light bgs
+  // in light mode. In dark mode, lighten it heavily so text stays legible on dark surfaces.
+  const inkColor =
+    proposalMode === "dark" ? `color-mix(in srgb, ${brandDark} 20%, white)` : brandDark;
+  // Grok's aesthetic is intentionally near-black surfaces on pure black — leave the
+  // default dark --surface values alone for it. Every other theme derives its surfaces
+  // from its own brandDark so cards don't render in Grok's #191a1d.
+  const darkSurfaceOverrides =
+    proposalMode === "dark" && theme.id !== "grok"
+      ? {
+          "--surface": `color-mix(in srgb, ${brandDark} 82%, white)`,
+          "--surface-subtle": `color-mix(in srgb, ${brandDark} 90%, white)`,
+          "--surface-control": `color-mix(in srgb, ${brandDark} 72%, white)`,
+          "--surface-row-alt": `color-mix(in srgb, ${brandDark} 86%, white)`,
+        }
+      : {};
+  const logoUrl =
+    proposalMode === "dark"
+      ? brand.theme?.logoDarkUrl ?? brand.theme?.logoUrl ?? null
+      : brand.theme?.logoUrl ?? null;
+  // Subtle accent-tinted surface used behind table section headers. In light mode it's
+  // a very pale wash of brandDark on white; in dark mode we mix toward black so the
+  // header still reads as a subtle band on the dark preview.
+  const subtleAccentBg =
+    proposalMode === "dark"
+      ? `color-mix(in srgb, ${brandDark} 40%, black)`
+      : `color-mix(in srgb, ${brandDark} 10%, white)`;
   const urgencyOffer = catalogOffer?.active ? catalogOffer : getUrgencyOfferDisplay(DEFAULT_URGENCY_OFFER);
 
   const options = buildOptions(assessment);
@@ -511,7 +548,7 @@ export default function OfferProposalPreview({
   const [paymentClientSecret, setPaymentClientSecret] = useState<string | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<"succeeded" | "processing" | null>(null);
   const [agreementText, setAgreementText] = useState("");
-  const [agreementLoading, setAgreementLoading] = useState(false);
+  const [agreementLoading, setAgreementLoading] = useState(Boolean(engagementId));
   const agreementScrollRef = useRef<HTMLDivElement>(null);
   const streamIframeRef = useRef<HTMLIFrameElement>(null);
   const streamPlayerRef = useRef<CloudflareStreamPlayer | null>(null);
@@ -610,7 +647,6 @@ export default function OfferProposalPreview({
 
   useEffect(() => {
     if (step !== 2 || !engagementId) return;
-    setAgreementLoading(true);
     fetch(`/api/proposal/${engagementId}/agreement`)
       .then((r) => r.json())
       .then((result: { text?: string; signed?: boolean; signerName?: string | null; signedAt?: string | null }) => {
@@ -714,25 +750,49 @@ export default function OfferProposalPreview({
   const recurringServiceNames = Array.from(new Set(optionMeta.flatMap(({ id }) => options[id].recurringRows.map((r) => r.serviceName))));
   const oneTimeServiceNames   = Array.from(new Set(optionMeta.flatMap(({ id }) => options[id].oneTimeRows.map((r) => r.serviceName))));
 
-  const clientSteps = ["Cover", "Services", "Deposit", "Confirmation"] as const;
+  const clientSteps = ["Cover", "Services", "Sign & Pay", "Confirmation"] as const;
   const selectedOnboardingFee = selectedOptionId
     ? (options[selectedOptionId].oneTimeRows.find((r) => isOnboarding(r))?.price ?? null)
     : null;
+  const agreementTitle =
+    agreementTemplate?.name
+    ?? assessment.agreementTemplateName
+    ?? DEFAULT_AGREEMENT_TEMPLATE_NAME;
+  const embeddedAgreementText = renderAgreementTemplate(
+    agreementTemplate?.content
+      ?? assessment.agreementTemplateContent
+      ?? DEFAULT_BOOKKEEPING_AGREEMENT_TEMPLATE,
+    {
+      brandName: brand.name,
+      clientName: companyName,
+      primaryContactName: contactName || null,
+      primaryContactEmail: primary.email || null,
+      selectedTierLabel: selectedOptionId ? options[selectedOptionId].name : null,
+      onboardingFee: selectedOnboardingFee,
+      hasCleanup: cleanupPeriods.length > 0,
+    },
+  );
+  const displayedAgreementText = engagementId ? agreementText : embeddedAgreementText;
 
   return (
     <main
+      data-theme={proposalMode}
+      data-appearance="standard"
       className={`relative isolate overflow-hidden px-4 py-6 text-brandnavy [&_button:not(:disabled)]:cursor-pointer [&_button:disabled]:cursor-not-allowed sm:px-6 lg:px-10 ${
         embedded ? "min-h-[40rem]" : "min-h-screen"
       }`}
       style={{
-        background: theme.pageBg,
-        "--brand-primary": primaryColor,
+        background: pageBg,
+        "--brand-light": lightColor,
         "--brand-accent": accentColor,
-        "--brand-ink": primaryColor,
+        ...primaryActionVariables,
+        ...overlayVariables,
+        ...darkSurfaceOverrides,
         "--brand-dark": brandDark,
+        "--proposal-ink": inkColor,
         "--color-accent-500": accentColor,
-        "--color-accent-100": `color-mix(in srgb, ${accentColor} 15%, white)`,
-      } as React.CSSProperties}
+        "--color-accent-100": `color-mix(in srgb, ${accentColor} 15%, ${proposalMode === "dark" ? "black" : "white"})`,
+      } as unknown as React.CSSProperties}
     >
       <svg aria-hidden="true" viewBox="0 0 1600 1000" preserveAspectRatio="none" className={`pointer-events-none inset-0 z-0 h-full w-full text-brandnavy opacity-[0.045] ${embedded ? "absolute" : "fixed"}`}>
         <g fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -745,11 +805,16 @@ export default function OfferProposalPreview({
 
       <section className={`relative z-10 mx-auto flex max-w-[1180px] flex-col gap-6 ${embedded ? "" : "min-h-[calc(100vh-3rem)]"}`}>
 
-        {/* Nav bar */}
-        <nav aria-label="Proposal navigation" className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+        {/* Nav bar — always a white floating bar, even under dark themes */}
+        <nav
+          aria-label="Proposal navigation"
+          data-theme="light"
+          data-appearance="standard"
+          className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm"
+        >
           <div className="grid grid-cols-[auto_1fr_auto] items-center gap-4">
             {step === 0 ? <span className="w-[74px]" /> : (
-              <button type="button" onClick={() => setStep((s) => Math.max(0, s - 1))} className="rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-semibold" style={{ color: brandDark }}>Back</button>
+              <button type="button" onClick={() => setStep((s) => Math.max(0, s - 1))} className="ui-action-secondary rounded-lg border px-5 py-2.5 text-sm font-semibold transition">Back</button>
             )}
             <ol className="flex items-start justify-center">
               {clientSteps.map((label, index) => (
@@ -757,8 +822,8 @@ export default function OfferProposalPreview({
                   {index > 0 && <span className="mt-4 h-0.5 w-5 sm:w-10" style={{ backgroundColor: index <= step ? brandDark : "#cbd5e1" }} />}
                   <div className="w-16 text-center sm:w-20">
                     <span
-                      className={`mx-auto grid h-8 w-8 place-items-center rounded-full border text-sm font-bold ${index <= step ? "text-white" : "border-slate-300 bg-white text-slate-500"}`}
-                      style={index <= step ? { backgroundColor: brandDark, borderColor: brandDark } : undefined}
+                      className={`mx-auto grid h-8 w-8 place-items-center rounded-full border text-sm font-bold ${index <= step ? "" : "border-slate-300 bg-white text-slate-500"}`}
+                      style={index <= step ? { backgroundColor: brandDark, borderColor: brandDark, color: brandDarkForeground } : undefined}
                     >
                       {index < step ? "✓" : index + 1}
                     </span>
@@ -772,8 +837,7 @@ export default function OfferProposalPreview({
                 type="button"
                 disabled={!selectedOptionId}
                 onClick={() => setStep(2)}
-                className="inline-flex items-center gap-2 rounded-lg border-2 px-5 py-2 text-sm font-bold text-white transition-all hover:-translate-y-0.5 hover:brightness-95 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
-                style={{ backgroundColor: actionColor, borderColor: actionColor }}
+                className="ui-action-primary inline-flex items-center gap-2 rounded-lg border-2 px-5 py-2 text-sm font-bold transition-all hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
               >
                 Next <ChevronRight strokeWidth={3} className="h-4 w-4" />
               </button>
@@ -782,7 +846,7 @@ export default function OfferProposalPreview({
                 type="button"
                 disabled={engagementId ? (!alreadySigned && (!canSignAgreement || signSubmitting)) : false}
                 onClick={() => void submitSignatureAndContinue()}
-                className="inline-flex items-center gap-2 rounded-lg border-2 border-accent-500 bg-brandnavy px-5 py-2 text-sm font-bold text-white transition-all hover:-translate-y-0.5 hover:bg-slate-950 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                className="ui-action-primary inline-flex items-center gap-2 rounded-lg border-2 px-5 py-2 text-sm font-bold transition-all hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
               >
                 {!engagementId
                   ? <>Continue <ChevronRight strokeWidth={3} className="h-4 w-4" /></>
@@ -802,9 +866,9 @@ export default function OfferProposalPreview({
           {(step === 0 || step === 2) ? (
             <header className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                {brand.theme?.logoUrl ? (
+                {logoUrl ? (
                   <div className="h-10 w-full max-w-44">
-                    <img src={brand.theme.logoUrl} alt={brand.name} className="brand-asset-fit brand-asset-fit-left" />
+                    <img src={logoUrl} alt={brand.name} className="brand-asset-fit brand-asset-fit-left" />
                   </div>
                 ) : (
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{brand.name}</p>
@@ -812,7 +876,7 @@ export default function OfferProposalPreview({
               </div>
               <div className="text-right">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Prepared for</p>
-                <p className="mt-1 font-semibold" style={{ color: brandDark }}>{companyName}</p>
+                <p className="mt-1 font-semibold" style={{ color: inkColor }}>{companyName}</p>
               </div>
             </header>
           ) : null}
@@ -837,13 +901,13 @@ export default function OfferProposalPreview({
             const continueIsPrimary = !showMediaButton || hasStartedIntroVideo;
             const heroButtonClass = (primary: boolean) =>
               `inline-flex w-full items-center justify-center gap-2 rounded-lg border px-6 py-3 text-lg font-bold transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)] ${
-                primary ? "text-white hover:brightness-95" : "border-slate-300 bg-white text-slate-500"
+                primary ? "ui-action-primary" : "ui-action-secondary"
               }`;
             return (
               <div className="pb-12 sm:pb-16">
                 <div className={`grid items-center gap-8 ${hasMedia ? "md:grid-cols-2" : ""}`}>
                   <div>
-                    <h1 className="text-3xl font-bold tracking-tight sm:text-4xl" style={{ color: brandDark }}>
+                    <h1 className="text-3xl font-bold tracking-tight sm:text-4xl" style={{ color: inkColor }}>
                       {customHeadline ?? (
                         <>
                           Expert <span className="text-accent-500">Real Estate</span> Bookkeeping +{" "}
@@ -853,7 +917,7 @@ export default function OfferProposalPreview({
                     </h1>
                     <p className={`mt-6 text-lg leading-8 text-slate-600 ${hasMedia ? "" : "max-w-2xl"}`}>
                       {introBodyCopy}
-                      {includesRegisteredAgentMessage ? <span className="mt-3 flex items-center gap-2 pt-2 text-base font-semibold text-slate-600"><span className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-white" style={{ backgroundColor: brandDark }}><Check className="h-3 w-3" /></span>{registeredAgentMessage}</span> : null}
+                      {includesRegisteredAgentMessage ? <span className="mt-3 flex items-center gap-2 pt-2 text-base font-semibold text-slate-600"><span className="grid h-5 w-5 shrink-0 place-items-center rounded-full" style={{ backgroundColor: brandDark, color: brandDarkForeground }}><Check className="h-3 w-3" /></span>{registeredAgentMessage}</span> : null}
                     </p>
                     <div className="mt-8 space-y-3">
                       {showMediaButton ? (
@@ -863,7 +927,6 @@ export default function OfferProposalPreview({
                           aria-pressed={isIntroVideoPlaying}
                           aria-label={isIntroVideoPlaying ? `Pause ${mediaButtonLabel}` : `Play ${mediaButtonLabel}`}
                           className={heroButtonClass(!continueIsPrimary)}
-                          style={!continueIsPrimary ? { backgroundColor: actionColor, borderColor: actionColor } : undefined}
                         >
                           <HeroCtaContent
                             config={mediaButton}
@@ -876,7 +939,7 @@ export default function OfferProposalPreview({
                         type="button"
                         onClick={() => setStep(1)}
                         className={heroButtonClass(continueIsPrimary)}
-                        style={continueIsPrimary ? { backgroundColor: actionColor, borderColor: actionColor } : undefined}
+                        style={!continueIsPrimary ? { backgroundColor: "#ffffff", color: "#111827", borderColor: "#cbd5e1" } : undefined}
                       >
                         <HeroCtaContent
                           config={continueButton}
@@ -884,7 +947,7 @@ export default function OfferProposalPreview({
                         />
                       </button>
                       {introVideoError ? <p role="alert" className="mt-2 text-sm text-red-700">{introVideoError}</p> : null}
-                      <ProposalUrgencyNote offer={urgencyOffer} color={brandDark} />
+                      <ProposalUrgencyNote offer={urgencyOffer} color={inkColor} />
                     </div>
                   </div>
                   {embedUrl ? (
@@ -931,17 +994,17 @@ export default function OfferProposalPreview({
           {step === 1 && (
             <div>
               <div className="mb-5 text-center">
-                <h1 className="text-2xl font-bold tracking-tight sm:text-3xl" style={{ color: brandDark }}>Select your services</h1>
+                <h1 className="text-2xl font-bold tracking-tight sm:text-3xl" style={{ color: inkColor }}>Select your services</h1>
               </div>
               {urgencyOffer.active ? (
                 <div className="mx-auto mb-8 max-w-3xl">
-                  <ProposalUrgencyBanner offer={urgencyOffer} accentColor={actionColor} inkColor={brandDark} />
+                  <ProposalUrgencyBanner offer={urgencyOffer} accentColor={actionColor} inkColor={inkColor} />
                 </div>
               ) : null}
 
               {/* Annual toggle */}
               <div className="mb-8 flex flex-wrap items-center justify-center gap-4 text-base font-bold sm:text-lg">
-                <span className={hasTwelveMonthAgreement ? "text-slate-400" : undefined} style={hasTwelveMonthAgreement ? undefined : { color: brandDark }}>Month-to-month</span>
+                <span className={hasTwelveMonthAgreement ? "text-slate-400" : undefined} style={hasTwelveMonthAgreement ? undefined : { color: inkColor }}>Month-to-month</span>
                 <button type="button" role="switch" aria-checked={hasTwelveMonthAgreement} onClick={() => setHasTwelveMonthAgreement((v) => !v)} className={`relative h-9 w-16 rounded-full transition ${hasTwelveMonthAgreement ? "" : "bg-slate-300"}`} style={hasTwelveMonthAgreement ? { backgroundColor: brandDark } : undefined}>
                   <span className={`absolute top-1 h-7 w-7 rounded-full bg-white shadow-sm transition ${hasTwelveMonthAgreement ? "left-8" : "left-1"}`} />
                   <span className="sr-only">
@@ -950,7 +1013,7 @@ export default function OfferProposalPreview({
                       : "Choose a 12-month agreement"}
                   </span>
                 </button>
-                <button type="button" aria-pressed={hasTwelveMonthAgreement} onClick={() => setHasTwelveMonthAgreement(true)} className={`inline-flex items-center gap-1.5 rounded-lg border bg-accent-100 px-3 py-1.5 transition hover:brightness-95 ${hasTwelveMonthAgreement ? "" : "border-transparent"}`} style={{ color: brandDark, borderColor: hasTwelveMonthAgreement ? brandDark : undefined }}>
+                <button type="button" aria-pressed={hasTwelveMonthAgreement} onClick={() => setHasTwelveMonthAgreement(true)} className={`inline-flex items-center gap-1.5 rounded-lg border bg-accent-100 px-3 py-1.5 transition hover:brightness-95 ${hasTwelveMonthAgreement ? "" : "border-transparent"}`} style={{ color: inkColor, borderColor: hasTwelveMonthAgreement ? brandDark : undefined }}>
                   <Sparkles className="h-5 w-5" />
                   {annualSavingsPercent > 0 ? `Annual · Save ${annualSavingsPercent}%` : "Annual"}
                   <Sparkles className="h-4 w-4" />
@@ -1024,8 +1087,8 @@ export default function OfferProposalPreview({
                       <div className="p-5">
                         <div className="flex items-start justify-between gap-4">
                           <div>
-                            <h2 className="text-2xl font-bold" style={{ color: brandDark }}>{option.name}</h2>
-                            <button type="button" onClick={() => setComparisonOpen(true)} className="mt-1 hidden text-xs font-semibold underline underline-offset-2" style={{ color: brandDark }}>
+                            <h2 className="text-2xl font-bold" style={{ color: inkColor }}>{option.name}</h2>
+                            <button type="button" onClick={() => setComparisonOpen(true)} className="mt-1 hidden text-xs font-semibold underline underline-offset-2" style={{ color: inkColor }}>
                               See everything included
                             </button>
                           </div>
@@ -1034,12 +1097,12 @@ export default function OfferProposalPreview({
                               {onboardingWaived && originalOnboardingFee > 0 ? (
                                 <span className="mr-1.5 text-slate-400 line-through">{fmt(originalOneTimeTotal)}</span>
                               ) : null}
-                              <span className="font-bold" style={{ color: brandDark }}>{fmt(oneTimeTotal)}</span> <span className="text-slate-500">One-Time</span>
+                              <span className="font-bold" style={{ color: inkColor }}>{fmt(oneTimeTotal)}</span> <span className="text-slate-500">One-Time</span>
                             </p>
                             {onboardingWaived ? (
                               <p className="text-xs font-semibold text-emerald-700">Onboarding fee waived</p>
                             ) : null}
-                            <p><span className={`font-bold ${hasTwelveMonthAgreement ? "rounded bg-accent-100 px-1.5 py-0.5" : ""}`} style={{ color: brandDark }}>{fmt(recurringTotal)}</span> <span className="text-slate-500">/mo</span></p>
+                            <p><span className={`font-bold ${hasTwelveMonthAgreement ? "rounded bg-accent-100 px-1.5 py-0.5" : ""}`} style={{ color: inkColor }}>{fmt(recurringTotal)}</span> <span className="text-slate-500">/mo</span></p>
                           </div>
                         </div>
                         <p className="mt-4 text-center text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{serviceLevel} service level</p>
@@ -1059,14 +1122,14 @@ export default function OfferProposalPreview({
                                               }),
                                             });
                                           }
-                                        }} aria-pressed={selected} className="mt-4 w-full rounded-lg border px-4 py-3 text-base font-bold text-white transition hover:opacity-90" style={{ backgroundColor: actionColor, borderColor: actionColor }}>
+                                        }} aria-pressed={selected} className="ui-action-primary mt-4 w-full rounded-lg border px-4 py-3 text-base font-bold transition">
                           Select {option.name}
                         </button>
                       </div>
 
                       {/* One-time services */}
                       <section className="border-t border-slate-200">
-                        <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ backgroundColor: `color-mix(in srgb, ${brandDark} 10%, white)`, color: brandDark }}>One-time services</p>
+                        <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ backgroundColor: subtleAccentBg, color: inkColor }}>One-time services</p>
                         <div className="px-5 py-4">
                           {requiredOnboard.length ? <div className="mt-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Required to get started</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{requiredOnboard.map((row) => <ServiceLine key={row.id} row={row} originalPrice={onboardingWaived && isOnboarding(row) ? originalOnboardingFee : undefined} waivedLabel={onboardingWaived && isOnboarding(row) ? "Waived" : undefined} />)}</ul></div> : null}
                           {optionalCleanup.length ? <div className="mt-5 border-t border-slate-200 pt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Optional catch-up</p><ul className="mt-4 space-y-7 text-sm text-slate-600">{optionalCleanup.map((row) => <ServiceLine key={row.id} row={row} selected={cleanupIsSelected(id, row.cleanupPeriodKey!)} onToggle={(checked) => setCleanupSelections((prev) => ({ ...prev, [cleanupKey(id, row.cleanupPeriodKey!)]: checked }))} showPriceWhenUnselected />)}</ul></div> : null}
@@ -1076,7 +1139,7 @@ export default function OfferProposalPreview({
 
                       {/* Recurring services */}
                       <section>
-                        <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em] text-white" style={{ backgroundColor: brandDark }}>Recurring services</p>
+                        <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ backgroundColor: brandDark, color: brandDarkForeground }}>Recurring services</p>
                         {bkRow && !lowerTierId ? <div className="px-5 pt-4"><p className="text-sm font-semibold text-slate-500">Monthly Bookkeeping</p><p className="mt-1 text-sm leading-6 text-slate-600">{getTooltip(bkRow)}</p></div> : null}
                         {recurringLeadInName ? <p className="px-5 pt-4 text-sm font-semibold text-slate-500">Everything in {recurringLeadInName}, plus:</p> : null}
                         <ul className="space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600">
@@ -1085,7 +1148,7 @@ export default function OfferProposalPreview({
                               <span className="inline-flex items-start gap-1.5">
                                 <span className="group relative inline-flex shrink-0">
                                   <button type="button" aria-label={`More information about ${row.serviceName}`} className={`${isNew(row.serviceName) ? "text-emerald-600" : "text-slate-400"} hover:text-brandnavy focus:text-brandnavy focus:outline-none`}><CircleHelp className="h-3.5 w-3.5" /></button>
-                                  <span role="tooltip" className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-64 rounded-lg bg-slate-950 px-3 py-2 text-left text-xs font-normal leading-5 text-white shadow-lg group-hover:block group-focus-within:block">{getTooltip(row)}</span>
+                                  <span role="tooltip" className="ui-tooltip pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-64 rounded-lg px-3 py-2 text-left text-xs font-normal leading-5 shadow-lg group-hover:block group-focus-within:block">{getTooltip(row)}</span>
                                 </span>
                                 <span>{row.serviceName}</span>
                                 {row.platformTag ? <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${isNew(row.serviceName) ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-brandnavy"}`}>{row.platformTag}</span> : null}
@@ -1100,7 +1163,7 @@ export default function OfferProposalPreview({
 
                       {additionalOptionRows.length > 0 ? (
                         <section>
-                          <p className="bg-accent-100 px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ color: brandDark }}>Additional options</p>
+                          <p className="bg-accent-100 px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ color: inkColor }}>Additional options</p>
                           <div className="px-5 py-4">
                             <ul className="space-y-2 text-sm text-slate-600">
                               {additionalOptionRows.map((row) => (
@@ -1132,7 +1195,7 @@ export default function OfferProposalPreview({
                                 <span className="inline-flex items-start gap-1.5">
                                   <span className="group relative inline-flex shrink-0">
                                     <button type="button" aria-label={`More information about ${row.serviceName}`} className="text-emerald-600 hover:text-brandnavy focus:outline-none"><CircleHelp className="h-3.5 w-3.5" /></button>
-                                    <span role="tooltip" className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-64 rounded-lg bg-slate-950 px-3 py-2 text-left text-xs font-normal leading-5 text-white shadow-lg group-hover:block group-focus-within:block">{getTooltip(row)}</span>
+                                    <span role="tooltip" className="ui-tooltip pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-64 rounded-lg px-3 py-2 text-left text-xs font-normal leading-5 shadow-lg group-hover:block group-focus-within:block">{getTooltip(row)}</span>
                                   </span>
                                   <span>{row.serviceName}</span>
                                 </span>
@@ -1151,7 +1214,7 @@ export default function OfferProposalPreview({
                               One-time total
                               {onboardingWaived ? <span className="mt-0.5 block text-xs font-semibold text-emerald-700">Onboarding fee waived</span> : null}
                             </span>
-                            <span className="text-right font-bold" style={{ color: brandDark }}>
+                            <span className="text-right font-bold" style={{ color: inkColor }}>
                               {onboardingWaived && originalOnboardingFee > 0 ? (
                                 <span className="mr-1.5 font-medium text-slate-400 line-through">{fmt(originalOneTimeTotal)}</span>
                               ) : null}
@@ -1160,7 +1223,7 @@ export default function OfferProposalPreview({
                           </div>
                           <div className="mt-2 flex items-center justify-between gap-4 border-t border-slate-200 pt-2 text-sm">
                             <span className="text-slate-600">Ongoing bookkeeping</span>
-                            <span className="font-bold" style={{ color: brandDark }}>{fmt(recurringTotal)}/mo</span>
+                            <span className="font-bold" style={{ color: inkColor }}>{fmt(recurringTotal)}/mo</span>
                           </div>
                         </div>
                         <button type="button" onClick={() => {
@@ -1179,7 +1242,7 @@ export default function OfferProposalPreview({
                                               }),
                                             });
                                           }
-                                        }} className="mt-4 w-full rounded-lg border px-4 py-3 text-base font-bold text-white transition hover:opacity-90" style={{ backgroundColor: actionColor, borderColor: actionColor }}>
+                                        }} className="ui-action-primary mt-4 w-full rounded-lg border px-4 py-3 text-base font-bold transition">
                           Select {option.name}
                         </button>
                         {urgencyOffer.active ? (
@@ -1199,10 +1262,10 @@ export default function OfferProposalPreview({
               {!alreadySigned ? (
                 <div className="space-y-5">
                   {urgencyOffer.active ? (
-                    <ProposalUrgencyBanner offer={urgencyOffer} accentColor={actionColor} inkColor={brandDark} compact />
+                    <ProposalUrgencyBanner offer={urgencyOffer} accentColor={actionColor} inkColor={inkColor} compact />
                   ) : null}
                   <div>
-                    <h2 className="text-sm font-bold text-slate-900">Bookkeeping Services Agreement</h2>
+                    <h2 className="text-sm font-bold text-slate-900">{agreementTitle}</h2>
                     <p className="mt-1 text-sm font-semibold text-brandnavy">
                       {engagementId
                         ? "You must read the entire agreement below before you can sign."
@@ -1213,18 +1276,18 @@ export default function OfferProposalPreview({
                       onScroll={(event) => checkAgreementScrolled(event.currentTarget)}
                       tabIndex={0}
                       role="region"
-                      aria-label="Bookkeeping Services Agreement text, scroll to review"
+                      aria-label={`${agreementTitle} text, scroll to review`}
                       className="mt-2 max-h-[50vh] overflow-y-auto rounded-lg border border-slate-200 bg-white p-6 focus:outline-none focus:ring-2 focus:ring-brandnavy sm:max-h-[65vh]"
                     >
                       {agreementLoading ? (
                         <p className="text-sm text-slate-500">Loading your agreement…</p>
-                      ) : agreementText ? (
-                        <AgreementTextView text={agreementText} />
+                      ) : displayedAgreementText ? (
+                        <AgreementTextView text={displayedAgreementText} />
                       ) : (
                         <p className="text-sm text-slate-500">
                           {engagementId
                             ? "Unable to load agreement text. Please refresh and try again."
-                            : "Agreement text will appear here when this proposal is sent to a client."}
+                            : "No agreement template is selected."}
                         </p>
                       )}
                     </div>
@@ -1332,7 +1395,7 @@ export default function OfferProposalPreview({
                             type="button"
                             disabled={signSubmitting}
                             onClick={() => void submitSignatureAndContinue()}
-                            className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+                            className="ui-action-danger rounded-lg border px-3 py-1.5 text-xs font-semibold transition disabled:opacity-50"
                           >
                             {signSubmitting ? "Retrying…" : "Retry"}
                           </button>
@@ -1421,10 +1484,10 @@ export default function OfferProposalPreview({
           <div role="dialog" aria-modal="true" aria-labelledby="comparison-title" className="mx-auto w-full max-w-[1180px] overflow-hidden rounded-2xl bg-white shadow-2xl">
             <header className="flex items-start justify-between gap-6 border-b border-slate-200 px-5 py-4 sm:px-7">
               <div>
-                <h2 id="comparison-title" className="text-2xl font-bold" style={{ color: brandDark }}>Compare everything included</h2>
+                <h2 id="comparison-title" className="text-2xl font-bold" style={{ color: inkColor }}>Compare everything included</h2>
                 <p className="mt-1 text-sm text-slate-600">Review pricing, services, and support details across all three options.</p>
               </div>
-              <button type="button" onClick={() => setComparisonOpen(false)} aria-label="Close plan comparison" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-brandnavy">
+              <button type="button" onClick={() => setComparisonOpen(false)} aria-label="Close plan comparison" className="ui-action-ghost rounded-lg p-2 transition">
                 <X className="h-5 w-5" />
               </button>
             </header>
@@ -1442,34 +1505,34 @@ export default function OfferProposalPreview({
                   </tr>
                 </thead>
                 <tbody>
-                  <tr style={{ backgroundColor: `color-mix(in srgb, ${brandDark} 10%, white)` }}><th colSpan={4} className="px-5 py-2.5 text-left text-xs font-bold uppercase tracking-wide" style={{ color: brandDark }}>One-time services</th></tr>
+                  <tr style={{ backgroundColor: subtleAccentBg }}><th colSpan={4} className="px-5 py-2.5 text-left text-xs font-bold uppercase tracking-wide" style={{ color: inkColor }}>One-time services</th></tr>
                   {oneTimeServiceNames.map((name, i) => {
                     const ref = optionMeta.map(({ id }) => options[id].oneTimeRows.find((r) => r.serviceName === name)).find(Boolean);
                     return (
                       <tr key={name} className={`border-b border-slate-100 ${i % 2 === 0 ? "bg-white" : "bg-slate-50"}`}>
-                        <th scope="row" className="px-5 py-3 text-left align-top font-semibold" style={{ color: brandDark }}>
+                        <th scope="row" className="px-5 py-3 text-left align-top font-semibold" style={{ color: inkColor }}>
                           {name}
                           {ref ? <span className="mt-1 block text-xs font-normal leading-5 text-slate-500">{getTooltip(ref)}</span> : null}
                         </th>
                         {optionMeta.map(({ id }) => {
                           const row = options[id].oneTimeRows.find((r) => r.serviceName === name);
-                          return <td key={id} className="px-4 py-3 text-center align-middle">{row ? <Check aria-label="Included" className="mx-auto h-5 w-5" style={{ color: brandDark }} /> : <span className="text-slate-300">—</span>}</td>;
+                          return <td key={id} className="px-4 py-3 text-center align-middle">{row ? <Check aria-label="Included" className="mx-auto h-5 w-5" style={{ color: inkColor }} /> : <span className="text-slate-300">—</span>}</td>;
                         })}
                       </tr>
                     );
                   })}
-                  <tr style={{ backgroundColor: brandDark }}><th colSpan={4} className="px-5 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-white">Recurring services</th></tr>
+                  <tr style={{ backgroundColor: brandDark, color: brandDarkForeground }}><th colSpan={4} className="px-5 py-2.5 text-left text-xs font-bold uppercase tracking-wide">Recurring services</th></tr>
                   {recurringServiceNames.map((name, i) => {
                     const ref = optionMeta.map(({ id }) => options[id].recurringRows.find((r) => r.serviceName === name)).find(Boolean);
                     return (
                       <tr key={name} className={`border-b border-slate-100 ${i % 2 === 0 ? "bg-white" : "bg-slate-50"}`}>
-                        <th scope="row" className="px-5 py-3 text-left align-top font-semibold" style={{ color: brandDark }}>
+                        <th scope="row" className="px-5 py-3 text-left align-top font-semibold" style={{ color: inkColor }}>
                           {name}
                           {ref ? <span className="mt-1 block text-xs font-normal leading-5 text-slate-500">{getTooltip(ref)}</span> : null}
                         </th>
                         {optionMeta.map(({ id }) => {
                           const row = options[id].recurringRows.find((r) => r.serviceName === name);
-                          return <td key={id} className="px-4 py-3 text-center align-middle">{row ? <Check aria-label="Included" className="mx-auto h-5 w-5" style={{ color: brandDark }} /> : <span className="text-slate-300">—</span>}</td>;
+                          return <td key={id} className="px-4 py-3 text-center align-middle">{row ? <Check aria-label="Included" className="mx-auto h-5 w-5" style={{ color: inkColor }} /> : <span className="text-slate-300">—</span>}</td>;
                         })}
                       </tr>
                     );

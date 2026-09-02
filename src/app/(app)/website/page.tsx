@@ -35,7 +35,7 @@ export default async function WebsitePage({
 
   const theme = await prisma.brandTheme.findUnique({
     where: { brandId: brand.id },
-    select: { ga4PropertyId: true, ga4HostName: true, primaryColor: true, websiteEngagedSessionsGoal: true },
+    select: { ga4PropertyId: true, ga4HostName: true, lightColor: true, websiteEngagedSessionsGoal: true },
   });
 
   if (!theme?.ga4PropertyId) {

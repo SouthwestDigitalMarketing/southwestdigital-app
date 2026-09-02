@@ -59,7 +59,7 @@ export default function NewBrandPage() {
             <input name="supportEmail" type="email" className={inputClass} />
           </label>
           {[
-            ["primaryColor", "Primary", "#17324d"],
+            ["lightColor", "Light", "#17324d"],
             ["accentColor", "Accent", "#d79b3b"],
             ["backgroundColor", "Background", "#f7f8fa"],
             ["foregroundColor", "Foreground", "#17202a"],

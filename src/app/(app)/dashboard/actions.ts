@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
 
-export const DASHBOARD_GOAL_FIELDS = [
+const DASHBOARD_GOAL_FIELDS = [
   "monthlyReviewRequestsGoal",
   "reviewOpenRateGoal",
   "reviewFiveStarRateGoal",

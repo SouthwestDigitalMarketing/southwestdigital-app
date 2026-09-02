@@ -172,10 +172,10 @@ export function SiteTrafficGraph({ rows, goal, label, granularity }: Props) {
               const currentPace = pacePct(currentValue);
               const paceColor = goalColors(currentPace).bar;
               return (
-                <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-sm">
-                  <p className="mb-1 font-semibold text-slate-700">{fmtTooltipDate(String(lbl), granularity)}</p>
-                  <p className="text-slate-900">{currentValue.toLocaleString("en-US")} engaged sessions</p>
-                  <p className="text-slate-400">prev. {Number(row?.previous ?? 0).toLocaleString("en-US")}</p>
+                <div className="ui-tooltip rounded-lg px-3 py-2 text-xs shadow-sm">
+                  <p className="mb-1 font-semibold">{fmtTooltipDate(String(lbl), granularity)}</p>
+                  <p>{currentValue.toLocaleString("en-US")} engaged sessions</p>
+                  <p className="opacity-70">prev. {Number(row?.previous ?? 0).toLocaleString("en-US")}</p>
                   <p className="mt-1 font-semibold" style={{ color: paceColor }}>
                     {Math.round(currentPace)}% of {paceLabel} pace
                   </p>

@@ -3,10 +3,9 @@ import { BrandStatus } from "@prisma/client";
 import { mergeToolLinks, visibleToolLinks } from "@/lib/brands/tools";
 
 const BRAND_THEME_SELECT = {
-  primaryColor: true,
+  lightColor: true,
   darkColor: true,
   accentColor: true,
-  accentDarkColor: true,
   backgroundColor: true,
   foregroundColor: true,
   logoUrl: true,
@@ -16,11 +15,13 @@ const BRAND_THEME_SELECT = {
   sidebarLogoType: true,
   logoAlt: true,
   mode: true,
+  themePreset: true,
   supportEmail: true,
   proposalFeaturedVideoUrl: true,
   proposalFeaturedImageUrl: true,
-  proposalPrimaryColor: true,
+  proposalLightColor: true,
   proposalAccentColor: true,
+  accentForegroundColor: true,
 } as const;
 
 const DEV_FALLBACK_SLUG = process.env.DEV_BRAND_SLUG ?? "bc";

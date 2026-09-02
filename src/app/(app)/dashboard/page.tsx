@@ -235,7 +235,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     select: {
       ga4PropertyId: true,
       ga4HostName: true,
-      primaryColor: true,
+      lightColor: true,
       youtubeChannelId: true,
       youtubeHandle: true,
       monthlyViewsGoal: true,

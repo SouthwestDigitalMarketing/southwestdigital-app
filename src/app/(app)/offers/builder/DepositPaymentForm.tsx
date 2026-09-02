@@ -38,7 +38,7 @@ function CheckoutForm({ onPaid }: { onPaid: (status: "succeeded" | "processing")
       <button
         type="submit"
         disabled={!stripe || submitting}
-        className="w-full rounded-lg border-2 border-accent-500 bg-brandnavy px-5 py-3 text-sm font-bold text-white transition-all hover:-translate-y-0.5 hover:bg-slate-950 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
+        className="ui-action-primary w-full rounded-lg border-2 px-5 py-3 text-sm font-bold transition-all hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
       >
         {submitting ? "Processing…" : "Pay now"}
       </button>

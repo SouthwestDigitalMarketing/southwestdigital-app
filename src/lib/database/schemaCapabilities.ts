@@ -7,6 +7,7 @@ export type SchemaCapabilities = {
   proposalPackageDefaults: boolean;
   quoteRevisions: boolean;
   quoteEngagement: boolean;
+  agreementTemplates: boolean;
 };
 
 type CapabilityRow = {
@@ -14,6 +15,7 @@ type CapabilityRow = {
   proposalPackageDefaults: boolean;
   quoteRevisions: boolean;
   quoteEngagement: boolean;
+  agreementTemplates: boolean;
 };
 
 const NO_CAPABILITIES: SchemaCapabilities = {
@@ -21,6 +23,7 @@ const NO_CAPABILITIES: SchemaCapabilities = {
   proposalPackageDefaults: false,
   quoteRevisions: false,
   quoteEngagement: false,
+  agreementTemplates: false,
 };
 
 export async function getSchemaCapabilities(): Promise<SchemaCapabilities> {
@@ -48,7 +51,8 @@ export async function getSchemaCapabilities(): Promise<SchemaCapabilities> {
           WHERE table_schema = current_schema()
             AND table_name = 'quotes'
             AND column_name = 'engagementId'
-        ) AS "quoteEngagement"
+        ) AS "quoteEngagement",
+        to_regclass(current_schema() || '."AgreementTemplate"') IS NOT NULL AS "agreementTemplates"
     `;
     return row ?? NO_CAPABILITIES;
   } catch {

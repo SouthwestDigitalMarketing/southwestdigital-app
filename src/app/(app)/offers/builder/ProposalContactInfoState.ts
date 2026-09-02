@@ -170,18 +170,33 @@ export function useProposalContactInfoDemoState({
     : resolvedEngagementId
       ? `${CONTACT_INFO_STORAGE_KEY}:${resolvedEngagementId}`
       : CONTACT_INFO_STORAGE_KEY;
+  // Initialize with SSR-safe defaults (no localStorage read) so server and client
+  // agree on the first render. Then hydrate from localStorage in an effect below.
   const [contactInfo, setContactInfo] = useState<ContactInfoState>(() =>
-    readStoredContactInfo(storageKey, initialContactInfo, persist),
+    readStoredContactInfo(storageKey, initialContactInfo, false),
   );
+  const [hydratedFromStorage, setHydratedFromStorage] = useState(false);
 
   useEffect(() => {
-    if (!persist) return;
+    if (!persist) {
+      setHydratedFromStorage(true);
+      return;
+    }
+    setContactInfo(readStoredContactInfo(storageKey, initialContactInfo, true));
+    setHydratedFromStorage(true);
+    // Only hydrate on mount / when the storage key changes. initialContactInfo is
+    // an unstable object each render so intentionally excluded.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey, persist]);
+
+  useEffect(() => {
+    if (!persist || !hydratedFromStorage) return;
     try {
       window.localStorage.setItem(storageKey, JSON.stringify(contactInfo));
     } catch {
       // Ignore localStorage failures in demo mode.
     }
-  }, [contactInfo, persist, storageKey]);
+  }, [contactInfo, hydratedFromStorage, persist, storageKey]);
 
   function updateField<Key extends keyof ContactInfoState>(key: Key, value: ContactInfoState[Key]) {
     setContactInfo((current) => ({ ...current, [key]: value }));

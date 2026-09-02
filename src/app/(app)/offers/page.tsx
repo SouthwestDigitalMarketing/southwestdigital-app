@@ -52,8 +52,6 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
       : Promise.resolve(null),
   ]);
 
-  const accentDark = brand.theme?.accentDarkColor ?? brand.theme?.accentColor ?? "#8a5a12";
-
   return (
     <div className="px-8 pb-8">
       <h1 className="sr-only">Offers</h1>
@@ -163,10 +161,9 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                           }
                           className={
                             canResume
-                              ? "inline-flex h-9 cursor-pointer items-center justify-center rounded-full border border-slate-300 px-3 text-base font-semibold leading-none text-white transition hover:opacity-90"
+                              ? "ui-action-primary inline-flex h-9 cursor-pointer items-center justify-center rounded-full border px-3 text-base font-semibold leading-none transition hover:opacity-90"
                               : "text-base font-medium text-slate-900 hover:underline"
                           }
-                          style={canResume ? { backgroundColor: accentDark } : undefined}
                         >
                           {canResume ? "Resume" : "View"}
                         </Link>

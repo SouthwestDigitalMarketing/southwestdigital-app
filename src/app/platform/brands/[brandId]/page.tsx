@@ -45,7 +45,7 @@ export default async function BrandAdministrationPage({
   const theme = brand.theme ?? {
     logoUrl: null,
     supportEmail: null,
-    primaryColor: "#17324d",
+    lightColor: "#17324d",
     accentColor: "#d79b3b",
     backgroundColor: "#f7f8fa",
     foregroundColor: "#17202a",
@@ -122,7 +122,7 @@ export default async function BrandAdministrationPage({
               <label className="text-sm font-semibold text-slate-700 sm:col-span-2">Logo URL<input name="logoUrl" type="url" defaultValue={theme.logoUrl ?? ""} className={inputClass} /></label>
               <label className="text-sm font-semibold text-slate-700 sm:col-span-2">Support email<input name="supportEmail" type="email" defaultValue={theme.supportEmail ?? ""} className={inputClass} /></label>
               {[
-                ["primaryColor", "Primary", theme.primaryColor],
+                ["lightColor", "Light", theme.lightColor],
                 ["accentColor", "Accent", theme.accentColor],
                 ["backgroundColor", "Background", theme.backgroundColor],
                 ["foregroundColor", "Foreground", theme.foregroundColor],
@@ -132,12 +132,12 @@ export default async function BrandAdministrationPage({
               <button type="submit" className="cursor-pointer rounded-full bg-slate-950 px-5 py-2.5 font-semibold text-white sm:col-span-2">Save theme</button>
             </form>
             <div style={{ backgroundColor: theme.backgroundColor, color: theme.foregroundColor }} className="overflow-hidden rounded-3xl border border-slate-200 shadow-sm">
-              <div style={{ backgroundColor: theme.primaryColor }} className="h-3" />
+              <div style={{ backgroundColor: theme.lightColor }} className="h-3" />
               <div className="p-7">
                 <p style={{ color: theme.accentColor }} className="text-xs font-semibold uppercase tracking-[0.2em]">Portal preview</p>
                 <h3 className="mt-4 text-2xl font-semibold">{brand.name}</h3>
                 <p className="mt-2 text-sm opacity-70">Sign in to continue to your client portal.</p>
-                <div style={{ backgroundColor: theme.primaryColor }} className="mt-6 rounded-full px-5 py-3 text-center font-semibold text-white">Continue with Google</div>
+                <div style={{ backgroundColor: theme.lightColor }} className="mt-6 rounded-full px-5 py-3 text-center font-semibold text-white">Continue with Google</div>
               </div>
             </div>
           </div>

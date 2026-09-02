@@ -65,7 +65,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Cu
           <input name="principalAddressPostalCode" placeholder="Postal code" className={inputClass} />
           <input name="noticesEmail" type="email" placeholder="Legal notices email" className={inputClass} />
           <input name="invoicingEmail" type="email" placeholder="Invoicing email" className={inputClass} />
-          <button type="submit" className="w-full cursor-pointer rounded-full bg-[var(--brand-primary)] px-5 py-3 font-semibold text-white">Save customer</button>
+          <button type="submit" className="w-full cursor-pointer rounded-full bg-[var(--brand-light)] px-5 py-3 font-semibold text-white">Save customer</button>
           </form>
         ) : (
           <aside className="h-fit rounded-3xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">

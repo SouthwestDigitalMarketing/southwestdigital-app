@@ -27,9 +27,12 @@ import {
   Tag,
   BadgePercent,
   ChevronDown,
+  ScrollText,
 } from "lucide-react";
 import { selectBrand } from "@/app/select-brand/actions";
 import { useBrand } from "@/lib/brands/context";
+import { appCanvasGradient, appThemeCssVariables } from "@/lib/brands/themeTokens";
+import { normalizeThemeChoice, resolveEffectiveThemeColors } from "@/lib/brands/themePresets";
 import { signOutAction } from "./actions";
 
 const NAV: Array<{
@@ -47,6 +50,7 @@ const NAV: Array<{
   { label: "CRM", href: "/pipeline", icon: TrendingUp },
   { label: "Services", href: "/services", icon: Package },
   { label: "Offers", href: "/offers", icon: FileText },
+  { label: "Agreements", href: "/agreements", icon: ScrollText },
   { label: "Discounts", href: "/discounts", icon: BadgePercent, dividerAfter: true },
   { label: "Clients", href: "/clients", icon: Building2 },
   { label: "Team", href: "/team", icon: Users },
@@ -68,7 +72,6 @@ function NavItem({
   icon: Icon,
   label,
   exact = false,
-  accent,
   isLight,
   navTextColor,
   onNavigate,
@@ -77,7 +80,6 @@ function NavItem({
   icon: React.ElementType;
   label: string;
   exact?: boolean;
-  accent: string;
   isLight: boolean;
   navTextColor: string;
   onNavigate: () => void;
@@ -88,14 +90,12 @@ function NavItem({
   return (
     <Link
       href={href}
+      aria-current={active ? "page" : undefined}
       onClick={onNavigate}
       className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-        active ? "" : isLight ? "hover:bg-black/5" : "hover:bg-white/10"
+        active ? "ui-action-primary" : isLight ? "hover:bg-black/5" : "hover:bg-white/10"
       }`}
-      style={{
-        backgroundColor: active ? accent : undefined,
-        color: active ? "#ffffff" : navTextColor,
-      }}
+      style={active ? undefined : { color: navTextColor }}
     >
       <Icon size={16} />
       {label}
@@ -150,14 +150,20 @@ export function AppShell({
   const { brand } = useBrand();
   const [open, setOpen] = useState(false);
 
-  const primary = brand.theme?.primaryColor ?? "#17324d";
-  const accent = brand.theme?.accentColor ?? "#d79b3b";
-  const accentDark = brand.theme?.accentDarkColor ?? accent;
-  const mode = brand.theme?.mode === "dark" || brand.theme?.mode === "light" ? brand.theme.mode : "system";
+  const themePreset = normalizeThemeChoice(brand.theme?.themePreset);
+  const effective = resolveEffectiveThemeColors({
+    themePreset,
+    lightColor: brand.theme?.lightColor,
+    darkColor: brand.theme?.darkColor,
+    accentColor: brand.theme?.accentColor,
+    mode: brand.theme?.mode,
+  });
+  const light = effective.lightColor;
+  const accent = effective.accentColor;
+  const mode = effective.mode;
   const isLight = mode === "light";
-  const activeNavBackground = isLight ? accentDark : accent;
   const sidebarLogoType = brand.theme?.sidebarLogoType === "logo" ? "logo" : "mark";
-  const appearance = primary.toLowerCase() === "#111111" ? "grok" : "standard";
+  const appearance = themePreset === "grok" ? "grok" : "standard";
 
   const sidebarLightLogo = sidebarLogoType === "logo" ? brand.theme?.logoUrl : brand.theme?.logoMarkUrl;
   const sidebarDarkLogo = sidebarLogoType === "logo" ? brand.theme?.logoDarkUrl : brand.theme?.logoMarkDarkUrl;
@@ -170,7 +176,9 @@ export function AppShell({
       ? "brand-asset-fit brand-asset-fit-left"
       : "h-8 w-8 rounded object-contain";
 
-  const darkColor = brand.theme?.darkColor ?? primary;
+  const darkColor = effective.darkColor;
+  const themeVariables = appThemeCssVariables({ mode, accent, dark: darkColor });
+  const mainPanelBackground = appCanvasGradient(mode);
   const navTextColor = isLight ? darkColor : "rgba(255,255,255,0.7)";
   const navMutedColor = isLight ? `${darkColor}80` : "rgba(255,255,255,0.5)";
   const sidebarBg = isLight ? "#ffffff" : "var(--sidebar-background)";
@@ -195,7 +203,7 @@ export function AppShell({
       }}
     >
       <div
-        className="flex h-16 w-full min-w-0 items-center px-5"
+        className="flex h-20 w-full min-w-0 items-center px-5 py-3"
         style={{ borderBottom: `1px solid ${dividerColor}` }}
       >
         {sidebarDisplayLogo ? (
@@ -254,7 +262,6 @@ export function AppShell({
               icon={icon}
               label={label}
               exact={exact}
-              accent={activeNavBackground}
               isLight={isLight}
               navTextColor={navTextColor}
               onNavigate={() => setOpen(false)}
@@ -319,10 +326,11 @@ export function AppShell({
       className="flex h-screen overflow-hidden"
       style={{
         backgroundColor: "var(--app-canvas)",
-        "--brand-primary": primary,
+        "--brand-light": light,
         "--brand-dark": darkColor,
         "--brand-accent": accent,
-        ...(isLight ? { "--app-canvas": primary } : {}),
+        ...themeVariables,
+        ...(isLight && themePreset !== "grok" ? { "--app-canvas": light } : {}),
       } as React.CSSProperties}
     >
       <aside className="hidden lg:flex">{sidebar}</aside>
@@ -345,7 +353,12 @@ export function AppShell({
           <span className="ml-3 text-sm font-semibold text-slate-900">{brand.name}</span>
         </header>
 
-        <main className="flex-1 overflow-y-auto">{children}</main>
+        <main
+          className="flex-1 overflow-y-auto"
+          style={{ background: mainPanelBackground }}
+        >
+          {children}
+        </main>
       </div>
     </div>
   );

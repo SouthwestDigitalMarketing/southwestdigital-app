@@ -37,7 +37,7 @@ export default async function YouTubePage() {
         monthlyViewsGoal: true,
         monthlyClicksGoal: true,
         youtubeWatchPercentageGoal: true,
-        primaryColor: true,
+        lightColor: true,
       },
     }),
     prisma.brandDomain.findFirst({

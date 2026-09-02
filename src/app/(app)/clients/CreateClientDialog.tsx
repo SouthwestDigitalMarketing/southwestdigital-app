@@ -20,7 +20,7 @@ export function CreateClientDialog() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-slate-700"
+        className="ui-action-primary flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide transition"
       >
         <Plus size={13} />
         Add Client
@@ -76,7 +76,7 @@ export function CreateClientDialog() {
               <button
                 type="submit"
                 disabled={pending}
-                className="w-full rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-slate-700 disabled:opacity-50"
+                className="ui-action-primary w-full rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide transition disabled:opacity-50"
               >
                 {pending ? "Saving…" : "Save client"}
               </button>

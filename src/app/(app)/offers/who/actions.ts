@@ -10,6 +10,7 @@ import { parseEmailOrThrow } from "@/lib/email";
 import { parseSubmittedPhone } from "@/lib/phone";
 import { isOfferKindKey, type OfferKindKey } from "@/lib/quotes/kinds";
 import { materializeProposalCatalog } from "@/lib/quotes/materializeProposalCatalog";
+import { materializeAgreementTemplate } from "@/lib/agreements/materialize";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
 import { ensureQuoteEngagement } from "@/lib/engagements/fromOffer";
 
@@ -231,10 +232,11 @@ export async function saveOfferDraftAction(
     existing.snapshotJson && typeof existing.snapshotJson === "object"
       ? (existing.snapshotJson as Record<string, unknown>)
       : {};
-  const assessment = await materializeProposalCatalog(
+  const catalogAssessment = await materializeProposalCatalog(
     brand.id,
     state.assessment ?? previous.assessment,
   );
+  const assessment = await materializeAgreementTemplate(brand.id, catalogAssessment);
 
   await prisma.quote.update({
     where: { id: existing.id },
@@ -268,11 +270,12 @@ export async function publishOfferChangesAction(
     existing.snapshotJson && typeof existing.snapshotJson === "object"
       ? (existing.snapshotJson as Record<string, unknown>)
       : {};
-  const assessment = await materializeProposalCatalog(
+  const catalogAssessment = await materializeProposalCatalog(
     brand.id,
     state.assessment ?? previous.assessment,
     { freezeApplicability: true },
   );
+  const assessment = await materializeAgreementTemplate(brand.id, catalogAssessment);
   const snapshot = asJsonObject({
     ...previous,
     kind: existing.kind,

@@ -103,7 +103,7 @@ export function ProposalMediaSettingsForm({
         <button
           type="submit"
           disabled={isPending || videoIsInvalid}
-          className="rounded-lg bg-brandnavy px-4 py-2 text-sm font-semibold text-white transition hover:bg-brandnavy/90 disabled:opacity-50"
+          className="ui-action-primary rounded-lg px-4 py-2 text-sm font-semibold transition disabled:opacity-50"
         >
           {isPending ? "Saving…" : saved ? "Saved ✓" : "Save"}
         </button>

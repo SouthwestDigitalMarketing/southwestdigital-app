@@ -38,7 +38,7 @@ import {
   type UrgencyOfferConfig,
 } from "./urgencyOffer";
 import { useBrand } from "@/lib/brands/context";
-import { getProposalTheme, BRAND_PRIMARY_SENTINEL, BRAND_ACCENT_SENTINEL } from "./proposalThemes";
+import { DEFAULT_PROPOSAL_THEME_ID, DEFAULT_PROPOSAL_MODE } from "./proposalThemes";
 
 export type PackageId = "maintain" | "improve" | "grow";
 export type ProposalBonusId =
@@ -303,6 +303,10 @@ export type AssessmentState = {
   heroContinueButton: HeroButtonConfig;
   urgencyOffer: UrgencyOfferConfig;
   proposalTheme: string;
+  proposalMode: "light" | "dark";
+  agreementTemplateId?: string;
+  agreementTemplateName?: string;
+  agreementTemplateContent?: string;
   ongoingBookkeepingPlatform: BookkeepingPlatform;
   platformMigrationEnabled: boolean;
   platformMigrationEffectiveMonth: string;
@@ -486,7 +490,8 @@ const INITIAL_ASSESSMENT: AssessmentState = {
   heroMediaButton: DEFAULT_HERO_MEDIA_BUTTON,
   heroContinueButton: DEFAULT_HERO_CONTINUE_BUTTON,
   urgencyOffer: DEFAULT_URGENCY_OFFER,
-  proposalTheme: "brand",
+  proposalTheme: DEFAULT_PROPOSAL_THEME_ID,
+  proposalMode: DEFAULT_PROPOSAL_MODE,
   ongoingBookkeepingPlatform: "qbo",
   platformMigrationEnabled: false,
   platformMigrationEffectiveMonth: "",
@@ -2742,7 +2747,7 @@ export default function ProposalCreationWorkspaceDemo({
                               <CircleHelp className="h-3.5 w-3.5" />
                               <span
                                 role="tooltip"
-                                className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-80 -translate-x-1/2 rounded-xl bg-slate-950 px-3 py-2.5 text-left text-xs font-normal normal-case leading-relaxed tracking-normal text-white shadow-xl group-hover:block group-focus:block"
+                                className="ui-tooltip pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-80 -translate-x-1/2 rounded-xl px-3 py-2.5 text-left text-xs font-normal normal-case leading-relaxed tracking-normal shadow-xl group-hover:block group-focus:block"
                               >
                                 In QBO, open the General Ledger, set the date range, and export it as
                                 a CSV. Open the CSV in a spreadsheet or upload it to an AI chatbot to

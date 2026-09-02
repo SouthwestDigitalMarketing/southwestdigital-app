@@ -43,9 +43,9 @@ export async function POST(request: Request) {
 
     const currentTheme = await prisma.brandTheme.findUnique({
       where: { brandId: brand.id },
-      select: { primaryColor: true },
+      select: { lightColor: true },
     });
-    const shouldApplySuggestion = Boolean(suggestedColor) && (!currentTheme || currentTheme.primaryColor.toLowerCase() === "#17324d");
+    const shouldApplySuggestion = Boolean(suggestedColor) && (!currentTheme || currentTheme.lightColor.toLowerCase() === "#17324d");
 
     await prisma.brandTheme.upsert({
       where: { brandId: brand.id },
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
             : kind === "logo-dark"
               ? { logoDarkUrl: url }
               : { logoMarkDarkUrl: url }),
-        ...(shouldApplySuggestion ? { primaryColor: suggestedColor! } : {}),
+        ...(shouldApplySuggestion ? { lightColor: suggestedColor! } : {}),
       },
       update: {
         ...(kind === "logo"
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
             : kind === "logo-dark"
               ? { logoDarkUrl: url }
               : { logoMarkDarkUrl: url }),
-        ...(shouldApplySuggestion ? { primaryColor: suggestedColor! } : {}),
+        ...(shouldApplySuggestion ? { lightColor: suggestedColor! } : {}),
       },
     });
 

@@ -1,17 +1,49 @@
 # Coding-agent handoff
 
-Updated: 2026-09-01 (America/Chicago)
+Updated: 2026-09-02 (America/Chicago)
 
 ## Start here
 
 - Read the repository `AGENTS.md` before changing code. Its tenant, authorization, secret-handling, analytics, migration-safety, and Next.js 16 rules are non-negotiable.
 - Current branch: `main`.
-- Current pushed commit: `6a89195 Make proposal package services configurable`.
-- At the time of this update, `main`, `origin/main`, and `origin/HEAD` all point to `6a89195`.
-- `HANDOFF.md` itself is updated after that commit and is therefore an uncommitted working-tree change.
+- Current pushed commit before the agreement-template work: `999bc89 Build offer delivery and connected payments`.
+- At the time of this update, `main`, `origin/main`, and `origin/HEAD` all point to `999bc89`.
 - `.claude/` is untracked user-owned content. Do not add, delete, or modify it unless the user explicitly requests that.
 
 ## Current product state
+
+### Agreement templates and proposal signing (current working tree)
+
+- The client proposal's third step is named **Sign & Pay**, because the agreement is reviewed and signed before the onboarding payment is collected.
+- Agreement language is managed separately at `/agreements`; staff can create, edit, archive, restore, delete archived templates, and choose one active default per brand.
+- The Offers Preview page selects an active agreement template and renders its proposal-specific tokens immediately in the embedded preview.
+- Saving or publishing materializes the selected template's ID, name, and current content into the offer snapshot. Published revisions therefore retain their original agreement language when a template is edited or deleted later.
+- Unsigned engagement agreement text is regenerated when an offer is republished or the client changes package selection. Signed agreement text and its hash remain unchanged.
+- The additive, idempotent migration is `prisma/migrations/20260902140000_agreement_templates/migration.sql`. It has been applied directly to the connected local database and its table was verified through Prisma.
+- The default bookkeeping agreement was moved into `src/lib/agreements/template.ts`. Its language should be reviewed by qualified counsel before live client use.
+
+Primary new files:
+
+- `src/app/(app)/agreements/page.tsx`
+- `src/app/(app)/agreements/AgreementTemplatesManager.tsx`
+- `src/app/(app)/agreements/actions.ts`
+- `src/lib/agreements/template.ts`
+- `src/lib/agreements/repository.ts`
+- `src/lib/agreements/materialize.ts`
+- `prisma/migrations/20260902140000_agreement_templates/migration.sql`
+
+Current verification: `npm run typecheck` passed, all 29 Vitest files/149 tests passed, focused ESLint passed with only pre-existing warnings, the migration executed successfully twice, and the Next.js dev server is healthy on port 3000. Authenticated visual verification remains for the user/next agent.
+
+### Semantic action theming (current working tree)
+
+- Primary, secondary, danger, and ghost action colors are centralized in `src/app/globals.css`; controls use `ui-action-*` roles rather than pairing background and text utilities locally.
+- `src/lib/brands/themeTokens.ts` is the single source for primary-action background/foreground pairs and contrast selection.
+- The active sidebar item and authenticated-app primary actions consume the same pair. Light mode guarantees configured dark accent with white text; dark mode uses the regular accent with a centrally selected contrasting foreground.
+- The proposal preview and published proposal override that same primary-action pair from the offer's selected proposal theme, covering cover CTAs, package selection, signing, and Stripe payment.
+- Legacy primary actions across Contacts, Clients, Reviews, Media, Discounts, Settings, Dashboard, and Offers were migrated to the semantic primary-action role. Selected chips/tooltips remain separate control types.
+- See `docs/architecture/ui-theme-system.md` before adding or restyling actions.
+
+### Configurable proposal services (previous work)
 
 The Offers → Options step is now the per-offer source of truth for optional services, included services, cadence, and Grow/Improve/Maintain assignments.
 

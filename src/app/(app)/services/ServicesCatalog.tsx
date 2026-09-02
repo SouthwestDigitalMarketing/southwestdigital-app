@@ -172,10 +172,9 @@ export function ServicesCatalog({
               aria-checked={archived}
               aria-label="Show archived services"
               onClick={() => router.push(archived ? "/services" : "/services?archived=1")}
-              className="relative h-7 w-12 cursor-pointer rounded-full transition-colors"
-              style={{ backgroundColor: archived ? "var(--brand-dark, var(--brand-primary))" : "#64748b" }}
+              className="ui-toggle-switch"
             >
-              <span className={`absolute top-1 h-5 w-5 rounded-full border border-slate-300 bg-white shadow-sm transition-transform ${archived ? "left-6" : "left-1"}`} />
+              <span className="ui-toggle-switch-thumb" />
             </button>
             <span className={archived ? "text-slate-900" : "text-slate-400"}>Archived</span>
           </div>

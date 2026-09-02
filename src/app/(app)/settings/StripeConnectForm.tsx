@@ -66,7 +66,7 @@ export function StripeConnectForm({
             <button
               type="submit"
               disabled={pending}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
+              className="ui-action-primary rounded-lg px-4 py-2 text-sm font-semibold transition disabled:opacity-50"
             >
               {status === "active" ? "Update Stripe details" : "Connect this brand"}
             </button>

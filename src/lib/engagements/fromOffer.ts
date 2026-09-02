@@ -31,7 +31,7 @@ export async function ensureQuoteEngagement(input: {
   if (quote.engagementId) {
     const existing = await prisma.engagement.findFirst({
       where: { id: quote.engagementId, brandId: input.brandId },
-      select: { id: true, onboardingData: true },
+      select: { id: true, onboardingData: true, signedAt: true },
     });
     if (existing) {
       const onboardingData = isRecord(existing.onboardingData) ? existing.onboardingData : {};
@@ -47,6 +47,9 @@ export async function ensureQuoteEngagement(input: {
           primaryContactEmail: fields.primaryContactEmail,
           primaryContactPhone: fields.primaryContactPhone,
           billingContactEmail: fields.billingContactEmail,
+          ...(existing.signedAt
+            ? {}
+            : { agreementText: null, agreementTextHash: null }),
           onboardingData: {
             ...onboardingData,
             proposalBuilderState: {

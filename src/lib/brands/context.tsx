@@ -10,10 +10,9 @@ export type BrandContextValue = {
     name: string;
     status: BrandStatus;
     theme: {
-      primaryColor: string;
+      lightColor: string;
       darkColor: string | null;
       accentColor: string;
-      accentDarkColor: string | null;
       backgroundColor: string;
       foregroundColor: string;
       logoUrl: string | null;
@@ -23,11 +22,13 @@ export type BrandContextValue = {
       sidebarLogoType: string;
       logoAlt: string | null;
       mode: string;
+      themePreset: string;
       supportEmail: string | null;
       proposalFeaturedVideoUrl: string | null;
       proposalFeaturedImageUrl: string | null;
-      proposalPrimaryColor: string | null;
+      proposalLightColor: string | null;
       proposalAccentColor: string | null;
+      accentForegroundColor: string;
     } | null;
     toolLinks: Array<{
       key: string;

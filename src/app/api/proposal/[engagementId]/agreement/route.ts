@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateProposalAgreementText } from "@/lib/engagements/agreementGenerator";
+import { renderAgreementTemplate } from "@/lib/agreements/template";
 
 export async function GET(
   _request: Request,
@@ -39,21 +40,28 @@ export async function GET(
 
   const onboardingData = isRecord(engagement.onboardingData) ? engagement.onboardingData : {};
   const builderState = isRecord(onboardingData.proposalBuilderState) ? onboardingData.proposalBuilderState : {};
+  const assessment = isRecord(builderState.assessment) ? builderState.assessment : {};
   const services = isRecord(builderState.services) ? builderState.services : {};
   const tierLabel = typeof services.selectedTierLabel === "string" ? services.selectedTierLabel : null;
   const hasCleanup = Boolean(builderState.hasCleanup);
+  const templateContent = typeof assessment.agreementTemplateContent === "string"
+    ? assessment.agreementTemplateContent
+    : null;
+  const renderInput = {
+    brandName: brand?.name ?? "Bookkeeping Conroe",
+    clientName: engagement.clientName || "Client",
+    primaryContactName: engagement.primaryContactName,
+    primaryContactEmail: engagement.primaryContactEmail,
+    selectedTierLabel: tierLabel,
+    onboardingFee: engagement.onboardingFee ? Number(engagement.onboardingFee) : null,
+    hasCleanup,
+  };
 
   let text = engagement.agreementText ?? "";
-  if (!engagement.signedAt) {
-    text = generateProposalAgreementText({
-      brandName: brand?.name ?? "Bookkeeping Conroe",
-      clientName: engagement.clientName || "Client",
-      primaryContactName: engagement.primaryContactName,
-      primaryContactEmail: engagement.primaryContactEmail,
-      selectedTierLabel: tierLabel,
-      onboardingFee: engagement.onboardingFee ? Number(engagement.onboardingFee) : null,
-      hasCleanup,
-    });
+  if (!engagement.signedAt && !text) {
+    text = templateContent
+      ? renderAgreementTemplate(templateContent, renderInput)
+      : generateProposalAgreementText(renderInput);
     await prisma.engagement.update({
       where: { id: engagementId },
       data: { agreementText: text },

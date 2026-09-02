@@ -90,7 +90,7 @@ export default async function LoginPage({ searchParams }: { searchParams: LoginS
               />
               <button
                 type="submit"
-                className="w-full cursor-pointer rounded-full bg-[var(--brand-primary)] px-5 py-3 font-semibold text-white transition hover:opacity-90"
+                className="w-full cursor-pointer rounded-full bg-[var(--brand-light)] px-5 py-3 font-semibold text-white transition hover:opacity-90"
               >
                 {authProviderAvailability.instantEmail ? "Sign in" : "Email me a sign-in link"}
               </button>

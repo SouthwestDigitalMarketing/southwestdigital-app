@@ -2,9 +2,20 @@
 
 import { useState } from "react";
 import { Check, Image as ImageIcon, Video } from "lucide-react";
-import OfferProposalPreview, { resolveVideoEmbedUrl } from "./OfferProposalPreview";
+import Link from "next/link";
+import dynamic from "next/dynamic";
+import { resolveVideoEmbedUrl } from "./OfferProposalPreview";
+
+// Load the preview client-only. Its state is entirely localStorage-backed
+// (contact info + assessment), so SSR would render defaults and then re-render
+// with real data — causing a flash. Client-only rendering skips SSR for this
+// subtree so the first paint already reflects stored state.
+const OfferProposalPreview = dynamic(() => import("./OfferProposalPreview"), {
+  ssr: false,
+  loading: () => <div className="min-h-[40rem]" />,
+});
 import type { UrgencyOfferDisplay } from "./urgencyOffer";
-import { PROPOSAL_THEMES, BRAND_PRIMARY_SENTINEL, BRAND_ACCENT_SENTINEL } from "./proposalThemes";
+import { PROPOSAL_THEMES, DEFAULT_PROPOSAL_THEME_ID, DEFAULT_PROPOSAL_MODE, type ProposalMode } from "./proposalThemes";
 import { useBrand } from "@/lib/brands/context";
 import ProposalAppDemoHeader from "./ProposalAppDemoHeader";
 import { useProposalAssessmentDemoState } from "./ProposalCreationWorkspaceDemo";
@@ -17,6 +28,7 @@ import {
 } from "./heroButtons";
 import { resolveCoverMedia } from "./coverMedia";
 import { CoverMediaPicker, type CoverMediaFolder, type CoverMediaItem } from "./CoverMediaPicker";
+import type { AgreementTemplateOption } from "@/lib/agreements/types";
 
 export type BrandMediaItem = CoverMediaItem;
 
@@ -28,14 +40,29 @@ export default function ProposalIntroDemo({
   mediaItems,
   mediaFolders = [],
   catalogOffer = null,
+  agreementTemplates,
 }: {
   mediaItems: BrandMediaItem[];
   mediaFolders?: CoverMediaFolder[];
   catalogOffer?: UrgencyOfferDisplay | null;
+  agreementTemplates: AgreementTemplateOption[];
 }) {
   const { assessment, updateAssessment } = useProposalAssessmentDemoState();
   const { brand } = useBrand();
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
+  const selectedAgreement =
+    agreementTemplates.find((template) => template.id === assessment.agreementTemplateId)
+    ?? agreementTemplates.find((template) => template.isDefault)
+    ?? agreementTemplates[0]
+    ?? null;
+
+  function selectAgreement(templateId: string) {
+    const template = agreementTemplates.find((item) => item.id === templateId);
+    if (!template) return;
+    updateAssessment("agreementTemplateId", template.id);
+    updateAssessment("agreementTemplateName", template.name);
+    updateAssessment("agreementTemplateContent", template.content);
+  }
 
   const brandDefaultVideoUrl = brand.theme?.proposalFeaturedVideoUrl ?? null;
   const brandDefaultImageUrl = brand.theme?.proposalFeaturedImageUrl ?? null;
@@ -88,13 +115,10 @@ export default function ProposalIntroDemo({
             : "No media selected";
   const selectedMediaType = selectedLibraryItem?.type ?? (hasSelectedVideo ? "video" : coverMedia.imageUrl ? "image" : null);
 
-  const brandPrimary = brand.theme?.proposalPrimaryColor ?? brand.theme?.primaryColor ?? "#17324d";
+  const brandLight = brand.theme?.proposalLightColor ?? brand.theme?.lightColor ?? "#17324d";
   const brandAccent = brand.theme?.proposalAccentColor ?? brand.theme?.accentColor ?? "#d79b3b";
   function resolveThemeColor(value: string | null, fallback: string): string {
-    if (value === null) return fallback;
-    if (value === BRAND_ACCENT_SENTINEL) return brandAccent;
-    if (value === BRAND_PRIMARY_SENTINEL) return brandPrimary;
-    return value;
+    return value ?? fallback;
   }
 
   return (
@@ -170,7 +194,7 @@ export default function ProposalIntroDemo({
                   <button
                     type="button"
                     onClick={() => setMediaPickerOpen(true)}
-                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                    className="ui-action-secondary rounded-lg border px-3 py-2 text-sm font-semibold transition"
                   >
                     Choose media
                   </button>
@@ -195,51 +219,65 @@ export default function ProposalIntroDemo({
             </div>
 
             {/* ── Theme picker ─────────────────────────────────────────────── */}
-            <div className="mt-8">
-              <p className="mb-1 text-sm font-semibold text-slate-700">Theme</p>
-              <p className="mb-3 text-xs text-slate-400">
-                Proposal color scheme — <span className="font-medium">Brand</span> variants use your colors from Settings
-              </p>
+            {(() => {
+              const proposalMode: ProposalMode = assessment.proposalMode ?? DEFAULT_PROPOSAL_MODE;
+              return (
+            <div className="mt-8 rounded-xl border border-slate-200 proposal-builder-card p-5">
+              <div className="mb-3 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold text-slate-700">Theme</p>
+                  <p className="text-xs text-slate-400">
+                    Proposal color scheme — <span className="font-medium">Brand</span> uses your colors from Settings
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 text-xs font-medium text-slate-700">
+                  <span className={proposalMode === "light" ? "text-slate-900" : "text-slate-500"}>Light</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={proposalMode === "dark"}
+                    aria-label="Toggle proposal dark mode"
+                    onClick={() => updateAssessment("proposalMode", proposalMode === "dark" ? "light" : "dark")}
+                    className="ui-toggle-switch"
+                  >
+                    <span className="ui-toggle-switch-thumb" />
+                  </button>
+                  <span className={proposalMode === "dark" ? "text-slate-900" : "text-slate-500"}>Dark</span>
+                </div>
+              </div>
               <div className="flex flex-wrap gap-3">
                 {PROPOSAL_THEMES.map((theme) => {
-                  const swatchPrimary = resolveThemeColor(theme.primary, brandPrimary);
-                  const swatchAccent = resolveThemeColor(theme.accent, brandAccent);
-                  const active = (assessment.proposalTheme || "brand") === theme.id;
+                  const themeLight = proposalMode === "dark" && theme.darkLight ? theme.darkLight : theme.light;
+                  const themeAccent = proposalMode === "dark" && theme.darkAccent ? theme.darkAccent : theme.accent;
+                  const swatchLight = resolveThemeColor(themeLight, brandLight);
+                  const swatchAccent = resolveThemeColor(themeAccent, brandAccent);
+                  const active = (assessment.proposalTheme || DEFAULT_PROPOSAL_THEME_ID) === theme.id;
                   return (
                     <button
                       key={theme.id}
                       type="button"
                       title={theme.description}
                       onClick={() => updateAssessment("proposalTheme", theme.id)}
-                      style={theme.swatchBg ? { backgroundColor: theme.swatchBg } : undefined}
                       className={`relative flex flex-col cursor-pointer items-center gap-2 rounded-xl border-2 p-2 pb-2.5 transition ${
                         active
-                          ? "border-slate-900 shadow-sm"
+                          ? "border-brandnavy shadow-sm"
                           : "border-slate-200 hover:border-slate-400"
                       }`}
                     >
-                      {/* Color preview block */}
-                      <div className="relative h-10 w-16 overflow-hidden rounded-lg shadow-inner">
-                        <div className="absolute inset-0" style={{ backgroundColor: swatchPrimary }} />
-                        {/* Accent stripe */}
-                        <div
-                          className="absolute bottom-0 left-0 right-0 h-3"
-                          style={{ backgroundColor: swatchAccent }}
-                        />
-                        {/* Check on active */}
+                      {/* Color preview block — primary | pageBg (current mode) | accent */}
+                      <div className="relative flex h-10 w-16 overflow-hidden rounded-lg shadow-inner">
+                        <div className="flex-1" style={{ backgroundColor: swatchLight }} />
+                        <div className="flex-1" style={{ background: theme.pageBg[proposalMode] }} />
+                        <div className="flex-1" style={{ backgroundColor: swatchAccent }} />
                         {active && (
-                          <div className="absolute inset-0 flex items-center justify-center pb-2">
-                            <div className="rounded-full bg-white/20 p-0.5">
-                              <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="rounded-full bg-white/90 p-0.5 shadow-sm">
+                              <Check className="h-3 w-3 text-slate-900" strokeWidth={3} />
                             </div>
                           </div>
                         )}
                       </div>
-                      <span
-                        className={`text-xs font-semibold leading-none ${
-                          active ? "text-slate-900" : "text-slate-600"
-                        }`}
-                      >
+                      <span className="text-xs font-semibold leading-none">
                         {theme.label}
                       </span>
                     </button>
@@ -247,11 +285,51 @@ export default function ProposalIntroDemo({
                 })}
               </div>
             </div>
+              );
+            })()}
 
             <div className="mt-8">
+              <div className="mb-6 rounded-xl border border-slate-200 proposal-builder-card p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <label htmlFor="agreement-template" className="block text-sm font-semibold text-slate-700">
+                      Agreement template
+                    </label>
+                    <p className="mt-1 text-xs text-slate-500">
+                      The client reviews and signs this agreement before paying. Publishing saves a copy with this offer.
+                    </p>
+                  </div>
+                  <Link
+                    href="/agreements"
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Manage templates
+                  </Link>
+                </div>
+                <select
+                  id="agreement-template"
+                  value={selectedAgreement?.id ?? ""}
+                  onChange={(event) => selectAgreement(event.target.value)}
+                  className="mt-3 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 focus:border-brandnavy focus:outline-none focus:ring-2 focus:ring-brandnavy/20"
+                >
+                  {agreementTemplates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}{template.isDefault ? " (default)" : ""}
+                    </option>
+                  ))}
+                </select>
+                {selectedAgreement?.description ? (
+                  <p className="mt-2 text-xs text-slate-500">{selectedAgreement.description}</p>
+                ) : null}
+              </div>
               <p className="mb-3 text-sm font-semibold text-slate-500 uppercase tracking-wide">Preview</p>
               <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
-                <OfferProposalPreview embedded assessment={assessment} catalogOffer={catalogOffer} />
+                <OfferProposalPreview
+                  embedded
+                  assessment={assessment}
+                  catalogOffer={catalogOffer}
+                  agreementTemplate={selectedAgreement}
+                />
               </div>
             </div>
           </div>

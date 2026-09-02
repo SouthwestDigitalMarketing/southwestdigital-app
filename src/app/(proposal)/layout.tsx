@@ -16,7 +16,7 @@ export default async function ProposalLayout({ children }: { children: React.Rea
     );
   }
 
-  const primary = brand.theme?.proposalPrimaryColor ?? brand.theme?.primaryColor ?? "#17324d";
+  const light = brand.theme?.proposalLightColor ?? brand.theme?.lightColor ?? "#17324d";
   const accent = brand.theme?.proposalAccentColor ?? brand.theme?.accentColor ?? "#d79b3b";
 
   return (
@@ -25,7 +25,7 @@ export default async function ProposalLayout({ children }: { children: React.Rea
         data-theme="light"
         style={
           {
-            "--brand-primary": primary,
+            "--brand-light": light,
             "--brand-accent": accent,
             minHeight: "100vh",
           } as React.CSSProperties

@@ -21,10 +21,6 @@ export function GoalEditor({
     if (editing) inputRef.current?.select();
   }, [editing]);
 
-  useEffect(() => {
-    if (!editing) setDraft(String(goal));
-  }, [goal, editing]);
-
   function save() {
     const parsed = Number(draft);
     if (!Number.isFinite(parsed) || parsed <= 0) return;
@@ -55,7 +51,7 @@ export function GoalEditor({
           type="button"
           onClick={save}
           disabled={pending}
-          className="rounded-md bg-slate-900 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
+          className="ui-action-primary rounded-md px-2 py-1 text-xs font-semibold transition disabled:opacity-50"
         >
           Save
         </button>
@@ -66,7 +62,10 @@ export function GoalEditor({
   return (
     <button
       type="button"
-      onClick={() => setEditing(true)}
+      onClick={() => {
+        setDraft(String(goal));
+        setEditing(true);
+      }}
       className="absolute right-4 top-4 flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 transition-colors hover:border-slate-300 hover:text-slate-600"
       aria-label="Edit goal"
     >

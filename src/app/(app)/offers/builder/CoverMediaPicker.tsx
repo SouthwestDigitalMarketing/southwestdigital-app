@@ -154,7 +154,7 @@ export function CoverMediaPicker({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+                  className="ui-action-primary rounded-lg px-4 py-2 text-sm font-semibold transition"
                 >
                   Done
                 </button>

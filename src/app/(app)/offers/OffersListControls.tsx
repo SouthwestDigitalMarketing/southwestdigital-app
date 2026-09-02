@@ -75,21 +75,16 @@ export function OffersListControls({
             aria-checked={archived}
             aria-label="Show archived offers"
             onClick={() => push({ archived: !archived, status: "all" })}
-            className="relative h-7 w-12 rounded-full transition-colors"
-            style={{ backgroundColor: archived ? "var(--brand-dark, var(--brand-primary))" : "#64748b" }}
+            className="ui-toggle-switch"
           >
-            <span
-              className={`absolute left-1 top-1 h-5 w-5 rounded-full border border-slate-300 bg-white shadow-sm transition-transform ${
-                archived ? "translate-x-5" : "translate-x-0.5"
-              }`}
-            />
+            <span className="ui-toggle-switch-thumb" />
           </button>
           <span className={archived ? "text-slate-900" : "text-slate-400"}>Archived</span>
         </div>
         <Link
           href={whoHref("bookkeeping", contactId)}
           className="ml-auto inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-full px-4 py-2 text-base font-semibold text-white transition hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2"
-          style={{ backgroundColor: "var(--brand-dark, var(--brand-primary))" }}
+          style={{ backgroundColor: "var(--brand-dark, var(--brand-light))" }}
         >
           Create offer
         </Link>

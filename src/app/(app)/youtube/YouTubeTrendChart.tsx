@@ -60,21 +60,21 @@ function makeTooltip(segments: VideoSegment[]) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const total = entries.reduce((s: number, p: any) => s + Number(p.value), 0);
     return (
-      <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-sm">
-        <p className="mb-1.5 font-semibold text-slate-700">{dateLabel}</p>
+      <div className="ui-tooltip rounded-lg px-3 py-2 text-xs shadow-sm">
+        <p className="mb-1.5 font-semibold">{dateLabel}</p>
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
         {entries.map((entry: any) => {
           const seg = segments.find((s: VideoSegment) => s.videoId === String(entry.dataKey));
           return (
             <div key={String(entry.dataKey)} className="flex items-center gap-1.5 py-0.5">
               <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: seg?.color ?? "#94a3b8" }} />
-              <span className="flex-1 text-slate-600">{truncate(seg?.title ?? String(entry.dataKey), 32)}</span>
-              <span className="ml-3 font-medium text-slate-900">{Number(entry.value).toLocaleString("en-US")}</span>
+              <span className="flex-1 opacity-80">{truncate(seg?.title ?? String(entry.dataKey), 32)}</span>
+              <span className="ml-3 font-medium">{Number(entry.value).toLocaleString("en-US")}</span>
             </div>
           );
         })}
         {entries.length > 1 && (
-          <div className="mt-1 border-t border-slate-100 pt-1 text-right font-semibold text-slate-700">
+          <div className="mt-1 border-t border-white/25 pt-1 text-right font-semibold">
             {total.toLocaleString("en-US")} total
           </div>
         )}

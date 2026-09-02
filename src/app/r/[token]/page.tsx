@@ -36,7 +36,7 @@ export default async function PublicReviewPage({
     select: {
       name: true,
       theme: {
-        select: { primaryColor: true, accentColor: true },
+        select: { lightColor: true, accentColor: true },
       },
     },
   });
@@ -51,7 +51,7 @@ export default async function PublicReviewPage({
       token={token}
       recipientName={request.recipientName}
       brandName={brand.name}
-      primaryColor={brand.theme?.primaryColor ?? "#17324d"}
+      lightColor={brand.theme?.lightColor ?? "#17324d"}
       accentColor={brand.theme?.accentColor ?? "#d79b3b"}
       googleReviewUrl={googleReviewUrl}
     />

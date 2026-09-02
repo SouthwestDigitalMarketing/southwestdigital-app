@@ -31,7 +31,7 @@ export async function POST(
 
   const engagement = await prisma.engagement.findUnique({
     where: { id: engagementId },
-    select: { onboardingData: true, onboardingFeeStatus: true },
+    select: { onboardingData: true, onboardingFeeStatus: true, signedAt: true },
   });
   if (!engagement) return NextResponse.json({ error: "Engagement not found" }, { status: 404 });
 
@@ -60,6 +60,9 @@ export async function POST(
       onboardingFeeStatus,
       scopingMode: "AGREEMENT",
       isExpedited: true,
+      ...(engagement.signedAt
+        ? {}
+        : { agreementText: null, agreementTextHash: null }),
     },
   });
 

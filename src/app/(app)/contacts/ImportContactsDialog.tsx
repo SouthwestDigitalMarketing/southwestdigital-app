@@ -241,7 +241,7 @@ export function ImportContactsDialog({ tags }: { tags: TagOption[] }) {
                     <button
                       type="button"
                       onClick={close}
-                      className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-white hover:bg-slate-700"
+                      className="ui-action-primary rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition"
                     >
                       Done
                     </button>
@@ -349,7 +349,7 @@ export function ImportContactsDialog({ tags }: { tags: TagOption[] }) {
                   type="button"
                   disabled={pending || !canImport || dataRows.length === 0}
                   onClick={submit}
-                  className="rounded-full bg-slate-900 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-white hover:bg-slate-700 disabled:opacity-50"
+                  className="ui-action-primary rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-wide transition disabled:opacity-50"
                 >
                   {pending ? "Importing…" : `Import ${dataRows.length} row${dataRows.length === 1 ? "" : "s"}`}
                 </button>

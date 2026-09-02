@@ -77,7 +77,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Con
               <option value="DENIED">Denied</option>
             </select>
           </label>
-          <button type="submit" className="w-full cursor-pointer rounded-full bg-[var(--brand-primary)] px-5 py-3 font-semibold text-white">
+          <button type="submit" className="w-full cursor-pointer rounded-full bg-[var(--brand-light)] px-5 py-3 font-semibold text-white">
             Save contact
           </button>
           </form>

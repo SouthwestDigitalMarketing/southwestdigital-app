@@ -15,12 +15,12 @@ function escapeHtml(value: string): string {
 function magicLinkHtml(input: {
   brandName: string;
   url: string;
-  primaryColor: string;
+  lightColor: string;
   accentColor: string;
 }): string {
   const brandName = escapeHtml(input.brandName);
   const url = escapeHtml(input.url);
-  const primaryColor = escapeHtml(input.primaryColor);
+  const lightColor = escapeHtml(input.lightColor);
   const accentColor = escapeHtml(input.accentColor);
 
   return `<!doctype html>
@@ -33,9 +33,9 @@ function magicLinkHtml(input: {
             <tr>
               <td style="padding:32px">
                 <div style="height:5px;border-radius:999px;background:${accentColor};margin-bottom:24px"></div>
-                <h1 style="margin:0;font-size:24px;color:${primaryColor}">Sign in to ${brandName}</h1>
+                <h1 style="margin:0;font-size:24px;color:${lightColor}">Sign in to ${brandName}</h1>
                 <p style="margin:16px 0 24px;line-height:1.6;color:#475569">Use the secure button below to finish signing in. This link expires automatically and can be used only once.</p>
-                <a href="${url}" style="display:inline-block;border-radius:999px;background:${primaryColor};color:#fff;text-decoration:none;font-weight:700;padding:13px 22px">Sign in securely</a>
+                <a href="${url}" style="display:inline-block;border-radius:999px;background:${lightColor};color:#fff;text-decoration:none;font-weight:700;padding:13px 22px">Sign in securely</a>
                 <p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#64748b">If you did not request this email, you can safely ignore it.</p>
               </td>
             </tr>
@@ -66,7 +66,7 @@ export function BrandedResend(config: { apiKey: string; from: string }): EmailCo
       }
 
       const brandName = brand?.name ?? "Southwest Digital App";
-      const primaryColor = brand?.theme?.primaryColor ?? "#17324d";
+      const lightColor = brand?.theme?.lightColor ?? "#17324d";
       const accentColor = brand?.theme?.accentColor ?? "#d79b3b";
       const response = await fetch("https://api.resend.com/emails", {
         method: "POST",
@@ -78,7 +78,7 @@ export function BrandedResend(config: { apiKey: string; from: string }): EmailCo
           from: provider.from,
           to: normalizeEmail(identifier),
           subject: `Sign in to ${brandName}`,
-          html: magicLinkHtml({ brandName, url, primaryColor, accentColor }),
+          html: magicLinkHtml({ brandName, url, lightColor, accentColor }),
           text: `Sign in to ${brandName}: ${url}\n\nIf you did not request this email, ignore it.`,
         }),
       });

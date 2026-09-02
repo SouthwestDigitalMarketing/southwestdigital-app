@@ -80,7 +80,7 @@ export default async function LeadsPage() {
             </div>
           </details>
           <textarea name="notes" placeholder="Notes" rows={3} className="w-full rounded-xl border border-slate-300 px-3 py-2.5" />
-          <button type="submit" className="w-full cursor-pointer rounded-full bg-[var(--brand-primary)] px-5 py-3 font-semibold text-white">
+          <button type="submit" className="w-full cursor-pointer rounded-full bg-[var(--brand-light)] px-5 py-3 font-semibold text-white">
             Save lead
           </button>
           </form>

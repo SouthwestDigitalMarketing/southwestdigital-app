@@ -4,29 +4,91 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { LoaderCircle, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { updateBrandAppearanceAction } from "./actions";
-import { normalizeBrandColor } from "@/lib/brands/colors";
+import {
+  contrastRatio,
+  normalizeBrandColor,
+  readableForegroundColor,
+  textContrastRating,
+  type TextContrastRating,
+} from "@/lib/brands/colors";
+import {
+  BRAND_COLORS_CHOICE,
+  THEME_PRESETS,
+  normalizeThemeChoice,
+  type ThemeChoice,
+} from "@/lib/brands/themePresets";
 
 type AssetKind = "logo" | "mark" | "logo-dark" | "mark-dark";
 const MAX_FILE_SIZE = 2 * 1024 * 1024;
 
-const THEME_PRESETS = [
-  { name: "Professional navy", color: "#17324d", mode: "light" },
-  { name: "Modern slate", color: "#334155", mode: "light" },
-  { name: "Grok", color: "#111111", mode: "dark" },
-] as const;
-
 type Theme = {
-  primaryColor: string;
+  lightColor: string;
   darkColor: string | null;
   accentColor: string;
-  accentDarkColor: string | null;
+  accentForegroundColor: string;
   mode: string;
   logoUrl: string | null;
   logoMarkUrl: string | null;
   logoDarkUrl: string | null;
   logoMarkDarkUrl: string | null;
   sidebarLogoType: string;
+  themePreset: string;
 };
+
+const CONTRAST_EXPLANATIONS: Record<TextContrastRating, string> = {
+  AAA: "Meets WCAG enhanced guidance for ordinary text with a contrast ratio of at least 7:1.",
+  AA: "Meets WCAG guidance for ordinary text with a contrast ratio of at least 4.5:1.",
+  Fail: "Does not meet WCAG guidance for ordinary text. A contrast ratio of at least 4.5:1 is required.",
+};
+
+function BrandColorSwatch({
+  label,
+  background,
+  foreground,
+}: {
+  label: string;
+  background: string;
+  foreground?: string;
+}) {
+  const textColor = foreground ?? readableForegroundColor(background);
+  const ratio = contrastRatio(textColor, background) ?? 1;
+  const rating = textContrastRating(textColor, background);
+  const textDescription = textColor.toLowerCase() === "#ffffff" ? "White text" : "Dark text";
+  const tooltipId = `contrast-${label.toLowerCase().replaceAll(" ", "-")}`;
+
+  return (
+    <>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+        <div className="group relative">
+          <button
+            type="button"
+            aria-describedby={tooltipId}
+            aria-label={`${rating === "Fail" ? "Fails" : rating} contrast guidance for ${label}`}
+            data-rating={rating}
+            className="ui-contrast-badge cursor-help rounded-full border px-2 py-0.5 text-xs font-bold"
+          >
+            {rating === "Fail" ? "Fails" : rating}
+          </button>
+          <div
+            id={tooltipId}
+            role="tooltip"
+            className="ui-tooltip pointer-events-none absolute bottom-full right-0 z-20 mb-2 w-64 rounded-lg px-3 py-2 text-left text-xs font-normal leading-relaxed opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+          >
+            {CONTRAST_EXPLANATIONS[rating]} This checks {textDescription.toLowerCase()} against the {label.toLowerCase()} color. Contrast is {ratio.toFixed(2)}:1.
+          </div>
+        </div>
+      </div>
+      <div
+        className="flex h-16 w-full flex-col items-center justify-center rounded-lg border border-black/10"
+        style={{ backgroundColor: background, color: textColor }}
+      >
+        <span className="text-base font-semibold">Sample text</span>
+        <span className="text-xs opacity-80">{textDescription} · {ratio.toFixed(2)}:1</span>
+      </div>
+    </>
+  );
+}
 
 async function sampleLogoColor(file: File): Promise<string | null> {
   if (file.type === "image/svg+xml") return null;
@@ -152,7 +214,7 @@ function AssetDropzone({
   uploading,
   onUpload,
   onRemove,
-  brandPrimary,
+  brandLight,
   brandDark,
 }: {
   kind: AssetKind;
@@ -160,7 +222,7 @@ function AssetDropzone({
   uploading: boolean;
   onUpload: (kind: AssetKind, file: File) => void;
   onRemove: (kind: AssetKind) => void;
-  brandPrimary: string;
+  brandLight: string;
   brandDark: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -193,9 +255,9 @@ function AssetDropzone({
         ) : (
           <div className="flex h-full w-full items-center justify-center">
             {isMark ? (
-              <ExampleMarkPair onDark={isDark} brandColor={brandPrimary} />
+              <ExampleMarkPair onDark={isDark} brandColor={brandLight} />
             ) : (
-              <ExampleLogoPair onDark={isDark} brandColor={brandPrimary} />
+              <ExampleLogoPair onDark={isDark} brandColor={brandLight} />
             )}
           </div>
         )}
@@ -243,7 +305,7 @@ function AssetDropzone({
 export function BrandAppearanceForm({ theme }: { theme: Theme }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [primaryColor, setPrimaryColor] = useState(theme.primaryColor);
+  const [lightColor, setLightColor] = useState(theme.lightColor);
   const [mode, setMode] = useState(theme.mode === "dark" ? "dark" : "light");
   const [logoUrl, setLogoUrl] = useState(theme.logoUrl);
   const [logoMarkUrl, setLogoMarkUrl] = useState(theme.logoMarkUrl);
@@ -252,36 +314,47 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
   const [sidebarLogoType, setSidebarLogoType] = useState(theme.sidebarLogoType === "logo" ? "logo" : "mark");
   const [darkColor, setDarkColor] = useState(theme.darkColor ?? "");
   const [accentColor, setAccentColor] = useState(theme.accentColor);
-  const [accentDarkColor, setAccentDarkColor] = useState(theme.accentDarkColor ?? "");
+  const [accentForegroundColor, setAccentForegroundColor] = useState(
+    theme.accentForegroundColor === "#111827" ? "#111827" : "#ffffff",
+  );
+  const [themeChoice, setThemeChoice] = useState<ThemeChoice>(normalizeThemeChoice(theme.themePreset));
   const [uploading, setUploading] = useState<AssetKind | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const savedAppearance = useRef(`${normalizeBrandColor(theme.primaryColor) ?? "#17324d"}:${theme.darkColor ?? ""}:${theme.accentColor}:${theme.accentDarkColor ?? ""}:${mode}:${sidebarLogoType}`);
+  const savedAppearance = useRef(`${normalizeBrandColor(theme.lightColor) ?? "#17324d"}:${theme.darkColor ?? ""}:${theme.accentColor}:${accentForegroundColor}:${mode}:${sidebarLogoType}:${normalizeThemeChoice(theme.themePreset)}`);
 
-  const colorValue = normalizeBrandColor(primaryColor) ?? "#17324d";
+  const colorValue = normalizeBrandColor(lightColor) ?? "#17324d";
+
+  function updateBrandColor(
+    setter: (value: string) => void,
+    value: string,
+  ) {
+    setSaved(false);
+    setter(value);
+  }
 
   useEffect(() => {
-    const normalized = normalizeBrandColor(primaryColor);
+    const normalized = normalizeBrandColor(lightColor);
     if (!normalized) return;
     const normalizedDark = darkColor ? (normalizeBrandColor(darkColor) ?? "") : "";
     const normalizedAccent = normalizeBrandColor(accentColor) ?? "";
-    const normalizedAccentDark = accentDarkColor ? (normalizeBrandColor(accentDarkColor) ?? "") : "";
-    const appearance = `${normalized}:${normalizedDark}:${normalizedAccent}:${normalizedAccentDark}:${mode}:${sidebarLogoType}`;
+    const appearance = `${normalized}:${normalizedDark}:${normalizedAccent}:${accentForegroundColor}:${mode}:${sidebarLogoType}:${themeChoice}`;
     if (appearance === savedAppearance.current) return;
 
     const timeout = window.setTimeout(() => {
       startTransition(async () => {
         try {
           const formData = new FormData();
-          formData.set("primaryColor", normalized);
+          formData.set("lightColor", normalized);
           formData.set("darkColor", normalizedDark);
           formData.set("accentColor", normalizedAccent);
-          formData.set("accentDarkColor", normalizedAccentDark);
+          formData.set("accentForegroundColor", accentForegroundColor);
           formData.set("mode", mode);
           formData.set("sidebarLogoType", sidebarLogoType);
+          formData.set("themePreset", themeChoice);
           await updateBrandAppearanceAction(formData);
           savedAppearance.current = appearance;
-          setPrimaryColor(normalized);
+          setLightColor(normalized);
           setSaved(true);
           router.refresh();
         } catch (err) {
@@ -291,7 +364,7 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
     }, 500);
 
     return () => window.clearTimeout(timeout);
-  }, [accentColor, accentDarkColor, darkColor, mode, primaryColor, router, sidebarLogoType, startTransition]);
+  }, [accentColor, accentForegroundColor, darkColor, lightColor, mode, router, sidebarLogoType, startTransition, themeChoice]);
 
   async function uploadAsset(kind: AssetKind, file: File) {
     setError(null);
@@ -315,7 +388,7 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
       else if (kind === "mark") setLogoMarkUrl(result.url);
       else if (kind === "logo-dark") setLogoDarkUrl(result.url);
       else setLogoMarkDarkUrl(result.url);
-      if (result.suggestedColor) setPrimaryColor(result.suggestedColor);
+      if (result.suggestedColor) updateBrandColor(setLightColor, result.suggestedColor);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not upload this image.");
@@ -346,36 +419,35 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
       <section className="rounded-xl border border-slate-200 bg-white p-6">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Logo</h2>
         <div className="mt-5 grid min-w-0 grid-cols-2 gap-4 xl:grid-cols-4">
-          <AssetDropzone kind="mark" url={logoMarkUrl} uploading={uploading === "mark"} onUpload={uploadAsset} onRemove={removeAsset} brandPrimary={colorValue} brandDark={normalizeBrandColor(darkColor) ?? colorValue} />
-          <AssetDropzone kind="logo" url={logoUrl} uploading={uploading === "logo"} onUpload={uploadAsset} onRemove={removeAsset} brandPrimary={colorValue} brandDark={normalizeBrandColor(darkColor) ?? colorValue} />
-          <AssetDropzone kind="mark-dark" url={logoMarkDarkUrl} uploading={uploading === "mark-dark"} onUpload={uploadAsset} onRemove={removeAsset} brandPrimary={colorValue} brandDark={normalizeBrandColor(darkColor) ?? colorValue} />
-          <AssetDropzone kind="logo-dark" url={logoDarkUrl} uploading={uploading === "logo-dark"} onUpload={uploadAsset} onRemove={removeAsset} brandPrimary={colorValue} brandDark={normalizeBrandColor(darkColor) ?? colorValue} />
+          <AssetDropzone kind="mark" url={logoMarkUrl} uploading={uploading === "mark"} onUpload={uploadAsset} onRemove={removeAsset} brandLight={colorValue} brandDark={normalizeBrandColor(darkColor) ?? colorValue} />
+          <AssetDropzone kind="logo" url={logoUrl} uploading={uploading === "logo"} onUpload={uploadAsset} onRemove={removeAsset} brandLight={colorValue} brandDark={normalizeBrandColor(darkColor) ?? colorValue} />
+          <AssetDropzone kind="mark-dark" url={logoMarkDarkUrl} uploading={uploading === "mark-dark"} onUpload={uploadAsset} onRemove={removeAsset} brandLight={colorValue} brandDark={normalizeBrandColor(darkColor) ?? colorValue} />
+          <AssetDropzone kind="logo-dark" url={logoDarkUrl} uploading={uploading === "logo-dark"} onUpload={uploadAsset} onRemove={removeAsset} brandLight={colorValue} brandDark={normalizeBrandColor(darkColor) ?? colorValue} />
         </div>
       </section>
 
       {/* Brand Colors */}
       <section className="rounded-xl border border-slate-200 bg-white p-6">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Brand Colors</h2>
-        <div className="mt-4 grid grid-cols-4 gap-4">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Your Brand Colors</h2>
+        <div className="mt-4 grid grid-cols-3 gap-4">
           {/* Light */}
           <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <div className="h-16 w-full rounded-lg" style={{ backgroundColor: colorValue }} />
-            <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Light</p>
+            <BrandColorSwatch label="Light" background={colorValue} />
             <div className="mt-2 flex gap-2">
               <input
-                id="brand-primary-color"
+                id="brand-light-color"
                 type="color"
                 value={colorValue}
-                onChange={(e) => { setSaved(false); setPrimaryColor(e.target.value); }}
+                onChange={(e) => updateBrandColor(setLightColor, e.target.value)}
                 className="h-9 w-10 cursor-pointer rounded border border-slate-300 bg-white p-1"
                 aria-label="Choose light brand color"
               />
               <input
-                value={primaryColor}
-                onChange={(e) => { setSaved(false); setPrimaryColor(e.target.value); }}
+                value={lightColor}
+                onChange={(e) => updateBrandColor(setLightColor, e.target.value)}
                 onBlur={() => {
-                  const n = normalizeBrandColor(primaryColor);
-                  if (n) { setError(null); setPrimaryColor(n); }
+                  const n = normalizeBrandColor(lightColor);
+                  if (n) { setError(null); setLightColor(n); }
                   else setError("Enter a HEX color or RGB value for Light.");
                 }}
                 className="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1.5 font-mono text-base text-slate-800 focus:border-slate-500 focus:outline-none"
@@ -387,20 +459,19 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
 
           {/* Dark */}
           <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <div className="h-16 w-full rounded-lg" style={{ backgroundColor: normalizeBrandColor(darkColor) ?? "#0f1d2e" }} />
-            <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Dark</p>
+            <BrandColorSwatch label="Dark" background={normalizeBrandColor(darkColor) ?? "#0f1d2e"} foreground="#ffffff" />
             <div className="mt-2 flex gap-2">
               <input
                 id="brand-dark-color"
                 type="color"
                 value={normalizeBrandColor(darkColor) ?? "#0f1d2e"}
-                onChange={(e) => { setSaved(false); setDarkColor(e.target.value); }}
+                onChange={(e) => updateBrandColor(setDarkColor, e.target.value)}
                 className="h-9 w-10 cursor-pointer rounded border border-slate-300 bg-white p-1"
                 aria-label="Choose dark brand color"
               />
               <input
                 value={darkColor}
-                onChange={(e) => { setSaved(false); setDarkColor(e.target.value); }}
+                onChange={(e) => updateBrandColor(setDarkColor, e.target.value)}
                 onBlur={() => {
                   if (!darkColor) return;
                   const n = normalizeBrandColor(darkColor);
@@ -414,60 +485,55 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
             </div>
           </div>
 
-          {/* Accent Light */}
+          {/* Accent */}
           <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <div className="h-16 w-full rounded-lg" style={{ backgroundColor: normalizeBrandColor(accentColor) ?? "#d79b3b" }} />
-            <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Accent Light</p>
+            <BrandColorSwatch
+              label="Accent"
+              background={normalizeBrandColor(accentColor) ?? "#d79b3b"}
+              foreground={accentForegroundColor}
+            />
             <div className="mt-2 flex gap-2">
               <input
                 id="brand-accent-color"
                 type="color"
                 value={normalizeBrandColor(accentColor) ?? "#d79b3b"}
-                onChange={(e) => { setSaved(false); setAccentColor(e.target.value); }}
+                onChange={(e) => updateBrandColor(setAccentColor, e.target.value)}
                 className="h-9 w-10 cursor-pointer rounded border border-slate-300 bg-white p-1"
-                aria-label="Choose accent light brand color"
+                aria-label="Choose accent brand color"
               />
               <input
                 value={accentColor}
-                onChange={(e) => { setSaved(false); setAccentColor(e.target.value); }}
+                onChange={(e) => updateBrandColor(setAccentColor, e.target.value)}
                 onBlur={() => {
                   const n = normalizeBrandColor(accentColor);
                   if (n) { setError(null); setAccentColor(n); }
-                  else setError("Enter a HEX color or RGB value for Accent Light.");
+                  else setError("Enter a HEX color or RGB value for Accent.");
                 }}
                 className="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1.5 font-mono text-base text-slate-800 focus:border-slate-500 focus:outline-none"
                 placeholder="#d79b3b"
-                aria-label="Accent light brand color as HEX"
+                aria-label="Accent brand color as HEX"
               />
             </div>
-          </div>
-
-          {/* Accent Dark */}
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <div className="h-16 w-full rounded-lg" style={{ backgroundColor: normalizeBrandColor(accentDarkColor) ?? "#8a5a12" }} />
-            <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Accent Dark</p>
-            <div className="mt-2 flex gap-2">
-              <input
-                id="brand-accent-dark-color"
-                type="color"
-                value={normalizeBrandColor(accentDarkColor) ?? "#8a5a12"}
-                onChange={(e) => { setSaved(false); setAccentDarkColor(e.target.value); }}
-                className="h-9 w-10 cursor-pointer rounded border border-slate-300 bg-white p-1"
-                aria-label="Choose accent dark brand color"
-              />
-              <input
-                value={accentDarkColor}
-                onChange={(e) => { setSaved(false); setAccentDarkColor(e.target.value); }}
-                onBlur={() => {
-                  if (!accentDarkColor) return;
-                  const n = normalizeBrandColor(accentDarkColor);
-                  if (n) { setError(null); setAccentDarkColor(n); }
-                  else setError("Enter a HEX color or RGB value for Accent Dark.");
-                }}
-                className="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1.5 font-mono text-base text-slate-800 focus:border-slate-500 focus:outline-none"
-                placeholder="#8a5a12"
-                aria-label="Accent dark brand color as HEX"
-              />
+            <div className="mt-4 border-t border-slate-200 pt-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Accent button text</p>
+              <div className="mt-3 flex items-center gap-3 text-base font-medium text-slate-700">
+                <span className={accentForegroundColor === "#ffffff" ? "text-slate-900" : "text-slate-500"}>White</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={accentForegroundColor === "#111827"}
+                  aria-label="Use black text on accent buttons"
+                  onClick={() => {
+                    setSaved(false);
+                    setAccentForegroundColor((current) => current === "#111827" ? "#ffffff" : "#111827");
+                  }}
+                  className="ui-toggle-switch"
+                >
+                  <span className="ui-toggle-switch-thumb" />
+                </button>
+                <span className={accentForegroundColor === "#111827" ? "text-slate-900" : "text-slate-500"}>Black</span>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-slate-500">Controls text and icons placed on accent-colored buttons in the proposal preview.</p>
             </div>
           </div>
         </div>
@@ -477,20 +543,37 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
       <section className="rounded-xl border border-slate-200 bg-white p-6">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Theme</h2>
 
-        <div className="mt-4 grid gap-4 grid-cols-3">
+        <div className="mt-4 grid gap-4 grid-cols-2">
           {/* Starting themes */}
           <div className="rounded-xl border border-slate-200 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Starting themes</p>
-            <p className="mt-1 text-base text-slate-500">Choose a clean starting point, then fine-tune brand colors above.</p>
-            <div className="mt-3 flex flex-col gap-2">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setThemeChoice(BRAND_COLORS_CHOICE);
+                  setSaved(false);
+                }}
+                className={`flex items-center gap-3 rounded-lg border p-3 text-left text-base font-medium transition-colors ${
+                  themeChoice === BRAND_COLORS_CHOICE
+                    ? "border-slate-900 bg-slate-50"
+                    : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                }`}
+              >
+                <span className="flex h-7 w-7 shrink-0 overflow-hidden rounded-md">
+                  <span className="flex-1" style={{ backgroundColor: colorValue }} />
+                  <span className="flex-1" style={{ backgroundColor: normalizeBrandColor(darkColor) ?? colorValue }} />
+                  <span className="flex-1" style={{ backgroundColor: normalizeBrandColor(accentColor) ?? "#d79b3b" }} />
+                </span>
+                <span className="text-slate-700">Your Brand Colors</span>
+              </button>
               {THEME_PRESETS.map((preset) => {
-                const selected = colorValue.toLowerCase() === preset.color && mode === preset.mode;
+                const selected = themeChoice === preset.id;
                 return (
                   <button
-                    key={preset.name}
+                    key={preset.id}
                     type="button"
                     onClick={() => {
-                      setPrimaryColor(preset.color);
+                      setThemeChoice(preset.id);
                       setMode(preset.mode);
                       setSaved(false);
                     }}
@@ -498,7 +581,11 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
                       selected ? "border-slate-900 bg-slate-50" : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
                     }`}
                   >
-                    <span className="h-7 w-7 shrink-0 rounded-md" style={{ backgroundColor: preset.color }} />
+                    <span className="flex h-7 w-7 shrink-0 overflow-hidden rounded-md">
+                      <span className="flex-1" style={{ backgroundColor: preset.lightColor }} />
+                      <span className="flex-1" style={{ backgroundColor: preset.darkColor }} />
+                      <span className="flex-1" style={{ backgroundColor: preset.accentColor }} />
+                    </span>
                     <span className="text-slate-700">{preset.name}</span>
                   </button>
                 );
@@ -506,54 +593,48 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
             </div>
           </div>
 
-          {/* Sidebar branding */}
+          {/* Sidebar branding + Portal theme */}
           <div className="rounded-xl border border-slate-200 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sidebar branding</p>
-            <p className="mt-1 text-base text-slate-500">
-              The sidebar is always a dark branded surface, so it uses the Dark mode version. Light mode assets remain available for future light-surface placements.
-            </p>
-            <div className="mt-3 flex items-center gap-3 text-base font-medium text-slate-700">
-              <span className={sidebarLogoType === "mark" ? "text-slate-900" : "text-slate-500"}>Logo mark</span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={sidebarLogoType === "logo"}
-                aria-label="Use the full logo in the sidebar"
-                onClick={() => {
-                  setSaved(false);
-                  setSidebarLogoType((current) => (current === "mark" ? "logo" : "mark"));
-                }}
-                className="sidebar-branding-toggle relative h-7 w-12 rounded-full transition-colors"
-                style={{ backgroundColor: sidebarLogoType === "logo" ? "var(--brand-primary)" : "#64748b" }}
-              >
-                <span
-                  className={`absolute left-1 top-1 h-5 w-5 rounded-full border border-slate-300 bg-white shadow-sm transition-transform ${
-                    sidebarLogoType === "logo" ? "translate-x-5" : "translate-x-0.5"
-                  }`}
-                />
-              </button>
-              <span className={sidebarLogoType === "logo" ? "text-slate-900" : "text-slate-500"}>Full logo</span>
-            </div>
-          </div>
-
-          {/* Portal theme */}
-          <div className="rounded-xl border border-slate-200 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Portal theme</p>
-            <div className="mt-3 inline-flex rounded-lg border border-slate-200 bg-slate-100 p-1">
-              {(["light", "dark"] as const).map((value) => (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sidebar branding</p>
+              <div className="mt-3 flex items-center gap-3 text-base font-medium text-slate-700">
+                <span className={sidebarLogoType === "mark" ? "text-slate-900" : "text-slate-500"}>Logo mark</span>
                 <button
-                  key={value}
                   type="button"
-                  onClick={() => { setSaved(false); setMode(value); }}
-                  className={`rounded-md px-5 py-1.5 text-base font-medium capitalize transition-colors ${
-                    mode === value
-                      ? "bg-white text-slate-900 shadow-sm"
-                      : "text-slate-500 hover:text-slate-700"
-                  }`}
+                  role="switch"
+                  aria-checked={sidebarLogoType === "logo"}
+                  aria-label="Use the full logo in the sidebar"
+                  onClick={() => {
+                    setSaved(false);
+                    setSidebarLogoType((current) => (current === "mark" ? "logo" : "mark"));
+                  }}
+                  className="ui-toggle-switch"
                 >
-                  {value.charAt(0).toUpperCase() + value.slice(1)}
+                  <span className="ui-toggle-switch-thumb" />
                 </button>
-              ))}
+                <span className={sidebarLogoType === "logo" ? "text-slate-900" : "text-slate-500"}>Full logo</span>
+              </div>
+            </div>
+
+            <div className="mt-6 border-t border-slate-200 pt-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Portal theme</p>
+              <div className="mt-3 flex items-center gap-3 text-base font-medium text-slate-700">
+                <span className={mode === "light" ? "text-slate-900" : "text-slate-500"}>Light</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={mode === "dark"}
+                  aria-label="Use the dark portal theme"
+                  onClick={() => {
+                    setSaved(false);
+                    setMode((current) => (current === "dark" ? "light" : "dark"));
+                  }}
+                  className="ui-toggle-switch"
+                >
+                  <span className="ui-toggle-switch-thumb" />
+                </button>
+                <span className={mode === "dark" ? "text-slate-900" : "text-slate-500"}>Dark</span>
+              </div>
             </div>
           </div>
         </div>

@@ -81,16 +81,17 @@ export default async function SettingsPage({
         />
         <BrandAppearanceForm
           theme={{
-            primaryColor: brand.theme?.primaryColor ?? "#17324d",
+            lightColor: brand.theme?.lightColor ?? "#17324d",
             darkColor: brand.theme?.darkColor ?? null,
             accentColor: brand.theme?.accentColor ?? "#d79b3b",
-            accentDarkColor: brand.theme?.accentDarkColor ?? null,
+            accentForegroundColor: brand.theme?.accentForegroundColor ?? "#ffffff",
             mode: brand.theme?.mode ?? "system",
             logoUrl: brand.theme?.logoUrl ?? null,
             logoMarkUrl: brand.theme?.logoMarkUrl ?? null,
             logoDarkUrl: brand.theme?.logoDarkUrl ?? null,
             logoMarkDarkUrl: brand.theme?.logoMarkDarkUrl ?? null,
             sidebarLogoType: brand.theme?.sidebarLogoType ?? "mark",
+            themePreset: brand.theme?.themePreset ?? "brand-colors",
           }}
         />
         <ToolLinksForm links={mergeToolLinks(stored)} />

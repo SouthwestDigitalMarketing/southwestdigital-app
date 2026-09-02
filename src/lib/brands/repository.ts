@@ -21,7 +21,7 @@ const brandSummarySelect = {
     select: {
       logoUrl: true,
       logoAlt: true,
-      primaryColor: true,
+      lightColor: true,
       accentColor: true,
       backgroundColor: true,
       foregroundColor: true,
@@ -38,7 +38,7 @@ export type BrandSummary = {
   theme: {
     logoUrl: string | null;
     logoAlt: string | null;
-    primaryColor: string;
+    lightColor: string;
     accentColor: string;
     backgroundColor: string;
     foregroundColor: string;
