@@ -3,11 +3,13 @@ export function YouTubeIntegrationForm({
   channelName,
   channelId,
   notice,
+  reason,
 }: {
   status: "missing" | "active" | "error";
   channelName: string | null;
   channelId: string | null;
   notice?: string | null;
+  reason?: string | null;
 }) {
   const statusLabel = status === "active" ? "Connected" : status === "error" ? "Needs attention" : "Not connected";
   return (
@@ -21,7 +23,12 @@ export function YouTubeIntegrationForm({
       {notice === "missing-refresh-token" ? <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">Google did not return a refresh token. Reconnect and approve access when prompted.</p> : null}
       {notice === "not-configured" ? <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">YouTube OAuth is not configured on this environment.</p> : null}
       {notice === "no-channel" ? <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">No YouTube channel was found for that Google account.</p> : null}
-      {notice === "error" || notice === "cancelled" ? <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">YouTube was not connected. Try again.</p> : null}
+      {notice === "error" || notice === "cancelled" ? (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          <p>YouTube was not connected. Try again.</p>
+          {reason ? <p className="mt-1 font-mono text-xs text-slate-500">Reason: {reason}</p> : null}
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-slate-900">{statusLabel}</p>

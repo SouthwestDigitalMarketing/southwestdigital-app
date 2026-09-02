@@ -19,7 +19,7 @@ import { YouTubeIntegrationForm } from "./YouTubeIntegrationForm";
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ stripe?: string; youtube?: string }>;
+  searchParams: Promise<{ stripe?: string; youtube?: string; reason?: string }>;
 }) {
   const { brand } = await requireStaffBrand();
   const query = await searchParams;
@@ -89,6 +89,7 @@ export default async function SettingsPage({
           channelName={youtube?.publicIdentifier ?? null}
           channelId={youtube?.externalAccountId ?? null}
           notice={query.youtube}
+          reason={query.reason ?? null}
         />
         <BrandAppearanceForm
           theme={{
