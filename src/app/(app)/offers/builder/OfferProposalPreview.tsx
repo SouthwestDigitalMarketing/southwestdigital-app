@@ -508,6 +508,17 @@ export default function OfferProposalPreview({
           "--surface-row-alt": `color-mix(in srgb, ${brandDark} 86%, white)`,
         }
       : {};
+  const stepperPrimaryVariables = {
+    "--action-primary-background": brandDark,
+    "--action-primary-foreground": brandDarkForeground,
+    "--action-primary-border": brandDark,
+  } as React.CSSProperties;
+  const stepperSecondaryVariables = {
+    "--action-secondary-background": `color-mix(in srgb, ${brandDark} 10%, white)`,
+    "--action-secondary-hover-background": `color-mix(in srgb, ${brandDark} 16%, white)`,
+    "--action-secondary-foreground": brandDark,
+    "--action-secondary-border": `color-mix(in srgb, ${brandDark} 36%, white)`,
+  } as React.CSSProperties;
   const logoUrl =
     proposalMode === "dark"
       ? brand.theme?.logoDarkUrl ?? brand.theme?.logoUrl ?? null
@@ -814,7 +825,14 @@ export default function OfferProposalPreview({
         >
           <div className="grid grid-cols-[auto_1fr_auto] items-center gap-4">
             {step === 0 ? <span className="w-[74px]" /> : (
-              <button type="button" onClick={() => setStep((s) => Math.max(0, s - 1))} className="ui-action-secondary rounded-lg border px-5 py-2.5 text-sm font-semibold transition">Back</button>
+              <button
+                type="button"
+                onClick={() => setStep((s) => Math.max(0, s - 1))}
+                className="ui-action-secondary rounded-lg border px-5 py-2.5 text-sm font-semibold transition"
+                style={stepperSecondaryVariables}
+              >
+                Back
+              </button>
             )}
             <ol className="flex items-start justify-center">
               {clientSteps.map((label, index) => (
@@ -838,6 +856,7 @@ export default function OfferProposalPreview({
                 disabled={!selectedOptionId}
                 onClick={() => setStep(2)}
                 className="ui-action-primary inline-flex items-center gap-2 rounded-lg border-2 px-5 py-2 text-sm font-bold transition-all hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                style={stepperPrimaryVariables}
               >
                 Next <ChevronRight strokeWidth={3} className="h-4 w-4" />
               </button>

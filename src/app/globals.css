@@ -39,11 +39,13 @@ img.brand-asset-mark {
   --color-brandnavy-700: #1b263b;
   --color-brandnavy-900: #10192a;
   --color-brandnavy-foreground: #ffffff;
-  --action-primary-background: var(--brand-accent);
-  --action-primary-foreground: #111827;
-  --action-secondary-background: #ffffff;
-  --action-secondary-foreground: #334155;
-  --action-secondary-border: #cbd5e1;
+  --action-primary-background: var(--brand-dark);
+  --action-primary-foreground: #ffffff;
+  --action-primary-border: color-mix(in srgb, var(--action-primary-background) 50%, var(--action-primary-foreground));
+  --action-secondary-background: color-mix(in srgb, var(--action-primary-background) 12%, #ffffff);
+  --action-secondary-hover-background: color-mix(in srgb, var(--action-primary-background) 18%, #ffffff);
+  --action-secondary-foreground: var(--action-primary-background);
+  --action-secondary-border: color-mix(in srgb, var(--action-primary-background) 36%, #ffffff);
   --action-danger-background: #ffffff;
   --action-danger-foreground: #b91c1c;
   --action-danger-border: #fecaca;
@@ -141,7 +143,7 @@ body {
 }
 
 :is(.ui-action-primary, .ui-action-secondary, .ui-action-danger, .ui-action-ghost):focus-visible {
-  outline: 2px solid var(--action-primary-background);
+  outline: 2px solid var(--brand-accent);
   outline-offset: 2px;
 }
 
@@ -151,8 +153,13 @@ body {
 
 .ui-action-primary {
   background-color: var(--action-primary-background);
-  border-color: var(--action-primary-background);
+  border-color: var(--action-primary-border);
   color: var(--action-primary-foreground);
+}
+
+:is(button, a).ui-action-primary:not([aria-current="page"]) {
+  outline: 1px solid var(--action-primary-border);
+  outline-offset: -1px;
 }
 
 .ui-action-primary:not(:disabled):hover {
@@ -165,7 +172,10 @@ body {
   color: var(--action-secondary-foreground);
 }
 
-.ui-action-secondary:not(:disabled):hover,
+.ui-action-secondary:not(:disabled):hover {
+  background-color: var(--action-secondary-hover-background);
+}
+
 .ui-action-ghost:not(:disabled):hover {
   background-color: var(--surface-subtle, #f8fafc);
 }
@@ -182,8 +192,19 @@ body {
 
 .ui-action-ghost {
   background-color: transparent;
-  border-color: transparent;
+  border: 1px solid var(--action-secondary-border);
   color: var(--action-secondary-foreground);
+}
+
+/* Active navigation is a selected state, not a primary action. */
+.ui-nav-active {
+  background-color: var(--action-primary-background);
+  color: var(--action-primary-foreground);
+}
+
+.ui-nav-active:focus-visible {
+  outline: 2px solid var(--brand-accent);
+  outline-offset: 2px;
 }
 
 /* Overlay components consume semantic, brand-derived theme roles. */
@@ -261,6 +282,7 @@ body {
 [data-theme] {
   color-scheme: light;
   --app-canvas: #f5f7fa;
+  --main-panel-canvas: var(--app-canvas);
   --surface: #ffffff;
   --surface-subtle: #f8fafc;
   --surface-row-alt: #f3f5f7;
@@ -272,16 +294,33 @@ body {
   --text-muted: #718096;
   --surface-inverse: color-mix(in srgb, var(--brand-light) 75%, #000000);
   --brand-ink: var(--brand-light);
-  --sidebar-background: color-mix(in srgb, var(--brand-light) 82%, #1e293b);
-  --chart-primary: var(--brand-light);
-  --chart-muted: #94a3b8;
-  --chart-cursor: #f1f5f9;
+  --chart-series-1: var(--action-primary-background);
+  --chart-series-2: color-mix(in srgb, var(--action-primary-background) 84%, var(--brand-accent));
+  --chart-series-3: color-mix(in srgb, var(--action-primary-background) 68%, var(--brand-accent));
+  --chart-series-4: color-mix(in srgb, var(--action-primary-background) 52%, var(--brand-accent));
+  --chart-series-5: color-mix(in srgb, var(--action-primary-background) 38%, var(--brand-accent));
+  --chart-stage-1: var(--chart-series-1);
+  --chart-stage-2: color-mix(in srgb, var(--chart-series-1) 90%, var(--chart-series-5));
+  --chart-stage-3: color-mix(in srgb, var(--chart-series-1) 80%, var(--chart-series-5));
+  --chart-stage-4: color-mix(in srgb, var(--chart-series-1) 70%, var(--chart-series-5));
+  --chart-stage-5: color-mix(in srgb, var(--chart-series-1) 60%, var(--chart-series-5));
+  --chart-stage-6: color-mix(in srgb, var(--chart-series-1) 50%, var(--chart-series-5));
+  --chart-stage-7: color-mix(in srgb, var(--chart-series-1) 40%, var(--chart-series-5));
+  --chart-stage-8: color-mix(in srgb, var(--chart-series-1) 30%, var(--chart-series-5));
+  --chart-stage-9: color-mix(in srgb, var(--chart-series-1) 20%, var(--chart-series-5));
+  --chart-stage-10: color-mix(in srgb, var(--chart-series-1) 10%, var(--chart-series-5));
+  --chart-stage-11: var(--chart-series-5);
+  --chart-other: var(--text-muted);
+  --chart-primary: var(--chart-series-1);
+  --chart-muted: var(--text-muted);
+  --chart-cursor: color-mix(in srgb, var(--chart-series-1) 10%, transparent);
   --card-shadow: 0 1px 2px rgb(15 23 42 / 0.06), 0 6px 18px rgb(15 23 42 / 0.06);
   --proposal-section-odd: #eef2f7;
   --proposal-section-even: #ffffff;
-  --action-secondary-background: var(--surface);
-  --action-secondary-foreground: var(--text-secondary);
-  --action-secondary-border: var(--border-strong);
+  --action-secondary-background: color-mix(in srgb, var(--action-primary-background) 12%, var(--surface));
+  --action-secondary-hover-background: color-mix(in srgb, var(--action-primary-background) 18%, var(--surface));
+  --action-secondary-foreground: var(--action-primary-background);
+  --action-secondary-border: color-mix(in srgb, var(--action-primary-background) 36%, var(--surface));
   --action-danger-background: var(--surface);
   --action-danger-foreground: #b91c1c;
   --action-danger-border: #fecaca;
@@ -294,27 +333,32 @@ body {
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --app-canvas: #101113;
-  --surface: #191a1d;
-  --surface-subtle: #202126;
-  --surface-row-alt: #24262b;
-  --surface-control: #292b31;
-  --border: #303239;
-  --border-strong: #484a52;
+  --app-canvas: color-mix(in srgb, var(--brand-dark) 55%, #000000);
+  --main-panel-canvas: color-mix(in srgb, var(--app-canvas) 82%, #121212);
+  --surface: color-mix(in srgb, var(--brand-dark) 72%, #0d0d0d);
+  --surface-subtle: color-mix(in srgb, var(--surface) 94%, #ffffff);
+  --surface-row-alt: color-mix(in srgb, var(--surface) 90%, #ffffff);
+  --surface-control: color-mix(in srgb, var(--surface) 84%, #ffffff);
+  --border: color-mix(in srgb, var(--surface) 72%, #ffffff);
+  --border-strong: color-mix(in srgb, var(--surface) 58%, #ffffff);
   --text-primary: #f7f7f8;
   --text-secondary: #d5d6da;
   --text-muted: #9a9ca5;
   --surface-inverse: color-mix(in srgb, var(--brand-light) 38%, #090a0b);
   --brand-ink: color-mix(in srgb, var(--brand-light) 50%, #f2f3f5);
-  --sidebar-background: color-mix(in srgb, var(--brand-light) 36%, #17181b);
-  --chart-primary: color-mix(in srgb, var(--brand-light) 35%, #e5e7eb);
-  --chart-muted: #979aa3;
-  --chart-cursor: rgb(255 255 255 / 0.06);
   --card-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 18px rgb(0 0 0 / 0.18);
-  --proposal-section-odd: #202126;
-  --proposal-section-even: #292b31;
+  --proposal-section-odd: var(--surface-subtle);
+  --proposal-section-even: var(--surface-control);
+  --action-secondary-background: color-mix(in srgb, var(--action-primary-background) 28%, var(--surface));
+  --action-secondary-hover-background: color-mix(in srgb, var(--action-primary-background) 38%, var(--surface));
+  --action-secondary-foreground: var(--action-primary-foreground);
+  --action-secondary-border: color-mix(in srgb, var(--action-primary-background) 55%, var(--surface));
   --action-danger-foreground: #fca5a5;
   --action-danger-border: #7f1d1d;
+}
+
+[data-theme="dark"] .ui-action-primary:not(:disabled):hover {
+  filter: brightness(1.06);
 }
 
 [data-theme] main {
@@ -580,25 +624,22 @@ body {
 
   [data-theme="system"] {
     color-scheme: dark;
-    --app-canvas: #101113;
-    --surface: #191a1d;
-    --surface-subtle: #202126;
-    --surface-row-alt: #24262b;
-    --surface-control: #292b31;
-    --border: #303239;
-    --border-strong: #484a52;
+    --app-canvas: color-mix(in srgb, var(--brand-dark) 55%, #000000);
+    --main-panel-canvas: color-mix(in srgb, var(--app-canvas) 82%, #121212);
+    --surface: color-mix(in srgb, var(--brand-dark) 72%, #0d0d0d);
+    --surface-subtle: color-mix(in srgb, var(--surface) 94%, #ffffff);
+    --surface-row-alt: color-mix(in srgb, var(--surface) 90%, #ffffff);
+    --surface-control: color-mix(in srgb, var(--surface) 84%, #ffffff);
+    --border: color-mix(in srgb, var(--surface) 72%, #ffffff);
+    --border-strong: color-mix(in srgb, var(--surface) 58%, #ffffff);
     --text-primary: #f7f7f8;
     --text-secondary: #d5d6da;
     --text-muted: #9a9ca5;
     --surface-inverse: color-mix(in srgb, var(--brand-light) 38%, #090a0b);
     --brand-ink: color-mix(in srgb, var(--brand-light) 50%, #f2f3f5);
-    --sidebar-background: color-mix(in srgb, var(--brand-light) 36%, #17181b);
-    --chart-primary: color-mix(in srgb, var(--brand-light) 35%, #e5e7eb);
-    --chart-muted: #979aa3;
-    --chart-cursor: rgb(255 255 255 / 0.06);
     --card-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 18px rgb(0 0 0 / 0.18);
-    --proposal-section-odd: #202126;
-    --proposal-section-even: #292b31;
+    --proposal-section-odd: var(--surface-subtle);
+    --proposal-section-even: var(--surface-control);
     --action-danger-foreground: #fca5a5;
     --action-danger-border: #7f1d1d;
   }

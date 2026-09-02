@@ -31,7 +31,11 @@ import {
 } from "lucide-react";
 import { selectBrand } from "@/app/select-brand/actions";
 import { useBrand } from "@/lib/brands/context";
-import { appCanvasGradient, appThemeCssVariables } from "@/lib/brands/themeTokens";
+import {
+  appCanvasGradient,
+  appThemeCssVariables,
+  chartPaletteCssVariables,
+} from "@/lib/brands/themeTokens";
 import { normalizeThemeChoice, resolveEffectiveThemeColors } from "@/lib/brands/themePresets";
 import { signOutAction } from "./actions";
 
@@ -93,7 +97,7 @@ function NavItem({
       aria-current={active ? "page" : undefined}
       onClick={onNavigate}
       className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-        active ? "ui-action-primary" : isLight ? "hover:bg-black/5" : "hover:bg-white/10"
+        active ? "ui-nav-active" : isLight ? "hover:bg-black/5" : "hover:bg-white/10"
       }`}
       style={active ? undefined : { color: navTextColor }}
     >
@@ -177,11 +181,20 @@ export function AppShell({
       : "h-8 w-8 rounded object-contain";
 
   const darkColor = effective.darkColor;
-  const themeVariables = appThemeCssVariables({ mode, accent, dark: darkColor });
+  const brandAccent = brand.theme?.accentColor ?? accent;
+  const themeVariables = appThemeCssVariables({
+    mode,
+    dark: darkColor,
+  });
+  const chartVariables = chartPaletteCssVariables({
+    mode,
+    dark: darkColor,
+    accent,
+  });
   const mainPanelBackground = appCanvasGradient(mode);
   const navTextColor = isLight ? darkColor : "rgba(255,255,255,0.7)";
   const navMutedColor = isLight ? `${darkColor}80` : "rgba(255,255,255,0.5)";
-  const sidebarBg = isLight ? "#ffffff" : "var(--sidebar-background)";
+  const sidebarBg = isLight ? "#ffffff" : "var(--app-canvas)";
   const dividerColor = isLight ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.1)";
   const dividerNavColor = isLight ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.12)";
 
@@ -294,7 +307,7 @@ export function AppShell({
         <div className="flex items-center gap-3 px-3 py-2">
           <div
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-            style={{ backgroundColor: accent }}
+            style={{ backgroundColor: brandAccent }}
           >
             {initials}
           </div>
@@ -330,6 +343,7 @@ export function AppShell({
         "--brand-dark": darkColor,
         "--brand-accent": accent,
         ...themeVariables,
+        ...chartVariables,
         ...(isLight && themePreset !== "grok" ? { "--app-canvas": light } : {}),
       } as React.CSSProperties}
     >

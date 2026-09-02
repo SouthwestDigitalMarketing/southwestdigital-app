@@ -162,7 +162,7 @@ export default async function YouTubePage() {
         ...topVideoIds.map((id, i) => ({
           videoId: id,
           title: topVideos.find((v) => v.videoId === id)?.title ?? id,
-          color: VIDEO_COLORS[i] ?? "#94a3b8",
+          color: VIDEO_COLORS[i] ?? OTHER_COLOR,
         })),
         ...(hasOther ? [{ videoId: "other", title: "Other videos", color: OTHER_COLOR }] : []),
       ];

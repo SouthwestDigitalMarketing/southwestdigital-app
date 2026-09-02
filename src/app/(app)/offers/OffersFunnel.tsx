@@ -4,17 +4,17 @@ import { useMemo, useState } from "react";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 const STEPS = [
-  { key: "sent", label: "Sent", color: "var(--brand-dark, var(--brand-light))" },
-  { key: "openedEmail", label: "Opened email", color: "#2563eb" },
-  { key: "openedProposal", label: "Opened proposal", color: "var(--brand-accent, #d79b3b)" },
-  { key: "continued", label: "Continued from cover", color: "#7c3aed" },
-  { key: "selected", label: "Selected a package", color: "#db2777" },
-  { key: "agreement", label: "Read agreement", color: "#ea580c" },
-  { key: "details", label: "Entered details", color: "#ca8a04" },
-  { key: "confirmed", label: "Confirmed", color: "#65a30d" },
-  { key: "signed", label: "Signed", color: "#0d9488" },
-  { key: "paymentStarted", label: "Started payment", color: "#0284c7" },
-  { key: "paid", label: "Payment cleared", color: "#059669" },
+  { key: "sent", label: "Sent", color: "var(--chart-stage-1)" },
+  { key: "openedEmail", label: "Opened email", color: "var(--chart-stage-2)" },
+  { key: "openedProposal", label: "Opened proposal", color: "var(--chart-stage-3)" },
+  { key: "continued", label: "Continued from cover", color: "var(--chart-stage-4)" },
+  { key: "selected", label: "Selected a package", color: "var(--chart-stage-5)" },
+  { key: "agreement", label: "Read agreement", color: "var(--chart-stage-6)" },
+  { key: "details", label: "Entered details", color: "var(--chart-stage-7)" },
+  { key: "confirmed", label: "Confirmed", color: "var(--chart-stage-8)" },
+  { key: "signed", label: "Signed", color: "var(--chart-stage-9)" },
+  { key: "paymentStarted", label: "Started payment", color: "var(--chart-stage-10)" },
+  { key: "paid", label: "Payment cleared", color: "var(--chart-stage-11)" },
 ] as const;
 
 type StepKey = (typeof STEPS)[number]["key"];
@@ -74,6 +74,12 @@ function noise(seed: number) {
   return value - Math.floor(value);
 }
 
+function sampleWholeCount(value: number, seed: number) {
+  const whole = Math.floor(value);
+  const remainder = value - whole;
+  return whole + (noise(seed) < remainder ? 1 : 0);
+}
+
 function emptySteps(): Record<StepKey, number> {
   return {
     sent: 0,
@@ -93,9 +99,17 @@ function emptySteps(): Record<StepKey, number> {
 function countsForSeed(seed: number, dailyGoal: number, quiet: boolean): Record<StepKey, number> {
   const base = Math.max(0, dailyGoal * (quiet ? 0.35 : 1) * (0.5 + noise(seed) * 0.95));
   const counts = emptySteps();
-  STEPS.forEach((step, index) => {
-    const drop = 0.78 ** index;
-    counts[step.key] = Math.max(0, Math.round(base * drop * (0.55 + noise(seed + index * 19) * 0.7)));
+  let previousCount = sampleWholeCount(base, seed + 7);
+  counts.sent = previousCount;
+
+  STEPS.slice(1).forEach((step, index) => {
+    const stageIndex = index + 1;
+    const conversionRate = 0.75 + noise(seed + stageIndex * 19) * 0.17;
+    previousCount = sampleWholeCount(
+      previousCount * conversionRate,
+      seed + stageIndex * 31 + 7,
+    );
+    counts[step.key] = previousCount;
   });
   return counts;
 }

@@ -67,7 +67,7 @@ function makeTooltip(segments: VideoSegment[]) {
           const seg = segments.find((s: VideoSegment) => s.videoId === String(entry.dataKey));
           return (
             <div key={String(entry.dataKey)} className="flex items-center gap-1.5 py-0.5">
-              <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: seg?.color ?? "#94a3b8" }} />
+              <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: seg?.color ?? "var(--chart-other)" }} />
               <span className="flex-1 opacity-80">{truncate(seg?.title ?? String(entry.dataKey), 32)}</span>
               <span className="ml-3 font-medium">{Number(entry.value).toLocaleString("en-US")}</span>
             </div>

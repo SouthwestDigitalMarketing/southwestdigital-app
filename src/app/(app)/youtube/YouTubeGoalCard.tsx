@@ -1,15 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { goalColors } from "../website/goal-colors";
 import { updateYouTubeGoal } from "./actions";
 
 type Field = "monthlyViewsGoal" | "youtubeWatchPercentageGoal";
-
-function goalColors(pct: number) {
-  if (pct >= 100) return { bar: "#10b981", text: "text-emerald-600" };
-  if (pct >= 70) return { bar: "#f59e0b", text: "text-amber-600" };
-  return { bar: "#f43f5e", text: "text-rose-600" };
-}
 
 export function YouTubeGoalCard({
   brandId,
@@ -39,14 +34,9 @@ export function YouTubeGoalCard({
     if (editing) inputRef.current?.select();
   }, [editing]);
 
-  // Keep draft in sync if parent re-renders with new goal after save
-  useEffect(() => {
-    if (!editing) setDraft(String(goal));
-  }, [goal, editing]);
-
   const capped = Math.min(100, pct);
   const met = pct >= 100;
-  const { bar, text } = goalColors(pct);
+  const { bar } = goalColors(pct);
 
   function handleSave() {
     const parsed = Number(draft);
@@ -66,7 +56,10 @@ export function YouTubeGoalCard({
     <div className="relative rounded-xl border border-slate-200 bg-white p-6">
       {!editing && (
         <button
-          onClick={() => setEditing(true)}
+          onClick={() => {
+            setDraft(String(goal));
+            setEditing(true);
+          }}
           className="absolute right-4 top-4 flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 transition-colors hover:border-slate-300 hover:text-slate-600"
           aria-label="Edit goal"
         >
@@ -93,7 +86,7 @@ export function YouTubeGoalCard({
 
       <div className="mt-3 flex items-end justify-between gap-4">
         <p className="text-4xl font-semibold tabular-nums text-slate-900">{value}</p>
-        <p className={`mb-1 text-xl font-bold tabular-nums ${text}`}>{Math.round(pct)}%</p>
+        <p className="mb-1 text-xl font-bold tabular-nums text-slate-900">{Math.round(pct)}%</p>
       </div>
 
       {editing ? (
@@ -140,7 +133,7 @@ export function YouTubeGoalCard({
           style={{ width: `${capped}%`, backgroundColor: bar }}
         />
       </div>
-      {met && <p className={`mt-2 text-xs font-semibold ${text}`}>Goal met!</p>}
+      {met ? <p className="mt-2 text-xs font-semibold text-slate-700">Goal met!</p> : null}
     </div>
   );
 }

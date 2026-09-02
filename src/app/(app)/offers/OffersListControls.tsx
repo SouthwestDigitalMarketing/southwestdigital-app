@@ -83,8 +83,7 @@ export function OffersListControls({
         </div>
         <Link
           href={whoHref("bookkeeping", contactId)}
-          className="ml-auto inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-full px-4 py-2 text-base font-semibold text-white transition hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2"
-          style={{ backgroundColor: "var(--brand-dark, var(--brand-light))" }}
+          className="ui-action-primary ml-auto inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-full border px-4 py-2 text-base font-semibold transition"
         >
           Create offer
         </Link>

@@ -26,11 +26,11 @@ type Props = {
 };
 
 const PACE_BANDS: { key: GoalBand; color: string }[] = [
-  { key: "rose", color: goalColors(0).bar },
-  { key: "orange", color: goalColors(25).bar },
-  { key: "amber", color: goalColors(50).bar },
-  { key: "lime", color: goalColors(75).bar },
-  { key: "emerald", color: goalColors(100).bar },
+  { key: "band1", color: goalColors(0).bar },
+  { key: "band2", color: goalColors(25).bar },
+  { key: "band3", color: goalColors(50).bar },
+  { key: "band4", color: goalColors(75).bar },
+  { key: "band5", color: goalColors(100).bar },
 ];
 
 function formatK(n: number) {
@@ -170,13 +170,12 @@ export function SiteTrafficGraph({ rows, goal, label, granularity }: Props) {
               const row = payload[0]?.payload as TrafficComparisonRow | undefined;
               const currentValue = Number(row?.current ?? 0);
               const currentPace = pacePct(currentValue);
-              const paceColor = goalColors(currentPace).bar;
               return (
                 <div className="ui-tooltip rounded-lg px-3 py-2 text-xs shadow-sm">
                   <p className="mb-1 font-semibold">{fmtTooltipDate(String(lbl), granularity)}</p>
                   <p>{currentValue.toLocaleString("en-US")} engaged sessions</p>
                   <p className="opacity-70">prev. {Number(row?.previous ?? 0).toLocaleString("en-US")}</p>
-                  <p className="mt-1 font-semibold" style={{ color: paceColor }}>
+                  <p className="mt-1 font-semibold">
                     {Math.round(currentPace)}% of {paceLabel} pace
                   </p>
                 </div>
@@ -207,8 +206,8 @@ export function SiteTrafficGraph({ rows, goal, label, granularity }: Props) {
         </ComposedChart>
       </ResponsiveContainer>
       <p className="mt-2 text-xs text-slate-400">
-        Each bar is measured against {targetPerBucket.toLocaleString("en-US", { maximumFractionDigits: 1 })} engaged sessions per {bucketLabel}:
-        {" "}rose &lt;25%, orange 25–49%, amber 50–74%, lime 75–99%, emerald 100%+.
+        Each bar is measured against {targetPerBucket.toLocaleString("en-US", { maximumFractionDigits: 1 })} engaged sessions per {bucketLabel}
+        {" "}and progresses through five theme-derived pace bands.
       </p>
     </div>
   );

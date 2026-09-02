@@ -3,15 +3,15 @@ import { goalColors, goalSegments } from "./goal-colors";
 
 describe("goalColors", () => {
   it.each([
-    [0, "#f43f5e"],
-    [24.9, "#f43f5e"],
-    [25, "#f97316"],
-    [49.9, "#f97316"],
-    [50, "#f59e0b"],
-    [74.9, "#f59e0b"],
-    [75, "#84cc16"],
-    [99.9, "#84cc16"],
-    [100, "#10b981"],
+    [0, "var(--chart-series-1)"],
+    [24.9, "var(--chart-series-1)"],
+    [25, "var(--chart-series-2)"],
+    [49.9, "var(--chart-series-2)"],
+    [50, "var(--chart-series-3)"],
+    [74.9, "var(--chart-series-3)"],
+    [75, "var(--chart-series-4)"],
+    [99.9, "var(--chart-series-4)"],
+    [100, "var(--chart-series-5)"],
   ])("maps %s%% pace to %s", (pct, color) => {
     expect(goalColors(pct).bar).toBe(color);
   });
@@ -20,22 +20,22 @@ describe("goalColors", () => {
     const segments = goalSegments(80, 100);
 
     expect(segments).toEqual({
-      rose: 25,
-      orange: 25,
-      amber: 25,
-      lime: 5,
-      emerald: 0,
+      band1: 25,
+      band2: 25,
+      band3: 25,
+      band4: 5,
+      band5: 0,
     });
-    expect(segments.rose + segments.orange + segments.amber + segments.lime + segments.emerald).toBe(80);
+    expect(segments.band1 + segments.band2 + segments.band3 + segments.band4 + segments.band5).toBe(80);
   });
 
   it("adds over-goal performance as an emerald segment", () => {
     expect(goalSegments(120, 100)).toEqual({
-      rose: 25,
-      orange: 25,
-      amber: 25,
-      lime: 25,
-      emerald: 20,
+      band1: 25,
+      band2: 25,
+      band3: 25,
+      band4: 25,
+      band5: 20,
     });
   });
 });

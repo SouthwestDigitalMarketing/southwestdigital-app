@@ -7,11 +7,9 @@ import type { OfferBucket } from "@/lib/quotes/status";
 
 export function OfferStatusButtons({
   offerId,
-  status,
   bucket,
 }: {
   offerId: string;
-  status: string;
   bucket: OfferBucket;
 }) {
   const router = useRouter();
@@ -28,7 +26,7 @@ export function OfferStatusButtons({
   }
 
   const btn =
-    "inline-flex h-9 items-center justify-center rounded-full border border-slate-300 px-3 text-base font-medium leading-none text-slate-600 disabled:opacity-50";
+    "ui-action-ghost inline-flex h-9 items-center justify-center rounded-full px-3 text-base font-medium leading-none transition disabled:opacity-50";
 
   return (
     <div className="flex flex-wrap justify-end gap-1">
@@ -38,7 +36,7 @@ export function OfferStatusButtons({
             type="button"
             disabled={pending}
             onClick={() => setStatus("sent")}
-            className={`${btn} border-slate-300 text-slate-700 hover:bg-slate-50`}
+            className={btn}
           >
             Mark sent
           </button>
@@ -46,7 +44,7 @@ export function OfferStatusButtons({
             type="button"
             disabled={pending}
             onClick={() => setStatus("archived")}
-            className={`${btn} border-slate-300 text-slate-700 hover:bg-slate-50`}
+            className={btn}
           >
             Archive
           </button>
@@ -58,7 +56,7 @@ export function OfferStatusButtons({
             type="button"
             disabled={pending}
             onClick={() => setStatus("accepted")}
-            className={`${btn} border-slate-300 text-slate-700 hover:bg-slate-50`}
+            className={btn}
           >
             Accepted
           </button>
@@ -66,7 +64,7 @@ export function OfferStatusButtons({
             type="button"
             disabled={pending}
             onClick={() => setStatus("rejected")}
-            className={`${btn} border-slate-300 text-slate-700 hover:bg-slate-50`}
+            className={btn}
           >
             Rejected
           </button>
@@ -77,7 +75,7 @@ export function OfferStatusButtons({
           type="button"
           disabled={pending}
           onClick={() => setStatus("archived")}
-          className={`${btn} border-slate-300 text-slate-700 hover:bg-slate-50`}
+          className={btn}
         >
           Archive
         </button>
@@ -87,7 +85,7 @@ export function OfferStatusButtons({
           type="button"
           disabled={pending}
           onClick={() => setStatus("draft")}
-          className={`${btn} border-slate-300 text-slate-700 hover:bg-slate-50`}
+          className={btn}
         >
           Unarchive
         </button>
