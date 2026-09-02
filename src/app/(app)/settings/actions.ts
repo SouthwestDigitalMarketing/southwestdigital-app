@@ -1,8 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
+import {
+  StripeConnectNotEnabledError,
+  createBrandConnectOnboardingUrl,
+  syncConnectedAccountStatus,
+} from "@/lib/stripe/connect";
+import { requestOrigin } from "@/lib/stripe/requestOrigin";
 import { DEFAULT_TOOL_LINKS, parseToolUrl, type ToolLinkKey } from "@/lib/brands/tools";
 import { normalizeBrandColor } from "@/lib/brands/colors";
 
@@ -100,5 +108,36 @@ export async function updateToolLinksAction(formData: FormData) {
   );
 
   revalidatePath("/", "layout");
+  revalidatePath("/settings");
+}
+
+export async function startStripeConnectOnboardingAction() {
+  const { brand } = await requireStaffBrandOrThrow();
+  const origin = requestOrigin(await headers());
+  let url: string;
+  try {
+    url = await createBrandConnectOnboardingUrl({
+      brandId: brand.id,
+      brandName: brand.name,
+      origin,
+    });
+  } catch (error) {
+    if (error instanceof StripeConnectNotEnabledError) {
+      redirect("/settings?stripe=connect-signup");
+    }
+    throw error;
+  }
+  redirect(url);
+}
+
+export async function refreshStripeConnectStatusAction() {
+  const { brand } = await requireStaffBrandOrThrow();
+  const integration = await prisma.brandIntegration.findUnique({
+    where: { brandId_key: { brandId: brand.id, key: "stripe-connect" } },
+    select: { externalAccountId: true },
+  });
+  if (integration?.externalAccountId) {
+    await syncConnectedAccountStatus(integration.externalAccountId);
+  }
   revalidatePath("/settings");
 }

@@ -550,6 +550,8 @@ model Brand {
   theme                  BrandTheme?
   toolLinks              BrandToolLink[]
   media                  BrandMedia[]
+  mediaFolders           BrandMediaFolder[]
+  discounts              BrandDiscount[]
   crmContacts            Contact[]              @relation("CrmBrandContacts")
   contactTags            ContactTag[]
   contactTagAutomations  ContactTagAutomation[]
@@ -677,6 +679,11 @@ model BrandTheme {
   youtubeHandle              String?
   youtubeWatchPercentageGoal Float?
   websiteEngagedSessionsGoal Int?
+  monthlyReviewRequestsGoal  Int?
+  reviewOpenRateGoal         Int?
+  reviewFiveStarRateGoal     Int?
+  monthlyOffersSentGoal      Int?
+  monthlyOffersAcceptedGoal  Int?
   proposalFeaturedVideoUrl   String?
   proposalFeaturedImageUrl   String?
   proposalPrimaryColor       String?
@@ -701,18 +708,58 @@ model BrandToolLink {
   @@index([brandId, sortOrder])
 }
 
-model BrandMedia {
-  id        String   @id @default(cuid())
+model BrandMediaFolder {
+  id        String       @id @default(cuid())
   brandId   String
+  name      String
+  sortOrder Int          @default(0)
+  brand     Brand        @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  media     BrandMedia[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([brandId, sortOrder])
+}
+
+model BrandMedia {
+  id        String            @id @default(cuid())
+  brandId   String
+  folderId  String?
   name      String
   type      String // "video" | "image"
   url       String
-  sortOrder Int      @default(0)
-  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  sortOrder Int               @default(0)
+  brand     Brand             @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  folder    BrandMediaFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
 
   @@index([brandId, sortOrder])
+  @@index([brandId, folderId])
+}
+
+model BrandDiscount {
+  id           String    @id @default(cuid())
+  brandId      String
+  name         String
+  kind         String
+  percent      Int       @default(10)
+  amount       Decimal   @default(250) @db.Decimal(12, 2)
+  title        String    @default("")
+  details      String    @default("") @db.Text
+  activationMode       String    @default("held")
+  activationDelayDays  Int       @default(0)
+  presentedAt          DateTime?
+  deadlineMode         String    @default("relative")
+  durationDays         Int       @default(14)
+  deadlineDate         DateTime?
+  active               Boolean   @default(true)
+  sortOrder    Int       @default(0)
+  brand        Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([brandId, active, sortOrder])
 }
 
 // ─── Member profile data ─────────────────────────────────────────────────────
@@ -2003,6 +2050,7 @@ model Engagement {
   updatedAt                          DateTime                @updatedAt
   discoveryItems                     DiscoveryItem[]
   proposalDocuments                  ProposalDocument[]
+  quotes                             Quote[]
   assignedOwner                      BrandMembership?        @relation("EngagementAssignedOwner", fields: [assignedOwnerMembershipId], references: [id], onDelete: SetNull)
   internalReviewer                   BrandMembership?        @relation("EngagementInternalReviewer", fields: [internalReviewerMembershipId], references: [id], onDelete: SetNull)
   createdBy                          BrandMembership?        @relation("EngagementCreatedBy", fields: [createdByMembershipId], references: [id], onDelete: SetNull)
@@ -2340,6 +2388,8 @@ model Quote {
   publishedSnapshotJson Json?
   publicToken           String?         @unique
   publishedAt           DateTime?
+  firstViewedAt         DateTime?
+  engagementId          String?         @unique
   createdAt             DateTime        @default(now())
   updatedAt             DateTime        @updatedAt
   sentAt                DateTime?
@@ -2347,10 +2397,12 @@ model Quote {
   client                QuoteClient     @relation(fields: [clientId], references: [id])
   lineItems             QuoteLineItem[]
   revisions             QuoteRevision[]
+  engagement            Engagement?     @relation(fields: [engagementId], references: [id], onDelete: SetNull)
 
   @@index([brandId, clientId, status])
   @@index([brandId, publishedAt])
   @@index([status, createdAt])
+  @@index([brandId, engagementId])
   @@map("quotes")
 }
 

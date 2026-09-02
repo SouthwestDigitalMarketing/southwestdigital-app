@@ -102,8 +102,9 @@ export default async function YouTubePage() {
       dailyByVideo = channelDaily.map(({ date, views }) => ({ date, videoId: "__total", views }));
     }
   } catch (err) {
-    console.error("[youtube] API error:", err);
-    error = err instanceof Error ? err.message : String(err);
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn("[youtube] API skipped:", message);
+    error = message;
   }
 
   // Click tracking — independent of YouTube Analytics; failures don't block the page

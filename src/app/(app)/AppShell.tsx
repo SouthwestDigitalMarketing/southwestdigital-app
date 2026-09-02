@@ -25,6 +25,7 @@ import {
   ImagePlay,
   Package,
   Tag,
+  BadgePercent,
   ChevronDown,
 } from "lucide-react";
 import { selectBrand } from "@/app/select-brand/actions";
@@ -45,7 +46,8 @@ const NAV: Array<{
   { label: "Contacts", href: "/contacts", icon: Contact },
   { label: "CRM", href: "/pipeline", icon: TrendingUp },
   { label: "Services", href: "/services", icon: Package },
-  { label: "Offers", href: "/offers", icon: FileText, dividerAfter: true },
+  { label: "Offers", href: "/offers", icon: FileText },
+  { label: "Discounts", href: "/discounts", icon: BadgePercent, dividerAfter: true },
   { label: "Clients", href: "/clients", icon: Building2 },
   { label: "Team", href: "/team", icon: Users },
   { label: "Media", href: "/media", icon: ImagePlay },

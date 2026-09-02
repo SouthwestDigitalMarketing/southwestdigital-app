@@ -26,6 +26,19 @@ import {
   TrendingUp,
   Trash2,
 } from "lucide-react";
+import {
+  DEFAULT_HERO_CONTINUE_BUTTON,
+  DEFAULT_HERO_MEDIA_BUTTON,
+  normalizeHeroButton,
+  type HeroButtonConfig,
+} from "./heroButtons";
+import {
+  DEFAULT_URGENCY_OFFER,
+  normalizeUrgencyOffer,
+  type UrgencyOfferConfig,
+} from "./urgencyOffer";
+import { useBrand } from "@/lib/brands/context";
+import { getProposalTheme, BRAND_PRIMARY_SENTINEL, BRAND_ACCENT_SENTINEL } from "./proposalThemes";
 
 export type PackageId = "maintain" | "improve" | "grow";
 export type ProposalBonusId =
@@ -286,6 +299,9 @@ export type AssessmentState = {
   featuredMediaId: string;
   introHeadline: string;
   introBody: string;
+  heroMediaButton: HeroButtonConfig;
+  heroContinueButton: HeroButtonConfig;
+  urgencyOffer: UrgencyOfferConfig;
   proposalTheme: string;
   ongoingBookkeepingPlatform: BookkeepingPlatform;
   platformMigrationEnabled: boolean;
@@ -467,6 +483,9 @@ const INITIAL_ASSESSMENT: AssessmentState = {
   featuredMediaId: "",
   introHeadline: "",
   introBody: "",
+  heroMediaButton: DEFAULT_HERO_MEDIA_BUTTON,
+  heroContinueButton: DEFAULT_HERO_CONTINUE_BUTTON,
+  urgencyOffer: DEFAULT_URGENCY_OFFER,
   proposalTheme: "brand",
   ongoingBookkeepingPlatform: "qbo",
   platformMigrationEnabled: false,
@@ -1224,6 +1243,12 @@ function readStoredAssessment(
       optionsCatalogOrder: Array.isArray(parsed.optionsCatalogOrder)
         ? parsed.optionsCatalogOrder.filter((id): id is string => typeof id === "string")
         : initialState.optionsCatalogOrder,
+      heroMediaButton: normalizeHeroButton(parsed.heroMediaButton, initialState.heroMediaButton),
+      heroContinueButton: normalizeHeroButton(
+        parsed.heroContinueButton,
+        initialState.heroContinueButton,
+      ),
+      urgencyOffer: normalizeUrgencyOffer(parsed.urgencyOffer),
     });
   } catch {
     return withComplexityUnknownDefaults(initialState);
@@ -1870,6 +1895,7 @@ export default function ProposalCreationWorkspaceDemo({
     toggleBankUsed,
     togglePayrollPaymentMethod,
   } = useProposalAssessmentDemoState();
+  const { brand } = useBrand();
   const [expandAllSignal, setExpandAllSignal] = useState<ProposalAppCollapsibleForceSignal>({
     value: false,
     token: 0,

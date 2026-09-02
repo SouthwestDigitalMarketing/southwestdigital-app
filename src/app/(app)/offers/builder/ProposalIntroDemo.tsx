@@ -1,26 +1,41 @@
 "use client";
 
-import { Check, Image, Sparkles, Video, Link2 } from "lucide-react";
-import OfferProposalPreview from "./OfferProposalPreview";
+import { useState } from "react";
+import { Check, Image as ImageIcon, Video } from "lucide-react";
+import OfferProposalPreview, { resolveVideoEmbedUrl } from "./OfferProposalPreview";
+import type { UrgencyOfferDisplay } from "./urgencyOffer";
 import { PROPOSAL_THEMES, BRAND_PRIMARY_SENTINEL, BRAND_ACCENT_SENTINEL } from "./proposalThemes";
 import { useBrand } from "@/lib/brands/context";
 import ProposalAppDemoHeader from "./ProposalAppDemoHeader";
 import { useProposalAssessmentDemoState } from "./ProposalCreationWorkspaceDemo";
+import {
+  DEFAULT_HERO_CONTINUE_BUTTON,
+  DEFAULT_HERO_MEDIA_BUTTON,
+  HeroButtonEditor,
+  HeroVideoButtonToggle,
+  normalizeHeroButton,
+} from "./heroButtons";
+import { resolveCoverMedia } from "./coverMedia";
+import { CoverMediaPicker, type CoverMediaFolder, type CoverMediaItem } from "./CoverMediaPicker";
 
-export type BrandMediaItem = {
-  id: string;
-  name: string;
-  type: string;
-  url: string;
-};
+export type BrandMediaItem = CoverMediaItem;
 
 const DEFAULT_HEADLINE = "Expert Real Estate Bookkeeping + Great Communication";
 const DEFAULT_BODY =
   "You should not have to chase your bookkeeper or guess what your numbers mean. Your bookkeeper should help real estate investors with clean books, useful reports, and clear answers from a team that knows your business.";
 
-export default function ProposalIntroDemo({ mediaItems }: { mediaItems: BrandMediaItem[] }) {
+export default function ProposalIntroDemo({
+  mediaItems,
+  mediaFolders = [],
+  catalogOffer = null,
+}: {
+  mediaItems: BrandMediaItem[];
+  mediaFolders?: CoverMediaFolder[];
+  catalogOffer?: UrgencyOfferDisplay | null;
+}) {
   const { assessment, updateAssessment } = useProposalAssessmentDemoState();
   const { brand } = useBrand();
+  const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
 
   const brandDefaultVideoUrl = brand.theme?.proposalFeaturedVideoUrl ?? null;
   const brandDefaultImageUrl = brand.theme?.proposalFeaturedImageUrl ?? null;
@@ -47,6 +62,31 @@ export default function ProposalIntroDemo({ mediaItems }: { mediaItems: BrandMed
   function selectCustom() {
     updateAssessment("featuredMediaId", "custom");
   }
+
+  const coverMedia = resolveCoverMedia(
+    {
+      featuredMediaId: assessment.featuredMediaId,
+      featuredVideoUrl: assessment.featuredVideoUrl,
+      featuredImageUrl: assessment.featuredImageUrl,
+    },
+    {
+      videoUrl: brand.theme?.proposalFeaturedVideoUrl ?? null,
+      imageUrl: brand.theme?.proposalFeaturedImageUrl ?? null,
+    },
+  );
+  const hasSelectedVideo = Boolean(resolveVideoEmbedUrl(coverMedia.videoUrl));
+  const selectedLibraryItem = mediaItems.find((item) => item.id === selectedMediaId);
+  const selectedMediaLabel =
+    selectedMediaId === "custom"
+      ? "Custom URL"
+      : selectedLibraryItem
+        ? selectedLibraryItem.name
+        : brandDefaultVideoUrl
+          ? "Brand default video"
+          : brandDefaultImageUrl
+            ? "Brand default image"
+            : "No media selected";
+  const selectedMediaType = selectedLibraryItem?.type ?? (hasSelectedVideo ? "video" : coverMedia.imageUrl ? "image" : null);
 
   const brandPrimary = brand.theme?.proposalPrimaryColor ?? brand.theme?.primaryColor ?? "#17324d";
   const brandAccent = brand.theme?.proposalAccentColor ?? brand.theme?.accentColor ?? "#d79b3b";
@@ -104,93 +144,54 @@ export default function ProposalIntroDemo({ mediaItems }: { mediaItems: BrandMed
                 />
               </div>
 
-              {/* Media picker */}
               <div className="rounded-xl border border-slate-200 proposal-builder-card p-5">
                 <p className="text-sm font-semibold text-slate-700">Cover Media</p>
                 <p className="mt-0.5 text-xs text-slate-500">
-                  Video or image shown on the first screen. Video takes priority over image.
-                  Manage your library in{" "}
+                  Choose a video or image from your library. Manage folders and uploads in{" "}
                   <a href="/media" className="font-semibold text-brandnavy underline underline-offset-2">
                     Media
                   </a>
                   .
                 </p>
-
-                <div className="mt-3 space-y-2">
-                  <MediaOption
-                    selected={selectedMediaId === ""}
-                    onClick={selectBrandDefault}
-                    icon={<Sparkles className="h-4 w-4" />}
-                    label="Use brand default"
-                    sub={
-                      brandDefaultVideoUrl
-                        ? "Video set in Settings"
-                        : brandDefaultImageUrl
-                          ? "Image set in Settings"
-                          : "No brand default set"
-                    }
-                  />
-
-                  {mediaItems.map((item) => (
-                    <MediaOption
-                      key={item.id}
-                      selected={selectedMediaId === item.id}
-                      onClick={() => selectLibraryItem(item)}
-                      icon={
-                        item.type === "video" ? (
-                          <Video className="h-4 w-4" />
-                        ) : (
-                          <Image className="h-4 w-4" />
-                        )
-                      }
-                      label={item.name}
-                      sub={item.type === "video" ? "Video" : "Image"}
-                    />
-                  ))}
-
-                  <MediaOption
-                    selected={selectedMediaId === "custom"}
-                    onClick={selectCustom}
-                    icon={<Link2 className="h-4 w-4" />}
-                    label="Custom URL"
-                    sub="Enter a URL directly"
-                  />
-                </div>
-
-                {/* Custom URL inputs */}
-                {selectedMediaId === "custom" && (
-                  <div className="mt-4 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600">
-                        Video URL
-                        <span className="ml-1.5 font-normal text-slate-400">
-                          YouTube, Vimeo, or Cloudflare Stream
-                        </span>
-                      </label>
-                      <input
-                        type="url"
-                        placeholder="https://…"
-                        value={assessment.featuredVideoUrl ?? ""}
-                        onChange={(e) => updateAssessment("featuredVideoUrl", e.target.value)}
-                        className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-brandnavy focus:ring-2 focus:ring-brandnavy/20"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600">
-                        Image URL
-                        <span className="ml-1.5 font-normal text-slate-400">JPG, PNG, WebP, etc.</span>
-                      </label>
-                      <input
-                        type="url"
-                        placeholder="https://…"
-                        value={assessment.featuredImageUrl ?? ""}
-                        onChange={(e) => updateAssessment("featuredImageUrl", e.target.value)}
-                        className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-brandnavy focus:ring-2 focus:ring-brandnavy/20"
-                      />
-                    </div>
+                <div className="mt-3 flex items-center gap-3 rounded-xl border border-slate-200 px-3 py-3">
+                  <span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-500">
+                    {selectedMediaType === "image" ? (
+                      <ImageIcon className="h-5 w-5" />
+                    ) : (
+                      <Video className="h-5 w-5" />
+                    )}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-slate-900">{selectedMediaLabel}</p>
+                    <p className="text-xs text-slate-500">
+                      {selectedMediaType === "video" ? "Video" : selectedMediaType === "image" ? "Image" : "Not set"}
+                    </p>
                   </div>
-                )}
+                  <button
+                    type="button"
+                    onClick={() => setMediaPickerOpen(true)}
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Choose media
+                  </button>
+                </div>
               </div>
+
+              {hasSelectedVideo ? (
+                <HeroVideoButtonToggle
+                  value={normalizeHeroButton(assessment.heroMediaButton, DEFAULT_HERO_MEDIA_BUTTON)}
+                  onChange={(next) => updateAssessment("heroMediaButton", next)}
+                />
+              ) : null}
+
+              <HeroButtonEditor
+                title="Continue button"
+                description="Always shown. This is the main button on image-only covers, and it becomes the highlighted button after the video starts."
+                value={normalizeHeroButton(assessment.heroContinueButton, DEFAULT_HERO_CONTINUE_BUTTON)}
+                fallback={DEFAULT_HERO_CONTINUE_BUTTON}
+                defaultIcon="arrow-right"
+                onChange={(next) => updateAssessment("heroContinueButton", next)}
+              />
             </div>
 
             {/* ── Theme picker ─────────────────────────────────────────────── */}
@@ -250,49 +251,28 @@ export default function ProposalIntroDemo({ mediaItems }: { mediaItems: BrandMed
             <div className="mt-8">
               <p className="mb-3 text-sm font-semibold text-slate-500 uppercase tracking-wide">Preview</p>
               <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
-                <OfferProposalPreview embedded assessment={assessment} />
+                <OfferProposalPreview embedded assessment={assessment} catalogOffer={catalogOffer} />
               </div>
             </div>
           </div>
         </div>
       </section>
-    </main>
-  );
-}
-
-function MediaOption({
-  selected,
-  onClick,
-  icon,
-  label,
-  sub,
-}: {
-  selected: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-  sub?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition ${
-        selected
-          ? "border-brandnavy bg-brandnavy-50/30 text-brandnavy"
-          : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
-      }`}
-    >
-      <span className={`shrink-0 ${selected ? "text-brandnavy" : "text-slate-400"}`}>{icon}</span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold">{label}</span>
-        {sub && <span className="block text-xs text-slate-400">{sub}</span>}
-      </span>
-      <span
-        className={`h-4 w-4 shrink-0 rounded-full border-2 transition ${
-          selected ? "border-brandnavy bg-brandnavy" : "border-slate-300"
-        }`}
+      <CoverMediaPicker
+        open={mediaPickerOpen}
+        onClose={() => setMediaPickerOpen(false)}
+        items={mediaItems}
+        folders={mediaFolders}
+        selectedMediaId={selectedMediaId}
+        brandDefaultVideoUrl={brandDefaultVideoUrl}
+        brandDefaultImageUrl={brandDefaultImageUrl}
+        customVideoUrl={assessment.featuredVideoUrl ?? ""}
+        customImageUrl={assessment.featuredImageUrl ?? ""}
+        onSelectBrandDefault={selectBrandDefault}
+        onSelectLibraryItem={selectLibraryItem}
+        onSelectCustom={selectCustom}
+        onCustomVideoUrlChange={(value) => updateAssessment("featuredVideoUrl", value)}
+        onCustomImageUrlChange={(value) => updateAssessment("featuredImageUrl", value)}
       />
-    </button>
+    </main>
   );
 }

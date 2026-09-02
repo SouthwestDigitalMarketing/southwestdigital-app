@@ -8,8 +8,6 @@ import {
   ChevronRight,
   CircleHelp,
   LineChart,
-  Pause,
-  Play,
   ShieldCheck,
   Sparkles,
   X,
@@ -39,6 +37,15 @@ import {
   type AssessmentState,
   type HistoricalCleanupPeriod,
 } from "./ProposalCreationWorkspaceDemo";
+import {
+  DEFAULT_HERO_CONTINUE_BUTTON,
+  DEFAULT_HERO_MEDIA_BUTTON,
+  HeroCtaContent,
+  normalizeHeroButton,
+} from "./heroButtons";
+import { resolveCoverMedia } from "./coverMedia";
+import { DEFAULT_URGENCY_OFFER, getUrgencyOfferDisplay } from "./urgencyOffer";
+import { ProposalUrgencyBanner, ProposalUrgencyNote } from "./ProposalUrgencyBanner";
 
 type CloudflareStreamEvent = "play" | "pause" | "ended";
 
@@ -433,12 +440,17 @@ export default function OfferProposalPreview({
   live = false,
   embedded = false,
   assessment: assessmentOverride,
+  catalogOffer = null,
+  engagementId: engagementIdProp = null,
 }: {
   initialAssessment?: Partial<AssessmentState>;
   initialContactInfo?: Partial<ContactInfoState>;
   live?: boolean;
   embedded?: boolean;
   assessment?: AssessmentState;
+  issuedAt?: Date | string | null;
+  catalogOffer?: ReturnType<typeof getUrgencyOfferDisplay> | null;
+  engagementId?: string | null;
 } = {}) {
   const { brand } = useBrand();
   const { assessment: storedAssessment } = useProposalAssessmentDemoState({
@@ -448,7 +460,7 @@ export default function OfferProposalPreview({
   const assessment = assessmentOverride ?? storedAssessment;
   const { contactInfo } = useProposalContactInfoDemoState({ initialContactInfo, persist: !live });
   const searchParams = useSearchParams();
-  const engagementId = searchParams.get("engagementId") ?? null;
+  const engagementId = engagementIdProp ?? searchParams.get("engagementId");
 
   const primary = resolvePrimaryContact(contactInfo);
   const contactName = formatPersonName(primary.firstName, primary.lastName) || contactInfo.owners[0]?.firstName || "";
@@ -470,6 +482,7 @@ export default function OfferProposalPreview({
     theme.accent === BRAND_PRIMARY_SENTINEL ? brandPrimary :
     theme.accent;
   const actionColor = theme.id === "brand-light" ? brandAccentDark : accentColor;
+  const urgencyOffer = catalogOffer?.active ? catalogOffer : getUrgencyOfferDisplay(DEFAULT_URGENCY_OFFER);
 
   const options = buildOptions(assessment);
   const [selectedOptionId, setSelectedOptionId] = useState<OptionId | null>(null);
@@ -503,7 +516,18 @@ export default function OfferProposalPreview({
   const streamIframeRef = useRef<HTMLIFrameElement>(null);
   const streamPlayerRef = useRef<CloudflareStreamPlayer | null>(null);
   const playRequestedRef = useRef(false);
-  const introVideoUrl = assessment.featuredVideoUrl || brand.theme?.proposalFeaturedVideoUrl || "";
+  const coverMedia = resolveCoverMedia(
+    {
+      featuredMediaId: assessment.featuredMediaId,
+      featuredVideoUrl: assessment.featuredVideoUrl,
+      featuredImageUrl: assessment.featuredImageUrl,
+    },
+    {
+      videoUrl: brand.theme?.proposalFeaturedVideoUrl ?? null,
+      imageUrl: brand.theme?.proposalFeaturedImageUrl ?? null,
+    },
+  );
+  const introVideoUrl = coverMedia.videoUrl;
   const introEmbedUrl = resolveVideoEmbedUrl(introVideoUrl);
 
   useEffect(() => {
@@ -795,7 +819,7 @@ export default function OfferProposalPreview({
 
           {/* Step 0 — Intro */}
           {step === 0 && (() => {
-            const imageUrl = assessment.featuredImageUrl || brand.theme?.proposalFeaturedImageUrl || "";
+            const imageUrl = coverMedia.imageUrl;
             const embedUrl = introEmbedUrl;
             const hasMedia = !!(embedUrl || imageUrl);
             const customHeadline = assessment.introHeadline?.trim().replace("Professional local bookkeeping and registered agent services", "Professional local accounting and registered agent services") || null;
@@ -806,6 +830,15 @@ export default function OfferProposalPreview({
             const registeredAgentMessage = "Registered agent services included at no additional charge.";
             const includesRegisteredAgentMessage = /registered agent services included at no charge\.?/i.test(introBody);
             const introBodyCopy = introBody.replace(/\s*registered agent services included at no charge\.?/i, "").trim();
+            const mediaButton = normalizeHeroButton(assessment.heroMediaButton, DEFAULT_HERO_MEDIA_BUTTON);
+            const continueButton = normalizeHeroButton(assessment.heroContinueButton, DEFAULT_HERO_CONTINUE_BUTTON);
+            const mediaButtonLabel = mediaButton.label.trim() || DEFAULT_HERO_MEDIA_BUTTON.label;
+            const showMediaButton = Boolean(embedUrl) && mediaButton.visible;
+            const continueIsPrimary = !showMediaButton || hasStartedIntroVideo;
+            const heroButtonClass = (primary: boolean) =>
+              `inline-flex w-full items-center justify-center gap-2 rounded-lg border px-6 py-3 text-lg font-bold transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)] ${
+                primary ? "text-white hover:brightness-95" : "border-slate-300 bg-white text-slate-500"
+              }`;
             return (
               <div className="pb-12 sm:pb-16">
                 <div className={`grid items-center gap-8 ${hasMedia ? "md:grid-cols-2" : ""}`}>
@@ -823,27 +856,35 @@ export default function OfferProposalPreview({
                       {includesRegisteredAgentMessage ? <span className="mt-3 flex items-center gap-2 pt-2 text-base font-semibold text-slate-600"><span className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-white" style={{ backgroundColor: brandDark }}><Check className="h-3 w-3" /></span>{registeredAgentMessage}</span> : null}
                     </p>
                     <div className="mt-8 space-y-3">
-                      {embedUrl ? (
+                      {showMediaButton ? (
                         <button
                           type="button"
                           onClick={toggleIntroVideo}
                           aria-pressed={isIntroVideoPlaying}
-                          aria-label={isIntroVideoPlaying ? "Pause client testimonial" : "Play client testimonial"}
-                          className={`inline-flex w-full items-center justify-center gap-2 rounded-lg border px-6 py-3 text-lg font-bold transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)] ${hasStartedIntroVideo ? "border-slate-300 bg-white text-slate-500" : "text-white hover:brightness-95"}`}
-                          style={hasStartedIntroVideo ? undefined : { backgroundColor: actionColor, borderColor: actionColor }}
+                          aria-label={isIntroVideoPlaying ? `Pause ${mediaButtonLabel}` : `Play ${mediaButtonLabel}`}
+                          className={heroButtonClass(!continueIsPrimary)}
+                          style={!continueIsPrimary ? { backgroundColor: actionColor, borderColor: actionColor } : undefined}
                         >
-                          Client Testimonial {isIntroVideoPlaying ? <Pause className="h-5 w-5 fill-current" /> : <Play className="h-5 w-5 fill-current" />}
+                          <HeroCtaContent
+                            config={mediaButton}
+                            fallbackLabel={DEFAULT_HERO_MEDIA_BUTTON.label}
+                            playing={isIntroVideoPlaying}
+                          />
                         </button>
                       ) : null}
                       <button
                         type="button"
                         onClick={() => setStep(1)}
-                        className={`inline-flex w-full items-center justify-center gap-2 rounded-lg border px-6 py-3 text-lg font-bold transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)] ${hasStartedIntroVideo ? "text-white hover:brightness-95" : "border-slate-300 bg-white text-slate-500"}`}
-                        style={hasStartedIntroVideo ? { backgroundColor: actionColor, borderColor: actionColor } : undefined}
+                        className={heroButtonClass(continueIsPrimary)}
+                        style={continueIsPrimary ? { backgroundColor: actionColor, borderColor: actionColor } : undefined}
                       >
-                        Shop pricing
+                        <HeroCtaContent
+                          config={continueButton}
+                          fallbackLabel={DEFAULT_HERO_CONTINUE_BUTTON.label}
+                        />
                       </button>
                       {introVideoError ? <p role="alert" className="mt-2 text-sm text-red-700">{introVideoError}</p> : null}
+                      <ProposalUrgencyNote offer={urgencyOffer} color={brandDark} />
                     </div>
                   </div>
                   {embedUrl ? (
@@ -866,13 +907,19 @@ export default function OfferProposalPreview({
                       </div>
                     </div>
                   ) : imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={imageUrl}
-                      alt=""
-                      className="max-h-[320px] w-full rounded-xl border object-cover shadow-sm"
+                    <div
+                      className="relative overflow-hidden rounded-xl border shadow-sm"
                       style={{ borderColor: "#cbd5e1" }}
-                    />
+                    >
+                      <div className="aspect-video bg-slate-100">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={imageUrl}
+                          alt={customHeadline || `${brand.name} cover image`}
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                    </div>
                   ) : null}
                 </div>
                 <ProposalReviewsSection brandName={brand.name} animate />
@@ -886,6 +933,11 @@ export default function OfferProposalPreview({
               <div className="mb-5 text-center">
                 <h1 className="text-2xl font-bold tracking-tight sm:text-3xl" style={{ color: brandDark }}>Select your services</h1>
               </div>
+              {urgencyOffer.active ? (
+                <div className="mx-auto mb-8 max-w-3xl">
+                  <ProposalUrgencyBanner offer={urgencyOffer} accentColor={actionColor} inkColor={brandDark} />
+                </div>
+              ) : null}
 
               {/* Annual toggle */}
               <div className="mb-8 flex flex-wrap items-center justify-center gap-4 text-base font-bold sm:text-lg">
@@ -1130,6 +1182,9 @@ export default function OfferProposalPreview({
                                         }} className="mt-4 w-full rounded-lg border px-4 py-3 text-base font-bold text-white transition hover:opacity-90" style={{ backgroundColor: actionColor, borderColor: actionColor }}>
                           Select {option.name}
                         </button>
+                        {urgencyOffer.active ? (
+                          <p className="mt-2 text-center text-xs font-medium text-slate-500">{urgencyOffer.ctaHint}</p>
+                        ) : null}
                       </div>
                     </section>
                   );
@@ -1143,6 +1198,9 @@ export default function OfferProposalPreview({
             <div className="py-6">
               {!alreadySigned ? (
                 <div className="space-y-5">
+                  {urgencyOffer.active ? (
+                    <ProposalUrgencyBanner offer={urgencyOffer} accentColor={actionColor} inkColor={brandDark} compact />
+                  ) : null}
                   <div>
                     <h2 className="text-sm font-bold text-slate-900">Bookkeeping Services Agreement</h2>
                     <p className="mt-1 text-sm font-semibold text-brandnavy">
@@ -1259,7 +1317,13 @@ export default function OfferProposalPreview({
                       {paymentClientSecret ? (
                         <DepositPaymentForm
                           clientSecret={paymentClientSecret}
-                          onPaid={(status) => { setPaymentStatus(status); setStep(3); }}
+                          onPaid={(status) => {
+                            if (status === "succeeded" && engagementId) {
+                              void fetch(`/api/proposal/${engagementId}/confirm-payment`, { method: "POST" });
+                            }
+                            setPaymentStatus(status);
+                            setStep(3);
+                          }}
                         />
                       ) : signError ? (
                         <div className="space-y-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5">

@@ -5,22 +5,29 @@ import MediaLibraryClient from "./MediaLibraryClient";
 export default async function MediaPage() {
   const { brand } = await requireStaffBrand();
 
-  const items = await prisma.brandMedia.findMany({
-    where: { brandId: brand.id },
-    select: { id: true, name: true, type: true, url: true, sortOrder: true },
-    orderBy: { sortOrder: "asc" },
-  });
+  const [items, folders] = await Promise.all([
+    prisma.brandMedia.findMany({
+      where: { brandId: brand.id },
+      select: { id: true, name: true, type: true, url: true, folderId: true, sortOrder: true },
+      orderBy: { sortOrder: "asc" },
+    }),
+    prisma.brandMediaFolder.findMany({
+      where: { brandId: brand.id },
+      select: { id: true, name: true },
+      orderBy: { sortOrder: "asc" },
+    }),
+  ]);
 
   return (
     <div className="p-8">
       <h1 className="sr-only">Media</h1>
-      <section className="max-w-2xl">
+      <section className="max-w-5xl">
         <h2 className="text-lg font-semibold text-slate-900">Proposal media</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Videos and images available for proposal intros.
+          Videos and images available for proposal intros, organized in folders.
         </p>
         <div className="mt-4">
-          <MediaLibraryClient items={items} />
+          <MediaLibraryClient items={items} folders={folders} />
         </div>
       </section>
     </div>

@@ -1,0 +1,110 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { prisma } from "@/lib/prisma";
+import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
+import { isDiscountDeadlineMode, isDiscountKind, parseDiscountActivationMode } from "@/lib/discounts/kinds";
+
+function clean(value: FormDataEntryValue | null) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function parseDiscountInput(formData: FormData) {
+  const name = clean(formData.get("name"));
+  const kind = clean(formData.get("kind"));
+  const deadlineMode = clean(formData.get("deadlineMode")) || "relative";
+  const showOnFirstOpen =
+    formData.get("showOnFirstOpen") === "on" || clean(formData.get("activationMode")) === "immediate";
+  const activationMode = parseDiscountActivationMode(showOnFirstOpen ? "immediate" : "held");
+  const title = clean(formData.get("title"));
+  const details = clean(formData.get("details"));
+  const percent = Math.min(100, Math.max(1, Number(formData.get("percent")) || 10));
+  const amount = Math.max(1, Number(formData.get("amount")) || 250);
+  const durationDays = Math.min(365, Math.max(1, Number(formData.get("durationDays")) || 14));
+  const deadlineDateRaw = clean(formData.get("deadlineDate"));
+  const deadlineDate = /^\d{4}-\d{2}-\d{2}$/.test(deadlineDateRaw)
+    ? new Date(`${deadlineDateRaw}T00:00:00`)
+    : null;
+
+  if (!name) throw new Error("Name is required.");
+  if (!isDiscountKind(kind)) throw new Error("Choose a valid benefit type.");
+  if (!isDiscountDeadlineMode(deadlineMode)) throw new Error("Choose a valid deadline.");
+  if (deadlineMode === "date" && !deadlineDate) throw new Error("Choose a deadline date.");
+
+  return {
+    name,
+    kind,
+    title,
+    details,
+    percent,
+    amount,
+    activationMode,
+    activationDelayDays: 0,
+    deadlineMode,
+    durationDays,
+    deadlineDate,
+  };
+}
+
+export async function createBrandDiscountAction(formData: FormData) {
+  const { brand } = await requireStaffBrandOrThrow();
+  const data = parseDiscountInput(formData);
+  const maxOrder = await prisma.brandDiscount.aggregate({
+    where: { brandId: brand.id },
+    _max: { sortOrder: true },
+  });
+
+  await prisma.brandDiscount.create({
+    data: {
+      brandId: brand.id,
+      sortOrder: (maxOrder._max.sortOrder ?? -1) + 1,
+      presentedAt: data.activationMode === "immediate" ? new Date() : null,
+      ...data,
+    },
+  });
+
+  revalidatePath("/discounts");
+  revalidatePath("/offers/intro");
+}
+
+export async function updateBrandDiscountAction(id: string, formData: FormData) {
+  const { brand } = await requireStaffBrandOrThrow();
+  const data = parseDiscountInput(formData);
+  const existing = await prisma.brandDiscount.findFirst({
+    where: { id, brandId: brand.id },
+    select: { activationMode: true, presentedAt: true },
+  });
+  if (!existing) throw new Error("Discount not found.");
+
+  const turningOn = data.activationMode === "immediate" && existing.activationMode !== "immediate";
+  const turningOff = data.activationMode !== "immediate";
+
+  await prisma.brandDiscount.updateMany({
+    where: { id, brandId: brand.id },
+    data: {
+      ...data,
+      presentedAt: turningOff ? null : turningOn ? new Date() : existing.presentedAt,
+    },
+  });
+
+  revalidatePath("/discounts");
+  revalidatePath("/offers/intro");
+}
+
+export async function archiveBrandDiscountAction(id: string) {
+  const { brand } = await requireStaffBrandOrThrow();
+  await prisma.brandDiscount.updateMany({
+    where: { id, brandId: brand.id },
+    data: { active: false },
+  });
+  revalidatePath("/discounts");
+}
+
+export async function restoreBrandDiscountAction(id: string) {
+  const { brand } = await requireStaffBrandOrThrow();
+  await prisma.brandDiscount.updateMany({
+    where: { id, brandId: brand.id },
+    data: { active: true },
+  });
+  revalidatePath("/discounts");
+}

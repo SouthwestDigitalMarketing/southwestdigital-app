@@ -44,7 +44,22 @@ export async function getAccessToken(refreshToken: string): Promise<string> {
     }),
   });
 
-  if (!res.ok) throw new Error(`YouTube token refresh failed: ${await res.text()}`);
+  if (!res.ok) {
+    const body = await res.text();
+    let reason = body;
+    try {
+      const parsed = JSON.parse(body) as { error?: string; error_description?: string };
+      reason = parsed.error_description || parsed.error || body;
+      if (parsed.error === "invalid_grant") {
+        throw new Error(
+          "YouTube refresh token expired or revoked. Run node scripts/get-youtube-token.mjs and update YOUTUBE_REFRESH_TOKEN_<SLUG>.",
+        );
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("YouTube refresh token")) throw error;
+    }
+    throw new Error(`YouTube token refresh failed: ${reason}`);
+  }
 
   const data = (await res.json()) as TokenResponse;
   cachedToken = {

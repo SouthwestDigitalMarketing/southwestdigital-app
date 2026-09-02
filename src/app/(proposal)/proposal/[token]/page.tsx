@@ -6,21 +6,42 @@ import { resolvePublicBrand } from "@/lib/brands/resolve";
 import OfferProposalPreview from "@/app/(app)/offers/builder/OfferProposalPreview";
 import type { AssessmentState } from "@/app/(app)/offers/builder/ProposalCreationWorkspaceDemo";
 import type { ContactInfoState } from "@/app/(app)/offers/builder/ProposalContactInfoState";
+import { isLeadConvertedForDiscount, pickActiveCatalogOffer } from "@/lib/discounts/eligibility";
+import { ensureQuoteEngagement } from "@/lib/engagements/fromOffer";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-export default async function PublicProposalPage({ params }: { params: Promise<{ token: string }> }) {
+export default async function PublicProposalPage({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}) {
   const { token } = await params;
   const hostname = (await headers()).get("x-hostname");
   const brand = await resolvePublicBrand(hostname);
   if (!brand) notFound();
-  const { quoteRevisions } = await getSchemaCapabilities();
+  const { quoteRevisions, quoteEngagement } = await getSchemaCapabilities();
   const quote = await prisma.quote.findFirst({
     where: { brandId: brand.id, publicToken: token, publishedAt: { not: null } },
-    select: { id: true, publishedSnapshotJson: true },
+    select: {
+      id: true,
+      publishedSnapshotJson: true,
+      publishedAt: true,
+      firstViewedAt: true,
+      status: true,
+      engagementId: true,
+    },
   });
+  const viewedAt = new Date();
+  if (quote && !quote.firstViewedAt) {
+    await prisma.quote.updateMany({
+      where: { id: quote.id, firstViewedAt: null },
+      data: { firstViewedAt: viewedAt },
+    });
+  }
+  const firstViewedAt = quote?.firstViewedAt ?? (quote ? viewedAt : null);
   const revision = quote && quoteRevisions
     ? await prisma.quoteRevision.findFirst({
         where: { brandId: brand.id, quoteId: quote.id },
@@ -36,11 +57,65 @@ export default async function PublicProposalPage({ params }: { params: Promise<{
       : null;
   if (!snapshot) notFound();
 
+  let engagementId = quoteEngagement ? quote?.engagementId ?? null : null;
+  if (quote && quoteEngagement && !engagementId) {
+    try {
+      engagementId = await ensureQuoteEngagement({
+        brandId: brand.id,
+        quoteId: quote.id,
+        snapshot: {
+          contactInfo: snapshot.contactInfo,
+          assessment: snapshot.assessment,
+        },
+      });
+    } catch (error) {
+      console.error("[proposal] Could not attach an engagement for signing and payment:", error);
+    }
+  }
+
+  const [discounts, engagement] = await Promise.all([
+    prisma.brandDiscount.findMany({
+      where: { brandId: brand.id, active: true },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    }),
+    engagementId
+      ? prisma.engagement.findFirst({
+          where: { id: engagementId, brandId: brand.id },
+          select: { status: true },
+        })
+      : Promise.resolve(null),
+  ]);
+  const catalogOffer = pickActiveCatalogOffer(
+    discounts.map((discount) => ({
+      kind: discount.kind,
+      percent: discount.percent,
+      amount: Number(discount.amount),
+      title: discount.title,
+      details: discount.details,
+      activationMode: discount.activationMode,
+      activationDelayDays: discount.activationDelayDays,
+      deadlineMode: discount.deadlineMode,
+      durationDays: discount.durationDays,
+      deadlineDate: discount.deadlineDate,
+      presentedAt: discount.presentedAt,
+    })),
+    {
+      publishedAt: quote?.publishedAt ?? null,
+      firstViewedAt,
+      converted: isLeadConvertedForDiscount({
+        quoteStatus: quote?.status,
+        engagementStatus: engagement?.status,
+      }),
+    },
+  );
+
   return (
     <OfferProposalPreview
       initialAssessment={isRecord(snapshot.assessment) ? (snapshot.assessment as Partial<AssessmentState>) : undefined}
       initialContactInfo={isRecord(snapshot.contactInfo) ? (snapshot.contactInfo as Partial<ContactInfoState>) : undefined}
       live
+      catalogOffer={catalogOffer}
+      engagementId={engagementId}
     />
   );
 }

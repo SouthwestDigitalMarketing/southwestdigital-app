@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { ExternalLink } from "lucide-react";
+import { goalColors } from "../website/goal-colors";
 
 type GoalDisplay = {
   pct: number;
@@ -20,10 +21,11 @@ export function StatCard({
   label,
   value,
   goal,
-  goalColor = "#17324d",
+  goalColor,
   comparison,
   icon,
   attribution,
+  goalEditor,
 }: {
   label: string;
   value: string;
@@ -32,11 +34,14 @@ export function StatCard({
   comparison?: number | null;
   icon?: ReactNode;
   attribution?: Attribution;
+  goalEditor?: ReactNode;
 }) {
-  const color = goal ? goalColor : undefined;
+  const pct = goal ? Math.max(0, Math.min(100, Number.isFinite(goal.pct) ? goal.pct : 0)) : 0;
+  const color = goal ? (goalColor ?? goalColors(pct).bar) : undefined;
 
   return (
-    <div className="flex flex-col rounded-xl border border-slate-200 bg-white p-6">
+    <div className="relative flex flex-col rounded-xl border border-slate-200 bg-white p-6">
+      {goalEditor}
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex min-w-0 items-start gap-1.5 text-slate-400">
@@ -72,12 +77,12 @@ export function StatCard({
           {goal && <p className="mt-0.5 text-xs text-slate-500">{goal.subtitle}</p>}
         </div>
         {goal && (
-          <div className="shrink-0 text-right">
+          <div className={`shrink-0 text-right ${goalEditor ? "pt-6" : ""}`}>
             <span
               className="text-2xl font-bold tabular-nums"
               style={{ color: "var(--text-primary)" }}
             >
-              {goal.pct}%
+              {pct}%
             </span>
             <p className="text-xs text-slate-400">of goal</p>
           </div>
@@ -88,7 +93,7 @@ export function StatCard({
         <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-slate-100">
           <div
             className="h-full rounded-full transition-all duration-500"
-            style={{ width: `${goal.pct}%`, background: color }}
+            style={{ width: `${pct}%`, backgroundColor: color }}
           />
         </div>
       )}

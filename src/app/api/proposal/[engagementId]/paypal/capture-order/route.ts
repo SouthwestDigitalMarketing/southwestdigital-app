@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { paypalFetch } from "@/lib/paypal";
+import { markEngagementDepositPaid } from "@/lib/engagements/fromOffer";
 
 export async function POST(
   request: Request,
@@ -31,10 +32,7 @@ export async function POST(
     if (captureResult.status !== "COMPLETED") {
       return NextResponse.json({ error: "PayPal payment was not completed." }, { status: 400 });
     }
-    await prisma.engagement.update({
-      where: { id: engagementId },
-      data: { onboardingFeeStatus: "PAID", status: "DEPOSIT_PAID" },
-    });
+    await markEngagementDepositPaid(engagementId);
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("[paypal/capture-order] Failed:", error);

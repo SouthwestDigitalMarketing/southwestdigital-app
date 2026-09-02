@@ -5,7 +5,12 @@ import { useEffect, useRef, useState } from "react";
 import { Check, ChevronLeft, ChevronRight, Eye, LogOut, Save, Send, Upload } from "lucide-react";
 import ProposalAppDemoStepper, { type ProposalAppDemoStep } from "./ProposalAppDemoStepper";
 import { readProposalBuilderLocalState } from "./ProposalBuilderStorage";
-import { publishOfferChangesAction, saveOfferDraftAction, syncOfferContactsAction } from "../who/actions";
+import {
+  getOfferPublicPathAction,
+  publishOfferChangesAction,
+  saveOfferDraftAction,
+  syncOfferContactsAction,
+} from "../who/actions";
 import type { ContactInfoState } from "./ProposalContactInfoState";
 
 export default function ProposalAppDemoHeader({
@@ -149,11 +154,14 @@ export default function ProposalAppDemoHeader({
     // Open the tab synchronously (before await) so popup blockers don't trigger
     const newTab = window.open("", "_blank");
     const success = await saveProposalBuilderState();
-    if (success && newTab) {
-      newTab.location.href = scopedHref("/proposal/preview");
-    } else {
+    if (!success || !newTab) {
       newTab?.close();
+      return;
     }
+    const offerId = searchParams.get("offer");
+    const storedPath = offerId ? window.localStorage.getItem(`proposal-public-path:${offerId}`) : null;
+    const publicPath = storedPath || (offerId ? await getOfferPublicPathAction(offerId) : null);
+    newTab.location.href = publicPath || scopedHref("/proposal/preview");
   }
 
   return (

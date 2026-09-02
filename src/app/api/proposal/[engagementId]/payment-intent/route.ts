@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getStripeClient } from "@/lib/stripe";
+import { getChargeableConnectedAccountId } from "@/lib/stripe/connect";
+import { destinationPaymentIntentParams } from "@/lib/stripe/paymentIntentParams";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -15,7 +17,7 @@ export async function POST(
 
   const engagement = await prisma.engagement.findUnique({
     where: { id: engagementId },
-    select: { onboardingFee: true, onboardingFeeStatus: true, onboardingData: true },
+    select: { brandId: true, onboardingFee: true, onboardingFeeStatus: true, onboardingData: true },
   });
   if (!engagement) return NextResponse.json({ error: "Engagement not found" }, { status: 404 });
 
@@ -34,6 +36,14 @@ export async function POST(
   const existingPaymentIntentId = typeof existingServices.stripePaymentIntentId === "string" ? existingServices.stripePaymentIntentId : null;
 
   const amountInCents = Math.round(onboardingFee * 100);
+  const connectedAccountId = await getChargeableConnectedAccountId(engagement.brandId);
+  const intentParams = destinationPaymentIntentParams({
+    amountInCents,
+    engagementId,
+    brandId: engagement.brandId,
+    connectedAccountId,
+    receiptEmail: invoiceEmail,
+  });
 
   let clientSecret: string | null;
   try {
@@ -42,7 +52,7 @@ export async function POST(
       const existing = await stripe.paymentIntents.retrieve(existingPaymentIntentId);
       if (existing.status === "requires_payment_method" || existing.status === "requires_confirmation") {
         const updated = await stripe.paymentIntents.update(existingPaymentIntentId, {
-          amount: amountInCents,
+          amount: intentParams.amount,
           ...(invoiceEmail ? { receipt_email: invoiceEmail } : {}),
         });
         clientSecret = updated.client_secret;
@@ -50,13 +60,7 @@ export async function POST(
         clientSecret = existing.client_secret;
       }
     } else {
-      const created = await stripe.paymentIntents.create({
-        amount: amountInCents,
-        currency: "usd",
-        metadata: { engagementId },
-        ...(invoiceEmail ? { receipt_email: invoiceEmail } : {}),
-        payment_method_types: ["card", "us_bank_account", "cashapp", "klarna"],
-      });
+      const created = await stripe.paymentIntents.create(intentParams);
       clientSecret = created.client_secret;
       const proposalBuilderState = {
         ...existingState,

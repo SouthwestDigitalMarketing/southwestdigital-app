@@ -11,6 +11,7 @@ import { parseSubmittedPhone } from "@/lib/phone";
 import { isOfferKindKey, type OfferKindKey } from "@/lib/quotes/kinds";
 import { materializeProposalCatalog } from "@/lib/quotes/materializeProposalCatalog";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
+import { ensureQuoteEngagement } from "@/lib/engagements/fromOffer";
 
 export type OfferAudienceContact = {
   id: string;
@@ -279,7 +280,7 @@ export async function publishOfferChangesAction(
     assessment,
   });
   const publicToken = existing.publicToken ?? randomBytes(32).toString("base64url");
-  const { quoteRevisions } = await getSchemaCapabilities();
+  const { quoteRevisions, quoteEngagement } = await getSchemaCapabilities();
   const publishedAt = new Date();
 
   if (!quoteRevisions) {
@@ -292,6 +293,13 @@ export async function publishOfferChangesAction(
         publishedAt,
       },
     });
+    if (quoteEngagement) {
+      await ensureQuoteEngagement({
+        brandId: brand.id,
+        quoteId: existing.id,
+        snapshot: { contactInfo: snapshot.contactInfo, assessment: snapshot.assessment },
+      });
+    }
     revalidatePath("/offers");
     revalidatePath(`/offers/${existing.id}`);
     revalidatePath(`/proposal/${publicToken}`);
@@ -329,6 +337,14 @@ export async function publishOfferChangesAction(
       },
     }),
   ]);
+
+  if (quoteEngagement) {
+    await ensureQuoteEngagement({
+      brandId: brand.id,
+      quoteId: existing.id,
+      snapshot: { contactInfo: snapshot.contactInfo, assessment: snapshot.assessment },
+    });
+  }
 
   revalidatePath("/offers");
   revalidatePath(`/offers/${existing.id}`);
