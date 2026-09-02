@@ -5,7 +5,12 @@ import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
 import { prisma } from "@/lib/prisma";
 import { requestOrigin } from "@/lib/stripe/requestOrigin";
 import { encryptSecret } from "@/lib/secrets/encryption";
-import { verifyYouTubeOAuthState, YOUTUBE_OAUTH_STATE_COOKIE } from "@/lib/youtube/oauth";
+import {
+  readYouTubeOAuthState,
+  verifyYouTubeOAuthState,
+  youtubeOAuthCallbackOrigin,
+  YOUTUBE_OAUTH_STATE_COOKIE,
+} from "@/lib/youtube/oauth";
 import { YOUTUBE_INTEGRATION_KEY } from "@/lib/youtube/credentials";
 
 function result(value: string, origin: string) {
@@ -15,19 +20,32 @@ function result(value: string, origin: string) {
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const origin = requestOrigin(await headers());
+  const callbackOrigin = youtubeOAuthCallbackOrigin(origin);
   const state = url.searchParams.get("state");
   const code = url.searchParams.get("code");
+  const parsedState = state ? readYouTubeOAuthState(state) : null;
+
+  if (origin === callbackOrigin && parsedState?.returnOrigin !== origin) {
+    if (!parsedState) return result("error", origin);
+    const relay = new URL("/api/youtube/callback", parsedState.returnOrigin);
+    for (const key of ["code", "state", "error"] as const) {
+      const value = url.searchParams.get(key);
+      if (value) relay.searchParams.set(key, value);
+    }
+    return NextResponse.redirect(relay);
+  }
+
   const cookieStore = await cookies();
   const storedState = cookieStore.get(YOUTUBE_OAUTH_STATE_COOKIE)?.value;
   cookieStore.delete(YOUTUBE_OAUTH_STATE_COOKIE);
   const { brand } = await requireStaffBrandOrThrow();
-  if (!state || !storedState || state !== storedState || !verifyYouTubeOAuthState(state, brand.id)) return result("error", origin);
+  if (!state || !storedState || state !== storedState || !verifyYouTubeOAuthState(state, brand.id, origin)) return result("error", origin);
   if (url.searchParams.get("error") || !code) return result("cancelled", origin);
 
   const clientId = process.env.YOUTUBE_OAUTH_CLIENT_ID?.trim();
   const clientSecret = process.env.YOUTUBE_OAUTH_CLIENT_SECRET?.trim();
   if (!clientId || !clientSecret) return result("not-configured", origin);
-  const redirectUri = `${origin}/api/youtube/callback`;
+  const redirectUri = `${callbackOrigin}/api/youtube/callback`;
   const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },

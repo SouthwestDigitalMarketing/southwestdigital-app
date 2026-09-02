@@ -17,6 +17,7 @@ export function YouTubeIntegrationForm({
         <p className="mt-1 text-base text-slate-500">Connect the YouTube channel used by this brand. The refresh token is encrypted and stays server-side.</p>
       </div>
       {notice === "connected" ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">YouTube is connected and analytics can refresh.</p> : null}
+      {notice === "disconnected" ? <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">YouTube has been disconnected. Analytics will pause until it is reconnected.</p> : null}
       {notice === "missing-refresh-token" ? <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">Google did not return a refresh token. Reconnect and approve access when prompted.</p> : null}
       {notice === "not-configured" ? <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">YouTube OAuth is not configured on this environment.</p> : null}
       {notice === "no-channel" ? <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">No YouTube channel was found for that Google account.</p> : null}
@@ -26,7 +27,14 @@ export function YouTubeIntegrationForm({
           <p className="text-sm font-semibold text-slate-900">{statusLabel}</p>
           {channelName ? <p className="mt-0.5 text-xs text-slate-500">{channelName}{channelId ? ` · ${channelId}` : ""}</p> : null}
         </div>
-        <a href="/api/youtube/connect" className="ui-action-primary rounded-lg px-4 py-2 text-sm font-semibold transition">{status === "active" ? "Reconnect YouTube" : "Connect YouTube"}</a>
+        <div className="flex flex-wrap items-center gap-2">
+          {status === "active" ? (
+            <form action="/api/youtube/disconnect" method="post">
+              <button type="submit" className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Disconnect</button>
+            </form>
+          ) : null}
+          <a href="/api/youtube/connect" className="ui-action-primary rounded-lg px-4 py-2 text-sm font-semibold transition">{status === "active" ? "Reconnect YouTube" : "Connect YouTube"}</a>
+        </div>
       </div>
     </section>
   );
