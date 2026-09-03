@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   BadgeCheck,
   Check,
+  ChevronLeft,
   ChevronRight,
   CircleHelp,
   LineChart,
@@ -567,6 +568,7 @@ export default function OfferProposalPreview({
   const [signSubmitting, setSignSubmitting] = useState(false);
   const [signError, setSignError] = useState<string | null>(null);
   const [paymentClientSecret, setPaymentClientSecret] = useState<string | null>(null);
+  const [paymentWaived, setPaymentWaived] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState<"succeeded" | "processing" | null>(null);
   const [agreementText, setAgreementText] = useState("");
   const [agreementLoading, setAgreementLoading] = useState(Boolean(engagementId));
@@ -670,23 +672,33 @@ export default function OfferProposalPreview({
     if (step !== 2 && step !== 3 || !engagementId) return;
     fetch(`/api/proposal/${engagementId}/agreement`)
       .then((r) => r.json())
-      .then((result: { text?: string; signed?: boolean; signerName?: string | null; signedAt?: string | null }) => {
+      .then((result: { text?: string; signed?: boolean; signerName?: string | null; signedAt?: string | null; onboardingFeeStatus?: string | null }) => {
         setAgreementText(result.text ?? "");
         if (result.signed) {
           setAlreadySigned(true);
           setSignedSignerName(result.signerName ?? null);
           setSignedAt(result.signedAt ?? null);
-          if (!assessment.waiveOnboardingFee && assessment.onboardingFeeOverride !== 0) {
+          if (result.onboardingFeeStatus === "PAID" || result.onboardingFeeStatus === "WAIVED") {
+            setPaymentStatus("succeeded");
+            if (result.onboardingFeeStatus === "WAIVED") setPaymentWaived(true);
+          } else {
             fetch(`/api/proposal/${engagementId}/payment-intent`, { method: "POST" })
               .then((r) => r.json())
-              .then((pr: { clientSecret?: string }) => { if (pr.clientSecret) setPaymentClientSecret(pr.clientSecret); })
+              .then((pr: { clientSecret?: string; waived?: boolean }) => {
+                if (pr.waived) {
+                  setPaymentWaived(true);
+                  setPaymentStatus("succeeded");
+                } else if (pr.clientSecret) {
+                  setPaymentClientSecret(pr.clientSecret);
+                }
+              })
               .catch(() => {});
           }
         }
       })
       .catch(() => {})
       .finally(() => setAgreementLoading(false));
-  }, [step, engagementId, assessment.waiveOnboardingFee, assessment.onboardingFeeOverride]);
+  }, [step, engagementId]);
 
   function checkAgreementScrolled(el: HTMLDivElement) {
     if (el.scrollTop + el.clientHeight >= el.scrollHeight - 20) setHasScrolledToEnd(true);
@@ -764,14 +776,27 @@ export default function OfferProposalPreview({
         setSignedSignerName(result?.signerName ?? signerName);
         setSignedAt(result?.signedAt ?? null);
       }
-      if (selectedOnboardingFee === 0) {
+      if (paymentStatus === "succeeded") {
+        setStep(3);
+        return;
+      }
+      if (!requiresOnboardingPayment) {
         setPaymentStatus("succeeded");
         setStep(3);
         return;
       }
       const paymentResponse = await fetch(`/api/proposal/${engagementId}/payment-intent`, { method: "POST" });
-      const paymentResult = await paymentResponse.json().catch(() => null) as { clientSecret?: string; error?: string } | null;
-      if (!paymentResponse.ok || !paymentResult?.clientSecret) {
+      const paymentResult = await paymentResponse.json().catch(() => null) as { clientSecret?: string; waived?: boolean; error?: string } | null;
+      if (!paymentResponse.ok) {
+        throw new Error(paymentResult?.error ?? "Unable to start payment");
+      }
+      if (paymentResult?.waived) {
+        setPaymentWaived(true);
+        setPaymentStatus("succeeded");
+        setStep(3);
+        return;
+      }
+      if (!paymentResult?.clientSecret) {
         throw new Error(paymentResult?.error ?? "Unable to start payment");
       }
       setPaymentClientSecret(paymentResult.clientSecret);
@@ -817,7 +842,16 @@ export default function OfferProposalPreview({
   const selectedOnboardingFee = selectedOptionId
     ? (options[selectedOptionId].oneTimeRows.find((r) => isOnboarding(r))?.price ?? null)
     : null;
-  const requiresOnboardingPayment = selectedOnboardingFee !== 0;
+  const selectedMonthlyCharge = selectedOptionId ? options[selectedOptionId].monthlyPrice : 0;
+  const chargeIsFirstMonth = (selectedOnboardingFee ?? 0) <= 0 && selectedMonthlyCharge > 0;
+  const chargeAmount = (selectedOnboardingFee ?? 0) > 0
+    ? (selectedOnboardingFee as number)
+    : chargeIsFirstMonth ? selectedMonthlyCharge : 0;
+  const requiresOnboardingPayment = chargeAmount > 0;
+  const chargeLabel = chargeIsFirstMonth ? "First Month" : "Your Deposit";
+  const chargeDescription = chargeIsFirstMonth
+    ? "Prepays your first month of ongoing bookkeeping so we can start immediately. Non-refundable once work begins."
+    : "Covers onboarding, document collection, and discovery. Earned upon signing and non-refundable.";
   const clientSteps = [
     "Cover",
     "Services",
@@ -843,6 +877,28 @@ export default function OfferProposalPreview({
     },
   );
   const displayedAgreementText = engagementId ? agreementText : embeddedAgreementText;
+
+  const signedByBanner = (
+    <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
+      Signed by <span className="font-semibold">{signedSignerName}</span>
+      {signedAt ? ` on ${new Date(signedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}` : null}
+    </div>
+  );
+
+  const signedAgreementCollapsible = displayedAgreementText ? (
+    <details className="rounded-lg border border-slate-200 bg-white">
+      <summary className="cursor-pointer list-none px-3 py-2.5 text-sm font-semibold text-slate-700 hover:text-slate-900">
+        View the signed Agreement
+      </summary>
+      <div
+        data-proposal-surface="light"
+        className="max-h-[50vh] overflow-y-auto border-t border-slate-200 p-4 sm:max-h-[65vh]"
+        style={{ "--proposal-light-surface-ink": lightSurfaceInk } as React.CSSProperties}
+      >
+        <AgreementTextView text={displayedAgreementText} />
+      </div>
+    </details>
+  ) : null;
 
   return (
     <main
@@ -888,9 +944,10 @@ export default function OfferProposalPreview({
               <button
                 type="button"
                 onClick={() => setStep((s) => Math.max(0, s - 1))}
-                className="ui-action-secondary rounded-lg border px-5 py-2.5 text-sm font-semibold transition"
+                className="ui-action-secondary inline-flex items-center gap-2 rounded-lg border px-5 py-2.5 text-sm font-semibold transition"
                 style={stepperSecondaryVariables}
               >
+                <ChevronLeft strokeWidth={3} className="h-4 w-4" />
                 Back
               </button>
             )}
@@ -910,45 +967,7 @@ export default function OfferProposalPreview({
                 </li>
               ))}
             </ol>
-            {step === 0 ? <span className="w-20" /> : step === 1 ? (
-              <button
-                type="button"
-                disabled={!selectedOptionId}
-                onClick={() => setStep(2)}
-                className="ui-action-primary inline-flex items-center gap-2 rounded-lg border-2 px-5 py-2 text-sm font-bold transition-all hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
-                style={stepperPrimaryVariables}
-              >
-                Next <ChevronRight strokeWidth={3} className="h-4 w-4" />
-              </button>
-            ) : step === 2 && alreadySigned ? (
-              <button
-                type="button"
-                disabled={requiresOnboardingPayment && !paymentClientSecret}
-                onClick={() => setStep(3)}
-                className="ui-action-primary inline-flex items-center gap-2 rounded-lg border-2 px-5 py-2 text-sm font-bold transition-all disabled:cursor-not-allowed disabled:opacity-40"
-                style={stepperPrimaryVariables}
-              >
-                Continue to Payment <ChevronRight strokeWidth={3} className="h-4 w-4" />
-              </button>
-            ) : step === 2 && !(paymentClientSecret || alreadySigned) ? (
-              <button
-                type="button"
-                disabled={!alreadySigned && (!canSignAgreement || signSubmitting)}
-                onClick={() => void submitSignatureAndContinue()}
-                className="ui-action-primary inline-flex items-center gap-2 rounded-lg border-2 px-5 py-2 text-sm font-bold transition-all hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
-              >
-                {!engagementId
-                  ? <>Continue <ChevronRight strokeWidth={3} className="h-4 w-4" /></>
-                  : signSubmitting
-                    ? "Submitting…"
-                    : alreadySigned
-                      ? <>Continue to Payment <ChevronRight strokeWidth={3} className="h-4 w-4" /></>
-                      : <>
-                          {requiresOnboardingPayment ? "Sign & Continue to Payment" : "I Agree — Sign & Continue"}
-                          <ChevronRight strokeWidth={3} className="h-4 w-4" />
-                        </>}
-              </button>
-            ) : <span className="w-20" />}
+            <span className="w-[74px]" />
           </div>
         </nav>
 
@@ -1205,12 +1224,18 @@ export default function OfferProposalPreview({
                         <p className="mt-4 text-center text-xs font-bold uppercase tracking-[0.12em] text-slate-700">{serviceLevel} service level</p>
                         <button
                           type="button"
-                          disabled={selectionSubmittingId !== null}
+                          disabled={paymentStatus === "succeeded" || selectionSubmittingId !== null}
                           onClick={() => void selectOptionAndContinue(id)}
                           aria-pressed={selected}
-                          className="ui-action-primary mt-4 w-full rounded-lg border px-4 py-3 text-base font-bold transition disabled:cursor-wait disabled:opacity-60"
+                          className={
+                            paymentStatus === "succeeded" && !selected
+                              ? "mt-4 w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-base font-semibold text-slate-400 transition disabled:cursor-not-allowed"
+                              : "ui-action-primary mt-4 w-full rounded-lg border px-4 py-3 text-base font-bold transition disabled:cursor-not-allowed disabled:opacity-60"
+                          }
                         >
-                          {selectionSubmittingId === id ? "Saving selection…" : `Select ${option.name}`}
+                          {paymentStatus === "succeeded"
+                            ? (selected ? "Selected & Paid" : "Not selected")
+                            : selectionSubmittingId === id ? "Saving selection…" : `Select ${option.name}`}
                         </button>
                       </div>
 
@@ -1315,11 +1340,17 @@ export default function OfferProposalPreview({
                         </div>
                         <button
                           type="button"
-                          disabled={selectionSubmittingId !== null}
+                          disabled={paymentStatus === "succeeded" || selectionSubmittingId !== null}
                           onClick={() => void selectOptionAndContinue(id)}
-                          className="ui-action-primary mt-4 w-full rounded-lg border px-4 py-3 text-base font-bold transition disabled:cursor-wait disabled:opacity-60"
+                          className={
+                            paymentStatus === "succeeded" && !selected
+                              ? "mt-4 w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-base font-semibold text-slate-400 transition disabled:cursor-not-allowed"
+                              : "ui-action-primary mt-4 w-full rounded-lg border px-4 py-3 text-base font-bold transition disabled:cursor-not-allowed disabled:opacity-60"
+                          }
                         >
-                          {selectionSubmittingId === id ? "Saving selection…" : `Select ${option.name}`}
+                          {paymentStatus === "succeeded"
+                            ? (selected ? "Selected & Paid" : "Not selected")
+                            : selectionSubmittingId === id ? "Saving selection…" : `Select ${option.name}`}
                         </button>
                         {urgencyOffer.active ? (
                           <p className="mt-2 text-center text-xs font-medium text-slate-500">{urgencyOffer.ctaHint}</p>
@@ -1516,17 +1547,17 @@ export default function OfferProposalPreview({
 
                     <div className="order-1 space-y-4 md:order-2">
                       <div className="rounded-xl border border-slate-200 bg-white p-5">
-                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Your Deposit</p>
+                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{chargeLabel}</p>
                         {selectedOptionId ? (
                           <p className="mt-1 text-sm text-slate-600">{options[selectedOptionId].name} package</p>
                         ) : null}
                         <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-3">
                           <span className="text-sm font-semibold text-slate-700">Total due</span>
                           <span className="text-2xl font-bold text-brandnavy">
-                            {selectedOnboardingFee !== null ? fmt(selectedOnboardingFee) : "—"}
+                            {chargeAmount > 0 ? fmt(chargeAmount) : "—"}
                           </span>
                         </div>
-                        <p className="mt-2 text-xs text-slate-500">Covers onboarding, document collection, and discovery. Earned upon signing and non-refundable.</p>
+                        <p className="mt-2 text-xs text-slate-500">{chargeDescription}</p>
                       </div>
                       <div className="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-4">
                         <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />
@@ -1543,21 +1574,27 @@ export default function OfferProposalPreview({
 
           {step === 2 && alreadySigned && (
             <div className="py-6">
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
-                Signed by <span className="font-semibold">{signedSignerName}</span>
-                {signedAt ? ` on ${new Date(signedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}` : null}
-              </div>
-              <p className="mt-4 text-sm text-slate-600">Your agreement is complete. Continue to payment when you&apos;re ready.</p>
+              {signedByBanner}
+              <button
+                type="button"
+                onClick={() => void submitSignatureAndContinue()}
+                disabled={signSubmitting}
+                className="ui-action-primary mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg border-2 px-5 py-3 text-sm font-bold transition-all hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+              >
+                {paymentStatus === "succeeded"
+                  ? "View Confirmation"
+                  : requiresOnboardingPayment ? "Continue to Payment" : "Continue"}
+                <ChevronRight strokeWidth={3} className="h-4 w-4" />
+              </button>
+              {signedAgreementCollapsible ? <div className="mt-4">{signedAgreementCollapsible}</div> : null}
             </div>
           )}
 
           {/* Step 3 — Payment */}
           {step === 3 && !paymentStatus && requiresOnboardingPayment && (
             <div className="py-6">
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
-                Signed by <span className="font-semibold">{signedSignerName}</span>
-                {signedAt ? ` on ${new Date(signedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}` : null}
-              </div>
+              {signedByBanner}
+              {signedAgreementCollapsible ? <div className="mt-3">{signedAgreementCollapsible}</div> : null}
               <div className="mt-4 grid gap-6 md:grid-cols-[1fr_380px] md:items-start">
                 <div className="order-2 space-y-4 rounded-xl border border-slate-200 p-6 md:order-1">
                   {paymentClientSecret ? (
@@ -1601,15 +1638,15 @@ export default function OfferProposalPreview({
                 </div>
                 <div className="order-1 space-y-4 md:order-2">
                   <div className="rounded-xl border border-slate-200 bg-white p-5">
-                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Your Deposit</p>
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{chargeLabel}</p>
                     {selectedOptionId ? <p className="mt-1 text-sm text-slate-600">{options[selectedOptionId].name} package</p> : null}
                     <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-3">
                       <span className="text-sm font-semibold text-slate-700">Total due</span>
                       <span className="text-2xl font-bold text-brandnavy">
-                        {selectedOnboardingFee !== null ? fmt(selectedOnboardingFee) : "—"}
+                        {chargeAmount > 0 ? fmt(chargeAmount) : "—"}
                       </span>
                     </div>
-                    <p className="mt-2 text-xs text-slate-500">Covers onboarding, document collection, and discovery. Earned upon signing and non-refundable.</p>
+                    <p className="mt-2 text-xs text-slate-500">{chargeDescription}</p>
                   </div>
                   <div className="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />
@@ -1673,11 +1710,11 @@ export default function OfferProposalPreview({
               ) : (
                 <>
                   <h1 className="mt-6 text-3xl font-bold">
-                    {selectedOptionId ? `${options[selectedOptionId].name} — you&apos;re all set` : "You&apos;re all set"}
+                    You're all set
                   </h1>
                   <p className="mt-3 text-slate-600">
                     {engagementId
-                      ? `Your agreement is signed and your deposit is paid. We'll be in touch shortly to kick off onboarding.`
+                      ? `Your agreement is signed and ${paymentWaived ? "your onboarding fee has been waived" : chargeIsFirstMonth ? "your first month is paid" : "your deposit is paid"}. We'll be in touch shortly to kick off onboarding.`
                       : "We have your selection and will be in touch to kick off onboarding. Reach out any time if you have questions."}
                   </p>
                 </>

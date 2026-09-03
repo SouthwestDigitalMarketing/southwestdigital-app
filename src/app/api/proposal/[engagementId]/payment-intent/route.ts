@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getStripeClient } from "@/lib/stripe";
 import { getChargeableConnectedAccountId } from "@/lib/stripe/connect";
 import { destinationPaymentIntentParams } from "@/lib/stripe/paymentIntentParams";
+import { resolveOnboardingWaiverForEngagement } from "@/lib/discounts/resolveOnboardingWaiver";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -22,11 +23,17 @@ export async function POST(
   if (!engagement) return NextResponse.json({ error: "Engagement not found" }, { status: 404 });
 
   const onboardingFee = engagement.onboardingFee ? Number(engagement.onboardingFee) : 0;
-  if (onboardingFee <= 0) {
-    return NextResponse.json({ error: "No engagement fee set for this proposal yet" }, { status: 400 });
+  if (engagement.onboardingFeeStatus === "PAID" || engagement.onboardingFeeStatus === "WAIVED") {
+    return NextResponse.json({ waived: engagement.onboardingFeeStatus === "WAIVED", alreadyResolved: true });
   }
-  if (engagement.onboardingFeeStatus === "PAID") {
-    return NextResponse.json({ error: "This deposit has already been paid" }, { status: 400 });
+
+  const waiverActive = await resolveOnboardingWaiverForEngagement(engagementId);
+  if (waiverActive) {
+    await prisma.engagement.update({
+      where: { id: engagementId },
+      data: { onboardingFeeStatus: "WAIVED", status: "DEPOSIT_PAID" },
+    });
+    return NextResponse.json({ waived: true });
   }
 
   const onboardingData = isRecord(engagement.onboardingData) ? engagement.onboardingData : {};
@@ -34,16 +41,29 @@ export async function POST(
   const existingServices = isRecord(existingState.services) ? existingState.services : {};
   const invoiceEmail = typeof existingServices.invoiceEmail === "string" ? existingServices.invoiceEmail : undefined;
   const existingPaymentIntentId = typeof existingServices.stripePaymentIntentId === "string" ? existingServices.stripePaymentIntentId : null;
+  const recurringMonthlyTotal = typeof existingServices.recurringMonthlyTotal === "number" ? existingServices.recurringMonthlyTotal : 0;
 
-  const amountInCents = Math.round(onboardingFee * 100);
+  const chargeAmount = onboardingFee > 0
+    ? onboardingFee
+    : recurringMonthlyTotal > 0 ? recurringMonthlyTotal : 0;
+  const chargeKind = onboardingFee > 0 ? "onboarding" : "first_month";
+  if (chargeAmount <= 0) {
+    return NextResponse.json({ error: "No amount is due for this proposal yet" }, { status: 400 });
+  }
+
+  const amountInCents = Math.round(chargeAmount * 100);
   const connectedAccountId = await getChargeableConnectedAccountId(engagement.brandId);
-  const intentParams = destinationPaymentIntentParams({
+  const baseIntentParams = destinationPaymentIntentParams({
     amountInCents,
     engagementId,
     brandId: engagement.brandId,
     connectedAccountId,
     receiptEmail: invoiceEmail,
   });
+  const intentParams = {
+    ...baseIntentParams,
+    metadata: { ...baseIntentParams.metadata, chargeKind },
+  };
 
   let clientSecret: string | null;
   try {

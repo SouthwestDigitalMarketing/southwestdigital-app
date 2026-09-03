@@ -25,6 +25,8 @@ function parseDiscountInput(formData: FormData) {
   const deadlineDate = /^\d{4}-\d{2}-\d{2}$/.test(deadlineDateRaw)
     ? new Date(`${deadlineDateRaw}T00:00:00`)
     : null;
+  const contactIdRaw = clean(formData.get("contactId"));
+  const contactId = contactIdRaw || null;
 
   if (!name) throw new Error("Name is required.");
   if (!isDiscountKind(kind)) throw new Error("Choose a valid benefit type.");
@@ -43,12 +45,23 @@ function parseDiscountInput(formData: FormData) {
     deadlineMode,
     durationDays,
     deadlineDate,
+    contactId,
   };
+}
+
+async function validateContactBelongsToBrand(contactId: string | null, brandId: string) {
+  if (!contactId) return;
+  const contact = await prisma.contact.findFirst({
+    where: { id: contactId, brandId },
+    select: { id: true },
+  });
+  if (!contact) throw new Error("That contact was not found for this brand.");
 }
 
 export async function createBrandDiscountAction(formData: FormData) {
   const { brand } = await requireStaffBrandOrThrow();
   const data = parseDiscountInput(formData);
+  await validateContactBelongsToBrand(data.contactId, brand.id);
   const maxOrder = await prisma.brandDiscount.aggregate({
     where: { brandId: brand.id },
     _max: { sortOrder: true },
@@ -70,6 +83,7 @@ export async function createBrandDiscountAction(formData: FormData) {
 export async function updateBrandDiscountAction(id: string, formData: FormData) {
   const { brand } = await requireStaffBrandOrThrow();
   const data = parseDiscountInput(formData);
+  await validateContactBelongsToBrand(data.contactId, brand.id);
   const existing = await prisma.brandDiscount.findFirst({
     where: { id, brandId: brand.id },
     select: { activationMode: true, presentedAt: true },

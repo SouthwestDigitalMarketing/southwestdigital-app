@@ -4,21 +4,30 @@ import { DiscountsCatalog } from "./DiscountsCatalog";
 
 export default async function DiscountsPage() {
   const { brand } = await requireStaffBrand();
-  const discounts = await prisma.brandDiscount.findMany({
-    where: { brandId: brand.id },
-    orderBy: [{ active: "desc" }, { sortOrder: "asc" }, { createdAt: "desc" }],
-  });
+  const [discounts, contacts] = await Promise.all([
+    prisma.brandDiscount.findMany({
+      where: { brandId: brand.id },
+      orderBy: [{ active: "desc" }, { sortOrder: "asc" }, { createdAt: "desc" }],
+      include: { contact: { select: { id: true, name: true, company: true } } },
+    }),
+    prisma.contact.findMany({
+      where: { brandId: brand.id, isActive: true },
+      orderBy: [{ name: "asc" }],
+      select: { id: true, name: true, company: true },
+    }),
+  ]);
 
   return (
     <div className="p-8">
       <h1 className="sr-only">Discounts</h1>
       <section>
         <h2 className="text-lg font-semibold text-slate-900">Discounts</h2>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-base text-slate-500">
           Create a discount, then choose whether the lead sees it the first time they open the proposal. Leave that off to hold it and turn it on later.
         </p>
         <div className="mt-4">
           <DiscountsCatalog
+            contacts={contacts}
             discounts={discounts.map((discount) => ({
               id: discount.id,
               name: discount.name,
@@ -35,6 +44,8 @@ export default async function DiscountsPage() {
                 ? discount.deadlineDate.toISOString().slice(0, 10)
                 : null,
               active: discount.active,
+              contactId: discount.contactId,
+              contactName: discount.contact?.name ?? null,
             }))}
           />
         </div>

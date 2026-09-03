@@ -8,6 +8,7 @@ import type { AssessmentState } from "@/app/(app)/offers/builder/ProposalCreatio
 import type { ContactInfoState } from "@/app/(app)/offers/builder/ProposalContactInfoState";
 import { isLeadConvertedForDiscount, pickActiveCatalogOffer } from "@/lib/discounts/eligibility";
 import { ensureQuoteEngagement } from "@/lib/engagements/fromOffer";
+import { quoteContactSummaryFromSnapshot } from "@/lib/quotes/clientInfo";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -73,9 +74,17 @@ export default async function PublicProposalPage({
     }
   }
 
+  const primaryContactId = quoteContactSummaryFromSnapshot(snapshot).contactId;
   const [discounts, engagement] = await Promise.all([
     prisma.brandDiscount.findMany({
-      where: { brandId: brand.id, active: true },
+      where: {
+        brandId: brand.id,
+        active: true,
+        OR: [
+          { contactId: null },
+          ...(primaryContactId ? [{ contactId: primaryContactId }] : []),
+        ],
+      },
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     }),
     engagementId

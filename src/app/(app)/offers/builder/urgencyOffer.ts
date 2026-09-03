@@ -68,6 +68,7 @@ export type UrgencyOfferDisplay = {
   headline: string;
   details: string;
   ctaHint: string;
+  kind: UrgencyKind | null;
 };
 
 function isKind(value: unknown): value is UrgencyKind {
@@ -196,6 +197,7 @@ export function getUrgencyOfferDisplay(
     headline: "",
     details: "",
     ctaHint: "",
+    kind: null,
   };
   if (!config.enabled) return inactive;
 
@@ -217,5 +219,6 @@ export function getUrgencyOfferDisplay(
     headline,
     details,
     ctaHint: `Includes this limited-time offer if you start by ${dateLabel}`,
+    kind: config.kind,
   };
 }

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Copy } from "lucide-react";
+import { Copy, Eye } from "lucide-react";
 import type { Prisma } from "@prisma/client";
 import { requireQuoteStaff } from "@/lib/quotes/access";
 import { prisma } from "@/lib/prisma";
@@ -264,6 +264,18 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                         >
                           {canResume ? "Resume" : "View"}
                         </Link>
+                        {quote.publicToken ? (
+                          <Link
+                            href={`/proposal/${quote.publicToken}`}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            aria-label="View proposal"
+                            title="View proposal"
+                            className="ui-action-ghost inline-flex h-9 w-9 items-center justify-center rounded-full transition"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Link>
+                        ) : null}
                         <OfferStatusButtons offerId={quote.id} bucket={itemBucket} />
                         <form action={duplicateQuoteAction}>
                           <input type="hidden" name="id" value={quote.id} />

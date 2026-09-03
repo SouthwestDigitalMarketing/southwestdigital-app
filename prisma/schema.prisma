@@ -743,6 +743,7 @@ model BrandMedia {
 model BrandDiscount {
   id           String    @id @default(cuid())
   brandId      String
+  contactId    String?
   name         String
   kind         String
   percent      Int       @default(10)
@@ -758,10 +759,12 @@ model BrandDiscount {
   active               Boolean   @default(true)
   sortOrder    Int       @default(0)
   brand        Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  contact      Contact?  @relation("BrandDiscountContact", fields: [contactId], references: [id], onDelete: SetNull)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
   @@index([brandId, active, sortOrder])
+  @@index([contactId])
 }
 
 // ─── Member profile data ─────────────────────────────────────────────────────
@@ -1390,6 +1393,7 @@ model Contact {
   reviewRequests ReviewRequest[]
   tagLinks       ContactTagLink[]
   brandLinks     ContactBrandLink[]
+  brandDiscounts BrandDiscount[]      @relation("BrandDiscountContact")
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
 
