@@ -57,7 +57,7 @@ export function ContactsFilters({
     if (nextBrandId) params.set("brand", nextBrandId);
     for (const key of nextTags) params.append("tag", key);
     const qs = params.toString();
-    router.push(qs ? `/contacts?${qs}` : "/contacts");
+    router.push(qs ? `/contacts?${qs}` : "/contacts", { scroll: false });
   }
 
   return (

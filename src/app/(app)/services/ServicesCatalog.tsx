@@ -171,7 +171,7 @@ export function ServicesCatalog({
               role="switch"
               aria-checked={archived}
               aria-label="Show archived services"
-              onClick={() => router.push(archived ? "/services" : "/services?archived=1")}
+              onClick={() => router.push(archived ? "/services" : "/services?archived=1", { scroll: false })}
               className="ui-toggle-switch"
             >
               <span className="ui-toggle-switch-thumb" />

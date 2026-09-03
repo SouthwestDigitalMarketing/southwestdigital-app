@@ -28,7 +28,7 @@ export function OffersListControls({
     else if (nextStatus !== "all") params.set("status", nextStatus);
     if (nextKind !== "all") params.set("kind", nextKind);
     const qs = params.toString();
-    router.push(qs ? `/offers?${qs}` : "/offers");
+    router.push(qs ? `/offers?${qs}` : "/offers", { scroll: false });
   }
 
   const selectClass =

@@ -18,7 +18,7 @@ export function PeriodSelector({ current }: { current: string }) {
   function select(value: string) {
     const params = new URLSearchParams(searchParams.toString());
     params.set("period", value);
-    router.push(`?${params.toString()}`);
+    router.push(`?${params.toString()}`, { scroll: false });
   }
 
   return (

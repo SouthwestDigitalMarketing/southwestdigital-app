@@ -22,7 +22,7 @@ export function DashboardControls({
     const params = new URLSearchParams();
     if (range !== "last-30-days") params.set("range", range);
     const query = params.toString();
-    startTransition(() => router.push(`/dashboard${query ? `?${query}` : ""}`));
+    startTransition(() => router.push(`/dashboard${query ? `?${query}` : ""}`, { scroll: false }));
   }
 
   return (
