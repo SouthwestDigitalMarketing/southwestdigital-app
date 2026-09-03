@@ -1598,7 +1598,9 @@ export default function OfferProposalPreview({
                 disabled={signSubmitting}
                 className="ui-action-primary mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg border-2 px-5 py-3 text-sm font-bold transition-all hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
               >
-                {paymentStatus === "succeeded"
+                {signSubmitting
+                  ? "Preparing payment..."
+                  : paymentStatus === "succeeded"
                   ? "View Confirmation"
                   : requiresOnboardingPayment ? "Continue to Payment" : "Continue"}
                 <ChevronRight strokeWidth={3} className="h-4 w-4" />
@@ -1608,7 +1610,7 @@ export default function OfferProposalPreview({
           )}
 
           {/* Step 3 — Payment */}
-          {step === 3 && !paymentStatus && requiresOnboardingPayment && alreadySigned && (
+          {step === 3 && !paymentStatus && alreadySigned && (requiresOnboardingPayment || paymentClientSecret) && (
             <div className="py-6">
               {signedByBanner}
               {signedAgreementCollapsible ? <div className="mt-3">{signedAgreementCollapsible}</div> : null}
@@ -1674,7 +1676,7 @@ export default function OfferProposalPreview({
             </div>
           )}
 
-          {step === 3 && !paymentStatus && (!alreadySigned || !requiresOnboardingPayment) && (
+          {step === 3 && !paymentStatus && !paymentClientSecret && (!alreadySigned || !requiresOnboardingPayment) && (
             <div className="mx-auto max-w-2xl rounded-xl border border-slate-200 bg-white px-6 py-12 text-center shadow-sm">
               {!alreadySigned ? (
                 <>
