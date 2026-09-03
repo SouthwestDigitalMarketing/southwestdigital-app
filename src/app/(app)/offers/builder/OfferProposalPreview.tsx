@@ -704,6 +704,13 @@ export default function OfferProposalPreview({
     if (el.scrollTop + el.clientHeight >= el.scrollHeight - 20) setHasScrolledToEnd(true);
   }
 
+  useEffect(() => {
+    if (agreementLoading || hasScrolledToEnd) return;
+    const el = agreementScrollRef.current;
+    if (!el) return;
+    if (el.scrollHeight - el.clientHeight <= 20) setHasScrolledToEnd(true);
+  }, [agreementLoading, agreementText, hasScrolledToEnd]);
+
   function isValidEmail(value: string) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
   }
