@@ -19,6 +19,7 @@ import { OffersListControls } from "./OffersListControls";
 import { OffersFunnel } from "./OffersFunnel";
 import { OfferContactCell } from "./OfferContactCell";
 import { DuplicateOfferButton } from "./DuplicateOfferButton";
+import { SendOfferEmailButton } from "./SendOfferEmailButton";
 
 type SortKey = "contact" | "status" | "mrr" | "lump" | "lastSent";
 type SearchParams = Promise<{
@@ -286,6 +287,9 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                             <Eye className="h-4 w-4" />
                           </span>
                         )}
+                        <SendOfferEmailButton
+                          offerId={quote.id}
+                        />
                         <OfferStatusButtons offerId={quote.id} bucket={itemBucket} />
                         <DuplicateOfferButton
                           offerId={quote.id}

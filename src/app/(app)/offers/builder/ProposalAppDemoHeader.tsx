@@ -256,7 +256,7 @@ export default function ProposalAppDemoHeader({
             type="button"
             onClick={() => previousHref && void saveThenNavigate(previousHref)}
             disabled={!previousHref || saveStatus === "saving"}
-            className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 xl:inline-flex"
+            className="theme-white hidden shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 xl:inline-flex"
           >
             <ChevronLeft className="h-4 w-4" />
             Back
@@ -269,7 +269,7 @@ export default function ProposalAppDemoHeader({
               type="button"
               onClick={() => void saveThenOpenProposal()}
               disabled={saveStatus === "saving"}
-               className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 xl:inline-flex"
+               className="theme-white hidden shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 xl:inline-flex"
             >
               <Eye className="h-4 w-4" />
               View Proposal
@@ -279,7 +279,7 @@ export default function ProposalAppDemoHeader({
               type="button"
               onClick={() => nextHref && void saveThenNavigate(nextHref)}
               disabled={!nextHref || saveStatus === "saving"}
-               className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 xl:inline-flex"
+               className="theme-white hidden shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 xl:inline-flex"
             >
               Next
               <ChevronRight className="h-4 w-4" />

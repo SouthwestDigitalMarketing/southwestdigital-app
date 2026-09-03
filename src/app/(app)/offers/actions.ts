@@ -8,7 +8,9 @@ import { requireQuoteStaffOrThrow } from "@/lib/quotes/access";
 import { contactInfoFromCrm } from "@/lib/quotes/fromContacts";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
 import { ensureQuoteEngagement } from "@/lib/engagements/fromOffer";
-import { quoteClientDetailsFromSnapshot } from "@/lib/quotes/clientInfo";
+import {
+  quoteClientDetailsFromSnapshot,
+} from "@/lib/quotes/clientInfo";
 export async function markQuoteSentAction(formData: FormData) {
   const { brand } = await requireQuoteStaffOrThrow();
   const id = (formData.get("id") as string | null)?.trim() ?? "";

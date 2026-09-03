@@ -281,7 +281,7 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
   }
 
   return (
-    <main className="min-h-screen bg-white">
+    <main className="min-h-screen">
       <section className="mx-auto w-full max-w-[1720px] px-5 py-6 lg:px-8">
         <ProposalAppDemoHeader currentStep="add-ons" previousHref="/offers/calculator" nextHref="/offers/intro" />
         <div className="proposal-options-editor mt-8 min-w-0">

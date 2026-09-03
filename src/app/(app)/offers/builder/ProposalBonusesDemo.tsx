@@ -94,7 +94,7 @@ export default function ProposalBonusesDemo() {
   }
 
   return (
-    <main className="min-h-screen bg-white">
+    <main className="min-h-screen">
       <section className="mx-auto w-full max-w-[1720px] px-5 py-6 lg:px-8">
         <ProposalAppDemoHeader
           currentStep="add-ons"

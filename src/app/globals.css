@@ -285,6 +285,7 @@ body {
   color-scheme: light;
   --app-canvas: #f5f7fa;
   --main-panel-canvas: var(--app-canvas);
+  --theme-white: #ffffff;
   --surface: #ffffff;
   --surface-subtle: #f8fafc;
   --surface-row-alt: #f3f5f7;
@@ -337,6 +338,7 @@ body {
   color-scheme: dark;
   --app-canvas: color-mix(in srgb, var(--theme-dark) 55%, #000000);
   --main-panel-canvas: color-mix(in srgb, var(--app-canvas) 82%, #121212);
+  --theme-white: color-mix(in srgb, var(--surface) 94%, #ffffff);
   --surface: color-mix(in srgb, var(--theme-dark) 72%, #0d0d0d);
   --surface-subtle: color-mix(in srgb, var(--surface) 94%, #ffffff);
   --surface-row-alt: color-mix(in srgb, var(--surface) 90%, #ffffff);
@@ -457,7 +459,11 @@ body {
 
 /* Primary builder cards sit one surface above the page canvas. */
 [data-theme] .proposal-builder-card {
-  background-color: var(--surface-subtle);
+  background-color: var(--theme-white);
+}
+
+.theme-white {
+  background-color: var(--theme-white);
 }
 
 [data-theme] .proposal-step-active {
@@ -640,10 +646,11 @@ body {
     background-color: var(--surface-control);
   }
 
-  [data-theme="system"] {
+[data-theme="system"] {
     color-scheme: dark;
     --app-canvas: color-mix(in srgb, var(--theme-dark) 55%, #000000);
     --main-panel-canvas: color-mix(in srgb, var(--app-canvas) 82%, #121212);
+    --theme-white: color-mix(in srgb, var(--surface) 94%, #ffffff);
     --surface: color-mix(in srgb, var(--theme-dark) 72%, #0d0d0d);
     --surface-subtle: color-mix(in srgb, var(--surface) 94%, #ffffff);
     --surface-row-alt: color-mix(in srgb, var(--surface) 90%, #ffffff);

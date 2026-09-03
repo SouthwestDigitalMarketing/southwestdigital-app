@@ -67,8 +67,8 @@ export default function PricingSnapshotSidebar({
               : isImprove
                 ? "border-slate-200 bg-slate-100"
                 : item.isRecommended
-                  ? "border-brandnavy bg-white shadow-sm"
-                  : "border-slate-200 bg-white";
+                  ? "border-brandnavy theme-white shadow-sm"
+                  : "border-slate-200 theme-white";
             const titleClassName = isGrow ? "text-white" : "text-slate-900";
 
             return (
