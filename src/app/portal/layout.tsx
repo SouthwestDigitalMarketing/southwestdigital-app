@@ -6,8 +6,8 @@ import { requireActiveBrandContext } from "@/lib/tenancy/current";
 import { signOutOfPortal } from "./actions";
 
 type BrandCssProperties = CSSProperties & {
-  "--brand-light": string;
-  "--brand-accent": string;
+  "--theme-light": string;
+  "--theme-accent": string;
   "--brand-background": string;
   "--brand-foreground": string;
 };
@@ -15,8 +15,8 @@ type BrandCssProperties = CSSProperties & {
 export default async function PortalLayout({ children }: { children: ReactNode }) {
   const { session, activeBrand, accessibleBrands } = await requireActiveBrandContext();
   const style: BrandCssProperties = {
-    "--brand-light": activeBrand.theme?.lightColor ?? "#17324d",
-    "--brand-accent": activeBrand.theme?.accentColor ?? "#d79b3b",
+    "--theme-light": activeBrand.theme?.lightColor ?? "#17324d",
+    "--theme-accent": activeBrand.theme?.accentColor ?? "#d79b3b",
     "--brand-background": activeBrand.theme?.backgroundColor ?? "#f7f8fa",
     "--brand-foreground": activeBrand.theme?.foregroundColor ?? "#17202a",
   };
@@ -29,7 +29,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
               Active brand
             </p>
-            <p className="text-xl font-semibold text-[var(--brand-light)]">{activeBrand.name}</p>
+            <p className="text-xl font-semibold text-[var(--theme-light)]">{activeBrand.name}</p>
           </Link>
 
           <nav className="flex items-center gap-1 text-sm font-semibold text-slate-700">

@@ -24,10 +24,10 @@ img.brand-asset-mark {
 
 :root {
   color-scheme: light;
-  --brand-light: #17324d;
-  --brand-accent: #d79b3b;
-  --color-accent-500: var(--brand-accent);
-  --color-accent-100: color-mix(in srgb, var(--brand-accent) 15%, white);
+  --theme-light: #17324d;
+  --theme-accent: #d79b3b;
+  --color-accent-500: var(--theme-accent);
+  --color-accent-100: color-mix(in srgb, var(--theme-accent) 15%, white);
   --brand-background: #f7f8fa;
   --brand-foreground: #17202a;
   --color-brandnavy: #1b263b;
@@ -39,7 +39,7 @@ img.brand-asset-mark {
   --color-brandnavy-700: #1b263b;
   --color-brandnavy-900: #10192a;
   --color-brandnavy-foreground: #ffffff;
-  --action-primary-background: var(--brand-dark);
+  --action-primary-background: var(--theme-dark);
   --action-primary-foreground: #ffffff;
   --action-primary-border: color-mix(in srgb, var(--action-primary-background) 50%, var(--action-primary-foreground));
   --action-secondary-background: color-mix(in srgb, var(--action-primary-background) 12%, #ffffff);
@@ -49,7 +49,7 @@ img.brand-asset-mark {
   --action-danger-background: #ffffff;
   --action-danger-foreground: #b91c1c;
   --action-danger-border: #fecaca;
-  --surface-overlay: var(--brand-dark, var(--brand-light));
+  --surface-overlay: var(--theme-dark, var(--theme-light));
   --text-on-overlay: #ffffff;
   --border-on-overlay: color-mix(in srgb, var(--surface-overlay) 82%, #ffffff);
 }
@@ -89,8 +89,8 @@ img.brand-asset-mark {
 }
 
 .proposal-options-editor .proposal-options-check {
-  background-color: var(--brand-dark, var(--brand-light));
-  border-color: var(--brand-dark, var(--brand-light));
+  background-color: var(--theme-dark, var(--theme-light));
+  border-color: var(--theme-dark, var(--theme-light));
 }
 
 .proposal-options-editor .proposal-options-kind {
@@ -104,8 +104,8 @@ img.brand-asset-mark {
 }
 
 .proposal-options-editor .proposal-options-kind-optional {
-  background-color: var(--brand-dark, var(--brand-light));
-  border-color: var(--brand-dark, var(--brand-light));
+  background-color: var(--theme-dark, var(--theme-light));
+  border-color: var(--theme-dark, var(--theme-light));
   color: #ffffff;
 }
 
@@ -120,7 +120,7 @@ img.brand-asset-mark {
 [data-theme="dark"] .proposal-options-editor .proposal-options-kind-optional {
   background-color: #ffffff;
   border-color: #ffffff;
-  color: var(--brand-dark, var(--brand-light));
+  color: var(--theme-dark, var(--theme-light));
 }
 
 [data-theme="dark"] .proposal-options-editor .proposal-options-kind.proposal-options-kind-optional {
@@ -143,7 +143,7 @@ body {
 }
 
 :is(.ui-action-primary, .ui-action-secondary, .ui-action-danger, .ui-action-ghost):focus-visible {
-  outline: 2px solid var(--brand-accent);
+  outline: 2px solid var(--theme-accent);
   outline-offset: 2px;
 }
 
@@ -203,7 +203,7 @@ body {
 }
 
 .ui-nav-active:focus-visible {
-  outline: 2px solid var(--brand-accent);
+  outline: 2px solid var(--theme-accent);
   outline-offset: 2px;
 }
 
@@ -239,6 +239,14 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+@keyframes offer-row-highlight-flash {
+  0% { background-color: color-mix(in srgb, var(--theme-accent) 45%, transparent); }
+  100% { background-color: transparent; }
+}
+.offer-row-highlight {
+  animation: offer-row-highlight-flash 3s ease-out;
+}
+
 /* Toggle switch: shared appearance across the app. State is driven by
    aria-checked so consumers don't need inline styles. In dark themes the
    track is white regardless of position, and the thumb inverts to dark. */
@@ -247,15 +255,10 @@ body {
   height: 1.75rem;
   width: 3rem;
   border-radius: 9999px;
-  background-color: #64748b;
-  transition: background-color 0.15s;
+  background-color: var(--border-strong);
   cursor: pointer;
 }
-.ui-toggle-switch[aria-checked="true"] {
-  background-color: var(--brand-light);
-}
-[data-theme="dark"] .ui-toggle-switch,
-[data-theme="dark"] .ui-toggle-switch[aria-checked="true"] {
+[data-theme="dark"] .ui-toggle-switch {
   background-color: #ffffff;
 }
 
@@ -266,8 +269,8 @@ body {
   height: 1.25rem;
   width: 1.25rem;
   border-radius: 9999px;
-  border: 1px solid #cbd5e1;
-  background-color: #ffffff;
+  border: 1px solid transparent;
+  background-color: var(--theme-dark, var(--theme-light));
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
   transition: transform 0.15s;
 }
@@ -275,8 +278,7 @@ body {
   transform: translateX(1.25rem);
 }
 [data-theme="dark"] .ui-toggle-switch-thumb {
-  background-color: #0f172a;
-  border-color: #334155;
+  background-color: var(--theme-light);
 }
 
 [data-theme] {
@@ -292,13 +294,13 @@ body {
   --text-primary: #172033;
   --text-secondary: #475569;
   --text-muted: #64748b;
-  --surface-inverse: color-mix(in srgb, var(--brand-light) 75%, #000000);
-  --brand-ink: var(--brand-light);
+  --surface-inverse: color-mix(in srgb, var(--theme-light) 75%, #000000);
+  --theme-ink: var(--theme-light);
   --chart-series-1: var(--action-primary-background);
-  --chart-series-2: color-mix(in srgb, var(--action-primary-background) 84%, var(--brand-accent));
-  --chart-series-3: color-mix(in srgb, var(--action-primary-background) 68%, var(--brand-accent));
-  --chart-series-4: color-mix(in srgb, var(--action-primary-background) 52%, var(--brand-accent));
-  --chart-series-5: color-mix(in srgb, var(--action-primary-background) 38%, var(--brand-accent));
+  --chart-series-2: color-mix(in srgb, var(--action-primary-background) 84%, var(--theme-accent));
+  --chart-series-3: color-mix(in srgb, var(--action-primary-background) 68%, var(--theme-accent));
+  --chart-series-4: color-mix(in srgb, var(--action-primary-background) 52%, var(--theme-accent));
+  --chart-series-5: color-mix(in srgb, var(--action-primary-background) 38%, var(--theme-accent));
   --chart-stage-1: var(--chart-series-1);
   --chart-stage-2: color-mix(in srgb, var(--chart-series-1) 90%, var(--chart-series-5));
   --chart-stage-3: color-mix(in srgb, var(--chart-series-1) 80%, var(--chart-series-5));
@@ -327,15 +329,15 @@ body {
 }
 
 [data-theme="dark"] .proposal-step-active {
-  background-color: var(--brand-light);
-  border-color: var(--brand-light);
+  background-color: var(--theme-light);
+  border-color: var(--theme-light);
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --app-canvas: color-mix(in srgb, var(--brand-dark) 55%, #000000);
+  --app-canvas: color-mix(in srgb, var(--theme-dark) 55%, #000000);
   --main-panel-canvas: color-mix(in srgb, var(--app-canvas) 82%, #121212);
-  --surface: color-mix(in srgb, var(--brand-dark) 72%, #0d0d0d);
+  --surface: color-mix(in srgb, var(--theme-dark) 72%, #0d0d0d);
   --surface-subtle: color-mix(in srgb, var(--surface) 94%, #ffffff);
   --surface-row-alt: color-mix(in srgb, var(--surface) 90%, #ffffff);
   --surface-control: color-mix(in srgb, var(--surface) 84%, #ffffff);
@@ -344,8 +346,8 @@ body {
   --text-primary: #f7f7f8;
   --text-secondary: #d5d6da;
   --text-muted: #9a9ca5;
-  --surface-inverse: color-mix(in srgb, var(--brand-light) 38%, #090a0b);
-  --brand-ink: color-mix(in srgb, var(--brand-light) 50%, #f2f3f5);
+  --surface-inverse: color-mix(in srgb, var(--theme-light) 38%, #090a0b);
+  --theme-ink: color-mix(in srgb, var(--theme-light) 50%, #f2f3f5);
   --card-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 18px rgb(0 0 0 / 0.18);
   --proposal-section-odd: var(--surface-subtle);
   --proposal-section-even: var(--surface-control);
@@ -370,7 +372,7 @@ body {
   --text-primary: #172033;
   --text-secondary: #475569;
   --text-muted: #64748b;
-  --brand-ink: var(--proposal-light-surface-ink, #172033);
+  --theme-ink: var(--proposal-light-surface-ink, #172033);
 }
 
 [data-theme="dark"] .ui-action-primary:not(:disabled):hover {
@@ -382,7 +384,7 @@ body {
 }
 
 .offer-kind-icon {
-  background-color: var(--brand-dark, var(--brand-light));
+  background-color: var(--theme-dark, var(--theme-light));
   color: #ffffff;
 }
 
@@ -396,7 +398,7 @@ body {
 
 [data-theme="dark"] .offer-kind-icon {
   background-color: #ffffff;
-  color: var(--brand-dark, var(--brand-light));
+  color: var(--theme-dark, var(--theme-light));
 }
 
 [data-theme] .bg-white {
@@ -459,8 +461,8 @@ body {
 }
 
 [data-theme] .proposal-step-active {
-  background-color: color-mix(in srgb, var(--brand-light) 50%, #000000);
-  border-color: color-mix(in srgb, var(--brand-light) 50%, #000000);
+  background-color: color-mix(in srgb, var(--theme-light) 50%, #000000);
+  border-color: color-mix(in srgb, var(--theme-light) 50%, #000000);
   color: #fff;
 }
 
@@ -472,32 +474,32 @@ body {
 /* Legacy builder utilities inherit the active brand rather than the original
    Southwest navy palette. This keeps theme presets (including Grok) cohesive. */
 [data-theme] .bg-brandnavy {
-  background-color: var(--brand-light);
+  background-color: var(--theme-light);
 }
 
 [data-theme] .bg-brandnavy-50,
 [data-theme] .bg-brandnavy-50\/30 {
-  background-color: color-mix(in srgb, var(--brand-light) 8%, var(--surface));
+  background-color: color-mix(in srgb, var(--theme-light) 8%, var(--surface));
 }
 
 [data-theme] .border-brandnavy,
 [data-theme] .border-brandnavy-200,
 [data-theme] .border-brandnavy-300,
 [data-theme] .hover\:border-brandnavy-300:hover {
-  border-color: var(--brand-ink);
+  border-color: var(--theme-ink);
 }
 
 [data-theme] .text-brandnavy {
-  color: var(--brand-ink);
+  color: var(--theme-ink);
 }
 
 [data-theme] .focus\:border-brandnavy:focus {
-  border-color: var(--brand-ink);
+  border-color: var(--theme-ink);
 }
 
 [data-theme] .focus\:ring-brandnavy:focus,
 [data-theme] .focus\:ring-brandnavy\/10:focus {
-  --tw-ring-color: color-mix(in srgb, var(--brand-ink) 30%, transparent);
+  --tw-ring-color: color-mix(in srgb, var(--theme-ink) 30%, transparent);
 }
 
 [data-theme] .bg-slate-950 {
@@ -539,9 +541,9 @@ body {
 
 .theme-mode-option-selected {
   border-width: 2px;
-  border-color: var(--brand-light);
-  background-color: color-mix(in srgb, var(--brand-light) 78%, #0b1220);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand-light) 32%, transparent);
+  border-color: var(--theme-light);
+  background-color: color-mix(in srgb, var(--theme-light) 78%, #0b1220);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--theme-light) 32%, transparent);
 }
 
 [data-theme="dark"] .bg-slate-800 {
@@ -600,7 +602,7 @@ body {
 [data-theme="dark"][data-appearance="grok"] .proposal-options-editor .proposal-options-kind-optional {
   background-color: #ffffff;
   border-color: #ffffff;
-  color: var(--brand-dark, var(--brand-light));
+  color: var(--theme-dark, var(--theme-light));
   height: auto;
   padding: 0.375rem 2.25rem 0.375rem 0.625rem;
 }
@@ -621,13 +623,13 @@ body {
 @media (prefers-color-scheme: dark) {
   [data-theme="system"] .offer-kind-icon {
     background-color: #ffffff;
-    color: var(--brand-dark, var(--brand-light));
+    color: var(--theme-dark, var(--theme-light));
   }
 
   [data-theme="system"] .proposal-options-editor .proposal-options-kind-optional {
     background-color: #ffffff;
     border-color: #ffffff;
-    color: var(--brand-dark, var(--brand-light));
+    color: var(--theme-dark, var(--theme-light));
   }
 
   [data-theme="system"] .proposal-options-editor .proposal-options-kind.proposal-options-kind-optional {
@@ -640,9 +642,9 @@ body {
 
   [data-theme="system"] {
     color-scheme: dark;
-    --app-canvas: color-mix(in srgb, var(--brand-dark) 55%, #000000);
+    --app-canvas: color-mix(in srgb, var(--theme-dark) 55%, #000000);
     --main-panel-canvas: color-mix(in srgb, var(--app-canvas) 82%, #121212);
-    --surface: color-mix(in srgb, var(--brand-dark) 72%, #0d0d0d);
+    --surface: color-mix(in srgb, var(--theme-dark) 72%, #0d0d0d);
     --surface-subtle: color-mix(in srgb, var(--surface) 94%, #ffffff);
     --surface-row-alt: color-mix(in srgb, var(--surface) 90%, #ffffff);
     --surface-control: color-mix(in srgb, var(--surface) 84%, #ffffff);
@@ -651,8 +653,8 @@ body {
     --text-primary: #f7f7f8;
     --text-secondary: #d5d6da;
     --text-muted: #9a9ca5;
-    --surface-inverse: color-mix(in srgb, var(--brand-light) 38%, #090a0b);
-    --brand-ink: color-mix(in srgb, var(--brand-light) 50%, #f2f3f5);
+    --surface-inverse: color-mix(in srgb, var(--theme-light) 38%, #090a0b);
+    --theme-ink: color-mix(in srgb, var(--theme-light) 50%, #f2f3f5);
     --card-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 18px rgb(0 0 0 / 0.18);
     --proposal-section-odd: var(--surface-subtle);
     --proposal-section-even: var(--surface-control);
@@ -661,8 +663,8 @@ body {
   }
 
   [data-theme="system"] .proposal-step-active {
-    background-color: var(--brand-light);
-    border-color: var(--brand-light);
+    background-color: var(--theme-light);
+    border-color: var(--theme-light);
   }
 
   [data-theme="system"] .bg-slate-800 {

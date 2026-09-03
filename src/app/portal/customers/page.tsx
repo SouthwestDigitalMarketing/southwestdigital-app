@@ -15,7 +15,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Cu
     <section className="mx-auto max-w-6xl px-6 py-10">
       <div className="flex flex-wrap items-end justify-between gap-5">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--brand-accent)]">CRM</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--theme-accent)]">CRM</p>
           <h1 className="mt-2 text-4xl font-semibold">Customers</h1>
           <p className="mt-2 text-slate-600">Businesses and customer accounts belonging to the active brand.</p>
         </div>
@@ -65,7 +65,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Cu
           <input name="principalAddressPostalCode" placeholder="Postal code" className={inputClass} />
           <input name="noticesEmail" type="email" placeholder="Legal notices email" className={inputClass} />
           <input name="invoicingEmail" type="email" placeholder="Invoicing email" className={inputClass} />
-          <button type="submit" className="w-full cursor-pointer rounded-full bg-[var(--brand-light)] px-5 py-3 font-semibold text-white">Save customer</button>
+          <button type="submit" className="w-full cursor-pointer rounded-full bg-[var(--theme-light)] px-5 py-3 font-semibold text-white">Save customer</button>
           </form>
         ) : (
           <aside className="h-fit rounded-3xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">

@@ -217,21 +217,51 @@ export async function reassignQuoteContactAction(formData: FormData) {
 export async function duplicateQuoteAction(formData: FormData) {
   const { brand } = await requireQuoteStaffOrThrow();
   const id = (formData.get("id") as string | null)?.trim() ?? "";
+  const contactId = (formData.get("contactId") as string | null)?.trim() ?? "";
+  const archived = formData.get("archived") === "1";
   if (!id) throw new Error("Quote ID required");
 
-  const quote = await prisma.quote.findFirst({
-    where: { id, brandId: brand.id },
-    include: {
-      client: { select: { name: true, email: true, company: true } },
-      lineItems: { orderBy: { sortOrder: "asc" } },
-    },
-  });
+  const [quote, contact] = await Promise.all([
+    prisma.quote.findFirst({
+      where: { id, brandId: brand.id },
+      include: {
+        client: { select: { name: true, email: true, company: true } },
+        lineItems: { orderBy: { sortOrder: "asc" } },
+      },
+    }),
+    contactId
+      ? prisma.contact.findFirst({
+          where: { id: contactId, brandId: brand.id },
+          select: {
+            id: true,
+            name: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phoneE164: true,
+            phoneNumber: true,
+            company: true,
+            roleTitle: true,
+          },
+        })
+      : Promise.resolve(null),
+  ]);
   if (!quote) throw new Error("Not found");
+  if (contactId && !contact) throw new Error("Contact not found");
   if (!quote.snapshotJson || typeof quote.snapshotJson !== "object" || Array.isArray(quote.snapshotJson)) {
     throw new Error("Offer snapshot is malformed.");
   }
 
-  const client = quoteClientDetailsFromSnapshot(quote.snapshotJson, quote.client);
+  const snapshot = contact
+    ? {
+        ...quote.snapshotJson,
+        contactInfo: contactInfoFromCrm([
+          { ...contact, phoneNumber: contact.phoneNumber ?? undefined },
+        ]),
+      }
+    : quote.snapshotJson;
+
+  const client = quoteClientDetailsFromSnapshot(snapshot, quote.client);
   const clientRecord = await prisma.quoteClient.create({
     data: {
       brandId: brand.id,
@@ -248,12 +278,12 @@ export async function duplicateQuoteAction(formData: FormData) {
       slug: offerSlug(client.name),
       clientId: clientRecord.id,
       kind: quote.kind,
-      status: "draft",
+      status: archived ? "archived" : "draft",
       packageId: quote.packageId,
       totalOneTime: quote.totalOneTime,
       totalRecurring: quote.totalRecurring,
       onboardingFee: quote.onboardingFee,
-      snapshotJson: quote.snapshotJson,
+      snapshotJson: snapshot,
       lineItems: {
         create: quote.lineItems.map((item, index) => ({
           label: item.label,
@@ -264,11 +294,29 @@ export async function duplicateQuoteAction(formData: FormData) {
         })),
       },
     },
-    select: { id: true },
+    select: { id: true, kind: true },
   });
 
   revalidatePath("/offers");
-  redirect(`/offers/${duplicate.id}`);
+  redirect(`/offers?highlight=${duplicate.id}${archived ? "&archived=1" : ""}`);
+}
+
+export async function deleteQuoteAction(formData: FormData) {
+  const { brand } = await requireQuoteStaffOrThrow();
+  const id = (formData.get("id") as string | null)?.trim() ?? "";
+  if (!id) throw new Error("Offer ID required");
+
+  const quote = await prisma.quote.findFirst({
+    where: { id, brandId: brand.id },
+    select: { id: true, status: true },
+  });
+  if (!quote) throw new Error("Not found");
+  if (quote.status !== "archived") {
+    throw new Error("Only archived offers can be deleted.");
+  }
+
+  await prisma.quote.delete({ where: { id: quote.id } });
+  revalidatePath("/offers");
 }
 
 export async function setOfferStatusAction(formData: FormData) {

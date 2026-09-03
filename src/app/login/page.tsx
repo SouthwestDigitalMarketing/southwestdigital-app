@@ -86,11 +86,11 @@ export default async function LoginPage({ searchParams }: { searchParams: LoginS
                 autoComplete="email"
                 required
                 placeholder="you@example.com"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none ring-[var(--brand-accent)] focus:ring-2"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none ring-[var(--theme-accent)] focus:ring-2"
               />
               <button
                 type="submit"
-                className="w-full cursor-pointer rounded-full bg-[var(--brand-light)] px-5 py-3 font-semibold text-white transition hover:opacity-90"
+                className="w-full cursor-pointer rounded-full bg-[var(--theme-light)] px-5 py-3 font-semibold text-white transition hover:opacity-90"
               >
                 {authProviderAvailability.instantEmail ? "Sign in" : "Email me a sign-in link"}
               </button>

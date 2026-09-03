@@ -14,9 +14,9 @@ describe("semantic theme tokens", () => {
     const dark = appCanvasGradient("dark");
 
     expect(light).toContain("linear-gradient(to top left");
-    expect(light).toContain("var(--brand-light)");
-    expect(light).toContain("var(--brand-dark)");
-    expect(light).toContain("var(--brand-accent)");
+    expect(light).toContain("var(--theme-light)");
+    expect(light).toContain("var(--theme-dark)");
+    expect(light).toContain("var(--theme-accent)");
     expect(light).toContain("var(--main-panel-canvas)");
     expect(dark).toContain("var(--main-panel-canvas)");
     expect(dark).not.toBe(light);

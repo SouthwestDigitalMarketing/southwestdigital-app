@@ -878,12 +878,12 @@ export default function OfferProposalPreview({
   );
   const displayedAgreementText = engagementId ? agreementText : embeddedAgreementText;
 
-  const signedByBanner = (
+  const signedByBanner = signedSignerName ? (
     <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
       Signed by <span className="font-semibold">{signedSignerName}</span>
       {signedAt ? ` on ${new Date(signedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}` : null}
     </div>
-  );
+  ) : null;
 
   const signedAgreementCollapsible = displayedAgreementText ? (
     <details className="rounded-lg border border-slate-200 bg-white">
@@ -909,13 +909,13 @@ export default function OfferProposalPreview({
       }`}
       style={{
         background: pageBg,
-        "--brand-light": lightColor,
-        "--brand-accent": accentColor,
+        "--theme-light": lightColor,
+        "--theme-accent": accentColor,
         ...primaryActionVariables,
         ...overlayVariables,
         ...darkSurfaceOverrides,
-        "--brand-dark": brandDark,
-        "--brand-ink": inkColor,
+        "--theme-dark": brandDark,
+        "--theme-ink": inkColor,
         "--proposal-ink": inkColor,
         "--color-accent-500": accentColor,
         "--color-accent-100": accentHeaderBg,
@@ -1591,7 +1591,7 @@ export default function OfferProposalPreview({
           )}
 
           {/* Step 3 — Payment */}
-          {step === 3 && !paymentStatus && requiresOnboardingPayment && (
+          {step === 3 && !paymentStatus && requiresOnboardingPayment && alreadySigned && (
             <div className="py-6">
               {signedByBanner}
               {signedAgreementCollapsible ? <div className="mt-3">{signedAgreementCollapsible}</div> : null}

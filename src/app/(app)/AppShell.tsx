@@ -376,9 +376,9 @@ export function AppShell({
       className="flex h-screen overflow-hidden"
       style={{
         backgroundColor: "var(--app-canvas)",
-        "--brand-light": light,
-        "--brand-dark": darkColor,
-        "--brand-accent": accent,
+        "--theme-light": light,
+        "--theme-dark": darkColor,
+        "--theme-accent": accent,
         ...themeVariables,
         ...chartVariables,
         ...(isLight && themePreset !== "grok" ? { "--app-canvas": light } : {}),

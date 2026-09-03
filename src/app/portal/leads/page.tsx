@@ -9,7 +9,7 @@ export default async function LeadsPage() {
   return (
     <section className="mx-auto max-w-6xl px-6 py-10">
       <div>
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--brand-accent)]">CRM</p>
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--theme-accent)]">CRM</p>
         <h1 className="mt-2 text-4xl font-semibold">Leads</h1>
         <p className="mt-2 text-slate-600">Brand-owned prospects with acquisition attribution.</p>
       </div>
@@ -80,7 +80,7 @@ export default async function LeadsPage() {
             </div>
           </details>
           <textarea name="notes" placeholder="Notes" rows={3} className="w-full rounded-xl border border-slate-300 px-3 py-2.5" />
-          <button type="submit" className="w-full cursor-pointer rounded-full bg-[var(--brand-light)] px-5 py-3 font-semibold text-white">
+          <button type="submit" className="w-full cursor-pointer rounded-full bg-[var(--theme-light)] px-5 py-3 font-semibold text-white">
             Save lead
           </button>
           </form>

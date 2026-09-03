@@ -82,7 +82,7 @@ export function appCanvasGradient(mode: Exclude<ThemeMode, "system">) {
   const lightWeight = mode === "dark" ? 1.5 : 0.75;
   const darkWeight = mode === "dark" ? 1 : 0.5;
 
-  return `linear-gradient(to top left, color-mix(in srgb, var(--brand-accent) ${accentWeight}%, var(--main-panel-canvas)) 0%, color-mix(in srgb, var(--brand-light) ${lightWeight}%, var(--main-panel-canvas)) 52%, color-mix(in srgb, var(--brand-dark) ${darkWeight}%, var(--main-panel-canvas)) 100%)`;
+  return `linear-gradient(to top left, color-mix(in srgb, var(--theme-accent) ${accentWeight}%, var(--main-panel-canvas)) 0%, color-mix(in srgb, var(--theme-light) ${lightWeight}%, var(--main-panel-canvas)) 52%, color-mix(in srgb, var(--theme-dark) ${darkWeight}%, var(--main-panel-canvas)) 100%)`;
 }
 
 export function chartPaletteCssVariables({

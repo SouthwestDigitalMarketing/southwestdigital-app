@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Copy, Eye } from "lucide-react";
+import { Eye } from "lucide-react";
 import type { Prisma } from "@prisma/client";
 import { requireQuoteStaff } from "@/lib/quotes/access";
 import { prisma } from "@/lib/prisma";
@@ -17,8 +17,8 @@ import {
 import { OfferStatusButtons } from "./OfferStatusButtons";
 import { OffersListControls } from "./OffersListControls";
 import { OffersFunnel } from "./OffersFunnel";
-import { duplicateQuoteAction } from "./actions";
 import { OfferContactCell } from "./OfferContactCell";
+import { DuplicateOfferButton } from "./DuplicateOfferButton";
 
 type SortKey = "contact" | "status" | "mrr" | "lump" | "lastSent";
 type SearchParams = Promise<{
@@ -29,6 +29,7 @@ type SearchParams = Promise<{
   archived?: string;
   sort?: string;
   order?: string;
+  highlight?: string;
 }>;
 
 const BUCKET_STYLE: Record<OfferBucket, string> = {
@@ -92,6 +93,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
   const { brand } = await requireQuoteStaff();
   const params = await searchParams;
   const contactId = typeof params.contact === "string" ? params.contact.trim() : "";
+  const highlightId = typeof params.highlight === "string" ? params.highlight.trim() : "";
   const archived = parseArchivedView(params.archived);
   const statusFilter = parseOfferStatusFilter(params.status);
   const kindFilter =
@@ -221,7 +223,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                 const oneTimeTotal =
                   snapshot.pricing?.maintain?.totalOneTime ?? (oneTimeLineItemTotal || Number(quote.totalOneTime));
                 return (
-                  <tr key={quote.id} className="hover:bg-slate-50">
+                  <tr key={quote.id} className={`hover:bg-slate-50 ${quote.id === highlightId ? "offer-row-highlight" : ""}`}>
                     <td className="px-5 py-4">
                       <OfferContactCell
                         offerId={quote.id}
@@ -275,19 +277,22 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                           >
                             <Eye className="h-4 w-4" />
                           </Link>
-                        ) : null}
-                        <OfferStatusButtons offerId={quote.id} bucket={itemBucket} />
-                        <form action={duplicateQuoteAction}>
-                          <input type="hidden" name="id" value={quote.id} />
-                          <button
-                            type="submit"
-                            aria-label="Duplicate offer"
-                            title="Duplicate offer"
-                            className="ui-action-ghost inline-flex h-9 w-9 items-center justify-center rounded-full transition"
+                        ) : (
+                          <span
+                            aria-label="No published proposal yet"
+                            title="No published proposal yet"
+                            className="inline-flex h-9 w-9 cursor-not-allowed items-center justify-center rounded-full border border-slate-200 text-slate-300"
                           >
-                            <Copy className="h-4 w-4" />
-                          </button>
-                        </form>
+                            <Eye className="h-4 w-4" />
+                          </span>
+                        )}
+                        <OfferStatusButtons offerId={quote.id} bucket={itemBucket} />
+                        <DuplicateOfferButton
+                          offerId={quote.id}
+                          currentContact={currentContact}
+                          contacts={contacts}
+                          archived={archived}
+                        />
                       </div>
                     </td>
                   </tr>

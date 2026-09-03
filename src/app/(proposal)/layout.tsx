@@ -25,8 +25,8 @@ export default async function ProposalLayout({ children }: { children: React.Rea
         data-theme="light"
         style={
           {
-            "--brand-light": light,
-            "--brand-accent": accent,
+            "--theme-light": light,
+            "--theme-accent": accent,
             minHeight: "100vh",
           } as React.CSSProperties
         }

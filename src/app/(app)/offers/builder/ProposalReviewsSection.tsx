@@ -138,11 +138,11 @@ export function ProposalReviewsSection({
     <div className="mt-16 pt-14">
       <p
         className="text-center text-xs font-semibold uppercase tracking-[0.16em]"
-        style={{ color: "color-mix(in srgb, var(--proposal-ink, var(--brand-dark, #17324d)) 65%, transparent)" }}
+        style={{ color: "color-mix(in srgb, var(--proposal-ink, var(--theme-dark, #17324d)) 65%, transparent)" }}
       >
         {brandName} Reviews
       </p>
-      <h2 className="mt-2 text-center text-2xl font-semibold md:text-3xl" style={{ color: "var(--proposal-ink, var(--brand-dark, #17324d))" }}>
+      <h2 className="mt-2 text-center text-2xl font-semibold md:text-3xl" style={{ color: "var(--proposal-ink, var(--theme-dark, #17324d))" }}>
         What Our Clients Are Saying
       </h2>
       <p className="mx-auto mt-3 mb-8 max-w-2xl text-center text-sm text-slate-600 md:text-base">
