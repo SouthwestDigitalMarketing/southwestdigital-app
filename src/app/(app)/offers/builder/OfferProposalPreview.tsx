@@ -1587,6 +1587,11 @@ export default function OfferProposalPreview({
           {step === 2 && alreadySigned && (
             <div className="py-6">
               {signedByBanner}
+              {signError ? (
+                <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
+                  <p>{signError}</p>
+                </div>
+              ) : null}
               <button
                 type="button"
                 onClick={() => void submitSignatureAndContinue()}

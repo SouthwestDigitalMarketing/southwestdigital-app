@@ -81,7 +81,27 @@ export async function POST(
         clientSecret = existing.client_secret;
       }
     } else {
-      const created = await stripe.paymentIntents.create(intentParams);
+      let created;
+      try {
+        created = await stripe.paymentIntents.create(intentParams);
+      } catch (destinationError) {
+        // A stale/mismatched Connect account must not prevent the lead from
+        // paying. Retry on the platform account while retaining payment
+        // metadata so the engagement can still be reconciled.
+        if (!connectedAccountId) throw destinationError;
+        console.error("[payment-intent] Connected-account charge failed; retrying on platform:", destinationError);
+        const platformParams = destinationPaymentIntentParams({
+          amountInCents,
+          engagementId,
+          brandId: engagement.brandId,
+          connectedAccountId: null,
+          receiptEmail: invoiceEmail,
+        });
+        created = await stripe.paymentIntents.create({
+          ...platformParams,
+          metadata: { ...platformParams.metadata, chargeKind, paymentRouting: "platform-fallback" },
+        });
+      }
       clientSecret = created.client_secret;
       const proposalBuilderState = {
         ...existingState,
