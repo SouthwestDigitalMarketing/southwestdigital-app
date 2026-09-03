@@ -173,22 +173,25 @@ export default function ProposalAppDemoHeader({
   return (
     <header className="pb-8 [&_a]:cursor-pointer [&_button:not(:disabled)]:cursor-pointer [&_button:disabled]:cursor-not-allowed">
       <div>
-        <div className="grid gap-4 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
-        <div className="flex h-11 items-center gap-6">
+        <div className="flex items-center justify-center gap-2">
+        <div className="flex h-11 items-center gap-2">
           <button
             type="button"
             onClick={requestExit}
             disabled={saveStatus === "saving" || publishStatus === "publishing"}
-            className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-semibold text-slate-500 transition hover:text-slate-900 hover:opacity-75 disabled:opacity-40"
+            aria-label="Exit"
+            title="Exit"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:text-slate-900 hover:opacity-75 disabled:opacity-40"
           >
             <LogOut className="h-4 w-4 scale-x-[-1]" />
-            Exit
           </button>
           <button
             type="button"
             onClick={() => void saveProposalBuilderState()}
             disabled={saveStatus === "saving" || publishStatus === "publishing"}
-            className={`inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-semibold transition hover:opacity-75 disabled:opacity-40 ${
+            aria-label={saveStatus === "saving" ? "Saving" : saveStatus === "saved" ? "Saved" : saveStatus === "error" ? "Save failed" : "Save"}
+            title={saveStatus === "saving" ? "Saving" : saveStatus === "saved" ? "Saved" : saveStatus === "error" ? "Save failed" : "Save"}
+            className={`inline-flex h-9 w-9 items-center justify-center rounded-full text-[0px] font-semibold transition hover:opacity-75 disabled:opacity-40 ${
               saveStatus === "saved"
                 ? "text-emerald-700"
                 : saveStatus === "error"
@@ -208,7 +211,9 @@ export default function ProposalAppDemoHeader({
             type="button"
             onClick={() => void publishProposalChanges()}
             disabled={saveStatus === "saving" || publishStatus === "publishing"}
-            className={`inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-semibold transition hover:opacity-75 disabled:opacity-40 ${
+            aria-label={publishStatus === "publishing" ? "Publishing" : publishStatus === "published" ? `Published version ${publishedVersion}` : publishStatus === "error" ? "Publish failed" : "Publish"}
+            title={publishStatus === "publishing" ? "Publishing" : publishStatus === "published" ? `Published version ${publishedVersion}` : publishStatus === "error" ? "Publish failed" : "Publish"}
+            className={`inline-flex h-9 w-9 items-center justify-center rounded-full text-[0px] font-semibold transition hover:opacity-75 disabled:opacity-40 ${
               publishStatus === "published"
                 ? "text-emerald-700"
                 : publishStatus === "error"
@@ -222,7 +227,31 @@ export default function ProposalAppDemoHeader({
           </button>
         </div>
 
-        <div className="flex w-full max-w-[1220px] items-center gap-6">
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => void saveThenOpenProposal()}
+            disabled={saveStatus === "saving"}
+            aria-label="View proposal"
+            title="View proposal"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:text-slate-900 hover:opacity-75 disabled:opacity-40"
+          >
+            <Eye className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => void saveThenNavigate("/offers/cover")}
+            disabled={saveStatus === "saving"}
+            aria-label="Email proposal"
+            title="Email proposal"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:text-slate-900 hover:opacity-75 disabled:opacity-40"
+          >
+            <Send className="h-4 w-4" />
+          </button>
+        </div>
+
+        </div>
+        <div className="mx-auto flex w-full max-w-[1220px] items-center justify-center gap-4">
           <button
             type="button"
             onClick={() => previousHref && void saveThenNavigate(previousHref)}
@@ -232,7 +261,7 @@ export default function ProposalAppDemoHeader({
             <ChevronLeft className="h-4 w-4" />
             Back
           </button>
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0">
             <ProposalAppDemoStepper currentStep={currentStep} />
           </div>
           {viewProposalAsNext ? (
@@ -240,7 +269,7 @@ export default function ProposalAppDemoHeader({
               type="button"
               onClick={() => void saveThenOpenProposal()}
               disabled={saveStatus === "saving"}
-              className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 xl:inline-flex"
+               className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 xl:inline-flex"
             >
               <Eye className="h-4 w-4" />
               View Proposal
@@ -250,34 +279,12 @@ export default function ProposalAppDemoHeader({
               type="button"
               onClick={() => nextHref && void saveThenNavigate(nextHref)}
               disabled={!nextHref || saveStatus === "saving"}
-              className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 xl:inline-flex"
+               className="hidden shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 xl:inline-flex"
             >
               Next
               <ChevronRight className="h-4 w-4" />
             </button>
           )}
-        </div>
-
-        <div className="flex items-center justify-end gap-6">
-          <button
-            type="button"
-            onClick={() => void saveThenNavigate("/offers/cover")}
-            disabled={saveStatus === "saving"}
-            className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-semibold text-slate-500 transition hover:text-slate-900 hover:opacity-75 disabled:opacity-40"
-          >
-            <Send className="h-4 w-4" />
-            Email
-          </button>
-          <button
-            type="button"
-            onClick={() => void saveThenOpenProposal()}
-            disabled={saveStatus === "saving"}
-            className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-semibold text-slate-500 transition hover:text-slate-900 hover:opacity-75 disabled:opacity-40"
-          >
-            <Eye className="h-4 w-4" />
-            View Proposal
-          </button>
-        </div>
         </div>
       </div>
       {isExitDialogOpen ? (

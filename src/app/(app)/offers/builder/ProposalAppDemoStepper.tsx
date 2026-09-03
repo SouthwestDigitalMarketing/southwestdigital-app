@@ -71,7 +71,7 @@ export default function ProposalAppDemoStepper({
               href={query ? `${step.href}?${query}` : step.href}
             />
             {index < STEP_ITEMS.length - 1 ? (
-              <span className="mx-2 h-px min-w-4 flex-1 bg-slate-200" />
+              <span className="mx-1 h-px min-w-2 flex-1 bg-slate-200" />
             ) : null}
           </Fragment>
         );

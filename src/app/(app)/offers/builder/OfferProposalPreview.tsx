@@ -667,7 +667,7 @@ export default function OfferProposalPreview({
   }
 
   useEffect(() => {
-    if (step !== 2 || !engagementId) return;
+    if (step !== 2 && step !== 3 || !engagementId) return;
     fetch(`/api/proposal/${engagementId}/agreement`)
       .then((r) => r.json())
       .then((result: { text?: string; signed?: boolean; signerName?: string | null; signedAt?: string | null }) => {
@@ -765,6 +765,7 @@ export default function OfferProposalPreview({
         setSignedAt(result?.signedAt ?? null);
       }
       if (selectedOnboardingFee === 0) {
+        setPaymentStatus("succeeded");
         setStep(3);
         return;
       }
@@ -774,6 +775,7 @@ export default function OfferProposalPreview({
         throw new Error(paymentResult?.error ?? "Unable to start payment");
       }
       setPaymentClientSecret(paymentResult.clientSecret);
+      setStep(3);
     } catch (error) {
       setSignError(error instanceof Error ? error.message : "Something went wrong. Please try again.");
     } finally {
@@ -820,7 +822,7 @@ export default function OfferProposalPreview({
     "Cover",
     "Services",
     "Agreement",
-    requiresOnboardingPayment ? "Payment" : "Confirmation",
+    "Payment",
   ] as const;
   const agreementTitle =
     agreementTemplate?.name
@@ -917,6 +919,16 @@ export default function OfferProposalPreview({
                 style={stepperPrimaryVariables}
               >
                 Next <ChevronRight strokeWidth={3} className="h-4 w-4" />
+              </button>
+            ) : step === 2 && alreadySigned ? (
+              <button
+                type="button"
+                disabled={requiresOnboardingPayment && !paymentClientSecret}
+                onClick={() => setStep(3)}
+                className="ui-action-primary inline-flex items-center gap-2 rounded-lg border-2 px-5 py-2 text-sm font-bold transition-all disabled:cursor-not-allowed disabled:opacity-40"
+                style={stepperPrimaryVariables}
+              >
+                Continue to Payment <ChevronRight strokeWidth={3} className="h-4 w-4" />
               </button>
             ) : step === 2 && !(paymentClientSecret || alreadySigned) ? (
               <button
@@ -1321,7 +1333,7 @@ export default function OfferProposalPreview({
           )}
 
           {/* Step 2 — Deposit / Contract */}
-          {step === 2 && (
+          {step === 2 && !alreadySigned && (
             <div className="py-6">
               {!alreadySigned ? (
                 <div className="space-y-5">
@@ -1529,8 +1541,123 @@ export default function OfferProposalPreview({
             </div>
           )}
 
+          {step === 2 && alreadySigned && (
+            <div className="py-6">
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
+                Signed by <span className="font-semibold">{signedSignerName}</span>
+                {signedAt ? ` on ${new Date(signedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}` : null}
+              </div>
+              <p className="mt-4 text-sm text-slate-600">Your agreement is complete. Continue to payment when you&apos;re ready.</p>
+            </div>
+          )}
+
+          {/* Step 3 — Payment */}
+          {step === 3 && !paymentStatus && requiresOnboardingPayment && (
+            <div className="py-6">
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
+                Signed by <span className="font-semibold">{signedSignerName}</span>
+                {signedAt ? ` on ${new Date(signedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}` : null}
+              </div>
+              <div className="mt-4 grid gap-6 md:grid-cols-[1fr_380px] md:items-start">
+                <div className="order-2 space-y-4 rounded-xl border border-slate-200 p-6 md:order-1">
+                  {paymentClientSecret ? (
+                    <DepositPaymentForm
+                      clientSecret={paymentClientSecret}
+                      onPaid={(status) => {
+                        if (status === "succeeded" && engagementId) {
+                          void fetch(`/api/proposal/${engagementId}/confirm-payment`, { method: "POST" });
+                        }
+                        setPaymentStatus(status);
+                      }}
+                    />
+                  ) : signError ? (
+                    <div className="space-y-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5">
+                      <p className="text-xs text-red-700">We couldn&apos;t start the payment form: {signError} Please try again.</p>
+                      <button
+                        type="button"
+                        disabled={signSubmitting}
+                        onClick={() => void submitSignatureAndContinue()}
+                        className="ui-action-danger rounded-lg border px-3 py-1.5 text-xs font-semibold transition disabled:opacity-50"
+                      >
+                        {signSubmitting ? "Retrying..." : "Retry"}
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-600">Preparing your payment form...</p>
+                  )}
+                  {engagementId && paymentClientSecret ? (
+                    <>
+                      <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        <div className="h-px flex-1 bg-slate-200" />
+                        or pay with PayPal
+                        <div className="h-px flex-1 bg-slate-200" />
+                      </div>
+                      <PaypalPaymentButton
+                        engagementId={engagementId}
+                        onPaid={(status) => setPaymentStatus(status)}
+                      />
+                    </>
+                  ) : null}
+                </div>
+                <div className="order-1 space-y-4 md:order-2">
+                  <div className="rounded-xl border border-slate-200 bg-white p-5">
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Your Deposit</p>
+                    {selectedOptionId ? <p className="mt-1 text-sm text-slate-600">{options[selectedOptionId].name} package</p> : null}
+                    <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-3">
+                      <span className="text-sm font-semibold text-slate-700">Total due</span>
+                      <span className="text-2xl font-bold text-brandnavy">
+                        {selectedOnboardingFee !== null ? fmt(selectedOnboardingFee) : "—"}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-xs text-slate-500">Covers onboarding, document collection, and discovery. Earned upon signing and non-refundable.</p>
+                  </div>
+                  <div className="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />
+                    <p className="text-xs leading-5 text-slate-500">Payments are processed securely by Stripe and PayPal. Your card and bank details are never stored on our servers.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {step === 3 && !paymentStatus && (!alreadySigned || !requiresOnboardingPayment) && (
+            <div className="mx-auto max-w-2xl rounded-xl border border-slate-200 bg-white px-6 py-12 text-center shadow-sm">
+              {!alreadySigned ? (
+                <>
+                  <h1 className="text-2xl font-bold text-slate-900">Complete the agreement first</h1>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">
+                    Once the agreement is signed, you&apos;ll be able to review and complete payment here.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setStep(2)}
+                    className="ui-action-primary mt-6 inline-flex items-center rounded-lg border-2 px-5 py-2.5 text-sm font-bold transition-all"
+                    style={stepperPrimaryVariables}
+                  >
+                    Return to Agreement
+                  </button>
+                </>
+              ) : (
+                <>
+                  <h1 className="text-2xl font-bold text-slate-900">No payment is required</h1>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">
+                    Your agreement is complete. You can continue without making a payment.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentStatus("succeeded")}
+                    className="ui-action-primary mt-6 inline-flex items-center rounded-lg border-2 px-5 py-2.5 text-sm font-bold transition-all"
+                    style={stepperPrimaryVariables}
+                  >
+                    Continue
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
           {/* Step 3 — Confirmation */}
-          {step === 3 && (
+          {step === 3 && paymentStatus && (
             <div className="mx-auto grid max-w-2xl place-items-center px-7 py-20 text-center">
               <div className="grid h-16 w-16 place-items-center rounded-full bg-emerald-100 text-emerald-700">
                 <BadgeCheck className="h-8 w-8" />
