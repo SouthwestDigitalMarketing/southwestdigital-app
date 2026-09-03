@@ -13,7 +13,10 @@ export function destinationPaymentIntentParams(input: {
       brandId: input.brandId,
       ...(input.connectedAccountId ? { connectedAccountId: input.connectedAccountId } : {}),
     },
-    payment_method_types: ["card", "us_bank_account", "cashapp", "klarna"],
+    // Keep the primary Payment Element universally available. PayPal has its
+    // own checkout path, and optional methods can reject the entire intent
+    // when they are not enabled for a connected account.
+    payment_method_types: ["card"],
     ...(input.receiptEmail ? { receipt_email: input.receiptEmail } : {}),
     ...(input.connectedAccountId
       ? { transfer_data: { destination: input.connectedAccountId } }
