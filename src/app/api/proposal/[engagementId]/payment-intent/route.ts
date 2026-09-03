@@ -23,12 +23,20 @@ export async function POST(
   if (!engagement) return NextResponse.json({ error: "Engagement not found" }, { status: 404 });
 
   const onboardingFee = engagement.onboardingFee ? Number(engagement.onboardingFee) : 0;
-  if (engagement.onboardingFeeStatus === "PAID" || engagement.onboardingFeeStatus === "WAIVED") {
-    return NextResponse.json({ waived: engagement.onboardingFeeStatus === "WAIVED", alreadyResolved: true });
+  const onboardingData = isRecord(engagement.onboardingData) ? engagement.onboardingData : {};
+  const existingState = isRecord(onboardingData.proposalBuilderState) ? onboardingData.proposalBuilderState : {};
+  const existingServices = isRecord(existingState.services) ? existingState.services : {};
+  const invoiceEmail = typeof existingServices.invoiceEmail === "string" ? existingServices.invoiceEmail : undefined;
+  const existingPaymentIntentId = typeof existingServices.stripePaymentIntentId === "string" ? existingServices.stripePaymentIntentId : null;
+  const recurringMonthlyTotal = typeof existingServices.recurringMonthlyTotal === "number" ? existingServices.recurringMonthlyTotal : 0;
+  const waiverActive = engagement.onboardingFeeStatus === "WAIVED"
+    || await resolveOnboardingWaiverForEngagement(engagementId);
+
+  if (engagement.onboardingFeeStatus === "PAID") {
+    return NextResponse.json({ alreadyResolved: true });
   }
 
-  const waiverActive = await resolveOnboardingWaiverForEngagement(engagementId);
-  if (waiverActive) {
+  if (waiverActive && recurringMonthlyTotal <= 0) {
     await prisma.engagement.update({
       where: { id: engagementId },
       data: { onboardingFeeStatus: "WAIVED", status: "DEPOSIT_PAID" },
@@ -36,17 +44,10 @@ export async function POST(
     return NextResponse.json({ waived: true });
   }
 
-  const onboardingData = isRecord(engagement.onboardingData) ? engagement.onboardingData : {};
-  const existingState = isRecord(onboardingData.proposalBuilderState) ? onboardingData.proposalBuilderState : {};
-  const existingServices = isRecord(existingState.services) ? existingState.services : {};
-  const invoiceEmail = typeof existingServices.invoiceEmail === "string" ? existingServices.invoiceEmail : undefined;
-  const existingPaymentIntentId = typeof existingServices.stripePaymentIntentId === "string" ? existingServices.stripePaymentIntentId : null;
-  const recurringMonthlyTotal = typeof existingServices.recurringMonthlyTotal === "number" ? existingServices.recurringMonthlyTotal : 0;
-
-  const chargeAmount = onboardingFee > 0
+  const chargeAmount = !waiverActive && onboardingFee > 0
     ? onboardingFee
     : recurringMonthlyTotal > 0 ? recurringMonthlyTotal : 0;
-  const chargeKind = onboardingFee > 0 ? "onboarding" : "first_month";
+  const chargeKind = !waiverActive && onboardingFee > 0 ? "onboarding" : "first_month";
   if (chargeAmount <= 0) {
     return NextResponse.json({ error: "No amount is due for this proposal yet" }, { status: 400 });
   }

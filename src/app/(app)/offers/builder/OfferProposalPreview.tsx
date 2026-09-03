@@ -589,6 +589,11 @@ export default function OfferProposalPreview({
   );
   const introVideoUrl = coverMedia.videoUrl;
   const introEmbedUrl = resolveVideoEmbedUrl(introVideoUrl);
+  const selectedOnboardingFeeForPayment = selectedOptionId
+    ? (options[selectedOptionId].oneTimeRows.find((row) => isOnboarding(row))?.price ?? null)
+    : null;
+  const selectedMonthlyChargeForPayment = selectedOptionId ? options[selectedOptionId].monthlyPrice : 0;
+  const requiresOnboardingPaymentForSelection = (selectedOnboardingFeeForPayment ?? 0) > 0 || selectedMonthlyChargeForPayment > 0;
 
   useEffect(() => {
     if (!introEmbedUrl || !isCloudflareStreamEmbed(introEmbedUrl)) return;
@@ -678,7 +683,7 @@ export default function OfferProposalPreview({
           setAlreadySigned(true);
           setSignedSignerName(result.signerName ?? null);
           setSignedAt(result.signedAt ?? null);
-          if (result.onboardingFeeStatus === "PAID" || result.onboardingFeeStatus === "WAIVED") {
+          if (result.onboardingFeeStatus === "PAID" || (result.onboardingFeeStatus === "WAIVED" && !requiresOnboardingPaymentForSelection)) {
             setPaymentStatus("succeeded");
             if (result.onboardingFeeStatus === "WAIVED") setPaymentWaived(true);
           } else {
@@ -698,7 +703,7 @@ export default function OfferProposalPreview({
       })
       .catch(() => {})
       .finally(() => setAgreementLoading(false));
-  }, [step, engagementId]);
+  }, [step, engagementId, requiresOnboardingPaymentForSelection]);
 
   function checkAgreementScrolled(el: HTMLDivElement) {
     if (el.scrollTop + el.clientHeight >= el.scrollHeight - 20) setHasScrolledToEnd(true);
@@ -1717,7 +1722,7 @@ export default function OfferProposalPreview({
               ) : (
                 <>
                   <h1 className="mt-6 text-3xl font-bold">
-                    You're all set
+                    You&apos;re all set
                   </h1>
                   <p className="mt-3 text-slate-600">
                     {engagementId
