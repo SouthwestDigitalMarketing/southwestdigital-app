@@ -29,6 +29,7 @@ export async function POST(
   const invoiceEmail = typeof existingServices.invoiceEmail === "string" ? existingServices.invoiceEmail : undefined;
   const existingPaymentIntentId = typeof existingServices.stripePaymentIntentId === "string" ? existingServices.stripePaymentIntentId : null;
   const recurringMonthlyTotal = typeof existingServices.recurringMonthlyTotal === "number" ? existingServices.recurringMonthlyTotal : 0;
+  const hasCleanup = existingState.hasCleanup === true;
   const waiverActive = engagement.onboardingFeeStatus === "WAIVED"
     || await resolveOnboardingWaiverForEngagement(engagementId);
 
@@ -44,10 +45,12 @@ export async function POST(
     return NextResponse.json({ waived: true });
   }
 
-  const chargeAmount = !waiverActive && onboardingFee > 0
-    ? onboardingFee
-    : recurringMonthlyTotal > 0 ? recurringMonthlyTotal : 0;
-  const chargeKind = !waiverActive && onboardingFee > 0 ? "onboarding" : "first_month";
+  const chargeOnboarding = !waiverActive && onboardingFee > 0 ? onboardingFee : 0;
+  const chargeFirstMonth = !hasCleanup && recurringMonthlyTotal > 0 ? recurringMonthlyTotal : 0;
+  const chargeAmount = chargeOnboarding + chargeFirstMonth;
+  const chargeKind = chargeOnboarding > 0 && chargeFirstMonth > 0
+    ? "onboarding_and_first_month"
+    : chargeOnboarding > 0 ? "onboarding" : "first_month";
   if (chargeAmount <= 0) {
     return NextResponse.json({ error: "No amount is due for this proposal yet" }, { status: 400 });
   }

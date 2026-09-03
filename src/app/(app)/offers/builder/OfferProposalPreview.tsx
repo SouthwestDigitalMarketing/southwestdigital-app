@@ -855,15 +855,20 @@ export default function OfferProposalPreview({
     ? (options[selectedOptionId].oneTimeRows.find((r) => isOnboarding(r))?.price ?? null)
     : null;
   const selectedMonthlyCharge = selectedOptionId ? options[selectedOptionId].monthlyPrice : 0;
-  const chargeIsFirstMonth = (selectedOnboardingFee ?? 0) <= 0 && selectedMonthlyCharge > 0;
-  const chargeAmount = (selectedOnboardingFee ?? 0) > 0
-    ? (selectedOnboardingFee as number)
-    : chargeIsFirstMonth ? selectedMonthlyCharge : 0;
+  const hasCleanup = cleanupPeriods.length > 0;
+  const chargeFirstMonth = !hasCleanup && selectedMonthlyCharge > 0 ? selectedMonthlyCharge : 0;
+  const chargeOnboarding = selectedOnboardingFee ?? 0;
+  const chargeAmount = chargeOnboarding + chargeFirstMonth;
+  const chargeIsFirstMonth = chargeFirstMonth > 0;
   const requiresOnboardingPayment = chargeAmount > 0;
-  const chargeLabel = chargeIsFirstMonth ? "First Month" : "Your Deposit";
-  const chargeDescription = chargeIsFirstMonth
-    ? "Prepays your first month of ongoing bookkeeping so we can start immediately. Non-refundable once work begins."
-    : "Covers onboarding, document collection, and discovery. Earned upon signing and non-refundable.";
+  const chargeLabel = chargeOnboarding > 0 && chargeFirstMonth > 0
+    ? "Onboarding + First Month"
+    : chargeIsFirstMonth ? "First Month" : "Your Deposit";
+  const chargeDescription = chargeOnboarding > 0 && chargeFirstMonth > 0
+    ? "Covers onboarding and prepays your first month of ongoing bookkeeping so we can start immediately. Non-refundable once work begins."
+    : chargeIsFirstMonth
+      ? "Prepays your first month of ongoing bookkeeping so we can start immediately. Non-refundable once work begins."
+      : "Covers onboarding, document collection, and discovery. Earned upon signing and non-refundable.";
   const clientSteps = [
     "Cover",
     "Services",
