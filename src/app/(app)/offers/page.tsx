@@ -230,14 +230,17 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                     key={quote.id}
                     className={`hover:bg-slate-50 ${quote.id === highlightId ? "offer-row-highlight" : ""}`}
                   >
-                    <td className="px-5 py-4">
+                    <td className="relative px-5 py-4">
                       {quote.id === highlightId ? (
                         <>
                           <DuplicateOfferFocus offerId={quote.id} />
-                          <div className="mb-2 inline-flex flex-wrap items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-bold uppercase tracking-wide text-amber-900">
-                            <span>New duplicate</span>
-                            <span className="font-mono normal-case tracking-normal text-amber-700">{quote.id}</span>
-                          </div>
+                          <span
+                            title={`New duplicate: ${quote.id}`}
+                            aria-label={`New duplicate offer ${quote.id}`}
+                            className="absolute right-2 top-2 z-10 inline-flex rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none tracking-wide text-amber-900"
+                          >
+                            Duplicate
+                          </span>
                         </>
                       ) : null}
                       <OfferContactCell
