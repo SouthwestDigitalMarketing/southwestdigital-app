@@ -199,7 +199,7 @@ export function ServicesCatalog({
 
       {services.length === 0 && !creating ? (
         <div className="rounded-xl border border-slate-200 bg-white px-6 py-16 text-center">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Service list</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Service list</p>
           <p className="mt-3 text-base text-slate-500">
             {archived ? "No archived services yet." : "No services in the catalogue yet."}
           </p>
@@ -207,7 +207,7 @@ export function ServicesCatalog({
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
           <div className="border-b border-slate-100 px-5 py-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Service list</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Service list</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-base">
@@ -339,7 +339,7 @@ function ServiceForm({
         onSubmit(new FormData(event.currentTarget));
       }}
     >
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">
         {service ? "Edit service" : "New service"}
       </p>
       <div className="grid gap-3 md:grid-cols-2">
@@ -435,7 +435,7 @@ function ServiceForm({
           <div className="grid gap-3 sm:grid-cols-2">
             {tagsByKind.map((group) => (
               <fieldset key={group.kind} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-                <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{group.label}</legend>
+                <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-700">{group.label}</legend>
                 <div className="flex flex-wrap gap-2 py-1">
                   {group.tags.map((tag) => (
                     <label key={tag.id} className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-slate-200 px-2.5 py-1 text-sm text-slate-700">

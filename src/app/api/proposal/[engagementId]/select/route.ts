@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-
-const VALID_TIERS = new Set(["grow", "improve", "maintain"]);
+import { isProposalTierId } from "@/lib/engagements/proposalSelection";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -21,7 +20,7 @@ export async function POST(
   } | null;
 
   const tier = typeof body?.tier === "string" ? body.tier : "";
-  if (!VALID_TIERS.has(tier)) return NextResponse.json({ error: "Invalid tier" }, { status: 400 });
+  if (!isProposalTierId(tier)) return NextResponse.json({ error: "Invalid tier" }, { status: 400 });
 
   const onboardingFee = typeof body?.onboardingFee === "number" ? body.onboardingFee : null;
   if (onboardingFee === null || onboardingFee < 0) return NextResponse.json({ error: "Invalid onboardingFee" }, { status: 400 });

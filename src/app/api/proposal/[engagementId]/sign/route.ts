@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { createHash } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/simpleRateLimit";
+import { getSelectedProposalTier } from "@/lib/engagements/proposalSelection";
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -46,7 +47,7 @@ export async function POST(
 
   const engagement = await prisma.engagement.findUnique({
     where: { id: engagementId },
-    select: { onboardingFee: true, onboardingFeeStatus: true, agreementText: true, signedAt: true, signerName: true },
+    select: { onboardingData: true, onboardingFeeStatus: true, agreementText: true, signedAt: true, signerName: true },
   });
   if (!engagement) return NextResponse.json({ error: "Engagement not found" }, { status: 404 });
 
@@ -54,8 +55,7 @@ export async function POST(
     return NextResponse.json({ ok: true, signedAt: engagement.signedAt.toISOString(), signerName: engagement.signerName });
   }
 
-  const onboardingFee = engagement.onboardingFee ? Number(engagement.onboardingFee) : 0;
-  if (onboardingFee <= 0) {
+  if (!getSelectedProposalTier(engagement.onboardingData)) {
     return NextResponse.json({ error: "Please select a service tier first." }, { status: 400 });
   }
 

@@ -291,7 +291,7 @@ body {
   --border-strong: #cbd5e1;
   --text-primary: #172033;
   --text-secondary: #475569;
-  --text-muted: #718096;
+  --text-muted: #64748b;
   --surface-inverse: color-mix(in srgb, var(--brand-light) 75%, #000000);
   --brand-ink: var(--brand-light);
   --chart-series-1: var(--action-primary-background);
@@ -355,6 +355,22 @@ body {
   --action-secondary-border: color-mix(in srgb, var(--action-primary-background) 55%, var(--surface));
   --action-danger-foreground: #fca5a5;
   --action-danger-border: #7f1d1d;
+}
+
+/* Fixed light proposal surfaces are explicit theme boundaries. Their text,
+   controls, and borders stay readable even inside a dark proposal theme. */
+[data-proposal-surface="light"] {
+  color-scheme: light;
+  --surface: #ffffff;
+  --surface-subtle: #f8fafc;
+  --surface-row-alt: #f3f5f7;
+  --surface-control: #eef2f7;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --text-primary: #172033;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --brand-ink: var(--proposal-light-surface-ink, #172033);
 }
 
 [data-theme="dark"] .ui-action-primary:not(:disabled):hover {

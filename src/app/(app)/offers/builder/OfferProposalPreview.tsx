@@ -15,7 +15,17 @@ import {
 import { useBrand } from "@/lib/brands/context";
 import { readableForegroundColor } from "@/lib/brands/colors";
 import { overlaySurfaceCssVariables, primaryActionCssVariables } from "@/lib/brands/themeTokens";
-import { getProposalTheme, DEFAULT_PROPOSAL_THEME_ID, DEFAULT_PROPOSAL_MODE, type ProposalMode } from "./proposalThemes";
+import {
+  getProposalAccentHeaderBackground,
+  getProposalDarkSurfaceColors,
+  getProposalInkColor,
+  getProposalSectionHeaderBackground,
+  getProposalSurfaceTextColor,
+  getProposalTheme,
+  DEFAULT_PROPOSAL_THEME_ID,
+  DEFAULT_PROPOSAL_MODE,
+  type ProposalMode,
+} from "./proposalThemes";
 import { extraIsRealEstateSpecific } from "@/lib/quotes/catalog";
 import { ProposalReviewsSection } from "./ProposalReviewsSection";
 import AgreementTextView from "./AgreementTextView";
@@ -489,35 +499,35 @@ export default function OfferProposalPreview({
   const brandDarkForeground = readableForegroundColor(brandDark);
   const actionColor = accentColor;
   const pageBg = theme.pageBg[proposalMode];
-  const accentForegroundColor = brand.theme?.accentForegroundColor === "#111827" ? "#111827" : "#ffffff";
-  const primaryActionVariables = primaryActionCssVariables(actionColor, accentForegroundColor);
+  const primaryActionVariables = primaryActionCssVariables(actionColor);
   const overlayVariables = overlaySurfaceCssVariables({ mode: proposalMode, dark: brandDark });
   // Ink color for text and glyphs. brandDark is a dark shade — readable on light bgs
   // in light mode. In dark mode, lighten it heavily so text stays legible on dark surfaces.
-  const inkColor =
-    proposalMode === "dark" ? `color-mix(in srgb, ${brandDark} 20%, white)` : brandDark;
-  // Grok's aesthetic is intentionally near-black surfaces on pure black — leave the
-  // default dark --surface values alone for it. Every other theme derives its surfaces
-  // from its own brandDark so cards don't render in Grok's #191a1d.
-  const darkSurfaceOverrides =
-    proposalMode === "dark" && theme.id !== "grok"
-      ? {
-          "--surface": `color-mix(in srgb, ${brandDark} 82%, white)`,
-          "--surface-subtle": `color-mix(in srgb, ${brandDark} 90%, white)`,
-          "--surface-control": `color-mix(in srgb, ${brandDark} 72%, white)`,
-          "--surface-row-alt": `color-mix(in srgb, ${brandDark} 86%, white)`,
-        }
-      : {};
+  const inkColor = getProposalInkColor(proposalMode, brandDark, theme.id);
+  const lightSurfaceInk = getProposalSurfaceTextColor("#ffffff", brandDark);
+  // Proposal cards use explicit theme surfaces. Grok keeps near-black cards even
+  // though its dark-mode heading and accent colors intentionally invert to white.
+  const darkSurfaceColors = proposalMode === "dark"
+    ? getProposalDarkSurfaceColors(theme.id, brandDark)
+    : null;
+  const darkSurfaceOverrides = darkSurfaceColors
+    ? {
+        "--surface": darkSurfaceColors.surface,
+        "--surface-subtle": darkSurfaceColors.subtle,
+        "--surface-control": darkSurfaceColors.control,
+        "--surface-row-alt": darkSurfaceColors.rowAlt,
+      }
+    : {};
   const stepperPrimaryVariables = {
-    "--action-primary-background": brandDark,
-    "--action-primary-foreground": brandDarkForeground,
-    "--action-primary-border": brandDark,
+    "--action-primary-background": lightSurfaceInk,
+    "--action-primary-foreground": readableForegroundColor(lightSurfaceInk),
+    "--action-primary-border": lightSurfaceInk,
   } as React.CSSProperties;
   const stepperSecondaryVariables = {
-    "--action-secondary-background": `color-mix(in srgb, ${brandDark} 10%, white)`,
-    "--action-secondary-hover-background": `color-mix(in srgb, ${brandDark} 16%, white)`,
-    "--action-secondary-foreground": brandDark,
-    "--action-secondary-border": `color-mix(in srgb, ${brandDark} 36%, white)`,
+    "--action-secondary-background": `color-mix(in srgb, ${lightSurfaceInk} 10%, white)`,
+    "--action-secondary-hover-background": `color-mix(in srgb, ${lightSurfaceInk} 16%, white)`,
+    "--action-secondary-foreground": lightSurfaceInk,
+    "--action-secondary-border": `color-mix(in srgb, ${lightSurfaceInk} 36%, white)`,
   } as React.CSSProperties;
   const logoUrl =
     proposalMode === "dark"
@@ -526,14 +536,14 @@ export default function OfferProposalPreview({
   // Subtle accent-tinted surface used behind table section headers. In light mode it's
   // a very pale wash of brandDark on white; in dark mode we mix toward black so the
   // header still reads as a subtle band on the dark preview.
-  const subtleAccentBg =
-    proposalMode === "dark"
-      ? `color-mix(in srgb, ${brandDark} 40%, black)`
-      : `color-mix(in srgb, ${brandDark} 10%, white)`;
+  const subtleAccentBg = getProposalSectionHeaderBackground(proposalMode, brandDark);
+  const accentHeaderBg = getProposalAccentHeaderBackground(proposalMode, accentColor);
   const urgencyOffer = catalogOffer?.active ? catalogOffer : getUrgencyOfferDisplay(DEFAULT_URGENCY_OFFER);
 
   const options = buildOptions(assessment);
   const [selectedOptionId, setSelectedOptionId] = useState<OptionId | null>(null);
+  const [selectionSubmittingId, setSelectionSubmittingId] = useState<OptionId | null>(null);
+  const [selectionError, setSelectionError] = useState<string | null>(null);
   const [step, setStep] = useState(0);
   const [hasStartedIntroVideo, setHasStartedIntroVideo] = useState(false);
   const [isIntroVideoPlaying, setIsIntroVideoPlaying] = useState(false);
@@ -545,7 +555,7 @@ export default function OfferProposalPreview({
   const [additionalOptionSelections, setAdditionalOptionSelections] = useState<Record<OptionId, Record<string, boolean>>>({ grow: {}, improve: {}, maintain: {} });
 
   // Signing / payment state
-  const [signerName, setSignerName] = useState(contactName);
+  const [signerName, setSignerName] = useState("");
   const [signerTitle, setSignerTitle] = useState("");
   const [email, setEmail] = useState("");
   const [consentChecked, setConsentChecked] = useState(false);
@@ -688,9 +698,50 @@ export default function OfferProposalPreview({
 
   const canSignAgreement = signerName.trim().length > 0 && isValidEmail(email) && consentChecked && readAndAgreedChecked && hasScrolledToEnd;
 
+  async function selectOptionAndContinue(id: OptionId) {
+    const option = options[id];
+    setSelectionError(null);
+
+    if (!engagementId) {
+      setSelectedOptionId(id);
+      setStep(2);
+      return;
+    }
+
+    setSelectionSubmittingId(id);
+    try {
+      const onboardingFee = option.oneTimeRows.find((row) => isOnboarding(row))?.price ?? 0;
+      const response = await fetch(`/api/proposal/${engagementId}/select`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tier: id,
+          tierLabel: option.name,
+          onboardingFee,
+          recurringMonthlyTotal: option.monthlyPrice,
+        }),
+      });
+      const result = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(result?.error ?? "We couldn't save your service selection. Please try again.");
+      }
+
+      setSelectedOptionId(id);
+      setStep(2);
+    } catch (error) {
+      setSelectionError(
+        error instanceof Error
+          ? error.message
+          : "We couldn't save your service selection. Please try again.",
+      );
+    } finally {
+      setSelectionSubmittingId(null);
+    }
+  }
+
   async function submitSignatureAndContinue() {
-    if (!engagementId) { setStep(3); return; }
     if (!alreadySigned && !canSignAgreement) return;
+    if (!engagementId) { setStep(3); return; }
     setSignSubmitting(true);
     setSignError(null);
     try {
@@ -761,10 +812,16 @@ export default function OfferProposalPreview({
   const recurringServiceNames = Array.from(new Set(optionMeta.flatMap(({ id }) => options[id].recurringRows.map((r) => r.serviceName))));
   const oneTimeServiceNames   = Array.from(new Set(optionMeta.flatMap(({ id }) => options[id].oneTimeRows.map((r) => r.serviceName))));
 
-  const clientSteps = ["Cover", "Services", "Sign & Pay", "Confirmation"] as const;
   const selectedOnboardingFee = selectedOptionId
     ? (options[selectedOptionId].oneTimeRows.find((r) => isOnboarding(r))?.price ?? null)
     : null;
+  const requiresOnboardingPayment = selectedOnboardingFee !== 0;
+  const clientSteps = [
+    "Cover",
+    "Services",
+    "Sign & Pay",
+    requiresOnboardingPayment ? "Onboarding Payment" : "Confirmation",
+  ] as const;
   const agreementTitle =
     agreementTemplate?.name
     ?? assessment.agreementTemplateName
@@ -800,9 +857,10 @@ export default function OfferProposalPreview({
         ...overlayVariables,
         ...darkSurfaceOverrides,
         "--brand-dark": brandDark,
+        "--brand-ink": inkColor,
         "--proposal-ink": inkColor,
         "--color-accent-500": accentColor,
-        "--color-accent-100": `color-mix(in srgb, ${accentColor} 15%, ${proposalMode === "dark" ? "black" : "white"})`,
+        "--color-accent-100": accentHeaderBg,
       } as unknown as React.CSSProperties}
     >
       <svg aria-hidden="true" viewBox="0 0 1600 1000" preserveAspectRatio="none" className={`pointer-events-none inset-0 z-0 h-full w-full text-brandnavy opacity-[0.045] ${embedded ? "absolute" : "fixed"}`}>
@@ -841,7 +899,7 @@ export default function OfferProposalPreview({
                   <div className="w-16 text-center sm:w-20">
                     <span
                       className={`mx-auto grid h-8 w-8 place-items-center rounded-full border text-sm font-bold ${index <= step ? "" : "border-slate-300 bg-white text-slate-500"}`}
-                      style={index <= step ? { backgroundColor: brandDark, borderColor: brandDark, color: brandDarkForeground } : undefined}
+                      style={index <= step ? { backgroundColor: lightSurfaceInk, borderColor: lightSurfaceInk, color: readableForegroundColor(lightSurfaceInk) } : undefined}
                     >
                       {index < step ? "✓" : index + 1}
                     </span>
@@ -863,7 +921,7 @@ export default function OfferProposalPreview({
             ) : step === 2 && !(paymentClientSecret || alreadySigned) ? (
               <button
                 type="button"
-                disabled={engagementId ? (!alreadySigned && (!canSignAgreement || signSubmitting)) : false}
+                disabled={!alreadySigned && (!canSignAgreement || signSubmitting)}
                 onClick={() => void submitSignatureAndContinue()}
                 className="ui-action-primary inline-flex items-center gap-2 rounded-lg border-2 px-5 py-2 text-sm font-bold transition-all hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
               >
@@ -873,7 +931,10 @@ export default function OfferProposalPreview({
                     ? "Submitting…"
                     : alreadySigned
                       ? <>Continue to Payment <ChevronRight strokeWidth={3} className="h-4 w-4" /></>
-                      : <>I Agree — Sign &amp; Continue <ChevronRight strokeWidth={3} className="h-4 w-4" /></>}
+                      : <>
+                          {requiresOnboardingPayment ? "Sign & Continue to Payment" : "I Agree — Sign & Continue"}
+                          <ChevronRight strokeWidth={3} className="h-4 w-4" />
+                        </>}
               </button>
             ) : <span className="w-20" />}
           </div>
@@ -1020,6 +1081,11 @@ export default function OfferProposalPreview({
                   <ProposalUrgencyBanner offer={urgencyOffer} accentColor={actionColor} inkColor={inkColor} />
                 </div>
               ) : null}
+              {selectionError ? (
+                <p role="alert" className="mx-auto mb-6 max-w-3xl text-center text-sm font-semibold text-rose-700">
+                  {selectionError}
+                </p>
+              ) : null}
 
               {/* Annual toggle */}
               <div className="mb-8 flex flex-wrap items-center justify-center gap-4 text-base font-bold sm:text-lg">
@@ -1124,25 +1190,15 @@ export default function OfferProposalPreview({
                             <p><span className={`font-bold ${hasTwelveMonthAgreement ? "rounded bg-accent-100 px-1.5 py-0.5" : ""}`} style={{ color: inkColor }}>{fmt(recurringTotal)}</span> <span className="text-slate-500">/mo</span></p>
                           </div>
                         </div>
-                        <p className="mt-4 text-center text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{serviceLevel} service level</p>
-                        <button type="button" onClick={() => {
-                                          setSelectedOptionId(id);
-                                          setStep(2);
-                                          if (engagementId) {
-                                            const onbFee = option.oneTimeRows.find((r) => isOnboarding(r))?.price ?? 0;
-                                            void fetch(`/api/proposal/${engagementId}/select`, {
-                                              method: "POST",
-                                              headers: { "Content-Type": "application/json" },
-                                              body: JSON.stringify({
-                                                tier: id,
-                                                tierLabel: option.name,
-                                                onboardingFee: onbFee,
-                                                recurringMonthlyTotal: option.monthlyPrice,
-                                              }),
-                                            });
-                                          }
-                                        }} aria-pressed={selected} className="ui-action-primary mt-4 w-full rounded-lg border px-4 py-3 text-base font-bold transition">
-                          Select {option.name}
+                        <p className="mt-4 text-center text-xs font-bold uppercase tracking-[0.12em] text-slate-700">{serviceLevel} service level</p>
+                        <button
+                          type="button"
+                          disabled={selectionSubmittingId !== null}
+                          onClick={() => void selectOptionAndContinue(id)}
+                          aria-pressed={selected}
+                          className="ui-action-primary mt-4 w-full rounded-lg border px-4 py-3 text-base font-bold transition disabled:cursor-wait disabled:opacity-60"
+                        >
+                          {selectionSubmittingId === id ? "Saving selection…" : `Select ${option.name}`}
                         </button>
                       </div>
 
@@ -1150,17 +1206,17 @@ export default function OfferProposalPreview({
                       <section className="border-t border-slate-200">
                         <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ backgroundColor: subtleAccentBg, color: inkColor }}>One-time services</p>
                         <div className="px-5 py-4">
-                          {requiredOnboard.length ? <div className="mt-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Required to get started</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{requiredOnboard.map((row) => <ServiceLine key={row.id} row={row} originalPrice={onboardingWaived && isOnboarding(row) ? originalOnboardingFee : undefined} waivedLabel={onboardingWaived && isOnboarding(row) ? "Waived" : undefined} />)}</ul></div> : null}
-                          {optionalCleanup.length ? <div className="mt-5 border-t border-slate-200 pt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Optional catch-up</p><ul className="mt-4 space-y-7 text-sm text-slate-600">{optionalCleanup.map((row) => <ServiceLine key={row.id} row={row} selected={cleanupIsSelected(id, row.cleanupPeriodKey!)} onToggle={(checked) => setCleanupSelections((prev) => ({ ...prev, [cleanupKey(id, row.cleanupPeriodKey!)]: checked }))} showPriceWhenUnselected />)}</ul></div> : null}
-                          {additionalSetup.length ? <div className="mt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Additional setup</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{additionalSetup.map((row) => <ServiceLine key={row.id} row={row} />)}</ul></div> : null}
+                          {requiredOnboard.length ? <div className="mt-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Required to get started</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{requiredOnboard.map((row) => <ServiceLine key={row.id} row={row} originalPrice={onboardingWaived && isOnboarding(row) ? originalOnboardingFee : undefined} waivedLabel={onboardingWaived && isOnboarding(row) ? "Waived" : undefined} />)}</ul></div> : null}
+                          {optionalCleanup.length ? <div className="mt-5 border-t border-slate-200 pt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Optional catch-up</p><ul className="mt-4 space-y-7 text-sm text-slate-600">{optionalCleanup.map((row) => <ServiceLine key={row.id} row={row} selected={cleanupIsSelected(id, row.cleanupPeriodKey!)} onToggle={(checked) => setCleanupSelections((prev) => ({ ...prev, [cleanupKey(id, row.cleanupPeriodKey!)]: checked }))} showPriceWhenUnselected />)}</ul></div> : null}
+                          {additionalSetup.length ? <div className="mt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Additional setup</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{additionalSetup.map((row) => <ServiceLine key={row.id} row={row} />)}</ul></div> : null}
                         </div>
                       </section>
 
                       {/* Recurring services */}
                       <section>
                         <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ backgroundColor: brandDark, color: brandDarkForeground }}>Recurring services</p>
-                        {bkRow && !lowerTierId ? <div className="px-5 pt-4"><p className="text-sm font-semibold text-slate-500">Monthly Bookkeeping</p><p className="mt-1 text-sm leading-6 text-slate-600">{getTooltip(bkRow)}</p></div> : null}
-                        {recurringLeadInName ? <p className="px-5 pt-4 text-sm font-semibold text-slate-500">Everything in {recurringLeadInName}, plus:</p> : null}
+                        {bkRow && !lowerTierId ? <div className="px-5 pt-4"><p className="text-sm font-semibold text-slate-700">Monthly Bookkeeping</p><p className="mt-1 text-sm leading-6 text-slate-600">{getTooltip(bkRow)}</p></div> : null}
+                        {recurringLeadInName ? <p className="px-5 pt-4 text-sm font-semibold text-slate-700">Everything in {recurringLeadInName}, plus:</p> : null}
                         <ul className="space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600">
                           {orderedRecurring.map((row) => (
                             <li key={row.id} className={`flex justify-between gap-3 ${isNew(row.serviceName) ? "font-semibold text-emerald-700" : ""}`}>
@@ -1178,7 +1234,7 @@ export default function OfferProposalPreview({
                       </section>
 
                       {/* Support row */}
-                      {supportRow ? <div className="border-t border-slate-200 px-5 py-4"><p className="text-sm font-semibold text-slate-500">{supportRow.serviceName}</p><p className="mt-1 text-sm leading-6 text-slate-600">{getTooltip(supportRow)}</p></div> : <div />}
+                      {supportRow ? <div className="border-t border-slate-200 px-5 py-4"><p className="text-sm font-semibold text-slate-700">{supportRow.serviceName}</p><p className="mt-1 text-sm leading-6 text-slate-600">{getTooltip(supportRow)}</p></div> : <div />}
 
                       {additionalOptionRows.length > 0 ? (
                         <section>
@@ -1207,7 +1263,7 @@ export default function OfferProposalPreview({
                       {displayedBonuses.length > 0 ? (
                         <section>
                           <p className="bg-emerald-100 px-5 py-3 text-xs font-bold uppercase tracking-[0.12em] text-emerald-900">Included bonuses</p>
-                          {bonusLeadInName ? <p className="px-5 pt-4 text-sm font-semibold text-slate-500">Everything in {bonusLeadInName}, plus:</p> : null}
+                          {bonusLeadInName ? <p className="px-5 pt-4 text-sm font-semibold text-slate-700">Everything in {bonusLeadInName}, plus:</p> : null}
                           <ul className="space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600">
                             {displayedBonuses.map((row) => (
                               <li key={row.id} className="flex justify-between gap-3 font-semibold text-emerald-700">
@@ -1226,7 +1282,7 @@ export default function OfferProposalPreview({
 
                       {/* Pricing summary */}
                       <div className="border-t border-slate-200 p-5">
-                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Your pricing</p>
+                        <p className="text-xs font-bold uppercase tracking-wide text-slate-700">Your pricing</p>
                         <div className="mt-3 rounded-xl bg-slate-50 p-4">
                           <div className="flex items-center justify-between gap-4 text-sm">
                             <span className="text-slate-600">
@@ -1245,24 +1301,13 @@ export default function OfferProposalPreview({
                             <span className="font-bold" style={{ color: inkColor }}>{fmt(recurringTotal)}/mo</span>
                           </div>
                         </div>
-                        <button type="button" onClick={() => {
-                                          setSelectedOptionId(id);
-                                          setStep(2);
-                                          if (engagementId) {
-                                            const onbFee = option.oneTimeRows.find((r) => isOnboarding(r))?.price ?? 0;
-                                            void fetch(`/api/proposal/${engagementId}/select`, {
-                                              method: "POST",
-                                              headers: { "Content-Type": "application/json" },
-                                              body: JSON.stringify({
-                                                tier: id,
-                                                tierLabel: option.name,
-                                                onboardingFee: onbFee,
-                                                recurringMonthlyTotal: option.monthlyPrice,
-                                              }),
-                                            });
-                                          }
-                                        }} className="ui-action-primary mt-4 w-full rounded-lg border px-4 py-3 text-base font-bold transition">
-                          Select {option.name}
+                        <button
+                          type="button"
+                          disabled={selectionSubmittingId !== null}
+                          onClick={() => void selectOptionAndContinue(id)}
+                          className="ui-action-primary mt-4 w-full rounded-lg border px-4 py-3 text-base font-bold transition disabled:cursor-wait disabled:opacity-60"
+                        >
+                          {selectionSubmittingId === id ? "Saving selection…" : `Select ${option.name}`}
                         </button>
                         {urgencyOffer.active ? (
                           <p className="mt-2 text-center text-xs font-medium text-slate-500">{urgencyOffer.ctaHint}</p>
@@ -1285,18 +1330,20 @@ export default function OfferProposalPreview({
                   ) : null}
                   <div>
                     <h2 className="text-sm font-bold text-slate-900">{agreementTitle}</h2>
-                    <p className="mt-1 text-sm font-semibold text-brandnavy">
+                    <p className="mt-1 text-sm font-semibold" style={{ color: inkColor }}>
                       {engagementId
                         ? "You must read the entire agreement below before you can sign."
                         : "Review your agreement. In a live proposal, you would sign here before paying."}
                     </p>
                     <div
+                      data-proposal-surface="light"
                       ref={agreementScrollRef}
                       onScroll={(event) => checkAgreementScrolled(event.currentTarget)}
                       tabIndex={0}
                       role="region"
                       aria-label={`${agreementTitle} text, scroll to review`}
                       className="mt-2 max-h-[50vh] overflow-y-auto rounded-lg border border-slate-200 bg-white p-6 focus:outline-none focus:ring-2 focus:ring-brandnavy sm:max-h-[65vh]"
+                      style={{ "--proposal-light-surface-ink": lightSurfaceInk } as React.CSSProperties}
                     >
                       {agreementLoading ? (
                         <p className="text-sm text-slate-500">Loading your agreement…</p>
@@ -1324,11 +1371,14 @@ export default function OfferProposalPreview({
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-sm font-semibold text-slate-700" htmlFor="signerName">Full Name</label>
+                    <label className="mb-1 block text-sm font-semibold text-slate-700" htmlFor="signerName">
+                      Type your full legal name to sign
+                    </label>
                     <input
                       id="signerName"
                       type="text"
                       required
+                      autoComplete="off"
                       value={signerName}
                       onChange={(e) => setSignerName(e.target.value)}
                       placeholder="Your full name"
@@ -1387,6 +1437,21 @@ export default function OfferProposalPreview({
                     </label>
                   </div>
                   {signError ? <p className="text-xs text-red-600">{signError}</p> : null}
+                  <button
+                    type="button"
+                    disabled={!canSignAgreement || signSubmitting}
+                    onClick={() => void submitSignatureAndContinue()}
+                    className="ui-action-primary inline-flex w-full items-center justify-center gap-2 rounded-lg border-2 px-5 py-3 text-sm font-bold transition-all hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                  >
+                    {!engagementId
+                      ? <>Continue <ChevronRight strokeWidth={3} className="h-4 w-4" /></>
+                      : signSubmitting
+                        ? "Submitting…"
+                        : <>
+                            {requiresOnboardingPayment ? "Sign & Continue to Payment" : "I Agree — Sign & Continue"}
+                            <ChevronRight strokeWidth={3} className="h-4 w-4" />
+                          </>}
+                  </button>
                 </div>
               ) : (
                 <div className="space-y-4">
