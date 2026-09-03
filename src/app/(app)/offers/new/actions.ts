@@ -80,39 +80,40 @@ export async function createQuoteAction(formData: FormData) {
     redirect("/offers/new?error=package-required");
   }
 
-  let clientId = existingClientId;
+  let clientId: string;
 
-  if (clientId) {
+  if (existingClientId) {
     const existing = await prisma.quoteClient.findFirst({
-      where: { id: clientId, brandId: brand.id },
-      select: { id: true },
+      where: { id: existingClientId, brandId: brand.id },
+      select: { name: true, email: true, company: true },
     });
     if (!existing) {
       redirect("/offers/new?error=client-required");
     }
+    const client = await prisma.quoteClient.create({
+      data: {
+        brandId: brand.id,
+        name: existing.name,
+        email: existing.email,
+        company: existing.company,
+      },
+      select: { id: true },
+    });
+    clientId = client.id;
   } else {
     if (!clientName || !clientEmail) {
       redirect("/offers/new?error=client-required");
     }
-
-    const match = await prisma.quoteClient.findFirst({
-      where: { brandId: brand.id, email: clientEmail },
+    const client = await prisma.quoteClient.create({
+      data: {
+        brandId: brand.id,
+        name: clientName,
+        email: clientEmail,
+        company: clientCompany,
+      },
       select: { id: true },
     });
-
-    if (match) {
-      clientId = match.id;
-    } else {
-      const client = await prisma.quoteClient.create({
-        data: {
-          brandId: brand.id,
-          name: clientName,
-          email: clientEmail,
-          company: clientCompany,
-        },
-      });
-      clientId = client.id;
-    }
+    clientId = client.id;
   }
 
   try {

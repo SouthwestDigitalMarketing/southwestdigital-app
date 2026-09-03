@@ -13,6 +13,7 @@ import { materializeProposalCatalog } from "@/lib/quotes/materializeProposalCata
 import { materializeAgreementTemplate } from "@/lib/agreements/materialize";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
 import { ensureQuoteEngagement } from "@/lib/engagements/fromOffer";
+import { quoteClientDetailsFromSnapshot } from "@/lib/quotes/clientInfo";
 
 export type OfferAudienceContact = {
   id: string;
@@ -47,6 +48,46 @@ function asJsonObject(value: unknown): Prisma.InputJsonObject {
     if (error instanceof Error && error.message === "Offer data must be a JSON object.") throw error;
     throw new Error("Offer data could not be saved.");
   }
+}
+
+async function ensureExclusiveQuoteClient(
+  tx: Prisma.TransactionClient,
+  input: {
+    brandId: string;
+    quoteId: string;
+    clientId: string;
+    snapshot: unknown;
+    fallbackClient: { name: string; email: string; company: string | null };
+  },
+) {
+  const clientData = quoteClientDetailsFromSnapshot(input.snapshot, input.fallbackClient);
+  const usage = await tx.quote.count({ where: { clientId: input.clientId } });
+
+  if (usage > 1) {
+    const cloned = await tx.quoteClient.create({
+      data: {
+        brandId: input.brandId,
+        name: clientData.name,
+        email: clientData.email,
+        company: clientData.company,
+      },
+      select: { id: true },
+    });
+
+    await tx.quote.update({
+      where: { id: input.quoteId },
+      data: { clientId: cloned.id },
+    });
+
+    return cloned.id;
+  }
+
+  await tx.quoteClient.update({
+    where: { id: input.clientId },
+    data: clientData,
+  });
+
+  return input.clientId;
 }
 
 export async function searchOfferContactsAction(
@@ -180,22 +221,15 @@ export async function startOfferDraftAction(kind: OfferKindKey, contactIds: stri
     .filter((contact): contact is NonNullable<typeof contact> => Boolean(contact));
   const primary = ordered[0];
   const email = (primary.email ?? "").trim().toLowerCase() || `${primary.id}@contacts.local`;
-
-  let client = await prisma.quoteClient.findFirst({
-    where: { brandId: brand.id, email },
+  const client = await prisma.quoteClient.create({
+    data: {
+      brandId: brand.id,
+      name: primary.name,
+      email,
+      company: primary.company,
+    },
     select: { id: true },
   });
-  if (!client) {
-    client = await prisma.quoteClient.create({
-      data: {
-        brandId: brand.id,
-        name: primary.name,
-        email,
-        company: primary.company,
-      },
-      select: { id: true },
-    });
-  }
 
   const quote = await prisma.quote.create({
     data: {
@@ -218,12 +252,19 @@ export async function startOfferDraftAction(kind: OfferKindKey, contactIds: stri
 
 export async function saveOfferDraftAction(
   offerId: string,
-  state: { contactInfo?: unknown; assessment?: unknown },
+  state: { contactInfo?: unknown; assessment?: unknown; pricing?: unknown },
 ) {
   const { brand } = await requireQuoteStaffOrThrow();
   const existing = await prisma.quote.findFirst({
     where: { id: offerId, brandId: brand.id },
-    select: { id: true, status: true, snapshotJson: true, kind: true },
+    select: {
+      id: true,
+      status: true,
+      snapshotJson: true,
+      kind: true,
+      clientId: true,
+      client: { select: { name: true, email: true, company: true } },
+    },
   });
   if (!existing) throw new Error("Offer not found.");
   if (existing.status === "archived") throw new Error("This offer is archived.");
@@ -237,17 +278,27 @@ export async function saveOfferDraftAction(
     state.assessment ?? previous.assessment,
   );
   const assessment = await materializeAgreementTemplate(brand.id, catalogAssessment);
+  const snapshot = asJsonObject({
+    ...previous,
+    kind: existing.kind,
+    contactInfo: state.contactInfo ?? previous.contactInfo,
+    assessment,
+    pricing: state.pricing ?? previous.pricing,
+  });
 
-  await prisma.quote.update({
-    where: { id: existing.id },
-    data: {
-      snapshotJson: asJsonObject({
-        ...previous,
-        kind: existing.kind,
-        contactInfo: state.contactInfo ?? previous.contactInfo,
-        assessment,
-      }),
-    },
+  await prisma.$transaction(async (tx) => {
+    const clientId = await ensureExclusiveQuoteClient(tx, {
+      brandId: brand.id,
+      quoteId: existing.id,
+      clientId: existing.clientId,
+      snapshot,
+      fallbackClient: existing.client,
+    });
+
+    await tx.quote.update({
+      where: { id: existing.id },
+      data: { clientId, snapshotJson: snapshot },
+    });
   });
 
   revalidatePath("/offers");
@@ -256,12 +307,20 @@ export async function saveOfferDraftAction(
 
 export async function publishOfferChangesAction(
   offerId: string,
-  state: { contactInfo?: unknown; assessment?: unknown },
+  state: { contactInfo?: unknown; assessment?: unknown; pricing?: unknown },
 ) {
   const { brand } = await requireQuoteStaffOrThrow();
   const existing = await prisma.quote.findFirst({
     where: { id: offerId, brandId: brand.id },
-    select: { id: true, status: true, snapshotJson: true, kind: true, publicToken: true },
+    select: {
+      id: true,
+      status: true,
+      snapshotJson: true,
+      kind: true,
+      publicToken: true,
+      clientId: true,
+      client: { select: { name: true, email: true, company: true } },
+    },
   });
   if (!existing) throw new Error("Offer not found.");
   if (existing.status === "archived") throw new Error("This offer is archived.");
@@ -281,20 +340,32 @@ export async function publishOfferChangesAction(
     kind: existing.kind,
     contactInfo: state.contactInfo ?? previous.contactInfo,
     assessment,
+    pricing: state.pricing ?? previous.pricing,
   });
   const publicToken = existing.publicToken ?? randomBytes(32).toString("base64url");
   const { quoteRevisions, quoteEngagement } = await getSchemaCapabilities();
   const publishedAt = new Date();
 
   if (!quoteRevisions) {
-    await prisma.quote.update({
-      where: { id: existing.id },
-      data: {
-        snapshotJson: snapshot,
-        publishedSnapshotJson: snapshot,
-        publicToken,
-        publishedAt,
-      },
+    await prisma.$transaction(async (tx) => {
+      const clientId = await ensureExclusiveQuoteClient(tx, {
+        brandId: brand.id,
+        quoteId: existing.id,
+        clientId: existing.clientId,
+        snapshot,
+        fallbackClient: existing.client,
+      });
+
+      await tx.quote.update({
+        where: { id: existing.id },
+        data: {
+          clientId,
+          snapshotJson: snapshot,
+          publishedSnapshotJson: snapshot,
+          publicToken,
+          publishedAt,
+        },
+      });
     });
     if (quoteEngagement) {
       await ensureQuoteEngagement({
@@ -316,12 +387,20 @@ export async function publishOfferChangesAction(
   });
   const version = (latestRevision?.version ?? 0) + 1;
 
-  await prisma.$transaction([
-    prisma.quoteRevision.updateMany({
+  await prisma.$transaction(async (tx) => {
+    const clientId = await ensureExclusiveQuoteClient(tx, {
+      brandId: brand.id,
+      quoteId: existing.id,
+      clientId: existing.clientId,
+      snapshot,
+      fallbackClient: existing.client,
+    });
+
+    await tx.quoteRevision.updateMany({
       where: { brandId: brand.id, quoteId: existing.id, supersededAt: null },
       data: { supersededAt: publishedAt },
-    }),
-    prisma.quoteRevision.create({
+    });
+    await tx.quoteRevision.create({
       data: {
         brandId: brand.id,
         quoteId: existing.id,
@@ -329,17 +408,18 @@ export async function publishOfferChangesAction(
         snapshotJson: snapshot,
         publishedAt,
       },
-    }),
-    prisma.quote.update({
+    });
+    await tx.quote.update({
       where: { id: existing.id },
       data: {
+        clientId,
         snapshotJson: snapshot,
         publishedSnapshotJson: snapshot,
         publicToken,
         publishedAt,
       },
-    }),
-  ]);
+    });
+  });
 
   if (quoteEngagement) {
     await ensureQuoteEngagement({

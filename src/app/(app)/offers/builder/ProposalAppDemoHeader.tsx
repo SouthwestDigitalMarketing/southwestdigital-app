@@ -12,6 +12,10 @@ import {
   syncOfferContactsAction,
 } from "../who/actions";
 import type { ContactInfoState } from "./ProposalContactInfoState";
+import {
+  getProposalPricingSnapshotData,
+  type AssessmentState,
+} from "./ProposalCreationWorkspaceDemo";
 
 export default function ProposalAppDemoHeader({
   currentStep,
@@ -80,6 +84,7 @@ export default function ProposalAppDemoHeader({
         await saveOfferDraftAction(offerId, {
           contactInfo,
           assessment: localState.assessment,
+          pricing: getProposalPricingSnapshotData(localState.assessment as AssessmentState).packagePricing,
         });
       }
       setSaveStatus("saved");
@@ -121,6 +126,7 @@ export default function ProposalAppDemoHeader({
       const result = await publishOfferChangesAction(offerId, {
         contactInfo,
         assessment: localState.assessment,
+        pricing: getProposalPricingSnapshotData(localState.assessment as AssessmentState).packagePricing,
       });
       window.localStorage.setItem(`proposal-public-path:${offerId}`, result.publicPath);
       setPublishedVersion(result.version);

@@ -819,8 +819,8 @@ export default function OfferProposalPreview({
   const clientSteps = [
     "Cover",
     "Services",
-    "Sign & Pay",
-    requiresOnboardingPayment ? "Onboarding Payment" : "Confirmation",
+    "Agreement",
+    requiresOnboardingPayment ? "Payment" : "Confirmation",
   ] as const;
   const agreementTitle =
     agreementTemplate?.name

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "openrouter/thinkingmachines/inkling-small:free",
+  "provider": {
+    "openrouter": {
+      "models": {
+        "thinkingmachines/inkling-small:free": {}
+      }
+    }
+  }
+}

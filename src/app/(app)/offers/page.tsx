@@ -2,7 +2,8 @@ import Link from "next/link";
 import { requireQuoteStaff } from "@/lib/quotes/access";
 import { prisma } from "@/lib/prisma";
 import { formatUsd } from "@/lib/quotes/format";
-import { OFFER_KINDS, isOfferKindKey, resumeOfferHref } from "@/lib/quotes/kinds";
+import { isOfferKindKey, resumeOfferHref } from "@/lib/quotes/kinds";
+import { quoteContactSummaryFromSnapshot } from "@/lib/quotes/clientInfo";
 import {
   bucketForStatus,
   outcomeLabel,
@@ -14,6 +15,8 @@ import {
 import { OfferStatusButtons } from "./OfferStatusButtons";
 import { OffersListControls } from "./OffersListControls";
 import { OffersFunnel } from "./OffersFunnel";
+import { duplicateQuoteAction } from "./actions";
+import { OfferContactCell } from "./OfferContactCell";
 
 type SearchParams = Promise<{ sent?: string; contact?: string; status?: string; kind?: string; archived?: string }>;
 
@@ -33,7 +36,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
   const kindFilter =
     typeof params.kind === "string" && isOfferKindKey(params.kind) ? params.kind : "all";
 
-  const [listed, contact] = await Promise.all([
+  const [listed, contacts, contact] = await Promise.all([
     prisma.quote.findMany({
       where: {
         brandId: brand.id,
@@ -42,7 +45,15 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
       },
       orderBy: { updatedAt: "desc" },
       take: 50,
-      include: { client: true },
+      include: {
+        client: true,
+        lineItems: { select: { amount: true, billingType: true } },
+      },
+    }),
+    prisma.contact.findMany({
+      where: { brandId: brand.id, isActive: true },
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+      select: { id: true, name: true, company: true, email: true },
     }),
     contactId
       ? prisma.contact.findFirst({
@@ -100,11 +111,11 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
           <table className="w-full text-base">
             <thead>
               <tr className="bg-slate-50 text-left">
-                <th className="px-5 py-2 text-sm font-semibold normal-case text-slate-700">Client</th>
-                <th className="px-5 py-2 text-sm font-semibold normal-case text-slate-700">Type</th>
+                <th className="px-5 py-2 text-sm font-semibold normal-case text-slate-700">Contact</th>
                 <th className="px-5 py-2 text-sm font-semibold normal-case text-slate-700">Status</th>
                 <th className="px-5 py-2 text-sm font-semibold normal-case text-slate-700">Updated</th>
-                <th className="px-5 py-2 text-sm font-semibold normal-case text-slate-700">Amount</th>
+                <th className="px-5 py-2 text-sm font-semibold normal-case text-slate-700">Monthly $</th>
+                <th className="px-5 py-2 text-sm font-semibold normal-case text-slate-700">1-time $</th>
                 <th className="px-5 py-2"></th>
               </tr>
             </thead>
@@ -112,22 +123,38 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
               {listed.map((quote) => {
                 const snapshot =
                   quote.snapshotJson && typeof quote.snapshotJson === "object"
-                    ? (quote.snapshotJson as { contactIds?: string[]; kind?: string; package?: unknown })
+                    ? (quote.snapshotJson as {
+                        contactIds?: string[];
+                        kind?: string;
+                        package?: unknown;
+                        pricing?: {
+                          maintain?: { monthly?: number; totalOneTime?: number };
+                        };
+                      })
                     : {};
                 const kind = snapshot.kind ?? quote.kind;
-                const kindLabel =
-                  OFFER_KINDS.find((item) => item.key === kind)?.name ?? "Offer";
                 const itemBucket = bucketForStatus(quote.status);
                 const canResume = itemBucket === "draft" || !snapshot.package;
+                const currentContact = quoteContactSummaryFromSnapshot(quote.snapshotJson, quote.client);
+                const monthlyLineItemTotal = quote.lineItems
+                  .filter((item) => item.billingType.toLowerCase() === "recurring")
+                  .reduce((total, item) => total + Number(item.amount), 0);
+                const oneTimeLineItemTotal = quote.lineItems
+                  .filter((item) => item.billingType.toLowerCase() === "one_time")
+                  .reduce((total, item) => total + Number(item.amount), 0);
+                const monthlyTotal =
+                  snapshot.pricing?.maintain?.monthly ?? (monthlyLineItemTotal || Number(quote.totalRecurring));
+                const oneTimeTotal =
+                  snapshot.pricing?.maintain?.totalOneTime ?? (oneTimeLineItemTotal || Number(quote.totalOneTime));
                 return (
                   <tr key={quote.id} className="hover:bg-slate-50">
                     <td className="px-5 py-4">
-                      <div className="font-medium text-slate-900">{quote.client.name}</div>
-                      {quote.client.company ? (
-                        <div className="mt-0.5 text-base text-slate-500">{quote.client.company}</div>
-                      ) : null}
+                      <OfferContactCell
+                        offerId={quote.id}
+                        currentContact={currentContact}
+                        contacts={contacts}
+                      />
                     </td>
-                    <td className="px-5 py-4 text-slate-600">{kindLabel}</td>
                     <td className="px-5 py-4">
                       <span
                         className={`inline-flex rounded-full px-3 py-1 font-medium ${BUCKET_STYLE[itemBucket]}`}
@@ -143,13 +170,10 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                       })}
                     </td>
                     <td className="px-5 py-4 text-slate-700">
-                      {Number(quote.totalOneTime) > 0 || Number(quote.totalRecurring) > 0
-                        ? `${formatUsd(quote.totalOneTime)}${
-                            Number(quote.totalRecurring) > 0
-                              ? ` + ${formatUsd(quote.totalRecurring)}/mo`
-                              : ""
-                          }`
-                        : "—"}
+                      {monthlyTotal > 0 ? formatUsd(monthlyTotal) : "—"}
+                    </td>
+                    <td className="px-5 py-4 text-slate-700">
+                      {oneTimeTotal > 0 ? formatUsd(oneTimeTotal) : "—"}
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex flex-wrap items-center justify-end gap-2">
@@ -164,9 +188,18 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                               ? "ui-action-secondary inline-flex h-9 items-center justify-center rounded-full border px-3 text-base font-semibold leading-none transition"
                               : "text-base font-medium text-slate-900 hover:underline"
                           }
-                        >
+                          >
                           {canResume ? "Resume" : "View"}
                         </Link>
+                        <form action={duplicateQuoteAction}>
+                          <input type="hidden" name="id" value={quote.id} />
+                          <button
+                            type="submit"
+                            className="ui-action-ghost inline-flex h-9 items-center justify-center rounded-full px-3 text-base font-medium leading-none transition"
+                          >
+                            Duplicate
+                          </button>
+                        </form>
                         <OfferStatusButtons offerId={quote.id} bucket={itemBucket} />
                       </div>
                     </td>
