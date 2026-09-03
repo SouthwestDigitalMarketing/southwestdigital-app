@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Archive, ArchiveRestore, RotateCw, Trash2 } from "lucide-react";
 import { deleteQuoteAction, setOfferStatusAction } from "./actions";
@@ -16,6 +16,7 @@ export function OfferStatusButtons({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   function setStatus(next: "draft" | "completed" | "archived" | "sent" | "accepted" | "rejected") {
     const data = new FormData();
@@ -36,8 +37,12 @@ export function OfferStatusButtons({
     });
   }
 
+  function requestDelete() {
+    setDeleteConfirmOpen(true);
+  }
+
   function deleteOffer() {
-    if (!window.confirm("Delete this offer permanently? This cannot be undone.")) return;
+    setDeleteConfirmOpen(false);
     const data = new FormData();
     data.set("id", offerId);
     startTransition(async () => {
@@ -65,7 +70,7 @@ export function OfferStatusButtons({
       <button
         type="button"
         disabled={pending}
-        onClick={deleteOffer}
+        onClick={requestDelete}
         className="ui-action-ghost inline-flex h-9 w-9 items-center justify-center rounded-full text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
         aria-label="Delete offer permanently"
         title="Delete offer permanently"
@@ -127,6 +132,46 @@ export function OfferStatusButtons({
         >
           <ArchiveRestore className="h-4 w-4" />
         </button>
+      ) : null}
+      {deleteConfirmOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4"
+          role="presentation"
+          onClick={() => !pending && setDeleteConfirmOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-left shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={`delete-offer-title-${offerId}`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id={`delete-offer-title-${offerId}`} className="text-lg font-semibold text-slate-900">
+              Delete this offer?
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              This permanently deletes the offer and cannot be undone.
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => setDeleteConfirmOpen(false)}
+                className="ui-action-secondary inline-flex h-9 items-center justify-center rounded-full border px-4 text-sm font-semibold transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={deleteOffer}
+                className="inline-flex h-9 items-center justify-center rounded-full border border-rose-600 bg-rose-600 px-4 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-50"
+              >
+                {pending ? "Deleting..." : "Delete offer"}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   );
