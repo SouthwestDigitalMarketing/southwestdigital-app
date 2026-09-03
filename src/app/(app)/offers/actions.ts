@@ -262,6 +262,9 @@ export async function duplicateQuoteAction(formData: FormData) {
     : null;
   const snapshot = {
     ...sourceSnapshot,
+    // Duplicates are fresh lead-facing proposals and must not inherit
+    // contact-specific promotions from the source offer.
+    isFreshDuplicate: true,
     ...(freshAssessment ? { assessment: freshAssessment } : {}),
     ...(contact
       ? {

@@ -16,7 +16,17 @@ export async function resolveOnboardingWaiverForEngagement(engagementId: string)
   });
   if (!quote) return false;
 
-  const summary = quoteContactSummaryFromSnapshot(quote.publishedSnapshotJson ?? quote.snapshotJson);
+  const publishedSnapshot = quote.publishedSnapshotJson ?? quote.snapshotJson;
+  if (
+    publishedSnapshot &&
+    typeof publishedSnapshot === "object" &&
+    !Array.isArray(publishedSnapshot) &&
+    publishedSnapshot.isFreshDuplicate === true
+  ) {
+    return false;
+  }
+
+  const summary = quoteContactSummaryFromSnapshot(publishedSnapshot);
   const primaryContactId = summary.contactId;
 
   const discounts = await prisma.brandDiscount.findMany({

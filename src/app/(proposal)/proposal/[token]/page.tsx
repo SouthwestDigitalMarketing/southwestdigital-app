@@ -57,6 +57,7 @@ export default async function PublicProposalPage({
       ? quote.publishedSnapshotJson
       : null;
   if (!snapshot) notFound();
+  const isFreshDuplicate = snapshot.isFreshDuplicate === true;
 
   let engagementId = quoteEngagement ? quote?.engagementId ?? null : null;
   if (quote && quoteEngagement && !engagementId) {
@@ -76,17 +77,19 @@ export default async function PublicProposalPage({
 
   const primaryContactId = quoteContactSummaryFromSnapshot(snapshot).contactId;
   const [discounts, engagement] = await Promise.all([
-    prisma.brandDiscount.findMany({
-      where: {
-        brandId: brand.id,
-        active: true,
-        OR: [
-          { contactId: null },
-          ...(primaryContactId ? [{ contactId: primaryContactId }] : []),
-        ],
-      },
-      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-    }),
+    isFreshDuplicate
+      ? Promise.resolve([])
+      : prisma.brandDiscount.findMany({
+          where: {
+            brandId: brand.id,
+            active: true,
+            OR: [
+              { contactId: null },
+              ...(primaryContactId ? [{ contactId: primaryContactId }] : []),
+            ],
+          },
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        }),
     engagementId
       ? prisma.engagement.findFirst({
           where: { id: engagementId, brandId: brand.id },
