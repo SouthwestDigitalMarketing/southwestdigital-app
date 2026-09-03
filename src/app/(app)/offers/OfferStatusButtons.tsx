@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Archive, RotateCw, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, RotateCw, Trash2 } from "lucide-react";
 import { deleteQuoteAction, setOfferStatusAction } from "./actions";
 import { resendQuoteAction } from "./actions";
 import type { OfferBucket } from "@/lib/quotes/status";
@@ -62,6 +62,16 @@ export function OfferStatusButtons({
       >
         <RotateCw className="h-4 w-4" />
       </button>
+      <button
+        type="button"
+        disabled={pending}
+        onClick={deleteOffer}
+        className="ui-action-ghost inline-flex h-9 w-9 items-center justify-center rounded-full text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
+        aria-label="Delete offer permanently"
+        title="Delete offer permanently"
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
       {bucket === "draft" ? (
         <button
           type="button"
@@ -107,26 +117,16 @@ export function OfferStatusButtons({
         </button>
       ) : null}
       {bucket === "archived" ? (
-        <>
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => setStatus("draft")}
-            className="ui-action-ghost inline-flex h-9 items-center justify-center rounded-full px-3 text-base font-medium leading-none transition disabled:opacity-50"
-          >
-            Unarchive
-          </button>
-          <button
-            type="button"
-            disabled={pending}
-            onClick={deleteOffer}
-            className="ui-action-ghost inline-flex h-9 w-9 items-center justify-center rounded-full text-rose-600 hover:bg-rose-50 disabled:opacity-50"
-            aria-label="Delete offer permanently"
-            title="Delete offer permanently"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
-        </>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => setStatus("draft")}
+          className={iconBtn}
+          aria-label="Unarchive offer"
+          title="Unarchive offer"
+        >
+          <ArchiveRestore className="h-4 w-4" />
+        </button>
       ) : null}
     </div>
   );

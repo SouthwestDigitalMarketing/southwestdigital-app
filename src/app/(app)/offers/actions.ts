@@ -365,10 +365,6 @@ export async function deleteQuoteAction(formData: FormData) {
     select: { id: true, status: true },
   });
   if (!quote) throw new Error("Not found");
-  if (quote.status !== "archived") {
-    throw new Error("Only archived offers can be deleted.");
-  }
-
   await prisma.quote.delete({ where: { id: quote.id } });
   revalidatePath("/offers");
 }
