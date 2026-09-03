@@ -58,6 +58,7 @@ export default async function PublicProposalPage({
       : null;
   if (!snapshot) notFound();
   const isFreshDuplicate = snapshot.isFreshDuplicate === true;
+  const suppressPromotions = isFreshDuplicate || snapshot.suppressPromotions === true;
 
   let engagementId = quoteEngagement ? quote?.engagementId ?? null : null;
   if (quote && quoteEngagement && !engagementId) {
@@ -77,7 +78,7 @@ export default async function PublicProposalPage({
 
   const primaryContactId = quoteContactSummaryFromSnapshot(snapshot).contactId;
   const [discounts, engagement] = await Promise.all([
-    isFreshDuplicate
+    suppressPromotions
       ? Promise.resolve([])
       : prisma.brandDiscount.findMany({
           where: {

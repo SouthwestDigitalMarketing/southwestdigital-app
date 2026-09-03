@@ -20,6 +20,7 @@ import { OffersFunnel } from "./OffersFunnel";
 import { OfferContactCell } from "./OfferContactCell";
 import { DuplicateOfferButton } from "./DuplicateOfferButton";
 import { DuplicateOfferFocus } from "./DuplicateOfferFocus";
+import { ClearDuplicateMarkerButton } from "./ClearDuplicateMarkerButton";
 import { SendOfferEmailButton } from "./SendOfferEmailButton";
 
 type SortKey = "contact" | "status" | "mrr" | "lump" | "lastSent";
@@ -205,6 +206,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                         contactIds?: string[];
                         kind?: string;
                         package?: unknown;
+                        isFreshDuplicate?: boolean;
                         pricing?: {
                           maintain?: { monthly?: number; totalOneTime?: number };
                         };
@@ -224,6 +226,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                   snapshot.pricing?.maintain?.monthly ?? (monthlyLineItemTotal || Number(quote.totalRecurring));
                 const oneTimeTotal =
                   snapshot.pricing?.maintain?.totalOneTime ?? (oneTimeLineItemTotal || Number(quote.totalOneTime));
+                const isDuplicate = snapshot.isFreshDuplicate === true;
                 return (
                   <tr
                     id={`offer-row-${quote.id}`}
@@ -231,15 +234,16 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                     className={`hover:bg-slate-50 ${quote.id === highlightId ? "offer-row-highlight" : ""}`}
                   >
                     <td className="relative px-5 py-4">
-                      {quote.id === highlightId ? (
+                      {isDuplicate ? (
                         <>
-                          <DuplicateOfferFocus offerId={quote.id} />
+                          {quote.id === highlightId ? <DuplicateOfferFocus offerId={quote.id} /> : null}
                           <span
                             title={`New duplicate: ${quote.id}`}
                             aria-label={`New duplicate offer ${quote.id}`}
                             className="absolute right-2 top-2 z-10 inline-flex rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none tracking-wide text-amber-900"
                           >
                             Duplicate
+                            <ClearDuplicateMarkerButton offerId={quote.id} />
                           </span>
                         </>
                       ) : null}

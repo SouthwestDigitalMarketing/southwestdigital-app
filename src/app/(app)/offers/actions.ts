@@ -265,6 +265,7 @@ export async function duplicateQuoteAction(formData: FormData) {
     // Duplicates are fresh lead-facing proposals and must not inherit
     // contact-specific promotions from the source offer.
     isFreshDuplicate: true,
+    suppressPromotions: true,
     ...(freshAssessment ? { assessment: freshAssessment } : {}),
     ...(contact
       ? {
@@ -326,6 +327,32 @@ export async function duplicateQuoteAction(formData: FormData) {
 
   revalidatePath("/offers");
   redirect(`/offers?highlight=${duplicate.id}${archived ? "&archived=1" : ""}`);
+}
+
+export async function clearDuplicateMarkerAction(formData: FormData) {
+  const { brand } = await requireQuoteStaffOrThrow();
+  const id = (formData.get("id") as string | null)?.trim() ?? "";
+  if (!id) throw new Error("Offer ID required");
+
+  const quote = await prisma.quote.findFirst({
+    where: { id, brandId: brand.id },
+    select: { id: true, snapshotJson: true },
+  });
+  if (!quote) throw new Error("Not found");
+  if (!quote.snapshotJson || typeof quote.snapshotJson !== "object" || Array.isArray(quote.snapshotJson)) {
+    throw new Error("Offer snapshot is malformed.");
+  }
+
+  const snapshot = Object.fromEntries(
+    Object.entries(quote.snapshotJson as Record<string, unknown>)
+      .filter(([key]) => key !== "isFreshDuplicate"),
+  );
+  await prisma.quote.update({
+    where: { id: quote.id },
+    data: { snapshotJson: snapshot as Prisma.InputJsonValue },
+  });
+
+  revalidatePath("/offers");
 }
 
 export async function deleteQuoteAction(formData: FormData) {

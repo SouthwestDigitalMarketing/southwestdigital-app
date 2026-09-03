@@ -21,7 +21,7 @@ export async function resolveOnboardingWaiverForEngagement(engagementId: string)
     publishedSnapshot &&
     typeof publishedSnapshot === "object" &&
     !Array.isArray(publishedSnapshot) &&
-    publishedSnapshot.isFreshDuplicate === true
+    (publishedSnapshot.isFreshDuplicate === true || publishedSnapshot.suppressPromotions === true)
   ) {
     return false;
   }
