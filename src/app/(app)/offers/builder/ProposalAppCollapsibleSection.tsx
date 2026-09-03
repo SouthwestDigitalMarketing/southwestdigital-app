@@ -18,6 +18,7 @@ export default function ProposalAppCollapsibleSection({
   bodyClassName = "px-5 pb-7 pt-3",
   titleClassName = "text-lg font-semibold tracking-tight text-slate-900",
   headerMeta,
+  hideToggle = false,
 }: {
   title: string;
   children: ReactNode;
@@ -26,6 +27,7 @@ export default function ProposalAppCollapsibleSection({
   bodyClassName?: string;
   titleClassName?: string;
   headerMeta?: ReactNode;
+  hideToggle?: boolean;
 }) {
   const [open, setOpen] = useState(() =>
     forceOpen ? readStoredExpandAllPreference() : defaultOpen,
@@ -40,7 +42,11 @@ export default function ProposalAppCollapsibleSection({
   return (
     <div className="proposal-builder-section">
       <div className="flex w-full items-center justify-between gap-4 px-5 py-6 text-left">
-        <button
+        {hideToggle ? (
+          <div className="flex min-w-0 items-center gap-3">
+            <span className={titleClassName}>{title}</span>
+          </div>
+        ) : <button
           type="button"
           onClick={() => setOpen((current) => !current)}
           className="flex min-w-0 items-center gap-3"
@@ -52,7 +58,7 @@ export default function ProposalAppCollapsibleSection({
             }`}
           />
           <span className={titleClassName}>{title}</span>
-        </button>
+        </button>}
 
         {headerMeta ? <div className="shrink-0">{headerMeta}</div> : null}
       </div>

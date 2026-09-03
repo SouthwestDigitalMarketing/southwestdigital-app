@@ -25,6 +25,7 @@ import {
   Sparkles,
   TrendingUp,
   Trash2,
+  X,
 } from "lucide-react";
 import {
   DEFAULT_HERO_CONTINUE_BUTTON,
@@ -37,7 +38,6 @@ import {
   normalizeUrgencyOffer,
   type UrgencyOfferConfig,
 } from "./urgencyOffer";
-import { useBrand } from "@/lib/brands/context";
 import { DEFAULT_PROPOSAL_THEME_ID, DEFAULT_PROPOSAL_MODE } from "./proposalThemes";
 
 export type PackageId = "maintain" | "improve" | "grow";
@@ -1900,11 +1900,12 @@ export default function ProposalCreationWorkspaceDemo({
     toggleBankUsed,
     togglePayrollPaymentMethod,
   } = useProposalAssessmentDemoState();
-  const { brand } = useBrand();
   const [expandAllSignal, setExpandAllSignal] = useState<ProposalAppCollapsibleForceSignal>({
     value: false,
     token: 0,
   });
+  const [isEditingAssessment, setIsEditingAssessment] = useState(false);
+  const [editingAssessmentSection, setEditingAssessmentSection] = useState<"portfolio" | "monthly" | "cleanup" | null>(null);
   const isScaleStep = step === "scale";
   const isComplexityStep = step === "pricing";
   const isIncludedStep = step === "included";
@@ -2003,23 +2004,39 @@ export default function ProposalCreationWorkspaceDemo({
 
           <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_440px] 2xl:grid-cols-[minmax(0,1.55fr)_470px]">
             <div className="space-y-3">
-              <div className="flex justify-start px-1">
-                <ProposalAppExpandAllControl
-                  onExpandAll={() => setExpandAllSignal({ value: true, token: Date.now() })}
-                  onCollapseAll={() => setExpandAllSignal({ value: false, token: Date.now() })}
-                />
-              </div>
+              {!isIncludedStep ? (
+                <p className="mb-3 px-1 text-sm font-semibold text-slate-500">Assessment</p>
+              ) : (
+                <div className="flex justify-start px-1">
+                  <ProposalAppExpandAllControl
+                    onExpandAll={() => setExpandAllSignal({ value: true, token: Date.now() })}
+                    onCollapseAll={() => setExpandAllSignal({ value: false, token: Date.now() })}
+                  />
+                </div>
+              )}
+              {!isIncludedStep && !isEditingAssessment ? <AssessmentSummary assessment={assessment} step={step} onEdit={(section) => { setEditingAssessmentSection(section as "portfolio" | "monthly" | "cleanup"); setExpandAllSignal({ value: true, token: Date.now() }); setIsEditingAssessment(true); }} /> : null}
               <section
                 className={`proposal-builder-card rounded-[1.5rem] ${
+                  !isIncludedStep && !isEditingAssessment ? "hidden" : ""
+                } ${
+                  isEditingAssessment && !isIncludedStep
+                    ? isScaleStep
+                      ? editingAssessmentSection === "portfolio"
+                        ? "fixed left-1/2 top-1/2 z-50 w-[min(100%-2rem,32rem)] -translate-x-1/2 -translate-y-1/2 overflow-hidden border border-slate-300 bg-white pb-16 shadow-2xl"
+                        : "fixed left-1/2 top-1/2 z-50 max-h-[calc(100vh-2rem)] w-[min(100%-2rem,60rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto border border-slate-300 bg-white shadow-2xl"
+                      : "fixed inset-4 z-50 max-h-[calc(100vh-2rem)] overflow-y-auto border border-slate-300 bg-white shadow-2xl"
+                    :
                   isIncludedStep
                     ? "overflow-visible"
                     : "overflow-hidden border border-slate-300 shadow-sm"
-                }`}
+                } ${isEditingAssessment && !isIncludedStep ? "relative" : ""}`}
               >
-                {isScaleStep ? (
+                {isEditingAssessment && !isIncludedStep ? <button type="button" onClick={() => setIsEditingAssessment(false)} aria-label="Close editor" title="Close editor" className="absolute right-4 top-4 z-10 rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"><X className="h-5 w-5" /></button> : null}
+                {isScaleStep && showRealEstateFields && (!editingAssessmentSection || editingAssessmentSection === "portfolio") ? (
                   <ProposalAppCollapsibleSection
                     title="Portfolio Scale"
                     forceOpen={expandAllSignal}
+                    hideToggle={isEditingAssessment}
                   >
                     {showRealEstateFields ? (
                       <div className="max-w-[280px]">
@@ -2729,10 +2746,11 @@ export default function ProposalCreationWorkspaceDemo({
                   </ProposalAppCollapsibleSection>
                 ) : null}
 
-                {isScaleStep ? (
+                {isScaleStep && (!editingAssessmentSection || editingAssessmentSection === "monthly") ? (
                   <ProposalAppCollapsibleSection
                     title="Monthly Activity"
                     forceOpen={expandAllSignal}
+                    hideToggle={isEditingAssessment}
                   >
                     <div className="grid gap-4 md:grid-cols-2">
                       <FieldLabel
@@ -2810,10 +2828,11 @@ export default function ProposalCreationWorkspaceDemo({
                   </ProposalAppCollapsibleSection>
                 ) : null}
 
-                {isScaleStep && needsHistoricalCleanup ? (
+                {isScaleStep && needsHistoricalCleanup && (!editingAssessmentSection || editingAssessmentSection === "cleanup") ? (
                   <ProposalAppCollapsibleSection
                     title="Historical Cleanup"
                     forceOpen={expandAllSignal}
+                    hideToggle={isEditingAssessment}
                   >
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                           <div className="space-y-2 md:col-span-2 xl:col-span-4">
@@ -3134,6 +3153,20 @@ export default function ProposalCreationWorkspaceDemo({
       </section>
     </main>
   );
+}
+
+function AssessmentSummary({ assessment, step, onEdit }: { assessment: AssessmentState; step: ProposalAssessmentStep; onEdit: (section: string) => void }) {
+  if (step === "scale") {
+    return <div className="space-y-3">{assessment.bookSetType === "real-estate-only" || assessment.bookSetType === "mixed-books" ? <SummarySection title="Portfolio Scale" onEdit={() => onEdit("portfolio")} items={[["Properties", String(assessment.numberOfProperties)], ["Book set", assessment.bookSetType]]} /> : null}<SummarySection title="Monthly Activity" onEdit={() => onEdit("monthly")} items={[["Average monthly volume", assessment.transactionBand], ["Books over two months behind", assessment.booksOverTwoMonthsBehind === true ? "Yes" : assessment.booksOverTwoMonthsBehind === false ? "No" : "Unknown"]]} />{assessment.booksOverTwoMonthsBehind ? <SummarySection title="Historical Cleanup" onEdit={() => onEdit("cleanup")} items={[["Cleanup periods", String(assessment.historicalCleanupPeriods.length)], ["Ongoing platform", assessment.ongoingBookkeepingPlatform], ["Platform migration", assessment.platformMigrationEnabled ? "Enabled" : "Not enabled"]]} /> : null}</div>;
+  }
+  const values: Array<[string, string]> = step === "pricing"
+      ? [["Connected bank accounts", String(assessment.bankAccountsCount)], ["Connected credit cards", String(assessment.creditCardsCount)], ["Unconnected bank accounts", String(assessment.unconnectedBankAccountsCount)], ["Unconnected credit cards", String(assessment.unconnectedCreditCardsCount)], ["Payment platforms", assessment.paymentPlatforms.join(", ")], ["Loans", String(assessment.loansCount)], ["Employees", String(assessment.employeesCount)], ["Contractors", String(assessment.contractorsCount)]]
+      : [["Monthly multiplier", `${assessment.discretionaryMultiplier}x`], ["Annual savings", `${assessment.annualSavingsPercent}%`], ["Onboarding fee", assessment.waiveOnboardingFee ? "Waived" : assessment.onboardingFeeOverride === null ? "Calculated" : String(assessment.onboardingFeeOverride)], ["Assessment notes", assessment.assessmentNotes || "Not set"]];
+  return <section className="proposal-builder-card overflow-hidden rounded-[1.5rem] border border-slate-300 bg-white shadow-sm"><div className="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-5"><h2 className="text-lg font-semibold tracking-tight text-slate-900">{step === "pricing" ? "Complexity" : "Adjustments"}</h2><button type="button" onClick={() => onEdit("all")} className="inline-flex items-center rounded-lg px-2 py-1 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-900">Edit</button></div><div className="grid gap-x-8 gap-y-5 px-5 py-6 sm:grid-cols-2">{values.map(([label, value]) => <div key={label}><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{label}</p><p className="mt-1 text-sm font-medium text-slate-800">{value || "Not set"}</p></div>)}</div></section>;
+}
+
+function SummarySection({ title, items, onEdit }: { title: string; items: Array<[string, string]>; onEdit: () => void }) {
+  return <section className="proposal-builder-card overflow-hidden rounded-[1.5rem] border border-slate-300 bg-white shadow-sm"><div className="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-5"><h2 className="text-lg font-semibold tracking-tight text-slate-900">{title}</h2><button type="button" onClick={onEdit} className="rounded-lg px-2 py-1 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-900">Edit</button></div><div className="grid gap-x-8 gap-y-5 px-5 py-6 sm:grid-cols-2">{items.map(([label, value]) => <div key={label}><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{label}</p><p className="mt-1 text-sm font-medium text-slate-800">{value || "Not set"}</p></div>)}</div></section>;
 }
 
 function FieldLabel({
