@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import { Search, X } from "lucide-react";
 import { createOfferAudienceContactAction } from "./who/actions";
 import { reassignQuoteContactAction } from "./actions";
 
@@ -31,9 +33,10 @@ export function OfferContactCell({
   contacts: ContactOption[];
 }) {
   const router = useRouter();
-  const [selectedContactId, setSelectedContactId] = useState(currentContact.contactId ?? "");
   const [error, setError] = useState<string | null>(null);
   const [showNewContact, setShowNewContact] = useState(false);
+  const [showContactOptions, setShowContactOptions] = useState(false);
+  const [contactQuery, setContactQuery] = useState("");
   const [pending, startTransition] = useTransition();
 
   const options = useMemo(() => {
@@ -51,6 +54,21 @@ export function OfferContactCell({
     ];
   }, [contacts, currentContact]);
 
+  const filteredOptions = useMemo(() => {
+    const query = contactQuery.trim().toLowerCase();
+    if (!query) return options;
+    return options.filter((contact) =>
+      [contact.name, contact.company, contact.email]
+        .filter(Boolean)
+        .some((value) => value!.toLowerCase().includes(query)),
+    );
+  }, [contactQuery, options]);
+
+  function toggleContactOptions() {
+    setShowContactOptions((shown) => !shown);
+    setContactQuery("");
+  }
+
   function saveContact(contactId: string) {
     if (!contactId || contactId === currentContact.contactId) return;
     const data = new FormData();
@@ -62,40 +80,35 @@ export function OfferContactCell({
         await reassignQuoteContactAction(data);
         router.refresh();
       } catch (err) {
-        setSelectedContactId(currentContact.contactId ?? "");
         setError(err instanceof Error ? err.message : "Could not change the contact.");
       }
     });
   }
 
   function selectContact(contactId: string) {
-    if (contactId === currentContact.contactId) return;
+    if (contactId === currentContact.contactId) {
+      setShowContactOptions(false);
+      return;
+    }
 
     if (contactId === NEW_CONTACT_VALUE) {
       if (currentContact.contactId && !window.confirm("Are you sure you want to select a new contact?")) {
-        setSelectedContactId(currentContact.contactId);
         return;
       }
-      setSelectedContactId(NEW_CONTACT_VALUE);
+      setShowContactOptions(false);
+      setContactQuery("");
       setShowNewContact(true);
       setError(null);
       return;
     }
 
-    const nextContact = options.find((contact) => contact.id === contactId);
-    const label = nextContact?.name ?? "this contact";
-    if (!window.confirm(`Are you sure you want to assign this offer to ${label}?`)) {
-      setSelectedContactId(currentContact.contactId ?? "");
-      return;
-    }
-
-    setSelectedContactId(contactId);
+    setShowContactOptions(false);
+    setContactQuery("");
     saveContact(contactId);
   }
 
   function cancelNewContact() {
     setShowNewContact(false);
-    setSelectedContactId(currentContact.contactId ?? "");
     setError(null);
   }
 
@@ -108,7 +121,6 @@ export function OfferContactCell({
         setError(null);
         const contact = await createOfferAudienceContactAction(data);
         setShowNewContact(false);
-        setSelectedContactId(contact.id);
         saveContact(contact.id);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not add contact.");
@@ -119,28 +131,91 @@ export function OfferContactCell({
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <label className="sr-only" htmlFor={`offer-contact-${offerId}`}>
-          Select offer contact
-        </label>
-        <select
-          id={`offer-contact-${offerId}`}
-          value={selectedContactId}
-          onChange={(event) => selectContact(event.target.value)}
+        <button
+          type="button"
+          aria-expanded={showContactOptions}
+          aria-haspopup="listbox"
           disabled={pending}
+          onClick={toggleContactOptions}
           className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 focus:border-slate-500 focus:outline-none"
         >
-          {!currentContact.contactId ? <option value="">Select contact</option> : null}
-          <option value={NEW_CONTACT_VALUE}>New contact...</option>
-          {options.map((contact) => (
-            <option key={contact.id} value={contact.id}>
-              {contact.name}
-              {contact.company ? ` - ${contact.company}` : ""}
-              {contact.email ? ` - ${contact.email}` : ""}
-            </option>
-          ))}
-        </select>
+          {currentContact.contactId ? currentContact.company || currentContact.name : "Select contact"}
+        </button>
         {pending ? <span className="text-xs text-slate-500">Saving...</span> : null}
       </div>
+
+      {showContactOptions && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+              role="presentation"
+              onClick={() => setShowContactOptions(false)}
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={`offer-contact-dialog-${offerId}`}
+                className="w-full max-w-xl rounded-2xl bg-white p-5 shadow-xl"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <h2 id={`offer-contact-dialog-${offerId}`} className="text-lg font-semibold text-slate-900">
+                    Select contact
+                  </h2>
+                  <button
+                    type="button"
+                    aria-label="Close contact selector"
+                    title="Close contact selector"
+                    onClick={() => setShowContactOptions(false)}
+                    className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+                <label className="relative mt-4 block">
+                  <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    value={contactQuery}
+                    onChange={(event) => setContactQuery(event.target.value)}
+                    placeholder="Search name, business, or email"
+                    aria-label="Search contacts"
+                    autoFocus
+                    className="w-full rounded-lg border border-slate-200 py-2 pl-8 pr-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
+                  />
+                </label>
+                <div className="mt-3 max-h-80 overflow-y-auto rounded-xl border border-slate-200 p-1" role="listbox" aria-label="Select offer contact">
+                  <button
+                    type="button"
+                    onClick={() => selectContact(NEW_CONTACT_VALUE)}
+                    className="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    New contact...
+                  </button>
+                  {filteredOptions.map((contact) => (
+                    <button
+                      key={contact.id}
+                      type="button"
+                      role="option"
+                      aria-selected={contact.id === currentContact.contactId}
+                      onClick={() => selectContact(contact.id)}
+                      className="block w-full rounded-lg px-3 py-2 text-left hover:bg-slate-50"
+                    >
+                      <span className="block text-sm font-medium text-slate-800">
+                        {contact.name}
+                        {contact.company ? ` - ${contact.company}` : ""}
+                      </span>
+                      <span className="block text-xs text-slate-500">{contact.email || "No email on file"}</span>
+                    </button>
+                  ))}
+                  {filteredOptions.length === 0 ? (
+                    <p className="px-3 py-3 text-sm text-slate-400">No matching contacts.</p>
+                  ) : null}
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
 
       {showNewContact ? (
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">

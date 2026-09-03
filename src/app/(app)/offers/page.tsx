@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Copy } from "lucide-react";
+import type { Prisma } from "@prisma/client";
 import { requireQuoteStaff } from "@/lib/quotes/access";
 import { prisma } from "@/lib/prisma";
 import { formatUsd } from "@/lib/quotes/format";
@@ -18,7 +20,16 @@ import { OffersFunnel } from "./OffersFunnel";
 import { duplicateQuoteAction } from "./actions";
 import { OfferContactCell } from "./OfferContactCell";
 
-type SearchParams = Promise<{ sent?: string; contact?: string; status?: string; kind?: string; archived?: string }>;
+type SortKey = "contact" | "status" | "mrr" | "lump" | "lastSent";
+type SearchParams = Promise<{
+  sent?: string;
+  contact?: string;
+  status?: string;
+  kind?: string;
+  archived?: string;
+  sort?: string;
+  order?: string;
+}>;
 
 const BUCKET_STYLE: Record<OfferBucket, string> = {
   draft: "bg-slate-100 text-slate-600",
@@ -26,6 +37,56 @@ const BUCKET_STYLE: Record<OfferBucket, string> = {
   completed: "bg-emerald-50 text-emerald-700",
   archived: "bg-slate-50 text-slate-500",
 };
+
+function formatOfferDate(date: Date | null) {
+  return date
+    ? date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : "—";
+}
+
+function daysSinceOfferSent(date: Date | null) {
+  if (!date) return "—";
+  const days = Math.max(0, Math.floor((Date.now() - date.getTime()) / (24 * 60 * 60 * 1000)));
+  return `${days} ${days === 1 ? "day" : "days"}`;
+}
+
+function parseSortKey(value: string | undefined): SortKey {
+  if (value === "contact" || value === "status" || value === "mrr" || value === "lump" || value === "lastSent") {
+    return value;
+  }
+  return "lastSent";
+}
+
+function SortableHeader({
+  label,
+  sortKey,
+  currentSort,
+  currentOrder,
+  params,
+}: {
+  label: string;
+  sortKey: SortKey;
+  currentSort: SortKey;
+  currentOrder: "asc" | "desc";
+  params: Awaited<SearchParams>;
+}) {
+  const nextOrder = currentSort === sortKey && currentOrder === "asc" ? "desc" : "asc";
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (typeof value === "string" && key !== "sort" && key !== "order") query.set(key, value);
+  }
+  query.set("sort", sortKey);
+  query.set("order", nextOrder);
+
+  return (
+    <th className="px-5 py-2 text-sm font-semibold normal-case text-slate-700">
+      <Link href={`/offers?${query.toString()}`} className="inline-flex items-center gap-1 hover:text-slate-950">
+        {label}
+        {currentSort === sortKey ? <span aria-hidden="true">{currentOrder === "asc" ? "↑" : "↓"}</span> : null}
+      </Link>
+    </th>
+  );
+}
 
 export default async function QuotesPage({ searchParams }: { searchParams: SearchParams }) {
   const { brand } = await requireQuoteStaff();
@@ -35,6 +96,18 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
   const statusFilter = parseOfferStatusFilter(params.status);
   const kindFilter =
     typeof params.kind === "string" && isOfferKindKey(params.kind) ? params.kind : "all";
+  const sortKey = parseSortKey(params.sort);
+  const sortOrder: "asc" | "desc" = params.order === "asc" ? "asc" : "desc";
+  const orderBy: Prisma.QuoteOrderByWithRelationInput =
+    sortKey === "contact"
+      ? { client: { name: sortOrder } }
+      : sortKey === "status"
+        ? { status: sortOrder }
+        : sortKey === "mrr"
+          ? { totalRecurring: sortOrder }
+          : sortKey === "lump"
+            ? { totalOneTime: sortOrder }
+            : { sentAt: sortOrder };
 
   const [listed, contacts, contact] = await Promise.all([
     prisma.quote.findMany({
@@ -43,7 +116,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
         status: { in: statusesForOfferList({ archived, statusFilter }) },
         ...(kindFilter === "all" ? {} : { kind: kindFilter }),
       },
-      orderBy: { updatedAt: "desc" },
+      orderBy,
       take: 50,
       include: {
         client: true,
@@ -111,11 +184,12 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
           <table className="w-full text-base">
             <thead>
               <tr className="bg-slate-50 text-left">
-                <th className="px-5 py-2 text-sm font-semibold normal-case text-slate-700">Contact</th>
-                <th className="px-5 py-2 text-sm font-semibold normal-case text-slate-700">Status</th>
-                <th className="px-5 py-2 text-sm font-semibold normal-case text-slate-700">Updated</th>
-                <th className="px-5 py-2 text-sm font-semibold normal-case text-slate-700">Monthly $</th>
-                <th className="px-5 py-2 text-sm font-semibold normal-case text-slate-700">1-time $</th>
+                <SortableHeader label="Contact" sortKey="contact" currentSort={sortKey} currentOrder={sortOrder} params={params} />
+                <SortableHeader label="Status" sortKey="status" currentSort={sortKey} currentOrder={sortOrder} params={params} />
+                <SortableHeader label="MRR" sortKey="mrr" currentSort={sortKey} currentOrder={sortOrder} params={params} />
+                <SortableHeader label="Lump" sortKey="lump" currentSort={sortKey} currentOrder={sortOrder} params={params} />
+                <SortableHeader label="Last sent" sortKey="lastSent" currentSort={sortKey} currentOrder={sortOrder} params={params} />
+                <th className="px-5 py-2 text-sm font-semibold normal-case text-slate-700">Days ago</th>
                 <th className="px-5 py-2"></th>
               </tr>
             </thead>
@@ -162,18 +236,17 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                         {outcomeLabel(quote.status)}
                       </span>
                     </td>
-                    <td className="px-5 py-4 text-slate-500">
-                      {quote.updatedAt.toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                    </td>
                     <td className="px-5 py-4 text-slate-700">
                       {monthlyTotal > 0 ? formatUsd(monthlyTotal) : "—"}
                     </td>
                     <td className="px-5 py-4 text-slate-700">
                       {oneTimeTotal > 0 ? formatUsd(oneTimeTotal) : "—"}
+                    </td>
+                    <td className="px-5 py-4 text-slate-500">
+                      {formatOfferDate(quote.lastSentAt ?? quote.sentAt)}
+                    </td>
+                    <td className="px-5 py-4 text-slate-500">
+                      {daysSinceOfferSent(quote.lastSentAt ?? quote.sentAt)}
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex flex-wrap items-center justify-end gap-2">
@@ -188,19 +261,21 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                               ? "ui-action-secondary inline-flex h-9 items-center justify-center rounded-full border px-3 text-base font-semibold leading-none transition"
                               : "text-base font-medium text-slate-900 hover:underline"
                           }
-                          >
+                        >
                           {canResume ? "Resume" : "View"}
                         </Link>
+                        <OfferStatusButtons offerId={quote.id} bucket={itemBucket} />
                         <form action={duplicateQuoteAction}>
                           <input type="hidden" name="id" value={quote.id} />
                           <button
                             type="submit"
-                            className="ui-action-ghost inline-flex h-9 items-center justify-center rounded-full px-3 text-base font-medium leading-none transition"
+                            aria-label="Duplicate offer"
+                            title="Duplicate offer"
+                            className="ui-action-ghost inline-flex h-9 w-9 items-center justify-center rounded-full transition"
                           >
-                            Duplicate
+                            <Copy className="h-4 w-4" />
                           </button>
                         </form>
-                        <OfferStatusButtons offerId={quote.id} bucket={itemBucket} />
                       </div>
                     </td>
                   </tr>

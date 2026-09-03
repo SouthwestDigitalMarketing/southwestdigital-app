@@ -2395,6 +2395,8 @@ model Quote {
   createdAt             DateTime        @default(now())
   updatedAt             DateTime        @updatedAt
   sentAt                DateTime?
+  firstSentAt           DateTime?
+  lastSentAt            DateTime?
   expiresAt             DateTime?
   client                QuoteClient     @relation(fields: [clientId], references: [id])
   lineItems             QuoteLineItem[]

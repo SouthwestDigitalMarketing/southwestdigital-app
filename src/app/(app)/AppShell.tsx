@@ -28,6 +28,7 @@ import {
   BadgePercent,
   ChevronDown,
   ScrollText,
+  X,
 } from "lucide-react";
 import { selectBrand } from "@/app/select-brand/actions";
 import { useBrand } from "@/lib/brands/context";
@@ -79,6 +80,7 @@ function NavItem({
   isLight,
   navTextColor,
   onNavigate,
+  collapsed,
 }: {
   href: string;
   icon: React.ElementType;
@@ -87,6 +89,7 @@ function NavItem({
   isLight: boolean;
   navTextColor: string;
   onNavigate: () => void;
+  collapsed: boolean;
 }) {
   const pathname = usePathname();
   const active = exact ? pathname === href : pathname.startsWith(href);
@@ -94,15 +97,16 @@ function NavItem({
   return (
     <Link
       href={href}
+      title={collapsed ? label : undefined}
       aria-current={active ? "page" : undefined}
       onClick={onNavigate}
-      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${collapsed ? "justify-center" : ""} ${
         active ? "ui-nav-active" : isLight ? "hover:bg-black/5" : "hover:bg-white/10"
       }`}
       style={active ? undefined : { color: navTextColor }}
     >
       <Icon size={16} />
-      {label}
+      <span className={collapsed ? "hidden" : undefined}>{label}</span>
     </Link>
   );
 }
@@ -114,6 +118,7 @@ function ExternalNavItem({
   isLight,
   navTextColor,
   onNavigate,
+  collapsed,
 }: {
   href: string;
   icon: React.ElementType;
@@ -121,21 +126,23 @@ function ExternalNavItem({
   isLight: boolean;
   navTextColor: string;
   onNavigate: () => void;
+  collapsed: boolean;
 }) {
   return (
     <a
       href={href}
+      title={collapsed ? label : undefined}
       target="_blank"
       rel="noopener noreferrer"
       onClick={onNavigate}
-      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${collapsed ? "justify-center" : ""} ${
         isLight ? "hover:bg-black/5" : "hover:bg-white/10"
       }`}
       style={{ color: navTextColor }}
     >
       <Icon size={16} />
-      <span className="flex-1 truncate">{label}</span>
-      <ExternalLink size={12} className="shrink-0 opacity-50" />
+      <span className={collapsed ? "hidden" : "flex-1 truncate"}>{label}</span>
+      {!collapsed ? <ExternalLink size={12} className="shrink-0 opacity-50" /> : null}
     </a>
   );
 }
@@ -153,6 +160,10 @@ export function AppShell({
 }) {
   const { brand } = useBrand();
   const [open, setOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(256);
+  const [resizingSidebar, setResizingSidebar] = useState(false);
 
   const themePreset = normalizeThemeChoice(brand.theme?.themePreset);
   const effective = resolveEffectiveThemeColors({
@@ -175,13 +186,16 @@ export function AppShell({
   const sidebarDisplayLogo = isLight
     ? (sidebarLightLogo ?? sidebarDarkLogo)
     : (sidebarDarkLogo ?? sidebarLightLogo);
+  const sidebarMarkLogo = isLight
+    ? (brand.theme?.logoMarkUrl ?? brand.theme?.logoMarkDarkUrl)
+    : (brand.theme?.logoMarkDarkUrl ?? brand.theme?.logoMarkUrl);
+  const sidebarLogo = collapsed ? (sidebarMarkLogo ?? sidebarDisplayLogo) : sidebarDisplayLogo;
   const sidebarLogoClass =
-    sidebarLogoType === "logo"
+    !collapsed && sidebarLogoType === "logo"
       ? "brand-asset-fit brand-asset-fit-left"
       : "h-8 w-8 rounded object-contain";
 
   const darkColor = effective.darkColor;
-  const brandAccent = brand.theme?.accentColor ?? accent;
   const themeVariables = appThemeCssVariables({
     mode,
     dark: darkColor,
@@ -199,75 +213,97 @@ export function AppShell({
   const dividerNavColor = isLight ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.12)";
 
   const displayName = user.name ?? user.email ?? "User";
-  const initials = displayName
-    .split(" ")
-    .slice(0, 2)
-    .map((n: string) => n[0])
-    .join("")
-    .toUpperCase();
+  const profileName = user.name?.trim().split(/\s+/)[0] || "User";
+  const initials = profileName.slice(0, 1).toUpperCase();
 
   const sidebar = (
     <div
-      className="flex h-full w-64 shrink-0 flex-col"
+      className="relative flex h-full shrink-0 flex-col overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       style={{
         backgroundColor: sidebarBg,
+        width: `${collapsed ? 64 : sidebarWidth}px`,
         borderRight: `1px solid ${dividerColor}`,
         boxShadow: "var(--card-shadow)",
       }}
     >
       <div
-        className="flex h-20 w-full min-w-0 items-center px-5 py-3"
+        className={`py-1 ${collapsed ? "px-1" : "px-3"}`}
         style={{ borderBottom: `1px solid ${dividerColor}` }}
       >
-        {sidebarDisplayLogo ? (
-          <div className={sidebarLogoType === "logo" ? "h-8 min-w-0 w-full" : "h-8 w-8 shrink-0"}>
-            <img
-              src={sidebarDisplayLogo}
-              alt={sidebarLogoType === "logo" ? brand.name : ""}
-              className={sidebarLogoClass}
-            />
+        <div className={`flex items-center py-1 ${collapsed ? "justify-center gap-2 px-0" : "gap-3 px-3"}`}>
+          <button
+            type="button"
+            aria-label="Open profile"
+            aria-expanded={profileOpen}
+            onClick={() => setProfileOpen((isOpen) => !isOpen)}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+            style={{
+              backgroundColor: isLight ? darkColor : light,
+              color: isLight ? "#ffffff" : darkColor,
+            }}
+          >
+            {initials}
+          </button>
+          <div className={`min-w-0 flex-1 ${collapsed ? "hidden" : ""}`}>
+            <p className="truncate text-sm font-medium" style={{ color: navTextColor }}>{profileName}</p>
           </div>
-        ) : null}
-        {!sidebarDisplayLogo ? (
-          <span className="text-sm font-bold uppercase tracking-widest" style={{ color: navTextColor }}>
-            {brand.name}
-          </span>
+        </div>
+      </div>
+      <div
+        className={`w-full min-w-0 pb-3 pt-4 ${collapsed ? "px-1" : "px-5"}`}
+        style={{ borderBottom: `1px solid ${dividerColor}` }}
+      >
+        <div className={`flex h-8 w-full min-w-0 items-center ${collapsed ? "justify-center" : ""}`}>
+          {sidebarLogo ? (
+            <div className={!collapsed && sidebarLogoType === "logo" ? "h-8 min-w-0 w-full" : "h-8 w-8 shrink-0"}>
+              <img
+                src={sidebarLogo}
+                alt={!collapsed && sidebarLogoType === "logo" ? brand.name : ""}
+                className={sidebarLogoClass}
+              />
+            </div>
+          ) : null}
+          {!sidebarLogo ? (
+            <span className="text-sm font-bold uppercase tracking-widest" style={{ color: navTextColor }}>
+              {brand.name}
+            </span>
+          ) : null}
+        </div>
+        {accessibleBrands.length > 1 && !collapsed ? (
+          <form action={selectBrand} className="mt-3">
+            <label className="sr-only" htmlFor="active-brand">
+              Switch brand
+            </label>
+            <div className="relative">
+              <select
+                id="active-brand"
+                name="brandId"
+                defaultValue={activeBrandId}
+                onChange={(event) => event.currentTarget.form?.requestSubmit()}
+                className="w-full appearance-none rounded-lg border py-2 pl-3 pr-10 text-sm"
+                style={{
+                  color: navTextColor,
+                  backgroundColor: isLight ? "#ffffff" : "transparent",
+                  borderColor: dividerColor,
+                }}
+              >
+                {accessibleBrands.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                aria-hidden="true"
+                className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2"
+                style={{ color: navMutedColor }}
+              />
+            </div>
+          </form>
         ) : null}
       </div>
-      {accessibleBrands.length > 1 ? (
-        <form action={selectBrand} className="px-3 pb-3 pt-3">
-          <label className="sr-only" htmlFor="active-brand">
-            Switch brand
-          </label>
-          <div className="relative">
-            <select
-              id="active-brand"
-              name="brandId"
-              defaultValue={activeBrandId}
-              onChange={(event) => event.currentTarget.form?.requestSubmit()}
-              className="w-full appearance-none rounded-lg border py-2 pl-3 pr-10 text-sm"
-              style={{
-                color: navTextColor,
-                backgroundColor: isLight ? "#ffffff" : "transparent",
-                borderColor: dividerColor,
-              }}
-            >
-              {accessibleBrands.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-            <ChevronDown
-              aria-hidden="true"
-              className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2"
-              style={{ color: navMutedColor }}
-            />
-          </div>
-        </form>
-      ) : null}
 
-      <nav className="flex-1 space-y-0.5 px-3 py-4">
+      <nav className={`flex-1 space-y-0.5 py-4 ${collapsed ? "px-2" : "px-3"}`}>
         {NAV.map(({ href, icon, label, exact, dividerAfter }) => (
           <div key={href}>
             <NavItem
@@ -278,6 +314,7 @@ export function AppShell({
               isLight={isLight}
               navTextColor={navTextColor}
               onNavigate={() => setOpen(false)}
+              collapsed={collapsed}
             />
             {dividerAfter ? (
               <div
@@ -296,39 +333,39 @@ export function AppShell({
             isLight={isLight}
             navTextColor={navTextColor}
             onNavigate={() => setOpen(false)}
+            collapsed={collapsed}
           />
         ))}
       </nav>
 
       <div
-        className="px-3 py-4"
-        style={{ borderTop: `1px solid ${dividerColor}` }}
-      >
-        <div className="flex items-center gap-3 px-3 py-2">
-          <div
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-            style={{ backgroundColor: brandAccent }}
-          >
-            {initials}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium" style={{ color: navTextColor }}>{displayName}</p>
-            {user.name && user.email && (
-              <p className="truncate text-xs" style={{ color: navMutedColor }}>{user.email}</p>
-            )}
-          </div>
-          <form action={signOutAction}>
-            <button
-              type="submit"
-              title="Sign out"
-              className="rounded p-1 opacity-60 transition-opacity hover:opacity-100"
-              style={{ color: navTextColor }}
-            >
-              <LogOut size={15} />
-            </button>
-          </form>
-        </div>
-      </div>
+        role="separator"
+        aria-label="Resize sidebar"
+        aria-orientation="vertical"
+        onPointerDown={(event) => {
+          event.currentTarget.setPointerCapture(event.pointerId);
+          setResizingSidebar(true);
+        }}
+        onPointerMove={(event) => {
+          if (!resizingSidebar) return;
+          const nextWidth = Math.max(64, Math.min(320, event.clientX));
+          if (nextWidth <= 96) {
+            setCollapsed(true);
+            setSidebarWidth(64);
+          } else {
+            setCollapsed(false);
+            setSidebarWidth(nextWidth);
+          }
+        }}
+        onPointerUp={(event) => {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+          setResizingSidebar(false);
+        }}
+        onPointerCancel={() => setResizingSidebar(false)}
+        className={`absolute right-0 top-0 z-10 h-full w-2 translate-x-1/2 cursor-ew-resize ${resizingSidebar ? "bg-slate-400/20" : "hover:bg-slate-400/10"}`}
+        style={{ touchAction: "none" }}
+      />
+
     </div>
   );
 
@@ -348,6 +385,48 @@ export function AppShell({
       } as React.CSSProperties}
     >
       <aside className="hidden lg:flex">{sidebar}</aside>
+
+      {profileOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+          role="presentation"
+          onClick={() => setProfileOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="profile-dialog-title"
+            className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 id="profile-dialog-title" className="text-lg font-semibold text-slate-900">Profile</h2>
+                <p className="mt-1 text-sm text-slate-700">{displayName}</p>
+                {user.email ? <p className="text-sm text-slate-500">{user.email}</p> : null}
+              </div>
+              <button
+                type="button"
+                aria-label="Close profile"
+                title="Close profile"
+                onClick={() => setProfileOpen(false)}
+                className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <form action={signOutAction} className="mt-5">
+              <button
+                type="submit"
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                <LogOut size={15} />
+                Sign out
+              </button>
+            </form>
+          </div>
+        </div>
+      ) : null}
 
       {open && (
         <div className="fixed inset-0 z-40 lg:hidden">

@@ -2,7 +2,9 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Archive, RotateCw } from "lucide-react";
 import { setOfferStatusAction } from "./actions";
+import { resendQuoteAction } from "./actions";
 import type { OfferBucket } from "@/lib/quotes/status";
 
 export function OfferStatusButtons({
@@ -25,30 +27,42 @@ export function OfferStatusButtons({
     });
   }
 
-  const btn =
-    "ui-action-ghost inline-flex h-9 items-center justify-center rounded-full px-3 text-base font-medium leading-none transition disabled:opacity-50";
+  function resend() {
+    const data = new FormData();
+    data.set("id", offerId);
+    startTransition(async () => {
+      await resendQuoteAction(data);
+      router.refresh();
+    });
+  }
+
+  const iconBtn =
+    "ui-action-ghost inline-flex h-9 w-9 items-center justify-center rounded-full transition disabled:opacity-50";
+  const canResend = bucket === "sent" || bucket === "completed";
 
   return (
     <div className="flex flex-wrap justify-end gap-1">
+      <button
+        type="button"
+        disabled={pending || !canResend}
+        onClick={resend}
+        className={iconBtn}
+        aria-label="Resend offer"
+        title="Resend offer"
+      >
+        <RotateCw className="h-4 w-4" />
+      </button>
       {bucket === "draft" ? (
-        <>
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => setStatus("sent")}
-            className={btn}
-          >
-            Mark sent
-          </button>
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => setStatus("archived")}
-            className={btn}
-          >
-            Archive
-          </button>
-        </>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => setStatus("archived")}
+          className={iconBtn}
+          aria-label="Archive offer"
+          title="Archive offer"
+        >
+          <Archive className="h-4 w-4" />
+        </button>
       ) : null}
       {bucket === "sent" ? (
         <>
@@ -56,7 +70,7 @@ export function OfferStatusButtons({
             type="button"
             disabled={pending}
             onClick={() => setStatus("accepted")}
-            className={btn}
+            className="ui-action-ghost inline-flex h-9 items-center justify-center rounded-full px-3 text-base font-medium leading-none transition disabled:opacity-50"
           >
             Accepted
           </button>
@@ -64,7 +78,7 @@ export function OfferStatusButtons({
             type="button"
             disabled={pending}
             onClick={() => setStatus("rejected")}
-            className={btn}
+            className="ui-action-ghost inline-flex h-9 items-center justify-center rounded-full px-3 text-base font-medium leading-none transition disabled:opacity-50"
           >
             Rejected
           </button>
@@ -75,9 +89,11 @@ export function OfferStatusButtons({
           type="button"
           disabled={pending}
           onClick={() => setStatus("archived")}
-          className={btn}
+          className={iconBtn}
+          aria-label="Archive offer"
+          title="Archive offer"
         >
-          Archive
+          <Archive className="h-4 w-4" />
         </button>
       ) : null}
       {bucket === "archived" ? (
@@ -85,7 +101,7 @@ export function OfferStatusButtons({
           type="button"
           disabled={pending}
           onClick={() => setStatus("draft")}
-          className={btn}
+          className="ui-action-ghost inline-flex h-9 items-center justify-center rounded-full px-3 text-base font-medium leading-none transition disabled:opacity-50"
         >
           Unarchive
         </button>

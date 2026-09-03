@@ -16,20 +16,55 @@ export async function markQuoteSentAction(formData: FormData) {
 
   const quote = await prisma.quote.findFirst({
     where: { id, brandId: brand.id },
-    select: { id: true, status: true },
+    select: { id: true, status: true, firstSentAt: true },
   });
   if (!quote) throw new Error("Not found");
   if (quote.status !== "draft" && quote.status !== "completed") {
     throw new Error("Only unsent offers can be marked sent");
   }
 
+  const now = new Date();
   await prisma.quote.update({
     where: { id: quote.id },
-    data: { status: "sent", sentAt: new Date() },
+    data: {
+      status: "sent",
+      sentAt: now,
+      firstSentAt: quote.firstSentAt ?? now,
+      lastSentAt: now,
+    },
   });
 
   revalidatePath("/offers");
   redirect(`/offers/${id}?sent=1`);
+}
+
+export async function resendQuoteAction(formData: FormData) {
+  const { brand } = await requireQuoteStaffOrThrow();
+  const id = (formData.get("id") as string | null)?.trim() ?? "";
+  if (!id) throw new Error("Quote ID required");
+
+  const quote = await prisma.quote.findFirst({
+    where: { id, brandId: brand.id },
+    select: { id: true, status: true, firstSentAt: true },
+  });
+  if (!quote) throw new Error("Not found");
+  if (quote.status === "draft" || quote.status === "archived") {
+    throw new Error("Only sent offers can be resent");
+  }
+
+  const now = new Date();
+  await prisma.quote.update({
+    where: { id: quote.id },
+    data: {
+      status: "sent",
+      sentAt: now,
+      firstSentAt: quote.firstSentAt ?? now,
+      lastSentAt: now,
+    },
+  });
+
+  revalidatePath("/offers");
+  revalidatePath(`/offers/${id}`);
 }
 
 function offerSlug(name: string) {
@@ -254,7 +289,7 @@ export async function setOfferStatusAction(formData: FormData) {
 
   const quote = await prisma.quote.findFirst({
     where: { id, brandId: brand.id },
-    select: { id: true, sentAt: true },
+    select: { id: true, sentAt: true, firstSentAt: true },
   });
   if (!quote) throw new Error("Not found");
 
@@ -262,7 +297,13 @@ export async function setOfferStatusAction(formData: FormData) {
     where: { id: quote.id },
     data: {
       status,
-      ...(status === "sent" && !quote.sentAt ? { sentAt: new Date() } : {}),
+      ...(status === "sent"
+        ? {
+            sentAt: new Date(),
+            firstSentAt: quote.firstSentAt ?? quote.sentAt ?? new Date(),
+            lastSentAt: new Date(),
+          }
+        : {}),
     },
   });
 
