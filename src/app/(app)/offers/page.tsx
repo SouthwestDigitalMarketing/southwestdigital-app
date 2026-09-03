@@ -19,6 +19,7 @@ import { OffersListControls } from "./OffersListControls";
 import { OffersFunnel } from "./OffersFunnel";
 import { OfferContactCell } from "./OfferContactCell";
 import { DuplicateOfferButton } from "./DuplicateOfferButton";
+import { DuplicateOfferFocus } from "./DuplicateOfferFocus";
 import { SendOfferEmailButton } from "./SendOfferEmailButton";
 
 type SortKey = "contact" | "status" | "mrr" | "lump" | "lastSent";
@@ -224,8 +225,21 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                 const oneTimeTotal =
                   snapshot.pricing?.maintain?.totalOneTime ?? (oneTimeLineItemTotal || Number(quote.totalOneTime));
                 return (
-                  <tr key={quote.id} className={`hover:bg-slate-50 ${quote.id === highlightId ? "offer-row-highlight" : ""}`}>
+                  <tr
+                    id={`offer-row-${quote.id}`}
+                    key={quote.id}
+                    className={`hover:bg-slate-50 ${quote.id === highlightId ? "offer-row-highlight" : ""}`}
+                  >
                     <td className="px-5 py-4">
+                      {quote.id === highlightId ? (
+                        <>
+                          <DuplicateOfferFocus offerId={quote.id} />
+                          <div className="mb-2 inline-flex flex-wrap items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-bold uppercase tracking-wide text-amber-900">
+                            <span>New duplicate</span>
+                            <span className="font-mono normal-case tracking-normal text-amber-700">{quote.id}</span>
+                          </div>
+                        </>
+                      ) : null}
                       <OfferContactCell
                         offerId={quote.id}
                         currentContact={currentContact}

@@ -239,12 +239,9 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-@keyframes offer-row-highlight-flash {
-  0% { background-color: color-mix(in srgb, var(--theme-accent) 45%, transparent); }
-  100% { background-color: transparent; }
-}
 .offer-row-highlight {
-  animation: offer-row-highlight-flash 3s ease-out;
+  background: color-mix(in srgb, var(--theme-accent) 16%, var(--theme-white));
+  box-shadow: inset 4px 0 0 var(--theme-accent);
 }
 
 /* Toggle switch: shared appearance across the app. State is driven by
