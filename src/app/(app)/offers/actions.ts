@@ -255,14 +255,22 @@ export async function duplicateQuoteAction(formData: FormData) {
     throw new Error("Offer snapshot is malformed.");
   }
 
-  const snapshot = contact
-    ? {
-        ...quote.snapshotJson,
-        contactInfo: contactInfoFromCrm([
-          { ...contact, phoneNumber: contact.phoneNumber ?? undefined },
-        ]),
-      }
-    : quote.snapshotJson;
+  const sourceSnapshot = quote.snapshotJson as Record<string, unknown>;
+  const sourceAssessment = sourceSnapshot.assessment;
+  const freshAssessment = sourceAssessment && typeof sourceAssessment === "object" && !Array.isArray(sourceAssessment)
+    ? { ...(sourceAssessment as Record<string, unknown>), waiveOnboardingFee: false }
+    : null;
+  const snapshot = {
+    ...sourceSnapshot,
+    ...(freshAssessment ? { assessment: freshAssessment } : {}),
+    ...(contact
+      ? {
+          contactInfo: contactInfoFromCrm([
+            { ...contact, phoneNumber: contact.phoneNumber ?? undefined },
+          ]),
+        }
+      : {}),
+  } as Prisma.InputJsonValue;
 
   const client = quoteClientDetailsFromSnapshot(snapshot, quote.client);
   const clientRecord = await prisma.quoteClient.create({
