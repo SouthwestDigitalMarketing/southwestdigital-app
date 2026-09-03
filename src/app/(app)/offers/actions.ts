@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { randomBytes } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireQuoteStaffOrThrow } from "@/lib/quotes/access";
 import { contactInfoFromCrm } from "@/lib/quotes/fromContacts";
@@ -286,6 +287,19 @@ export async function duplicateQuoteAction(formData: FormData) {
       totalRecurring: quote.totalRecurring,
       onboardingFee: quote.onboardingFee,
       snapshotJson: snapshot,
+      // A duplicate is a new lead-facing proposal. Never carry over the
+      // original proposal link, publication/view state, engagement, or send
+      // timestamps, even if a database default or a future schema change adds
+      // one of those fields.
+      publishedSnapshotJson: Prisma.DbNull,
+      publicToken: null,
+      publishedAt: null,
+      firstViewedAt: null,
+      engagementId: null,
+      sentAt: null,
+      firstSentAt: null,
+      lastSentAt: null,
+      expiresAt: null,
       lineItems: {
         create: quote.lineItems.map((item, index) => ({
           label: item.label,
