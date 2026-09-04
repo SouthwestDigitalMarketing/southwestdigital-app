@@ -1,8 +1,11 @@
 import { notFound, redirect } from "next/navigation";
 import { headers } from "next/headers";
+import { BrandRole } from "@prisma/client";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
 import { resolvePublicBrand } from "@/lib/brands/resolve";
+import { getBrandAccessDecision } from "@/lib/brands/repository";
 import OfferProposalPreview from "@/app/(app)/offers/builder/OfferProposalPreview";
 import type { AssessmentState } from "@/app/(app)/offers/builder/ProposalCreationWorkspaceDemo";
 import type { ContactInfoState } from "@/app/(app)/offers/builder/ProposalContactInfoState";
@@ -19,13 +22,27 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export default async function PublicProposalPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>;
+  searchParams: Promise<{ staffPreview?: string }>;
 }) {
   const { token } = await params;
+  const { staffPreview } = await searchParams;
   const hostname = (await headers()).get("x-hostname");
   const brand = await resolvePublicBrand(hostname);
   if (!brand) notFound();
+  const session = staffPreview === "1" ? await auth() : null;
+  const staffPreviewAccess = session?.user
+    ? await getBrandAccessDecision({
+        brandId: brand.id,
+        userId: session.user.id,
+        userStatus: session.user.status,
+        platformRole: session.user.platformRole,
+        minimumRole: BrandRole.MEMBER,
+      })
+    : null;
+  const isAuthorizedStaffPreview = staffPreviewAccess?.allowed === true;
   const { quoteRevisions, quoteEngagement } = await getSchemaCapabilities();
   const quote = await prisma.quote.findFirst({
     where: { brandId: brand.id, publicToken: token, publishedAt: { not: null } },
@@ -40,7 +57,7 @@ export default async function PublicProposalPage({
     },
   });
   const viewedAt = new Date();
-  if (quote && !quote.firstViewedAt) {
+  if (quote && !quote.firstViewedAt && !isAuthorizedStaffPreview) {
     await prisma.quote.updateMany({
       where: { id: quote.id, firstViewedAt: null },
       data: { firstViewedAt: viewedAt },

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Copy, Eye } from "lucide-react";
+import { Copy } from "lucide-react";
 import { BrandStatus, type Prisma } from "@prisma/client";
 import { requireQuoteStaff } from "@/lib/quotes/access";
 import { prisma } from "@/lib/prisma";
@@ -22,6 +22,7 @@ import { DuplicateOfferButton } from "./DuplicateOfferButton";
 import { DuplicateOfferFocus } from "./DuplicateOfferFocus";
 import { ClearDuplicateMarkerButton } from "./ClearDuplicateMarkerButton";
 import { SendOfferEmailButton } from "./SendOfferEmailButton";
+import { OfferEditButton } from "./OfferEditButton";
 
 type SortKey = "contact" | "status" | "mrr" | "lump" | "lastSent";
 type SearchParams = Promise<{
@@ -126,6 +127,9 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
       include: {
         client: true,
         lineItems: { select: { amount: true, billingType: true } },
+        engagement: {
+          select: { signedAt: true, onboardingFeeStatus: true },
+        },
       },
     }),
     prisma.contact.findMany({
@@ -244,6 +248,10 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                 const kind = snapshot.kind ?? quote.kind;
                 const itemBucket = bucketForStatus(quote.status);
                 const canResume = itemBucket === "draft";
+                const editHref = resumeOfferHref({ id: quote.id, kind, snapshot });
+                const publishedProposalHref = quote.publicToken
+                  ? `/proposal/${quote.publicToken}?staffPreview=1`
+                  : null;
                 const currentContact = quoteContactSummaryFromSnapshot(quote.snapshotJson, quote.client);
                 const monthlyLineItemTotal = quote.lineItems
                   .filter((item) => item.billingType.toLowerCase() === "recurring")
@@ -329,35 +337,18 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                     <td className="px-5 py-4">
                       <div className="flex flex-wrap items-center justify-end gap-2">
                         <Link
-                          href={
-                            canResume
-                              ? resumeOfferHref({ id: quote.id, kind, snapshot })
-                              : `/offers/${quote.id}`
-                          }
+                          href={canResume ? editHref : publishedProposalHref ?? `/offers/${quote.id}`}
                           className="ui-action-primary inline-flex h-9 items-center justify-center rounded-full border px-3 text-base font-semibold leading-none transition"
                         >
-                          {canResume ? "Resume" : "View"}
+                          {canResume ? "Resume" : publishedProposalHref ? "View" : "Details"}
                         </Link>
-                        {quote.publicToken ? (
-                          <Link
-                            href={`/proposal/${quote.publicToken}`}
-                            target="_blank"
-                            rel="noreferrer noopener"
-                            aria-label="View proposal"
-                            title="View proposal"
-                            className="ui-action-secondary inline-flex h-9 w-9 items-center justify-center rounded-full border transition"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Link>
-                        ) : (
-                          <span
-                            aria-label="No published proposal yet"
-                            title="No published proposal yet"
-                            className="inline-flex h-9 w-9 cursor-not-allowed items-center justify-center rounded-full border border-slate-200 text-slate-300"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </span>
-                        )}
+                        <OfferEditButton
+                          href={editHref}
+                          offerId={quote.id}
+                          viewed={Boolean(quote.firstViewedAt)}
+                          signed={Boolean(quote.engagement?.signedAt)}
+                          paid={quote.engagement?.onboardingFeeStatus === "PAID"}
+                        />
                         <SendOfferEmailButton
                           offerId={quote.id}
                           hasBeenSent={Boolean(quote.lastSentAt ?? quote.sentAt)}
