@@ -10,8 +10,28 @@ import {
   useProposalContactInfoDemoState,
 } from "./ProposalContactInfoState";
 import { useBrand } from "@/lib/brands/context";
-import { getOfferPublicPathAction } from "../who/actions";
+import { getOfferKindAction, getOfferPublicPathAction } from "../who/actions";
 import { MessageTemplateManager, type MessageTemplate } from "./MessageTemplateManager";
+
+function defaultCopyForKind(kind: string | null, args: { brandName: string; companyName: string; recipientFirstName: string; proposalUrl: string }) {
+  const url = args.proposalUrl || "[Publish changes to generate the proposal link]";
+  if (kind === "consulting") {
+    return {
+      subject: `Consulting proposal for ${args.companyName}`,
+      body: `Hi ${args.recipientFirstName},\n\nThanks for reaching out. I put together a consulting proposal outlining the scope, hours, and rate.\n\nReview it here:\n${url}\n\nOnce you sign and pay, we'll schedule the first session.\n\nThank you,\n${args.brandName}`,
+    };
+  }
+  if (kind === "coaching") {
+    return {
+      subject: `Coaching proposal for ${args.recipientFirstName}`,
+      body: `Hi ${args.recipientFirstName},\n\nHere's the coaching proposal we discussed. It shows the session count, pace, and total investment.\n\nReview it here:\n${url}\n\nOnce you sign and pay, we can book your first session and start.\n\nThank you,\n${args.brandName}`,
+    };
+  }
+  return {
+    subject: `Your bookkeeping proposal for ${args.companyName}`,
+    body: `Hi ${args.recipientFirstName},\n\nThank you for taking the time to meet with me. I put together a bookkeeping proposal for ${args.companyName}.\n\nYou can review it here:\n${url}\n\nThe proposal shows your service options, what each option includes, and the price. You can pick the option that works best for you.\n\n${args.brandName} would be glad to help you get clear, organized books and reach your goals.\n\nThank you,\n${args.brandName}`,
+  };
+}
 
 const INPUT_CLASS_NAME =
   "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm transition focus:border-brandnavy focus:outline-none focus:ring-2 focus:ring-brandnavy/10";
@@ -31,6 +51,7 @@ export default function ProposalCoverLetterDemo() {
     if (typeof window === "undefined") return null;
     return new URLSearchParams(window.location.search).get("offer");
   });
+  const [offerKind, setOfferKind] = useState<string | null>(null);
   const [sendState, setSendState] = useState<
     | { kind: "idle" }
     | { kind: "sending" }
@@ -49,20 +70,14 @@ export default function ProposalCoverLetterDemo() {
   const companyName = contactInfo.companyName || "your business";
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const proposalUrl = publicPath ? `${origin}${publicPath}` : "";
-  const subject = `Your bookkeeping proposal for ${companyName}`;
-  const defaultEmailBody = `Hi ${recipientFirstName},
-
-Thank you for taking the time to meet with me. I put together a bookkeeping proposal for ${companyName}.
-
-You can review it here:
-${proposalUrl || "[Publish changes to generate the proposal link]"}
-
-The proposal shows your service options, what each option includes, and the price. You can pick the option that works best for you.
-
-${brand.name} would be glad to help you get clear, organized books and reach your goals.
-
-Thank you,
-${brand.name}`;
+  const kindDefaults = defaultCopyForKind(offerKind, {
+    brandName: brand.name,
+    companyName,
+    recipientFirstName,
+    proposalUrl,
+  });
+  const subject = kindDefaults.subject;
+  const defaultEmailBody = kindDefaults.body;
   const [emailBody, setEmailBody] = useState<string | null>(null);
   const effectiveEmailBody = emailBody ?? defaultEmailBody;
   const [emailSubject, setEmailSubject] = useState<string | null>(null);
@@ -117,6 +132,9 @@ ${effectiveEmailBody}`;
     if (!offerId) return;
     void getOfferPublicPathAction(offerId).then((path) => {
       setPublicPath(path ?? "");
+    });
+    void getOfferKindAction(offerId).then((kind) => {
+      setOfferKind(kind);
     });
   }, [offerId]);
 

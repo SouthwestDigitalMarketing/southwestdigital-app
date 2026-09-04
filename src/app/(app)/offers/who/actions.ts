@@ -451,3 +451,12 @@ export async function getOfferPublicPathAction(offerId: string) {
   });
   return quote?.publicToken ? `/proposal/${quote.publicToken}` : null;
 }
+
+export async function getOfferKindAction(offerId: string): Promise<string | null> {
+  const { brand } = await requireQuoteStaffOrThrow();
+  const quote = await prisma.quote.findFirst({
+    where: { id: offerId, brandId: brand.id },
+    select: { kind: true },
+  });
+  return quote?.kind ?? null;
+}
