@@ -8,6 +8,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+// Only these Quote.kind values correspond to engagement-producing product
+// flows. Anything else falls back to bookkeeping so existing behavior is
+// preserved.
+function resolveProductKind(kind: string | null | undefined): string {
+  if (kind === "consulting" || kind === "coaching") return kind;
+  return "bookkeeping";
+}
+
 export async function ensureQuoteEngagement(input: {
   brandId: string;
   quoteId: string;
@@ -16,9 +24,10 @@ export async function ensureQuoteEngagement(input: {
   const fields = extractOfferEngagementFields(input.snapshot);
   const quote = await prisma.quote.findFirst({
     where: { id: input.quoteId, brandId: input.brandId },
-    select: { id: true, engagementId: true },
+    select: { id: true, engagementId: true, kind: true },
   });
   if (!quote) throw new Error("Offer not found.");
+  const productKind = resolveProductKind(quote.kind);
 
   const proposalBuilderState = {
     assessment: input.snapshot.assessment ?? null,
@@ -47,6 +56,7 @@ export async function ensureQuoteEngagement(input: {
           primaryContactEmail: fields.primaryContactEmail,
           primaryContactPhone: fields.primaryContactPhone,
           billingContactEmail: fields.billingContactEmail,
+          productKind,
           isTestProposal: input.snapshot.isTestProposal === true,
           ...(existing.signedAt
             ? {}
@@ -74,6 +84,7 @@ export async function ensureQuoteEngagement(input: {
       primaryContactEmail: fields.primaryContactEmail,
       primaryContactPhone: fields.primaryContactPhone,
       billingContactEmail: fields.billingContactEmail,
+      productKind,
       isTestProposal: input.snapshot.isTestProposal === true,
       status: "SENT_TO_CLIENT",
       onboardingData: { proposalBuilderState } as Prisma.InputJsonValue,
