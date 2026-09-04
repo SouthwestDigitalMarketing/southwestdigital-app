@@ -9,6 +9,9 @@ import type { ContactInfoState } from "@/app/(app)/offers/builder/ProposalContac
 import { isLeadConvertedForDiscount, pickActiveCatalogOffer } from "@/lib/discounts/eligibility";
 import { ensureQuoteEngagement } from "@/lib/engagements/fromOffer";
 import { quoteContactSummaryFromSnapshot } from "@/lib/quotes/clientInfo";
+import { HourlyPublicView } from "./HourlyPublicView";
+import { isHourlyOfferKind, OFFER_KINDS } from "@/lib/quotes/kinds";
+import { parseStoredHourlyCheckout } from "@/lib/engagements/hourlyCheckout";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -128,6 +131,63 @@ export default async function PublicProposalPage({
 
   if (engagement?.signedAt && (quote?.status === "completed" || quote?.status === "archived")) {
     redirect(`/proposal/${token}/receipt`);
+  }
+
+  const snapshotKind = typeof snapshot.kind === "string" ? snapshot.kind : "";
+  if (isHourlyOfferKind(snapshotKind)) {
+    const contact = quoteContactSummaryFromSnapshot(snapshot);
+    const kindMeta = OFFER_KINDS.find((k) => k.key === snapshotKind);
+    // Prefer the checkout summary on the snapshot; fall back to the one stored
+    // on the engagement's services blob.
+    const snapshotCheckout = isRecord(snapshot.checkoutSummary)
+      ? parseStoredHourlyCheckout(snapshot.checkoutSummary)
+      : null;
+    let hourlyCheckout = snapshotCheckout;
+    let agreementText = typeof snapshot.agreementText === "string" ? (snapshot.agreementText as string) : "";
+    if (engagementId) {
+      const eng = await prisma.engagement.findFirst({
+        where: { id: engagementId, brandId: brand.id },
+        select: { onboardingData: true, agreementText: true },
+      });
+      if (eng?.agreementText) agreementText = eng.agreementText;
+      if (!hourlyCheckout && eng?.onboardingData && typeof eng.onboardingData === "object" && !Array.isArray(eng.onboardingData)) {
+        const state = (eng.onboardingData as Record<string, unknown>).proposalBuilderState;
+        if (state && typeof state === "object" && !Array.isArray(state)) {
+          const services = (state as Record<string, unknown>).services;
+          if (services && typeof services === "object" && !Array.isArray(services)) {
+            hourlyCheckout = parseStoredHourlyCheckout((services as Record<string, unknown>).hourlyCheckout);
+          }
+        }
+      }
+    }
+    if (!hourlyCheckout) notFound();
+    return (
+      <HourlyPublicView
+        proposalToken={token}
+        engagementId={engagementId}
+        isTestProposal={engagement?.isTestProposal === true}
+        kindLabel={kindMeta?.name ?? snapshotKind}
+        clientName={
+          (isRecord(snapshot.contactInfo) && typeof (snapshot.contactInfo as Record<string, unknown>).companyName === "string")
+            ? ((snapshot.contactInfo as Record<string, unknown>).companyName as string)
+            : contact.name
+        }
+        brandName={brand.name}
+        brandAccent={brand.theme?.accentColor ?? null}
+        contact={{ name: contact.name, email: contact.email }}
+        offer={{
+          catalogItemLabel: hourlyCheckout.catalogItemLabel,
+          quantity: hourlyCheckout.quantity,
+          unitPrice: hourlyCheckout.unitPrice,
+          intakeFee: hourlyCheckout.intakeFee,
+          subtotal: hourlyCheckout.subtotal,
+          total: hourlyCheckout.total,
+          amountDueNow: hourlyCheckout.amountDueNow,
+        }}
+        agreementText={agreementText || "Agreement text unavailable. Please contact the sender."}
+        alreadySigned={Boolean(engagement?.signedAt)}
+      />
+    );
   }
 
   return (

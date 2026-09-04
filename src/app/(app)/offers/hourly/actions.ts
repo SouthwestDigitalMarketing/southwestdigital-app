@@ -164,7 +164,7 @@ export async function publishHourlyOfferAction(offerId: string, snapshot: Hourly
   });
 
   if (quoteEngagement) {
-    await ensureQuoteEngagement({
+    const engagementId = await ensureQuoteEngagement({
       brandId: brand.id,
       quoteId: existing.id,
       snapshot: {
@@ -177,6 +177,45 @@ export async function publishHourlyOfferAction(offerId: string, snapshot: Hourly
         isTestProposal: merged.isTestProposal,
       },
     });
+    // Store hourly checkout summary in onboardingData.proposalBuilderState.services
+    // so the payment-intent route (dispatched by productKind) can find it via
+    // parseStoredHourlyCheckout. Also set engagement.agreementText so the
+    // existing sign / signed-PDF pipeline works unchanged.
+    const eng = await prisma.engagement.findFirst({
+      where: { id: engagementId, brandId: brand.id },
+      select: { onboardingData: true, signedAt: true },
+    });
+    if (eng) {
+      const onboardingData = eng.onboardingData && typeof eng.onboardingData === "object" && !Array.isArray(eng.onboardingData)
+        ? (eng.onboardingData as Record<string, unknown>)
+        : {};
+      const builderState = onboardingData.proposalBuilderState && typeof onboardingData.proposalBuilderState === "object" && !Array.isArray(onboardingData.proposalBuilderState)
+        ? (onboardingData.proposalBuilderState as Record<string, unknown>)
+        : {};
+      const priorServices = builderState.services && typeof builderState.services === "object" && !Array.isArray(builderState.services)
+        ? (builderState.services as Record<string, unknown>)
+        : {};
+      const nextData = {
+        ...onboardingData,
+        proposalBuilderState: {
+          ...builderState,
+          services: { ...priorServices, hourlyCheckout: summary },
+          version: 1,
+          updatedAt: new Date().toISOString(),
+        },
+      };
+      await prisma.engagement.update({
+        where: { id: engagementId },
+        data: {
+          onboardingData: nextData as Prisma.InputJsonValue,
+          // Only set agreementText if not already signed — mirrors the
+          // guard in ensureQuoteEngagement.
+          ...(eng.signedAt || !merged.agreementText
+            ? {}
+            : { agreementText: merged.agreementText }),
+        },
+      });
+    }
   }
 
   revalidatePath("/offers");

@@ -10,6 +10,10 @@ import {
   parseStoredProposalCheckout,
   resolveAmountDueNow,
 } from "@/lib/engagements/proposalCheckout";
+import {
+  parseStoredHourlyCheckout,
+  resolveHourlyAmountDueNow,
+} from "@/lib/engagements/hourlyCheckout";
 import { markEngagementDepositPaid } from "@/lib/engagements/fromOffer";
 import { hasPublicProposalAccess, publicProposalNotFound } from "@/lib/engagements/publicProposalAccess";
 
@@ -34,7 +38,7 @@ export async function POST(
 
   const engagement = await prisma.engagement.findUnique({
     where: { id: engagementId },
-    select: { brandId: true, onboardingFeeStatus: true, onboardingData: true, agreementManagerStatus: true, isTestProposal: true, signedAt: true },
+    select: { brandId: true, onboardingFeeStatus: true, onboardingData: true, agreementManagerStatus: true, isTestProposal: true, signedAt: true, productKind: true },
   });
   if (!engagement) return NextResponse.json({ error: "Engagement not found" }, { status: 404 });
   if (engagement.agreementManagerStatus === "VOIDED" || engagement.agreementManagerStatus === "VOIDED_BEFORE_SIGNATURE" || engagement.agreementManagerStatus === "CANCELLATION_REQUESTED" || engagement.agreementManagerStatus === "TERMINATED_AFTER_SIGNATURE") {
@@ -44,13 +48,21 @@ export async function POST(
   if (!engagement.signedAt) {
     return NextResponse.json({ error: "The agreement must be signed before payment." }, { status: 409 });
   }
+  const isHourlyKind = engagement.productKind === "consulting" || engagement.productKind === "coaching";
   const onboardingData = isRecord(engagement.onboardingData) ? engagement.onboardingData : {};
   const existingState = isRecord(onboardingData.proposalBuilderState) ? onboardingData.proposalBuilderState : {};
   const existingServices = isRecord(existingState.services) ? existingState.services : {};
-  const checkout = parseStoredProposalCheckout(existingServices);
-  if (!checkout) {
+  const hourlyCheckout = isHourlyKind
+    ? parseStoredHourlyCheckout(existingServices.hourlyCheckout)
+    : null;
+  const checkout = !isHourlyKind ? parseStoredProposalCheckout(existingServices) : null;
+  if (isHourlyKind && !hourlyCheckout) {
+    return NextResponse.json({ error: "Republish this hourly proposal before payment." }, { status: 409 });
+  }
+  if (!isHourlyKind && !checkout) {
     return NextResponse.json({ error: "Select a valid published pricing option before payment." }, { status: 409 });
   }
+  const selectionHash = (hourlyCheckout ?? checkout!).selectionHash;
   const invoiceEmail = typeof existingServices.invoiceEmail === "string" ? existingServices.invoiceEmail : undefined;
   const existingPaymentIntentId = typeof existingServices.stripePaymentIntentId === "string" ? existingServices.stripePaymentIntentId : null;
   const waiverActive = engagement.onboardingFeeStatus === "WAIVED"
@@ -60,11 +72,16 @@ export async function POST(
     return NextResponse.json({ alreadyResolved: true });
   }
 
-  const chargeAmount = resolveAmountDueNow({
-    checkout,
-    onboardingWaived: waiverActive,
-    isTestProposal: engagement.isTestProposal,
-  });
+  const chargeAmount = isHourlyKind
+    ? resolveHourlyAmountDueNow({
+        checkout: hourlyCheckout!,
+        isTestProposal: engagement.isTestProposal,
+      })
+    : resolveAmountDueNow({
+        checkout: checkout!,
+        onboardingWaived: waiverActive,
+        isTestProposal: engagement.isTestProposal,
+      });
 
   if (chargeAmount <= 0) {
     await prisma.engagement.update({
@@ -74,7 +91,9 @@ export async function POST(
     return NextResponse.json({ waived: true });
   }
 
-  const chargeKind = engagement.isTestProposal ? "test_proposal" : checkout.chargeKind;
+  const chargeKind = engagement.isTestProposal
+    ? "test_proposal"
+    : (hourlyCheckout?.chargeKind ?? checkout!.chargeKind);
   const amountInCents = Math.round(chargeAmount * 100);
   const connectedAccountId = await getChargeableConnectedAccountId(engagement.brandId);
 
@@ -159,7 +178,7 @@ export async function POST(
       : 0;
     const paymentAttempt = previousAttempt + 1;
     const created = await stripe.paymentIntents.create(intentParams, {
-      idempotencyKey: `proposal:${engagementId}:${checkout.selectionHash}:${paymentAttempt}`,
+      idempotencyKey: `proposal:${engagementId}:${selectionHash}:${paymentAttempt}`,
     });
     const proposalBuilderState = {
       ...existingState,

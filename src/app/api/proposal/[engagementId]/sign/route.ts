@@ -54,9 +54,10 @@ export async function POST(
 
   const engagement = await prisma.engagement.findUnique({
     where: { id: engagementId },
-    select: { brandId: true, onboardingData: true, onboardingFeeStatus: true, agreementText: true, signedAt: true, signerName: true, agreementManagerStatus: true },
+    select: { brandId: true, onboardingData: true, onboardingFeeStatus: true, agreementText: true, signedAt: true, signerName: true, agreementManagerStatus: true, productKind: true },
   });
   if (!engagement) return NextResponse.json({ error: "Engagement not found" }, { status: 404 });
+  const isHourlyKind = engagement.productKind === "consulting" || engagement.productKind === "coaching";
 
   if (engagement.agreementManagerStatus === "VOIDED" || engagement.agreementManagerStatus === "VOIDED_BEFORE_SIGNATURE" || engagement.agreementManagerStatus === "CANCELLATION_REQUESTED" || engagement.agreementManagerStatus === "TERMINATED_AFTER_SIGNATURE") {
     return NextResponse.json({ error: "This agreement is no longer available for signing." }, { status: 409 });
@@ -70,7 +71,7 @@ export async function POST(
     return NextResponse.json({ ok: true, signedAt: engagement.signedAt.toISOString(), signerName: engagement.signerName });
   }
 
-  if (!getSelectedProposalTier(engagement.onboardingData)) {
+  if (!isHourlyKind && !getSelectedProposalTier(engagement.onboardingData)) {
     return NextResponse.json({ error: "Please select a service tier first." }, { status: 400 });
   }
   if (!engagement.agreementText?.trim()) {
