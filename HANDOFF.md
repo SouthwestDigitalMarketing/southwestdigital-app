@@ -1,221 +1,226 @@
 # Coding-agent handoff
 
-Updated: 2026-09-04 (America/Chicago)
+Updated: 2026-09-04 (America/Chicago) — mid-session snapshot; being refreshed as work lands.
 
 ## Start here
 
-- Read the repository `AGENTS.md` before changing code. Its tenant, authorization, secret-handling, analytics, migration-safety, and Next.js 16 rules are non-negotiable.
-- Current branch: `main`.
-- Current pushed commit before the agreement-template work: `999bc89 Build offer delivery and connected payments`.
-- At the time of this update, `main`, `origin/main`, and `origin/HEAD` all point to `999bc89`.
-- `.claude/` is untracked user-owned content. Do not add, delete, or modify it unless the user explicitly requests that.
+- Read `AGENTS.md` before changing code. Its tenant, authorization, secret-handling, analytics, migration-safety, and Next.js 16 rules are non-negotiable.
+- Current branch: `main`. Deployment is on **Vercel** (not Netlify — that's stale in older docs). Vercel CLI is not installed; use dashboard for env vars until user installs `npm i -g vercel`.
+- `.claude/` is untracked user-owned content. Do not modify.
+- Never commit `.env.local` or any secret. `AUTH_SECRET`, `ZOHO_MAIL_CLIENT_ID`, `ZOHO_MAIL_CLIENT_SECRET`, `INTEGRATION_ENCRYPTION_KEY`, Stripe/PayPal keys, and Supabase URLs are all secrets.
 
-## Current product state
+## Push policy
 
-### Proposal checkout, permanent receipt, and signed-document record
+The user has instructed: **never push without explicit user instruction**. Commit locally at every phase boundary so work is preserved; leave push to the user. If a phase is done and unpushed, say so in "Current commit state" below.
 
-The complete lead proposal path was hardened and verified locally:
+## Current commit state
 
-1. A lead opens the public proposal token, selects a package/term/cleanup/add-ons, reviews the frozen agreement, signs it, and pays.
-2. The browser now submits choices rather than trusted dollar amounts. `src/lib/engagements/proposalCheckout.ts` validates the choices against the published snapshot and calculates all amounts server-side.
-3. No-cleanup proposals collect onboarding plus the first month. Cleanup proposals collect onboarding plus cleanup and defer monthly billing. Waiving onboarding never waives the first month or cleanup charge.
-4. Payment cannot begin before signing. Stripe success is not shown until the server verifies the PaymentIntent and records it. PayPal uses the same calculated amount and verifies that the captured order belongs to the proposal.
-5. Signing stores the exact agreement, selected pricing and scope, signer, consent evidence, timestamp, IP, user agent, and SHA-256 hash in the engagement acceptance snapshot.
-6. Completed or archived signed proposal links redirect to `/proposal/[token]/receipt`. The receipt shows the accepted package, recurring price, payment evidence, agreement, signature/hash evidence, and a signed-PDF download.
-7. `/api/proposal/[token]/signed-document` generates the signed agreement plus electronic-signature certificate as a PDF. Public proposal mutation/read APIs require a token bound to the engagement.
+- Latest pushed commit at start of session: `5c688d7 Harden proposal signing and payment flow`
+- Since then, local + pushed:
+  - `66e9796 Enforce Stripe Connect destination on proposal payments`
+  - `f9f31e3 Add Zoho email connection so staff can send from the app`
+- **Local, not yet pushed:**
+  - `327efab Route proposal and cancellation email through Zoho`
+  - Additional Product Type commits landing during this session — see below
 
-For real-world smoke testing, the Duplicate Offer dialog now includes **Create as a $1 test proposal**. This preserves the real contract terms and pricing but forces the server-side provider charge to exactly $1; do not alter the offer's real prices merely to test checkout. Test proposals retain the existing `Test $1` manager chip.
+Run `git log --oneline origin/main..HEAD` to see what's ahead of origin.
 
-Local end-to-end evidence created on 2026-09-04:
+## This session's work
 
-- Archived test quote: `cmtn2olt20004inhg8ezdjdj9`
-- Engagement: `cmtn2olpg0001inhg3e00bhds`
-- Real accepted terms: Maintain at $670/month plus $350 onboarding ($1,020 ordinarily due immediately).
-- Stripe test-mode PaymentIntent: `pi_3UByUj2R5qsZ6eIF0lYUCFuJ`, succeeded for exactly $1.00.
-- Database state was signed, hashed, paid, and archived.
-- The original proposal URL returned a 307 redirect to its receipt; receipt returned 200 and showed signed/paid, $1.00, package, and SHA-256 evidence; PDF returned 200 `application/pdf` (9,810 bytes).
-- Agreement API returned 404 without the proposal token and 200 with the matching token.
+### 1) Stripe Connect safety — DONE, pushed (`66e9796`)
 
-Verification after the final changes:
+Replaced the silent platform-account fallback in the proposal PaymentIntent route with a strict destination-charge policy:
 
-- `npm run typecheck`: passed.
-- `npm test -- --run`: 34 files and 194 tests passed.
-- Focused ESLint for every changed proposal/checkout/receipt file: zero errors (one existing `no-img-element` warning).
-- `npx next build`: passed. The wrapper's preceding `prisma generate` can fail with Windows `EPERM` while the dev server holds the Prisma engine DLL; this is not a compilation failure.
-- `git diff --check`: passed.
+- If the brand has no `ACTIVE` Stripe Connect integration → 409 blocking response. No more accidental charges to Southwest Digital Marketing's platform balance.
+- If a prior PaymentIntent has `transfer_data.destination` missing (platform-only from before Connect activation) or pointing at a different connected account → cancel and recreate with the correct destination.
+- Extracted the decision into a pure helper `src/lib/stripe/connectPaymentPlan.ts` with 10 unit tests covering block, already-paid, reuse-update, reuse-as-is, create-fresh, cancel-and-create.
 
-Production launch blockers/operational notes:
+Key files: `src/app/api/proposal/[engagementId]/payment-intent/route.ts`, `src/lib/stripe/connectPaymentPlan.ts`, `src/lib/stripe/connectPaymentPlan.test.ts`.
 
-- The verified payment used Stripe **test mode**, not a real card charge.
-- The inspected Stripe test account had no webhook endpoint. Configure `/api/stripe/webhook` and its signing secret for durable interrupted/async reconciliation before treating production payments as fully operational.
-- Automatic proposal/receipt email is not provisioned because `AUTH_RESEND_KEY` is absent. Staff can copy and email the public proposal link manually. The prior cancellation-notification changes in `IssuedAgreementsTable.tsx` and `agreements/actions.ts` are included in this work, but also require the email credential to send.
-- A connected signed-in browser was unavailable, so verification covered server/API/database/build behavior rather than a final authenticated production click-through.
-- The Vercel CLI is not installed. Install it with `npm i -g vercel` to inspect production environment variables, deployment status, and logs.
-- The generated signature certificate records conventional evidence but is not, by itself, a legal opinion about enforceability. Have final contract language and electronic-signature procedure reviewed by counsel.
+### 2) Zoho email connections — DONE, pushed (`f9f31e3`)
 
-Primary implementation files:
+Per-membership OAuth connection so staff can send email from their own Zoho mailbox from inside the app.
 
-- `src/lib/engagements/proposalCheckout.ts`
-- `src/lib/engagements/publicProposalAccess.ts`
-- `src/app/(proposal)/proposal/[token]/receipt/page.tsx`
-- `src/app/api/proposal/[engagementId]/signed-document/route.ts`
-- `src/lib/agreements/signedPdf.ts`
-- `src/app/(app)/offers/builder/OfferProposalPreview.tsx`
-- `src/app/api/proposal/[engagementId]/payment-intent/route.ts`
-- `src/app/api/proposal/[engagementId]/sign/route.ts`
-- `src/app/api/stripe/webhook/route.ts`
+- New `EmailConnection` model (per-membership, unique). Encrypted access + refresh tokens using existing `encryptSecret`/`decryptSecret` (AES-256-GCM, keyed off `INTEGRATION_ENCRYPTION_KEY` or fallback `AUTH_SECRET`).
+- Region-aware Zoho OAuth: US / EU / IN / AU. HMAC-signed state binds membership + brand + returnOrigin.
+- Zoho Mail API integration: token exchange, refresh with revoke-detection, account lookup, send. Uses Zoho's `Zoho-oauthtoken` bearer prefix (not standard `Bearer`).
+- Settings page has an Email connections section with four provider cards. Zoho is fully enabled; Gmail / Microsoft / SMTP show as "Coming soon" so users see the roadmap.
+- Test-message form on the settings panel proves end-to-end delivery.
+- Migration `prisma/migrations/20260904160000_email_connections/migration.sql` — additive, idempotent, already applied to local DB.
+- User has completed local Zoho API Console setup and confirmed end-to-end test send works from their real Zoho mailbox.
 
-### Agreement templates and proposal signing (current working tree)
+**Env vars needed:** `ZOHO_MAIL_CLIENT_ID`, `ZOHO_MAIL_CLIENT_SECRET`. Optional prod: `PLATFORM_BASE_URL`, `INTEGRATION_ENCRYPTION_KEY`.
 
-- The client proposal's third step is named **Sign & Pay**, because the agreement is reviewed and signed before the onboarding payment is collected.
-- Agreement language is managed separately at `/agreements`; staff can create, edit, archive, restore, delete archived templates, and choose one active default per brand.
-- The Offers Preview page selects an active agreement template and renders its proposal-specific tokens immediately in the embedded preview.
-- Saving or publishing materializes the selected template's ID, name, and current content into the offer snapshot. Published revisions therefore retain their original agreement language when a template is edited or deleted later.
-- Unsigned engagement agreement text is regenerated when an offer is republished or the client changes package selection. Signed agreement text and its hash remain unchanged.
-- The additive, idempotent migration is `prisma/migrations/20260902140000_agreement_templates/migration.sql`. It has been applied directly to the connected local database and its table was verified through Prisma.
-- The default bookkeeping agreement was moved into `src/lib/agreements/template.ts`. Its language should be reviewed by qualified counsel before live client use.
+Key files: `src/lib/emailConnections/{providers,zohoOAuth,zohoMail,repository,send}.ts`, `src/app/api/email-connections/**`, `src/app/(app)/settings/EmailConnectionsPanel.tsx`, `docs/email-connections/zoho-setup.md`.
 
-Primary new files:
+### 3) Zoho wired into real flows — DONE, committed locally (`327efab`), not pushed
 
-- `src/app/(app)/agreements/page.tsx`
-- `src/app/(app)/agreements/AgreementTemplatesManager.tsx`
-- `src/app/(app)/agreements/actions.ts`
-- `src/lib/agreements/template.ts`
-- `src/lib/agreements/repository.ts`
-- `src/lib/agreements/materialize.ts`
-- `prisma/migrations/20260902140000_agreement_templates/migration.sql`
+- New shared helper `sendFromMembership` in `src/lib/emailConnections/send.ts` with typed `EmailConnectionMissingError` and `EmailConnectionRegionInvalidError`.
+- New route `POST /api/email/send` — generic authenticated send taking `{ to, subject, body, bodyHtml?, offerId? }`. Optional `offerId` marks the quote as sent.
+- Proposal cover-letter screen (`ProposalCoverLetterDemo.tsx`): primary "Send from your mailbox" button; "Copy email" moved to secondary escape hatch. On 409 not-connected, inline banner links to Settings.
+- Agreement cancellation notification (`requestAgreementCancellationAction`): sends via connected Zoho instead of Resend. `AUTH_RESEND_KEY` is no longer required for this flow.
+- Docs `docs/email-connections/zoho-setup.md` gained §2b Vercel production setup section.
 
-Current verification: `npm run typecheck` passed, all 29 Vitest files/149 tests passed, focused ESLint passed with only pre-existing warnings, the migration executed successfully twice, and the Next.js dev server is healthy on port 3000. Authenticated visual verification remains for the user/next agent.
+### 4) Product Type refactor — IN PROGRESS
 
-### Semantic action theming (current working tree)
+**Goal:** make product type a first-class dimension so the app can offer Consulting (one-off hourly) and Coaching (session pack) alongside the current Bookkeeping proposal shape. Everything downstream — signing, Stripe Connect + destination charges, receipts, cancellation — is reused. Only the offer builder, proposal preview, and pricing calculation branch by type.
 
-- Primary, secondary, danger, and ghost action colors are centralized in `src/app/globals.css`; controls use `ui-action-*` roles rather than pairing background and text utilities locally.
-- `src/lib/brands/themeTokens.ts` is the single source for primary-action background/foreground pairs and contrast selection.
-- The active sidebar item and authenticated-app primary actions consume the same pair. Light mode guarantees configured dark accent with white text; dark mode uses the regular accent with a centrally selected contrasting foreground.
-- The proposal preview and published proposal override that same primary-action pair from the offer's selected proposal theme, covering cover CTAs, package selection, signing, and Stripe payment.
-- Legacy primary actions across Contacts, Clients, Reviews, Media, Discounts, Settings, Dashboard, and Offers were migrated to the semantic primary-action role. Selected chips/tooltips remain separate control types.
-- See `docs/architecture/ui-theme-system.md` before adding or restyling actions.
+Full plan lives below in **"Product Type refactor plan"** section. Progress markers land here as each phase commits.
 
-### Configurable proposal services (previous work)
+**Assumed defaults (user delegated):**
+- Product types: `BOOKKEEPING`, `CONSULTING`, `COACHING`. New values added later via `ALTER TYPE ADD VALUE`.
+- Coaching payment (v1): **one-time upfront** (session pack). True subscriptions are v2.
+- Signing / agreement / payment: reuse existing infrastructure.
+- `/offers` list unified with Type column + filter.
+- `CatalogService` gets a single `productType` per row.
+- Hourly builder v1: one primary service with quantity + optional intake fee (no multi-line).
 
-The Offers → Options step is now the per-offer source of truth for optional services, included services, cadence, and Grow/Improve/Maintain assignments.
+**Phases (see plan below for detail):**
+- Phase 1: Schema + backfill + Prisma types
+- Phase 2: Catalog `productType` + seed hourly services
+- Phase 3: Product-type chooser + `/offers` list Type column
+- Phase 6 (moved earlier): `resolveAmountDueNow` per-type + tests
+- Phase 4: Hourly builder
+- Phase 5: Hourly proposal preview + public dispatch
+- Phase 8: `AgreementTemplate.defaultForProductType` + preselect
+- Phase 7: Email templates per type
+- Phase 9: Docs + verification
 
-The latest work completed all of the following:
+Each phase → its own commit. Fresh agents can `git log` since `f9f31e3` to see what's landed.
 
-- Removed every `Why shown: ...` explanation from the Options table.
-- Removed the Options table's `Real estate` column and toggle. Real-estate designation is derived from the service's `Real estate` tag through the Services/Tags management flow.
-- Changed the Edit/Done action to an accessible icon-only pencil/check button.
-- Removed the lead proposal preview's hard-coded recurring service lineup.
-- Moved these former runtime constants into brand-owned `CatalogService` rows:
-  - Monthly Bookkeeping
-  - Standard Client Support
-  - Monthly Reporting Package
-  - Priority Client Support
-  - Investor Reporting & KPI Review
-  - Concierge Client Support
-  - Monthly Advisory Calls
-  - CFO Pack
-  - Cash Flow Analysis
-- Added catalog-backed default package assignments, stored in `catalog_services.default_package_keys`.
-- Existing and new offer drafts receive newly cataloged core services without duplicating a service that a user converted from Included to Optional.
-- Per-offer package selections are stored in `assessment.bonusPackageSelections` and frozen into saved/published offer snapshots.
-- Catalog-backed rows are archived rather than destructively removed when the trash action is used, so they do not immediately rematerialize.
-- The lead preview derives recurring rows and tooltips from the configured service names/descriptions.
-- Package monthly totals remain driven by the pricing calculator, independently of how the service total is displayed internally.
-- `Everything in [lower tier], plus:` is only shown when the higher tier actually contains the lower tier's configured recurring services. Otherwise, the preview lists the actual selected services without making the inheritance claim.
-- The comparison modal now derives its recurring/one-time service matrix from configured rows; its separate hard-coded bookkeeping/support feature matrix was removed.
+## Product Type refactor plan
 
-Primary implementation files:
+### Data model
 
-- `src/app/(app)/offers/add-ons/page.tsx`
-- `src/app/(app)/offers/builder/ProposalAddOnsDemo.tsx`
-- `src/app/(app)/offers/builder/ProposalCreationWorkspaceDemo.tsx`
-- `src/app/(app)/offers/builder/OfferProposalPreview.tsx`
-- `src/lib/quotes/catalog.ts`
-- `src/lib/quotes/materializeProposalCatalog.ts`
-- `src/lib/database/schemaCapabilities.ts`
-- `prisma/schema.prisma`
-- `prisma/migrations/20260830123500_catalog_core_package_services/migration.sql`
+```prisma
+enum ProductType {
+  BOOKKEEPING
+  CONSULTING
+  COACHING
+}
+
+model Quote {
+  ...existing fields...
+  productType ProductType @default(BOOKKEEPING)
+  @@index([brandId, productType, status])
+}
+
+model Engagement {
+  ...existing fields...
+  productType ProductType @default(BOOKKEEPING)
+}
+
+model CatalogService {
+  ...existing fields...
+  productType ProductType @default(BOOKKEEPING)
+  @@index([brandId, productType, offerSection])
+}
+
+model AgreementTemplate {
+  ...existing fields...
+  defaultForProductType ProductType?  // nullable — a template may be default for none, one, or many types
+}
+```
+
+Migration is additive + idempotent: `CREATE TYPE IF NOT EXISTS`, `ALTER TABLE ADD COLUMN IF NOT EXISTS` with defaults, `UPDATE ... WHERE productType IS NULL` backfills, then `SET NOT NULL`. Follow the pattern in `prisma/migrations/20260904160000_email_connections/migration.sql`.
+
+Apply directly with `npx dotenv-cli -e .env.local -- npx prisma db execute --file <path> --schema prisma/schema.prisma` (never `prisma migrate deploy` — see migration drift note below).
+
+### Payment adapter
+
+Extend `resolveAmountDueNow` in `src/lib/engagements/proposalCheckout.ts` to branch on `productType`:
+
+- `BOOKKEEPING` — existing cleanup + onboarding + first-month calc.
+- `CONSULTING` / `COACHING` — full total upfront (single charge). No cleanup, no waiver handling for first month.
+
+`chargeKind` metadata gains `consulting` and `coaching` values. **Payment routes need zero changes** — they call `resolveAmountDueNow` and the Connect-safety helper from Phase 1.
+
+### Hourly builder shape
+
+Simpler than bookkeeping — one primary service, optional intake:
+
+1. Client (reuses Contacts picker).
+2. Service — pick from catalog filtered to this type. Quantity + rate (rate defaults from catalog, editable).
+3. Optional intake fee (waivable, one-time add-on).
+4. Agreement template (per-type default preselected).
+5. Publish → `Quote` with `productType`.
+
+No cleanup, no Grow/Improve/Maintain, no monthly tier UI. Reuses `QuoteRevision` snapshotting.
+
+### Public proposal dispatch
+
+`src/app/(proposal)/proposal/[token]/page.tsx` reads the engagement's `productType` and renders either the existing `OfferProposalPreview` (bookkeeping) or a new `HourlyOfferPreview` component. Sign & Pay, receipt, cancellation flow are all shared.
+
+### Test coverage
+
+- Unit tests for `resolveAmountDueNow` per type.
+- Unit tests for catalog filtering by product type.
+- Unit tests for agreement default resolution per type.
+- Keep the Stripe Connect payment plan tests passing.
+
+### Explicit cut lines (v2 or later)
+
+- Stripe Subscriptions (true recurring billing).
+- Session scheduling / calendar integration.
+- Time tracking against consulting hours.
+- Cross-type catalog services (single service usable across types).
+- Auto-populated email templates for coaching-for-bookkeepers audience (separate copy tuning, not a new type).
 
 ## Database and migration state — read before running Prisma commands
 
-The connected `.env.local` database is Supabase PostgreSQL. Do not expose its connection string or credentials.
+Unchanged from prior session. Supabase PostgreSQL. Migration history is divergent:
 
-Prisma migration history is divergent:
+- The DB contains consolidated migration `20260817205118_init` that is not in this repo.
+- Several repo migrations describe schema already in that consolidated state.
+- `prisma migrate status` reports `last common migration: null`.
+- **Do not run `prisma migrate deploy` or `prisma migrate dev`.** Apply reviewed idempotent SQL directly with `npx dotenv-cli -e .env.local -- npx prisma db execute --file <path> --schema prisma/schema.prisma`.
 
-- The database contains the consolidated migration `20260817205118_init`, which is not present in this repository.
-- Several repository migrations describe schema already provided by that consolidated database migration.
-- `prisma migrate status` reports `last common migration: null` and treats 13 local migrations as pending even though most of that schema already exists.
-- **Do not run `prisma migrate deploy` or blindly run `prisma migrate dev`.** Either could try to replay consolidated schema migrations.
+Recent additive migrations applied this way (not necessarily recorded in `_prisma_migrations`):
+- `20260904160000_email_connections` — applied 2026-09-04.
+- Product Type migration (Phase 1) — applied as it lands.
 
-Known applied catalog migrations:
+### Windows EPERM on `prisma generate`
 
-1. `20260829120000_catalog_options_and_quote_revisions`
-   - Applied previously as reviewed raw SQL and recorded in `_prisma_migrations`.
-   - Pre-migration backup: `backups/backup-pre-catalog-options-20260829T182501Z.sql` (gitignored).
-2. `20260830123500_catalog_core_package_services`
-   - Adds nullable JSONB `catalog_services.default_package_keys`.
-   - Seeds nine `core-services` catalog rows per existing brand with conflict-safe defaults.
-   - Applied directly with `prisma db execute` after `migrate status` exposed the divergent history.
-   - The SQL is idempotent (`ADD COLUMN IF NOT EXISTS` and conflict-safe inserts).
-   - It was **not** recorded with `prisma migrate resolve`, so Prisma may still report this migration as pending.
+Dev server holds `query_engine-windows.dll.node`. Stop `npm run dev`, run `npx prisma generate`, then start again. The `dev` script itself runs `prisma generate` on start, so restarting the dev server is often the fastest path.
 
-Post-apply database assertion succeeded:
+## Deferred / not done this session
 
-- `catalog_services.default_package_keys` exists.
-- Every current brand has at least nine `offer_section = 'core-services'` rows.
+- **Stripe Connect edge cases still open:**
+  - `confirm-payment` route does not validate that the succeeded PaymentIntent's destination matches the brand's active connected account before marking paid. Low risk now that intent-creation is safe, but worth revisiting.
+  - PayPal path routes to the platform PayPal account, not the brand.
+  - `/api/stripe/webhook` still lacks a configured endpoint/secret in the Stripe dashboard.
+- **Gmail / Microsoft OAuth**: schema/UI slots reserved; providers show as "Coming soon". Enable when there's demand.
+- **Test-send fields validation**: `/api/email/send` validates recipient email format but does not rate-limit; abuse risk is small (staff-only) but worth noting.
 
-The app now has a rollout compatibility guard:
+## Environment variables reference
 
-- `getSchemaCapabilities()` detects `proposalPackageDefaults` separately from the older proposal catalog capability.
-- Catalog queries only select `defaultPackageKeys` when the column exists.
-- This prevents the Prisma P2022 runtime failure seen when application code was ahead of the database migration.
+Required for full functionality:
 
-If another schema change is needed, first inspect migration status and the actual database schema. Prefer a reviewed, additive, idempotent SQL migration with explicit reconciliation. Do not alter production destructively without the backup/rehearsal/reconciliation/rollback process required by `AGENTS.md`.
+| Var | Purpose | Where |
+|---|---|---|
+| `DATABASE_URL` | Runtime Prisma queries (Supabase pgbouncer :6543) | `.env.local` and prod |
+| `DIRECT_DATABASE_URL` | Schema operations (Supabase :5432) | `.env.local` and prod |
+| `AUTH_SECRET` | JWT signing + fallback encryption key | `.env.local` and prod |
+| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Google OAuth login | prod |
+| `AUTH_EMAIL_SERVER` / `AUTH_EMAIL_FROM` | Magic link email (nodemailer) | prod |
+| `AUTH_RESEND_KEY` | Was used by cancellation notice; now unused after Zoho wiring. Still used by login magic link Resend path? Verify. | prod (verify) |
+| `AUTH_URL` | App base URL for auth callbacks | prod |
+| `STRIPE_SECRET_KEY` | Stripe API | `.env.local` and prod |
+| `PLATFORM_BASE_URL` | Locks OAuth callback origins (Zoho, YouTube) | prod recommended |
+| `INTEGRATION_ENCRYPTION_KEY` | Dedicated encryption key for stored OAuth tokens. Falls back to `AUTH_SECRET`. Rotating invalidates all stored tokens. | prod recommended |
+| `ZOHO_MAIL_CLIENT_ID` | Zoho OAuth app | `.env.local` and prod |
+| `ZOHO_MAIL_CLIENT_SECRET` | Zoho OAuth app | `.env.local` and prod |
+| `YOUTUBE_OAUTH_CLIENT_ID` / `YOUTUBE_OAUTH_CLIENT_SECRET` | YouTube brand connection | prod optional |
 
-## Verification completed
-
-After the latest code and compatibility fix:
-
-- `npm run typecheck`: passed.
-- `npm test`: 19 files passed, 117 tests passed.
-- Focused ESLint on the new catalog, capability, and Options code: passed.
-- Database migration script: executed successfully.
-- Direct database assertion for the new column and nine rows per brand: passed.
-- `git diff --check`: passed before commit.
-- Commit `6a89195` was pushed successfully to `origin/main`.
-
-The in-app browser was unavailable for the final post-migration authenticated visual reload. The next agent should begin by loading `/offers/add-ons` with an authenticated staff session and confirm:
-
-1. The page renders without a Prisma missing-column error.
-2. The nine core recurring services appear in the Options table.
-3. Package checkboxes match their seeded defaults.
-4. Editing names/descriptions or package assignments changes the embedded/public proposal preview.
-5. Removing a lower-tier service from a higher tier suppresses the `Everything in ...` inheritance claim.
-
-## Important behavior and remaining considerations
-
-- **Deferred Stripe Connect safety work — required before enabling live proposal payments, but not required to continue composing and sending test offers:**
-  - The payment-intent route currently omits `transfer_data.destination` when a brand has no active Stripe connected account. That fallback creates the charge on Southwest Digital Marketing's platform account. Replace it with a clear blocking response so a proposal cannot collect payment until its brand has an active connected account.
-  - A PaymentIntent created before the brand's connected account becomes active remains platform-only. The existing update path changes only the amount and receipt email; it cannot retrofit the destination. Detect a missing or mismatched destination and cancel/recreate an unpaid PaymentIntent for the active brand connected account.
-  - Add route-level tests proving that a brand cannot pay into another brand's connected account, a missing/inactive connection blocks payment, and a stale platform-only PaymentIntent is replaced.
-  - Confirm the intended merchant-of-record, Stripe-fee, refund, and dispute responsibilities before live launch. The current destination-charge design transfers the gross payment to the connected Express account while Southwest Digital Marketing's platform balance remains responsible for processing fees, refunds, and disputes.
-- Lead-facing recurring service names/descriptions are no longer hard-coded in `OfferProposalPreview.tsx`; the migration contains initial seed values that become editable brand catalog data.
-- `ProposalCreationWorkspaceDemo.tsx` still contains hard-coded package names, pricing algorithms, package descriptions, and staff-facing `includedServices` summary bullets. The lead-facing service lineup is catalog-driven, but a future product decision may also move package metadata and pricing configuration into database-backed package management.
-- The migration seeds brands that existed when it ran. Confirm that the brand-provisioning flow seeds/clones these core catalog services before relying on this behavior for newly created brands.
-- Published proposals use immutable `QuoteRevision` snapshots. Later catalog edits must not mutate already-published proposals; an intentional republish creates a new revision.
-- Real-estate classification remains tag-driven. Do not restore a separate Options-table toggle.
-- The repository uses Next.js 16. Read the relevant local guide in `node_modules/next/dist/docs/` before using framework APIs or conventions that may have changed.
-- A normal `prisma generate` may fail on Windows with `EPERM` if the running dev server has locked `query_engine-windows.dll.node`. Stop the dev server before regenerating if that occurs.
-- The Vercel CLI is not installed. Install it with `npm i -g vercel` if the next session needs `vercel env pull`, deployment, or log access.
+Zoho on Vercel: register a **separate** OAuth app for prod (not shared with local). See `docs/email-connections/zoho-setup.md` §2b.
 
 ## Suggested first commands for the next agent
 
 ```powershell
 git status --short
-git log -1 --oneline --decorate
+git log --oneline origin/main..HEAD    # what's committed locally but not pushed
 npm run typecheck
-npm test
+npm test -- --run
 ```
 
-Then perform the authenticated `/offers/add-ons` → proposal preview verification described above before starting unrelated work.
+Then read this file top-to-bottom, note which phase of the Product Type refactor is in progress (search for "IN PROGRESS" and the latest phase-completion commit), and continue from there.
