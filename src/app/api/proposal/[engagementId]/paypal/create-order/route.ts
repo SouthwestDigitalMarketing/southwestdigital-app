@@ -3,46 +3,58 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { paypalFetch } from "@/lib/paypal";
 import { resolveOnboardingWaiverForEngagement } from "@/lib/discounts/resolveOnboardingWaiver";
+import { parseStoredProposalCheckout, resolveAmountDueNow } from "@/lib/engagements/proposalCheckout";
+import { hasPublicProposalAccess, publicProposalNotFound } from "@/lib/engagements/publicProposalAccess";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ engagementId: string }> },
 ) {
   const { engagementId } = await params;
+  if (!await hasPublicProposalAccess(request, engagementId)) return publicProposalNotFound();
 
   const engagement = await prisma.engagement.findUnique({
     where: { id: engagementId },
-    select: { onboardingFee: true, onboardingFeeStatus: true, onboardingData: true },
+    select: {
+      onboardingFeeStatus: true,
+      onboardingData: true,
+      isTestProposal: true,
+      signedAt: true,
+      agreementManagerStatus: true,
+    },
   });
   if (!engagement) return NextResponse.json({ error: "Engagement not found" }, { status: 404 });
-
-  const onboardingFee = engagement.onboardingFee ? Number(engagement.onboardingFee) : 0;
-  if (engagement.onboardingFeeStatus === "PAID" || engagement.onboardingFeeStatus === "WAIVED") {
-    return NextResponse.json({ error: engagement.onboardingFeeStatus === "WAIVED" ? "No payment is required — the onboarding fee has been waived." : "This deposit has already been paid" }, { status: 400 });
+  if (!engagement.signedAt) {
+    return NextResponse.json({ error: "The agreement must be signed before payment." }, { status: 409 });
   }
-
-  const waiverActive = await resolveOnboardingWaiverForEngagement(engagementId);
-  if (waiverActive) {
-    await prisma.engagement.update({
-      where: { id: engagementId },
-      data: { onboardingFeeStatus: "WAIVED", status: "DEPOSIT_PAID" },
-    });
-    return NextResponse.json({ error: "No payment is required — the onboarding fee has been waived." }, { status: 400 });
+  if (engagement.agreementManagerStatus !== "ACTIVE" && engagement.agreementManagerStatus !== "ARCHIVED") {
+    return NextResponse.json({ error: "Payment is unavailable for this agreement." }, { status: 409 });
+  }
+  if (engagement.onboardingFeeStatus === "PAID") {
+    return NextResponse.json({ error: "This proposal has already been paid." }, { status: 409 });
   }
 
   const onboardingData = isRecord(engagement.onboardingData) ? engagement.onboardingData : {};
   const existingState = isRecord(onboardingData.proposalBuilderState) ? onboardingData.proposalBuilderState : {};
   const existingServices = isRecord(existingState.services) ? existingState.services : {};
-  const recurringMonthlyTotal = typeof existingServices.recurringMonthlyTotal === "number" ? existingServices.recurringMonthlyTotal : 0;
-
-  const chargeAmount = onboardingFee > 0
-    ? onboardingFee
-    : recurringMonthlyTotal > 0 ? recurringMonthlyTotal : 0;
-  if (chargeAmount <= 0) return NextResponse.json({ error: "No amount is due for this proposal yet" }, { status: 400 });
+  const checkout = parseStoredProposalCheckout(existingServices);
+  if (!checkout) {
+    return NextResponse.json({ error: "Select a valid published pricing option before payment." }, { status: 409 });
+  }
+  const waiverActive = engagement.onboardingFeeStatus === "WAIVED"
+    || await resolveOnboardingWaiverForEngagement(engagementId);
+  const chargeAmount = resolveAmountDueNow({
+    checkout,
+    onboardingWaived: waiverActive,
+    isTestProposal: engagement.isTestProposal,
+  });
+  if (chargeAmount <= 0) {
+    return NextResponse.json({ error: "No amount is due for this proposal." }, { status: 409 });
+  }
 
   try {
     const response = await paypalFetch("/v2/checkout/orders", {
@@ -73,7 +85,7 @@ export async function POST(
       data: { onboardingData: { ...onboardingData, proposalBuilderState } as Prisma.InputJsonValue },
     });
 
-    return NextResponse.json({ orderId: order.id });
+    return NextResponse.json({ orderId: order.id, amountDueNow: chargeAmount });
   } catch (error) {
     console.error("[paypal/create-order] Failed:", error);
     return NextResponse.json({ error: "We couldn't start PayPal checkout. Please try again shortly." }, { status: 500 });

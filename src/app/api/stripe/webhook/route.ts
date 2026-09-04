@@ -26,7 +26,12 @@ export async function POST(request: Request) {
     const engagementId = paymentIntent.metadata?.engagementId;
     const brandId = paymentIntent.metadata?.brandId;
     if (engagementId) {
-      await markEngagementDepositPaid(engagementId, brandId || undefined);
+      await markEngagementDepositPaid(engagementId, brandId || undefined, {
+        provider: "stripe",
+        reference: paymentIntent.id,
+        amount: paymentIntent.amount_received / 100,
+        currency: paymentIntent.currency.toUpperCase(),
+      });
     }
   }
 

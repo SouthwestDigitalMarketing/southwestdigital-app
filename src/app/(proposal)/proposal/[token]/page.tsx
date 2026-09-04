@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
@@ -70,6 +70,7 @@ export default async function PublicProposalPage({
         snapshot: {
           contactInfo: snapshot.contactInfo,
           assessment: snapshot.assessment,
+          isTestProposal: snapshot.isTestProposal,
         },
       });
     } catch (error) {
@@ -97,7 +98,7 @@ export default async function PublicProposalPage({
     engagementId
       ? prisma.engagement.findFirst({
           where: { id: engagementId, brandId: brand.id },
-          select: { status: true },
+          select: { status: true, isTestProposal: true, signedAt: true },
         })
       : Promise.resolve(null),
   ]);
@@ -125,6 +126,10 @@ export default async function PublicProposalPage({
     },
   );
 
+  if (engagement?.signedAt && (quote?.status === "completed" || quote?.status === "archived")) {
+    redirect(`/proposal/${token}/receipt`);
+  }
+
   return (
     <OfferProposalPreview
       initialAssessment={isRecord(snapshot.assessment) ? (snapshot.assessment as Partial<AssessmentState>) : undefined}
@@ -132,6 +137,8 @@ export default async function PublicProposalPage({
       live
       catalogOffer={catalogOffer}
       engagementId={engagementId}
+      isTestProposal={engagement?.isTestProposal === true}
+      proposalToken={token}
     />
   );
 }

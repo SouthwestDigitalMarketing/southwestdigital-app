@@ -7,9 +7,11 @@ const clientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID;
 
 export default function PaypalPaymentButton({
   engagementId,
+  proposalToken,
   onPaid,
 }: {
   engagementId: string;
+  proposalToken?: string | null;
   onPaid: (status: "succeeded" | "processing") => void;
 }) {
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +38,10 @@ export default function PaypalPaymentButton({
           style={{ layout: "vertical", label: "pay", disableMaxWidth: true }}
           createOrder={async () => {
             setError(null);
-            const response = await fetch(`/api/proposal/${engagementId}/paypal/create-order`, { method: "POST" });
+            const response = await fetch(`/api/proposal/${engagementId}/paypal/create-order`, {
+              method: "POST",
+              headers: proposalToken ? { "x-proposal-token": proposalToken } : undefined,
+            });
             const result = await response.json().catch(() => null);
             if (!response.ok || !result?.orderId) {
               setError(result?.error ?? "Unable to start PayPal checkout.");
@@ -47,7 +52,10 @@ export default function PaypalPaymentButton({
           onApprove={async (data) => {
             const response = await fetch(`/api/proposal/${engagementId}/paypal/capture-order`, {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Content-Type": "application/json",
+                ...(proposalToken ? { "x-proposal-token": proposalToken } : {}),
+              },
               body: JSON.stringify({ orderId: data.orderID }),
             });
             const result = await response.json().catch(() => null);

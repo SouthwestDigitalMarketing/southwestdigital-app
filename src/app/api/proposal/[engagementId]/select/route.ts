@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { isProposalTierId } from "@/lib/engagements/proposalSelection";
+import {
+  buildProposalCheckoutSummary,
+  applyOnboardingWaiver,
+  parseProposalCheckoutSelection,
+} from "@/lib/engagements/proposalCheckout";
+import { resolveOnboardingWaiverForEngagement } from "@/lib/discounts/resolveOnboardingWaiver";
+import { hasPublicProposalAccess, publicProposalNotFound } from "@/lib/engagements/publicProposalAccess";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -12,29 +18,54 @@ export async function POST(
   { params }: { params: Promise<{ engagementId: string }> },
 ) {
   const { engagementId } = await params;
-  const body = (await request.json().catch(() => null)) as {
-    tier?: unknown;
-    tierLabel?: unknown;
-    onboardingFee?: unknown;
-    recurringMonthlyTotal?: unknown;
-  } | null;
-
-  const tier = typeof body?.tier === "string" ? body.tier : "";
-  if (!isProposalTierId(tier)) return NextResponse.json({ error: "Invalid tier" }, { status: 400 });
-
-  const onboardingFee = typeof body?.onboardingFee === "number" ? body.onboardingFee : null;
-  if (onboardingFee === null || onboardingFee < 0) return NextResponse.json({ error: "Invalid onboardingFee" }, { status: 400 });
-
-  const tierLabel = typeof body?.tierLabel === "string" ? body.tierLabel : tier;
-  const recurringMonthlyTotal = typeof body?.recurringMonthlyTotal === "number" ? body.recurringMonthlyTotal : null;
+  if (!await hasPublicProposalAccess(request, engagementId)) return publicProposalNotFound();
+  const selection = parseProposalCheckoutSelection(await request.json().catch(() => null));
+  if (!selection) return NextResponse.json({ error: "Invalid proposal selection" }, { status: 400 });
 
   const engagement = await prisma.engagement.findUnique({
     where: { id: engagementId },
-    select: { onboardingData: true, onboardingFeeStatus: true, signedAt: true, agreementManagerStatus: true },
+    select: {
+      onboardingData: true,
+      onboardingFeeStatus: true,
+      signedAt: true,
+      agreementManagerStatus: true,
+      quotes: {
+        take: 1,
+        select: {
+          publishedSnapshotJson: true,
+          revisions: {
+            take: 1,
+            orderBy: { version: "desc" },
+            select: { snapshotJson: true },
+          },
+        },
+      },
+    },
   });
   if (!engagement) return NextResponse.json({ error: "Engagement not found" }, { status: 404 });
   if (engagement.agreementManagerStatus === "VOIDED" || engagement.agreementManagerStatus === "VOIDED_BEFORE_SIGNATURE" || engagement.agreementManagerStatus === "CANCELLATION_REQUESTED" || engagement.agreementManagerStatus === "TERMINATED_AFTER_SIGNATURE") {
     return NextResponse.json({ error: "This agreement is no longer available for changes." }, { status: 409 });
+  }
+  if (engagement.signedAt) {
+    return NextResponse.json({ error: "A signed proposal selection cannot be changed." }, { status: 409 });
+  }
+  if (engagement.onboardingFeeStatus === "PAID") {
+    return NextResponse.json({ error: "A paid proposal selection cannot be changed." }, { status: 409 });
+  }
+
+  const quote = engagement.quotes[0];
+  const publishedSnapshot = quote?.revisions[0]?.snapshotJson ?? quote?.publishedSnapshotJson;
+  let checkout;
+  try {
+    checkout = buildProposalCheckoutSummary(publishedSnapshot, selection);
+    if (await resolveOnboardingWaiverForEngagement(engagementId)) {
+      checkout = applyOnboardingWaiver(checkout);
+    }
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Published pricing is invalid." },
+      { status: 409 },
+    );
   }
 
   const onboardingData = isRecord(engagement.onboardingData) ? engagement.onboardingData : {};
@@ -42,31 +73,29 @@ export async function POST(
   const proposalBuilderState = {
     ...existingState,
     services: {
-      selectedTier: tier,
-      selectedTierLabel: tierLabel,
-      onboardingFee,
-      recurringMonthlyTotal,
+      ...checkout,
+      selectedTier: checkout.tier,
+      selectedTierLabel: checkout.tierLabel,
       selectedAt: new Date().toISOString(),
     },
     version: 1,
     updatedAt: new Date().toISOString(),
   };
 
-  const onboardingFeeStatus = engagement.onboardingFeeStatus ?? "REQUIRED";
+  const onboardingFeeStatus = checkout.onboardingFee === 0 ? "WAIVED" : "REQUIRED";
 
   await prisma.engagement.update({
     where: { id: engagementId },
     data: {
       onboardingData: { ...onboardingData, proposalBuilderState } as Prisma.InputJsonValue,
-      onboardingFee,
+      onboardingFee: checkout.onboardingFee,
       onboardingFeeStatus,
       scopingMode: "AGREEMENT",
       isExpedited: true,
-      ...(engagement.signedAt
-        ? {}
-        : { agreementText: null, agreementTextHash: null }),
+      agreementText: null,
+      agreementTextHash: null,
     },
   });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, checkout });
 }

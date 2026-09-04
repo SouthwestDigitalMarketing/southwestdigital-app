@@ -11,7 +11,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export async function ensureQuoteEngagement(input: {
   brandId: string;
   quoteId: string;
-  snapshot: { contactInfo?: unknown; assessment?: unknown };
+  snapshot: { contactInfo?: unknown; assessment?: unknown; isTestProposal?: unknown };
 }) {
   const fields = extractOfferEngagementFields(input.snapshot);
   const quote = await prisma.quote.findFirst({
@@ -47,6 +47,7 @@ export async function ensureQuoteEngagement(input: {
           primaryContactEmail: fields.primaryContactEmail,
           primaryContactPhone: fields.primaryContactPhone,
           billingContactEmail: fields.billingContactEmail,
+          isTestProposal: input.snapshot.isTestProposal === true,
           ...(existing.signedAt
             ? {}
             : { agreementText: null, agreementTextHash: null }),
@@ -73,6 +74,7 @@ export async function ensureQuoteEngagement(input: {
       primaryContactEmail: fields.primaryContactEmail,
       primaryContactPhone: fields.primaryContactPhone,
       billingContactEmail: fields.billingContactEmail,
+      isTestProposal: input.snapshot.isTestProposal === true,
       status: "SENT_TO_CLIENT",
       onboardingData: { proposalBuilderState } as Prisma.InputJsonValue,
     },
@@ -87,13 +89,43 @@ export async function ensureQuoteEngagement(input: {
   return created.id;
 }
 
-export async function markEngagementDepositPaid(engagementId: string, brandId?: string) {
-  await prisma.engagement.updateMany({
-    where: brandId ? { id: engagementId, brandId } : { id: engagementId },
-    data: { onboardingFeeStatus: "PAID", status: "DEPOSIT_PAID" },
+export async function markEngagementDepositPaid(
+  engagementId: string,
+  brandId?: string,
+  payment?: {
+    provider: "stripe" | "paypal";
+    reference: string;
+    amount: number;
+    currency: string;
+    receiptUrl?: string | null;
+  },
+) {
+  const engagement = await prisma.engagement.findFirst({
+    where: { id: engagementId, ...(brandId ? { brandId } : {}) },
+    select: { id: true, brandId: true, onboardingData: true },
+  });
+  if (!engagement) return;
+  const onboardingData = isRecord(engagement.onboardingData) ? engagement.onboardingData : {};
+  const acceptance = isRecord(onboardingData.proposalAcceptance) ? onboardingData.proposalAcceptance : {};
+  const paidAt = new Date();
+  await prisma.engagement.update({
+    where: { id: engagement.id },
+    data: {
+      onboardingFeeStatus: "PAID",
+      status: "DEPOSIT_PAID",
+      onboardingData: {
+        ...onboardingData,
+        proposalAcceptance: {
+          ...acceptance,
+          payment: payment
+            ? { ...payment, status: "paid", paidAt: paidAt.toISOString() }
+            : { status: "paid", paidAt: paidAt.toISOString() },
+        },
+      } as Prisma.InputJsonValue,
+    },
   });
   await prisma.quote.updateMany({
-    where: { engagementId, ...(brandId ? { brandId } : {}), status: { not: "archived" } },
+    where: { engagementId, brandId: engagement.brandId, status: { not: "archived" } },
     data: { status: "completed" },
   });
 }

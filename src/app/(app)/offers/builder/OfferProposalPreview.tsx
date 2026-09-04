@@ -178,6 +178,20 @@ type ProposalOption = {
   oneTimeRows: ServiceRow[];
 };
 
+type CheckoutSummary = {
+  tier: OptionId;
+  tierLabel: string;
+  hasTwelveMonthAgreement: boolean;
+  selectedCleanupPeriodKeys: string[];
+  selectedAdditionalOptionIds: string[];
+  recurringMonthlyTotal: number;
+  cleanupTotal: number;
+  onboardingFee: number;
+  oneTimeTotal: number;
+  amountDueNow: number;
+  chargeKind: string;
+};
+
 // ─── Static data ──────────────────────────────────────────────────────────────
 
 function isOnboardingFeeWaived(assessment: AssessmentState) {
@@ -229,6 +243,13 @@ const baseOptions: Record<OptionId, ProposalOption> = {
 
 function fmt(value: number) {
   return value.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function proposalHeaders(token: string | null, includeJson = false): Record<string, string> {
+  return {
+    ...(includeJson ? { "Content-Type": "application/json" } : {}),
+    ...(token ? { "x-proposal-token": token } : {}),
+  };
 }
 
 function sectionTotal(rows: ServiceRow[]) {
@@ -462,6 +483,8 @@ export default function OfferProposalPreview({
   catalogOffer = null,
   engagementId: engagementIdProp = null,
   agreementTemplate = null,
+  isTestProposal = false,
+  proposalToken = null,
 }: {
   initialAssessment?: Partial<AssessmentState>;
   initialContactInfo?: Partial<ContactInfoState>;
@@ -472,6 +495,8 @@ export default function OfferProposalPreview({
   catalogOffer?: ReturnType<typeof getUrgencyOfferDisplay> | null;
   engagementId?: string | null;
   agreementTemplate?: AgreementTemplateOption | null;
+  isTestProposal?: boolean;
+  proposalToken?: string | null;
 } = {}) {
   const { brand } = useBrand();
   const { assessment: storedAssessment } = useProposalAssessmentDemoState({
@@ -570,6 +595,7 @@ export default function OfferProposalPreview({
   const [paymentClientSecret, setPaymentClientSecret] = useState<string | null>(null);
   const [paymentWaived, setPaymentWaived] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState<"succeeded" | "processing" | null>(null);
+  const [checkoutSummary, setCheckoutSummary] = useState<CheckoutSummary | null>(null);
   const [agreementText, setAgreementText] = useState("");
   const [agreementManagerStatus, setAgreementManagerStatus] = useState<"ACTIVE" | "VOIDED" | "VOIDED_BEFORE_SIGNATURE" | "CANCELLATION_REQUESTED" | "TERMINATED_AFTER_SIGNATURE" | "ARCHIVED">("ACTIVE");
   const [cancellationReason, setCancellationReason] = useState<string | null>(null);
@@ -599,7 +625,8 @@ export default function OfferProposalPreview({
     ? (options[selectedOptionId].oneTimeRows.find((row) => isOnboarding(row))?.price ?? null)
     : null;
   const selectedMonthlyChargeForPayment = selectedOptionId ? options[selectedOptionId].monthlyPrice : 0;
-  const requiresOnboardingPaymentForSelection = (selectedOnboardingFeeForPayment ?? 0) > 0 || selectedMonthlyChargeForPayment > 0;
+  const requiresOnboardingPaymentForSelection = isTestProposal
+    || (checkoutSummary?.amountDueNow ?? ((selectedOnboardingFeeForPayment ?? 0) + selectedMonthlyChargeForPayment)) > 0;
 
   useEffect(() => {
     if (!introEmbedUrl || !isCloudflareStreamEmbed(introEmbedUrl)) return;
@@ -681,12 +708,17 @@ export default function OfferProposalPreview({
 
   useEffect(() => {
     if (step !== 2 && step !== 3 || !engagementId) return;
-    fetch(`/api/proposal/${engagementId}/agreement`)
+    fetch(`/api/proposal/${engagementId}/agreement`, { headers: proposalHeaders(proposalToken) })
       .then((r) => r.json())
-      .then((result: { text?: string; signed?: boolean; signerName?: string | null; signedAt?: string | null; onboardingFeeStatus?: string | null; agreementManagerStatus?: typeof agreementManagerStatus; cancellationReason?: string | null }) => {
+      .then((result: { text?: string; signed?: boolean; signerName?: string | null; signedAt?: string | null; onboardingFeeStatus?: string | null; agreementManagerStatus?: typeof agreementManagerStatus; cancellationReason?: string | null; checkout?: CheckoutSummary }) => {
         setAgreementText(result.text ?? "");
         setAgreementManagerStatus(result.agreementManagerStatus ?? "ACTIVE");
         setCancellationReason(result.cancellationReason ?? null);
+        if (result.checkout && typeof result.checkout.amountDueNow === "number") {
+          setCheckoutSummary(result.checkout);
+          setSelectedOptionId(result.checkout.tier);
+          setHasTwelveMonthAgreement(result.checkout.hasTwelveMonthAgreement === true);
+        }
         if (result.signed) {
           setAlreadySigned(true);
           setSignedSignerName(result.signerName ?? null);
@@ -696,11 +728,13 @@ export default function OfferProposalPreview({
             setPaymentStatus("succeeded");
             if (result.onboardingFeeStatus === "WAIVED") setPaymentWaived(true);
           } else {
-            fetch(`/api/proposal/${engagementId}/payment-intent`, { method: "POST" })
+            fetch(`/api/proposal/${engagementId}/payment-intent`, { method: "POST", headers: proposalHeaders(proposalToken) })
               .then((r) => r.json())
-              .then((pr: { clientSecret?: string; waived?: boolean }) => {
+              .then((pr: { clientSecret?: string; waived?: boolean; alreadyResolved?: boolean }) => {
                 if (pr.waived) {
                   setPaymentWaived(true);
+                  setPaymentStatus("succeeded");
+                } else if (pr.alreadyResolved) {
                   setPaymentStatus("succeeded");
                 } else if (pr.clientSecret) {
                   setPaymentClientSecret(pr.clientSecret);
@@ -712,7 +746,7 @@ export default function OfferProposalPreview({
       })
       .catch(() => {})
       .finally(() => setAgreementLoading(false));
-  }, [step, engagementId, requiresOnboardingPaymentForSelection]);
+  }, [step, engagementId, requiresOnboardingPaymentForSelection, proposalToken]);
 
   function checkAgreementScrolled(el: HTMLDivElement) {
     if (el.scrollTop + el.clientHeight >= el.scrollHeight - 20) setHasScrolledToEnd(true);
@@ -731,8 +765,21 @@ export default function OfferProposalPreview({
 
   const canSignAgreement = signerName.trim().length > 0 && isValidEmail(email) && consentChecked && readAndAgreedChecked && hasScrolledToEnd;
 
+  async function confirmStripePayment(status: "succeeded" | "processing") {
+    if (status === "processing") {
+      setPaymentStatus("processing");
+      return;
+    }
+    if (!engagementId) throw new Error("This payment is not attached to a proposal.");
+    const response = await fetch(`/api/proposal/${engagementId}/confirm-payment`, { method: "POST", headers: proposalHeaders(proposalToken) });
+    const result = await response.json().catch(() => null) as { paid?: boolean; error?: string } | null;
+    if (!response.ok || result?.paid !== true) {
+      throw new Error(result?.error ?? "Your payment was submitted, but we could not verify it yet. Please retry confirmation.");
+    }
+    setPaymentStatus("succeeded");
+  }
+
   async function selectOptionAndContinue(id: OptionId) {
-    const option = options[id];
     setSelectionError(null);
 
     if (!engagementId) {
@@ -743,23 +790,29 @@ export default function OfferProposalPreview({
 
     setSelectionSubmittingId(id);
     try {
-      const onboardingFee = option.oneTimeRows.find((row) => isOnboarding(row))?.price ?? 0;
+      const selectedCleanupPeriodKeys = cleanupPeriods
+        .map((period) => `${period.year}-${period.startMonth}-${period.endMonth}`)
+        .filter((periodKey) => cleanupIsSelected(id, periodKey));
+      const selectedAdditionalOptionIds = additionalOptionRows
+        .filter((row) => additionalOptionSelections[id][row.id] === true)
+        .map((row) => row.id);
       const response = await fetch(`/api/proposal/${engagementId}/select`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: proposalHeaders(proposalToken, true),
         body: JSON.stringify({
           tier: id,
-          tierLabel: option.name,
-          onboardingFee,
-          recurringMonthlyTotal: option.monthlyPrice,
+          hasTwelveMonthAgreement,
+          selectedCleanupPeriodKeys,
+          selectedAdditionalOptionIds,
         }),
       });
-      const result = await response.json().catch(() => null) as { error?: string } | null;
+      const result = await response.json().catch(() => null) as { error?: string; checkout?: CheckoutSummary } | null;
       if (!response.ok) {
         throw new Error(result?.error ?? "We couldn't save your service selection. Please try again.");
       }
 
       setSelectedOptionId(id);
+      if (result?.checkout) setCheckoutSummary(result.checkout);
       setStep(2);
     } catch (error) {
       setSelectionError(
@@ -781,7 +834,7 @@ export default function OfferProposalPreview({
       if (!alreadySigned) {
         const response = await fetch(`/api/proposal/${engagementId}/sign`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: proposalHeaders(proposalToken, true),
           body: JSON.stringify({
             signerName,
             signerTitle,
@@ -806,13 +859,18 @@ export default function OfferProposalPreview({
         setStep(3);
         return;
       }
-      const paymentResponse = await fetch(`/api/proposal/${engagementId}/payment-intent`, { method: "POST" });
-      const paymentResult = await paymentResponse.json().catch(() => null) as { clientSecret?: string; waived?: boolean; error?: string } | null;
+      const paymentResponse = await fetch(`/api/proposal/${engagementId}/payment-intent`, { method: "POST", headers: proposalHeaders(proposalToken) });
+      const paymentResult = await paymentResponse.json().catch(() => null) as { clientSecret?: string; waived?: boolean; alreadyResolved?: boolean; error?: string } | null;
       if (!paymentResponse.ok) {
         throw new Error(paymentResult?.error ?? "Unable to start payment");
       }
       if (paymentResult?.waived) {
         setPaymentWaived(true);
+        setPaymentStatus("succeeded");
+        setStep(3);
+        return;
+      }
+      if (paymentResult?.alreadyResolved) {
         setPaymentStatus("succeeded");
         setStep(3);
         return;
@@ -836,7 +894,7 @@ export default function OfferProposalPreview({
     try {
       const response = await fetch(`/api/proposal/${engagementId}/cancel`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: proposalHeaders(proposalToken, true),
         body: JSON.stringify({ name: cancellationName, email: cancellationEmail }),
       });
       const result = await response.json().catch(() => null) as { error?: string } | null;
@@ -881,19 +939,53 @@ export default function OfferProposalPreview({
   const oneTimeServiceNames   = Array.from(new Set(optionMeta.flatMap(({ id }) => options[id].oneTimeRows.map((r) => r.serviceName))));
 
   const selectedOnboardingFee = selectedOptionId
-    ? (options[selectedOptionId].oneTimeRows.find((r) => isOnboarding(r))?.price ?? null)
+    ? getOnboardingFee(
+        assessment,
+        cleanupPeriods.reduce(
+          (total, period) => total + (
+            cleanupIsSelected(selectedOptionId, `${period.year}-${period.startMonth}-${period.endMonth}`)
+              ? periodMonthCount(period)
+              : 0
+          ),
+          0,
+        ),
+      )
     : null;
-  const selectedMonthlyCharge = selectedOptionId ? options[selectedOptionId].monthlyPrice : 0;
-  const hasCleanup = cleanupPeriods.length > 0;
+  const selectedCleanupTotal = selectedOptionId
+    ? options[selectedOptionId].oneTimeRows
+        .filter((row) => row.cleanupPeriodKey && cleanupIsSelected(selectedOptionId, row.cleanupPeriodKey))
+        .reduce((total, row) => total + row.price * row.quantity, 0)
+    : 0;
+  const selectedAdditionalMonthlyTotal = selectedOptionId
+    ? additionalOptionRows.reduce(
+        (total, row) => total + (additionalOptionSelections[selectedOptionId][row.id] ? row.price : 0),
+        0,
+      )
+    : 0;
+  const selectedMonthlyCharge = selectedOptionId
+    ? options[selectedOptionId].monthlyPrice * recurringDiscountMultiplier + selectedAdditionalMonthlyTotal
+    : 0;
+  const hasCleanup = selectedCleanupTotal > 0;
   const chargeFirstMonth = !hasCleanup && selectedMonthlyCharge > 0 ? selectedMonthlyCharge : 0;
   const chargeOnboarding = selectedOnboardingFee ?? 0;
-  const chargeAmount = chargeOnboarding + chargeFirstMonth;
+  const calculatedChargeAmount = chargeOnboarding + selectedCleanupTotal + chargeFirstMonth;
+  const chargeAmount = isTestProposal ? 1 : checkoutSummary?.amountDueNow ?? calculatedChargeAmount;
   const chargeIsFirstMonth = chargeFirstMonth > 0;
   const requiresOnboardingPayment = chargeAmount > 0;
-  const chargeLabel = chargeOnboarding > 0 && chargeFirstMonth > 0
+  const chargeLabel = isTestProposal
+    ? "$1 Test Payment"
+    : selectedCleanupTotal > 0 && chargeOnboarding > 0
+      ? "Cleanup + Onboarding"
+      : selectedCleanupTotal > 0
+        ? "Cleanup"
+        : chargeOnboarding > 0 && chargeFirstMonth > 0
     ? "Onboarding + First Month"
     : chargeIsFirstMonth ? "First Month" : "Your Deposit";
-  const chargeDescription = chargeOnboarding > 0 && chargeFirstMonth > 0
+  const chargeDescription = isTestProposal
+    ? "This proposal is explicitly marked for testing. It exercises the real payment flow with a $1 total."
+    : selectedCleanupTotal > 0
+      ? "Covers the selected cleanup work and onboarding so work can begin."
+      : chargeOnboarding > 0 && chargeFirstMonth > 0
     ? "Covers onboarding and prepays your first month of ongoing bookkeeping so we can start immediately. Non-refundable once work begins."
     : chargeIsFirstMonth
       ? "Prepays your first month of ongoing bookkeeping so we can start immediately. Non-refundable once work begins."
@@ -919,7 +1011,19 @@ export default function OfferProposalPreview({
       primaryContactEmail: primary.email || null,
       selectedTierLabel: selectedOptionId ? options[selectedOptionId].name : null,
       onboardingFee: selectedOnboardingFee,
-      hasCleanup: cleanupPeriods.length > 0,
+      hasCleanup,
+      recurringMonthlyTotal: selectedMonthlyCharge,
+      cleanupTotal: selectedCleanupTotal,
+      amountDueNow: chargeAmount,
+      agreementTerm: hasTwelveMonthAgreement ? "12-month" : "month-to-month",
+      selectedCleanupPeriods: cleanupPeriods
+        .filter((period) => selectedOptionId && cleanupIsSelected(selectedOptionId, `${period.year}-${period.startMonth}-${period.endMonth}`))
+        .map((period) => `${period.year}: months ${period.startMonth}-${period.endMonth}`),
+      selectedAdditionalOptionNames: selectedOptionId
+        ? additionalOptionRows
+            .filter((row) => additionalOptionSelections[selectedOptionId][row.id])
+            .map((row) => row.serviceName)
+        : [],
     },
   );
   const displayedAgreementText = engagementId ? agreementText : embeddedAgreementText;
@@ -1017,6 +1121,12 @@ export default function OfferProposalPreview({
             <span className="w-[74px]" />
           </div>
         </nav>
+
+        {isTestProposal ? (
+          <div role="status" className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-center text-sm font-semibold text-amber-950 shadow-sm">
+            Test proposal — the payment step is limited to $1 and must not be sent to a lead.
+          </div>
+        ) : null}
 
         <article className="space-y-8 bg-transparent">
 
@@ -1554,11 +1664,8 @@ export default function OfferProposalPreview({
                       {paymentClientSecret ? (
                         <DepositPaymentForm
                           clientSecret={paymentClientSecret}
-                          onPaid={(status) => {
-                            if (status === "succeeded" && engagementId) {
-                              void fetch(`/api/proposal/${engagementId}/confirm-payment`, { method: "POST" });
-                            }
-                            setPaymentStatus(status);
+                          onPaid={async (status) => {
+                            await confirmStripePayment(status);
                             setStep(3);
                           }}
                         />
@@ -1586,6 +1693,7 @@ export default function OfferProposalPreview({
                           </div>
                           <PaypalPaymentButton
                             engagementId={engagementId}
+                            proposalToken={proposalToken}
                             onPaid={(status) => { setPaymentStatus(status); setStep(3); }}
                           />
                         </>
@@ -1692,12 +1800,7 @@ export default function OfferProposalPreview({
                   {paymentClientSecret ? (
                     <DepositPaymentForm
                       clientSecret={paymentClientSecret}
-                      onPaid={(status) => {
-                        if (status === "succeeded" && engagementId) {
-                          void fetch(`/api/proposal/${engagementId}/confirm-payment`, { method: "POST" });
-                        }
-                        setPaymentStatus(status);
-                      }}
+                      onPaid={confirmStripePayment}
                     />
                   ) : signError ? (
                     <div className="space-y-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5">
@@ -1723,6 +1826,7 @@ export default function OfferProposalPreview({
                       </div>
                       <PaypalPaymentButton
                         engagementId={engagementId}
+                        proposalToken={proposalToken}
                         onPaid={(status) => setPaymentStatus(status)}
                       />
                     </>

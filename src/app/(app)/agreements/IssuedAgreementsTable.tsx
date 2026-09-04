@@ -241,14 +241,14 @@ export function IssuedAgreementsTable({ agreements }: { agreements: IssuedAgreem
                               <Eye className="h-4 w-4" />
                             </Link>
                           ) : null}
-                          {agreement.agreementManagerStatus === "ACTIVE" ? (
+                          {agreement.agreementManagerStatus === "ACTIVE" || agreement.agreementManagerStatus === "CANCELLATION_REQUESTED" ? (
                             <>
                               <button
                                 type="button"
                                 disabled={isPending}
-                                onClick={() => { if (agreement.signedAt) setCancellationReason(""); setConfirmation({ ids: [agreement.id], action: agreement.signedAt ? "requestCancellation" : "void", label: agreement.signedAt ? "request cancellation" : "void" }); }}
-                                aria-label={agreement.signedAt ? "Request agreement cancellation" : "Void agreement"}
-                                title={agreement.signedAt ? "Request agreement cancellation" : "Void agreement"}
+                                onClick={() => { if (agreement.signedAt) setCancellationReason(""); setConfirmation({ ids: [agreement.id], action: agreement.signedAt ? "requestCancellation" : "void", label: agreement.signedAt ? (agreement.agreementManagerStatus === "CANCELLATION_REQUESTED" ? "resend cancellation request" : "request cancellation") : "void" }); }}
+                                aria-label={agreement.signedAt ? (agreement.agreementManagerStatus === "CANCELLATION_REQUESTED" ? "Resend cancellation request" : "Request agreement cancellation") : "Void agreement"}
+                                title={agreement.signedAt ? (agreement.agreementManagerStatus === "CANCELLATION_REQUESTED" ? "Resend cancellation request" : "Request agreement cancellation") : "Void agreement"}
                                 className="ui-action-ghost inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:text-red-700 disabled:opacity-50"
                               >
                                 <Ban className="h-4 w-4" />

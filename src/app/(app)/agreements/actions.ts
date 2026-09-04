@@ -60,13 +60,13 @@ export async function requestAgreementCancellationAction(id: string, reason: str
   const cancellationTokenHash = createHash("sha256").update(cancellationToken).digest("hex");
   const tokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
   const recipient = await prisma.engagement.findFirst({
-    where: { ...agreementRecordWhere(id, brand.id), signedAt: { not: null }, agreementManagerStatus: "ACTIVE" },
+    where: { ...agreementRecordWhere(id, brand.id), signedAt: { not: null }, agreementManagerStatus: { in: ["ACTIVE", "CANCELLATION_REQUESTED"] } },
     select: { primaryContactEmail: true, billingContactEmail: true, clientName: true, signerName: true },
   });
   const email = recipient?.billingContactEmail ?? recipient?.primaryContactEmail;
   if (!recipient || !email) throw new Error("This agreement does not have a signer email address.");
   const result = await prisma.engagement.updateMany({
-    where: { ...agreementRecordWhere(id, brand.id), signedAt: { not: null }, agreementManagerStatus: "ACTIVE" },
+    where: { ...agreementRecordWhere(id, brand.id), signedAt: { not: null }, agreementManagerStatus: { in: ["ACTIVE", "CANCELLATION_REQUESTED"] } },
     data: {
       agreementManagerStatus: "CANCELLATION_REQUESTED",
       agreementCancellationRequestedAt: new Date(),
@@ -123,9 +123,13 @@ export async function batchAgreementAction(
   action: "void" | "requestCancellation" | "archive" | "delete",
   reason = "",
 ) {
-  const { brand, session } = await requireStaffBrandOrThrow();
+  const { brand } = await requireStaffBrandOrThrow();
   const uniqueIds = [...new Set(ids.filter((id) => id.trim()))];
   if (uniqueIds.length === 0) throw new Error("Select at least one agreement.");
+  if (action === "requestCancellation") {
+    for (const id of uniqueIds) await requestAgreementCancellationAction(id, reason);
+    return;
+  }
 
   const where = {
     id: { in: uniqueIds },
@@ -139,18 +143,6 @@ export async function batchAgreementAction(
 
   if (action === "delete") {
     await prisma.engagement.deleteMany({ where });
-  } else if (action === "requestCancellation") {
-    const cleanedReason = reason.trim();
-    if (cleanedReason.length > 1_000) throw new Error("Cancellation reason must be 1,000 characters or fewer.");
-    await prisma.engagement.updateMany({
-      where: { ...where, signedAt: { not: null }, agreementManagerStatus: "ACTIVE" },
-      data: {
-        agreementManagerStatus: "CANCELLATION_REQUESTED",
-        agreementCancellationRequestedAt: new Date(),
-        agreementCancellationRequestedByUserId: session.user.id,
-        agreementCancellationReason: cleanedReason || null,
-      },
-    });
   } else {
     await prisma.engagement.updateMany({
       where: {

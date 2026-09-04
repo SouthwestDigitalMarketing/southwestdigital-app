@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateProposalAgreementText } from "@/lib/engagements/agreementGenerator";
 import { renderAgreementTemplate } from "@/lib/agreements/template";
+import { hasPublicProposalAccess, publicProposalNotFound } from "@/lib/engagements/publicProposalAccess";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ engagementId: string }> },
 ) {
   const { engagementId } = await params;
+  if (!await hasPublicProposalAccess(request, engagementId)) return publicProposalNotFound();
 
   const engagement = await prisma.engagement.findUnique({
     where: { id: engagementId },
@@ -26,6 +28,7 @@ export async function GET(
       agreementManagerStatus: true,
       agreementCancellationRequestedAt: true,
       agreementCancellationReason: true,
+      isTestProposal: true,
     },
   });
   if (!engagement) {
@@ -45,8 +48,29 @@ export async function GET(
   const builderState = isRecord(onboardingData.proposalBuilderState) ? onboardingData.proposalBuilderState : {};
   const assessment = isRecord(builderState.assessment) ? builderState.assessment : {};
   const services = isRecord(builderState.services) ? builderState.services : {};
-  const tierLabel = typeof services.selectedTierLabel === "string" ? services.selectedTierLabel : null;
-  const hasCleanup = Boolean(builderState.hasCleanup);
+  const tierLabel = typeof services.tierLabel === "string"
+    ? services.tierLabel
+    : typeof services.selectedTierLabel === "string" ? services.selectedTierLabel : null;
+  const cleanupTotal = typeof services.cleanupTotal === "number" ? services.cleanupTotal : 0;
+  const recurringMonthlyTotal = typeof services.recurringMonthlyTotal === "number" ? services.recurringMonthlyTotal : 0;
+  const amountDueNow = typeof services.amountDueNow === "number" ? services.amountDueNow : 0;
+  const hasCleanup = cleanupTotal > 0;
+  const selectedCleanupPeriods = Array.isArray(services.selectedCleanupPeriodKeys)
+    ? services.selectedCleanupPeriodKeys.filter((value): value is string => typeof value === "string")
+    : [];
+  const selectedAdditionalOptionIds = Array.isArray(services.selectedAdditionalOptionIds)
+    ? services.selectedAdditionalOptionIds.filter((value): value is string => typeof value === "string")
+    : [];
+  const additionalOptions: Record<string, unknown>[] = [];
+  if (Array.isArray(assessment.additionalOptions)) {
+    for (const value of assessment.additionalOptions) {
+      if (isRecord(value)) additionalOptions.push(value);
+    }
+  }
+  const selectedAdditionalOptionNames = selectedAdditionalOptionIds.map((id) => {
+    const option = additionalOptions.find((item) => item.id === id);
+    return typeof option?.name === "string" ? option.name : id;
+  });
   const templateContent = typeof assessment.agreementTemplateContent === "string"
     ? assessment.agreementTemplateContent
     : null;
@@ -58,6 +82,12 @@ export async function GET(
     selectedTierLabel: tierLabel,
     onboardingFee: engagement.onboardingFee ? Number(engagement.onboardingFee) : null,
     hasCleanup,
+    recurringMonthlyTotal,
+    cleanupTotal,
+    amountDueNow,
+    agreementTerm: services.hasTwelveMonthAgreement === true ? "12-month" as const : "month-to-month" as const,
+    selectedCleanupPeriods,
+    selectedAdditionalOptionNames,
   };
 
   let text = engagement.agreementText ?? "";
@@ -81,5 +111,7 @@ export async function GET(
     agreementManagerStatus: engagement.agreementManagerStatus,
     cancellationRequestedAt: engagement.agreementCancellationRequestedAt?.toISOString() ?? null,
     cancellationReason: engagement.agreementCancellationReason,
+    checkout: services,
+    isTestProposal: engagement.isTestProposal,
   });
 }

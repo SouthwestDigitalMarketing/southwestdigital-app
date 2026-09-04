@@ -1,6 +1,6 @@
 # Coding-agent handoff
 
-Updated: 2026-09-02 (America/Chicago)
+Updated: 2026-09-04 (America/Chicago)
 
 ## Start here
 
@@ -11,6 +11,59 @@ Updated: 2026-09-02 (America/Chicago)
 - `.claude/` is untracked user-owned content. Do not add, delete, or modify it unless the user explicitly requests that.
 
 ## Current product state
+
+### Proposal checkout, permanent receipt, and signed-document record
+
+The complete lead proposal path was hardened and verified locally:
+
+1. A lead opens the public proposal token, selects a package/term/cleanup/add-ons, reviews the frozen agreement, signs it, and pays.
+2. The browser now submits choices rather than trusted dollar amounts. `src/lib/engagements/proposalCheckout.ts` validates the choices against the published snapshot and calculates all amounts server-side.
+3. No-cleanup proposals collect onboarding plus the first month. Cleanup proposals collect onboarding plus cleanup and defer monthly billing. Waiving onboarding never waives the first month or cleanup charge.
+4. Payment cannot begin before signing. Stripe success is not shown until the server verifies the PaymentIntent and records it. PayPal uses the same calculated amount and verifies that the captured order belongs to the proposal.
+5. Signing stores the exact agreement, selected pricing and scope, signer, consent evidence, timestamp, IP, user agent, and SHA-256 hash in the engagement acceptance snapshot.
+6. Completed or archived signed proposal links redirect to `/proposal/[token]/receipt`. The receipt shows the accepted package, recurring price, payment evidence, agreement, signature/hash evidence, and a signed-PDF download.
+7. `/api/proposal/[token]/signed-document` generates the signed agreement plus electronic-signature certificate as a PDF. Public proposal mutation/read APIs require a token bound to the engagement.
+
+For real-world smoke testing, the Duplicate Offer dialog now includes **Create as a $1 test proposal**. This preserves the real contract terms and pricing but forces the server-side provider charge to exactly $1; do not alter the offer's real prices merely to test checkout. Test proposals retain the existing `Test $1` manager chip.
+
+Local end-to-end evidence created on 2026-09-04:
+
+- Archived test quote: `cmtn2olt20004inhg8ezdjdj9`
+- Engagement: `cmtn2olpg0001inhg3e00bhds`
+- Real accepted terms: Maintain at $670/month plus $350 onboarding ($1,020 ordinarily due immediately).
+- Stripe test-mode PaymentIntent: `pi_3UByUj2R5qsZ6eIF0lYUCFuJ`, succeeded for exactly $1.00.
+- Database state was signed, hashed, paid, and archived.
+- The original proposal URL returned a 307 redirect to its receipt; receipt returned 200 and showed signed/paid, $1.00, package, and SHA-256 evidence; PDF returned 200 `application/pdf` (9,810 bytes).
+- Agreement API returned 404 without the proposal token and 200 with the matching token.
+
+Verification after the final changes:
+
+- `npm run typecheck`: passed.
+- `npm test -- --run`: 34 files and 194 tests passed.
+- Focused ESLint for every changed proposal/checkout/receipt file: zero errors (one existing `no-img-element` warning).
+- `npx next build`: passed. The wrapper's preceding `prisma generate` can fail with Windows `EPERM` while the dev server holds the Prisma engine DLL; this is not a compilation failure.
+- `git diff --check`: passed.
+
+Production launch blockers/operational notes:
+
+- The verified payment used Stripe **test mode**, not a real card charge.
+- The inspected Stripe test account had no webhook endpoint. Configure `/api/stripe/webhook` and its signing secret for durable interrupted/async reconciliation before treating production payments as fully operational.
+- Automatic proposal/receipt email is not provisioned because `AUTH_RESEND_KEY` is absent. Staff can copy and email the public proposal link manually. The prior cancellation-notification changes in `IssuedAgreementsTable.tsx` and `agreements/actions.ts` are included in this work, but also require the email credential to send.
+- A connected signed-in browser was unavailable, so verification covered server/API/database/build behavior rather than a final authenticated production click-through.
+- The Vercel CLI is not installed. Install it with `npm i -g vercel` to inspect production environment variables, deployment status, and logs.
+- The generated signature certificate records conventional evidence but is not, by itself, a legal opinion about enforceability. Have final contract language and electronic-signature procedure reviewed by counsel.
+
+Primary implementation files:
+
+- `src/lib/engagements/proposalCheckout.ts`
+- `src/lib/engagements/publicProposalAccess.ts`
+- `src/app/(proposal)/proposal/[token]/receipt/page.tsx`
+- `src/app/api/proposal/[engagementId]/signed-document/route.ts`
+- `src/lib/agreements/signedPdf.ts`
+- `src/app/(app)/offers/builder/OfferProposalPreview.tsx`
+- `src/app/api/proposal/[engagementId]/payment-intent/route.ts`
+- `src/app/api/proposal/[engagementId]/sign/route.ts`
+- `src/app/api/stripe/webhook/route.ts`
 
 ### Agreement templates and proposal signing (current working tree)
 

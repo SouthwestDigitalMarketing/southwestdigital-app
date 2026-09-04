@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { createHash } from "crypto";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/simpleRateLimit";
 import { getSelectedProposalTier } from "@/lib/engagements/proposalSelection";
+import { hasPublicProposalAccess, publicProposalNotFound } from "@/lib/engagements/publicProposalAccess";
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 export async function POST(
@@ -14,6 +20,7 @@ export async function POST(
   { params }: { params: Promise<{ engagementId: string }> },
 ) {
   const { engagementId } = await params;
+  if (!await hasPublicProposalAccess(request, engagementId)) return publicProposalNotFound();
 
   const headersList = await headers();
   const ip = headersList.get("x-forwarded-for")?.split(",")[0]?.trim() || headersList.get("x-real-ip") || "unknown";
@@ -66,6 +73,9 @@ export async function POST(
   if (!getSelectedProposalTier(engagement.onboardingData)) {
     return NextResponse.json({ error: "Please select a service tier first." }, { status: 400 });
   }
+  if (!engagement.agreementText?.trim()) {
+    return NextResponse.json({ error: "The agreement could not be frozen for signing. Please reload and try again." }, { status: 409 });
+  }
 
   const signerIpAddress = ip === "unknown" ? null : ip;
   const signerUserAgent = headersList.get("user-agent") || null;
@@ -77,6 +87,28 @@ export async function POST(
       : "INVOICED";
 
   const signedAt = new Date();
+  const onboardingData = isRecord(engagement.onboardingData) ? engagement.onboardingData : {};
+  const builderState = isRecord(onboardingData.proposalBuilderState) ? onboardingData.proposalBuilderState : {};
+  const services = isRecord(builderState.services) ? builderState.services : {};
+  const proposalAcceptance = {
+    version: 1,
+    signedAt: signedAt.toISOString(),
+    agreementText: engagement.agreementText,
+    agreementTextHash,
+    selection: services,
+    signer: {
+      name: signerName,
+      title: signerTitle || null,
+      email,
+      ipAddress: signerIpAddress,
+      userAgent: signerUserAgent,
+    },
+    consent: {
+      electronicSignature: true,
+      readAndAgreed: true,
+      scrolledToEnd: true,
+    },
+  };
   await prisma.engagement.update({
     where: { id: engagementId },
     data: {
@@ -93,6 +125,7 @@ export async function POST(
       agreementScrolledAt: signedAt,
       billingContactEmail: email,
       onboardingFeeStatus,
+      onboardingData: { ...onboardingData, proposalAcceptance } as Prisma.InputJsonValue,
     },
   });
   await prisma.quote.updateMany({

@@ -2,16 +2,18 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getStripeClient } from "@/lib/stripe";
 import { markEngagementDepositPaid } from "@/lib/engagements/fromOffer";
+import { hasPublicProposalAccess, publicProposalNotFound } from "@/lib/engagements/publicProposalAccess";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ engagementId: string }> },
 ) {
   const { engagementId } = await params;
+  if (!await hasPublicProposalAccess(request, engagementId)) return publicProposalNotFound();
   const engagement = await prisma.engagement.findUnique({
     where: { id: engagementId },
     select: { brandId: true, onboardingFeeStatus: true, onboardingData: true },
@@ -29,9 +31,18 @@ export async function POST(
   }
 
   try {
-    const paymentIntent = await getStripeClient().paymentIntents.retrieve(paymentIntentId);
+    const paymentIntent = await getStripeClient().paymentIntents.retrieve(paymentIntentId, {
+      expand: ["latest_charge"],
+    });
     if (paymentIntent.status === "succeeded") {
-      await markEngagementDepositPaid(engagementId, engagement.brandId);
+      const latestCharge = typeof paymentIntent.latest_charge === "object" ? paymentIntent.latest_charge : null;
+      await markEngagementDepositPaid(engagementId, engagement.brandId, {
+        provider: "stripe",
+        reference: paymentIntent.id,
+        amount: paymentIntent.amount_received / 100,
+        currency: paymentIntent.currency.toUpperCase(),
+        receiptUrl: latestCharge?.receipt_url ?? null,
+      });
       return NextResponse.json({ ok: true, paid: true });
     }
     return NextResponse.json({ ok: true, paid: false, status: paymentIntent.status });

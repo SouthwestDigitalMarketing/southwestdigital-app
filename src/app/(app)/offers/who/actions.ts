@@ -371,7 +371,11 @@ export async function publishOfferChangesAction(
       await ensureQuoteEngagement({
         brandId: brand.id,
         quoteId: existing.id,
-        snapshot: { contactInfo: snapshot.contactInfo, assessment: snapshot.assessment },
+        snapshot: {
+          contactInfo: snapshot.contactInfo,
+          assessment: snapshot.assessment,
+          isTestProposal: snapshot.isTestProposal,
+        },
       });
     }
     revalidatePath("/offers");
@@ -425,7 +429,11 @@ export async function publishOfferChangesAction(
     await ensureQuoteEngagement({
       brandId: brand.id,
       quoteId: existing.id,
-      snapshot: { contactInfo: snapshot.contactInfo, assessment: snapshot.assessment },
+      snapshot: {
+        contactInfo: snapshot.contactInfo,
+        assessment: snapshot.assessment,
+        isTestProposal: snapshot.isTestProposal,
+      },
     });
   }
 

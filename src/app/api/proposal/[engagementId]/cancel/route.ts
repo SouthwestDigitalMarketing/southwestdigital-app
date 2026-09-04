@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/simpleRateLimit";
+import { hasPublicProposalAccess, publicProposalNotFound } from "@/lib/engagements/publicProposalAccess";
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -12,6 +13,7 @@ export async function POST(
   { params }: { params: Promise<{ engagementId: string }> },
 ) {
   const { engagementId } = await params;
+  if (!await hasPublicProposalAccess(request, engagementId)) return publicProposalNotFound();
   const headersList = await headers();
   const ip = headersList.get("x-forwarded-for")?.split(",")[0]?.trim() || headersList.get("x-real-ip") || "unknown";
   const rateLimit = checkRateLimit(`cancel:${engagementId}:${ip}`, 5, 10 * 60_000);

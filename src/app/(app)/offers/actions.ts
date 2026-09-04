@@ -206,7 +206,11 @@ export async function reassignQuoteContactAction(formData: FormData) {
     await ensureQuoteEngagement({
       brandId: brand.id,
       quoteId: quote.id,
-      snapshot: { contactInfo: snapshot.contactInfo, assessment: (snapshot as Record<string, unknown>).assessment },
+        snapshot: {
+          contactInfo: snapshot.contactInfo,
+          assessment: (snapshot as Record<string, unknown>).assessment,
+          isTestProposal: (snapshot as Record<string, unknown>).isTestProposal,
+        },
     });
   }
 
@@ -222,6 +226,7 @@ export async function duplicateQuoteAction(formData: FormData) {
   const id = (formData.get("id") as string | null)?.trim() ?? "";
   const contactId = (formData.get("contactId") as string | null)?.trim() ?? "";
   const archived = formData.get("archived") === "1";
+  const testProposal = formData.get("testProposal") === "1";
   if (!id) throw new Error("Quote ID required");
 
   const [quote, contact] = await Promise.all([
@@ -266,6 +271,7 @@ export async function duplicateQuoteAction(formData: FormData) {
     // contact-specific promotions from the source offer.
     isFreshDuplicate: true,
     suppressPromotions: true,
+    isTestProposal: testProposal,
     ...(freshAssessment ? { assessment: freshAssessment } : {}),
     ...(contact
       ? {

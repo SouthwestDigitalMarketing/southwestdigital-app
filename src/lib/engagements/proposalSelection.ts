@@ -18,5 +18,6 @@ export function getSelectedProposalTier(onboardingData: unknown): ProposalTierId
   if (!isRecord(proposalBuilderState)) return null;
   const services = proposalBuilderState.services;
   if (!isRecord(services)) return null;
+  if (isProposalTierId(services.tier)) return services.tier;
   return isProposalTierId(services.selectedTier) ? services.selectedTier : null;
 }

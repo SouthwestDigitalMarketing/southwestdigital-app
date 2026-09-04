@@ -8,7 +8,7 @@ import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-
 const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
 const stripePromise = publishableKey ? loadStripe(publishableKey) : null;
 
-function CheckoutForm({ onPaid }: { onPaid: (status: "succeeded" | "processing") => void }) {
+function CheckoutForm({ onPaid }: { onPaid: (status: "succeeded" | "processing") => Promise<void> | void }) {
   const stripe = useStripe();
   const elements = useElements();
   const [submitting, setSubmitting] = useState(false);
@@ -28,7 +28,12 @@ function CheckoutForm({ onPaid }: { onPaid: (status: "succeeded" | "processing")
       setSubmitting(false);
       return;
     }
-    onPaid(paymentIntent?.status === "processing" ? "processing" : "succeeded");
+    try {
+      await onPaid(paymentIntent?.status === "processing" ? "processing" : "succeeded");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "We couldn't verify your payment. Please try again.");
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -51,7 +56,7 @@ export default function DepositPaymentForm({
   onPaid,
 }: {
   clientSecret: string;
-  onPaid: (status: "succeeded" | "processing") => void;
+  onPaid: (status: "succeeded" | "processing") => Promise<void> | void;
 }) {
   if (!stripePromise) {
     return (

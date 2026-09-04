@@ -208,6 +208,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                         kind?: string;
                         package?: unknown;
                         isFreshDuplicate?: boolean;
+                        isTestProposal?: boolean;
                         pricing?: {
                           maintain?: { monthly?: number; totalOneTime?: number };
                         };
@@ -228,6 +229,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                 const oneTimeTotal =
                   snapshot.pricing?.maintain?.totalOneTime ?? (oneTimeLineItemTotal || Number(quote.totalOneTime));
                 const isDuplicate = snapshot.isFreshDuplicate === true;
+                const isTestProposal = snapshot.isTestProposal === true;
                 return (
                   <tr
                     id={`offer-row-${quote.id}`}
@@ -236,16 +238,16 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                   >
                     <td className="px-5 py-4 font-mono text-xs text-slate-500">{quote.offerCode}</td>
                     <td className="relative px-5 py-4">
-                      {isDuplicate ? (
+                      {isDuplicate || isTestProposal ? (
                         <>
                           {quote.id === highlightId ? <DuplicateOfferFocus offerId={quote.id} /> : null}
                           <span
-                            title={`New duplicate: ${quote.id}`}
-                            aria-label={`New duplicate offer ${quote.id}`}
+                            title={`${isTestProposal ? "$1 test proposal" : "New duplicate"}: ${quote.id}`}
+                            aria-label={`${isTestProposal ? "$1 test proposal" : "New duplicate offer"} ${quote.id}`}
                             className="absolute right-2 top-2 z-10 inline-flex rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none tracking-wide text-amber-900"
                           >
-                            Duplicate
-                            <ClearDuplicateMarkerButton offerId={quote.id} />
+                            {isTestProposal ? "Test $1" : "Duplicate"}
+                            {isDuplicate && !isTestProposal ? <ClearDuplicateMarkerButton offerId={quote.id} /> : null}
                           </span>
                         </>
                       ) : null}

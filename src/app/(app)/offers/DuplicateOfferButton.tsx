@@ -32,6 +32,7 @@ export function DuplicateOfferButton({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [testProposal, setTestProposal] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -48,6 +49,7 @@ export function DuplicateOfferButton({
     data.set("id", offerId);
     if (contactId) data.set("contactId", contactId);
     if (archived) data.set("archived", "1");
+    if (testProposal) data.set("testProposal", "1");
     startTransition(async () => {
       try {
         setError(null);
@@ -69,6 +71,7 @@ export function DuplicateOfferButton({
         onClick={() => {
           setOpen(true);
           setQuery("");
+          setTestProposal(false);
           setError(null);
         }}
         className="ui-action-ghost inline-flex h-9 w-9 items-center justify-center rounded-full transition disabled:opacity-40"
@@ -108,6 +111,19 @@ export function DuplicateOfferButton({
                 <p className="mt-2 text-base text-slate-600">
                   Choose the contact this duplicate is for. Their info will pre-populate the contact step.
                 </p>
+
+                <label className="mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                  <input
+                    type="checkbox"
+                    checked={testProposal}
+                    onChange={(event) => setTestProposal(event.target.checked)}
+                    className="mt-0.5 h-4 w-4 accent-slate-950"
+                  />
+                  <span>
+                    <span className="block font-semibold">Create as a $1 test proposal</span>
+                    <span className="mt-0.5 block text-amber-800">Runs the real signing and payment flow, but the amount due is limited to $1.</span>
+                  </span>
+                </label>
 
                 {currentContact.contactId ? (
                   <button
