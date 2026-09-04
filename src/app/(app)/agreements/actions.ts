@@ -204,6 +204,41 @@ export async function updateAgreementTemplateAction(
   revalidateAgreementPaths();
 }
 
+export async function setDefaultForProductKindAction(
+  id: string,
+  productKind: "bookkeeping" | "consulting" | "coaching" | null,
+) {
+  const { brand } = await requireStaffBrandOrThrow();
+  if (productKind !== null && !["bookkeeping", "consulting", "coaching"].includes(productKind)) {
+    throw new Error("Unknown product kind.");
+  }
+  await prisma.$transaction(async (transaction) => {
+    const template = await transaction.agreementTemplate.findFirst({
+      where: { id, brandId: brand.id, status: "active" },
+      select: { id: true },
+    });
+    if (!template) throw new Error("Active agreement template not found.");
+    if (productKind) {
+      // Only one active template per brand can be the default for a given
+      // product kind. Clear any prior holder before setting this one.
+      await transaction.agreementTemplate.updateMany({
+        where: {
+          brandId: brand.id,
+          status: "active",
+          defaultForProductKind: productKind,
+          NOT: { id: template.id },
+        },
+        data: { defaultForProductKind: null },
+      });
+    }
+    await transaction.agreementTemplate.update({
+      where: { id: template.id },
+      data: { defaultForProductKind: productKind },
+    });
+  });
+  revalidateAgreementPaths();
+}
+
 export async function setDefaultAgreementTemplateAction(id: string) {
   const { brand } = await requireStaffBrandOrThrow();
   await prisma.$transaction(async (transaction) => {

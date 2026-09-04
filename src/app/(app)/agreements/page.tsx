@@ -51,6 +51,7 @@ export default async function AgreementsPage() {
             content: true,
             status: true,
             isDefault: true,
+            defaultForProductKind: true,
             updatedAt: true,
           },
         });

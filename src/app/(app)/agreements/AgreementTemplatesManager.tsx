@@ -11,8 +11,16 @@ import {
   deleteAgreementTemplateAction,
   restoreAgreementTemplateAction,
   setDefaultAgreementTemplateAction,
+  setDefaultForProductKindAction,
   updateAgreementTemplateAction,
 } from "./actions";
+
+const PRODUCT_KIND_OPTIONS = [
+  { value: "", label: "None" },
+  { value: "bookkeeping", label: "Bookkeeping" },
+  { value: "consulting", label: "Consulting" },
+  { value: "coaching", label: "Coaching" },
+] as const;
 
 function TemplateEditor({ template }: { template: AgreementTemplateView }) {
   const router = useRouter();
@@ -57,6 +65,11 @@ function TemplateEditor({ template }: { template: AgreementTemplateView }) {
             {template.isDefault ? (
               <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">Default</span>
             ) : null}
+            {template.defaultForProductKind ? (
+              <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-700">
+                Default for {template.defaultForProductKind}
+              </span>
+            ) : null}
             {archived ? (
               <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">Archived</span>
             ) : null}
@@ -64,6 +77,32 @@ function TemplateEditor({ template }: { template: AgreementTemplateView }) {
           <p className="mt-1 text-xs text-slate-500">
             Last updated {new Date(template.updatedAt).toLocaleString()}
           </p>
+          {!archived ? (
+            <label className="mt-2 flex items-center gap-2 text-xs text-slate-600">
+              Default for product kind
+              <select
+                disabled={isPending}
+                value={template.defaultForProductKind ?? ""}
+                onChange={(event) =>
+                  run(
+                    () =>
+                      setDefaultForProductKindAction(
+                        template.id,
+                        (event.target.value || null) as "bookkeeping" | "consulting" | "coaching" | null,
+                      ),
+                    "Default updated.",
+                  )
+                }
+                className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+              >
+                {PRODUCT_KIND_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
           {!archived && !template.isDefault ? (
