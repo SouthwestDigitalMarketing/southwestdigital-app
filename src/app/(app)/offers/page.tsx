@@ -334,11 +334,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                               ? resumeOfferHref({ id: quote.id, kind, snapshot })
                               : `/offers/${quote.id}`
                           }
-                          className={
-                            canResume
-                              ? "ui-action-primary inline-flex h-9 items-center justify-center rounded-full border px-3 text-base font-semibold leading-none transition"
-                              : "text-base font-medium text-slate-900 hover:underline"
-                          }
+                          className="ui-action-primary inline-flex h-9 items-center justify-center rounded-full border px-3 text-base font-semibold leading-none transition"
                         >
                           {canResume ? "Resume" : "View"}
                         </Link>
