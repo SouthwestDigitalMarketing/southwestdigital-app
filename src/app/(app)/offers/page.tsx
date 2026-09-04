@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Copy } from "lucide-react";
+import { Copy, Eye } from "lucide-react";
 import { BrandStatus, type Prisma } from "@prisma/client";
 import { requireQuoteStaff } from "@/lib/quotes/access";
 import { prisma } from "@/lib/prisma";
@@ -336,12 +336,21 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex flex-wrap items-center justify-end gap-2">
-                        {!isDraft ? (
+                        {!isDraft && publishedProposalHref ? (
                           <Link
-                            href={publishedProposalHref ?? `/offers/${quote.id}`}
+                            href={publishedProposalHref}
+                            aria-label="View published proposal"
+                            title="View published proposal"
+                            className="ui-action-primary inline-flex h-9 w-9 items-center justify-center rounded-full border transition"
+                          >
+                            <Eye className="h-4 w-4" aria-hidden="true" />
+                          </Link>
+                        ) : !isDraft ? (
+                          <Link
+                            href={`/offers/${quote.id}`}
                             className="ui-action-primary inline-flex h-9 items-center justify-center rounded-full border px-3 text-base font-semibold leading-none transition"
                           >
-                            {publishedProposalHref ? "View" : "Details"}
+                            Details
                           </Link>
                         ) : null}
                         <OfferEditButton
