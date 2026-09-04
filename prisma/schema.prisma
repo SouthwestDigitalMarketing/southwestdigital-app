@@ -329,6 +329,15 @@ enum EngagementStatus {
   CANCELLED
 }
 
+enum AgreementManagerStatus {
+  ACTIVE
+  VOIDED
+  VOIDED_BEFORE_SIGNATURE
+  CANCELLATION_REQUESTED
+  TERMINATED_AFTER_SIGNATURE
+  ARCHIVED
+}
+
 enum EngagementPricingModel {
   FIXED_FEE
   HOURLY
@@ -2036,7 +2045,14 @@ model Engagement {
   specialReportDescription           String?
   auditPolicyOrLenderSupportRequired Boolean                 @default(false)
   agreementText                      String?
+  agreementManagerStatus             AgreementManagerStatus @default(ACTIVE)
   agreementSentAt                    DateTime?
+  agreementCancellationRequestedAt   DateTime?
+  agreementCancellationRequestedByUserId String?
+  agreementCancellationReason        String?
+  agreementCancellationAcknowledgedAt DateTime?
+  agreementCancellationAcknowledgedByName String?
+  agreementCancellationAcknowledgedByEmail String?
   agreementTokenHash                 String?
   signerName                         String?
   signerTitle                        String?

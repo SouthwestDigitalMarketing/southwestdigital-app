@@ -30,9 +30,12 @@ export async function POST(
 
   const engagement = await prisma.engagement.findUnique({
     where: { id: engagementId },
-    select: { onboardingData: true, onboardingFeeStatus: true, signedAt: true },
+    select: { onboardingData: true, onboardingFeeStatus: true, signedAt: true, agreementManagerStatus: true },
   });
   if (!engagement) return NextResponse.json({ error: "Engagement not found" }, { status: 404 });
+  if (engagement.agreementManagerStatus === "VOIDED" || engagement.agreementManagerStatus === "VOIDED_BEFORE_SIGNATURE" || engagement.agreementManagerStatus === "CANCELLATION_REQUESTED" || engagement.agreementManagerStatus === "TERMINATED_AFTER_SIGNATURE") {
+    return NextResponse.json({ error: "This agreement is no longer available for changes." }, { status: 409 });
+  }
 
   const onboardingData = isRecord(engagement.onboardingData) ? engagement.onboardingData : {};
   const existingState = isRecord(onboardingData.proposalBuilderState) ? onboardingData.proposalBuilderState : {};

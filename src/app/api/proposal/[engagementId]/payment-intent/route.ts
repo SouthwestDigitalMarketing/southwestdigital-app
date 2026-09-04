@@ -18,9 +18,12 @@ export async function POST(
 
   const engagement = await prisma.engagement.findUnique({
     where: { id: engagementId },
-    select: { brandId: true, onboardingFee: true, onboardingFeeStatus: true, onboardingData: true },
+    select: { brandId: true, onboardingFee: true, onboardingFeeStatus: true, onboardingData: true, agreementManagerStatus: true },
   });
   if (!engagement) return NextResponse.json({ error: "Engagement not found" }, { status: 404 });
+  if (engagement.agreementManagerStatus === "VOIDED" || engagement.agreementManagerStatus === "VOIDED_BEFORE_SIGNATURE" || engagement.agreementManagerStatus === "CANCELLATION_REQUESTED" || engagement.agreementManagerStatus === "TERMINATED_AFTER_SIGNATURE") {
+    return NextResponse.json({ error: "Payment is unavailable for this agreement." }, { status: 409 });
+  }
 
   const onboardingFee = engagement.onboardingFee ? Number(engagement.onboardingFee) : 0;
   const onboardingData = isRecord(engagement.onboardingData) ? engagement.onboardingData : {};

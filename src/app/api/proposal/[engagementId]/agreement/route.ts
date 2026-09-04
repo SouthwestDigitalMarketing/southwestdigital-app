@@ -23,6 +23,9 @@ export async function GET(
       signerName: true,
       signerTitle: true,
       onboardingFeeStatus: true,
+      agreementManagerStatus: true,
+      agreementCancellationRequestedAt: true,
+      agreementCancellationReason: true,
     },
   });
   if (!engagement) {
@@ -75,5 +78,8 @@ export async function GET(
     signerTitle: engagement.signerTitle,
     signedAt: engagement.signedAt ? engagement.signedAt.toISOString() : null,
     onboardingFeeStatus: engagement.onboardingFeeStatus,
+    agreementManagerStatus: engagement.agreementManagerStatus,
+    cancellationRequestedAt: engagement.agreementCancellationRequestedAt?.toISOString() ?? null,
+    cancellationReason: engagement.agreementCancellationReason,
   });
 }

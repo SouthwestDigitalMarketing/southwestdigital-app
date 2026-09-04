@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { AGREEMENT_TEMPLATE_TOKENS } from "@/lib/agreements/template";
 import type { AgreementTemplateView } from "@/lib/agreements/types";
@@ -183,18 +184,17 @@ function TemplateEditor({ template }: { template: AgreementTemplateView }) {
 
 export function AgreementTemplatesManager({ templates }: { templates: AgreementTemplateView[] }) {
   const router = useRouter();
-  const initial = templates.find((template) => template.isDefault) ?? templates[0];
-  const [selectedId, setSelectedId] = useState(initial?.id ?? "");
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [isCreating, startCreating] = useTransition();
   const [createError, setCreateError] = useState<string | null>(null);
-  const selected = templates.find((template) => template.id === selectedId) ?? initial;
+  const editingTemplate = templates.find((template) => template.id === editingId) ?? null;
 
   function createTemplate() {
     setCreateError(null);
     startCreating(async () => {
       try {
         const id = await createAgreementTemplateAction();
-        setSelectedId(id);
+        setEditingId(id);
         router.refresh();
       } catch (error) {
         setCreateError(error instanceof Error ? error.message : "Unable to create template.");
@@ -206,7 +206,7 @@ export function AgreementTemplatesManager({ templates }: { templates: AgreementT
     <div className="p-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Agreement Templates</h1>
+          <h2 className="text-xl font-semibold text-slate-900">Agreement Templates</h2>
           <p className="mt-1 max-w-3xl text-sm text-slate-500">
             Maintain reusable agreements here. Offer builders select a template; publishing saves its current text with that offer.
           </p>
@@ -214,6 +214,10 @@ export function AgreementTemplatesManager({ templates }: { templates: AgreementT
             Agreement language can have legal consequences. Have qualified counsel review templates before using them with clients.
           </p>
         </div>
+      </div>
+      {createError ? <p className="mt-3 text-sm text-red-600">{createError}</p> : null}
+
+      <div className="mt-5">
         <button
           type="button"
           disabled={isCreating}
@@ -223,33 +227,64 @@ export function AgreementTemplatesManager({ templates }: { templates: AgreementT
           {isCreating ? "Creating…" : "New template"}
         </button>
       </div>
-      {createError ? <p className="mt-3 text-sm text-red-600">{createError}</p> : null}
 
-      <div className="mt-6 grid gap-5 lg:grid-cols-[18rem_minmax(0,1fr)]">
-        <aside className="space-y-2">
-          {templates.map((template) => (
-            <button
-              key={template.id}
-              type="button"
-              onClick={() => setSelectedId(template.id)}
-              className={`w-full rounded-xl border p-3 text-left transition ${
-                selected?.id === template.id
-                  ? "border-brandnavy bg-brandnavy/5"
-                  : "border-slate-200 bg-white hover:border-slate-300"
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="truncate text-sm font-semibold text-slate-900">{template.name}</span>
-                {template.isDefault ? <span className="text-xs font-semibold text-emerald-700">Default</span> : null}
-              </div>
-              <p className="mt-1 line-clamp-2 text-xs text-slate-500">
-                {template.status === "archived" ? "Archived" : template.description || "No description"}
-              </p>
-            </button>
-          ))}
-        </aside>
-        {selected ? <TemplateEditor key={`${selected.id}:${selected.updatedAt}`} template={selected} /> : null}
+      <div className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        {templates.length === 0 ? (
+          <div className="px-6 py-12 text-center text-sm text-slate-500">No agreement templates yet.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[700px] text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50 text-left">
+                  <th className="px-5 py-3 font-semibold text-slate-700">Template</th>
+                  <th className="px-5 py-3 font-semibold text-slate-700">Description</th>
+                  <th className="px-5 py-3 font-semibold text-slate-700">Status</th>
+                  <th className="px-5 py-3 font-semibold text-slate-700">Updated</th>
+                  <th className="px-5 py-3 text-right font-semibold text-slate-700">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {templates.map((template) => (
+                  <tr key={template.id} className="hover:bg-slate-50">
+                    <td className="px-5 py-4">
+                      <p className="font-medium text-slate-900">{template.name}</p>
+                      {template.isDefault ? <p className="mt-1 text-xs font-semibold text-emerald-700">Default</p> : null}
+                    </td>
+                    <td className="max-w-sm px-5 py-4 text-slate-600">{template.description || "—"}</td>
+                    <td className="px-5 py-4">
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${template.status === "archived" ? "bg-slate-100 text-slate-600" : "bg-emerald-50 text-emerald-700"}`}>
+                        {template.status === "archived" ? "Archived" : "Active"}
+                      </span>
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-4 text-slate-600">{new Date(template.updatedAt).toLocaleDateString()}</td>
+                    <td className="px-5 py-4 text-right">
+                      <button type="button" onClick={() => setEditingId(template.id)} className="text-xs font-semibold text-slate-900 hover:underline">
+                        Edit
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
+
+      {editingTemplate ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 sm:p-8">
+          <div role="dialog" aria-modal="true" aria-labelledby="agreement-template-editor-title" className="flex max-h-[calc(100vh-2rem)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-slate-50 shadow-2xl sm:max-h-[calc(100vh-4rem)]">
+            <div className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
+              <h2 id="agreement-template-editor-title" className="text-lg font-semibold text-slate-900">Edit agreement template</h2>
+              <button type="button" onClick={() => setEditingId(null)} aria-label="Close template editor" title="Close template editor" className="rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="overflow-y-auto p-5">
+              <TemplateEditor key={`${editingTemplate.id}:${editingTemplate.updatedAt}`} template={editingTemplate} />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

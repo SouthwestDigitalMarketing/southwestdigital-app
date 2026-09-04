@@ -463,6 +463,14 @@ body {
   background-color: var(--theme-white);
 }
 
+[data-theme] .theme-checkbox {
+  accent-color: var(--theme-dark);
+}
+
+[data-theme="dark"] .theme-checkbox {
+  accent-color: var(--theme-white);
+}
+
 [data-theme] .proposal-step-active {
   background-color: color-mix(in srgb, var(--theme-light) 50%, #000000);
   border-color: color-mix(in srgb, var(--theme-light) 50%, #000000);

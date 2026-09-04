@@ -29,6 +29,111 @@ function revalidateAgreementPaths() {
   revalidatePath("/offers/intro");
 }
 
+function agreementRecordWhere(id: string, brandId: string) {
+  return {
+    id,
+    brandId,
+    OR: [
+      { agreementText: { not: null } },
+      { agreementSentAt: { not: null } },
+      { signedAt: { not: null } },
+    ],
+  };
+}
+
+export async function voidAgreementAction(id: string) {
+  const { brand } = await requireStaffBrandOrThrow();
+  const result = await prisma.engagement.updateMany({
+    where: { ...agreementRecordWhere(id, brand.id), signedAt: null, agreementManagerStatus: "ACTIVE" },
+    data: { agreementManagerStatus: "VOIDED_BEFORE_SIGNATURE" },
+  });
+  if (result.count === 0) throw new Error("Only unsigned active agreements can be voided immediately.");
+  revalidateAgreementPaths();
+}
+
+export async function requestAgreementCancellationAction(id: string, reason: string) {
+  const { brand, session } = await requireStaffBrandOrThrow();
+  const cleanedReason = reason.trim();
+  if (cleanedReason.length > 1_000) throw new Error("Cancellation reason must be 1,000 characters or fewer.");
+  const result = await prisma.engagement.updateMany({
+    where: { ...agreementRecordWhere(id, brand.id), signedAt: { not: null }, agreementManagerStatus: "ACTIVE" },
+    data: {
+      agreementManagerStatus: "CANCELLATION_REQUESTED",
+      agreementCancellationRequestedAt: new Date(),
+      agreementCancellationRequestedByUserId: session.user.id,
+      agreementCancellationReason: cleanedReason || null,
+    },
+  });
+  if (result.count === 0) throw new Error("Only signed active agreements can have cancellation requested.");
+  revalidateAgreementPaths();
+}
+
+export async function archiveAgreementAction(id: string) {
+  const { brand } = await requireStaffBrandOrThrow();
+  const result = await prisma.engagement.updateMany({
+    where: agreementRecordWhere(id, brand.id),
+    data: { agreementManagerStatus: "ARCHIVED" },
+  });
+  if (result.count === 0) throw new Error("Agreement not found.");
+  revalidateAgreementPaths();
+}
+
+export async function deleteAgreementAction(id: string) {
+  const { brand } = await requireStaffBrandOrThrow();
+  const result = await prisma.engagement.deleteMany({
+    where: agreementRecordWhere(id, brand.id),
+  });
+  if (result.count === 0) throw new Error("Agreement not found.");
+  revalidateAgreementPaths();
+}
+
+export async function batchAgreementAction(
+  ids: string[],
+  action: "void" | "requestCancellation" | "archive" | "delete",
+  reason = "",
+) {
+  const { brand, session } = await requireStaffBrandOrThrow();
+  const uniqueIds = [...new Set(ids.filter((id) => id.trim()))];
+  if (uniqueIds.length === 0) throw new Error("Select at least one agreement.");
+
+  const where = {
+    id: { in: uniqueIds },
+    brandId: brand.id,
+    OR: [
+      { agreementText: { not: null } },
+      { agreementSentAt: { not: null } },
+      { signedAt: { not: null } },
+    ],
+  };
+
+  if (action === "delete") {
+    await prisma.engagement.deleteMany({ where });
+  } else if (action === "requestCancellation") {
+    const cleanedReason = reason.trim();
+    if (cleanedReason.length > 1_000) throw new Error("Cancellation reason must be 1,000 characters or fewer.");
+    await prisma.engagement.updateMany({
+      where: { ...where, signedAt: { not: null }, agreementManagerStatus: "ACTIVE" },
+      data: {
+        agreementManagerStatus: "CANCELLATION_REQUESTED",
+        agreementCancellationRequestedAt: new Date(),
+        agreementCancellationRequestedByUserId: session.user.id,
+        agreementCancellationReason: cleanedReason || null,
+      },
+    });
+  } else {
+    await prisma.engagement.updateMany({
+      where: {
+        ...where,
+        agreementManagerStatus: "ACTIVE",
+        ...(action === "void" ? { signedAt: null } : {}),
+      },
+      data: { agreementManagerStatus: action === "void" ? "VOIDED_BEFORE_SIGNATURE" : "ARCHIVED" },
+    });
+  }
+
+  revalidateAgreementPaths();
+}
+
 export async function createAgreementTemplateAction() {
   const { brand } = await requireStaffBrandOrThrow();
   const created = await prisma.agreementTemplate.create({

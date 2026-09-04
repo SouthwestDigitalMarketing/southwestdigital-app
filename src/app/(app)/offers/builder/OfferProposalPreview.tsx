@@ -571,6 +571,12 @@ export default function OfferProposalPreview({
   const [paymentWaived, setPaymentWaived] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState<"succeeded" | "processing" | null>(null);
   const [agreementText, setAgreementText] = useState("");
+  const [agreementManagerStatus, setAgreementManagerStatus] = useState<"ACTIVE" | "VOIDED" | "VOIDED_BEFORE_SIGNATURE" | "CANCELLATION_REQUESTED" | "TERMINATED_AFTER_SIGNATURE" | "ARCHIVED">("ACTIVE");
+  const [cancellationReason, setCancellationReason] = useState<string | null>(null);
+  const [cancellationName, setCancellationName] = useState("");
+  const [cancellationEmail, setCancellationEmail] = useState("");
+  const [cancellationSubmitting, setCancellationSubmitting] = useState(false);
+  const [cancellationError, setCancellationError] = useState<string | null>(null);
   const [agreementLoading, setAgreementLoading] = useState(Boolean(engagementId));
   const agreementScrollRef = useRef<HTMLDivElement>(null);
   const streamIframeRef = useRef<HTMLIFrameElement>(null);
@@ -677,12 +683,15 @@ export default function OfferProposalPreview({
     if (step !== 2 && step !== 3 || !engagementId) return;
     fetch(`/api/proposal/${engagementId}/agreement`)
       .then((r) => r.json())
-      .then((result: { text?: string; signed?: boolean; signerName?: string | null; signedAt?: string | null; onboardingFeeStatus?: string | null }) => {
+      .then((result: { text?: string; signed?: boolean; signerName?: string | null; signedAt?: string | null; onboardingFeeStatus?: string | null; agreementManagerStatus?: typeof agreementManagerStatus; cancellationReason?: string | null }) => {
         setAgreementText(result.text ?? "");
+        setAgreementManagerStatus(result.agreementManagerStatus ?? "ACTIVE");
+        setCancellationReason(result.cancellationReason ?? null);
         if (result.signed) {
           setAlreadySigned(true);
           setSignedSignerName(result.signerName ?? null);
           setSignedAt(result.signedAt ?? null);
+          if (result.agreementManagerStatus === "CANCELLATION_REQUESTED" || result.agreementManagerStatus === "TERMINATED_AFTER_SIGNATURE" || result.agreementManagerStatus === "VOIDED_BEFORE_SIGNATURE") return;
           if (result.onboardingFeeStatus === "PAID" || (result.onboardingFeeStatus === "WAIVED" && !requiresOnboardingPaymentForSelection)) {
             setPaymentStatus("succeeded");
             if (result.onboardingFeeStatus === "WAIVED") setPaymentWaived(true);
@@ -819,6 +828,26 @@ export default function OfferProposalPreview({
       setSignSubmitting(false);
     }
   }
+
+  async function acknowledgeCancellation() {
+    if (!engagementId || !cancellationName.trim() || !isValidEmail(cancellationEmail)) return;
+    setCancellationSubmitting(true);
+    setCancellationError(null);
+    try {
+      const response = await fetch(`/api/proposal/${engagementId}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: cancellationName, email: cancellationEmail }),
+      });
+      const result = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) throw new Error(result?.error ?? "Unable to confirm cancellation.");
+      setAgreementManagerStatus("TERMINATED_AFTER_SIGNATURE");
+    } catch (error) {
+      setCancellationError(error instanceof Error ? error.message : "Unable to confirm cancellation.");
+    } finally {
+      setCancellationSubmitting(false);
+    }
+  }
   const annualSavingsPercent = getAnnualSavingsPercent(assessment);
   const recurringDiscountMultiplier = hasTwelveMonthAgreement
     ? 1 - annualSavingsPercent / 100
@@ -894,6 +923,7 @@ export default function OfferProposalPreview({
     },
   );
   const displayedAgreementText = engagementId ? agreementText : embeddedAgreementText;
+  const agreementIsOpen = agreementManagerStatus === "ACTIVE" || agreementManagerStatus === "ARCHIVED";
 
   const signedByBanner = signedSignerName ? (
     <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
@@ -1381,7 +1411,7 @@ export default function OfferProposalPreview({
           )}
 
           {/* Step 2 — Deposit / Contract */}
-          {step === 2 && !alreadySigned && (
+          {step === 2 && !alreadySigned && agreementIsOpen && (
             <div className="py-6">
               {!alreadySigned ? (
                 <div className="space-y-5">
@@ -1589,7 +1619,14 @@ export default function OfferProposalPreview({
             </div>
           )}
 
-          {step === 2 && alreadySigned && (
+          {step === 2 && agreementManagerStatus === "VOIDED_BEFORE_SIGNATURE" && (
+            <div className="py-10 text-center">
+              <h2 className="text-lg font-semibold text-slate-900">This agreement is no longer available</h2>
+              <p className="mt-2 text-sm text-slate-600">The agreement was voided before it was signed. Please contact us if you need an updated proposal.</p>
+            </div>
+          )}
+
+          {step === 2 && alreadySigned && agreementIsOpen && (
             <div className="py-6">
               {signedByBanner}
               {signError ? (
@@ -1614,8 +1651,39 @@ export default function OfferProposalPreview({
             </div>
           )}
 
+          {step === 2 && alreadySigned && (agreementManagerStatus === "CANCELLATION_REQUESTED" || agreementManagerStatus === "TERMINATED_AFTER_SIGNATURE") && (
+            <div className="space-y-5 py-6">
+              <div className={`rounded-lg border px-4 py-3 text-sm ${agreementManagerStatus === "CANCELLATION_REQUESTED" ? "border-amber-200 bg-amber-50 text-amber-800" : "border-slate-200 bg-slate-50 text-slate-700"}`}>
+                {agreementManagerStatus === "CANCELLATION_REQUESTED"
+                  ? "The business has requested cancellation of this signed agreement. Review the request below and confirm if you agree."
+                  : "This signed agreement has been terminated by mutual acknowledgment."}
+              </div>
+              {agreementManagerStatus === "CANCELLATION_REQUESTED" && cancellationReason ? (
+                <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Reason for request</p>
+                  <p className="mt-1 leading-6">{cancellationReason}</p>
+                </div>
+              ) : null}
+              {agreementManagerStatus === "CANCELLATION_REQUESTED" ? (
+                <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
+                  <h2 className="text-base font-semibold text-slate-900">Confirm agreement cancellation</h2>
+                  <p className="text-sm leading-6 text-slate-600">By confirming, you acknowledge that this signed agreement will no longer govern the engagement.</p>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="text-sm font-semibold text-slate-700">Full name<input value={cancellationName} onChange={(event) => setCancellationName(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal text-slate-900" /></label>
+                    <label className="text-sm font-semibold text-slate-700">Signer email<input type="email" value={cancellationEmail} onChange={(event) => setCancellationEmail(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal text-slate-900" /></label>
+                  </div>
+                  {cancellationError ? <p className="text-sm text-red-700">{cancellationError}</p> : null}
+                  <button type="button" onClick={() => void acknowledgeCancellation()} disabled={cancellationSubmitting || !cancellationName.trim() || !isValidEmail(cancellationEmail)} className="ui-action-primary w-full rounded-lg border px-4 py-3 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-40">
+                    {cancellationSubmitting ? "Confirming…" : "Acknowledge cancellation"}
+                  </button>
+                </div>
+              ) : null}
+              {signedAgreementCollapsible ? <div>{signedAgreementCollapsible}</div> : null}
+            </div>
+          )}
+
           {/* Step 3 — Payment */}
-          {step === 3 && !paymentStatus && alreadySigned && (requiresOnboardingPayment || paymentClientSecret) && (
+          {step === 3 && !paymentStatus && alreadySigned && agreementIsOpen && (requiresOnboardingPayment || paymentClientSecret) && (
             <div className="py-6">
               {signedByBanner}
               {signedAgreementCollapsible ? <div className="mt-3">{signedAgreementCollapsible}</div> : null}
