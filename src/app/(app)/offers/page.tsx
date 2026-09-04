@@ -278,12 +278,29 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                     key={quote.id}
                     className={`hover:bg-slate-50 ${quote.id === highlightId ? "offer-row-highlight" : ""}`}
                   >
-                    <td
-                      className="px-5 py-4 font-mono text-base text-slate-500"
-                      title={quote.offerCode}
-                      aria-label={`Offer ID ${quote.offerCode}`}
-                    >
-                      ...{quote.offerCode.slice(-4)}
+                    <td className="px-5 py-4 text-base text-slate-500">
+                      {quote.id === highlightId && (isDuplicate || isTestProposal) ? (
+                        <DuplicateOfferFocus offerId={quote.id} />
+                      ) : null}
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="font-mono"
+                          title={quote.offerCode}
+                          aria-label={`Offer ID ${quote.offerCode}`}
+                        >
+                          ...{quote.offerCode.slice(-4)}
+                        </span>
+                        {isDuplicate && !isTestProposal ? (
+                          <span
+                            title={duplicateTooltip}
+                            aria-label={duplicateTooltip}
+                            className="inline-flex rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 font-sans text-base font-bold uppercase leading-none tracking-wide text-amber-900"
+                          >
+                            <Copy className="h-4 w-4" aria-hidden="true" />
+                            <ClearDuplicateMarkerButton offerId={quote.id} />
+                          </span>
+                        ) : null}
+                      </div>
                     </td>
                     <td className="px-5 py-4 text-base">
                       <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-medium text-slate-600">
@@ -291,22 +308,14 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                       </span>
                     </td>
                     <td className="relative px-5 py-4">
-                      {isDuplicate || isTestProposal ? (
-                        <>
-                          {quote.id === highlightId ? <DuplicateOfferFocus offerId={quote.id} /> : null}
-                          <span
-                            title={isTestProposal ? `$1 test proposal: ${quote.id}` : duplicateTooltip}
-                            aria-label={isTestProposal ? `$1 test proposal ${quote.id}` : duplicateTooltip}
-                            className="absolute right-2 top-2 z-10 inline-flex rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-base font-bold uppercase leading-none tracking-wide text-amber-900"
-                          >
-                            {isTestProposal ? (
-                              "Test $1"
-                            ) : (
-                              <Copy className="h-4 w-4" aria-hidden="true" />
-                            )}
-                            {isDuplicate && !isTestProposal ? <ClearDuplicateMarkerButton offerId={quote.id} /> : null}
-                          </span>
-                        </>
+                      {isTestProposal ? (
+                        <span
+                          title={`$1 test proposal: ${quote.id}`}
+                          aria-label={`$1 test proposal ${quote.id}`}
+                          className="absolute right-2 top-2 z-10 inline-flex rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-base font-bold uppercase leading-none tracking-wide text-amber-900"
+                        >
+                          Test $1
+                        </span>
                       ) : null}
                       <OfferContactCell
                         offerId={quote.id}
