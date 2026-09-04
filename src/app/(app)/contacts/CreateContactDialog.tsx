@@ -8,6 +8,9 @@ import {
   ContactCreateFields,
   type ContactCreationOptions,
 } from "@/components/contacts/ContactCreateFields";
+import { ContactRelatedCreatePanel } from "@/components/contacts/ContactRelatedCreatePanel";
+
+type CreateDialogView = "contact" | "client" | "tag";
 
 export function CreateContactDialog({
   tags,
@@ -16,9 +19,22 @@ export function CreateContactDialog({
 }: ContactCreationOptions) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [view, setView] = useState<CreateDialogView>("contact");
+  const [options, setOptions] = useState<ContactCreationOptions>({ tags, clients, brands });
+  const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
+
+  function openContactDialog() {
+    setOptions({ tags, clients, brands });
+    setSelectedClientIds([]);
+    setSelectedTagIds([]);
+    setView("contact");
+    setError(null);
+    setOpen(true);
+  }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -40,7 +56,7 @@ export function CreateContactDialog({
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={openContactDialog}
         className="ui-action-primary flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide transition"
       >
         <Plus size={13} />
@@ -49,9 +65,16 @@ export function CreateContactDialog({
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-x-hidden overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-contact-dialog-title"
+            className="max-h-[90vh] w-full max-w-2xl overflow-x-hidden overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
+          >
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-slate-900">Add contact</h2>
+              <h2 id="create-contact-dialog-title" className="text-base font-semibold text-slate-900">
+                {view === "contact" ? "Add contact" : view === "client" ? "Add client" : "Add tag"}
+              </h2>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
@@ -61,12 +84,18 @@ export function CreateContactDialog({
               </button>
             </div>
 
-            <form ref={formRef} onSubmit={handleSubmit} className="mt-5 grid gap-4 sm:grid-cols-2">
+            <form
+              ref={formRef}
+              onSubmit={handleSubmit}
+              className={`${view === "contact" ? "" : "hidden"} mt-5 grid gap-4 sm:grid-cols-2`}
+            >
               <ContactCreateFields
-                tags={tags}
-                clients={clients}
-                brands={brands}
+                {...options}
                 autoFocusFirstName
+                defaultSelectedClientIds={selectedClientIds}
+                defaultSelectedTagIds={selectedTagIds}
+                onAddClient={() => setView("client")}
+                onAddTag={() => setView("tag")}
               />
 
               {error && (
@@ -83,6 +112,29 @@ export function CreateContactDialog({
                 {pending ? "Saving…" : "Save contact"}
               </button>
             </form>
+
+            {view !== "contact" ? (
+              <ContactRelatedCreatePanel
+                view={view}
+                onBack={() => setView("contact")}
+                onClientCreated={(client) => {
+                  setOptions((current) => ({
+                    ...current,
+                    clients: [client, ...current.clients],
+                  }));
+                  setSelectedClientIds((current) => [...new Set([...current, client.id])]);
+                  setView("contact");
+                }}
+                onTagCreated={(tag) => {
+                  setOptions((current) => ({
+                    ...current,
+                    tags: [tag, ...current.tags],
+                  }));
+                  setSelectedTagIds((current) => [...new Set([...current, tag.id])]);
+                  setView("contact");
+                }}
+              />
+            ) : null}
           </div>
         </div>
       )}

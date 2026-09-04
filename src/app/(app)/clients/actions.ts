@@ -32,16 +32,19 @@ export async function createClientAction(formData: FormData) {
   const requested = normalizeClientCode(clean(formData.get("code"))) || codeFromName(name);
   const code = await uniqueCode(brand.id, requested);
 
-  await prisma.ticketClient.create({
+  const client = await prisma.ticketClient.create({
     data: {
       brandId: brand.id,
       code,
       name,
       isActive: true,
     },
+    select: { id: true },
   });
 
   revalidatePath("/clients");
+  revalidatePath("/offers");
+  return { id: client.id, label: name };
 }
 
 export async function updateClientAction(formData: FormData) {

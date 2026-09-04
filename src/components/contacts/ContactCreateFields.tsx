@@ -1,5 +1,6 @@
 import { EmailInput } from "@/components/fields/EmailInput";
 import { PhoneInput } from "@/components/fields/PhoneInput";
+import { Plus } from "lucide-react";
 import { TAG_KIND_LABELS, type ContactTagKindName } from "@/lib/contacts/tags";
 
 export type ContactCreationOptions = {
@@ -16,7 +17,17 @@ export function ContactCreateFields({
   clients,
   brands,
   autoFocusFirstName = false,
-}: ContactCreationOptions & { autoFocusFirstName?: boolean }) {
+  defaultSelectedClientIds = [],
+  defaultSelectedTagIds = [],
+  onAddClient,
+  onAddTag,
+}: ContactCreationOptions & {
+  autoFocusFirstName?: boolean;
+  defaultSelectedClientIds?: readonly string[];
+  defaultSelectedTagIds?: readonly string[];
+  onAddClient?: () => void;
+  onAddTag?: () => void;
+}) {
   return (
     <>
       <label className="text-xs font-semibold uppercase tracking-wide text-slate-600">
@@ -63,7 +74,7 @@ export function ContactCreateFields({
         <textarea name="notes" rows={3} className={inputClass} />
       </label>
 
-      {clients.length > 0 ? (
+      {onAddClient || clients.length > 0 ? (
         <fieldset className="sm:col-span-2">
           <legend className="text-xs font-semibold uppercase tracking-wide text-slate-600">
             Clients
@@ -72,9 +83,25 @@ export function ContactCreateFields({
             Companies this brand serves. A person can belong to more than one.
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
+            {onAddClient ? (
+              <button
+                type="button"
+                onClick={onAddClient}
+                className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-slate-400 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-slate-600 hover:bg-slate-50"
+              >
+                <Plus size={12} />
+                Add new client
+              </button>
+            ) : null}
             {clients.map((client) => (
               <label key={client.id} className="cursor-pointer">
-                <input type="checkbox" name="clientIds" value={client.id} className="peer sr-only" />
+                <input
+                  type="checkbox"
+                  name="clientIds"
+                  value={client.id}
+                  defaultChecked={defaultSelectedClientIds.includes(client.id)}
+                  className="peer sr-only"
+                />
                 <span className="inline-flex rounded-full border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 peer-checked:border-slate-900 peer-checked:bg-slate-900 peer-checked:text-white">
                   {client.label}
                 </span>
@@ -110,15 +137,31 @@ export function ContactCreateFields({
         </fieldset>
       ) : null}
 
-      {tags.length > 0 ? (
+      {onAddTag || tags.length > 0 ? (
         <fieldset className="sm:col-span-2">
           <legend className="text-xs font-semibold uppercase tracking-wide text-slate-600">
             Tags
           </legend>
           <div className="mt-2 flex flex-wrap gap-2">
+            {onAddTag ? (
+              <button
+                type="button"
+                onClick={onAddTag}
+                className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-slate-400 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-slate-600 hover:bg-slate-50"
+              >
+                <Plus size={12} />
+                Add new tag
+              </button>
+            ) : null}
             {tags.map((tag) => (
               <label key={tag.id} className="cursor-pointer">
-                <input type="checkbox" name="tagIds" value={tag.id} className="peer sr-only" />
+                <input
+                  type="checkbox"
+                  name="tagIds"
+                  value={tag.id}
+                  defaultChecked={defaultSelectedTagIds.includes(tag.id)}
+                  className="peer sr-only"
+                />
                 <span className="inline-flex rounded-full border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 peer-checked:border-slate-900 peer-checked:bg-slate-900 peer-checked:text-white">
                   {tag.label}
                   <span className="ml-1 text-[10px] uppercase tracking-wide opacity-70">

@@ -493,7 +493,7 @@ export async function createContactTagAction(formData: FormData) {
       label,
       kind,
     },
-    select: { id: true },
+    select: { id: true, label: true, kind: true },
   });
 
   const contactId = clean(formData.get("contactId"));
@@ -517,6 +517,7 @@ export async function createContactTagAction(formData: FormData) {
   }
 
   revalidateTagPaths(contactId || undefined);
+  return tag;
 }
 
 export async function updateContactTagAction(formData: FormData) {

@@ -8,6 +8,7 @@ import {
   ContactCreateFields,
   type ContactCreationOptions,
 } from "@/components/contacts/ContactCreateFields";
+import { ContactRelatedCreatePanel } from "@/components/contacts/ContactRelatedCreatePanel";
 import { createOfferAudienceContactAction } from "./who/actions";
 import { reassignQuoteContactAction } from "./actions";
 
@@ -27,7 +28,7 @@ type CurrentContact = {
   email: string | null;
 };
 
-type ContactDialogView = "select" | "create" | null;
+type ContactDialogView = "select" | "create" | "create-client" | "create-tag" | null;
 
 export function OfferContactCell({
   offerId,
@@ -43,6 +44,10 @@ export function OfferContactCell({
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [contactDialogView, setContactDialogView] = useState<ContactDialogView>(null);
+  const [availableCreationOptions, setAvailableCreationOptions] =
+    useState<ContactCreationOptions>(creationOptions);
+  const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [contactQuery, setContactQuery] = useState("");
   const [pending, startTransition] = useTransition();
 
@@ -129,6 +134,9 @@ export function OfferContactCell({
         return;
       }
       setContactQuery("");
+      setAvailableCreationOptions(creationOptions);
+      setSelectedClientIds([]);
+      setSelectedTagIds([]);
       setContactDialogView("create");
       setError(null);
       return;
@@ -192,7 +200,13 @@ export function OfferContactCell({
               >
                 <div className="flex items-center justify-between gap-4">
                   <h2 id={`offer-contact-dialog-${offerId}`} className="text-lg font-semibold text-slate-900">
-                    {contactDialogView === "select" ? "Select contact" : "Add a new contact"}
+                    {contactDialogView === "select"
+                      ? "Select contact"
+                      : contactDialogView === "create-client"
+                        ? "Add client"
+                        : contactDialogView === "create-tag"
+                          ? "Add tag"
+                          : "Add a new contact"}
                   </h2>
                   <button
                     type="button"
@@ -248,20 +262,55 @@ export function OfferContactCell({
                     </div>
                   </>
                 ) : (
-                  <form className="mt-4 grid gap-4 sm:grid-cols-2" onSubmit={createNewContact}>
-                    <p className="text-sm text-slate-500 sm:col-span-2">
-                      Add the contact details and relationships you already know. You can edit them later from the contact page.
-                    </p>
-                    <ContactCreateFields {...creationOptions} autoFocusFirstName />
-                    <div className="mt-1 flex gap-2 sm:col-span-2">
-                      <button type="submit" disabled={pending} className="ui-action-primary rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-50">
-                        {pending ? "Saving..." : "Add contact"}
-                      </button>
-                      <button type="button" disabled={pending} onClick={cancelNewContact} className="rounded-full px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-50">
-                        Back
-                      </button>
-                    </div>
-                  </form>
+                  <>
+                    <form
+                      className={`${contactDialogView === "create" ? "" : "hidden"} mt-4 grid gap-4 sm:grid-cols-2`}
+                      onSubmit={createNewContact}
+                    >
+                      <p className="text-sm text-slate-500 sm:col-span-2">
+                        Add the contact details and relationships you already know. You can edit them later from the contact page.
+                      </p>
+                      <ContactCreateFields
+                        {...availableCreationOptions}
+                        autoFocusFirstName
+                        defaultSelectedClientIds={selectedClientIds}
+                        defaultSelectedTagIds={selectedTagIds}
+                        onAddClient={() => setContactDialogView("create-client")}
+                        onAddTag={() => setContactDialogView("create-tag")}
+                      />
+                      <div className="mt-1 flex gap-2 sm:col-span-2">
+                        <button type="submit" disabled={pending} className="ui-action-primary rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-50">
+                          {pending ? "Saving..." : "Add contact"}
+                        </button>
+                        <button type="button" disabled={pending} onClick={cancelNewContact} className="rounded-full px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-50">
+                          Back
+                        </button>
+                      </div>
+                    </form>
+
+                    {contactDialogView === "create-client" || contactDialogView === "create-tag" ? (
+                      <ContactRelatedCreatePanel
+                        view={contactDialogView === "create-client" ? "client" : "tag"}
+                        onBack={() => setContactDialogView("create")}
+                        onClientCreated={(client) => {
+                          setAvailableCreationOptions((current) => ({
+                            ...current,
+                            clients: [client, ...current.clients],
+                          }));
+                          setSelectedClientIds((current) => [...new Set([...current, client.id])]);
+                          setContactDialogView("create");
+                        }}
+                        onTagCreated={(tag) => {
+                          setAvailableCreationOptions((current) => ({
+                            ...current,
+                            tags: [tag, ...current.tags],
+                          }));
+                          setSelectedTagIds((current) => [...new Set([...current, tag.id])]);
+                          setContactDialogView("create");
+                        }}
+                      />
+                    ) : null}
+                  </>
                 )}
 
                 {error ? <p className="mt-3 text-sm text-rose-600">{error}</p> : null}
