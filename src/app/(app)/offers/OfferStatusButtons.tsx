@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Archive, ArchiveRestore, RotateCw, Trash2 } from "lucide-react";
 import { deleteQuoteAction, setOfferStatusAction } from "./actions";
@@ -10,9 +10,11 @@ import type { OfferBucket } from "@/lib/quotes/status";
 export function OfferStatusButtons({
   offerId,
   bucket,
+  children,
 }: {
   offerId: string;
   bucket: OfferBucket;
+  children: ReactNode;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -69,16 +71,7 @@ export function OfferStatusButtons({
       >
         <RotateCw className="h-4 w-4" />
       </button>
-      <button
-        type="button"
-        disabled={pending}
-        onClick={requestDelete}
-        className={iconBtn}
-        aria-label="Delete offer permanently"
-        title="Delete offer permanently"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
+      {children}
       {bucket === "draft" ? (
         <button
           type="button"
@@ -135,6 +128,16 @@ export function OfferStatusButtons({
           <ArchiveRestore className="h-4 w-4" />
         </button>
       ) : null}
+      <button
+        type="button"
+        disabled={pending}
+        onClick={requestDelete}
+        className={iconBtn}
+        aria-label="Delete offer permanently"
+        title="Delete offer permanently"
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
       {deleteConfirmOpen ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4"

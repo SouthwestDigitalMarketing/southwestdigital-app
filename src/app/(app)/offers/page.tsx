@@ -354,13 +354,14 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                         <SendOfferEmailButton
                           offerId={quote.id}
                         />
-                        <OfferStatusButtons offerId={quote.id} bucket={itemBucket} />
-                        <DuplicateOfferButton
-                          offerId={quote.id}
-                          currentContact={currentContact}
-                          contacts={contacts}
-                          archived={archived}
-                        />
+                        <OfferStatusButtons offerId={quote.id} bucket={itemBucket}>
+                          <DuplicateOfferButton
+                            offerId={quote.id}
+                            currentContact={currentContact}
+                            contacts={contacts}
+                            archived={archived}
+                          />
+                        </OfferStatusButtons>
                       </div>
                     </td>
                   </tr>
