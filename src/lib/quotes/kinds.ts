@@ -6,6 +6,18 @@ export const OFFER_KINDS = [
     href: "/offers/new",
   },
   {
+    key: "consulting",
+    name: "Hourly consulting",
+    summary: "One-off engagement billed by the hour or block. No monthly recurring.",
+    href: "/offers/hourly",
+  },
+  {
+    key: "coaching",
+    name: "Hourly coaching",
+    summary: "Session-pack coaching for business owners or fellow bookkeepers.",
+    href: "/offers/hourly",
+  },
+  {
     key: "referral-network",
     name: "Referral network",
     summary: "Build the partner / bookkeeper referral-network offer.",
@@ -15,8 +27,14 @@ export const OFFER_KINDS = [
 
 export type OfferKindKey = (typeof OFFER_KINDS)[number]["key"];
 
+export const HOURLY_OFFER_KINDS: OfferKindKey[] = ["consulting", "coaching"];
+
 export function isOfferKindKey(value: string): value is OfferKindKey {
   return OFFER_KINDS.some((kind) => kind.key === value);
+}
+
+export function isHourlyOfferKind(value: string): value is (typeof HOURLY_OFFER_KINDS)[number] {
+  return HOURLY_OFFER_KINDS.includes(value as OfferKindKey);
 }
 
 export function parseContactIds(raw: string | string[] | undefined): string[] {
@@ -36,6 +54,9 @@ export function builderHref(kind: OfferKindKey, contactIds: string[], offerId?: 
   const params = new URLSearchParams();
   if (contactIds.length) params.set("contacts", contactIds.join(","));
   if (offerId) params.set("offer", offerId);
+  // Hourly builder is shared between consulting and coaching, so it needs
+  // the kind explicitly on the URL to know which one it's building.
+  if (isHourlyOfferKind(kind)) params.set("kind", kind);
   const qs = params.toString();
   return qs ? `${href}?${qs}` : href;
 }

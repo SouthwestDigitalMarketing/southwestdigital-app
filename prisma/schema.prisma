@@ -1997,6 +1997,7 @@ model Engagement {
   relatedEntities                    String?
   clientNotes                        String?
   engagementType                     EngagementType?
+  productKind                        String                  @default("bookkeeping")
   status                             EngagementStatus        @default(DRAFT)
   pricingModel                       EngagementPricingModel?
   feeAmount                          Decimal?
@@ -2316,6 +2317,7 @@ model CatalogService {
   internalNotes             String?             @map("internal_notes")
   active                    Boolean             @default(true)
   realEstateSpecific        Boolean             @default(false)
+  productKind               String              @default("bookkeeping") @map("product_kind")
   tagId                     String?
   brand                     Brand               @relation(fields: [brandId], references: [id], onDelete: Cascade)
   tag                       ContactTag?         @relation(fields: [tagId], references: [id], onDelete: SetNull)
@@ -2329,6 +2331,7 @@ model CatalogService {
   @@index([brandId, active, category])
   @@index([brandId, offerSection, active, priority])
   @@index([brandId, realEstateSpecific])
+  @@index([brandId, productKind, active])
   @@index([brandId, tagId])
   @@map("catalog_services")
 }
@@ -2586,22 +2589,24 @@ model BrandIntegration {
 }
 
 model AgreementTemplate {
-  id          String    @id @default(cuid())
-  brandId     String
-  key         String
-  name        String
-  description String?
-  content     String    @db.Text
-  status      String    @default("active")
-  isDefault   Boolean   @default(false)
-  archivedAt  DateTime?
-  brand       Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id                    String    @id @default(cuid())
+  brandId               String
+  key                   String
+  name                  String
+  description           String?
+  content               String    @db.Text
+  status                String    @default("active")
+  isDefault             Boolean   @default(false)
+  defaultForProductKind String?
+  archivedAt            DateTime?
+  brand                 Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   @@unique([brandId, key])
   @@index([brandId, status, name])
   @@index([brandId, isDefault, status])
+  @@index([brandId, defaultForProductKind, status])
 }
 
 model AuditEvent {
