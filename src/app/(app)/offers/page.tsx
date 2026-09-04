@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Eye } from "lucide-react";
-import type { Prisma } from "@prisma/client";
+import { BrandStatus, type Prisma } from "@prisma/client";
 import { requireQuoteStaff } from "@/lib/quotes/access";
 import { prisma } from "@/lib/prisma";
 import { formatUsd } from "@/lib/quotes/format";
@@ -93,7 +93,7 @@ function SortableHeader({
 }
 
 export default async function QuotesPage({ searchParams }: { searchParams: SearchParams }) {
-  const { brand } = await requireQuoteStaff();
+  const { brand, isPlatformOperator } = await requireQuoteStaff();
   const params = await searchParams;
   const contactId = typeof params.contact === "string" ? params.contact.trim() : "";
   const highlightId = typeof params.highlight === "string" ? params.highlight.trim() : "";
@@ -114,7 +114,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
             ? { totalOneTime: sortOrder }
             : { sentAt: sortOrder };
 
-  const [listed, contacts, contact] = await Promise.all([
+  const [listed, contacts, contact, tags, clients, platformBrands] = await Promise.all([
     prisma.quote.findMany({
       where: {
         brandId: brand.id,
@@ -139,7 +139,33 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
           select: { id: true, name: true, company: true, email: true },
         })
       : Promise.resolve(null),
+    prisma.contactTag.findMany({
+      where: { brandId: brand.id, isActive: true },
+      orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+      select: { id: true, label: true, kind: true },
+    }),
+    prisma.ticketClient.findMany({
+      where: { brandId: brand.id, isActive: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, code: true },
+    }),
+    isPlatformOperator
+      ? prisma.brand.findMany({
+          where: { status: BrandStatus.ACTIVE },
+          orderBy: { name: "asc" },
+          select: { id: true, name: true },
+        })
+      : Promise.resolve([]),
   ]);
+
+  const contactCreationOptions = {
+    tags,
+    clients: clients.map((client) => ({
+      id: client.id,
+      label: client.name?.trim() || client.code,
+    })),
+    brands: platformBrands.map((item) => ({ id: item.id, label: item.name })),
+  };
 
   return (
     <div className="px-8 pb-8">
@@ -261,6 +287,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                         offerId={quote.id}
                         currentContact={currentContact}
                         contacts={contacts}
+                        creationOptions={contactCreationOptions}
                       />
                     </td>
                     <td className="px-5 py-4">

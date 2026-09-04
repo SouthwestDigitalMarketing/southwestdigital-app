@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { randomBytes } from "node:crypto";
-import { Prisma } from "@prisma/client";
+import { BrandStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireQuoteStaffOrThrow } from "@/lib/quotes/access";
 import { contactSearchWhere } from "@/lib/contacts/query";
@@ -14,6 +14,7 @@ import { materializeAgreementTemplate } from "@/lib/agreements/materialize";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
 import { ensureQuoteEngagement } from "@/lib/engagements/fromOffer";
 import { quoteClientDetailsFromSnapshot } from "@/lib/quotes/clientInfo";
+import { applyTagPipelineAutomation } from "@/lib/contacts/automation";
 
 export type OfferAudienceContact = {
   id: string;
@@ -35,6 +36,15 @@ const CONTACT_SELECT = {
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function ids(formData: FormData, key: string) {
+  return formData
+    .getAll(key)
+    .filter(
+      (value): value is string =>
+        typeof value === "string" && value.trim().length > 0,
+    );
 }
 
 function asJsonObject(value: unknown): Prisma.InputJsonObject {
@@ -109,7 +119,7 @@ export async function searchOfferContactsAction(
 }
 
 export async function createOfferAudienceContactAction(formData: FormData): Promise<OfferAudienceContact> {
-  const { brand } = await requireQuoteStaffOrThrow();
+  const { session, brand, isPlatformOperator } = await requireQuoteStaffOrThrow();
   const firstName = clean(formData.get("firstName"));
   const lastName = clean(formData.get("lastName"));
   if (!firstName || !lastName) throw new Error("First and last name are required.");
@@ -117,7 +127,12 @@ export async function createOfferAudienceContactAction(formData: FormData): Prom
   const name = `${firstName} ${lastName}`.replace(/\s+/g, " ").trim();
   const email = parseEmailOrThrow(clean(formData.get("email")));
   const company = clean(formData.get("company")) || null;
+  const roleTitle = clean(formData.get("roleTitle")) || null;
+  const notes = clean(formData.get("notes")) || null;
   const phoneE164 = parseSubmittedPhone(clean(formData.get("phone")));
+  const tagIds = ids(formData, "tagIds");
+  const clientIds = ids(formData, "clientIds");
+  const relatedBrandIds = ids(formData, "relatedBrandIds");
 
   if (email) {
     const existing = await prisma.contact.findFirst({
@@ -127,6 +142,27 @@ export async function createOfferAudienceContactAction(formData: FormData): Prom
     if (existing) throw new Error("A contact with this email already exists.");
   }
 
+  const [tags, clients, relatedBrands] = await Promise.all([
+    tagIds.length
+      ? prisma.contactTag.findMany({
+          where: { id: { in: tagIds }, brandId: brand.id, isActive: true },
+          select: { id: true },
+        })
+      : Promise.resolve([]),
+    clientIds.length
+      ? prisma.ticketClient.findMany({
+          where: { id: { in: clientIds }, brandId: brand.id, isActive: true },
+          select: { id: true },
+        })
+      : Promise.resolve([]),
+    relatedBrandIds.length && isPlatformOperator
+      ? prisma.brand.findMany({
+          where: { id: { in: relatedBrandIds }, status: BrandStatus.ACTIVE },
+          select: { id: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
   const contact = await prisma.contact.create({
     data: {
       brandId: brand.id,
@@ -135,14 +171,39 @@ export async function createOfferAudienceContactAction(formData: FormData): Prom
       lastName,
       email,
       company,
+      roleTitle,
+      notes,
       phoneE164,
       isActive: true,
+      tagLinks: tags.length
+        ? { create: tags.map((tag) => ({ tagId: tag.id })) }
+        : undefined,
+      clientLinks: clients.length
+        ? { create: clients.map((client) => ({ clientId: client.id })) }
+        : undefined,
+      brandLinks: relatedBrands.length
+        ? {
+            create: relatedBrands.map((relatedBrand) => ({
+              relatedBrandId: relatedBrand.id,
+            })),
+          }
+        : undefined,
     },
     select: CONTACT_SELECT,
   });
 
+  for (const tag of tags) {
+    await applyTagPipelineAutomation({
+      brandId: brand.id,
+      actorUserId: session.user.id,
+      contactId: contact.id,
+      tagId: tag.id,
+    });
+  }
+
   revalidatePath("/contacts");
   revalidatePath("/offers");
+  revalidatePath("/pipeline");
   return contact;
 }
 

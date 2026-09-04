@@ -4,6 +4,10 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Search, X } from "lucide-react";
+import {
+  ContactCreateFields,
+  type ContactCreationOptions,
+} from "@/components/contacts/ContactCreateFields";
 import { createOfferAudienceContactAction } from "./who/actions";
 import { reassignQuoteContactAction } from "./actions";
 
@@ -29,10 +33,12 @@ export function OfferContactCell({
   offerId,
   currentContact,
   contacts,
+  creationOptions,
 }: {
   offerId: string;
   currentContact: CurrentContact;
   contacts: ContactOption[];
+  creationOptions: ContactCreationOptions;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -181,7 +187,7 @@ export function OfferContactCell({
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={`offer-contact-dialog-${offerId}`}
-                className="w-full max-w-xl rounded-2xl bg-white p-5 shadow-xl"
+                className="max-h-[90vh] w-full max-w-2xl overflow-x-hidden overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
                 onClick={(event) => event.stopPropagation()}
               >
                 <div className="flex items-center justify-between gap-4">
@@ -242,12 +248,11 @@ export function OfferContactCell({
                     </div>
                   </>
                 ) : (
-                  <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={createNewContact}>
-                    <input name="firstName" required autoFocus placeholder="First name" className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
-                    <input name="lastName" required placeholder="Last name" className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
-                    <input name="email" type="email" placeholder="Email" className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
-                    <input name="phone" type="tel" placeholder="Phone" className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
-                    <input name="company" placeholder="Company" className="rounded-md border border-slate-300 px-3 py-2 text-sm sm:col-span-2" />
+                  <form className="mt-4 grid gap-4 sm:grid-cols-2" onSubmit={createNewContact}>
+                    <p className="text-sm text-slate-500 sm:col-span-2">
+                      Add the contact details and relationships you already know. You can edit them later from the contact page.
+                    </p>
+                    <ContactCreateFields {...creationOptions} autoFocusFirstName />
                     <div className="mt-1 flex gap-2 sm:col-span-2">
                       <button type="submit" disabled={pending} className="ui-action-primary rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-50">
                         {pending ? "Saving..." : "Add contact"}
