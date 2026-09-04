@@ -47,7 +47,7 @@ export async function POST(
 
   const engagement = await prisma.engagement.findUnique({
     where: { id: engagementId },
-    select: { onboardingData: true, onboardingFeeStatus: true, agreementText: true, signedAt: true, signerName: true, agreementManagerStatus: true },
+    select: { brandId: true, onboardingData: true, onboardingFeeStatus: true, agreementText: true, signedAt: true, signerName: true, agreementManagerStatus: true },
   });
   if (!engagement) return NextResponse.json({ error: "Engagement not found" }, { status: 404 });
 
@@ -56,6 +56,10 @@ export async function POST(
   }
 
   if (engagement.signedAt) {
+    await prisma.quote.updateMany({
+      where: { engagementId, brandId: engagement.brandId, status: { not: "archived" } },
+      data: { status: "accepted" },
+    });
     return NextResponse.json({ ok: true, signedAt: engagement.signedAt.toISOString(), signerName: engagement.signerName });
   }
 
@@ -90,6 +94,10 @@ export async function POST(
       billingContactEmail: email,
       onboardingFeeStatus,
     },
+  });
+  await prisma.quote.updateMany({
+    where: { engagementId, brandId: engagement.brandId, status: { not: "archived" } },
+    data: { status: "accepted" },
   });
 
   return NextResponse.json({ ok: true, signedAt: signedAt.toISOString(), signerName });

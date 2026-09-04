@@ -92,4 +92,8 @@ export async function markEngagementDepositPaid(engagementId: string, brandId?: 
     where: brandId ? { id: engagementId, brandId } : { id: engagementId },
     data: { onboardingFeeStatus: "PAID", status: "DEPOSIT_PAID" },
   });
+  await prisma.quote.updateMany({
+    where: { engagementId, ...(brandId ? { brandId } : {}), status: { not: "archived" } },
+    data: { status: "completed" },
+  });
 }
