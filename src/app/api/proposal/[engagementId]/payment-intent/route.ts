@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getStripeClient } from "@/lib/stripe";
 import { getChargeableConnectedAccountId } from "@/lib/stripe/connect";
 import { destinationPaymentIntentParams } from "@/lib/stripe/paymentIntentParams";
+import { planConnectedPaymentIntent } from "@/lib/stripe/connectPaymentPlan";
 import { resolveOnboardingWaiverForEngagement } from "@/lib/discounts/resolveOnboardingWaiver";
 import {
   parseStoredProposalCheckout,
@@ -14,6 +15,14 @@ import { hasPublicProposalAccess, publicProposalNotFound } from "@/lib/engagemen
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function extractTransferDestination(intent: { transfer_data?: { destination?: string | { id?: string } | null } | null }): string | null {
+  const dest = intent.transfer_data?.destination;
+  if (!dest) return null;
+  if (typeof dest === "string") return dest;
+  if (typeof dest === "object" && typeof dest.id === "string") return dest.id;
+  return null;
 }
 
 export async function POST(
@@ -66,9 +75,44 @@ export async function POST(
   }
 
   const chargeKind = engagement.isTestProposal ? "test_proposal" : checkout.chargeKind;
-
   const amountInCents = Math.round(chargeAmount * 100);
   const connectedAccountId = await getChargeableConnectedAccountId(engagement.brandId);
+
+  const stripe = getStripeClient();
+
+  let existingIntentSnapshot: { id: string; status: string; transferDestination: string | null } | null = null;
+  if (existingPaymentIntentId) {
+    try {
+      const existing = await stripe.paymentIntents.retrieve(existingPaymentIntentId);
+      existingIntentSnapshot = {
+        id: existing.id,
+        status: existing.status,
+        transferDestination: extractTransferDestination(existing),
+      };
+      if (existing.status === "succeeded") {
+        await markEngagementDepositPaid(engagementId, engagement.brandId, {
+          provider: "stripe",
+          reference: existing.id,
+          amount: existing.amount_received / 100,
+          currency: existing.currency.toUpperCase(),
+        });
+        return NextResponse.json({ alreadyResolved: true, amountDueNow: existing.amount_received / 100 });
+      }
+    } catch (error) {
+      console.error("[payment-intent] Failed to retrieve prior PaymentIntent:", error);
+      return NextResponse.json({ error: "We couldn't start the payment form. Please try again shortly." }, { status: 500 });
+    }
+  }
+
+  const plan = planConnectedPaymentIntent({
+    activeConnectedAccountId: connectedAccountId,
+    existingIntent: existingIntentSnapshot,
+  });
+
+  if (plan.kind === "block") {
+    return NextResponse.json({ error: plan.error }, { status: plan.status });
+  }
+
   const baseIntentParams = destinationPaymentIntentParams({
     amountInCents,
     engagementId,
@@ -81,84 +125,55 @@ export async function POST(
     metadata: { ...baseIntentParams.metadata, chargeKind },
   };
 
-  let clientSecret: string | null;
   try {
-    const stripe = getStripeClient();
-    let createNewIntent = !existingPaymentIntentId;
-    if (existingPaymentIntentId) {
-      const existing = await stripe.paymentIntents.retrieve(existingPaymentIntentId);
-      if (existing.status === "succeeded") {
-        await markEngagementDepositPaid(engagementId, engagement.brandId, {
-          provider: "stripe",
-          reference: existing.id,
-          amount: existing.amount_received / 100,
-          currency: existing.currency.toUpperCase(),
-        });
-        return NextResponse.json({ alreadyResolved: true, amountDueNow: existing.amount_received / 100 });
-      }
-      if (existing.status === "requires_payment_method" || existing.status === "requires_confirmation") {
-        const updated = await stripe.paymentIntents.update(existingPaymentIntentId, {
-          amount: intentParams.amount,
-          ...(invoiceEmail ? { receipt_email: invoiceEmail } : {}),
-        });
-        clientSecret = updated.client_secret;
-      } else if (existing.status === "canceled") {
-        createNewIntent = true;
-        clientSecret = null;
-      } else {
-        clientSecret = existing.client_secret;
-      }
-    } else {
-      clientSecret = null;
+    if (plan.kind === "reuse-update") {
+      const updated = await stripe.paymentIntents.update(plan.intentId, {
+        amount: intentParams.amount,
+        ...(invoiceEmail ? { receipt_email: invoiceEmail } : {}),
+      });
+      return NextResponse.json({ clientSecret: updated.client_secret, amountDueNow: chargeAmount, chargeKind });
     }
 
-    if (createNewIntent) {
-      const previousAttempt = typeof existingServices.stripePaymentAttempt === "number"
-        ? existingServices.stripePaymentAttempt
-        : 0;
-      const paymentAttempt = previousAttempt + 1;
-      let created;
-      try {
-        created = await stripe.paymentIntents.create(intentParams, {
-          idempotencyKey: `proposal:${engagementId}:${checkout.selectionHash}:${paymentAttempt}`,
-        });
-      } catch (destinationError) {
-        // A stale/mismatched Connect account must not prevent the lead from
-        // paying. Retry on the platform account while retaining payment
-        // metadata so the engagement can still be reconciled.
-        if (!connectedAccountId) throw destinationError;
-        console.error("[payment-intent] Connected-account charge failed; retrying on platform:", destinationError);
-        const platformParams = destinationPaymentIntentParams({
-          amountInCents,
-          engagementId,
-          brandId: engagement.brandId,
-          connectedAccountId: null,
-          receiptEmail: invoiceEmail,
-        });
-        created = await stripe.paymentIntents.create(
-          {
-            ...platformParams,
-            metadata: { ...platformParams.metadata, chargeKind, paymentRouting: "platform-fallback" },
-          },
-          { idempotencyKey: `proposal:${engagementId}:${checkout.selectionHash}:${paymentAttempt}:platform` },
-        );
-      }
-      clientSecret = created.client_secret;
-      const proposalBuilderState = {
-        ...existingState,
-        services: { ...existingServices, stripePaymentIntentId: created.id, stripePaymentAttempt: paymentAttempt },
-        version: 1,
-        updatedAt: new Date().toISOString(),
-      };
-      await prisma.engagement.update({
-        where: { id: engagementId },
-        data: { onboardingData: { ...onboardingData, proposalBuilderState } as Prisma.InputJsonValue },
-      });
+    if (plan.kind === "reuse-as-is") {
+      const existing = await stripe.paymentIntents.retrieve(plan.intentId);
+      return NextResponse.json({ clientSecret: existing.client_secret, amountDueNow: chargeAmount, chargeKind });
     }
+
+    if (plan.kind === "already-paid") {
+      return NextResponse.json({ alreadyResolved: true });
+    }
+
+    if (plan.kind === "cancel-and-create") {
+      try {
+        await stripe.paymentIntents.cancel(plan.cancelIntentId);
+      } catch (cancelError) {
+        // Log but don't fail — the intent may already be in a terminal state
+        // Stripe won't accept a cancel for; a fresh intent is still the safe
+        // action so the destination is correct going forward.
+        console.warn("[payment-intent] Cancel of stale intent failed:", cancelError);
+      }
+    }
+
+    const previousAttempt = typeof existingServices.stripePaymentAttempt === "number"
+      ? existingServices.stripePaymentAttempt
+      : 0;
+    const paymentAttempt = previousAttempt + 1;
+    const created = await stripe.paymentIntents.create(intentParams, {
+      idempotencyKey: `proposal:${engagementId}:${checkout.selectionHash}:${paymentAttempt}`,
+    });
+    const proposalBuilderState = {
+      ...existingState,
+      services: { ...existingServices, stripePaymentIntentId: created.id, stripePaymentAttempt: paymentAttempt },
+      version: 1,
+      updatedAt: new Date().toISOString(),
+    };
+    await prisma.engagement.update({
+      where: { id: engagementId },
+      data: { onboardingData: { ...onboardingData, proposalBuilderState } as Prisma.InputJsonValue },
+    });
+    return NextResponse.json({ clientSecret: created.client_secret, amountDueNow: chargeAmount, chargeKind });
   } catch (error) {
     console.error("[payment-intent] Failed to create/update PaymentIntent:", error);
     return NextResponse.json({ error: "We couldn't start the payment form. Please try again shortly." }, { status: 500 });
   }
-
-  return NextResponse.json({ clientSecret, amountDueNow: chargeAmount, chargeKind });
 }
