@@ -247,7 +247,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                     : {};
                 const kind = snapshot.kind ?? quote.kind;
                 const itemBucket = bucketForStatus(quote.status);
-                const canResume = itemBucket === "draft";
+                const isDraft = itemBucket === "draft";
                 const editHref = resumeOfferHref({ id: quote.id, kind, snapshot });
                 const publishedProposalHref = quote.publicToken
                   ? `/proposal/${quote.publicToken}?staffPreview=1`
@@ -336,12 +336,14 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex flex-wrap items-center justify-end gap-2">
-                        <Link
-                          href={canResume ? editHref : publishedProposalHref ?? `/offers/${quote.id}`}
-                          className="ui-action-primary inline-flex h-9 items-center justify-center rounded-full border px-3 text-base font-semibold leading-none transition"
-                        >
-                          {canResume ? "Resume" : publishedProposalHref ? "View" : "Details"}
-                        </Link>
+                        {!isDraft ? (
+                          <Link
+                            href={publishedProposalHref ?? `/offers/${quote.id}`}
+                            className="ui-action-primary inline-flex h-9 items-center justify-center rounded-full border px-3 text-base font-semibold leading-none transition"
+                          >
+                            {publishedProposalHref ? "View" : "Details"}
+                          </Link>
+                        ) : null}
                         <OfferEditButton
                           href={editHref}
                           offerId={quote.id}
