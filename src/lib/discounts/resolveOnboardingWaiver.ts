@@ -12,6 +12,7 @@ export async function resolveOnboardingWaiverForEngagement(engagementId: string)
       firstViewedAt: true,
       publishedSnapshotJson: true,
       snapshotJson: true,
+      id: true,
     },
   });
   if (!quote) return false;
@@ -36,6 +37,7 @@ export async function resolveOnboardingWaiverForEngagement(engagementId: string)
       OR: [
         { contactId: null },
         ...(primaryContactId ? [{ contactId: primaryContactId }] : []),
+        { offerAssignments: { some: { quoteId: quote.id, brandId: quote.brandId } } },
       ],
     },
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],

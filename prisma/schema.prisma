@@ -561,6 +561,7 @@ model Brand {
   media                  BrandMedia[]
   mediaFolders           BrandMediaFolder[]
   discounts              BrandDiscount[]
+  brandDiscountQuotes    BrandDiscountQuote[]
   crmContacts            Contact[]              @relation("CrmBrandContacts")
   contactTags            ContactTag[]
   contactTagAutomations  ContactTagAutomation[]
@@ -769,11 +770,27 @@ model BrandDiscount {
   sortOrder    Int       @default(0)
   brand        Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
   contact      Contact?  @relation("BrandDiscountContact", fields: [contactId], references: [id], onDelete: SetNull)
+  offerAssignments BrandDiscountQuote[]
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
   @@index([brandId, active, sortOrder])
   @@index([contactId])
+}
+
+model BrandDiscountQuote {
+  brandId    String
+  discountId String
+  quoteId    String
+  assignedAt DateTime @default(now())
+  brand      Brand         @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  discount   BrandDiscount @relation(fields: [discountId], references: [id], onDelete: Cascade)
+  quote      Quote         @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@id([discountId, quoteId])
+  @@index([brandId, quoteId])
+  @@index([brandId, discountId])
+  @@map("brand_discount_quotes")
 }
 
 // ─── Member profile data ─────────────────────────────────────────────────────
@@ -2398,6 +2415,7 @@ model QuoteClient {
 model Quote {
   id                    String          @id @default(cuid())
   brandId               String
+  offerCode             String          @unique @default(cuid())
   slug                  String          @unique
   clientId              String
   kind                  String          @default("bookkeeping")
@@ -2422,6 +2440,7 @@ model Quote {
   lineItems             QuoteLineItem[]
   revisions             QuoteRevision[]
   engagement            Engagement?     @relation(fields: [engagementId], references: [id], onDelete: SetNull)
+  discountAssignments   BrandDiscountQuote[]
 
   @@index([brandId, clientId, status])
   @@index([brandId, publishedAt])

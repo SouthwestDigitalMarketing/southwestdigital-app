@@ -27,6 +27,7 @@ function parseDiscountInput(formData: FormData) {
     : null;
   const contactIdRaw = clean(formData.get("contactId"));
   const contactId = contactIdRaw || null;
+  const offerIds = [...new Set(formData.getAll("offerIds").filter((value): value is string => typeof value === "string" && value.trim().length > 0).map((value) => value.trim()))];
 
   if (!name) throw new Error("Name is required.");
   if (!isDiscountKind(kind)) throw new Error("Choose a valid benefit type.");
@@ -46,6 +47,7 @@ function parseDiscountInput(formData: FormData) {
     durationDays,
     deadlineDate,
     contactId,
+    offerIds,
   };
 }
 
@@ -58,23 +60,39 @@ async function validateContactBelongsToBrand(contactId: string | null, brandId: 
   if (!contact) throw new Error("That contact was not found for this brand.");
 }
 
+async function validateOffersBelongToBrand(offerIds: string[], brandId: string) {
+  if (offerIds.length === 0) return;
+  const count = await prisma.quote.count({ where: { id: { in: offerIds }, brandId } });
+  if (count !== offerIds.length) throw new Error("One or more selected offers was not found for this brand.");
+}
+
+async function syncDiscountOffers(discountId: string, brandId: string, offerIds: string[]) {
+  await prisma.$transaction([
+    prisma.brandDiscountQuote.deleteMany({ where: { discountId, brandId } }),
+    prisma.brandDiscountQuote.createMany({ data: offerIds.map((quoteId) => ({ brandId, discountId, quoteId })) }),
+  ]);
+}
+
 export async function createBrandDiscountAction(formData: FormData) {
   const { brand } = await requireStaffBrandOrThrow();
   const data = parseDiscountInput(formData);
+  const { offerIds, ...discountData } = data;
   await validateContactBelongsToBrand(data.contactId, brand.id);
+  await validateOffersBelongToBrand(offerIds, brand.id);
   const maxOrder = await prisma.brandDiscount.aggregate({
     where: { brandId: brand.id },
     _max: { sortOrder: true },
   });
 
-  await prisma.brandDiscount.create({
+  const created = await prisma.brandDiscount.create({
     data: {
       brandId: brand.id,
       sortOrder: (maxOrder._max.sortOrder ?? -1) + 1,
       presentedAt: data.activationMode === "immediate" ? new Date() : null,
-      ...data,
+      ...discountData,
     },
   });
+  await syncDiscountOffers(created.id, brand.id, offerIds);
 
   revalidatePath("/discounts");
   revalidatePath("/offers/intro");
@@ -83,7 +101,9 @@ export async function createBrandDiscountAction(formData: FormData) {
 export async function updateBrandDiscountAction(id: string, formData: FormData) {
   const { brand } = await requireStaffBrandOrThrow();
   const data = parseDiscountInput(formData);
+  const { offerIds, ...discountData } = data;
   await validateContactBelongsToBrand(data.contactId, brand.id);
+  await validateOffersBelongToBrand(offerIds, brand.id);
   const existing = await prisma.brandDiscount.findFirst({
     where: { id, brandId: brand.id },
     select: { activationMode: true, presentedAt: true },
@@ -96,10 +116,11 @@ export async function updateBrandDiscountAction(id: string, formData: FormData) 
   await prisma.brandDiscount.updateMany({
     where: { id, brandId: brand.id },
     data: {
-      ...data,
+      ...discountData,
       presentedAt: turningOff ? null : turningOn ? new Date() : existing.presentedAt,
     },
   });
+  await syncDiscountOffers(id, brand.id, offerIds);
 
   revalidatePath("/discounts");
   revalidatePath("/offers/intro");

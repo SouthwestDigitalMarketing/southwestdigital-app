@@ -32,6 +32,7 @@ export default async function PublicProposalPage({
       publishedAt: true,
       firstViewedAt: true,
       status: true,
+      offerCode: true,
       engagementId: true,
     },
   });
@@ -77,6 +78,7 @@ export default async function PublicProposalPage({
   }
 
   const primaryContactId = quoteContactSummaryFromSnapshot(snapshot).contactId;
+  const quoteId = quote?.id ?? "";
   const [discounts, engagement] = await Promise.all([
     suppressPromotions
       ? Promise.resolve([])
@@ -87,6 +89,7 @@ export default async function PublicProposalPage({
             OR: [
               { contactId: null },
               ...(primaryContactId ? [{ contactId: primaryContactId }] : []),
+              ...(quoteId ? [{ offerAssignments: { some: { quoteId, brandId: brand.id } } }] : []),
             ],
           },
           orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],

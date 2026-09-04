@@ -189,6 +189,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
           <table className="w-full text-base">
             <thead>
               <tr className="bg-slate-50 text-left">
+                <th className="px-5 py-2 text-sm font-semibold normal-case text-slate-700">Offer ID</th>
                 <SortableHeader label="Contact" sortKey="contact" currentSort={sortKey} currentOrder={sortOrder} params={params} />
                 <SortableHeader label="Status" sortKey="status" currentSort={sortKey} currentOrder={sortOrder} params={params} />
                 <SortableHeader label="MRR" sortKey="mrr" currentSort={sortKey} currentOrder={sortOrder} params={params} />
@@ -233,6 +234,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                     key={quote.id}
                     className={`hover:bg-slate-50 ${quote.id === highlightId ? "offer-row-highlight" : ""}`}
                   >
+                    <td className="px-5 py-4 font-mono text-xs text-slate-500">{quote.offerCode}</td>
                     <td className="relative px-5 py-4">
                       {isDuplicate ? (
                         <>

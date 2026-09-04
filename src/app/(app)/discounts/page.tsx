@@ -4,16 +4,25 @@ import { DiscountsCatalog } from "./DiscountsCatalog";
 
 export default async function DiscountsPage() {
   const { brand } = await requireStaffBrand();
-  const [discounts, contacts] = await Promise.all([
+  const [discounts, contacts, offers] = await Promise.all([
     prisma.brandDiscount.findMany({
       where: { brandId: brand.id },
       orderBy: [{ active: "desc" }, { sortOrder: "asc" }, { createdAt: "desc" }],
-      include: { contact: { select: { id: true, name: true, company: true } } },
+      include: {
+        contact: { select: { id: true, name: true, company: true } },
+        offerAssignments: { select: { quote: { select: { id: true } } } },
+      },
     }),
     prisma.contact.findMany({
       where: { brandId: brand.id, isActive: true },
       orderBy: [{ name: "asc" }],
       select: { id: true, name: true, company: true },
+    }),
+    prisma.quote.findMany({
+      where: { brandId: brand.id },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      select: { id: true, offerCode: true, client: { select: { name: true } } },
     }),
   ]);
 
@@ -46,7 +55,9 @@ export default async function DiscountsPage() {
               active: discount.active,
               contactId: discount.contactId,
               contactName: discount.contact?.name ?? null,
+              offerIds: discount.offerAssignments.map((assignment) => assignment.quote.id),
             }))}
+            offers={offers.map((offer) => ({ id: offer.id, offerCode: offer.offerCode, clientName: offer.client.name }))}
           />
         </div>
       </section>

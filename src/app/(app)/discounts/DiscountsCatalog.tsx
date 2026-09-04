@@ -33,6 +33,7 @@ export type DiscountRow = {
   active: boolean;
   contactId: string | null;
   contactName: string | null;
+  offerIds: string[];
 };
 
 export type ContactOption = {
@@ -41,16 +42,43 @@ export type ContactOption = {
   company: string | null;
 };
 
+export type OfferOption = { id: string; offerCode: string; clientName: string };
+
 const inputClass =
   "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base text-slate-900 outline-none focus:border-brandnavy focus:ring-2 focus:ring-brandnavy/20";
 const labelClass = "block text-base font-semibold text-slate-700";
 
+const DISCOUNT_COPY: Record<DiscountKind, { title: string; details: string }> = {
+  bonus: {
+    title: "Start with us and receive an included bonus",
+    details: "Start in time to receive the bonus described in this offer.",
+  },
+  "percent-off": {
+    title: "Save on your services",
+    details: "Start in time to receive the percentage discount shown in this offer.",
+  },
+  "amount-off": {
+    title: "Receive a discount on your services",
+    details: "Start in time to receive the dollar amount off shown in this offer.",
+  },
+  "onboarding-waiver": {
+    title: "Onboarding fee waived",
+    details: "Start in time and we’ll waive your onboarding fee.",
+  },
+  custom: {
+    title: "A special offer for you",
+    details: "Start in time to receive this special offer.",
+  },
+};
+
 export function DiscountsCatalog({
   discounts,
   contacts,
+  offers,
 }: {
   discounts: DiscountRow[];
   contacts: ContactOption[];
+  offers: OfferOption[];
 }) {
   const router = useRouter();
   const [editingId, setEditingId] = useState<string | "new" | null>(null);
@@ -121,6 +149,7 @@ export function DiscountsCatalog({
             key={discount.id}
             discount={discount}
             contacts={contacts}
+            offers={offers}
             pending={pending}
             onCancel={() => setEditingId(null)}
             onSave={(formData) =>
@@ -142,6 +171,7 @@ export function DiscountsCatalog({
       {editingId === "new" ? (
         <DiscountForm
           contacts={contacts}
+          offers={offers}
           pending={pending}
           onCancel={() => setEditingId(null)}
           onSave={(formData) =>
@@ -233,12 +263,14 @@ function DiscountCard({
 function DiscountForm({
   discount,
   contacts,
+  offers,
   pending,
   onSave,
   onCancel,
 }: {
   discount?: DiscountRow;
   contacts: ContactOption[];
+  offers: OfferOption[];
   pending: boolean;
   onSave: (formData: FormData) => void;
   onCancel: () => void;
@@ -250,6 +282,9 @@ function DiscountForm({
   );
   const [scope, setScope] = useState<"any" | "contact">(discount?.contactId ? "contact" : "any");
   const [contactId, setContactId] = useState<string>(discount?.contactId ?? "");
+  const [selectedOfferIds, setSelectedOfferIds] = useState<string[]>(discount?.offerIds ?? []);
+  const [title, setTitle] = useState(discount?.title || DISCOUNT_COPY[kind].title);
+  const [details, setDetails] = useState(discount?.details || DISCOUNT_COPY[kind].details);
 
   return (
     <form
@@ -314,13 +349,32 @@ function DiscountForm({
       </div>
       <input type="hidden" name="contactId" value={scope === "contact" ? contactId : ""} />
 
+      <fieldset className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+        <legend className="px-1 text-base font-semibold text-slate-700">Apply to specific offers <span className="font-normal text-slate-400">(optional)</span></legend>
+        <p className="mt-1 text-sm text-slate-500">Select one or more offers. Leave empty to use the contact/global scope above.</p>
+        <div className="mt-3 max-h-48 space-y-2 overflow-y-auto">
+          {offers.map((offer) => (
+            <label key={offer.id} className="flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" name="offerIds" value={offer.id} checked={selectedOfferIds.includes(offer.id)} onChange={(event) => setSelectedOfferIds((current) => event.target.checked ? [...current, offer.id] : current.filter((id) => id !== offer.id))} className="h-4 w-4 rounded border-slate-300" />
+              <span className="font-mono text-xs text-slate-500">{offer.offerCode}</span>
+              <span>{offer.clientName || "Unnamed client"}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
       <div className="grid gap-4 md:grid-cols-2">
         <label className={labelClass}>
           Type of benefit
           <select
             name="kind"
             value={kind}
-            onChange={(event) => setKind(event.target.value as DiscountKind)}
+            onChange={(event) => {
+              const nextKind = event.target.value as DiscountKind;
+              setKind(nextKind);
+              setTitle(DISCOUNT_COPY[nextKind].title);
+              setDetails(DISCOUNT_COPY[nextKind].details);
+            }}
             className={inputClass}
           >
             {DISCOUNT_KINDS.map((option) => (
@@ -425,8 +479,9 @@ function DiscountForm({
         <span className="ml-2 font-normal text-slate-400">shown to the lead</span>
         <input
           name="title"
-          defaultValue={discount?.title ?? ""}
-          placeholder="e.g. First monthly close included"
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          placeholder={DISCOUNT_COPY[kind].title}
           className={inputClass}
         />
       </label>
@@ -436,8 +491,9 @@ function DiscountForm({
         <textarea
           name="details"
           rows={3}
-          defaultValue={discount?.details ?? ""}
-          placeholder="Be specific. Name the extra, discount, or waived fee."
+          value={details}
+          onChange={(event) => setDetails(event.target.value)}
+          placeholder={DISCOUNT_COPY[kind].details}
           className={`${inputClass} min-h-[84px] resize-y`}
         />
       </label>
