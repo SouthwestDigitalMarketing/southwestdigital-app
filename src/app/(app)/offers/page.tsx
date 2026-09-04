@@ -263,7 +263,13 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                     key={quote.id}
                     className={`hover:bg-slate-50 ${quote.id === highlightId ? "offer-row-highlight" : ""}`}
                   >
-                    <td className="px-5 py-4 font-mono text-xs text-slate-500">{quote.offerCode}</td>
+                    <td
+                      className="px-5 py-4 font-mono text-xs text-slate-500"
+                      title={quote.offerCode}
+                      aria-label={`Offer ID ${quote.offerCode}`}
+                    >
+                      ...{quote.offerCode.slice(-4)}
+                    </td>
                     <td className="px-5 py-4 text-xs">
                       <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-medium text-slate-600">
                         {OFFER_KINDS.find((k) => k.key === kind)?.name ?? kind}
