@@ -35,8 +35,45 @@ PLATFORM_BASE_URL=https://<your-domain>
 INTEGRATION_ENCRYPTION_KEY=<32+ random chars>
 ```
 
-- `PLATFORM_BASE_URL` locks the OAuth callback origin — safe when the app runs behind Netlify's reverse proxy.
+- `PLATFORM_BASE_URL` locks the OAuth callback origin — safe when the app runs behind a reverse proxy (Vercel or Netlify).
 - `INTEGRATION_ENCRYPTION_KEY` gives token encryption its own key instead of deriving from `AUTH_SECRET`. Rotate this separately from session signing.
+
+## 2b. Production setup (Vercel)
+
+Do this **once**, in addition to the local setup above. Create a **separate** Zoho OAuth app for production — don't share credentials between local and prod.
+
+1. **Register the prod OAuth app in the Zoho API Console** (<https://api-console.zoho.com/>):
+   - Client Name: `SWapp prod` (or similar — distinct from your local app).
+   - Homepage URL: `https://<your-vercel-domain>` (use the domain you send clients to — a custom domain if attached, otherwise the `.vercel.app` URL).
+   - Authorized Redirect URIs: `https://<your-vercel-domain>/api/email-connections/zoho/callback` (exact match, no trailing slash).
+   - Copy the new Client ID + Client Secret.
+
+2. **Add env vars in Vercel** — via the dashboard (Project → Settings → Environment Variables) or CLI if installed (`npm i -g vercel`):
+
+   ```
+   ZOHO_MAIL_CLIENT_ID=<prod client id>
+   ZOHO_MAIL_CLIENT_SECRET=<prod client secret>
+   PLATFORM_BASE_URL=https://<your-vercel-domain>
+   INTEGRATION_ENCRYPTION_KEY=<32+ random chars>       # generate once, keep stable
+   ```
+
+   Set each variable's scope to at least **Production**. Add **Preview** too if you want preview deployments to be able to test Zoho (requires adding the preview URL to the Zoho redirect URIs too, which is fussy — usually simpler to skip Preview).
+
+   CLI equivalent:
+   ```bash
+   vercel env add ZOHO_MAIL_CLIENT_ID production
+   vercel env add ZOHO_MAIL_CLIENT_SECRET production
+   vercel env add PLATFORM_BASE_URL production
+   vercel env add INTEGRATION_ENCRYPTION_KEY production
+   ```
+
+3. **Redeploy production** — env-var changes only apply to *new* deployments. Either push a commit or trigger a manual redeploy from the Vercel dashboard.
+
+4. **Connect a mailbox on production** — sign in to the production app, go to Settings → Email connections, and connect. First-time consent to a fresh OAuth app is normal.
+
+**Do not** re-use the local `ZOHO_MAIL_CLIENT_ID` in prod. If credentials ever leak, you can revoke one environment without breaking the other, and the consent screen shows the right app name.
+
+**Do not** rotate `INTEGRATION_ENCRYPTION_KEY` after users have connected mailboxes — you'd invalidate every stored refresh token and everyone would have to reconnect. Pick it once, keep it stable, and only rotate under a planned migration.
 
 ## 3. Connect your first mailbox
 

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Copy, ExternalLink, MessageSquare } from "lucide-react";
+import Link from "next/link";
+import { Check, Copy, ExternalLink, MessageSquare, Send } from "lucide-react";
 import ProposalAppDemoHeader from "./ProposalAppDemoHeader";
 import {
   formatPersonName,
@@ -26,6 +27,16 @@ export default function ProposalCoverLetterDemo() {
   const { contactInfo } = useProposalContactInfoDemoState();
   const [copied, setCopied] = useState(false);
   const [publicPath, setPublicPath] = useState("");
+  const [offerId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return new URLSearchParams(window.location.search).get("offer");
+  });
+  const [sendState, setSendState] = useState<
+    | { kind: "idle" }
+    | { kind: "sending" }
+    | { kind: "sent"; from: string }
+    | { kind: "error"; message: string; code?: string }
+  >({ kind: "idle" });
 
   const resolvedPrimaryContact = resolvePrimaryContact(contactInfo);
   const fallbackOwner = contactInfo.owners[0];
@@ -103,12 +114,11 @@ ${effectiveEmailBody}`;
   }, [copied]);
 
   useEffect(() => {
-    const offerId = new URLSearchParams(window.location.search).get("offer");
     if (!offerId) return;
     void getOfferPublicPathAction(offerId).then((path) => {
       setPublicPath(path ?? "");
     });
-  }, []);
+  }, [offerId]);
 
   async function handleCopy() {
     try {
@@ -118,6 +128,40 @@ ${effectiveEmailBody}`;
       // Clipboard access can fail in an insecure browser context.
     }
   }
+
+  async function handleSend() {
+    if (!recipientEmail || !proposalUrl) return;
+    setSendState({ kind: "sending" });
+    try {
+      const response = await fetch("/api/email/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: recipientEmail,
+          subject: effectiveEmailSubject,
+          body: effectiveEmailBody,
+          offerId,
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as { error?: string; code?: string; from?: string };
+      if (response.ok) {
+        setSendState({ kind: "sent", from: data.from ?? "" });
+      } else {
+        setSendState({
+          kind: "error",
+          message: data.error ?? "Send failed",
+          code: data.code,
+        });
+      }
+    } catch (error) {
+      setSendState({
+        kind: "error",
+        message: error instanceof Error ? error.message : "Network error",
+      });
+    }
+  }
+
+  const canSend = Boolean(recipientEmail) && Boolean(proposalUrl) && sendState.kind !== "sending";
 
   return (
     <main className="min-h-screen">
@@ -176,15 +220,48 @@ ${effectiveEmailBody}`;
               <textarea readOnly rows={17} value={effectiveEmailBody} className={`${INPUT_CLASS_NAME} leading-6`} />
             </label>
 
-            <button
-              type="button"
-              onClick={() => void handleCopy()}
-              disabled={!proposalUrl}
-              className="ui-action-primary inline-flex h-11 items-center gap-2 rounded-xl px-4 text-sm font-semibold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              {copied ? "Copied!" : "Copy Email"}
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => void handleSend()}
+                disabled={!canSend}
+                className="ui-action-primary inline-flex h-11 items-center gap-2 rounded-xl px-4 text-sm font-semibold shadow-sm transition disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Send className="h-4 w-4" />
+                {sendState.kind === "sending" ? "Sending…" : "Send from your mailbox"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleCopy()}
+                disabled={!proposalUrl}
+                className="ui-action-ghost inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {copied ? "Copied!" : "Copy email"}
+              </button>
+            </div>
+
+            {sendState.kind === "sent" ? (
+              <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                Sent {sendState.from ? `from ${sendState.from}` : ""}. Check your Sent folder to confirm.
+              </p>
+            ) : null}
+
+            {sendState.kind === "error" && sendState.code === "not-connected" ? (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                Connect your mailbox in{" "}
+                <Link href="/settings" className="font-semibold underline">
+                  Settings → Email connections
+                </Link>{" "}
+                so you can send from the app. In the meantime you can Copy email and paste it into your mail client.
+              </p>
+            ) : null}
+
+            {sendState.kind === "error" && sendState.code !== "not-connected" ? (
+              <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                {sendState.message}
+              </p>
+            ) : null}
           </section>
 
           <section className="theme-white space-y-5 rounded-2xl border border-slate-200 p-6 shadow-sm lg:p-8">

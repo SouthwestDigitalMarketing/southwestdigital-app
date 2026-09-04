@@ -6,6 +6,11 @@ import { createHash, randomBytes } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
 import { DEFAULT_BOOKKEEPING_AGREEMENT_TEMPLATE } from "@/lib/agreements/template";
+import {
+  EmailConnectionMissingError,
+  EmailConnectionRegionInvalidError,
+  sendFromMembership,
+} from "@/lib/emailConnections/send";
 
 type AgreementTemplateInput = {
   name: string;
@@ -53,7 +58,8 @@ export async function voidAgreementAction(id: string) {
 }
 
 export async function requestAgreementCancellationAction(id: string, reason: string) {
-  const { brand, session } = await requireStaffBrandOrThrow();
+  const { brand, session, membership } = await requireStaffBrandOrThrow();
+  if (!membership) throw new Error("Only brand members can request cancellation.");
   const cleanedReason = reason.trim();
   if (cleanedReason.length > 1_000) throw new Error("Cancellation reason must be 1,000 characters or fewer.");
   const cancellationToken = randomBytes(32).toString("base64url");
@@ -65,6 +71,11 @@ export async function requestAgreementCancellationAction(id: string, reason: str
   });
   const email = recipient?.billingContactEmail ?? recipient?.primaryContactEmail;
   if (!recipient || !email) throw new Error("This agreement does not have a signer email address.");
+  const baseUrl = (process.env.PLATFORM_BASE_URL ?? "").replace(/\/$/, "");
+  if (!baseUrl) {
+    throw new Error("PLATFORM_BASE_URL is not configured — cancellation link cannot be generated.");
+  }
+
   const result = await prisma.engagement.updateMany({
     where: { ...agreementRecordWhere(id, brand.id), signedAt: { not: null }, agreementManagerStatus: { in: ["ACTIVE", "CANCELLATION_REQUESTED"] } },
     data: {
@@ -77,25 +88,29 @@ export async function requestAgreementCancellationAction(id: string, reason: str
     },
   });
   if (result.count === 0) throw new Error("Only signed active agreements can have cancellation requested.");
-  const baseUrl = (process.env.PLATFORM_BASE_URL ?? "").replace(/\/$/, "");
-  if (!baseUrl || !process.env.AUTH_RESEND_KEY || !process.env.AUTH_EMAIL_FROM) {
-    throw new Error("Email delivery is not configured for cancellation notices.");
-  }
+
   const link = `${baseUrl}/agreement-cancellation/${cancellationToken}`;
   const safeClientName = recipient.clientName.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
   const safeReason = cleanedReason.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${process.env.AUTH_RESEND_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      from: process.env.AUTH_EMAIL_FROM,
+  const subject = "Action required: agreement cancellation request";
+  const textBody = `A cancellation request has been made for ${recipient.clientName}. Review and acknowledge it here: ${link}`;
+  const htmlBody = `<p>Hello ${recipient.signerName ?? "there"},</p><p>A cancellation request has been made for the signed agreement for <strong>${safeClientName}</strong>.</p>${safeReason ? `<p>Reason: ${safeReason}</p>` : ""}<p><a href="${link}">Review and acknowledge the cancellation request</a></p><p>This link expires in 30 days.</p>`;
+
+  try {
+    await sendFromMembership({
+      membershipId: membership.id,
+      brandId: brand.id,
       to: email,
-      subject: "Action required: agreement cancellation request",
-      text: `A cancellation request has been made for ${recipient.clientName}. Review and acknowledge it here: ${link}`,
-      html: `<p>Hello ${recipient.signerName ?? "there"},</p><p>A cancellation request has been made for the signed agreement for <strong>${safeClientName}</strong>.</p>${safeReason ? `<p>Reason: ${safeReason}</p>` : ""}<p><a href="${link}">Review and acknowledge the cancellation request</a></p><p>This link expires in 30 days.</p>`,
-    }),
-  });
-  if (!response.ok) throw new Error("Cancellation request was recorded, but the notification email could not be sent.");
+      subject,
+      bodyText: textBody,
+      bodyHtml: htmlBody,
+    });
+  } catch (error) {
+    if (error instanceof EmailConnectionMissingError || error instanceof EmailConnectionRegionInvalidError) {
+      throw new Error(`${error.message} Cancellation was recorded but no email was sent.`);
+    }
+    throw new Error("Cancellation request was recorded, but the notification email could not be sent.");
+  }
   revalidateAgreementPaths();
 }
 
