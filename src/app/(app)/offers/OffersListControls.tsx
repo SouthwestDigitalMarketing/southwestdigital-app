@@ -81,12 +81,23 @@ export function OffersListControls({
           </button>
           <span className={archived ? "text-slate-900" : "text-slate-400"}>Archived</span>
         </div>
-        <Link
-          href={whoHref("bookkeeping", contactId)}
-          className="ui-action-primary ml-auto inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-full border px-4 py-2 text-base font-semibold transition"
-        >
-          Create offer
-        </Link>
+        <details className="relative ml-auto">
+          <summary className="ui-action-primary inline-flex min-h-10 cursor-pointer list-none items-center justify-center whitespace-nowrap rounded-full border px-4 py-2 text-base font-semibold transition [&::-webkit-details-marker]:hidden">
+            Create offer
+          </summary>
+          <div className="absolute right-0 z-20 mt-1 min-w-64 rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+            {OFFER_KINDS.map((kind) => (
+              <Link
+                key={kind.key}
+                href={whoHref(kind.key, contactId)}
+                className="block rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
+              >
+                <span className="block font-semibold">{kind.name}</span>
+                <span className="block text-xs text-slate-500">{kind.summary}</span>
+              </Link>
+            ))}
+          </div>
+        </details>
       </div>
     </div>
   );

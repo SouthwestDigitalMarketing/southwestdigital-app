@@ -4,7 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { requireQuoteStaff } from "@/lib/quotes/access";
 import { prisma } from "@/lib/prisma";
 import { formatUsd } from "@/lib/quotes/format";
-import { isOfferKindKey, resumeOfferHref } from "@/lib/quotes/kinds";
+import { isOfferKindKey, OFFER_KINDS, resumeOfferHref } from "@/lib/quotes/kinds";
 import { quoteContactSummaryFromSnapshot } from "@/lib/quotes/clientInfo";
 import {
   bucketForStatus,
@@ -190,6 +190,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
             <thead>
               <tr className="bg-slate-50 text-left">
                 <th className="px-5 py-2 text-sm font-semibold normal-case text-slate-700">Offer ID</th>
+                <th className="px-5 py-2 text-sm font-semibold normal-case text-slate-700">Type</th>
                 <SortableHeader label="Contact" sortKey="contact" currentSort={sortKey} currentOrder={sortOrder} params={params} />
                 <SortableHeader label="Status" sortKey="status" currentSort={sortKey} currentOrder={sortOrder} params={params} />
                 <SortableHeader label="MRR" sortKey="mrr" currentSort={sortKey} currentOrder={sortOrder} params={params} />
@@ -237,6 +238,11 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                     className={`hover:bg-slate-50 ${quote.id === highlightId ? "offer-row-highlight" : ""}`}
                   >
                     <td className="px-5 py-4 font-mono text-xs text-slate-500">{quote.offerCode}</td>
+                    <td className="px-5 py-4 text-xs">
+                      <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-medium text-slate-600">
+                        {OFFER_KINDS.find((k) => k.key === kind)?.name ?? kind}
+                      </span>
+                    </td>
                     <td className="relative px-5 py-4">
                       {isDuplicate || isTestProposal ? (
                         <>
