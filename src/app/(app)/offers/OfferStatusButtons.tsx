@@ -52,7 +52,9 @@ export function OfferStatusButtons({
   }
 
   const iconBtn =
-    "ui-action-ghost inline-flex h-9 w-9 items-center justify-center rounded-full transition disabled:opacity-50";
+    "ui-action-secondary inline-flex h-9 w-9 items-center justify-center rounded-full border transition disabled:opacity-50";
+  const inactiveIconBtn =
+    "inline-flex h-9 w-9 cursor-not-allowed items-center justify-center rounded-full border border-slate-200 bg-transparent text-slate-300";
   const canResend = bucket === "sent" || bucket === "completed";
 
   return (
@@ -61,7 +63,7 @@ export function OfferStatusButtons({
         type="button"
         disabled={pending || !canResend}
         onClick={resend}
-        className={iconBtn}
+        className={canResend ? iconBtn : inactiveIconBtn}
         aria-label="Resend offer"
         title="Resend offer"
       >
@@ -71,7 +73,7 @@ export function OfferStatusButtons({
         type="button"
         disabled={pending}
         onClick={requestDelete}
-        className="ui-action-ghost inline-flex h-9 w-9 items-center justify-center rounded-full text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
+        className={iconBtn}
         aria-label="Delete offer permanently"
         title="Delete offer permanently"
       >

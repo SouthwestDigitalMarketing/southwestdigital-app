@@ -74,7 +74,7 @@ export function DuplicateOfferButton({
           setTestProposal(false);
           setError(null);
         }}
-        className="ui-action-ghost inline-flex h-9 w-9 items-center justify-center rounded-full transition disabled:opacity-40"
+        className="ui-action-secondary inline-flex h-9 w-9 items-center justify-center rounded-full border transition disabled:opacity-40"
       >
         <Copy className="h-4 w-4" />
       </button>

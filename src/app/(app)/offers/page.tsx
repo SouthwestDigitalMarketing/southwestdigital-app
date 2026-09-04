@@ -338,7 +338,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                             rel="noreferrer noopener"
                             aria-label="View proposal"
                             title="View proposal"
-                            className="ui-action-ghost inline-flex h-9 w-9 items-center justify-center rounded-full transition"
+                            className="ui-action-secondary inline-flex h-9 w-9 items-center justify-center rounded-full border transition"
                           >
                             <Eye className="h-4 w-4" />
                           </Link>
