@@ -61,7 +61,7 @@ Key files: `src/lib/emailConnections/{providers,zohoOAuth,zohoMail,repository,se
 - Agreement cancellation notification (`requestAgreementCancellationAction`): sends via connected Zoho instead of Resend. `AUTH_RESEND_KEY` is no longer required for this flow.
 - Docs `docs/email-connections/zoho-setup.md` gained §2b Vercel production setup section.
 
-### 4) Product Type refactor — IN PROGRESS
+### 4) Product Type refactor — DONE for the core plan (all 9 phases landed locally)
 
 **Goal:** make product type a first-class dimension so the app can offer Consulting (one-off hourly) and Coaching (session pack) alongside the current Bookkeeping proposal shape. Everything downstream — signing, Stripe Connect + destination charges, receipts, cancellation — is reused. Only the offer builder, proposal preview, and pricing calculation branch by type.
 
@@ -76,17 +76,25 @@ Full plan lives below in **"Product Type refactor plan"** section. Progress mark
 - Hourly builder v1: one primary service with quantity + optional intake fee (no multi-line).
 
 **Phases (see plan below for detail):**
-- Phase 1: Schema + backfill + Prisma types
-- Phase 2: Catalog `productType` + seed hourly services
-- Phase 3: Product-type chooser + `/offers` list Type column
-- Phase 6 (moved earlier): `resolveAmountDueNow` per-type + tests
-- Phase 4: Hourly builder
-- Phase 5: Hourly proposal preview + public dispatch
-- Phase 8: `AgreementTemplate.defaultForProductType` + preselect
-- Phase 7: Email templates per type
-- Phase 9: Docs + verification
+- Phase 1: Schema + backfill + Prisma types — **DONE, committed `6f26d15`.**
+- Phase 2: Catalog `productKind` + seed hourly services — **DONE, committed `b0a8ddb`.**
+- Phase 3: Product-type chooser + `/offers` list Type column — **DONE, committed `301e8be`.**
+- Phase 6 (moved earlier): `resolveAmountDueNow` per-kind + tests — **DONE, committed `5e0438d`.**
+- Phase 4: Hourly builder — **DONE, committed `58014d3`.**
+- Phase 5: Hourly proposal preview + public dispatch — **DONE, committed `8a6011e`.** Note: `HourlyPublicView` shows a Sign & Pay UI that stops at "PaymentIntent ready" — the full Stripe Payment Element render for hourly is a follow-up (Phase 5.5). PaymentIntent creation, Connect-safety, tests, sign, agreement text are all wired.
+- Phase 8: `AgreementTemplate.defaultForProductKind` + preselect — **DONE, committed `c397749`.**
+- Phase 7: Email templates per kind — **DONE, committed `296f6bd`.**
+- Phase 9: Docs + verification — **DONE.** `docs/architecture/product-kinds.md` explains the model and how to add a new kind. Typecheck ✅ · 39 test files / 238 tests ✅ · focused eslint ✅.
+
+**Follow-ups not blocking day-to-day use:**
+- `HourlyPublicView` shows a "PaymentIntent ready" placeholder instead of a Stripe Payment Element. The PaymentIntent + Connect-safety + hourly amount resolver are all live; wiring the actual `<Elements>` renderer for hourly is a short follow-up (see the existing bookkeeping `OfferProposalPreview` for the Stripe Elements pattern).
+- Receipt page (`/proposal/[token]/receipt`) still assumes bookkeeping snapshot shape; hourly receipts will show odd blanks until the receipt is made kind-aware.
+- Confirm-payment route doesn't validate destination account before marking paid (open item from Stripe Connect safety phase).
+- PayPal path (`/api/proposal/[engagementId]/paypal/*`) also needs the same hourly-checkout dispatch if you plan to enable PayPal on hourly offers.
 
 Each phase → its own commit. Fresh agents can `git log` since `f9f31e3` to see what's landed.
+
+**Naming clarification:** I switched from `productType` (planned) to `productKind` (built) because `Quote.kind` (String) already existed with two values (`bookkeeping`, `referral-network`). Extending that field's semantics is cleaner than introducing a redundant enum. `OFFER_KINDS` in `src/lib/quotes/kinds.ts` is the canonical list; `isOfferKindKey` validates. Hourly builder is at `/offers/hourly` and reads `?kind=consulting|coaching` from the URL.
 
 ## Product Type refactor plan
 
