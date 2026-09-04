@@ -51,6 +51,9 @@ export default async function PublicProposalPage({
       publishedSnapshotJson: true,
       publishedAt: true,
       firstViewedAt: true,
+      firstSentAt: true,
+      sentAt: true,
+      lastSentAt: true,
       status: true,
       offerCode: true,
       engagementId: true,
@@ -58,9 +61,21 @@ export default async function PublicProposalPage({
   });
   const viewedAt = new Date();
   if (quote && !quote.firstViewedAt && !isAuthorizedStaffPreview) {
+    // Self-heal: a real client view is proof the URL made it out somehow,
+    // so stamp firstSentAt (if not already) and flip status to "sent". This
+    // keeps DB filters (Draft/Sent/Completed) consistent with the derived
+    // lifecycle stage for out-of-band-shared URLs (personal email, text,
+    // Slack, etc.).
     await prisma.quote.updateMany({
       where: { id: quote.id, firstViewedAt: null },
-      data: { firstViewedAt: viewedAt },
+      data: {
+        firstViewedAt: viewedAt,
+        lastActivityAt: viewedAt,
+        firstSentAt: quote.firstSentAt ?? viewedAt,
+        sentAt: quote.sentAt ?? viewedAt,
+        lastSentAt: quote.lastSentAt ?? viewedAt,
+        ...(quote.status === "draft" ? { status: "sent" } : {}),
+      },
     });
   }
   const firstViewedAt = quote?.firstViewedAt ?? (quote ? viewedAt : null);
@@ -183,6 +198,7 @@ export default async function PublicProposalPage({
         proposalToken={token}
         engagementId={engagementId}
         isTestProposal={engagement?.isTestProposal === true}
+        isStaffPreview={isAuthorizedStaffPreview}
         kindLabel={kindMeta?.name ?? snapshotKind}
         clientName={
           (isRecord(snapshot.contactInfo) && typeof (snapshot.contactInfo as Record<string, unknown>).companyName === "string")
@@ -215,6 +231,7 @@ export default async function PublicProposalPage({
       catalogOffer={catalogOffer}
       engagementId={engagementId}
       isTestProposal={engagement?.isTestProposal === true}
+      isStaffPreview={isAuthorizedStaffPreview}
       proposalToken={token}
     />
   );

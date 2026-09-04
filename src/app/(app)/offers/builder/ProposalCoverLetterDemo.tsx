@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { Check, Copy, ExternalLink, MessageSquare, Send } from "lucide-react";
 import ProposalAppDemoHeader from "./ProposalAppDemoHeader";
@@ -11,6 +11,7 @@ import {
 } from "./ProposalContactInfoState";
 import { useBrand } from "@/lib/brands/context";
 import { getOfferKindAction, getOfferPublicPathAction } from "../who/actions";
+import { markQuoteSentAction } from "../actions";
 import { MessageTemplateManager, type MessageTemplate } from "./MessageTemplateManager";
 
 function defaultCopyForKind(kind: string | null, args: { brandName: string; companyName: string; recipientFirstName: string; proposalUrl: string }) {
@@ -33,6 +34,35 @@ function defaultCopyForKind(kind: string | null, args: { brandName: string; comp
   };
 }
 
+type FollowUpKind = "unviewed" | "unsigned" | "unpaid";
+
+// Follow-up copy is intentionally short, warm, and does not repeat the
+// full proposal pitch. Each variant reflects the client's actual state
+// so the message doesn't sound like a canned reminder.
+function followUpCopy(followUp: FollowUpKind, args: { brandName: string; companyName: string; recipientFirstName: string; proposalUrl: string }) {
+  const url = args.proposalUrl || "[Publish changes to generate the proposal link]";
+  if (followUp === "unviewed") {
+    return {
+      subject: `Following up on your ${args.companyName} proposal`,
+      body: `Hi ${args.recipientFirstName},\n\nI wanted to check in on the proposal I sent over. Want to make sure it landed and didn't get buried in your inbox.\n\nHere's the link again:\n${url}\n\nAny questions, just reply to this email.\n\nThank you,\n${args.brandName}`,
+    };
+  }
+  if (followUp === "unsigned") {
+    return {
+      subject: `Any questions on the ${args.companyName} proposal?`,
+      body: `Hi ${args.recipientFirstName},\n\nJust checking in — I noticed you had a chance to look at the proposal but haven't signed yet. Wanted to see if there's anything I can clarify or adjust to make it easier to move forward.\n\nProposal link:\n${url}\n\nHappy to jump on a quick call if that would help.\n\nThank you,\n${args.brandName}`,
+    };
+  }
+  return {
+    subject: `Payment for your ${args.companyName} engagement`,
+    body: `Hi ${args.recipientFirstName},\n\nThanks again for signing the agreement. Just a quick reminder to complete the payment so we can get started on your engagement.\n\nYou can pay here:\n${url}\n\nLet me know if you hit any trouble with the payment link.\n\nThank you,\n${args.brandName}`,
+  };
+}
+
+function isFollowUpKind(value: string | null): value is FollowUpKind {
+  return value === "unviewed" || value === "unsigned" || value === "unpaid";
+}
+
 const INPUT_CLASS_NAME =
   "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm transition focus:border-brandnavy focus:outline-none focus:ring-2 focus:ring-brandnavy/10";
 const FIELD_LABEL_CLASS =
@@ -51,6 +81,11 @@ export default function ProposalCoverLetterDemo() {
     if (typeof window === "undefined") return null;
     return new URLSearchParams(window.location.search).get("offer");
   });
+  const [followUp] = useState<FollowUpKind | null>(() => {
+    if (typeof window === "undefined") return null;
+    const raw = new URLSearchParams(window.location.search).get("followUp");
+    return isFollowUpKind(raw) ? raw : null;
+  });
   const [offerKind, setOfferKind] = useState<string | null>(null);
   const [sendState, setSendState] = useState<
     | { kind: "idle" }
@@ -58,6 +93,12 @@ export default function ProposalCoverLetterDemo() {
     | { kind: "sent"; from: string }
     | { kind: "error"; message: string; code?: string }
   >({ kind: "idle" });
+  const [markSentState, setMarkSentState] = useState<
+    | { kind: "idle" }
+    | { kind: "marked" }
+    | { kind: "error"; message: string }
+  >({ kind: "idle" });
+  const [markSentPending, startMarkSent] = useTransition();
 
   const resolvedPrimaryContact = resolvePrimaryContact(contactInfo);
   const fallbackOwner = contactInfo.owners[0];
@@ -70,12 +111,19 @@ export default function ProposalCoverLetterDemo() {
   const companyName = contactInfo.companyName || "your business";
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const proposalUrl = publicPath ? `${origin}${publicPath}` : "";
-  const kindDefaults = defaultCopyForKind(offerKind, {
-    brandName: brand.name,
-    companyName,
-    recipientFirstName,
-    proposalUrl,
-  });
+  const kindDefaults = followUp
+    ? followUpCopy(followUp, {
+        brandName: brand.name,
+        companyName,
+        recipientFirstName,
+        proposalUrl,
+      })
+    : defaultCopyForKind(offerKind, {
+        brandName: brand.name,
+        companyName,
+        recipientFirstName,
+        proposalUrl,
+      });
   const subject = kindDefaults.subject;
   const defaultEmailBody = kindDefaults.body;
   const [emailBody, setEmailBody] = useState<string | null>(null);
@@ -145,6 +193,32 @@ ${effectiveEmailBody}`;
     } catch {
       // Clipboard access can fail in an insecure browser context.
     }
+  }
+
+  function handleMarkAsSent() {
+    if (!offerId) return;
+    setMarkSentState({ kind: "idle" });
+    startMarkSent(async () => {
+      try {
+        const data = new FormData();
+        data.set("id", offerId);
+        await markQuoteSentAction(data);
+        setMarkSentState({ kind: "marked" });
+      } catch (error) {
+        // markQuoteSentAction ends with a redirect() to /offers/{id}?sent=1.
+        // Next.js signals that as a thrown error with a NEXT_REDIRECT digest;
+        // let it propagate so navigation happens.
+        const digest =
+          error && typeof error === "object" && "digest" in error
+            ? String((error as { digest?: unknown }).digest ?? "")
+            : "";
+        if (digest.startsWith("NEXT_REDIRECT")) throw error;
+        setMarkSentState({
+          kind: "error",
+          message: error instanceof Error ? error.message : "Could not mark as sent",
+        });
+      }
+    });
   }
 
   async function handleSend() {
@@ -217,10 +291,11 @@ ${effectiveEmailBody}`;
                 <input readOnly value={proposalUrl || "Publish changes to generate a client link."} className={INPUT_CLASS_NAME} />
                 {proposalUrl ? (
                   <a
-                    href={proposalUrl}
+                    href={`${proposalUrl}${proposalUrl.includes("?") ? "&" : "?"}staffPreview=1`}
                     target="_blank"
                     rel="noreferrer"
-                    aria-label="Open proposal link"
+                    aria-label="Preview proposal as staff (opens in new tab)"
+                    title="Preview as staff — sign/pay actions are disabled so you can't submit on the client's behalf. The link the client receives is the plain URL shown above."
                     className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-slate-300 text-slate-600 transition hover:bg-slate-50"
                   >
                     <ExternalLink className="h-4 w-4" />
@@ -257,7 +332,27 @@ ${effectiveEmailBody}`;
                 {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                 {copied ? "Copied!" : "Copy email"}
               </button>
+              <button
+                type="button"
+                onClick={handleMarkAsSent}
+                disabled={!offerId || markSentPending}
+                title="Use this only if you already sent the proposal via a channel outside the app (personal email, text, WhatsApp, etc.)."
+                className="ui-action-ghost inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {markSentPending ? "Marking…" : "I sent it another way — mark as sent"}
+              </button>
             </div>
+
+            {markSentState.kind === "marked" ? (
+              <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                Marked as sent.
+              </p>
+            ) : null}
+            {markSentState.kind === "error" ? (
+              <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                {markSentState.message}
+              </p>
+            ) : null}
 
             {sendState.kind === "sent" ? (
               <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">

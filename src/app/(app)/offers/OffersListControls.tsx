@@ -4,9 +4,16 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { X } from "lucide-react";
-import { OFFER_KINDS, whoHref } from "@/lib/quotes/kinds";
+import { BookOpenText, Clock, GraduationCap, Share2, X, type LucideIcon } from "lucide-react";
+import { OFFER_KINDS, whoHref, type OfferKindKey } from "@/lib/quotes/kinds";
 import type { OfferStatusFilter } from "@/lib/quotes/status";
+
+const OFFER_KIND_ICONS: Record<OfferKindKey, LucideIcon> = {
+  bookkeeping: BookOpenText,
+  consulting: Clock,
+  coaching: GraduationCap,
+  "referral-network": Share2,
+};
 
 export function OffersListControls({
   archived,
@@ -146,18 +153,24 @@ export function OffersListControls({
                 </div>
 
                 <div className="mt-5 grid gap-3">
-                  {OFFER_KINDS.map((kind, index) => (
-                    <Link
-                      key={kind.key}
-                      href={whoHref(kind.key, contactId)}
-                      autoFocus={index === 0}
-                      onClick={() => setShowCreateOffer(false)}
-                      className="rounded-xl border border-slate-200 px-4 py-3 text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 focus:border-slate-400 focus:outline-none"
-                    >
-                      <span className="block font-semibold text-slate-900">{kind.name}</span>
-                      <span className="mt-0.5 block text-sm text-slate-500">{kind.summary}</span>
-                    </Link>
-                  ))}
+                  {OFFER_KINDS.map((kind, index) => {
+                    const Icon = OFFER_KIND_ICONS[kind.key];
+                    return (
+                      <Link
+                        key={kind.key}
+                        href={whoHref(kind.key, contactId)}
+                        autoFocus={index === 0}
+                        onClick={() => setShowCreateOffer(false)}
+                        className="theme-dark block rounded-xl border px-4 py-3 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                      >
+                        <span className="flex items-center gap-2 font-semibold">
+                          <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+                          {kind.name}
+                        </span>
+                        <span className="mt-1 block text-sm opacity-80">{kind.summary}</span>
+                      </Link>
+                    );
+                  })}
                 </div>
               </div>
             </div>,

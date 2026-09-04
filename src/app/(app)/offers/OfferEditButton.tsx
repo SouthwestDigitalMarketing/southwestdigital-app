@@ -10,15 +10,15 @@ type OfferEditButtonProps = {
   viewed: boolean;
   signed: boolean;
   paid: boolean;
+  primary?: boolean;
 };
 
-export function OfferEditButton({ href, offerId, viewed, signed, paid }: OfferEditButtonProps) {
+export function OfferEditButton({ href, offerId, viewed, signed, paid, primary = false }: OfferEditButtonProps) {
   const [warningOpen, setWarningOpen] = useState(false);
   const hasProgress = viewed || signed || paid;
   const hasCommittedProgress = signed || paid;
   const dialogTitleId = `edit-offer-warning-title-${offerId}`;
-  const iconButtonClass =
-    "ui-action-secondary relative inline-flex h-9 w-9 items-center justify-center rounded-full border transition";
+  const iconButtonClass = `${primary ? "ui-action-primary" : "ui-action-secondary"} relative inline-flex h-9 w-9 items-center justify-center rounded-full border transition`;
 
   useEffect(() => {
     if (!warningOpen) return;

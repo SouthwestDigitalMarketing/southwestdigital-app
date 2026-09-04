@@ -34,6 +34,7 @@ export async function markQuoteSentAction(formData: FormData) {
       sentAt: now,
       firstSentAt: quote.firstSentAt ?? now,
       lastSentAt: now,
+      lastActivityAt: now,
     },
   });
 
@@ -63,6 +64,8 @@ export async function resendQuoteAction(formData: FormData) {
       sentAt: now,
       firstSentAt: quote.firstSentAt ?? now,
       lastSentAt: now,
+      lastActivityAt: now,
+      lastFollowUpAt: now,
     },
   });
 

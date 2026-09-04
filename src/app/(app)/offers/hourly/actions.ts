@@ -135,6 +135,7 @@ export async function publishHourlyOfferAction(offerId: string, snapshot: Hourly
         publishedSnapshotJson: finalSnapshot,
         publicToken,
         publishedAt,
+        lastActivityAt: publishedAt,
         totalOneTime: new Prisma.Decimal(summary.total),
         totalRecurring: new Prisma.Decimal(0),
         onboardingFee: new Prisma.Decimal(summary.intakeFee),

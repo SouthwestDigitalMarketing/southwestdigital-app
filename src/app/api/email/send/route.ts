@@ -53,6 +53,7 @@ export async function POST(request: Request) {
       });
       if (quote && (quote.status === "draft" || quote.status === "completed" || quote.status === "sent")) {
         const now = new Date();
+        const isFollowUp = Boolean(quote.firstSentAt);
         await prisma.quote.update({
           where: { id: quote.id },
           data: {
@@ -60,6 +61,8 @@ export async function POST(request: Request) {
             sentAt: now,
             firstSentAt: quote.firstSentAt ?? now,
             lastSentAt: now,
+            lastActivityAt: now,
+            ...(isFollowUp ? { lastFollowUpAt: now } : {}),
           },
         });
       }

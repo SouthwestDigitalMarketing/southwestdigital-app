@@ -84,9 +84,14 @@ export async function POST(
       });
 
   if (chargeAmount <= 0) {
+    const waivedAt = new Date();
     await prisma.engagement.update({
       where: { id: engagementId },
       data: { onboardingFeeStatus: "WAIVED", status: "DEPOSIT_PAID" },
+    });
+    await prisma.quote.updateMany({
+      where: { engagementId, brandId: engagement.brandId, status: { not: "archived" } },
+      data: { lastActivityAt: waivedAt },
     });
     return NextResponse.json({ waived: true });
   }

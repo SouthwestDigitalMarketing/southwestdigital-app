@@ -167,7 +167,12 @@ export default function ProposalAppDemoHeader({
     const offerId = searchParams.get("offer");
     const storedPath = offerId ? window.localStorage.getItem(`proposal-public-path:${offerId}`) : null;
     const publicPath = storedPath || (offerId ? await getOfferPublicPathAction(offerId) : null);
-    newTab.location.href = publicPath || scopedHref("/proposal/preview");
+    if (publicPath) {
+      const withPreview = `${publicPath}${publicPath.includes("?") ? "&" : "?"}staffPreview=1`;
+      newTab.location.href = withPreview;
+    } else {
+      newTab.location.href = scopedHref("/proposal/preview");
+    }
   }
 
   return (

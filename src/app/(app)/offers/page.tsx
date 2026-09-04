@@ -1,11 +1,17 @@
 import Link from "next/link";
-import { Copy, Eye } from "lucide-react";
+import { Copy, Eye, FlaskConical } from "lucide-react";
 import { BrandStatus, type Prisma } from "@prisma/client";
 import { requireQuoteStaff } from "@/lib/quotes/access";
 import { prisma } from "@/lib/prisma";
 import { formatUsd } from "@/lib/quotes/format";
 import { isOfferKindKey, OFFER_KINDS, resumeOfferHref } from "@/lib/quotes/kinds";
 import { quoteContactSummaryFromSnapshot } from "@/lib/quotes/clientInfo";
+import {
+  deriveLifecycleStage,
+  isStale,
+  nextStaffAction,
+  type NextActionKey,
+} from "@/lib/quotes/lifecycle";
 import {
   bucketForStatus,
   outcomeLabel,
@@ -20,7 +26,6 @@ import { OffersFunnel } from "./OffersFunnel";
 import { OfferContactCell } from "./OfferContactCell";
 import { DuplicateOfferButton } from "./DuplicateOfferButton";
 import { DuplicateOfferFocus } from "./DuplicateOfferFocus";
-import { ClearDuplicateMarkerButton } from "./ClearDuplicateMarkerButton";
 import { SendOfferEmailButton } from "./SendOfferEmailButton";
 import { OfferEditButton } from "./OfferEditButton";
 
@@ -48,6 +53,11 @@ function formatLastSentAge(date: Date | null) {
   const days = Math.max(0, Math.floor((Date.now() - date.getTime()) / (24 * 60 * 60 * 1000)));
   if (days === 0) return "Today";
   return `${days} ${days === 1 ? "day" : "days"} ago`;
+}
+
+function daysStaleFrom(date: Date | null) {
+  if (!date) return 0;
+  return Math.max(0, Math.floor((Date.now() - date.getTime()) / (24 * 60 * 60 * 1000)));
 }
 
 function parseSortKey(value: string | undefined): SortKey {
@@ -166,6 +176,52 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
     brands: platformBrands.map((item) => ({ id: item.id, label: item.name })),
   };
 
+  const followUpItems = listed
+    .map((quote) => {
+      const stage = deriveLifecycleStage({
+        status: quote.status,
+        publishedAt: quote.publishedAt,
+        firstSentAt: quote.firstSentAt,
+        firstViewedAt: quote.firstViewedAt,
+        engagement: quote.engagement,
+      });
+      const action = nextStaffAction({
+        stage,
+        lastActivityAt: quote.lastActivityAt,
+        lastFollowUpAt: quote.lastFollowUpAt,
+      });
+      if (
+        action !== "SEND_READY" &&
+        action !== "NUDGE_UNVIEWED" &&
+        action !== "NUDGE_UNSIGNED" &&
+        action !== "NUDGE_UNPAID"
+      ) {
+        return null;
+      }
+      const summary = quoteContactSummaryFromSnapshot(quote.snapshotJson, quote.client);
+      const clientLabel =
+        summary.name ||
+        summary.company ||
+        quote.client.name ||
+        `Offer …${quote.offerCode.slice(-4)}`;
+      // For SEND_READY the "quiet" timer is measured against publishedAt
+      // (how long has it sat unshared), not lastActivityAt.
+      const referenceDate =
+        action === "SEND_READY" ? quote.publishedAt : quote.lastActivityAt;
+      const daysStale = daysStaleFrom(referenceDate);
+      const stageHint =
+        action === "SEND_READY"
+          ? "Published, not sent yet"
+          : action === "NUDGE_UNVIEWED"
+            ? "Not opened yet"
+            : action === "NUDGE_UNSIGNED"
+              ? "Viewed, no signature"
+              : "Signed, no payment";
+      return { id: quote.id, clientLabel, daysStale, stageHint, action };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+    .sort((a, b) => b.daysStale - a.daysStale);
+
   return (
     <div className="px-8 pb-8">
       <h1 className="sr-only">Offers</h1>
@@ -194,6 +250,55 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
           <OffersFunnel />
         </div>
       </section>
+
+      {followUpItems.length > 0 ? (
+        <section className="-mx-8 px-8 pb-6 pt-8">
+          <h2 className="text-lg font-semibold text-slate-700">
+            Your move
+            <span className="ml-2 inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-sm font-semibold text-blue-800">
+              {followUpItems.length}
+            </span>
+          </h2>
+          <p className="mt-1 text-base text-slate-500">
+            Proposals waiting on you — either to send for the first time, or to nudge a client who&apos;s gone quiet.
+          </p>
+          <ul className="mt-3 grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+            {followUpItems.slice(0, 6).map((item) => (
+              <li
+                key={item.id}
+                className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-base font-semibold text-slate-900">{item.clientLabel}</p>
+                    <p className="mt-0.5 text-sm text-slate-600">
+                      {item.stageHint} ·{" "}
+                      {item.action === "SEND_READY"
+                        ? item.daysStale === 0
+                          ? "just published"
+                          : `${item.daysStale} ${item.daysStale === 1 ? "day" : "days"} since publish`
+                        : item.daysStale === 0
+                          ? "today"
+                          : `${item.daysStale} ${item.daysStale === 1 ? "day" : "days"} quiet`}
+                    </p>
+                  </div>
+                  <Link
+                    href={`#offer-row-${item.id}`}
+                    className="ui-action-primary inline-flex h-8 items-center rounded-full border px-3 text-sm font-semibold transition"
+                  >
+                    Review
+                  </Link>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {followUpItems.length > 6 ? (
+            <p className="mt-3 text-sm text-slate-500">
+              …and {followUpItems.length - 6} more below in the Manage offers table.
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className="-mx-8 px-8 pb-10 pt-8">
         <h2 className="text-lg font-semibold text-slate-700">Manage offers</h2>
@@ -246,6 +351,51 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                 const publishedProposalHref = quote.publicToken
                   ? `/proposal/${quote.publicToken}?staffPreview=1`
                   : null;
+                const lifecycleStage = deriveLifecycleStage({
+                  status: quote.status,
+                  publishedAt: quote.publishedAt,
+                  firstSentAt: quote.firstSentAt,
+                  firstViewedAt: quote.firstViewedAt,
+                  engagement: quote.engagement,
+                });
+                const nextAction: NextActionKey = nextStaffAction({
+                  stage: lifecycleStage,
+                  lastActivityAt: quote.lastActivityAt,
+                  lastFollowUpAt: quote.lastFollowUpAt,
+                });
+                const rowIsStale = isStale({
+                  stage: lifecycleStage,
+                  lastActivityAt: quote.lastActivityAt,
+                  lastFollowUpAt: quote.lastFollowUpAt,
+                });
+                const sendPrimaryLabel =
+                  nextAction === "SEND_READY"
+                    ? "Send this proposal — it's published but not delivered yet"
+                    : nextAction === "NUDGE_UNVIEWED"
+                      ? "Nudge client — proposal not opened yet"
+                      : nextAction === "NUDGE_UNSIGNED"
+                        ? "Follow up — viewed but not signed"
+                        : nextAction === "NUDGE_UNPAID"
+                          ? "Send payment reminder"
+                          : undefined;
+                const sendIsPrimary =
+                  nextAction === "SEND_READY" ||
+                  nextAction === "NUDGE_UNVIEWED" ||
+                  nextAction === "NUDGE_UNSIGNED" ||
+                  nextAction === "NUDGE_UNPAID";
+                const editIsPrimary = nextAction === "EDIT_DRAFT";
+                const editHasClientProgress =
+                  lifecycleStage === "VIEWED" ||
+                  lifecycleStage === "SIGNED" ||
+                  lifecycleStage === "PAID";
+                const followUpKind =
+                  nextAction === "NUDGE_UNVIEWED"
+                    ? ("unviewed" as const)
+                    : nextAction === "NUDGE_UNSIGNED"
+                      ? ("unsigned" as const)
+                      : nextAction === "NUDGE_UNPAID"
+                        ? ("unpaid" as const)
+                        : undefined;
                 const currentContact = quoteContactSummaryFromSnapshot(quote.snapshotJson, quote.client);
                 const monthlyLineItemTotal = quote.lineItems
                   .filter((item) => item.billingType.toLowerCase() === "recurring")
@@ -284,14 +434,22 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                         >
                           ...{quote.offerCode.slice(-4)}
                         </span>
-                        {isDuplicate && !isTestProposal ? (
+                        {isTestProposal ? (
+                          <span
+                            title={`$1 test proposal: ${quote.id}`}
+                            aria-label={`$1 test proposal ${quote.id}`}
+                            className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-amber-300 bg-amber-50 text-amber-900"
+                          >
+                            <FlaskConical className="h-3.5 w-3.5" aria-hidden="true" />
+                          </span>
+                        ) : null}
+                        {isDuplicate ? (
                           <span
                             title={duplicateTooltip}
                             aria-label={duplicateTooltip}
-                            className="inline-flex rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 font-sans text-base font-bold uppercase leading-none tracking-wide text-amber-900"
+                            className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-amber-300 bg-amber-50 text-amber-900"
                           >
-                            <Copy className="h-4 w-4" aria-hidden="true" />
-                            <ClearDuplicateMarkerButton offerId={quote.id} />
+                            <Copy className="h-3.5 w-3.5" aria-hidden="true" />
                           </span>
                         ) : null}
                       </div>
@@ -301,16 +459,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                         {OFFER_KINDS.find((k) => k.key === kind)?.name ?? kind}
                       </span>
                     </td>
-                    <td className="relative px-5 py-4">
-                      {isTestProposal ? (
-                        <span
-                          title={`$1 test proposal: ${quote.id}`}
-                          aria-label={`$1 test proposal ${quote.id}`}
-                          className="absolute right-2 top-2 z-10 inline-flex rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-base font-bold uppercase leading-none tracking-wide text-amber-900"
-                        >
-                          Test $1
-                        </span>
-                      ) : null}
+                    <td className="px-5 py-4">
                       <OfferContactCell
                         offerId={quote.id}
                         currentContact={currentContact}
@@ -331,7 +480,14 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                     <td className="px-5 py-4 text-slate-700">
                       {oneTimeTotal > 0 ? formatUsd(oneTimeTotal) : "—"}
                     </td>
-                    <td className="px-5 py-4 text-slate-500">
+                    <td
+                      className={
+                        rowIsStale
+                          ? "px-5 py-4 font-semibold text-amber-800"
+                          : "px-5 py-4 text-slate-500"
+                      }
+                      title={rowIsStale ? "This proposal has gone quiet — consider a follow-up." : undefined}
+                    >
                       {formatLastSentAge(quote.lastSentAt ?? quote.sentAt)}
                     </td>
                     <td className="px-5 py-4">
@@ -339,16 +495,18 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                         {!isDraft && publishedProposalHref ? (
                           <Link
                             href={publishedProposalHref}
-                            aria-label="View published proposal"
-                            title="View published proposal"
-                            className="ui-action-primary inline-flex h-9 w-9 items-center justify-center rounded-full border transition"
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-label="View published proposal (opens in new tab)"
+                            title="View published proposal (opens in new tab)"
+                            className="ui-action-secondary inline-flex h-9 w-9 items-center justify-center rounded-full border transition"
                           >
                             <Eye className="h-4 w-4" aria-hidden="true" />
                           </Link>
                         ) : !isDraft ? (
                           <Link
                             href={`/offers/${quote.id}`}
-                            className="ui-action-primary inline-flex h-9 items-center justify-center rounded-full border px-3 text-base font-semibold leading-none transition"
+                            className="ui-action-secondary inline-flex h-9 items-center justify-center rounded-full border px-3 text-base font-semibold leading-none transition"
                           >
                             Details
                           </Link>
@@ -356,14 +514,18 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                         <OfferEditButton
                           href={editHref}
                           offerId={quote.id}
-                          viewed={Boolean(quote.firstViewedAt)}
-                          signed={Boolean(quote.engagement?.signedAt)}
-                          paid={quote.engagement?.onboardingFeeStatus === "PAID"}
+                          viewed={editHasClientProgress && Boolean(quote.firstViewedAt)}
+                          signed={editHasClientProgress && Boolean(quote.engagement?.signedAt)}
+                          paid={editHasClientProgress && quote.engagement?.onboardingFeeStatus === "PAID"}
+                          primary={editIsPrimary}
                         />
                         <SendOfferEmailButton
                           offerId={quote.id}
                           hasBeenSent={Boolean(quote.lastSentAt ?? quote.sentAt)}
-                          disabled={itemBucket === "draft"}
+                          disabled={itemBucket === "draft" && lifecycleStage === "DRAFT"}
+                          primary={sendIsPrimary}
+                          primaryLabel={sendPrimaryLabel}
+                          followUpKind={followUpKind}
                         />
                         <OfferStatusButtons offerId={quote.id} bucket={itemBucket}>
                           <DuplicateOfferButton

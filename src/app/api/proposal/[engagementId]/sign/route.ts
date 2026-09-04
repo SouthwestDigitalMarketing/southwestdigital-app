@@ -131,7 +131,7 @@ export async function POST(
   });
   await prisma.quote.updateMany({
     where: { engagementId, brandId: engagement.brandId, status: { not: "archived" } },
-    data: { status: "accepted" },
+    data: { status: "accepted", lastActivityAt: signedAt },
   });
 
   return NextResponse.json({ ok: true, signedAt: signedAt.toISOString(), signerName });

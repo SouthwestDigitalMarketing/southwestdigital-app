@@ -2442,6 +2442,8 @@ model Quote {
   sentAt                DateTime?
   firstSentAt           DateTime?
   lastSentAt            DateTime?
+  lastActivityAt        DateTime?
+  lastFollowUpAt        DateTime?
   expiresAt             DateTime?
   client                QuoteClient     @relation(fields: [clientId], references: [id])
   lineItems             QuoteLineItem[]
@@ -2453,6 +2455,7 @@ model Quote {
   @@index([brandId, publishedAt])
   @@index([status, createdAt])
   @@index([brandId, engagementId])
+  @@index([brandId, status, lastActivityAt])
   @@map("quotes")
 }
 

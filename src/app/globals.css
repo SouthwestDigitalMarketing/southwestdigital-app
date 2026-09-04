@@ -463,6 +463,30 @@ body {
   background-color: var(--theme-white);
 }
 
+/* Inverted-surface card. In light ambient mode the card takes the brand's
+   dark tone; in dark ambient mode it flips to the brand's light tone so
+   it always contrasts the surrounding surface. Used for chooser cards
+   (e.g. the service-type modal) where each option should pop off the
+   modal background. */
+.theme-dark {
+  background-color: var(--theme-dark);
+  color: #ffffff;
+  border-color: color-mix(in srgb, var(--theme-dark) 65%, #ffffff);
+}
+.theme-dark:hover,
+.theme-dark:focus-visible {
+  background-color: color-mix(in srgb, var(--theme-dark) 85%, #ffffff);
+}
+[data-theme="dark"] .theme-dark {
+  background-color: var(--theme-light);
+  color: var(--theme-dark);
+  border-color: color-mix(in srgb, var(--theme-light) 65%, var(--theme-dark));
+}
+[data-theme="dark"] .theme-dark:hover,
+[data-theme="dark"] .theme-dark:focus-visible {
+  background-color: color-mix(in srgb, var(--theme-light) 85%, var(--theme-dark));
+}
+
 [data-theme] .theme-checkbox {
   accent-color: var(--theme-dark);
 }

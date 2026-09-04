@@ -425,6 +425,7 @@ export async function publishOfferChangesAction(
           publishedSnapshotJson: snapshot,
           publicToken,
           publishedAt,
+          lastActivityAt: publishedAt,
         },
       });
     });
@@ -482,6 +483,7 @@ export async function publishOfferChangesAction(
         publishedSnapshotJson: snapshot,
         publicToken,
         publishedAt,
+        lastActivityAt: publishedAt,
       },
     });
   });

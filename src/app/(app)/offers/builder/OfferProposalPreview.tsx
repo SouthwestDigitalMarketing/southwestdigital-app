@@ -484,6 +484,7 @@ export default function OfferProposalPreview({
   engagementId: engagementIdProp = null,
   agreementTemplate = null,
   isTestProposal = false,
+  isStaffPreview = false,
   proposalToken = null,
 }: {
   initialAssessment?: Partial<AssessmentState>;
@@ -496,6 +497,7 @@ export default function OfferProposalPreview({
   engagementId?: string | null;
   agreementTemplate?: AgreementTemplateOption | null;
   isTestProposal?: boolean;
+  isStaffPreview?: boolean;
   proposalToken?: string | null;
 } = {}) {
   const { brand } = useBrand();
@@ -763,7 +765,7 @@ export default function OfferProposalPreview({
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
   }
 
-  const canSignAgreement = signerName.trim().length > 0 && isValidEmail(email) && consentChecked && readAndAgreedChecked && hasScrolledToEnd;
+  const canSignAgreement = !isStaffPreview && signerName.trim().length > 0 && isValidEmail(email) && consentChecked && readAndAgreedChecked && hasScrolledToEnd;
 
   async function confirmStripePayment(status: "succeeded" | "processing") {
     if (status === "processing") {
@@ -826,6 +828,7 @@ export default function OfferProposalPreview({
   }
 
   async function submitSignatureAndContinue() {
+    if (isStaffPreview) return;
     if (!alreadySigned && !canSignAgreement) return;
     if (!engagementId) { setStep(3); return; }
     setSignSubmitting(true);
@@ -1082,6 +1085,21 @@ export default function OfferProposalPreview({
       </svg>
 
       <section className={`relative z-10 mx-auto flex max-w-[1180px] flex-col gap-6 ${embedded ? "" : "min-h-[calc(100vh-3rem)]"}`}>
+
+        {isStaffPreview ? (
+          <div
+            data-theme="light"
+            data-appearance="standard"
+            className="rounded-2xl border-2 border-dashed border-amber-400 bg-amber-50 px-5 py-3 text-sm text-amber-900"
+          >
+            <p className="font-semibold">Staff preview — the client has NOT signed or paid.</p>
+            <p className="mt-1 text-amber-800">
+              This is exactly what the client sees. Sign and pay actions are disabled in preview so
+              you can&apos;t accidentally submit on their behalf. Send this proposal to the client
+              via the Send button on Manage Offers to enable submission.
+            </p>
+          </div>
+        ) : null}
 
         {/* Nav bar — always a white floating bar, even under dark themes */}
         <nav

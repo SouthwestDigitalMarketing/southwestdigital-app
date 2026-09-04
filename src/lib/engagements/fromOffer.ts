@@ -137,6 +137,6 @@ export async function markEngagementDepositPaid(
   });
   await prisma.quote.updateMany({
     where: { engagementId, brandId: engagement.brandId, status: { not: "archived" } },
-    data: { status: "completed" },
+    data: { status: "completed", lastActivityAt: paidAt },
   });
 }

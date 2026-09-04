@@ -331,9 +331,14 @@ export function HourlyOfferBuilder({ initial }: { initial: HourlyOfferInitialSta
         ) : null}
         {status?.kind === "published" ? (
           <p className="text-sm text-emerald-800">
-            Published. Public link:{" "}
-            <Link href={status.path} className="font-semibold underline">
-              {status.path}
+            Published.{" "}
+            <Link
+              href={`${status.path}?staffPreview=1`}
+              target="_blank"
+              rel="noreferrer"
+              className="font-semibold underline"
+            >
+              Preview as staff (opens in new tab)
             </Link>
             . Next step: send it from{" "}
             <Link href={`/offers/cover?offer=${initial.offerId}`} className="font-semibold underline">
@@ -348,9 +353,13 @@ export function HourlyOfferBuilder({ initial }: { initial: HourlyOfferInitialSta
 
         {initial.publicPath ? (
           <p className="text-xs text-slate-500">
-            Current public link:{" "}
-            <Link href={initial.publicPath} target="_blank" rel="noreferrer" className="underline">
-              {initial.publicPath}
+            <Link
+              href={`${initial.publicPath}?staffPreview=1`}
+              target="_blank"
+              rel="noreferrer"
+              className="underline"
+            >
+              Preview as staff (opens in new tab)
             </Link>
           </p>
         ) : null}

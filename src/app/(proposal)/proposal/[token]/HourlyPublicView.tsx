@@ -1,11 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import DepositPaymentForm from "@/app/(app)/offers/builder/DepositPaymentForm";
 
 export type HourlyPublicViewProps = {
   proposalToken: string;
   engagementId: string | null;
   isTestProposal: boolean;
+  isStaffPreview?: boolean;
   kindLabel: string;
   clientName: string;
   brandName: string;
@@ -54,11 +56,20 @@ export function HourlyPublicView(props: HourlyPublicViewProps) {
   >({ kind: "idle" });
 
   const canSubmitSignature = useMemo(
-    () => Boolean(signerName.trim() && email.trim() && scrolled && readAndAgreed && consent),
-    [signerName, email, scrolled, readAndAgreed, consent],
+    () =>
+      Boolean(
+        signerName.trim() &&
+          email.trim() &&
+          scrolled &&
+          readAndAgreed &&
+          consent &&
+          !props.isStaffPreview,
+      ),
+    [signerName, email, scrolled, readAndAgreed, consent, props.isStaffPreview],
   );
 
   async function handleSign() {
+    if (props.isStaffPreview) return;
     if (!props.engagementId || !canSubmitSignature) return;
     setSignState({ kind: "signing" });
     try {
@@ -86,6 +97,7 @@ export function HourlyPublicView(props: HourlyPublicViewProps) {
   }
 
   async function handleStartPayment() {
+    if (props.isStaffPreview) return;
     if (!props.engagementId) return;
     setPayState({ kind: "loading" });
     try {
@@ -123,9 +135,40 @@ export function HourlyPublicView(props: HourlyPublicViewProps) {
     }
   }
 
+  async function confirmStripePayment(status: "succeeded" | "processing") {
+    if (status === "processing") return;
+    if (!props.engagementId) return;
+    try {
+      const response = await fetch(`/api/proposal/${props.engagementId}/confirm-payment`, {
+        method: "POST",
+        headers: { "x-proposal-token": props.proposalToken },
+      });
+      const data = (await response.json().catch(() => ({}))) as { paid?: boolean; error?: string };
+      if (!response.ok || data.paid !== true) {
+        throw new Error(data.error ?? "Payment could not be verified.");
+      }
+      setPayState({ kind: "paid" });
+    } catch (error) {
+      setPayState({
+        kind: "error",
+        message: error instanceof Error ? error.message : "Payment verification failed",
+      });
+    }
+  }
+
   return (
     <main className="min-h-screen bg-slate-50 py-10">
       <div className="mx-auto grid w-full max-w-4xl gap-6 px-4">
+        {props.isStaffPreview ? (
+          <div className="rounded-xl border-2 border-dashed border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <p className="font-semibold">Staff preview — the client has NOT signed or paid.</p>
+            <p className="mt-1 text-amber-800">
+              This is exactly what the client sees. Sign and pay actions are disabled in preview so
+              you can&apos;t accidentally submit on their behalf. Send this proposal to the client
+              via the Send button on Manage Offers to enable submission.
+            </p>
+          </div>
+        ) : null}
         <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             {props.brandName} • {props.kindLabel}
@@ -247,15 +290,14 @@ export function HourlyPublicView(props: HourlyPublicViewProps) {
               <p className="mt-4 text-sm text-emerald-800">Payment complete.</p>
             ) : null}
             {payState.kind === "ready" ? (
-              <div className="mt-4 rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-700">
-                <p className="font-semibold text-slate-900">
+              <div className="mt-4 rounded-lg border border-slate-200 bg-white p-4">
+                <p className="mb-3 text-sm font-semibold text-slate-900">
                   Charge amount: {money(payState.amountDueNow)}
                 </p>
-                <p className="mt-2 text-xs text-slate-500">
-                  PaymentIntent is prepared (client secret: {payState.clientSecret.slice(0, 12)}…). The full
-                  Stripe Payment Element for the hourly proposal is coming in the next iteration — for now
-                  this confirms Sign & Pay wiring is live end-to-end.
-                </p>
+                <DepositPaymentForm
+                  clientSecret={payState.clientSecret}
+                  onPaid={confirmStripePayment}
+                />
               </div>
             ) : null}
             {payState.kind === "error" ? (

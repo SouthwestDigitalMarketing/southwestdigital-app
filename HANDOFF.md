@@ -1,6 +1,6 @@
 # Coding-agent handoff
 
-Updated: 2026-09-04 (America/Chicago) — manage-offers workflow and handoff refreshed.
+Updated: 2026-09-04 (America/Chicago, later same day) — work-item / next-action lifecycle system + hourly Stripe wiring + staff-preview gating landed.
 
 ## Start here
 
@@ -16,10 +16,8 @@ The user has instructed: **never push without explicit user instruction**. Commi
 ## Current commit state
 
 - Latest commit on `origin/main`: `2731c3a Document product-kind architecture and mark refactor complete`
-- **Local, not yet pushed:** 20 commits, beginning with `7cceef5` and ending with `da2c537`.
-- The local commits cover the manage-offers modal, contact fields, client/tag creation, action styling/order, send/resend behavior, duplicate markers, published proposal viewing, progressed-edit warnings, draft editing, and relative last-sent age. Run `git log --oneline origin/main..HEAD` for the complete list.
-
-Run `git log --oneline origin/main..HEAD` to see what's ahead of origin.
+- **Local, committed but not pushed:** 21 commits (last: `dcd262e Refresh coding agent handoff`). Covers the manage-offers modal, contact fields, client/tag creation, action styling/order, send/resend behavior, duplicate markers, published proposal viewing, progressed-edit warnings, draft editing, and relative last-sent age. Run `git log --oneline origin/main..HEAD` for the complete list.
+- **Uncommitted working tree** (all of the new sections 6–11 below, plus a new migration folder `prisma/migrations/20260904200000_add_quote_lifecycle_tracking/` and two new library files `src/lib/quotes/lifecycle.{ts,test.ts}`). Ready to be reviewed and committed in phase-sized chunks — see "Suggested commit split" at the bottom of the new-work sections.
 
 ## This session's work
 
@@ -83,8 +81,8 @@ Full plan lives below in **"Product Type refactor plan"** section. Progress mark
 - Phase 9: Docs + verification — **DONE.** `docs/architecture/product-kinds.md` explains the model and how to add a new kind. Typecheck ✅ · 39 test files / 238 tests ✅ · focused eslint ✅.
 
 **Follow-ups not blocking day-to-day use:**
-- `HourlyPublicView` shows a "PaymentIntent ready" placeholder instead of a Stripe Payment Element. The PaymentIntent + Connect-safety + hourly amount resolver are all live; wiring the actual `<Elements>` renderer for hourly is a short follow-up (see the existing bookkeeping `OfferProposalPreview` for the Stripe Elements pattern).
-- Receipt page (`/proposal/[token]/receipt`) still assumes bookkeeping snapshot shape; hourly receipts will show odd blanks until the receipt is made kind-aware.
+- ~~`HourlyPublicView` Stripe Payment Element~~ — **done in this session's work, see section 9.**
+- Receipt page (`/proposal/[token]/receipt`) still assumes bookkeeping snapshot shape; hourly receipts will show odd blanks until the receipt is made kind-aware. Also reads the *current* published snapshot, not the exact revision the client signed against — see the version-tracking design section for the `signedQuoteRevisionId` fix.
 - Confirm-payment route doesn't validate destination account before marking paid (open item from Stripe Connect safety phase).
 - PayPal path (`/api/proposal/[engagementId]/paypal/*`) also needs the same hourly-checkout dispatch if you plan to enable PayPal on hourly offers.
 
@@ -101,6 +99,95 @@ Each phase → its own commit. Fresh agents can `git log` since `f9f31e3` to see
 - Verification for the latest changes: TypeScript ✅ · focused ESLint ✅ · 39 test files / 238 tests ✅ · `git diff --check` ✅.
 
 **Naming clarification:** I switched from `productType` (planned) to `productKind` (built) because `Quote.kind` (String) already existed with two values (`bookkeeping`, `referral-network`). Extending that field's semantics is cleaner than introducing a redundant enum. `OFFER_KINDS` in `src/lib/quotes/kinds.ts` is the canonical list; `isOfferKindKey` validates. Hourly builder is at `/offers/hourly` and reads `?kind=consulting|coaching` from the URL.
+
+### 6) Work-item / next-action lifecycle system — DONE, uncommitted
+
+The Manage Offers table now surfaces "what's my next move" at a glance, powered by a derived lifecycle stage + a stored activity clock. This is the concrete MVP of the "unified work items / next-action system" future-design section below.
+
+**Schema:** two nullable columns added to `Quote` — no enum, no coupling to CRM `PipelineItem` (the CRM path is a future pass).
+
+- `lastActivityAt` — bumped by every event that resets the "how long has this been sitting" clock: publish, send, resend, client view, sign, pay, follow-up nudge sent.
+- `lastFollowUpAt` — bumped only when staff sends a follow-up nudge. Feeds a 3-day cooldown so the row leaves the stale bucket immediately after a nudge and doesn't re-enter until the cooldown expires.
+
+Migration `prisma/migrations/20260904200000_add_quote_lifecycle_tracking/migration.sql` is additive, idempotent, and includes a backfill: `lastActivityAt = GREATEST(publishedAt, firstSentAt, lastSentAt, sentAt, firstViewedAt, updatedAt, createdAt)` for existing rows. Applied to local DB.
+
+**Helpers** (`src/lib/quotes/lifecycle.ts`, 27 tests):
+
+- `LifecycleStage` = `DRAFT | READY | SENT | VIEWED | SIGNED | PAID | CLOSED`.
+- `deriveLifecycleStage(input)` — pure function; reads `status`, `publishedAt`, `firstSentAt`, `firstViewedAt`, and the engagement's `signedAt` + `onboardingFeeStatus` (treats `WAIVED` as `PAID`). Only inspects `status` for the archived-terminal case; everything else derives from event timestamps.
+- `deriveWaitingOn(stage)` → `STAFF | CLIENT | NONE`. `DRAFT` and `READY` = STAFF; `SENT / VIEWED / SIGNED` = CLIENT; `PAID / CLOSED` = NONE.
+- `STALE_THRESHOLD_DAYS`: `READY: 0` (staff should send immediately), `SENT: 4`, `VIEWED: 5`, `SIGNED: 7`, `DRAFT / PAID / CLOSED: Infinity`. `FOLLOW_UP_COOLDOWN_DAYS: 3`.
+- `isStale(input)` — false for null `lastActivityAt` (fresh row); respects the threshold and cooldown.
+- `nextStaffAction(input)` returns one of `EDIT_DRAFT | SEND_READY | NUDGE_UNVIEWED | NUDGE_UNSIGNED | NUDGE_UNPAID | NONE`.
+- `bumpQuoteActivity(quoteId)` / `markQuoteFollowUpSent(quoteId)` — DB writes for the bumpers; never throw (activity tracking must never break its host flow).
+
+**Hooks wired** (every event that should reset the stale clock):
+
+- Publish (`offers/who/actions.ts`, `offers/hourly/actions.ts`) — bumps `lastActivityAt = publishedAt`.
+- Mark-sent (`offers/actions.ts markQuoteSentAction`) — bumps `lastActivityAt`.
+- Resend (`offers/actions.ts resendQuoteAction`) — bumps both `lastActivityAt` and `lastFollowUpAt` (it's a nudge by definition).
+- Send via connected mailbox (`api/email/send/route.ts`) — bumps `lastActivityAt`, and additionally `lastFollowUpAt` when `firstSentAt` is already set (distinguishes first send vs. nudge).
+- First client view (`(proposal)/proposal/[token]/page.tsx`) — bumps `lastActivityAt` + also self-heals (see section 10).
+- Sign (`api/proposal/[engagementId]/sign/route.ts`) — bumps `lastActivityAt` on the quote update.
+- Paid (`lib/engagements/fromOffer.ts markEngagementDepositPaid`) — bumps `lastActivityAt` when status flips to `completed`.
+- Waived (`api/proposal/[engagementId]/payment-intent/route.ts` zero-amount branch) — bumps `lastActivityAt` so the row doesn't stay in a stale-nudge state after WAIVED is set.
+
+**UI:**
+
+- **Manage Offers → row-level state-driven blue button.** View/Details is now neutral (secondary); Edit is blue for `EDIT_DRAFT`; Send is blue for `SEND_READY` and the three `NUDGE_*` actions with a state-appropriate primary label. Last-sent cell tints amber when the row is stale.
+- **"Your move" section** on `/offers` (was "Needs your follow-up") — appears above Manage Offers when any rows have a non-NONE action. Shows up to 6 cards sorted by staleness with client, stage hint, days-since-publish/quiet, and a "Review" link that anchors to the row.
+- **Follow-up compose flow** — nudge buttons route to `/offers/cover?offer=X&followUp=unviewed|unsigned|unpaid` and swap the initial-send template for a state-appropriate short follow-up template (`followUpCopy` in `ProposalCoverLetterDemo.tsx`). Send goes through the same `/api/email/send` (Zoho) which bumps `lastFollowUpAt`.
+
+**Key files added or changed:** `src/lib/quotes/lifecycle.{ts,test.ts}`, `src/app/(app)/offers/page.tsx`, `src/app/(app)/offers/{OfferEditButton,SendOfferEmailButton}.tsx`, `src/app/(app)/offers/builder/ProposalCoverLetterDemo.tsx`, `src/app/(app)/offers/{actions,who/actions,hourly/actions}.ts`, `src/app/api/email/send/route.ts`, `src/app/api/proposal/[engagementId]/{sign,payment-intent}/route.ts`, `src/lib/engagements/fromOffer.ts`, `src/app/(proposal)/proposal/[token]/page.tsx`.
+
+### 7) Service-type modal — icons + inverted-theme cards
+
+The "Create offer" modal's service-type cards now use a new `.theme-dark` CSS utility (added to `globals.css`) that inverts against the ambient theme: brand-dark background in light mode, brand-light background in dark mode. Each card's header inlines a lucide icon (`BookOpenText` bookkeeping, `Clock` consulting, `GraduationCap` coaching, `Share2` referral-network). Icon map lives locally in `OffersListControls.tsx` so the `OFFER_KINDS` data module stays icon-free.
+
+### 8) Offer-ID column icons — circular, no clear button
+
+Both the test-proposal and duplicate-of markers now render as `h-6 w-6` amber circles inside the Offer ID column (previously the test-proposal marker floated absolute-positioned inside the contact column). Icons: `FlaskConical` for test proposals, `Copy` for duplicates. Both are icon-only with hover tooltips. The X clear-duplicate-marker button was removed from the pill; `ClearDuplicateMarkerButton.tsx` + its server action remain in place as dead code in case a different clear-affordance is wanted later. Test-proposal + duplicate markers can now co-exist on the same row (dropped the `!isTestProposal` guard).
+
+### 9) Hourly proposal end-to-end + staff-preview banner + new-tab links
+
+Three fixes that came out of user testing the hourly-coaching flow.
+
+- **Hourly Stripe Payment Element wired.** `HourlyPublicView` now imports the same `DepositPaymentForm` component the bookkeeping flow uses, mounts `<Elements>` on the returned PaymentIntent's client secret, and calls `/api/proposal/[engagementId]/confirm-payment` on success. Hourly proposals are fully payable end-to-end. Phase 5.5 gap closed.
+- **Staff-preview banner + gating on both flows.** When `?staffPreview=1` is set and authorized by session, both `HourlyPublicView` and `OfferProposalPreview` show a persistent amber dashed banner ("Staff preview — the client has NOT signed or paid"), and the sign + pay actions are disabled so staff can't submit on the client's behalf. `canSignAgreement` includes `!isStaffPreview`; `submitSignatureAndContinue` short-circuits. Both components accept an `isStaffPreview` prop; page.tsx passes `isAuthorizedStaffPreview` through.
+- **All in-app "view proposal" links open in a new tab and land in preview mode.** Updated: the Manage Offers eye button, the hourly builder post-publish "Preview as staff" link, the hourly builder's "current public link", the bookkeeping builder header's proposal-preview button (via `ProposalAppDemoHeader.saveThenOpenProposal`), and the cover-letter compose page's external-link icon. The raw URL that gets pasted into the email body remains unchanged (that's what actually gets sent to the client).
+
+### 10) READY lifecycle stage + Mark-as-sent fallback + self-heal on first view
+
+A refinement of section 6 driven by the observation that publishing doesn't equal sending — publishing generates the URL; sending is a staff action.
+
+**New model:** publishing → `READY` (has `publishedAt`, no `firstSentAt`, no `firstViewedAt`). The Send button on Manage Offers becomes primary/blue immediately in `READY` (threshold = 0). "Sent" only happens when:
+
+1. **Send via connected Zoho mailbox** (primary path, already wired via `/api/email/send` which stamps `firstSentAt`).
+2. **Manual "I sent it another way — mark as sent" button** on the compose page (`ProposalCoverLetterDemo.tsx`) — calls the existing `markQuoteSentAction`. This is the escape hatch when email isn't connected or staff sent via a different channel (personal email, text, WhatsApp). Handles Next.js `NEXT_REDIRECT` propagation so the action's built-in redirect to `/offers/{id}?sent=1` works.
+3. **Self-heal on first real client view** (`(proposal)/proposal/[token]/page.tsx`) — if a client somehow opens the URL without staff having sent it (leaked link, out-of-band share), the first view stamps `firstSentAt`, `sentAt`, `lastSentAt`, and flips `Quote.status` to `"sent"`. This keeps DB filters (`Draft` / `Sent` / `Completed`) consistent with the derived lifecycle. Never fires for staff previews (`?staffPreview=1`).
+
+**Downstream effect:** the Edit warning fires only when the derived stage is `VIEWED / SIGNED / PAID` (never on `DRAFT` or `READY`). Fixes the "why is there an edit warning on a draft" case that surfaces when a proposal's `firstViewedAt` got stamped by a staff visit before we added the preview guards.
+
+### 11) Follow-ups & known gaps at end of this batch
+
+- **User's `...zd5n` row** (hit before preview guards existed) will now be derived as `VIEWED` because `firstViewedAt` is set. If that's stale test data and not a real client view, `UPDATE quotes SET "firstViewedAt" = NULL, "firstSentAt" = NULL WHERE id = '<id>'` in Prisma Studio.
+- **Test-proposal Lump/MRR display.** User explicitly opted to leave the Lump column showing the real list price on `$1` test rows (the `FlaskConical` icon + tooltip carries the "$1 will be charged" meaning). If this ever confuses in practice, section-based options are captured in conversation history.
+- **CRM `PipelineItem` still uncoupled.** The work-item primitive lives on `Quote` only; the "proposals also appear as cards in the CRM pipeline board" pass is deferred. See the future-design section below for the linkage.
+
+### Suggested commit split for this batch
+
+If you want to slice the uncommitted work into reviewable chunks before pushing:
+
+1. Schema + lifecycle helpers + tests: `prisma/migrations/20260904200000_add_quote_lifecycle_tracking/`, `src/lib/quotes/lifecycle.{ts,test.ts}`, `prisma/schema.prisma`.
+2. Activity-bump wiring across all event hooks: the actions + api/route file edits.
+3. State-driven blue button + "Your move" section + follow-up compose swap: `src/app/(app)/offers/page.tsx`, the two button components, `ProposalCoverLetterDemo.tsx` template swap.
+4. Service-type modal icons + `.theme-dark`: `src/app/globals.css`, `src/app/(app)/offers/OffersListControls.tsx`.
+5. Offer-ID column circular icons + move test marker: `src/app/(app)/offers/page.tsx`.
+6. Hourly Stripe Payment Element + staff-preview banner + new-tab links: `HourlyPublicView.tsx`, `OfferProposalPreview.tsx`, `(proposal)/proposal/[token]/page.tsx`, `HourlyOfferBuilder.tsx`, `ProposalAppDemoHeader.tsx`, `ProposalCoverLetterDemo.tsx` external-link.
+7. READY stage refinement + mark-as-sent fallback + self-heal on first view: lifecycle stage additions, `(proposal)/proposal/[token]/page.tsx` self-heal, `ProposalCoverLetterDemo.tsx` mark-as-sent button.
+8. HANDOFF refresh (this file).
+
+Or squash into one commit if you'd rather not manage the split — the batch is coherent as a single "work-item lifecycle + hourly + preview safety" landing.
 
 ## Product Type refactor plan
 
@@ -197,6 +284,113 @@ Recent additive migrations applied this way (not necessarily recorded in `_prism
 
 Dev server holds `query_engine-windows.dll.node`. Stop `npm run dev`, run `npx prisma generate`, then start again. The `dev` script itself runs `prisma generate` on start, so restarting the dev server is often the fastest path.
 
+## Future design: unified "work items" / next-action system
+
+**Status:** **MVP scope shipped for offers** (see section 6 + 10 above — lifecycle stages, staleness thresholds, blue-button treatment, "Your move" list, follow-up compose templates, self-heal on view, mark-as-sent fallback). What remains future work: the CRM `PipelineItem` coupling, a cross-surface "On your plate today" view, auto-fire nudges, and per-brand thresholds. Sections below are the original design sketch; keep it for the CRM extension.
+
+### The insight
+
+Every actionable row across the app (offer, pipeline card, agreement, ticket) is really a *work item* with three attributes:
+
+1. **Next action** — what needs to happen (Send, Resend, Advance stage, Nudge payment, etc.)
+2. **Who owes it** — `waitingOn: STAFF | CLIENT`
+3. **Staleness** — how long it's been sitting since the last touch
+
+Blue/primary treatment is *earned*: shown only when `waitingOn = STAFF` **and** staleness ≥ a threshold. Neutral otherwise. That way scanning any list tells you at a glance what's actually on your plate today.
+
+### Concrete surface: Manage Offers table
+
+Currently the blue treatment lives on the View/Details button for every non-draft row, regardless of state. It should follow the state × Last-sent age:
+
+| Row state | Fresh (under threshold) | Stale (over threshold) |
+|---|---|---|
+| Draft | Edit is blue (always your move) | same |
+| Sent, not viewed | Neutral (client hasn't had time) | **Resend** goes blue; Last-sent cell tints |
+| Viewed, not signed | Neutral | **Resend / follow-up** goes blue |
+| Signed, not paid | Neutral | **Nudge payment** goes blue |
+| Paid / completed | Nothing blue | nothing blue |
+
+Thresholds TBD (user has not set them). Suggested starting points: 5 days no-view → nudge; 5 days viewed-no-sign → nudge; 7 days signed-no-pay → nudge.
+
+### What actually needs to *trigger* when a client doesn't view/sign/pay
+
+This is the conversion-critical part. Two flavors, either or both:
+
+- **Auto-nudge to client** — templated follow-up email fires from the connected Zoho mailbox after N days of no-view / no-sign / no-pay. User must be able to preview + approve, or opt into full auto.
+- **Staff task creation** — a work item appears in staff's "On your plate today" list saying "Follow up with Acme Corp — proposal sent 8 days ago, not viewed." Clicking it lands on the offer row (or a compose-follow-up screen).
+
+Escalation ladder per stage matters: e.g., day 5 gentle nudge, day 10 second nudge with a different angle, day 15 archive-or-close prompt. The exact cadence should be per-brand configurable (v2) but ship with sane defaults.
+
+### CRM connection
+
+The CRM (`Pipeline` / `PipelineStage` / `PipelineItem`) today only tracks *where* a lead sits, not *when it was last touched* or *what needs to happen next*. To make the work-item model real, the CRM needs:
+
+1. `PipelineItem.lastActivityAt` — bumped by move / note / call log / offer send / proposal view / sign / pay.
+2. `PipelineItem.waitingOn` — `STAFF | CLIENT` enum.
+3. `PipelineStage.expectedDwellDays` — per-stage staleness threshold (natural extension of `valueMultiplier`).
+4. Lightweight `LeadActivity` table (or typed lead notes) so "last touched" is derived, not manually maintained.
+
+### How CRM and Manage Offers talk to each other
+
+The link already exists via `Contact`: `Quote → Contact` on one side, `PipelineItem → MeetingLead → LeadContact → Contact` on the other. Same person, both surfaces.
+
+Shared signal in practice:
+
+- **Send offer email** → bump `lastActivityAt` on any pipeline card whose lead is linked to that contact. CRM card stops looking stale, matching what the offers row now shows.
+- **Client views the proposal** → bump the CRM card too (client did something).
+- **Client signs** → CRM card auto-advances to a "Signed / awaiting payment" stage (leverage existing but unused `ContactTagAutomation`).
+- **"On your plate today"** view unions rows from both sources — an unviewed 8-day-old offer and an untouched 12-day-old pipeline card both appear in the same list, same blue-treatment rule.
+
+Framing: Manage Offers is a filtered slice of the CRM's work-item stream, scoped to `type = OFFER`. It's not really its own thing.
+
+### Cut lines / open questions for next session
+
+- Are thresholds per-brand configurable from day one, or global constants first?
+- Auto-fire nudges vs. staff-approves-each — probably staff-approves in v1 to avoid embarrassment.
+- Where does "On your plate today" live in navigation? (Homepage? New `/today` route?)
+- Does the offer-send bump the CRM card even if the offer isn't attached to any pipeline item, or only if there's a linked card?
+
+### Suggested build order when we come back (CRM extension)
+
+Steps 1–3 and 6 (offers-side) have shipped in section 6 + 10 above. What remains:
+
+1. ~~Add `lastActivityAt` + `waitingOn` to `PipelineItem`~~ → **still open.** Add `PipelineItem.lastActivityAt` + `waitingOn` + `PipelineStage.expectedDwellDays`.
+2. ~~Add a `bumpActivity(contactId)` helper~~ → **still open for CRM.** Offer-side bumpers write to `Quote`; extend to also bump linked `PipelineItem` rows for the same contact.
+3. ~~Retrofit Manage Offers~~ → **done** (section 6).
+4. Retrofit pipeline board cards with the same visual language.
+5. Add "On your plate today" view (union query across offers + pipeline items where staff-owned + stale).
+6. ~~Add nudge templates + staff approval gate~~ → **done as manual staff-approves-each** (section 6). Auto-send is the v2 extension.
+
+## Future design: proposal version tracking
+
+**Status:** design questions only — nothing built. Captured 2026-09-04 while wiring the hourly payment element. Come back to this before the app supports enough real-client proposals that version drift matters.
+
+### What already exists in the schema
+
+- `QuoteRevision` — versioned snapshots per Quote (`version` int, `snapshotJson`, `publishedAt`, `supersededAt`). Every publish creates a new row and marks prior revisions superseded.
+- The public `/proposal/[token]` page reads the latest revision (or the publishedSnapshotJson if no revisions).
+- The Manage Offers "Edit" button already surfaces an amber warning when editing a viewed/signed/paid proposal, recommending duplicate-instead-of-edit for signed/paid deals.
+
+### What's missing / undecided
+
+1. **Staff visibility of version history.** No UI shows the version log for a Quote — you can't currently see "v1 published Aug 12, v2 published Aug 15, v3 published today" or diff two versions. Should live on the offer detail page, probably as a collapsible timeline.
+2. **Client visibility of version changes.** If we republish while the client has the tab open (or has a bookmark), they get a different offer than what they last read. Do we warn them? Show a "This proposal was updated on X" banner? Force re-scroll of the agreement?
+3. **Republish trigger.** Right now editing → publishing silently swaps the URL's contents. Should a republish auto-fire a "we updated your proposal" nudge to the client (with the same trigger machinery from the follow-up system)?
+4. **Bumping the version.** Currently `QuoteRevision.version` increments on publish. Do minor edits (typo fix) also bump? Or only material changes (price, scope)? A "publish minor" vs "publish material" distinction might belong on the publish button.
+5. **Signed-version pinning.** When a client signs, we should snapshot the exact revision they signed against. Currently the engagement holds the agreement text and the acceptance payload, but not a `signedQuoteRevisionId` pointer. If someone later republishes the offer, we should not silently overwrite what was legally agreed.
+6. **Receipt page version.** The receipt currently reads the current published snapshot, not the signed one. Same fix as #5 — receipts must show the terms as signed, not the terms as currently published.
+
+### Suggested build order when we come back
+
+1. Add `signedQuoteRevisionId` on Engagement. Pin it in the sign route.
+2. Update `/proposal/[token]/receipt` to load the signed revision, not the current one.
+3. Staff-only version history timeline on `/offers/[id]`.
+4. Client-facing "updated" banner when they revisit after a republish (compare their last-viewed version to current).
+5. Auto-nudge on republish, opt-in per publish action.
+6. Diff view for two revisions (nice-to-have for staff).
+
+The [[unified-work-items-next-action-system]] follow-up mechanism can reuse these signals: a republish is another type of activity, and the client's re-view of a republished proposal is another activity bump.
+
 ## Deferred / not done this session
 
 - **Stripe Connect edge cases still open:**
@@ -231,10 +425,12 @@ Zoho on Vercel: register a **separate** OAuth app for prod (not shared with loca
 ## Suggested first commands for the next agent
 
 ```powershell
-git status --short
-git log --oneline origin/main..HEAD    # what's committed locally but not pushed
-npm run typecheck
-npm test -- --run
+git status --short                        # will show a big uncommitted working tree — sections 6–11
+git log --oneline origin/main..HEAD       # 21 committed-not-pushed commits
+npm run typecheck                         # should be clean
+npm test -- --run                         # 40 files / 265 tests, all green
 ```
 
-Then read this file top-to-bottom, note which phase of the Product Type refactor is in progress (search for "IN PROGRESS" and the latest phase-completion commit), and continue from there.
+Then read this file top-to-bottom, note that **sections 6–11 in "This session's work" are uncommitted** and the user's push policy is "never push without explicit user instruction." Suggested commit split is at the end of section 11.
+
+If the user asks you to move CRM PipelineItem into the work-item model, read section 6 first, then the "Future design: unified work items / next-action system" CRM extension list — the offer-side helpers (`src/lib/quotes/lifecycle.ts`) are the pattern to follow.
