@@ -233,7 +233,6 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                     ? (quote.snapshotJson as {
                         contactIds?: string[];
                         kind?: string;
-                        package?: unknown;
                         isFreshDuplicate?: boolean;
                         isTestProposal?: boolean;
                         duplicatedFromOfferCode?: string;
@@ -244,7 +243,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                     : {};
                 const kind = snapshot.kind ?? quote.kind;
                 const itemBucket = bucketForStatus(quote.status);
-                const canResume = itemBucket === "draft" || !snapshot.package;
+                const canResume = itemBucket === "draft";
                 const currentContact = quoteContactSummaryFromSnapshot(quote.snapshotJson, quote.client);
                 const monthlyLineItemTotal = quote.lineItems
                   .filter((item) => item.billingType.toLowerCase() === "recurring")
