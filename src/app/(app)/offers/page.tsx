@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Eye } from "lucide-react";
+import { Copy, Eye } from "lucide-react";
 import { BrandStatus, type Prisma } from "@prisma/client";
 import { requireQuoteStaff } from "@/lib/quotes/access";
 import { prisma } from "@/lib/prisma";
@@ -284,7 +284,11 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                             aria-label={`${isTestProposal ? "$1 test proposal" : "New duplicate offer"} ${quote.id}`}
                             className="absolute right-2 top-2 z-10 inline-flex rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-base font-bold uppercase leading-none tracking-wide text-amber-900"
                           >
-                            {isTestProposal ? "Test $1" : "Duplicate"}
+                            {isTestProposal ? (
+                              "Test $1"
+                            ) : (
+                              <Copy className="h-4 w-4" aria-hidden="true" />
+                            )}
                             {isDuplicate && !isTestProposal ? <ClearDuplicateMarkerButton offerId={quote.id} /> : null}
                           </span>
                         </>
