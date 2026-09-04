@@ -83,7 +83,7 @@ function SortableHeader({
   query.set("order", nextOrder);
 
   return (
-    <th className="px-5 py-2 text-sm font-semibold normal-case text-slate-700">
+    <th className="px-5 py-2 text-base font-semibold normal-case text-slate-700">
       <Link href={`/offers?${query.toString()}`} className="inline-flex items-center gap-1 hover:text-slate-950">
         {label}
         {currentSort === sortKey ? <span aria-hidden="true">{currentOrder === "asc" ? "↑" : "↓"}</span> : null}
@@ -215,14 +215,14 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
           <table className="w-full text-base">
             <thead>
               <tr className="bg-slate-50 text-left">
-                <th className="px-5 py-2 text-sm font-semibold normal-case text-slate-700">Offer ID</th>
-                <th className="px-5 py-2 text-sm font-semibold normal-case text-slate-700">Type</th>
+                <th className="px-5 py-2 text-base font-semibold normal-case text-slate-700">Offer ID</th>
+                <th className="px-5 py-2 text-base font-semibold normal-case text-slate-700">Type</th>
                 <SortableHeader label="Contact" sortKey="contact" currentSort={sortKey} currentOrder={sortOrder} params={params} />
                 <SortableHeader label="Status" sortKey="status" currentSort={sortKey} currentOrder={sortOrder} params={params} />
                 <SortableHeader label="MRR" sortKey="mrr" currentSort={sortKey} currentOrder={sortOrder} params={params} />
                 <SortableHeader label="Lump" sortKey="lump" currentSort={sortKey} currentOrder={sortOrder} params={params} />
                 <SortableHeader label="Last sent" sortKey="lastSent" currentSort={sortKey} currentOrder={sortOrder} params={params} />
-                <th className="px-5 py-2 text-sm font-semibold normal-case text-slate-700">Days ago</th>
+                <th className="px-5 py-2 text-base font-semibold normal-case text-slate-700">Days ago</th>
                 <th className="px-5 py-2"></th>
               </tr>
             </thead>
@@ -264,13 +264,13 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                     className={`hover:bg-slate-50 ${quote.id === highlightId ? "offer-row-highlight" : ""}`}
                   >
                     <td
-                      className="px-5 py-4 font-mono text-xs text-slate-500"
+                      className="px-5 py-4 font-mono text-base text-slate-500"
                       title={quote.offerCode}
                       aria-label={`Offer ID ${quote.offerCode}`}
                     >
                       ...{quote.offerCode.slice(-4)}
                     </td>
-                    <td className="px-5 py-4 text-xs">
+                    <td className="px-5 py-4 text-base">
                       <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-medium text-slate-600">
                         {OFFER_KINDS.find((k) => k.key === kind)?.name ?? kind}
                       </span>
@@ -282,7 +282,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                           <span
                             title={`${isTestProposal ? "$1 test proposal" : "New duplicate"}: ${quote.id}`}
                             aria-label={`${isTestProposal ? "$1 test proposal" : "New duplicate offer"} ${quote.id}`}
-                            className="absolute right-2 top-2 z-10 inline-flex rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none tracking-wide text-amber-900"
+                            className="absolute right-2 top-2 z-10 inline-flex rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-base font-bold uppercase leading-none tracking-wide text-amber-900"
                           >
                             {isTestProposal ? "Test $1" : "Duplicate"}
                             {isDuplicate && !isTestProposal ? <ClearDuplicateMarkerButton offerId={quote.id} /> : null}

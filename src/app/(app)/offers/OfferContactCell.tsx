@@ -180,11 +180,11 @@ export function OfferContactCell({
           aria-haspopup="dialog"
           disabled={pending}
           onClick={toggleContactOptions}
-          className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 focus:border-slate-500 focus:outline-none"
+          className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-base text-slate-700 focus:border-slate-500 focus:outline-none"
         >
           {currentContact.contactId ? currentContact.company || currentContact.name : "Select contact"}
         </button>
-        {pending ? <span className="text-xs text-slate-500">Saving...</span> : null}
+        {pending ? <span className="text-base text-slate-500">Saving...</span> : null}
       </div>
 
       {contactDialogView && portalTarget
