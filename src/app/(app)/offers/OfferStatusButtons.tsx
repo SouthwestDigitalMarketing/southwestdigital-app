@@ -2,9 +2,8 @@
 
 import { useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Archive, ArchiveRestore, RotateCw, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Trash2 } from "lucide-react";
 import { deleteQuoteAction, setOfferStatusAction } from "./actions";
-import { resendQuoteAction } from "./actions";
 import type { OfferBucket } from "@/lib/quotes/status";
 
 export function OfferStatusButtons({
@@ -30,15 +29,6 @@ export function OfferStatusButtons({
     });
   }
 
-  function resend() {
-    const data = new FormData();
-    data.set("id", offerId);
-    startTransition(async () => {
-      await resendQuoteAction(data);
-      router.refresh();
-    });
-  }
-
   function requestDelete() {
     setDeleteConfirmOpen(true);
   }
@@ -55,22 +45,9 @@ export function OfferStatusButtons({
 
   const iconBtn =
     "ui-action-secondary inline-flex h-9 w-9 items-center justify-center rounded-full border transition disabled:opacity-50";
-  const inactiveIconBtn =
-    "inline-flex h-9 w-9 cursor-not-allowed items-center justify-center rounded-full border border-slate-200 bg-transparent text-slate-300";
-  const canResend = bucket === "sent" || bucket === "completed";
 
   return (
     <div className="flex flex-wrap justify-end gap-1">
-      <button
-        type="button"
-        disabled={pending || !canResend}
-        onClick={resend}
-        className={canResend ? iconBtn : inactiveIconBtn}
-        aria-label="Resend offer"
-        title="Resend offer"
-      >
-        <RotateCw className="h-4 w-4" />
-      </button>
       {children}
       {bucket === "draft" ? (
         <button

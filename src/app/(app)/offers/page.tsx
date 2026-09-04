@@ -353,6 +353,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                         )}
                         <SendOfferEmailButton
                           offerId={quote.id}
+                          hasBeenSent={Boolean(quote.lastSentAt ?? quote.sentAt)}
                           disabled={itemBucket === "draft"}
                         />
                         <OfferStatusButtons offerId={quote.id} bucket={itemBucket}>
