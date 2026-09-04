@@ -270,6 +270,7 @@ export async function duplicateQuoteAction(formData: FormData) {
     // Duplicates are fresh lead-facing proposals and must not inherit
     // contact-specific promotions from the source offer.
     isFreshDuplicate: true,
+    duplicatedFromOfferCode: quote.offerCode,
     suppressPromotions: true,
     isTestProposal: testProposal,
     ...(freshAssessment ? { assessment: freshAssessment } : {}),

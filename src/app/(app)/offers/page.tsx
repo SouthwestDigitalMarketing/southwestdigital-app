@@ -236,6 +236,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                         package?: unknown;
                         isFreshDuplicate?: boolean;
                         isTestProposal?: boolean;
+                        duplicatedFromOfferCode?: string;
                         pricing?: {
                           maintain?: { monthly?: number; totalOneTime?: number };
                         };
@@ -257,6 +258,13 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                   snapshot.pricing?.maintain?.totalOneTime ?? (oneTimeLineItemTotal || Number(quote.totalOneTime));
                 const isDuplicate = snapshot.isFreshDuplicate === true;
                 const isTestProposal = snapshot.isTestProposal === true;
+                const duplicatedFromOfferCode =
+                  typeof snapshot.duplicatedFromOfferCode === "string"
+                    ? snapshot.duplicatedFromOfferCode
+                    : null;
+                const duplicateTooltip = duplicatedFromOfferCode
+                  ? `Duplicated from ...${duplicatedFromOfferCode.slice(-4)}`
+                  : "Duplicated from another offer";
                 return (
                   <tr
                     id={`offer-row-${quote.id}`}
@@ -280,8 +288,8 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                         <>
                           {quote.id === highlightId ? <DuplicateOfferFocus offerId={quote.id} /> : null}
                           <span
-                            title={`${isTestProposal ? "$1 test proposal" : "New duplicate"}: ${quote.id}`}
-                            aria-label={`${isTestProposal ? "$1 test proposal" : "New duplicate offer"} ${quote.id}`}
+                            title={isTestProposal ? `$1 test proposal: ${quote.id}` : duplicateTooltip}
+                            aria-label={isTestProposal ? `$1 test proposal ${quote.id}` : duplicateTooltip}
                             className="absolute right-2 top-2 z-10 inline-flex rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-base font-bold uppercase leading-none tracking-wide text-amber-900"
                           >
                             {isTestProposal ? (
