@@ -353,6 +353,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                         )}
                         <SendOfferEmailButton
                           offerId={quote.id}
+                          disabled={itemBucket === "draft"}
                         />
                         <OfferStatusButtons offerId={quote.id} bucket={itemBucket}>
                           <DuplicateOfferButton
