@@ -43,16 +43,11 @@ const BUCKET_STYLE: Record<OfferBucket, string> = {
   archived: "bg-slate-50 text-slate-500",
 };
 
-function formatOfferDate(date: Date | null) {
-  return date
-    ? date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-    : "—";
-}
-
-function daysSinceOfferSent(date: Date | null) {
-  if (!date) return "—";
+function formatLastSentAge(date: Date | null) {
+  if (!date) return "Not sent";
   const days = Math.max(0, Math.floor((Date.now() - date.getTime()) / (24 * 60 * 60 * 1000)));
-  return `${days} ${days === 1 ? "day" : "days"}`;
+  if (days === 0) return "Today";
+  return `${days} ${days === 1 ? "day" : "days"} ago`;
 }
 
 function parseSortKey(value: string | undefined): SortKey {
@@ -226,7 +221,6 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                 <SortableHeader label="MRR" sortKey="mrr" currentSort={sortKey} currentOrder={sortOrder} params={params} />
                 <SortableHeader label="Lump" sortKey="lump" currentSort={sortKey} currentOrder={sortOrder} params={params} />
                 <SortableHeader label="Last sent" sortKey="lastSent" currentSort={sortKey} currentOrder={sortOrder} params={params} />
-                <th className="px-5 py-2 text-base font-semibold normal-case text-slate-700">Days ago</th>
                 <th className="px-5 py-2"></th>
               </tr>
             </thead>
@@ -338,10 +332,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                       {oneTimeTotal > 0 ? formatUsd(oneTimeTotal) : "—"}
                     </td>
                     <td className="px-5 py-4 text-slate-500">
-                      {formatOfferDate(quote.lastSentAt ?? quote.sentAt)}
-                    </td>
-                    <td className="px-5 py-4 text-slate-500">
-                      {daysSinceOfferSent(quote.lastSentAt ?? quote.sentAt)}
+                      {formatLastSentAge(quote.lastSentAt ?? quote.sentAt)}
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex flex-wrap items-center justify-end gap-2">
