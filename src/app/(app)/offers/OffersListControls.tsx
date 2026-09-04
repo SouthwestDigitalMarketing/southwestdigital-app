@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { OFFER_KINDS, whoHref } from "@/lib/quotes/kinds";
@@ -21,6 +21,11 @@ export function OffersListControls({
 }) {
   const router = useRouter();
   const [showCreateOffer, setShowCreateOffer] = useState(false);
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+  const capturePortalTarget = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return;
+    setPortalTarget((node.closest("[data-theme]") as HTMLElement | null) ?? document.body);
+  }, []);
 
   useEffect(() => {
     if (!showCreateOffer) return;
@@ -50,7 +55,7 @@ export function OffersListControls({
     "rounded-full border border-slate-300 bg-transparent px-3 py-2 text-base text-slate-700 focus:border-slate-500 focus:outline-none";
 
   return (
-    <div className="px-5 py-4">
+    <div ref={capturePortalTarget} className="px-5 py-4">
       <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2 text-base text-slate-500">
           Type
@@ -105,7 +110,7 @@ export function OffersListControls({
         </button>
       </div>
 
-      {showCreateOffer && typeof document !== "undefined"
+      {showCreateOffer && portalTarget
         ? createPortal(
             <div
               className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
@@ -156,7 +161,7 @@ export function OffersListControls({
                 </div>
               </div>
             </div>,
-            document.body,
+            portalTarget,
           )
         : null}
     </div>

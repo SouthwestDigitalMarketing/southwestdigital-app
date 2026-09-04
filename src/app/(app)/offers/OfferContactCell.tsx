@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Search, X } from "lucide-react";
@@ -44,6 +44,11 @@ export function OfferContactCell({
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [contactDialogView, setContactDialogView] = useState<ContactDialogView>(null);
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+  const capturePortalTarget = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return;
+    setPortalTarget((node.closest("[data-theme]") as HTMLElement | null) ?? document.body);
+  }, []);
   const [availableCreationOptions, setAvailableCreationOptions] =
     useState<ContactCreationOptions>(creationOptions);
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
@@ -167,7 +172,7 @@ export function OfferContactCell({
   }
 
   return (
-    <div className="space-y-2">
+    <div ref={capturePortalTarget} className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -182,7 +187,7 @@ export function OfferContactCell({
         {pending ? <span className="text-xs text-slate-500">Saving...</span> : null}
       </div>
 
-      {contactDialogView && typeof document !== "undefined"
+      {contactDialogView && portalTarget
         ? createPortal(
             <div
               className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
@@ -282,7 +287,7 @@ export function OfferContactCell({
                         <button type="submit" disabled={pending} className="ui-action-primary rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-50">
                           {pending ? "Saving..." : "Add contact"}
                         </button>
-                        <button type="button" disabled={pending} onClick={cancelNewContact} className="rounded-full px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-50">
+                        <button type="button" disabled={pending} onClick={cancelNewContact} className="ui-action-secondary rounded-full border px-4 py-2 text-sm font-medium transition disabled:opacity-50">
                           Back
                         </button>
                       </div>
@@ -316,7 +321,7 @@ export function OfferContactCell({
                 {error ? <p className="mt-3 text-sm text-rose-600">{error}</p> : null}
               </div>
             </div>,
-            document.body,
+            portalTarget,
           )
         : null}
     </div>

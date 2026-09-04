@@ -87,7 +87,7 @@ export function ContactCreateFields({
               <button
                 type="button"
                 onClick={onAddClient}
-                className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-slate-400 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-slate-600 hover:bg-slate-50"
+                className="ui-action-secondary inline-flex items-center gap-1.5 rounded-full border border-dashed px-3 py-1 text-xs font-semibold transition"
               >
                 <Plus size={12} />
                 Add new client
@@ -147,7 +147,7 @@ export function ContactCreateFields({
               <button
                 type="button"
                 onClick={onAddTag}
-                className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-slate-400 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-slate-600 hover:bg-slate-50"
+                className="ui-action-secondary inline-flex items-center gap-1.5 rounded-full border border-dashed px-3 py-1 text-xs font-semibold transition"
               >
                 <Plus size={12} />
                 Add new tag

@@ -39,7 +39,7 @@ img.brand-asset-mark {
   --color-brandnavy-700: #1b263b;
   --color-brandnavy-900: #10192a;
   --color-brandnavy-foreground: #ffffff;
-  --action-primary-background: var(--theme-dark);
+  --action-primary-background: var(--theme-dark, var(--theme-light));
   --action-primary-foreground: #ffffff;
   --action-primary-border: color-mix(in srgb, var(--action-primary-background) 50%, var(--action-primary-foreground));
   --action-secondary-background: color-mix(in srgb, var(--action-primary-background) 12%, #ffffff);
