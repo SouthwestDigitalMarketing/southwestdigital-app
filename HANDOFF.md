@@ -1,6 +1,6 @@
 # Coding-agent handoff
 
-Updated: 2026-09-04 (America/Chicago) — mid-session snapshot; being refreshed as work lands.
+Updated: 2026-09-04 (America/Chicago) — manage-offers workflow and handoff refreshed.
 
 ## Start here
 
@@ -15,13 +15,9 @@ The user has instructed: **never push without explicit user instruction**. Commi
 
 ## Current commit state
 
-- Latest pushed commit at start of session: `5c688d7 Harden proposal signing and payment flow`
-- Since then, local + pushed:
-  - `66e9796 Enforce Stripe Connect destination on proposal payments`
-  - `f9f31e3 Add Zoho email connection so staff can send from the app`
-- **Local, not yet pushed:**
-  - `327efab Route proposal and cancellation email through Zoho`
-  - Additional Product Type commits landing during this session — see below
+- Latest commit on `origin/main`: `2731c3a Document product-kind architecture and mark refactor complete`
+- **Local, not yet pushed:** 20 commits, beginning with `7cceef5` and ending with `da2c537`.
+- The local commits cover the manage-offers modal, contact fields, client/tag creation, action styling/order, send/resend behavior, duplicate markers, published proposal viewing, progressed-edit warnings, draft editing, and relative last-sent age. Run `git log --oneline origin/main..HEAD` for the complete list.
 
 Run `git log --oneline origin/main..HEAD` to see what's ahead of origin.
 
@@ -93,6 +89,16 @@ Full plan lives below in **"Product Type refactor plan"** section. Progress mark
 - PayPal path (`/api/proposal/[engagementId]/paypal/*`) also needs the same hourly-checkout dispatch if you plan to enable PayPal on hourly offers.
 
 Each phase → its own commit. Fresh agents can `git log` since `f9f31e3` to see what's landed.
+
+### 5) Manage Offers workflow — DONE, local commits not pushed
+
+- Draft rows no longer show a redundant “Resume” action. The pencil Edit action opens the appropriate builder.
+- Non-draft rows use a primary eye-icon action to open the published, client-facing proposal. If no published token exists, the fallback is “Details”.
+- The Edit action shows an amber warning badge and confirmation modal when the proposal has been viewed, signed, or paid. Viewed-only warnings recommend republishing/resending; signed/paid warnings recommend duplicating the offer so the existing signed/payment terms are not silently replaced.
+- Staff proposal previews append `staffPreview=1` and are server-authorized by session, active user status, and brand membership/platform role. Authorized previews render the published proposal without stamping `firstViewedAt`.
+- Duplicate markers now live in the Offer ID column and retain their source tooltip and clear control. `$1 test proposal` markers remain in the contact column.
+- The separate exact “Last sent” date and “Days ago” columns were consolidated into one sortable “Last sent” column with relative values such as “Today”, “1 day ago”, “8 days ago”, and “Not sent”.
+- Verification for the latest changes: TypeScript ✅ · focused ESLint ✅ · 39 test files / 238 tests ✅ · `git diff --check` ✅.
 
 **Naming clarification:** I switched from `productType` (planned) to `productKind` (built) because `Quote.kind` (String) already existed with two values (`bookkeeping`, `referral-network`). Extending that field's semantics is cleaner than introducing a redundant enum. `OFFER_KINDS` in `src/lib/quotes/kinds.ts` is the canonical list; `isOfferKindKey` validates. Hourly builder is at `/offers/hourly` and reads `?kind=consulting|coaching` from the URL.
 
