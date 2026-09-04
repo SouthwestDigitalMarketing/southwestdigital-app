@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Archive, Ban, Eye, FileSignature, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { archiveAgreementAction, batchAgreementAction, deleteAgreementAction, requestAgreementCancellationAction, voidAgreementAction } from "./actions";
+import { archiveAgreementAction, batchAgreementAction, deleteAgreementAction, voidAgreementAction } from "./actions";
 
 type IssuedAgreement = {
   id: string;
@@ -106,13 +106,14 @@ export function IssuedAgreementsTable({ agreements }: { agreements: IssuedAgreem
     setActionError(null);
     startTransition(async () => {
       try {
-        if (ids.length === 1 && action !== "requestCancellation") {
+        if (action === "requestCancellation") {
+          await batchAgreementAction(ids, action, cancellationReason);
+        } else if (ids.length === 1) {
           if (action === "void") await voidAgreementAction(ids[0]);
           if (action === "archive") await archiveAgreementAction(ids[0]);
           if (action === "delete") await deleteAgreementAction(ids[0]);
         } else {
-          if (action === "requestCancellation") await requestAgreementCancellationAction(ids[0], cancellationReason);
-          else await batchAgreementAction(ids, action);
+          await batchAgreementAction(ids, action);
         }
         setConfirmation(null);
         router.refresh();
@@ -291,10 +292,10 @@ export function IssuedAgreementsTable({ agreements }: { agreements: IssuedAgreem
               {confirmation.label[0].toUpperCase() + confirmation.label.slice(1)} {confirmation.ids.length > 1 ? `${confirmation.ids.length} agreements` : "agreement"}?
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              Are you sure you want to {confirmation.action} {confirmation.ids.length > 1 ? "these agreements" : "this agreement"}?{" "}
+              Are you sure you want to {confirmation.label} {confirmation.ids.length > 1 ? "these agreements" : "this agreement"}?{" "}
               {confirmation.action === "delete"
                 ? "This permanently deletes the selected agreement records and cannot be undone."
-                : "The selected agreement records will be updated in the manager."}
+                : `The ${confirmation.ids.length > 1 ? "selected agreement records" : "agreement record"} will be updated in the manager.`}
             </p>
             {confirmation.action === "requestCancellation" ? (
               <div className="mt-4">

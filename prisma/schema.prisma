@@ -2067,6 +2067,8 @@ model Engagement {
   agreementCancellationRequestedAt   DateTime?
   agreementCancellationRequestedByUserId String?
   agreementCancellationReason        String?
+  agreementCancellationTokenHash     String? @unique
+  agreementCancellationTokenExpiresAt DateTime?
   agreementCancellationAcknowledgedAt DateTime?
   agreementCancellationAcknowledgedByName String?
   agreementCancellationAcknowledgedByEmail String?
