@@ -15,14 +15,35 @@ import { ToolLinksForm } from "./ToolLinksForm";
 import { BrandAppearanceForm } from "./BrandAppearanceForm";
 import { StripeConnectForm } from "./StripeConnectForm";
 import { YouTubeIntegrationForm } from "./YouTubeIntegrationForm";
+import { EmailConnectionsPanel } from "./EmailConnectionsPanel";
+import { getMembershipEmailConnection, toPublicConnection } from "@/lib/emailConnections/repository";
+
+type EmailNotice = "connected" | "cancelled" | "error" | "missing-refresh-token" | "not-configured" | "access-denied";
+
+const EMAIL_NOTICES: readonly EmailNotice[] = [
+  "connected",
+  "cancelled",
+  "error",
+  "missing-refresh-token",
+  "not-configured",
+  "access-denied",
+];
+
+function parseEmailNotice(value: string | undefined): EmailNotice | null {
+  return value && (EMAIL_NOTICES as readonly string[]).includes(value) ? (value as EmailNotice) : null;
+}
 
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ stripe?: string; youtube?: string; reason?: string }>;
+  searchParams: Promise<{ stripe?: string; youtube?: string; reason?: string; email?: string }>;
 }) {
-  const { brand } = await requireStaffBrand();
+  const { brand, membership } = await requireStaffBrand();
   const query = await searchParams;
+  const emailConnectionRow = membership ? await getMembershipEmailConnection(membership.id) : null;
+  const emailConnection = emailConnectionRow ? toPublicConnection(emailConnectionRow) : null;
+  const zohoConfigured = Boolean(process.env.ZOHO_MAIL_CLIENT_ID?.trim() && process.env.ZOHO_MAIL_CLIENT_SECRET?.trim());
+  const emailNotice = parseEmailNotice(query.email);
   if (query.stripe === "refresh") {
     let url: string;
     try {
@@ -83,6 +104,11 @@ export default async function SettingsPage({
                 ? "return"
                 : null
           }
+        />
+        <EmailConnectionsPanel
+          connection={emailConnection}
+          zohoConfigured={zohoConfigured}
+          notice={emailNotice}
         />
         <YouTubeIntegrationForm
           status={youtube?.status === IntegrationStatus.ACTIVE ? "active" : youtube?.status === IntegrationStatus.ERROR ? "error" : "missing"}

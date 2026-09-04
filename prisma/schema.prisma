@@ -580,6 +580,7 @@ model Brand {
   catalogServices        CatalogService[]
   catalogServiceTags     CatalogServiceTag[]
   quoteRevisions         QuoteRevision[]
+  emailConnections       EmailConnection[]
   createdAt              DateTime               @default(now())
   updatedAt              DateTime               @updatedAt
 
@@ -654,6 +655,7 @@ model BrandMembership {
   createdContentCalendarItems     ContentCalendarItem[]      @relation("ContentCalendarItemCreatedBy")
   createdPipelines                Pipeline[]                 @relation("PipelineCreatedBy")
   createdClientIntakeInvites      ClientIntakeInvite[]       @relation("ClientIntakeInviteCreatedBy")
+  emailConnection                 EmailConnection?
   createdAt                       DateTime                   @default(now())
   updatedAt                       DateTime                   @updatedAt
 
@@ -2757,4 +2759,43 @@ model BrandDataExport {
   updatedAt         DateTime               @updatedAt
 
   @@index([brandId, status, requestedAt])
+}
+
+enum EmailConnectionProvider {
+  ZOHO
+  GMAIL
+  MICROSOFT
+  SMTP
+}
+
+enum EmailConnectionStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+  ERROR
+}
+
+model EmailConnection {
+  id                     String                  @id @default(cuid())
+  brandId                String
+  membershipId           String                  @unique
+  provider               EmailConnectionProvider
+  region                 String?
+  emailAddress           String
+  displayName            String?
+  accountIdentifier      String?
+  accessTokenCiphertext  String                  @db.Text
+  refreshTokenCiphertext String                  @db.Text
+  accessTokenExpiresAt   DateTime?
+  scopes                 String?
+  status                 EmailConnectionStatus   @default(ACTIVE)
+  lastError              String?                 @db.Text
+  lastVerifiedAt         DateTime?
+  brand                  Brand                   @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  membership             BrandMembership         @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+
+  @@index([brandId])
+  @@index([brandId, status, provider])
 }
