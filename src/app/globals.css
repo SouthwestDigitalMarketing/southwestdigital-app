@@ -1,5 +1,19 @@
 @import "tailwindcss";
 
+/* Keep the app canvas width stable as route content crosses the scrollbar
+   threshold. Builder navigation uses the sidebar width to center against the
+   viewport instead of the remaining content column. */
+.app-shell-main { scrollbar-gutter: stable; }
+.proposal-builder-header {
+  width: 100vw;
+  margin-left: calc((100% - 100vw - var(--app-sidebar-width, 0px)) / 2);
+}
+
+@media (max-width: 1023px) {
+  .app-shell-root { --app-sidebar-width: 0px !important; }
+  .proposal-builder-header { margin-left: calc((100% - 100vw) / 2); }
+}
+
 .ui-modal {
   position: fixed;
   inset: 0;

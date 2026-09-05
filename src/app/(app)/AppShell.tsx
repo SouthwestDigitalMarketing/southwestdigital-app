@@ -375,7 +375,7 @@ export function AppShell({
     <div
       data-theme={mode}
       data-appearance={appearance}
-      className="flex h-dvh overflow-hidden"
+      className="app-shell-root flex h-dvh overflow-hidden"
       style={{
         backgroundColor: "var(--app-canvas)",
         "--theme-light": light,
@@ -384,6 +384,7 @@ export function AppShell({
         ...themeVariables,
         ...chartVariables,
         ...(isLight && themePreset !== "grok" ? { "--app-canvas": light } : {}),
+        "--app-sidebar-width": `${collapsed ? 64 : sidebarWidth}px`,
       } as React.CSSProperties}
     >
       <aside className="hidden lg:flex">{sidebar}</aside>
@@ -452,7 +453,7 @@ export function AppShell({
         <main
           id="main-content"
           tabIndex={-1}
-          className="min-w-0 flex-1 overflow-y-auto"
+          className="app-shell-main min-w-0 flex-1 overflow-y-auto"
           style={{ background: mainPanelBackground }}
         >
           {children}
