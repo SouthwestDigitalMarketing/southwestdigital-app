@@ -257,13 +257,13 @@ ${effectiveEmailBody}`;
 
   return (
     <main className="min-h-screen">
-      <section className="mx-auto w-full max-w-[1720px] px-5 py-6 lg:px-8">
+      <section className="w-full px-5 py-6 lg:px-8">
         <ProposalAppDemoHeader
           currentStep="cover"
           previousHref="/offers/add-ons"
         />
 
-        <div className="mt-8 grid gap-8 lg:grid-cols-2">
+        <div className="mt-4 grid gap-8 lg:grid-cols-2">
           <section className="theme-white space-y-5 rounded-2xl border border-slate-200 p-6 shadow-sm lg:p-8">
             <div>
               <h1 className="text-xl font-bold text-slate-950">Client Email</h1>

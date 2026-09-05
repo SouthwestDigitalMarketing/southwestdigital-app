@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { X } from "lucide-react";
+import { Archive, ArchiveRestore, Copy, Pencil, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/Modal";
 import { AGREEMENT_TEMPLATE_TOKENS } from "@/lib/agreements/template";
@@ -9,6 +9,7 @@ import type { AgreementTemplateView } from "@/lib/agreements/types";
 import {
   archiveAgreementTemplateAction,
   createAgreementTemplateAction,
+  duplicateAgreementTemplateAction,
   deleteAgreementTemplateAction,
   restoreAgreementTemplateAction,
   setDefaultAgreementTemplateAction,
@@ -23,7 +24,7 @@ const PRODUCT_KIND_OPTIONS = [
   { value: "coaching", label: "Coaching" },
 ] as const;
 
-function TemplateEditor({ template }: { template: AgreementTemplateView }) {
+function TemplateEditor({ template, onSaved }: { template: AgreementTemplateView; onSaved?: () => void }) {
   const router = useRouter();
   const [name, setName] = useState(template.name);
   const [description, setDescription] = useState(template.description ?? "");
@@ -33,12 +34,13 @@ function TemplateEditor({ template }: { template: AgreementTemplateView }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const archived = template.status === "archived";
 
-  function run(action: () => Promise<unknown>, successMessage?: string) {
+  function run(action: () => Promise<unknown>, successMessage?: string, onSuccess?: () => void) {
     setMessage(null);
     startTransition(async () => {
       try {
         await action();
         if (successMessage) setMessage(successMessage);
+        onSuccess?.();
         router.refresh();
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "Something went wrong.");
@@ -121,7 +123,7 @@ function TemplateEditor({ template }: { template: AgreementTemplateView }) {
               <button
                 type="button"
                 disabled={isPending}
-                onClick={() => run(() => restoreAgreementTemplateAction(template.id), "Template restored.")}
+            onClick={() => run(() => restoreAgreementTemplateAction(template.id), "Template restored.")}
                 className="ui-action-secondary rounded-lg border px-3 py-2 text-sm font-semibold transition disabled:opacity-50"
               >
                 Restore
@@ -210,7 +212,8 @@ function TemplateEditor({ template }: { template: AgreementTemplateView }) {
             disabled={isPending}
             onClick={() => run(
               () => updateAgreementTemplateAction(template.id, { name, description, content }),
-              "Agreement template saved.",
+              "Template saved.",
+              onSaved,
             )}
             className="ui-action-primary shrink-0 rounded-lg border px-4 py-2 text-sm font-semibold transition disabled:opacity-50"
           >
@@ -225,52 +228,129 @@ function TemplateEditor({ template }: { template: AgreementTemplateView }) {
 export function AgreementTemplatesManager({ templates }: { templates: AgreementTemplateView[] }) {
   const router = useRouter();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftTemplateId, setDraftTemplateId] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
   const [isCreating, startCreating] = useTransition();
   const [createError, setCreateError] = useState<string | null>(null);
   const editingTemplate = templates.find((template) => template.id === editingId) ?? null;
+  const visibleTemplates = templates.filter((template) => (showArchived ? template.status === "archived" : template.status !== "archived"));
 
   function createTemplate() {
     setCreateError(null);
     startCreating(async () => {
       try {
         const id = await createAgreementTemplateAction();
+        setDraftTemplateId(id);
         setEditingId(id);
         router.refresh();
       } catch (error) {
-        setCreateError(error instanceof Error ? error.message : "Unable to create template.");
+        setCreateError(error instanceof Error ? error.message : "Unable to create agreement.");
+      }
+    });
+  }
+
+  function duplicateTemplate(id: string) {
+    setCreateError(null);
+    startCreating(async () => {
+      try {
+        const createdId = await duplicateAgreementTemplateAction(id);
+        setDraftTemplateId(createdId);
+        setEditingId(createdId);
+        router.refresh();
+      } catch (error) {
+        setCreateError(error instanceof Error ? error.message : "Unable to create agreement.");
+      }
+    });
+  }
+
+  function runTemplateAction(action: () => Promise<unknown>) {
+    setCreateError(null);
+    startCreating(async () => {
+      try {
+        await action();
+        router.refresh();
+      } catch (error) {
+        setCreateError(error instanceof Error ? error.message : "Unable to update template.");
+      }
+    });
+  }
+
+  function archiveTemplate(id: string) {
+    runTemplateAction(() => archiveAgreementTemplateAction(id));
+  }
+
+  function restoreTemplate(id: string) {
+    runTemplateAction(() => restoreAgreementTemplateAction(id));
+  }
+
+  function deleteTemplate(id: string, status: AgreementTemplateView["status"]) {
+    const archived = status === "archived";
+    const message = archived
+      ? "Permanently delete this archived template? Published offers keep their saved agreement copy."
+      : "Permanently delete this active template? This cannot be undone.";
+    if (!window.confirm(message)) return;
+    runTemplateAction(async () => {
+      if (!archived) await archiveAgreementTemplateAction(id);
+      await deleteAgreementTemplateAction(id);
+    });
+  }
+
+  function closeEditor() {
+    const draftId = draftTemplateId;
+    setDraftTemplateId(null);
+    setEditingId(null);
+    if (!draftId) return;
+
+    startCreating(async () => {
+      try {
+        await archiveAgreementTemplateAction(draftId);
+        await deleteAgreementTemplateAction(draftId);
+        router.refresh();
+      } catch (error) {
+        setCreateError(error instanceof Error ? error.message : "Unable to discard template.");
       }
     });
   }
 
   return (
-    <div className="p-8">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-semibold text-slate-900">Agreement Templates</h2>
-          <p className="mt-1 max-w-3xl text-sm text-slate-500">
-            Maintain reusable agreements here. Offer builders select a template; publishing saves its current text with that offer.
-          </p>
-          <p className="mt-2 max-w-3xl text-xs text-amber-700">
-            Agreement language can have legal consequences. Have qualified counsel review templates before using them with clients.
-          </p>
-        </div>
-      </div>
+    <div>
       {createError ? <p className="mt-3 text-sm text-red-600">{createError}</p> : null}
 
       <div className="mt-5">
-        <button
-          type="button"
-          disabled={isCreating}
-          onClick={createTemplate}
-          className="ui-action-primary rounded-lg border px-4 py-2 text-sm font-semibold transition disabled:opacity-50"
-        >
-          {isCreating ? "Creating…" : "New template"}
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            disabled={isCreating}
+            onClick={createTemplate}
+            className="ui-action-primary rounded-lg border px-4 py-2 text-sm font-semibold transition disabled:opacity-50"
+          >
+            {isCreating ? "Creating…" : "New template"}
+          </button>
+          <p className="min-w-0 flex-1 text-xs text-amber-700">
+            Agreement language can have legal consequences. Have qualified counsel review templates before using them with clients.
+          </p>
+        </div>
+        <div className="mt-3 flex items-center gap-3 text-base font-medium text-slate-700">
+            <span className={!showArchived ? "text-slate-900" : "text-slate-500"}>Current</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={showArchived}
+              aria-label="Show archived templates"
+              onClick={() => setShowArchived((current) => !current)}
+              className="ui-toggle-switch"
+            >
+              <span className="ui-toggle-switch-thumb" />
+            </button>
+            <span className={showArchived ? "text-slate-900" : "text-slate-500"}>Archived</span>
+        </div>
       </div>
 
       <div className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        {templates.length === 0 ? (
-          <div className="px-6 py-12 text-center text-sm text-slate-500">No agreement templates yet.</div>
+        {visibleTemplates.length === 0 ? (
+          <div className="px-6 py-12 text-center text-sm text-slate-500">
+            {showArchived ? "No archived templates." : "No active templates yet."}
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[700px] text-sm">
@@ -284,7 +364,7 @@ export function AgreementTemplatesManager({ templates }: { templates: AgreementT
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {templates.map((template) => (
+                {visibleTemplates.map((template) => (
                   <tr key={template.id} className="hover:bg-slate-50">
                     <td className="px-5 py-4">
                       <p className="font-medium text-slate-900">{template.name}</p>
@@ -298,9 +378,76 @@ export function AgreementTemplatesManager({ templates }: { templates: AgreementT
                     </td>
                     <td className="whitespace-nowrap px-5 py-4 text-slate-600">{new Date(template.updatedAt).toLocaleDateString()}</td>
                     <td className="px-5 py-4 text-right">
-                      <button type="button" onClick={() => setEditingId(template.id)} className="text-xs font-semibold text-slate-900 hover:underline">
-                        Edit
-                      </button>
+                      <div className="flex justify-end gap-1 whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => setEditingId(template.id)}
+                          aria-label={`Edit ${template.name}`}
+                          title="Edit template"
+                          className="ui-action-ghost inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:text-slate-900"
+                        >
+                          <Pencil className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isCreating}
+                          onClick={() => duplicateTemplate(template.id)}
+                          aria-label={`Duplicate ${template.name}`}
+                          title="Duplicate template"
+                          className="ui-action-ghost inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:text-slate-900 disabled:opacity-50"
+                        >
+                          <Copy className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                        {template.status === "archived" ? (
+                          <>
+                            <button
+                              type="button"
+                              disabled={isCreating}
+                              onClick={() => restoreTemplate(template.id)}
+                              aria-label={`Restore ${template.name}`}
+                              title="Restore template"
+                              className="ui-action-ghost inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:text-slate-900 disabled:opacity-50"
+                            >
+                              <ArchiveRestore className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                            {!template.isDefault ? (
+                              <button
+                                type="button"
+                                disabled={isCreating}
+                                onClick={() => deleteTemplate(template.id, template.status)}
+                                aria-label={`Delete ${template.name}`}
+                                title="Delete template"
+                                className="ui-action-ghost inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:text-red-700 disabled:opacity-50"
+                              >
+                                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                              </button>
+                            ) : null}
+                          </>
+                        ) : !template.isDefault ? (
+                          <>
+                            <button
+                              type="button"
+                              disabled={isCreating}
+                              onClick={() => archiveTemplate(template.id)}
+                              aria-label={`Archive ${template.name}`}
+                              title="Archive template"
+                              className="ui-action-ghost inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:text-slate-900 disabled:opacity-50"
+                            >
+                              <Archive className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isCreating}
+                              onClick={() => deleteTemplate(template.id, template.status)}
+                              aria-label={`Delete ${template.name}`}
+                              title="Delete template"
+                              className="ui-action-ghost inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:text-red-700 disabled:opacity-50"
+                            >
+                              <Trash2 className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                          </>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -312,7 +459,7 @@ export function AgreementTemplatesManager({ templates }: { templates: AgreementT
 
       {editingTemplate ? (
         <Modal
-          onClose={() => setEditingId(null)}
+          onClose={closeEditor}
           labelledBy="agreement-template-editor-title"
           className="max-w-5xl overflow-hidden bg-slate-50"
           closeOnBackdrop={false}
@@ -320,12 +467,21 @@ export function AgreementTemplatesManager({ templates }: { templates: AgreementT
           <div className="flex max-h-[calc(100dvh-1rem)] min-h-0 flex-col sm:max-h-[calc(100dvh-2rem)]">
             <div className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
               <h2 id="agreement-template-editor-title" className="text-lg font-semibold text-slate-900">Edit agreement template</h2>
-              <button type="button" onClick={() => setEditingId(null)} aria-label="Close template editor" title="Close template editor" className="rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900">
-                <X className="h-5 w-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={closeEditor} className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+                  Cancel
+                </button>
+                <button type="button" onClick={closeEditor} aria-label="Close template editor" title="Close template editor" className="rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
-              <TemplateEditor key={`${editingTemplate.id}:${editingTemplate.updatedAt}`} template={editingTemplate} />
+              <TemplateEditor
+                key={`${editingTemplate.id}:${editingTemplate.updatedAt}`}
+                template={editingTemplate}
+                onSaved={() => setDraftTemplateId(null)}
+              />
             </div>
           </div>
         </Modal>

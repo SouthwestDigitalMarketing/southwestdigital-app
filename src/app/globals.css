@@ -179,6 +179,11 @@ img.brand-asset-mark {
   color: #ffffff;
 }
 
+/* Agreement tables and dialogs should never fall below the app's readable base size. */
+.agreements-readable :is(.text-xs, .text-sm) {
+  font-size: 1rem !important;
+}
+
 .proposal-options-editor .proposal-options-kind.proposal-options-kind-optional {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23ffffff'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2.5' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
 }

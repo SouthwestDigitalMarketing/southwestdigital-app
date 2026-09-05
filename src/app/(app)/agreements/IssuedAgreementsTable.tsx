@@ -15,7 +15,6 @@ type IssuedAgreement = {
   agreementText: string | null;
   agreementSentAt: Date | null;
   signedAt: Date | null;
-  signerName: string | null;
   agreementManagerStatus: "ACTIVE" | "VOIDED" | "VOIDED_BEFORE_SIGNATURE" | "CANCELLATION_REQUESTED" | "TERMINATED_AFTER_SIGNATURE" | "ARCHIVED";
   agreementCancellationRequestedAt: Date | null;
   agreementCancellationReason: string | null;
@@ -127,24 +126,39 @@ export function IssuedAgreementsTable({ agreements }: { agreements: IssuedAgreem
   return (
     <section>
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold text-slate-900">Agreements manager</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Track agreements issued to clients and the signatures you have received.
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/offers/new"
+              className="ui-action-primary inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-lg border px-4 py-2 text-sm font-semibold transition"
+            >
+              New agreement
+            </Link>
+            <Link
+              href="/agreements/templates"
+              className="ui-action-secondary inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-lg border px-4 py-2 text-sm font-semibold transition"
+            >
+              Manage Agreement Templates
+            </Link>
+          </div>
+          <p className="mt-2 w-full text-xs text-amber-700">
+            Agreement language can have legal consequences. Have qualified counsel review templates before using them with clients.
           </p>
         </div>
-        <div className="flex gap-5 text-right text-sm">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total</p>
-            <p className="mt-1 text-xl font-semibold text-slate-900">{agreements.length}</p>
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Signed</p>
-            <p className="mt-1 text-xl font-semibold text-emerald-700">{signedCount}</p>
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Awaiting</p>
-            <p className="mt-1 text-xl font-semibold text-amber-700">{awaitingSignatureCount}</p>
+        <div className="flex flex-col items-stretch gap-4 sm:items-end">
+          <div className="flex gap-5 text-right text-sm">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total</p>
+              <p className="mt-1 text-xl font-semibold text-slate-900">{agreements.length}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Signed</p>
+              <p className="mt-1 text-xl font-semibold text-emerald-700">{signedCount}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Awaiting</p>
+              <p className="mt-1 text-xl font-semibold text-amber-700">{awaitingSignatureCount}</p>
+            </div>
           </div>
         </div>
       </div>
@@ -183,7 +197,7 @@ export function IssuedAgreementsTable({ agreements }: { agreements: IssuedAgreem
                       className="theme-checkbox h-4 w-4 rounded border-slate-300 focus:ring-slate-400"
                     />
                   </th>
-                  <th className="px-5 py-3 font-semibold text-slate-700">Agreement</th>
+                  <th className="px-5 py-3 font-semibold text-slate-700">Designator</th>
                   <th className="px-5 py-3 font-semibold text-slate-700">Client</th>
                   <th className="px-5 py-3 font-semibold text-slate-700">Issued</th>
                   <th className="px-5 py-3 font-semibold text-slate-700">Signed</th>
@@ -195,7 +209,6 @@ export function IssuedAgreementsTable({ agreements }: { agreements: IssuedAgreem
               <tbody className="divide-y divide-slate-100">
                 {agreements.map((agreement) => {
                   const status = agreementStatus(agreement);
-                  const contact = agreement.primaryContactName || agreement.primaryContactEmail;
                   const offer = agreement.quotes[0];
 
                   return (
@@ -209,20 +222,23 @@ export function IssuedAgreementsTable({ agreements }: { agreements: IssuedAgreem
                           className="theme-checkbox h-4 w-4 rounded border-slate-300 focus:ring-slate-400"
                         />
                       </td>
-                      <td className="px-5 py-4">
-                        <p className="font-medium text-slate-900">Client agreement</p>
-                        <p className="mt-1 font-mono text-xs text-slate-400">{agreement.id}</p>
+                      <td className="whitespace-nowrap px-5 py-4">
+                        <span
+                          title={agreement.id}
+                          aria-label={`Agreement designator ${agreement.id}`}
+                          className="font-mono text-base text-slate-600"
+                        >
+                          ....{agreement.id.slice(-4)}
+                        </span>
                       </td>
                       <td className="px-5 py-4">
                         <p className="font-medium text-slate-900">{agreement.clientName || "Unnamed client"}</p>
-                        {contact ? <p className="mt-1 text-xs text-slate-500">{contact}</p> : null}
                       </td>
                       <td className="whitespace-nowrap px-5 py-4 text-slate-600">
                         {formatDate(agreement.agreementSentAt ?? agreement.createdAt)}
                       </td>
                       <td className="whitespace-nowrap px-5 py-4 text-slate-600">
                         {formatDate(agreement.signedAt)}
-                        {agreement.signerName ? <p className="mt-1 text-xs text-slate-500">{agreement.signerName}</p> : null}
                       </td>
                       <td className="px-5 py-4">
                         <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_STYLES[status]}`}>

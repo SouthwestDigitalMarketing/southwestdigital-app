@@ -141,14 +141,14 @@ export default function ProposalFinalizeDemo() {
 
   return (
     <main className="min-h-screen">
-      <section className="mx-auto w-full max-w-[1720px] px-5 py-6 lg:px-8">
+      <section className="w-full px-5 py-6 lg:px-8">
         <ProposalAppDemoHeader
           currentStep="finalize"
           previousHref="/offers/intro"
           nextHref="/offers/cover"
         />
 
-        <div className="mt-8 grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="mt-4 grid gap-5 xl:grid-cols-[minmax(0,1fr)_280px] 2xl:grid-cols-[minmax(0,1fr)_300px]">
           <div>
             <section className="proposal-builder-card overflow-hidden rounded-[1.5rem] border border-slate-300 shadow-sm">
               <div className="border-b border-slate-200 bg-white px-5 py-6">

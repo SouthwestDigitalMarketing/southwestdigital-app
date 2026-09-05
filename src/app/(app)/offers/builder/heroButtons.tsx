@@ -132,11 +132,11 @@ export function HeroVideoButtonToggle({
   onChange: (next: HeroButtonConfig) => void;
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 proposal-builder-card p-5">
+    <div className="min-w-0">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold text-slate-700">Video button</p>
-          <p className="mt-0.5 text-xs text-slate-500">
+          <p className="text-xl font-semibold tracking-tight text-slate-900">Video button</p>
+          <p className="mt-1 text-base text-slate-500">
             Show the play button on the proposal. This only appears when a video is selected.
           </p>
         </div>
@@ -160,7 +160,7 @@ export function HeroVideoButtonToggle({
         </div>
       </div>
 
-      <label className="mt-4 block text-sm font-semibold text-slate-700">
+      <label className="mt-5 block text-sm font-semibold uppercase tracking-[0.08em] text-slate-500">
         Button text
         <span className="ml-2 font-normal text-slate-400">leave blank to use the default</span>
       </label>
@@ -169,7 +169,7 @@ export function HeroVideoButtonToggle({
         placeholder={DEFAULT_HERO_MEDIA_BUTTON.label}
         value={value.label}
         onChange={(event) => onChange({ ...value, label: event.target.value })}
-        className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-brandnavy focus:ring-2 focus:ring-brandnavy/20"
+        className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-base text-slate-900 shadow-sm outline-none transition focus:border-brandnavy focus:ring-2 focus:ring-brandnavy/10"
       />
     </div>
   );
@@ -204,12 +204,12 @@ export function HeroButtonEditor({
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 proposal-builder-card p-5">
-      <p className="text-sm font-semibold text-slate-700">{title}</p>
-      <p className="mt-0.5 text-xs text-slate-500">{description}</p>
+    <div className="min-w-0">
+      <p className="text-xl font-semibold tracking-tight text-slate-900">{title}</p>
+      <p className="mt-1 text-base text-slate-500">{description}</p>
 
       <div className="mt-4">
-      <label className="block text-sm font-semibold text-slate-700">
+      <label className="block text-sm font-semibold uppercase tracking-[0.08em] text-slate-500">
         Button text
         <span className="ml-2 font-normal text-slate-400">leave blank to use the default</span>
       </label>
@@ -218,10 +218,10 @@ export function HeroButtonEditor({
         placeholder={fallback.label}
         value={value.label}
         onChange={(event) => onChange({ ...value, label: event.target.value })}
-        className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-brandnavy focus:ring-2 focus:ring-brandnavy/20"
+        className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-base text-slate-900 shadow-sm outline-none transition focus:border-brandnavy focus:ring-2 focus:ring-brandnavy/10"
       />
 
-      <p className="mt-4 text-sm font-semibold text-slate-700">Icon</p>
+      <p className="mt-5 text-sm font-semibold uppercase tracking-[0.08em] text-slate-500">Icon</p>
       <div className="mt-2 flex flex-wrap gap-2">
         {PLACEMENTS.map((placement) => {
           const selected = value.iconPlacement === placement.id;

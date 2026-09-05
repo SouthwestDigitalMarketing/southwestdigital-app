@@ -51,7 +51,7 @@ export default function AssessmentCardSection({
       </div>
       <div className="mt-4">
         {readOnly ? children : (
-          <div className={`grid gap-x-6 gap-y-4 sm:grid-cols-2 ${summary && summary.length >= 3 ? "xl:grid-cols-3" : ""}`}>
+          <div className={`grid gap-x-6 gap-y-4 sm:grid-cols-2 ${summary && summary.length >= 4 ? "xl:grid-cols-4" : summary && summary.length >= 3 ? "xl:grid-cols-3" : ""}`}>
             {summary?.map(([label, value]) => (
               <div key={label} className="min-w-0">
                 <p className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-500">{label}</p>

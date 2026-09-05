@@ -43,10 +43,10 @@ export default function PricingSnapshotSidebar({
           {cleanupCard ? (
             <div className="text-left">
               <div className="flex items-start justify-between gap-3">
-                <div>
+                <div className="min-w-0">
                   <p className="text-xl font-semibold tracking-tight text-slate-900">Historical cleanup</p>
                 </div>
-                <div className="text-right">
+                <div className="shrink-0 text-right">
                   <p className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-500">
                     One-Time
                   </p>
@@ -80,8 +80,8 @@ export default function PricingSnapshotSidebar({
                 className={`w-full rounded-[1.15rem] border px-4 py-2.5 text-left ${cardClassName}`}
               >
                 <div className="flex items-center justify-between gap-3">
-                  <p className={`text-base font-semibold ${titleClassName}`}>{item.name}</p>
-                  <p className={`text-base font-semibold ${titleClassName}`}>{item.monthlyLabel}</p>
+                  <p className={`min-w-0 break-words text-base font-semibold ${titleClassName}`}>{item.name}</p>
+                  <p className={`shrink-0 whitespace-nowrap text-base font-semibold ${titleClassName}`}>{item.monthlyLabel}</p>
                 </div>
               </div>
             );

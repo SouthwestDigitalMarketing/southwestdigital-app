@@ -95,14 +95,14 @@ export default function ProposalBonusesDemo() {
 
   return (
     <main className="min-h-screen">
-      <section className="mx-auto w-full max-w-[1720px] px-5 py-6 lg:px-8">
+      <section className="w-full px-5 py-6 lg:px-8">
         <ProposalAppDemoHeader
           currentStep="add-ons"
           previousHref="/offers/add-ons"
           nextHref="/offers"
         />
 
-        <div className="mx-auto mt-8 max-w-5xl">
+        <div className="mx-auto mt-4 max-w-5xl">
           <div className="mb-3">
             <h1 className="text-2xl font-bold text-slate-950">Choose Bonuses</h1>
             <p className="mt-1 text-sm text-slate-500">

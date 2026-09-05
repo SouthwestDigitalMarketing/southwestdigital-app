@@ -179,7 +179,7 @@ export default function ProposalAppDemoHeader({
   }
 
   return (
-    <header className="proposal-builder-header pb-8 [&_a]:cursor-pointer [&_button:not(:disabled)]:cursor-pointer [&_button:disabled]:cursor-not-allowed">
+    <header className="proposal-builder-header pb-4 [&_a]:cursor-pointer [&_button:not(:disabled)]:cursor-pointer [&_button:disabled]:cursor-not-allowed">
       <div>
         <div className="flex items-center justify-center gap-2">
         <div className="flex h-11 items-center gap-2">

@@ -20,7 +20,7 @@
 }
 
 .table > thead > tr > th:nth-child(1) { width: 8.5rem; }
-.table > thead > tr > th:nth-child(2) { width: 7.5rem; }
+.table > thead > tr > th:nth-child(2) { width: 11rem; }
 .table > thead > tr > th:nth-child(4) { width: 7rem; }
 .table > thead > tr > th:nth-child(5),
 .table > thead > tr > th:nth-child(6) { width: 6rem; }
@@ -33,6 +33,11 @@
   width: fit-content;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table > tbody > tr > td:nth-child(2),
+.table > tbody > tr > td:nth-child(2) > span {
   white-space: nowrap;
 }
 

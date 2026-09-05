@@ -22,8 +22,8 @@ function parseTemplateInput(input: AgreementTemplateInput) {
   const name = input.name.trim();
   const description = input.description.trim();
   const content = input.content.trim();
-  if (!name) throw new Error("Template name is required.");
-  if (name.length > 120) throw new Error("Template name must be 120 characters or fewer.");
+  if (!name) throw new Error("Agreement name is required.");
+  if (name.length > 120) throw new Error("Agreement name must be 120 characters or fewer.");
   if (description.length > 500) throw new Error("Description must be 500 characters or fewer.");
   if (!content) throw new Error("Agreement text is required.");
   if (content.length > 100_000) throw new Error("Agreement text is too long.");
@@ -190,6 +190,31 @@ export async function createAgreementTemplateAction() {
   return created.id;
 }
 
+export async function duplicateAgreementTemplateAction(id: string) {
+  const { brand } = await requireStaffBrandOrThrow();
+  const source = await prisma.agreementTemplate.findFirst({
+    where: { id, brandId: brand.id },
+    select: { name: true, description: true, content: true },
+  });
+  if (!source) throw new Error("Agreement not found.");
+
+  const created = await prisma.agreementTemplate.create({
+    data: {
+      brandId: brand.id,
+      key: `agreement-${randomUUID()}`,
+      name: `${source.name.slice(0, 110).trimEnd()} (copy)`,
+      description: source.description,
+      content: source.content,
+      status: "active",
+      isDefault: false,
+      defaultForProductKind: null,
+    },
+    select: { id: true },
+  });
+  revalidateAgreementPaths();
+  return created.id;
+}
+
 export async function updateAgreementTemplateAction(
   id: string,
   input: AgreementTemplateInput,
@@ -200,7 +225,7 @@ export async function updateAgreementTemplateAction(
     where: { id, brandId: brand.id },
     data,
   });
-  if (result.count === 0) throw new Error("Agreement template not found.");
+  if (result.count === 0) throw new Error("Agreement not found.");
   revalidateAgreementPaths();
 }
 
@@ -217,7 +242,7 @@ export async function setDefaultForProductKindAction(
       where: { id, brandId: brand.id, status: "active" },
       select: { id: true },
     });
-    if (!template) throw new Error("Active agreement template not found.");
+    if (!template) throw new Error("Active agreement not found.");
     if (productKind) {
       // Only one active template per brand can be the default for a given
       // product kind. Clear any prior holder before setting this one.
@@ -246,7 +271,7 @@ export async function setDefaultAgreementTemplateAction(id: string) {
       where: { id, brandId: brand.id, status: "active" },
       select: { id: true },
     });
-    if (!template) throw new Error("Active agreement template not found.");
+    if (!template) throw new Error("Active agreement not found.");
     await transaction.agreementTemplate.updateMany({
       where: { brandId: brand.id, isDefault: true },
       data: { isDefault: false },
@@ -265,8 +290,8 @@ export async function archiveAgreementTemplateAction(id: string) {
     where: { id, brandId: brand.id },
     select: { isDefault: true },
   });
-  if (!template) throw new Error("Agreement template not found.");
-  if (template.isDefault) throw new Error("Choose another default before archiving this template.");
+  if (!template) throw new Error("Agreement not found.");
+  if (template.isDefault) throw new Error("Choose another default before archiving this agreement.");
   await prisma.agreementTemplate.updateMany({
     where: { id, brandId: brand.id },
     data: { status: "archived", archivedAt: new Date(), isDefault: false },
@@ -280,7 +305,7 @@ export async function restoreAgreementTemplateAction(id: string) {
     where: { id, brandId: brand.id },
     data: { status: "active", archivedAt: null },
   });
-  if (result.count === 0) throw new Error("Agreement template not found.");
+  if (result.count === 0) throw new Error("Agreement not found.");
   revalidateAgreementPaths();
 }
 
@@ -290,7 +315,7 @@ export async function deleteAgreementTemplateAction(id: string) {
     where: { id, brandId: brand.id, status: "archived", isDefault: false },
   });
   if (result.count === 0) {
-    throw new Error("Only archived, non-default templates can be deleted.");
+    throw new Error("Only archived, non-default agreements can be deleted.");
   }
   revalidateAgreementPaths();
 }

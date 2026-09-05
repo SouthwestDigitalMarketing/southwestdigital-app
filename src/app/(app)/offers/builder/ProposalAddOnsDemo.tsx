@@ -282,9 +282,9 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
 
   return (
     <main className="min-h-screen">
-      <section className="mx-auto w-full max-w-[1720px] px-5 py-6 lg:px-8">
+      <section className="w-full px-5 py-6 lg:px-8">
         <ProposalAppDemoHeader currentStep="add-ons" previousHref="/offers/calculator" nextHref="/offers/intro" />
-        <div className="proposal-options-editor mt-8 min-w-0">
+        <div className="proposal-options-editor mt-4 min-w-0">
           <div className="px-1">
             <div className="mb-2 flex flex-wrap gap-2">
               <button type="button" onClick={() => addRow("optional")} className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-base font-medium text-slate-700 transition hover:border-slate-500 hover:bg-slate-100 hover:text-slate-900">
