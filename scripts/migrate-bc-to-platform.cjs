@@ -171,7 +171,6 @@ async function writeAllNewData(prisma, old) {
   log("Phase 3: Writing migrated data...");
 
   // Build lookup maps from old data
-  const userById = Object.fromEntries(old.users.map((u) => [u.id, u]));
   // Map old userId → new membershipId (pre-assigned below)
   const membershipIdByUserId = {};
   // Map old flowKey → flow.id (flows keep their IDs)

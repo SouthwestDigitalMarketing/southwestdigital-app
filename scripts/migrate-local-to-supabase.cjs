@@ -53,12 +53,6 @@ function mapPlatformRole(role) {
   return "NONE";
 }
 
-function mapPortalNoticeRole(role) {
-  if (role === "SUPER_ADMIN") return "OWNER";
-  if (role === "EMPLOYEE" || role === "INTERN") return "MEMBER";
-  return null;
-}
-
 async function main() {
   if (!process.env.DATABASE_URL) {
     console.error("DATABASE_URL not set.");

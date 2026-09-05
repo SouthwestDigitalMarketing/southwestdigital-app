@@ -89,11 +89,13 @@ function SortHeader({
   const nextDirection: SortDirection = isActive && sort.direction === "asc" ? "desc" : "asc";
   const Icon = !isActive ? ChevronsUpDown : sort.direction === "asc" ? ChevronUp : ChevronDown;
   return (
-    <th className="px-5 py-3.5 text-sm font-semibold normal-case text-slate-700">
+    <th
+      aria-sort={isActive ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}
+      className="px-5 py-3.5 text-sm font-semibold normal-case text-slate-700"
+    >
       <button
         type="button"
         onClick={() => onSort(column)}
-        aria-sort={isActive ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}
         aria-label={`Sort by ${label} ${nextDirection === "asc" ? "ascending" : "descending"}`}
         className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md px-1 py-0.5 -mx-1 transition-colors hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 ${
           isActive ? "text-slate-900" : "text-slate-600"
