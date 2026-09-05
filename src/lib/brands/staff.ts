@@ -14,7 +14,7 @@ const STAFF_ROLES: BrandRole[] = [BrandRole.OWNER, BrandRole.ADMIN, BrandRole.ME
 async function loadActiveAppBrand() {
   const { session, activeBrand, accessibleBrands } = await requireActiveBrandContext();
   const resolved = await resolveBrandById(activeBrand.id, session.user.id);
-  if (!resolved) redirect("/select-brand");
+  if (!resolved || resolved.brand.status !== "ACTIVE") redirect("/select-brand");
 
   const operator = isPlatformOperator(session.user.platformRole);
   const activeMembership = resolved.membership?.status === MembershipStatus.ACTIVE;
@@ -47,5 +47,21 @@ export async function requireStaffBrandOrThrow() {
   const staffMembership =
     ctx.membership?.status === MembershipStatus.ACTIVE && STAFF_ROLES.includes(ctx.membership.role);
   if (!ctx.isPlatformOperator && !staffMembership) throw new Error("Unauthorized");
+  return ctx;
+}
+
+export function canAdministerBrand(ctx: {
+  isPlatformOperator: boolean;
+  membership: { status: MembershipStatus; role: BrandRole } | null;
+}) {
+  return ctx.isPlatformOperator || (
+    ctx.membership?.status === MembershipStatus.ACTIVE &&
+    (ctx.membership.role === BrandRole.OWNER || ctx.membership.role === BrandRole.ADMIN)
+  );
+}
+
+export async function requireAdminBrandOrThrow() {
+  const ctx = await loadActiveAppBrand();
+  if (!canAdministerBrand(ctx)) throw new Error("Unauthorized");
   return ctx;
 }

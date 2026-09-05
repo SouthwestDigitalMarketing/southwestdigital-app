@@ -230,7 +230,7 @@ function AssetDropzone({
   const isDark = kind.endsWith("-dark");
   const label = `${isMark ? "Logo mark" : "Logo"} for ${isDark ? "dark" : "light"} backgrounds`;
   const dims = `Recommended: ${isMark ? "512 × 512 px" : "1200 × 400 px"} · 2 MB max`;
-  const types = "PNG, JPEG, WebP, or SVG";
+  const types = "PNG, JPEG, or WebP";
   const previewBg = isDark ? brandDark : "#ffffff";
 
   return (
@@ -270,14 +270,15 @@ function AssetDropzone({
           ref={inputRef}
           className="sr-only"
           type="file"
-          accept="image/png,image/jpeg,image/webp,image/svg+xml"
+          accept="image/png,image/jpeg,image/webp"
+          aria-label={`Upload ${label.toLowerCase()}`}
           onChange={(event) => {
             const file = event.target.files?.[0];
             if (file) onUpload(kind, file);
             event.currentTarget.value = "";
           }}
         />
-        <div className="mt-3 flex items-center gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <button
             type="button"
             disabled={uploading}
@@ -418,7 +419,7 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
       {/* Logo */}
       <section className="rounded-xl border border-slate-200 bg-white p-6">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Logo</h2>
-        <div className="mt-5 grid min-w-0 grid-cols-2 gap-4 xl:grid-cols-4">
+        <div className="mt-5 grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
           <AssetDropzone kind="mark" url={logoMarkUrl} uploading={uploading === "mark"} onUpload={uploadAsset} onRemove={removeAsset} brandLight={colorValue} brandDark={normalizeBrandColor(darkColor) ?? colorValue} />
           <AssetDropzone kind="logo" url={logoUrl} uploading={uploading === "logo"} onUpload={uploadAsset} onRemove={removeAsset} brandLight={colorValue} brandDark={normalizeBrandColor(darkColor) ?? colorValue} />
           <AssetDropzone kind="mark-dark" url={logoMarkDarkUrl} uploading={uploading === "mark-dark"} onUpload={uploadAsset} onRemove={removeAsset} brandLight={colorValue} brandDark={normalizeBrandColor(darkColor) ?? colorValue} />
@@ -429,7 +430,7 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
       {/* Brand Colors */}
       <section className="rounded-xl border border-slate-200 bg-white p-6">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Your Brand Colors</h2>
-        <div className="mt-4 grid grid-cols-3 gap-4">
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
           {/* Light */}
           <div className="rounded-xl border border-slate-200 bg-white p-4">
             <BrandColorSwatch label="Light" background={colorValue} />
@@ -543,10 +544,10 @@ export function BrandAppearanceForm({ theme }: { theme: Theme }) {
       <section className="rounded-xl border border-slate-200 bg-white p-6">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Theme</h2>
 
-        <div className="mt-4 grid gap-4 grid-cols-2">
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
           {/* Starting themes */}
           <div className="rounded-xl border border-slate-200 p-4">
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
               <button
                 type="button"
                 onClick={() => {

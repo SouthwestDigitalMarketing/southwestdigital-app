@@ -9,7 +9,7 @@ export async function GET(
   { params }: { params: Promise<{ engagementId: string }> },
 ) {
   const { engagementId } = await params;
-  if (!await hasPublicProposalAccess(request, engagementId)) return publicProposalNotFound();
+  if (!await hasPublicProposalAccess(request, engagementId, "agreement")) return publicProposalNotFound();
 
   const engagement = await prisma.engagement.findUnique({
     where: { id: engagementId },

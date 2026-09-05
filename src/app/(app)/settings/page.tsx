@@ -2,7 +2,7 @@ import { IntegrationStatus } from "@prisma/client";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requireStaffBrand } from "@/lib/brands/staff";
+import { canAdministerBrand, requireStaffBrand } from "@/lib/brands/staff";
 import { mergeToolLinks } from "@/lib/brands/tools";
 import {
   STRIPE_CONNECT_KEY,
@@ -38,12 +38,24 @@ export default async function SettingsPage({
 }: {
   searchParams: Promise<{ stripe?: string; youtube?: string; reason?: string; email?: string }>;
 }) {
-  const { brand, membership } = await requireStaffBrand();
+  const context = await requireStaffBrand();
+  const { brand, membership } = context;
   const query = await searchParams;
   const emailConnectionRow = membership ? await getMembershipEmailConnection(membership.id) : null;
   const emailConnection = emailConnectionRow ? toPublicConnection(emailConnectionRow) : null;
   const zohoConfigured = Boolean(process.env.ZOHO_MAIL_CLIENT_ID?.trim() && process.env.ZOHO_MAIL_CLIENT_SECRET?.trim());
   const emailNotice = parseEmailNotice(query.email);
+  if (!canAdministerBrand(context)) {
+    return (
+      <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6 lg:p-8">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Your settings</h1>
+          <p className="mt-2 text-sm text-muted-foreground">Manage your mailbox. Shared firm settings are managed by your brand administrator.</p>
+        </div>
+        <EmailConnectionsPanel connection={emailConnection} zohoConfigured={zohoConfigured} notice={emailNotice} />
+      </div>
+    );
+  }
   if (query.stripe === "refresh") {
     let url: string;
     try {
@@ -91,8 +103,11 @@ export default async function SettingsPage({
           : "missing";
 
   return (
-    <div className="p-8">
-      <h1 className="sr-only">Settings</h1>
+    <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6 lg:p-8">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+        <p className="mt-2 text-sm text-muted-foreground">Connections, appearance, and shared tools for {brand.name}.</p>
+      </div>
       <div className="grid gap-4">
         <StripeConnectForm
           status={connectStatus}

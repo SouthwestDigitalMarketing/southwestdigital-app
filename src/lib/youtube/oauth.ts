@@ -40,8 +40,8 @@ export function createYouTubeOAuthState(brandId: string, returnOrigin: string) {
 }
 
 export function readYouTubeOAuthState(value: string): YouTubeOAuthState | null {
-  const [payload, signature] = value.split(".");
-  if (!payload || !signature) return null;
+  const [payload, signature, extra] = value.split(".");
+  if (!payload || !signature || extra !== undefined || !/^[A-Za-z0-9_-]+$/.test(signature)) return null;
   const expected = createHmac("sha256", stateSecret()).update(payload).digest("base64url");
   const validSignature = signature.length === expected.length && timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
   if (!validSignature) return null;
@@ -54,8 +54,9 @@ export function readYouTubeOAuthState(value: string): YouTubeOAuthState | null {
       parsed.exp <= Date.now()
     ) return null;
     const returnUrl = new URL(parsed.returnOrigin);
-    if (returnUrl.origin !== parsed.returnOrigin) return null;
-    if (returnUrl.protocol !== "https:" && !(process.env.NODE_ENV !== "production" && returnUrl.protocol === "http:")) return null;
+    if (returnUrl.origin !== parsed.returnOrigin || returnUrl.username || returnUrl.password) return null;
+    const local = returnUrl.hostname === "localhost" || returnUrl.hostname === "127.0.0.1";
+    if (returnUrl.protocol !== "https:" && !(process.env.NODE_ENV !== "production" && local && returnUrl.protocol === "http:")) return null;
     return { brandId: parsed.brandId, returnOrigin: parsed.returnOrigin, exp: parsed.exp };
   } catch {
     return null;

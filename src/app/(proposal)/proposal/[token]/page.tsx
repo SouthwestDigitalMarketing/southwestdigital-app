@@ -3,12 +3,11 @@ import { headers } from "next/headers";
 import { BrandRole } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { toPublicBookkeepingProposal } from "@/lib/quotes/publicProposal";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
 import { resolvePublicBrand } from "@/lib/brands/resolve";
 import { getBrandAccessDecision } from "@/lib/brands/repository";
 import OfferProposalPreview from "@/app/(app)/offers/builder/OfferProposalPreview";
-import type { AssessmentState } from "@/app/(app)/offers/builder/ProposalCreationWorkspaceDemo";
-import type { ContactInfoState } from "@/app/(app)/offers/builder/ProposalContactInfoState";
 import { isLeadConvertedForDiscount, pickActiveCatalogOffer } from "@/lib/discounts/eligibility";
 import { ensureQuoteEngagement } from "@/lib/engagements/fromOffer";
 import { quoteContactSummaryFromSnapshot } from "@/lib/quotes/clientInfo";
@@ -57,9 +56,18 @@ export default async function PublicProposalPage({
       status: true,
       offerCode: true,
       engagementId: true,
+      expiresAt: true,
+      engagement: { select: { signedAt: true } },
     },
   });
+  if (!quote) notFound();
   const viewedAt = new Date();
+  const unavailable = quote.status === "archived" || quote.status === "completed" ||
+    (quote.expiresAt !== null && quote.expiresAt.getTime() <= viewedAt.getTime());
+  if (unavailable && !isAuthorizedStaffPreview) {
+    if (quote.engagement?.signedAt) redirect(`/proposal/${encodeURIComponent(token)}/receipt`);
+    notFound();
+  }
   if (quote && !quote.firstViewedAt && !isAuthorizedStaffPreview) {
     // Self-heal: a real client view is proof the URL made it out somehow,
     // so stamp firstSentAt (if not already) and flip status to "sent". This
@@ -223,10 +231,12 @@ export default async function PublicProposalPage({
     );
   }
 
+  const publicProposal = toPublicBookkeepingProposal(snapshot);
   return (
     <OfferProposalPreview
-      initialAssessment={isRecord(snapshot.assessment) ? (snapshot.assessment as Partial<AssessmentState>) : undefined}
-      initialContactInfo={isRecord(snapshot.contactInfo) ? (snapshot.contactInfo as Partial<ContactInfoState>) : undefined}
+      initialAssessment={publicProposal.assessment}
+      initialContactInfo={publicProposal.contactInfo}
+      publishedPricing={publicProposal.pricing}
       live
       catalogOffer={catalogOffer}
       engagementId={engagementId}

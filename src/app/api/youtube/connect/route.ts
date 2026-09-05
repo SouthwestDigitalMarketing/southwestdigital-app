@@ -1,6 +1,6 @@
 import { cookies, headers } from "next/headers";
 import { NextResponse } from "next/server";
-import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
+import { requireAdminBrandOrThrow } from "@/lib/brands/staff";
 import { requestOrigin } from "@/lib/stripe/requestOrigin";
 import {
   createYouTubeOAuthState,
@@ -13,7 +13,7 @@ const scopes = ["https://www.googleapis.com/auth/yt-analytics.readonly", "https:
 export async function GET() {
   const origin = requestOrigin(await headers());
   try {
-    const { brand } = await requireStaffBrandOrThrow();
+    const { brand } = await requireAdminBrandOrThrow();
     const clientId = process.env.YOUTUBE_OAUTH_CLIENT_ID?.trim();
     if (!clientId) return NextResponse.redirect(new URL("/settings?youtube=not-configured", origin));
 

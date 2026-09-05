@@ -65,6 +65,7 @@ import {
   renderAgreementTemplate,
 } from "@/lib/agreements/template";
 import type { AgreementTemplateOption } from "@/lib/agreements/types";
+import type { PublicProposalPricing } from "@/lib/quotes/publicProposal";
 
 type CloudflareStreamEvent = "play" | "pause" | "ended";
 
@@ -318,8 +319,8 @@ function buildCleanupRows(periods: HistoricalCleanupPeriod[], maintainMonthly: n
     });
 }
 
-function buildOptions(assessment: AssessmentState): Record<OptionId, ProposalOption> {
-  const { packagePricing } = getProposalPricingSnapshotData(assessment);
+function buildOptions(assessment: AssessmentState, publishedPricing?: PublicProposalPricing): Record<OptionId, ProposalOption> {
+  const packagePricing = publishedPricing ?? getProposalPricingSnapshotData(assessment).packagePricing;
   const periods = hasCatchUpPricingInputs(assessment)
     ? assessment.historicalCleanupPeriods.filter((p) => periodMonthCount(p) > 0)
     : [];
@@ -486,6 +487,7 @@ export default function OfferProposalPreview({
   isTestProposal = false,
   isStaffPreview = false,
   proposalToken = null,
+  publishedPricing,
 }: {
   initialAssessment?: Partial<AssessmentState>;
   initialContactInfo?: Partial<ContactInfoState>;
@@ -499,6 +501,7 @@ export default function OfferProposalPreview({
   isTestProposal?: boolean;
   isStaffPreview?: boolean;
   proposalToken?: string | null;
+  publishedPricing?: PublicProposalPricing;
 } = {}) {
   const { brand } = useBrand();
   const { assessment: storedAssessment } = useProposalAssessmentDemoState({
@@ -568,7 +571,7 @@ export default function OfferProposalPreview({
   const accentHeaderBg = getProposalAccentHeaderBackground(proposalMode, accentColor);
   const urgencyOffer = catalogOffer?.active ? catalogOffer : getUrgencyOfferDisplay(DEFAULT_URGENCY_OFFER);
 
-  const options = buildOptions(assessment);
+  const options = buildOptions(assessment, publishedPricing);
   const [selectedOptionId, setSelectedOptionId] = useState<OptionId | null>(null);
   const [selectionSubmittingId, setSelectionSubmittingId] = useState<OptionId | null>(null);
   const [selectionError, setSelectionError] = useState<string | null>(null);

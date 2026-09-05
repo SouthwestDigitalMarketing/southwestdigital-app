@@ -56,8 +56,8 @@ export function createZohoOAuthState(input: {
 }
 
 export function readZohoOAuthState(value: string): ZohoOAuthState | null {
-  const [payload, signature] = value.split(".");
-  if (!payload || !signature) return null;
+  const [payload, signature, extra] = value.split(".");
+  if (!payload || !signature || extra !== undefined || !/^[A-Za-z0-9_-]+$/.test(signature)) return null;
   const expected = createHmac("sha256", stateSecret()).update(payload).digest("base64url");
   const validSignature =
     signature.length === expected.length && timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
@@ -75,6 +75,10 @@ export function readZohoOAuthState(value: string): ZohoOAuthState | null {
     ) {
       return null;
     }
+    const returnUrl = new URL(parsed.returnOrigin);
+    const local = returnUrl.hostname === "localhost" || returnUrl.hostname === "127.0.0.1";
+    if (returnUrl.origin !== parsed.returnOrigin || returnUrl.username || returnUrl.password) return null;
+    if (returnUrl.protocol !== "https:" && !(process.env.NODE_ENV !== "production" && local && returnUrl.protocol === "http:")) return null;
     return {
       membershipId: parsed.membershipId,
       brandId: parsed.brandId,

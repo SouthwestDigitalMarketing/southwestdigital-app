@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
   buildZohoAuthorizationUrl,
   createZohoOAuthState,
@@ -82,5 +82,26 @@ describe("OAuth state round-trip", () => {
       JSON.stringify({ membershipId, brandId, region: "XX", returnOrigin, exp: Date.now() + 60_000 }),
     ).toString("base64url");
     expect(readZohoOAuthState(`${badPayload}.whatever`)).toBeNull();
+  });
+
+  it("rejects expired state before it can supply a relay destination", () => {
+    vi.useFakeTimers();
+    try {
+      const state = createZohoOAuthState({ membershipId, brandId, region: "US", returnOrigin });
+      vi.advanceTimersByTime(11 * 60_000);
+      expect(readZohoOAuthState(state)).toBeNull();
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("rejects unsigned relay payloads and extra state segments", () => {
+    const unsigned = Buffer.from(JSON.stringify({ returnOrigin: "https://attacker.example" })).toString("base64url");
+    expect(readZohoOAuthState(unsigned)).toBeNull();
+    const state = createZohoOAuthState({ membershipId, brandId, region: "US", returnOrigin });
+    expect(readZohoOAuthState(`${state}.extra`)).toBeNull();
+  });
+
+  it("rejects signed insecure remote origins", () => {
+    const state = createZohoOAuthState({ membershipId, brandId, region: "US", returnOrigin: "http://remote.example" });
+    expect(readZohoOAuthState(state)).toBeNull();
   });
 });

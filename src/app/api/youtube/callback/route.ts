@@ -1,7 +1,7 @@
 import { cookies, headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { IntegrationProvider, IntegrationStatus } from "@prisma/client";
-import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
+import { requireAdminBrandOrThrow } from "@/lib/brands/staff";
 import { prisma } from "@/lib/prisma";
 import { requestOrigin } from "@/lib/stripe/requestOrigin";
 import { encryptSecret } from "@/lib/secrets/encryption";
@@ -12,6 +12,7 @@ import {
   YOUTUBE_OAUTH_STATE_COOKIE,
 } from "@/lib/youtube/oauth";
 import { YOUTUBE_INTEGRATION_KEY } from "@/lib/youtube/credentials";
+import { isAuthorizedCallbackOrigin } from "@/lib/integrations/callbackOrigin";
 
 function result(value: string, origin: string) {
   return NextResponse.redirect(new URL(`/settings?youtube=${value}`, origin));
@@ -24,6 +25,9 @@ export async function GET(request: Request) {
   const state = url.searchParams.get("state");
   const code = url.searchParams.get("code");
   const parsedState = state ? readYouTubeOAuthState(state) : null;
+  if (!parsedState || !await isAuthorizedCallbackOrigin(parsedState.returnOrigin, parsedState.brandId)) {
+    return result("error", callbackOrigin);
+  }
 
   if (origin === callbackOrigin && parsedState?.returnOrigin !== origin) {
     if (!parsedState) return result("error", origin);
@@ -38,7 +42,7 @@ export async function GET(request: Request) {
   const cookieStore = await cookies();
   const storedState = cookieStore.get(YOUTUBE_OAUTH_STATE_COOKIE)?.value;
   cookieStore.delete(YOUTUBE_OAUTH_STATE_COOKIE);
-  const { brand } = await requireStaffBrandOrThrow();
+  const { brand } = await requireAdminBrandOrThrow();
   if (!state || !storedState || state !== storedState || !verifyYouTubeOAuthState(state, brand.id, origin)) return result("error", origin);
   if (url.searchParams.get("error") || !code) return result("cancelled", origin);
 

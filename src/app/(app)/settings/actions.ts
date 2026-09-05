@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
+import { requireAdminBrandOrThrow } from "@/lib/brands/staff";
 import {
   StripeConnectNotEnabledError,
   createBrandConnectOnboardingUrl,
@@ -20,7 +20,7 @@ function clean(value: FormDataEntryValue | null) {
 }
 
 export async function updateBrandAppearanceAction(formData: FormData) {
-  const { brand } = await requireStaffBrandOrThrow();
+  const { brand } = await requireAdminBrandOrThrow();
   const lightColor = normalizeBrandColor(clean(formData.get("lightColor")));
   const rawDark = clean(formData.get("darkColor"));
   const darkColor = rawDark ? normalizeBrandColor(rawDark) : null;
@@ -62,7 +62,7 @@ export async function updateBrandAppearanceAction(formData: FormData) {
 }
 
 export async function updateProposalMediaAction(formData: FormData) {
-  const { brand } = await requireStaffBrandOrThrow();
+  const { brand } = await requireAdminBrandOrThrow();
   const proposalFeaturedVideoUrl = clean(formData.get("proposalFeaturedVideoUrl")) || null;
   const proposalFeaturedImageUrl = clean(formData.get("proposalFeaturedImageUrl")) || null;
 
@@ -77,7 +77,7 @@ export async function updateProposalMediaAction(formData: FormData) {
 }
 
 export async function updateToolLinksAction(formData: FormData) {
-  const { brand } = await requireStaffBrandOrThrow();
+  const { brand } = await requireAdminBrandOrThrow();
 
   const updates = DEFAULT_TOOL_LINKS.map((fallback) => {
     const key = fallback.key;
@@ -114,7 +114,7 @@ export async function updateToolLinksAction(formData: FormData) {
 }
 
 export async function startStripeConnectOnboardingAction() {
-  const { brand } = await requireStaffBrandOrThrow();
+  const { brand } = await requireAdminBrandOrThrow();
   const origin = requestOrigin(await headers());
   let url: string;
   try {
@@ -133,7 +133,7 @@ export async function startStripeConnectOnboardingAction() {
 }
 
 export async function refreshStripeConnectStatusAction() {
-  const { brand } = await requireStaffBrandOrThrow();
+  const { brand } = await requireAdminBrandOrThrow();
   const integration = await prisma.brandIntegration.findUnique({
     where: { brandId_key: { brandId: brand.id, key: "stripe-connect" } },
     select: { externalAccountId: true },

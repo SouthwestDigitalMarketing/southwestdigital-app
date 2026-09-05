@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { BrandStatus } from "@prisma/client";
 import { mergeToolLinks, visibleToolLinks } from "@/lib/brands/tools";
+import { resolveAppBrandByHostname } from "@/lib/brands/repository";
 
 const BRAND_THEME_SELECT = {
   lightColor: true,
@@ -83,13 +84,7 @@ export async function resolveBrand(hostname: string | null, userId: string) {
   let brandId: string | null = null;
 
   if (hostname) {
-    const domain = await prisma.brandDomain.findUnique({
-      where: { hostname },
-      select: { brandId: true, brand: { select: { status: true } } },
-    });
-    if (domain?.brand.status === BrandStatus.ACTIVE) {
-      brandId = domain.brandId;
-    }
+    brandId = (await resolveAppBrandByHostname(hostname))?.id ?? null;
   }
 
   if (!brandId && process.env.NODE_ENV === "development") {
@@ -110,13 +105,7 @@ export async function resolvePublicBrand(hostname: string | null) {
   let brandId: string | null = null;
 
   if (hostname) {
-    const domain = await prisma.brandDomain.findUnique({
-      where: { hostname },
-      select: { brandId: true, brand: { select: { status: true } } },
-    });
-    if (domain?.brand.status === BrandStatus.ACTIVE) {
-      brandId = domain.brandId;
-    }
+    brandId = (await resolveAppBrandByHostname(hostname))?.id ?? null;
   }
 
   if (!brandId && process.env.NODE_ENV === "development") {

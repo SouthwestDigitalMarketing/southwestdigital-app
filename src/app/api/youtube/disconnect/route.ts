@@ -1,13 +1,13 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
-import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
+import { requireAdminBrandOrThrow } from "@/lib/brands/staff";
 import { prisma } from "@/lib/prisma";
 import { requestOrigin } from "@/lib/stripe/requestOrigin";
 import { decryptSecret } from "@/lib/secrets/encryption";
 import { YOUTUBE_INTEGRATION_KEY } from "@/lib/youtube/credentials";
 
 export async function POST() {
-  const { brand } = await requireStaffBrandOrThrow();
+  const { brand } = await requireAdminBrandOrThrow();
   const origin = requestOrigin(await headers());
 
   const integration = await prisma.brandIntegration.findUnique({

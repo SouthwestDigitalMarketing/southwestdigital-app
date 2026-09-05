@@ -3,8 +3,10 @@ import { NextResponse } from "next/server";
 import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
 import { requestOrigin } from "@/lib/stripe/requestOrigin";
 import { upsertZohoConnection } from "@/lib/emailConnections/repository";
+import { isAuthorizedCallbackOrigin } from "@/lib/integrations/callbackOrigin";
 import {
   ZOHO_OAUTH_STATE_COOKIE,
+  readZohoOAuthState,
   verifyZohoOAuthState,
   zohoOAuthCallbackOrigin,
 } from "@/lib/emailConnections/zohoOAuth";
@@ -21,14 +23,17 @@ export async function GET(request: Request) {
   const cookieStore = await cookies();
   const state = url.searchParams.get("state");
   const code = url.searchParams.get("code");
+  const signedState = state ? readZohoOAuthState(state) : null;
+  if (!signedState || !await isAuthorizedCallbackOrigin(signedState.returnOrigin, signedState.brandId)) {
+    return result("error", callbackOrigin);
+  }
 
   // If Zoho hit the platform base URL but the user was signing in from a
   // different origin, relay the callback so the user's session cookies are
   // available for authorization.
   if (origin === callbackOrigin) {
-    const parsedForRelay = state ? readOptionalReturnOrigin(state) : null;
-    if (parsedForRelay && parsedForRelay !== origin) {
-      const relay = new URL("/api/email-connections/zoho/callback", parsedForRelay);
+    if (signedState.returnOrigin !== origin) {
+      const relay = new URL("/api/email-connections/zoho/callback", signedState.returnOrigin);
       for (const key of ["code", "state", "error"] as const) {
         const value = url.searchParams.get(key);
         if (value) relay.searchParams.set(key, value);
@@ -91,16 +96,5 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error("[email-connections/zoho/callback] Failed:", error);
     return result("error", origin);
-  }
-}
-
-function readOptionalReturnOrigin(rawState: string): string | null {
-  const [payload] = rawState.split(".");
-  if (!payload) return null;
-  try {
-    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { returnOrigin?: unknown };
-    return typeof parsed.returnOrigin === "string" ? parsed.returnOrigin : null;
-  } catch {
-    return null;
   }
 }
