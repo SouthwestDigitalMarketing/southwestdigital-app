@@ -148,7 +148,7 @@ export default function ProposalFinalizeDemo() {
           nextHref="/offers/cover"
         />
 
-        <div className="mt-8 grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_440px] 2xl:grid-cols-[minmax(0,1.55fr)_470px]">
+        <div className="mt-8 grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_360px]">
           <div>
             <section className="proposal-builder-card overflow-hidden rounded-[1.5rem] border border-slate-300 shadow-sm">
               <div className="border-b border-slate-200 bg-white px-5 py-6">

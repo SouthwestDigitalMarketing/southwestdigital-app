@@ -2089,7 +2089,7 @@ export default function ProposalCreationWorkspaceDemo({
             nextHref={nextStepHref}
           />
 
-          <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_440px] 2xl:grid-cols-[minmax(0,1.55fr)_470px]">
+          <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_360px]">
             <div className="space-y-3">
               {isScaleStep || isComplexityStep || isCalculatorStep ? null : !isIncludedStep ? (
                 <p className="mb-3 px-1 text-base font-semibold text-slate-500">Assessment</p>
@@ -2330,7 +2330,7 @@ export default function ProposalCreationWorkspaceDemo({
                     onCancel={setAssessment}
                     summary={summaries["Payroll & Contractors"]}
                   >
-                    <div className="grid gap-4 md:grid-cols-2">
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                       <label className="grid gap-2">
                         <span className={FIELD_LABEL_CLASS}>Number of W-2 Employees</span>
                         <input
