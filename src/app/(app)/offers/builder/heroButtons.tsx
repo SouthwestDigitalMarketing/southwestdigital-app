@@ -1,6 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
+import { createElement } from "react";
 import {
   ArrowRight,
   Calculator,
@@ -110,9 +111,9 @@ export function HeroCtaContent({
   const showIcon = config.iconPlacement !== "none" && Boolean(config.icon);
   const Icon = showIcon ? iconComponent(config.icon, playing) : null;
   const fillPlayPause = config.icon === "play" || config.icon === "circle-play";
-  const iconEl = Icon ? (
-    <Icon className={`h-5 w-5 ${fillPlayPause ? "fill-current" : ""}`} />
-  ) : null;
+  const iconEl = Icon
+    ? createElement(Icon, { className: `h-5 w-5 ${fillPlayPause ? "fill-current" : ""}` })
+    : null;
 
   return (
     <>

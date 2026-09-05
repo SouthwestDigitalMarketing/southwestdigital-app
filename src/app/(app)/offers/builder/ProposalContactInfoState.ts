@@ -175,13 +175,14 @@ export function useProposalContactInfoDemoState({
   const [contactInfo, setContactInfo] = useState<ContactInfoState>(() =>
     readStoredContactInfo(storageKey, initialContactInfo, false),
   );
-  const [hydratedFromStorage, setHydratedFromStorage] = useState(false);
+  const [hydratedFromStorage, setHydratedFromStorage] = useState(() => !persist);
 
   useEffect(() => {
     if (!persist) {
-      setHydratedFromStorage(true);
       return;
     }
+    // Hydration is an intentional client-only state sync after SSR-safe markup.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setContactInfo(readStoredContactInfo(storageKey, initialContactInfo, true));
     setHydratedFromStorage(true);
     // Only hydrate on mount / when the storage key changes. initialContactInfo is

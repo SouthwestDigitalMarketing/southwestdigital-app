@@ -27,6 +27,10 @@ function YouTubeIcon({ className }: { className?: string }) {
 
 export const dynamic = "force-dynamic";
 
+function getYouTubeAnalyticsNow() {
+  return Date.now();
+}
+
 export default async function YouTubePage() {
   const { brand } = await requireAppBrand();
 
@@ -75,7 +79,7 @@ export default async function YouTubePage() {
   const clicksGoal = theme.monthlyClicksGoal ?? null;
   const redirectDomain = redirectDomainRecord?.hostname ?? null;
 
-  const now = Date.now();
+  const now = getYouTubeAnalyticsNow();
   // YouTube Analytics has a ~3-day reporting lag; clip endDate so trailing days aren't empty
   const endDate = new Date(now - 3 * 86400000).toISOString().slice(0, 10);
   const startDate = new Date(now - 32 * 86400000).toISOString().slice(0, 10);

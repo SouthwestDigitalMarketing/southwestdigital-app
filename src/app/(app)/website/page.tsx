@@ -22,6 +22,10 @@ const PERIOD_CONFIG: Record<string, PeriodConfig> = {
   "90d": { granularity: "daily", label: "Last 90 days" },
 };
 
+function getAnalyticsNow() {
+  return Date.now();
+}
+
 export default async function WebsitePage({
   searchParams,
 }: {
@@ -50,7 +54,7 @@ export default async function WebsitePage({
 
   const propertyId = theme.ga4PropertyId;
   const hostname = theme.ga4HostName;
-  const now = Date.now();
+  const now = getAnalyticsNow();
 
   const todayStr = new Date(now).toISOString().slice(0, 10);
   const yesterdayStr = new Date(now - 86400000).toISOString().slice(0, 10);
