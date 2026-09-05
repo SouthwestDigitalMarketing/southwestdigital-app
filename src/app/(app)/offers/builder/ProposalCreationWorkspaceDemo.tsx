@@ -1822,14 +1822,17 @@ export function getProposalPricingSnapshotData(assessment: AssessmentState) {
   };
 
   // Test proposals exercise the complete signing and payment flow with a
-  // single-dollar charge. Keep every package card aligned with that mode so
-  // the pricing calculator never presents normal commercial rates after the
-  // adjustment is enabled.
+  // single-dollar charge (see resolveAmountDueNow). Nothing recurs, so
+  // monthly is $0 and the entire one-time total collapses to $1.
   if (assessment.isTestProposal) {
     for (const pkg of PACKAGES) {
       packagePricing[pkg.id] = {
         ...packagePricing[pkg.id],
-        monthly: 1,
+        monthly: 0,
+        catchUpBase: 0,
+        assessmentOneTimeAdjustments: 0,
+        totalOneTimeBeforeManual: 1,
+        totalOneTime: 1,
       };
     }
   }
@@ -1859,6 +1862,10 @@ export function getProposalPricingSnapshotItems(assessment: AssessmentState) {
 export function getProposalPricingSnapshotCleanupCard(assessment: AssessmentState) {
   const { cleanupMonths, packagePricing, hasCatchUpPricing } =
     getProposalPricingSnapshotData(assessment);
+
+  if (assessment.isTestProposal) {
+    return { amountLabel: formatCurrency(1) };
+  }
 
   if (!hasCatchUpPricing) {
     return undefined;
