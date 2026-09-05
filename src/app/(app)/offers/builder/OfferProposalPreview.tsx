@@ -201,6 +201,7 @@ function isOnboardingFeeWaived(assessment: AssessmentState) {
 
 function getOnboardingFee(assessment: AssessmentState, cleanupMonths: number) {
   if (assessment.waiveOnboardingFee) return 0;
+  if (assessment.isTestProposal) return 1;
   if (assessment.onboardingFeeOverride !== null) return Math.max(0, assessment.onboardingFeeOverride);
   return getStandardOnboardingFee(cleanupMonths);
 }
@@ -327,7 +328,7 @@ function buildOptions(
   const calculatedPricing = publishedPricing ?? getProposalPricingSnapshotData(assessment).packagePricing;
   const packagePricing = isTestProposal
     ? Object.fromEntries(
-        optionMeta.map(({ id }) => [id, { ...calculatedPricing[id], monthly: 1 }]),
+        optionMeta.map(({ id }) => [id, { ...calculatedPricing[id], monthly: 0 }]),
       ) as Record<OptionId, PublicProposalPricing[OptionId]>
     : calculatedPricing;
   const periods = hasCatchUpPricingInputs(assessment)
