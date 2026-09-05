@@ -39,6 +39,7 @@ import {
 } from "@/lib/brands/themeTokens";
 import { normalizeThemeChoice, resolveEffectiveThemeColors } from "@/lib/brands/themePresets";
 import { signOutAction } from "./actions";
+import { Modal } from "@/components/Modal";
 
 const NAV: Array<{
   label: string;
@@ -339,6 +340,7 @@ export function AppShell({
       </nav>
 
       <div
+        data-sidebar-resize-handle
         role="separator"
         aria-label="Resize sidebar"
         aria-orientation="vertical"
@@ -373,7 +375,7 @@ export function AppShell({
     <div
       data-theme={mode}
       data-appearance={appearance}
-      className="flex h-screen overflow-hidden"
+      className="flex h-dvh overflow-hidden"
       style={{
         backgroundColor: "var(--app-canvas)",
         "--theme-light": light,
@@ -387,15 +389,8 @@ export function AppShell({
       <aside className="hidden lg:flex">{sidebar}</aside>
 
       {profileOpen ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
-          role="presentation"
-          onClick={() => setProfileOpen(false)}
-        >
+        <Modal onClose={() => setProfileOpen(false)} labelledBy="profile-dialog-title" className="max-w-sm">
           <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="profile-dialog-title"
             className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
             onClick={(event) => event.stopPropagation()}
           >
@@ -425,29 +420,39 @@ export function AppShell({
               </button>
             </form>
           </div>
-        </div>
+        </Modal>
       ) : null}
 
       {open && (
-        <div className="fixed inset-0 z-40 lg:hidden">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
-          <aside className="absolute left-0 top-0 flex h-full">{sidebar}</aside>
-        </div>
+        <Modal onClose={() => setOpen(false)} label="Main navigation" className="ui-navigation-drawer">
+          <div className="flex justify-end border-b border-slate-200 bg-white p-2">
+            <button type="button" onClick={() => setOpen(false)} aria-label="Close navigation" className="inline-flex h-11 w-11 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100"><X size={20} /></button>
+          </div>
+          <aside>{sidebar}</aside>
+        </Modal>
       )}
 
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <header className="flex h-14 shrink-0 items-center border-b border-slate-200 bg-white px-4 lg:hidden">
           <button
-            onClick={() => setOpen(true)}
+            type="button"
+            aria-label="Open navigation"
+            aria-expanded={open}
+            onClick={() => {
+              setCollapsed(false);
+              setOpen(true);
+            }}
             className="rounded p-2 text-slate-500 hover:bg-slate-100"
           >
             <Menu size={20} />
           </button>
-          <span className="ml-3 text-sm font-semibold text-slate-900">{brand.name}</span>
+          <span className="ml-3 min-w-0 truncate text-sm font-semibold text-slate-900">{brand.name}</span>
         </header>
 
         <main
-          className="flex-1 overflow-y-auto"
+          id="main-content"
+          tabIndex={-1}
+          className="min-w-0 flex-1 overflow-y-auto"
           style={{ background: mainPanelBackground }}
         >
           {children}

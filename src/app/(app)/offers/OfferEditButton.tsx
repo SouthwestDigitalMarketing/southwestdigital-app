@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
+import { useState } from "react";
 import { Pencil, TriangleAlert, X } from "lucide-react";
+import { Modal } from "@/components/Modal";
 
 type OfferEditButtonProps = {
   href: string;
@@ -16,22 +16,10 @@ type OfferEditButtonProps = {
 
 export function OfferEditButton({ href, offerId, viewed, signed, paid, primary = false }: OfferEditButtonProps) {
   const [warningOpen, setWarningOpen] = useState(false);
-  const [dialogTarget, setDialogTarget] = useState<HTMLElement | null>(null);
   const hasProgress = viewed || signed || paid;
   const hasCommittedProgress = signed || paid;
   const dialogTitleId = `edit-offer-warning-title-${offerId}`;
   const iconButtonClass = `${primary ? "ui-action-primary" : "ui-action-secondary"} relative inline-flex h-9 w-9 items-center justify-center rounded-full border transition`;
-
-  useEffect(() => {
-    if (!warningOpen) return;
-
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setWarningOpen(false);
-    }
-
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [warningOpen]);
 
   if (!hasProgress) {
     return (
@@ -48,10 +36,7 @@ export function OfferEditButton({ href, offerId, viewed, signed, paid, primary =
         aria-label="Edit offer — review warning"
         title="Edit offer — review warning"
         aria-haspopup="dialog"
-        onClick={(event) => {
-          setDialogTarget((event.currentTarget.closest("[data-theme]") as HTMLElement | null) ?? document.body);
-          setWarningOpen(true);
-        }}
+        onClick={() => setWarningOpen(true)}
         className={iconButtonClass}
       >
         <Pencil className="h-4 w-4" aria-hidden="true" />
@@ -63,19 +48,9 @@ export function OfferEditButton({ href, offerId, viewed, signed, paid, primary =
         </span>
       </button>
 
-      {warningOpen && dialogTarget ? createPortal(
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"
-          role="presentation"
-          onClick={() => setWarningOpen(false)}
-        >
-          <div
-            className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 text-left shadow-2xl"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={dialogTitleId}
-            onClick={(event) => event.stopPropagation()}
-          >
+      {warningOpen ? (
+        <Modal onClose={() => setWarningOpen(false)} labelledBy={dialogTitleId} className="max-w-lg">
+          <div className="p-5 text-left sm:p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full border border-amber-200 bg-amber-50 text-amber-700">
@@ -114,7 +89,7 @@ export function OfferEditButton({ href, offerId, viewed, signed, paid, primary =
                 : "If you publish changes, resend the proposal and follow up so the client knows a revised version is available."}
             </p>
 
-            <div className="mt-6 flex flex-wrap justify-end gap-2">
+            <div className="mt-6 flex flex-col-reverse justify-end gap-2 sm:flex-row sm:flex-wrap">
               <button
                 type="button"
                 onClick={() => setWarningOpen(false)}
@@ -130,8 +105,7 @@ export function OfferEditButton({ href, offerId, viewed, signed, paid, primary =
               </Link>
             </div>
           </div>
-        </div>,
-        dialogTarget,
+        </Modal>
       ) : null}
     </>
   );

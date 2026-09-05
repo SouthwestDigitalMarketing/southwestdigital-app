@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { Modal } from "@/components/Modal";
 import { AGREEMENT_TEMPLATE_TOKENS } from "@/lib/agreements/template";
 import type { AgreementTemplateView } from "@/lib/agreements/types";
 import {
@@ -310,19 +311,24 @@ export function AgreementTemplatesManager({ templates }: { templates: AgreementT
       </div>
 
       {editingTemplate ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 sm:p-8">
-          <div role="dialog" aria-modal="true" aria-labelledby="agreement-template-editor-title" className="flex max-h-[calc(100vh-2rem)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-slate-50 shadow-2xl sm:max-h-[calc(100vh-4rem)]">
+        <Modal
+          onClose={() => setEditingId(null)}
+          labelledBy="agreement-template-editor-title"
+          className="max-w-5xl overflow-hidden bg-slate-50"
+          closeOnBackdrop={false}
+        >
+          <div className="flex max-h-[calc(100dvh-1rem)] min-h-0 flex-col sm:max-h-[calc(100dvh-2rem)]">
             <div className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
               <h2 id="agreement-template-editor-title" className="text-lg font-semibold text-slate-900">Edit agreement template</h2>
               <button type="button" onClick={() => setEditingId(null)} aria-label="Close template editor" title="Close template editor" className="rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900">
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="overflow-y-auto p-5">
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
               <TemplateEditor key={`${editingTemplate.id}:${editingTemplate.updatedAt}`} template={editingTemplate} />
             </div>
           </div>
-        </div>
+        </Modal>
       ) : null}
     </div>
   );

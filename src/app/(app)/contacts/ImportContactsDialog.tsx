@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Modal } from "@/components/Modal";
 import { importContactsAction, type ImportContactsResult } from "./actions";
 
 type TagOption = { id: string; label: string };
@@ -185,17 +186,8 @@ export function ImportContactsDialog({ tags }: { tags: TagOption[] }) {
       </button>
 
       {open ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="import-title"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
-          onClick={close}
-        >
-          <div
-            className="max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
-            onClick={(event) => event.stopPropagation()}
-          >
+        <Modal onClose={close} labelledBy="import-title" className="max-w-3xl overflow-hidden" busy={pending}>
+          <div className="flex max-h-[calc(100dvh-1rem)] min-h-0 flex-col sm:max-h-[calc(100dvh-2rem)]">
             <header className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
               <div>
                 <h2 id="import-title" className="text-lg font-semibold text-slate-900">Import contacts from CSV</h2>
@@ -211,7 +203,7 @@ export function ImportContactsDialog({ tags }: { tags: TagOption[] }) {
               </button>
             </header>
 
-            <div className="max-h-[calc(90vh-160px)] overflow-y-auto px-5 py-4 text-sm">
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 text-sm sm:px-5">
               {result ? (
                 <div className="space-y-3">
                   <p className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
@@ -336,7 +328,7 @@ export function ImportContactsDialog({ tags }: { tags: TagOption[] }) {
             </div>
 
             {!result ? (
-              <footer className="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">
+              <footer className="flex flex-col-reverse items-stretch justify-end gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:px-5">
                 <button
                   type="button"
                   onClick={close}
@@ -356,7 +348,7 @@ export function ImportContactsDialog({ tags }: { tags: TagOption[] }) {
               </footer>
             ) : null}
           </div>
-        </div>
+        </Modal>
       ) : null}
     </>
   );

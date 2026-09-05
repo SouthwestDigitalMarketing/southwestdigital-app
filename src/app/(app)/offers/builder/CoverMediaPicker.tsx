@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Folder, Image as ImageIcon, Link2, Sparkles, Video, X } from "lucide-react";
+import { Modal } from "@/components/Modal";
 
 export type CoverMediaItem = {
   id: string;
@@ -66,13 +67,8 @@ export function CoverMediaPicker({
       : "No brand default set";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="cover-media-picker-title"
-        className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl"
-      >
+    <Modal onClose={onClose} labelledBy="cover-media-picker-title" className="max-w-3xl overflow-hidden">
+      <div className="flex max-h-[calc(100dvh-1rem)] min-h-0 flex-col sm:max-h-[calc(100dvh-2rem)]">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <div>
             <h2 id="cover-media-picker-title" className="text-base font-semibold text-slate-900">
@@ -90,8 +86,8 @@ export function CoverMediaPicker({
           </button>
         </div>
 
-        <div className="flex min-h-0 flex-1">
-          <aside className="w-44 shrink-0 overflow-y-auto border-r border-slate-200 p-3">
+        <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
+          <aside className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 p-3 sm:block sm:w-44 sm:overflow-y-auto sm:border-r sm:border-b-0">
             <FolderButton selected={filter === "all"} onClick={() => setFilter("all")} label="All media" />
             <FolderButton
               selected={filter === "unfiled"}
@@ -108,7 +104,7 @@ export function CoverMediaPicker({
             ))}
           </aside>
 
-          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4">
             <div className="grid gap-2 sm:grid-cols-2">
               <MediaChoice
                 selected={selectedMediaId === ""}
@@ -192,7 +188,7 @@ export function CoverMediaPicker({
           </div>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -209,7 +205,7 @@ function FolderButton({
     <button
       type="button"
       onClick={onClick}
-      className={`mb-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-medium ${
+      className={`flex min-h-11 min-w-max items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-medium sm:mb-1 sm:min-h-0 sm:w-full sm:min-w-0 ${
         selected ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"
       }`}
     >

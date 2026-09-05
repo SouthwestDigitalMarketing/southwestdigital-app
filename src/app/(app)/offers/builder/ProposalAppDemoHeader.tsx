@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronLeft, ChevronRight, Eye, LogOut, Save, Send, Upload } from "lucide-react";
+import { Modal } from "@/components/Modal";
 import ProposalAppDemoStepper, { type ProposalAppDemoStep } from "./ProposalAppDemoStepper";
 import { readProposalBuilderLocalState } from "./ProposalBuilderStorage";
 import {
@@ -295,17 +296,17 @@ export default function ProposalAppDemoHeader({
         </div>
       </div>
       {isExitDialogOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-          <div role="dialog" aria-modal="true" aria-labelledby="exit-dialog-title" className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
+        <Modal onClose={() => setIsExitDialogOpen(false)} labelledBy="exit-dialog-title" className="max-w-md" busy={saveStatus === "saving"}>
+          <div className="p-5 sm:p-6">
             <h2 id="exit-dialog-title" className="text-xl font-semibold text-slate-950">Save changes before exiting?</h2>
             <p className="mt-2 text-base leading-7 text-slate-600">Your changes have not been saved to this offer yet.</p>
-            <div className="mt-6 flex flex-wrap justify-end gap-3">
+            <div className="mt-6 flex flex-col-reverse justify-end gap-3 sm:flex-row sm:flex-wrap">
               <button type="button" onClick={() => setIsExitDialogOpen(false)} className="rounded-lg px-3 py-2 text-base font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">Continue editing</button>
               <button type="button" onClick={() => { setIsExitDialogOpen(false); exitToOffers(); }} className="rounded-lg border border-slate-300 px-3 py-2 text-base font-semibold text-slate-700 transition hover:bg-slate-50">Exit without saving</button>
               <button type="button" onClick={() => void saveAndExit()} disabled={saveStatus === "saving"} className="ui-action-primary rounded-lg px-3 py-2 text-base font-semibold transition disabled:opacity-50">{saveStatus === "saving" ? "Saving…" : "Save & exit"}</button>
             </div>
           </div>
-        </div>
+        </Modal>
       ) : null}
     </header>
   );

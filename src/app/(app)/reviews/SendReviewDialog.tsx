@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { Send, X } from "lucide-react";
 import { sendReviewRequest } from "./actions";
+import { Modal } from "@/components/Modal";
 
 export function SendReviewDialog({ onSent }: { onSent: () => void }) {
   const [open, setOpen] = useState(false);
@@ -37,11 +38,14 @@ export function SendReviewDialog({ onSent }: { onSent: () => void }) {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+        <Modal onClose={() => setOpen(false)} labelledBy="send-review-title" className="max-w-md" busy={pending}>
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-slate-900">Send Review Request</h2>
+              <h2 id="send-review-title" className="text-xl font-semibold tracking-tight text-slate-900">Request a review</h2>
               <button
+                type="button"
+                aria-label="Close review request"
+                disabled={pending}
                 onClick={() => setOpen(false)}
                 className="rounded p-1 text-slate-400 hover:text-slate-600"
               >
@@ -51,11 +55,12 @@ export function SendReviewDialog({ onSent }: { onSent: () => void }) {
 
             <form ref={formRef} onSubmit={handleSubmit} className="mt-5 space-y-4">
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                <label htmlFor="review-recipient-name" className="block text-xs font-semibold uppercase tracking-wide text-slate-600">
                   Recipient name
                 </label>
                 <input
                   name="recipientName"
+                  id="review-recipient-name"
                   type="text"
                   required
                   placeholder="Jane Smith"
@@ -63,11 +68,12 @@ export function SendReviewDialog({ onSent }: { onSent: () => void }) {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wide text-slate-600">
+                <label htmlFor="review-recipient-phone" className="block text-xs font-semibold uppercase tracking-wide text-slate-600">
                   Phone number
                 </label>
                 <input
                   name="recipientPhone"
+                  id="review-recipient-phone"
                   type="tel"
                   required
                   placeholder="(555) 123-4567"
@@ -82,6 +88,7 @@ export function SendReviewDialog({ onSent }: { onSent: () => void }) {
               <div className="flex justify-end gap-2 pt-1">
                 <button
                   type="button"
+                  disabled={pending}
                   onClick={() => setOpen(false)}
                   className="rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 hover:bg-slate-100"
                 >
@@ -98,7 +105,7 @@ export function SendReviewDialog({ onSent }: { onSent: () => void }) {
               </div>
             </form>
           </div>
-        </div>
+        </Modal>
       )}
     </>
   );

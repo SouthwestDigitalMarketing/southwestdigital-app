@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
-import { createPortal } from "react-dom";
+import { useState } from "react";
 import { BookOpenText, Clock, GraduationCap, Share2, X, type LucideIcon } from "lucide-react";
+import { Modal } from "@/components/Modal";
 import { OFFER_KINDS, whoHref, type OfferKindKey } from "@/lib/quotes/kinds";
 import type { OfferStatusFilter } from "@/lib/quotes/status";
 
@@ -28,22 +28,6 @@ export function OffersListControls({
 }) {
   const router = useRouter();
   const [showCreateOffer, setShowCreateOffer] = useState(false);
-  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
-  const capturePortalTarget = useCallback((node: HTMLDivElement | null) => {
-    if (!node) return;
-    setPortalTarget((node.closest("[data-theme]") as HTMLElement | null) ?? document.body);
-  }, []);
-
-  useEffect(() => {
-    if (!showCreateOffer) return;
-
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setShowCreateOffer(false);
-    }
-
-    document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [showCreateOffer]);
 
   function push(next: { archived?: boolean; status?: string; kind?: string }) {
     const params = new URLSearchParams();
@@ -62,7 +46,7 @@ export function OffersListControls({
     "rounded-full border border-slate-300 bg-transparent px-3 py-2 text-base text-slate-700 focus:border-slate-500 focus:outline-none";
 
   return (
-    <div ref={capturePortalTarget} className="px-5 py-4">
+    <div className="px-4 py-4 sm:px-5">
       <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2 text-base text-slate-500">
           Type
@@ -117,21 +101,14 @@ export function OffersListControls({
         </button>
       </div>
 
-      {showCreateOffer && portalTarget
-        ? createPortal(
-            <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
-              role="presentation"
-              onClick={() => setShowCreateOffer(false)}
-            >
-              <div
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="create-offer-dialog-title"
-                aria-describedby="create-offer-dialog-description"
-                className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-xl"
-                onClick={(event) => event.stopPropagation()}
-              >
+      {showCreateOffer ? (
+        <Modal
+          onClose={() => setShowCreateOffer(false)}
+          labelledBy="create-offer-dialog-title"
+          describedBy="create-offer-dialog-description"
+          className="max-w-xl"
+        >
+          <div className="p-5 sm:p-6">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <h2 id="create-offer-dialog-title" className="text-xl font-semibold text-slate-900">
@@ -172,11 +149,9 @@ export function OffersListControls({
                     );
                   })}
                 </div>
-              </div>
-            </div>,
-            portalTarget,
-          )
-        : null}
+          </div>
+        </Modal>
+      ) : null}
     </div>
   );
 }

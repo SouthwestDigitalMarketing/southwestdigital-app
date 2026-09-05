@@ -138,7 +138,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
         <h2 className="text-lg font-semibold text-slate-900">Contact directory</h2>
       </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-4">
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
         {[
           { label: "Showing", value: total },
           { label: "Tags", value: tags.length },

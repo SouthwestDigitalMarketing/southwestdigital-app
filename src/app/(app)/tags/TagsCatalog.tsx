@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Modal } from "@/components/Modal";
 import {
   createContactTagAction,
   deleteContactTagAction,
@@ -343,12 +344,13 @@ export function TagsCatalog({
       </div>
 
       {managingServicesTag ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="services-dialog-title"
-          aria-describedby="services-dialog-description"
-          className="fixed inset-0 z-50 flex min-h-0 flex-col bg-slate-50"
+        <Modal
+          onClose={closeServiceManager}
+          labelledBy="services-dialog-title"
+          describedBy="services-dialog-description"
+          className="ui-modal-fullscreen bg-slate-50"
+          busy={pending}
+          closeOnBackdrop={false}
         >
           <form
             className="flex min-h-0 flex-1 flex-col"
@@ -456,7 +458,7 @@ export function TagsCatalog({
               </div>
             </footer>
           </form>
-        </div>
+        </Modal>
       ) : null}
     </>
   );

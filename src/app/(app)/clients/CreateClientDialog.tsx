@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { Plus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { createClientAction } from "./actions";
+import { Modal } from "@/components/Modal";
 
 const inputClass =
   "mt-1.5 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
@@ -27,12 +28,14 @@ export function CreateClientDialog() {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+        <Modal onClose={() => setOpen(false)} labelledBy="create-client-title" className="max-w-md" busy={pending}>
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-slate-900">Add client</h2>
+              <h2 id="create-client-title" className="text-xl font-semibold tracking-tight text-slate-900">Add client</h2>
               <button
                 type="button"
+                aria-label="Close add client"
+                disabled={pending}
                 onClick={() => setOpen(false)}
                 className="rounded p-1 text-slate-400 hover:text-slate-600"
               >
@@ -82,7 +85,7 @@ export function CreateClientDialog() {
               </button>
             </form>
           </div>
-        </div>
+        </Modal>
       )}
     </>
   );

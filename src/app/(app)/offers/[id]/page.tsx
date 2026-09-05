@@ -110,7 +110,7 @@ export default async function QuoteDetailPage({ params, searchParams }: PageProp
 
         <div className="rounded-xl border border-slate-200 bg-white p-6">
           <h2 className="mb-4 text-base font-semibold text-slate-800">Totals</h2>
-          <div className="grid grid-cols-3 gap-4 text-center">
+          <div className="grid grid-cols-1 gap-4 text-center sm:grid-cols-3">
             <div>
               <div className="text-xs uppercase tracking-wide text-slate-400">One-time</div>
               <div className="mt-1 text-xl font-bold text-slate-900">

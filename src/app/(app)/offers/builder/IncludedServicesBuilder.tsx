@@ -552,7 +552,7 @@ export default function IncludedServicesBuilder({
           <select
             value={selectedTemplateId}
             onChange={(event) => applyTemplate(event.target.value)}
-            className="h-11 min-w-[220px] rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm focus:border-brandnavy focus:outline-none focus:ring-2 focus:ring-brandnavy/10"
+            className="h-11 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm focus:border-brandnavy focus:outline-none focus:ring-2 focus:ring-brandnavy/10 sm:w-auto sm:min-w-[220px]"
           >
             {templateOptions.map((template) => (
               <option key={template.id} value={template.id}>
@@ -567,7 +567,7 @@ export default function IncludedServicesBuilder({
           <input
             value={templateName}
             onChange={(event) => setTemplateName(event.target.value)}
-            className="h-11 min-w-[280px] flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm focus:border-brandnavy focus:outline-none focus:ring-2 focus:ring-brandnavy/10"
+            className="h-11 w-full min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm focus:border-brandnavy sm:min-w-[280px] focus:outline-none focus:ring-2 focus:ring-brandnavy/10"
           />
 
           <button

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Archive, Ban, Eye, FileSignature, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Modal } from "@/components/Modal";
 import { archiveAgreementAction, batchAgreementAction, deleteAgreementAction, voidAgreementAction } from "./actions";
 
 type IssuedAgreement = {
@@ -286,8 +287,13 @@ export function IssuedAgreementsTable({ agreements }: { agreements: IssuedAgreem
         )}
       </div>
       {confirmation ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-          <div role="dialog" aria-modal="true" aria-labelledby="agreement-action-title" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        <Modal
+          onClose={() => setConfirmation(null)}
+          labelledBy="agreement-action-title"
+          className="max-w-md"
+          busy={isPending}
+        >
+          <div className="p-5 sm:p-6">
             <h2 id="agreement-action-title" className="text-lg font-semibold text-slate-900">
               {confirmation.label[0].toUpperCase() + confirmation.label.slice(1)} {confirmation.ids.length > 1 ? `${confirmation.ids.length} agreements` : "agreement"}?
             </h2>
@@ -313,14 +319,14 @@ export function IssuedAgreementsTable({ agreements }: { agreements: IssuedAgreem
               </div>
             ) : null}
             {actionError ? <p className="mt-3 text-sm text-red-700">{actionError}</p> : null}
-            <div className="mt-5 flex justify-end gap-3">
+            <div className="mt-5 flex flex-col-reverse justify-end gap-3 sm:flex-row">
               <button type="button" onClick={() => setConfirmation(null)} disabled={isPending} className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50">Cancel</button>
               <button type="button" onClick={confirmAction} disabled={isPending} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50">
                 {isPending ? "Working…" : confirmation.label[0].toUpperCase() + confirmation.label.slice(1)}
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       ) : null}
     </section>
   );

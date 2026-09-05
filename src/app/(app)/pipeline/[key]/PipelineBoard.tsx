@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
+import { Modal } from "@/components/Modal";
 import { formatPhone } from "@/lib/phone";
 import { addLeadNoteAction, movePipelineItemAction } from "../actions";
 
@@ -166,18 +167,10 @@ export default function PipelineBoard({
       </section>
 
       {selected ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setSelectedId(null)}
-        >
-          <div
-            className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-xl"
-            onClick={(event) => event.stopPropagation()}
-          >
+        <Modal onClose={() => setSelectedId(null)} labelledBy="pipeline-detail-title" className="max-w-2xl" busy={pending}>
+          <div className="p-4 sm:p-5">
             <div className="flex items-start justify-between gap-3">
-              <h3 className="text-base font-semibold text-slate-900">{selected.leadName}</h3>
+              <h3 id="pipeline-detail-title" className="text-base font-semibold text-slate-900">{selected.leadName}</h3>
               <div className="flex flex-wrap items-center justify-end gap-2">
                 {selected.leadPhone ? (
                   <a href={`tel:${selected.leadPhone}`} className={chipButton}>
@@ -234,7 +227,7 @@ export default function PipelineBoard({
                   className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-normal normal-case tracking-normal text-slate-800 focus:border-slate-500 focus:outline-none"
                 />
               </label>
-              <div className="mt-2 flex items-center justify-between gap-3">
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
                 <span className="text-xs text-slate-400">{callNote.length}/2,000</span>
                 <button type="submit" disabled={pending || !callNote.trim()} className={chipButton}>
                   {pending ? "Saving…" : "Log call"}
@@ -265,7 +258,7 @@ export default function PipelineBoard({
               </div>
             </div>
           </div>
-        </div>
+        </Modal>
       ) : null}
     </div>
   );

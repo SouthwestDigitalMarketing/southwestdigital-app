@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { createPortal } from "react-dom";
 import { Copy, Search, X } from "lucide-react";
+import { Modal } from "@/components/Modal";
 import { duplicateQuoteAction } from "./actions";
 
 type ContactOption = {
@@ -84,20 +84,14 @@ export function DuplicateOfferButton({
         {menuItem ? "Duplicate offer" : null}
       </button>
 
-      {open && typeof document !== "undefined"
-        ? createPortal(
-            <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
-              role="presentation"
-              onClick={() => !pending && setOpen(false)}
-            >
-              <div
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby={`duplicate-offer-dialog-${offerId}`}
-                className="w-full max-w-xl rounded-2xl bg-white p-5 shadow-xl"
-                onClick={(event) => event.stopPropagation()}
-              >
+      {open ? (
+        <Modal
+          onClose={() => setOpen(false)}
+          labelledBy={`duplicate-offer-dialog-${offerId}`}
+          className="max-w-xl"
+          busy={pending}
+        >
+          <div className="p-4 sm:p-5">
                 <div className="flex items-center justify-between gap-4">
                   <h2 id={`duplicate-offer-dialog-${offerId}`} className="text-lg font-semibold text-slate-900">
                     Duplicate offer for…
@@ -184,11 +178,9 @@ export function DuplicateOfferButton({
 
                 {pending ? <p className="mt-3 text-base text-slate-500">Duplicating…</p> : null}
                 {error ? <p className="mt-3 text-base text-rose-600">{error}</p> : null}
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
+          </div>
+        </Modal>
+      ) : null}
     </>
   );
 }

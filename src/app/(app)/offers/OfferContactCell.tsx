@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
-import { createPortal } from "react-dom";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Search, X } from "lucide-react";
+import { Modal } from "@/components/Modal";
 import {
   ContactCreateFields,
   type ContactCreationOptions,
@@ -44,31 +44,12 @@ export function OfferContactCell({
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [contactDialogView, setContactDialogView] = useState<ContactDialogView>(null);
-  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
-  const capturePortalTarget = useCallback((node: HTMLDivElement | null) => {
-    if (!node) return;
-    setPortalTarget((node.closest("[data-theme]") as HTMLElement | null) ?? document.body);
-  }, []);
   const [availableCreationOptions, setAvailableCreationOptions] =
     useState<ContactCreationOptions>(creationOptions);
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [contactQuery, setContactQuery] = useState("");
   const [pending, startTransition] = useTransition();
-
-  useEffect(() => {
-    if (!contactDialogView || pending) return;
-
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key !== "Escape") return;
-      setContactDialogView(null);
-      setContactQuery("");
-      setError(null);
-    }
-
-    document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [contactDialogView, pending]);
 
   const options = useMemo(() => {
     if (!currentContact.contactId) return contacts;
@@ -172,7 +153,7 @@ export function OfferContactCell({
   }
 
   return (
-    <div ref={capturePortalTarget} className="space-y-2">
+    <div className="space-y-2">
       <div className="flex min-w-0 items-center gap-2">
         <button
           type="button"
@@ -188,22 +169,14 @@ export function OfferContactCell({
         {pending ? <span className="text-base text-slate-500">Saving...</span> : null}
       </div>
 
-      {contactDialogView && portalTarget
-        ? createPortal(
-            <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
-              role="presentation"
-              onClick={() => {
-                if (!pending) closeContactDialog();
-              }}
-            >
-              <div
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby={`offer-contact-dialog-${offerId}`}
-                className="max-h-[90vh] w-full max-w-2xl overflow-x-hidden overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
-                onClick={(event) => event.stopPropagation()}
-              >
+      {contactDialogView ? (
+        <Modal
+          onClose={closeContactDialog}
+          labelledBy={`offer-contact-dialog-${offerId}`}
+          className="max-w-2xl overflow-x-hidden"
+          busy={pending}
+        >
+          <div className="p-4 sm:p-6">
                 <div className="flex items-center justify-between gap-4">
                   <h2 id={`offer-contact-dialog-${offerId}`} className="text-lg font-semibold text-slate-900">
                     {contactDialogView === "select"
@@ -284,7 +257,7 @@ export function OfferContactCell({
                         onAddClient={() => setContactDialogView("create-client")}
                         onAddTag={() => setContactDialogView("create-tag")}
                       />
-                      <div className="mt-1 flex gap-2 sm:col-span-2">
+                      <div className="mt-1 flex flex-col gap-2 sm:col-span-2 sm:flex-row">
                         <button type="submit" disabled={pending} className="ui-action-primary rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-50">
                           {pending ? "Saving..." : "Add contact"}
                         </button>
@@ -320,11 +293,9 @@ export function OfferContactCell({
                 )}
 
                 {error ? <p className="mt-3 text-sm text-rose-600">{error}</p> : null}
-              </div>
-            </div>,
-            portalTarget,
-          )
-        : null}
+          </div>
+        </Modal>
+      ) : null}
     </div>
   );
 }

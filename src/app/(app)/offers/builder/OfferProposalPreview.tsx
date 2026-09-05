@@ -13,6 +13,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import { Modal } from "@/components/Modal";
 import { useBrand } from "@/lib/brands/context";
 import { readableForegroundColor } from "@/lib/brands/colors";
 import { overlaySurfaceCssVariables, primaryActionCssVariables } from "@/lib/brands/themeTokens";
@@ -1314,7 +1315,7 @@ export default function OfferProposalPreview({
               </div>
 
               {/* Package cards */}
-              <div className="grid items-stretch gap-5 [grid-template-rows:repeat(7,auto)] lg:grid-cols-3">
+              <div className="grid items-stretch gap-5 [grid-template-rows:repeat(7,auto)] xl:grid-cols-3">
                 {optionMeta.map(({ id, serviceLevel }) => {
                   const option = options[id];
                   const selected = selectedOptionId === id;
@@ -1916,8 +1917,8 @@ export default function OfferProposalPreview({
 
       {/* Comparison modal */}
       {comparisonOpen ? (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/60 p-4 sm:p-6 lg:p-10">
-          <div role="dialog" aria-modal="true" aria-labelledby="comparison-title" className="mx-auto w-full max-w-[1180px] overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <Modal onClose={() => setComparisonOpen(false)} labelledBy="comparison-title" className="max-w-[1180px] overflow-hidden">
+          <div className="flex max-h-[calc(100dvh-1rem)] min-h-0 flex-col sm:max-h-[calc(100dvh-2rem)]">
             <header className="flex items-start justify-between gap-6 border-b border-slate-200 px-5 py-4 sm:px-7">
               <div>
                 <h2 id="comparison-title" className="text-2xl font-bold" style={{ color: inkColor }}>Compare everything included</h2>
@@ -1927,7 +1928,7 @@ export default function OfferProposalPreview({
                 <X className="h-5 w-5" />
               </button>
             </header>
-            <div className="max-h-[calc(100vh-10rem)] overflow-y-auto overflow-x-hidden">
+            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-auto">
               <table className="w-full table-fixed border-collapse text-sm">
                 <colgroup><col /><col className="w-28" /><col className="w-28" /><col className="w-28" /></colgroup>
                 <thead className="sticky top-0 z-10 bg-white shadow-[0_1px_0_0_#e2e8f0]">
@@ -1977,7 +1978,7 @@ export default function OfferProposalPreview({
               </table>
             </div>
           </div>
-        </div>
+        </Modal>
       ) : null}
     </main>
   );

@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
-import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Archive, ArchiveRestore, Ellipsis, Trash2 } from "lucide-react";
+import { Modal } from "@/components/Modal";
 import { deleteQuoteAction, setOfferStatusAction } from "./actions";
 import type { OfferBucket } from "@/lib/quotes/status";
 
@@ -21,7 +21,6 @@ export function OfferStatusButtons({
   const [moreOpen, setMoreOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [dialogTarget, setDialogTarget] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!moreOpen) return;
@@ -40,8 +39,7 @@ export function OfferStatusButtons({
     });
   }
 
-  function requestDelete(event: React.MouseEvent<HTMLButtonElement>) {
-    setDialogTarget((event.currentTarget.closest("[data-theme]") as HTMLElement | null) ?? document.body);
+  function requestDelete() {
     setDeleteConfirmOpen(true);
   }
 
@@ -163,26 +161,21 @@ export function OfferStatusButtons({
         Delete offer
       </button>
       </div>
-      {deleteConfirmOpen && dialogTarget ? createPortal(
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4"
-          role="presentation"
-          onClick={() => !pending && setDeleteConfirmOpen(false)}
+      {deleteConfirmOpen ? (
+        <Modal
+          onClose={() => setDeleteConfirmOpen(false)}
+          labelledBy={`delete-offer-title-${offerId}`}
+          className="max-w-md"
+          busy={pending}
         >
-          <div
-            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-left shadow-2xl"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={`delete-offer-title-${offerId}`}
-            onClick={(event) => event.stopPropagation()}
-          >
+          <div className="p-5 text-left sm:p-6">
             <h2 id={`delete-offer-title-${offerId}`} className="text-lg font-semibold text-slate-900">
               Delete this offer?
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
               This permanently deletes the offer and cannot be undone.
             </p>
-            <div className="mt-6 flex justify-end gap-2">
+            <div className="mt-6 flex flex-col-reverse justify-end gap-2 sm:flex-row">
               <button
                 type="button"
                 disabled={pending}
@@ -201,8 +194,7 @@ export function OfferStatusButtons({
               </button>
             </div>
           </div>
-        </div>,
-        dialogTarget,
+        </Modal>
       ) : null}
     </div>
   );
