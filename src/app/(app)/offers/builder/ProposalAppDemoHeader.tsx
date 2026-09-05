@@ -263,7 +263,7 @@ export default function ProposalAppDemoHeader({
             type="button"
             onClick={() => previousHref && void saveThenNavigate(previousHref)}
             disabled={!previousHref || saveStatus === "saving"}
-            className="theme-white hidden shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 xl:inline-flex"
+            className="theme-white hidden shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-4 py-2 text-base font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 xl:inline-flex"
           >
             <ChevronLeft className="h-4 w-4" />
             Back
@@ -276,7 +276,7 @@ export default function ProposalAppDemoHeader({
               type="button"
               onClick={() => void saveThenOpenProposal()}
               disabled={saveStatus === "saving"}
-               className="theme-white hidden shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 xl:inline-flex"
+               className="theme-white hidden shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-4 py-2 text-base font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 xl:inline-flex"
             >
               <Eye className="h-4 w-4" />
               View Proposal
@@ -286,7 +286,7 @@ export default function ProposalAppDemoHeader({
               type="button"
               onClick={() => nextHref && void saveThenNavigate(nextHref)}
               disabled={!nextHref || saveStatus === "saving"}
-               className="theme-white hidden shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 xl:inline-flex"
+               className="theme-white hidden shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-4 py-2 text-base font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 xl:inline-flex"
             >
               Next
               <ChevronRight className="h-4 w-4" />
@@ -297,12 +297,12 @@ export default function ProposalAppDemoHeader({
       {isExitDialogOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
           <div role="dialog" aria-modal="true" aria-labelledby="exit-dialog-title" className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
-            <h2 id="exit-dialog-title" className="text-lg font-semibold text-slate-950">Save changes before exiting?</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">Your changes have not been saved to this offer yet.</p>
+            <h2 id="exit-dialog-title" className="text-xl font-semibold text-slate-950">Save changes before exiting?</h2>
+            <p className="mt-2 text-base leading-7 text-slate-600">Your changes have not been saved to this offer yet.</p>
             <div className="mt-6 flex flex-wrap justify-end gap-3">
-              <button type="button" onClick={() => setIsExitDialogOpen(false)} className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">Continue editing</button>
-              <button type="button" onClick={() => { setIsExitDialogOpen(false); exitToOffers(); }} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Exit without saving</button>
-              <button type="button" onClick={() => void saveAndExit()} disabled={saveStatus === "saving"} className="ui-action-primary rounded-lg px-3 py-2 text-sm font-semibold transition disabled:opacity-50">{saveStatus === "saving" ? "Saving…" : "Save & exit"}</button>
+              <button type="button" onClick={() => setIsExitDialogOpen(false)} className="rounded-lg px-3 py-2 text-base font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">Continue editing</button>
+              <button type="button" onClick={() => { setIsExitDialogOpen(false); exitToOffers(); }} className="rounded-lg border border-slate-300 px-3 py-2 text-base font-semibold text-slate-700 transition hover:bg-slate-50">Exit without saving</button>
+              <button type="button" onClick={() => void saveAndExit()} disabled={saveStatus === "saving"} className="ui-action-primary rounded-lg px-3 py-2 text-base font-semibold transition disabled:opacity-50">{saveStatus === "saving" ? "Saving…" : "Save & exit"}</button>
             </div>
           </div>
         </div>

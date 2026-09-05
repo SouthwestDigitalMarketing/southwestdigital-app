@@ -1,6 +1,6 @@
 # Coding-agent handoff
 
-Updated: 2026-09-04 (America/Chicago) — offer-builder card and Manage Offers UX pass in progress (see §13).
+Updated: 2026-09-05 (America/Chicago) — typography floor pass across the first four builder steps (see §14).
 
 ## Start here
 
@@ -15,9 +15,9 @@ The user has instructed: **never push without explicit user instruction**. Commi
 
 ## Current commit state
 
-- `HEAD` == `origin/main` at `467fbee Add offer-builder Finalize step with sequential save/publish/send`.
+- `HEAD` == `origin/main` at `69d6fc0 Refine offer builder and manage offers UX`.
 - **Line-ending noise warning (still true):** ~100 tracked files show as modified with identical content (worktree CRLF vs blob LF — `git diff --ignore-all-space` is empty for them). Do NOT commit that noise: stage only the files you changed, and normalize any touched file back to LF (`sed`/python CRLF→LF) so the commit holds only the logical diff.
-- §12 (Finalize step) committed and pushed this session; working tree otherwise still carries the CRLF noise above.
+- **Uncommitted this session:** §14 typography floor pass (5 files under `src/app/(app)/offers/builder/`) plus this HANDOFF refresh.
 
 ## This session's work
 
@@ -186,9 +186,9 @@ User asked for a real Finalize step at the end of the bookkeeping builder (was: 
 
 Key files: `builder/{ProposalAppDemoStepper,ProposalFinalizeDemo,ProposalContactInfoDemo,ProposalCreationWorkspaceDemo,PricingSnapshotSidebar}.tsx`, `offers/finalize/page.tsx`.
 
-### 13) Offer-builder card and Manage Offers UX pass — UNCOMMITTED
+### 13) Offer-builder card and Manage Offers UX pass — DONE, committed and pushed as `69d6fc0`
 
-This session continued the builder and offer-list UX work. The changes are present in the working tree and have not been committed or pushed.
+Builder and offer-list UX work landed as a single commit.
 
 - **Adjustments test proposal control:** `isTestProposal` is part of the assessment builder state and is carried through save/publish actions into the offer snapshot and engagement. The small `Mark as a $1 test proposal` checkbox is now its own final section on the Adjustments step.
 - **Assessment card pattern:** Scale, Complexity, and Adjustments use the Contact-step pattern: one rounded main card, alternating section surfaces, summary values, and section-level Edit dialogs. The pricing sidebar remains a separate card.
@@ -199,6 +199,39 @@ This session continued the builder and offer-list UX work. The changes are prese
 Validation: `npm run typecheck` ✅ · focused ESLint ✅ · `git diff --check` ✅. Browser visual verification was unavailable because no browser connection was available.
 
 Key files: `src/app/(app)/offers/builder/AssessmentCardSection.tsx`, `src/app/(app)/offers/builder/ProposalCreationWorkspaceDemo.tsx`, `src/app/(app)/offers/page.tsx`, `src/app/(app)/offers/OfferStatusButtons.tsx`, `src/app/(app)/offers/OfferContactCell.tsx`, `src/app/(app)/offers/DuplicateOfferButton.tsx`, `src/app/(app)/offers/OfferEditButton.tsx`, `src/app/(app)/offers/offers-table.module.css`, `src/app/globals.css`, and the offer persistence files under `offers/builder`, `offers/new`, and `offers/who`.
+
+### 14) Typography floor pass across the first four builder steps — UNCOMMITTED
+
+Raises the readable-content floor to the browser base (16px Arial = `text-base`) across Contact, Scale, Complexity, and Adjustments. Preserves a clear hierarchy by lifting section headings one step above the new body floor.
+
+**Scope:** the first four steps only (`/offers/new`, `/offers/scale`, `/offers/pricing`, `/offers/calculator`) plus the shared header/sidebar chrome those pages render. Later steps (Options, Preview, Finalize) are untouched and remain the smaller pre-pass sizing.
+
+**Type scale after the pass:**
+
+| Role | Before | After |
+|---|---|---|
+| Card / modal section heading (`h2`) | `text-lg` (18px) | `text-xl` (20px) |
+| Uppercase field label (summary keys + form labels) | `text-[11px] tracking-[0.14em]` | `text-sm tracking-[0.08em]` (uppercase/semibold/slate-500 preserved — see note below) |
+| Summary value, form input, notes textarea, helper copy | `text-sm` / `text-xs` | `text-base` |
+| Pill toggles, checkbox / radio labels | `text-sm` | `text-base` |
+| Pricing breakdown rows, x/% input suffixes | `text-sm` | `text-base` |
+| Buttons in the flow (Edit, Add Owner, Add Year, header Back/Next, modal Cancel/Save, exit dialog buttons) | `text-sm font-semibold` | `text-base font-semibold` |
+| Tooltip content | `text-xs` | `text-base` |
+| Sidebar cleanup headline + amount | `text-lg` | `text-xl` |
+| Sidebar "ONE-TIME" cap label | `text-base font-medium` | `text-sm font-semibold` (matches the label pattern) |
+| Contact-page input height (needed to keep the input visually balanced at the larger text) | `h-10 rounded-xl` | `h-12 rounded-xl` |
+
+**Note on field-label size** (§14 second iteration): first pass lifted labels to `text-base` (16px) but the uppercase + semibold + tracking treatment read too heavy next to the 16px body copy. Follow-up dropped labels to `text-sm` (14px) with the same uppercase / semibold / tracking-[0.08em] / slate-500 — the "readable-content floor is base" invariant applies to actual content (values, inputs, helper copy, buttons), not to structural micro-labels. If a future pass wants a different label size, all label uses run through two constants: `FIELD_LABEL_CLASS` in `ProposalContactInfoDemo.tsx` and `ProposalCreationWorkspaceDemo.tsx`, plus two inline copies of the same class string (summary label in `AssessmentCardSection.tsx`, "ONE-TIME" label in `PricingSnapshotSidebar.tsx`).
+
+**Intentionally kept smaller** — pure nav chrome, not content:
+- Stepper pill labels (`ProposalAppDemoStepper.tsx`) stay at `text-xs`.
+- Header toolbar buttons (Save / Publish / Send / Eye / Exit) remain icon-only with `text-[0px]` labels for screen-reader access.
+
+**iOS bonus:** bumping inputs to 16px stops iOS Safari from zooming when the input is focused. Both `INPUT_CLASS_NAME` constants (Contact + workspace) now use `text-base`.
+
+Validation: `npm run typecheck` ✅ · focused ESLint on the five touched files ✅. Browser visual verification unavailable in this session — spot-check the four steps at desktop + narrow desktop widths, especially the pricing sidebar column and the Adjustments card where the newly larger helper copy takes more vertical space.
+
+Key files: `src/app/(app)/offers/builder/AssessmentCardSection.tsx`, `src/app/(app)/offers/builder/PricingSnapshotSidebar.tsx`, `src/app/(app)/offers/builder/ProposalAppDemoHeader.tsx`, `src/app/(app)/offers/builder/ProposalContactInfoDemo.tsx`, `src/app/(app)/offers/builder/ProposalCreationWorkspaceDemo.tsx`.
 
 ### Suggested commit split for this batch
 
@@ -211,7 +244,8 @@ If you want to slice the uncommitted work into reviewable chunks before pushing:
 5. Offer-ID column circular icons + move test marker: `src/app/(app)/offers/page.tsx`.
 6. Hourly Stripe Payment Element + staff-preview banner + new-tab links: `HourlyPublicView.tsx`, `OfferProposalPreview.tsx`, `(proposal)/proposal/[token]/page.tsx`, `HourlyOfferBuilder.tsx`, `ProposalAppDemoHeader.tsx`, `ProposalCoverLetterDemo.tsx` external-link.
 7. READY stage refinement + mark-as-sent fallback + self-heal on first view: lifecycle stage additions, `(proposal)/proposal/[token]/page.tsx` self-heal, `ProposalCoverLetterDemo.tsx` mark-as-sent button.
-8. HANDOFF refresh (this file).
+8. Typography floor pass (§14): the 5 files listed under §14 above. Reviewable on its own — the diff is almost entirely `text-sm|text-xs|text-[11px] → text-sm|text-base` swaps plus two heading bumps.
+9. HANDOFF refresh (this file).
 
 Or squash into one commit if you'd rather not manage the split — the batch is coherent as a single "work-item lifecycle + hourly + preview safety" landing.
 
@@ -457,6 +491,6 @@ npm run typecheck                         # should be clean
 npm test -- --run                         # 40 files / 265 tests, all green
 ```
 
-Then read this file top-to-bottom, note that **section 13 in "This session's work" is uncommitted** and the user's push policy is "never push without explicit user instruction."
+Then read this file top-to-bottom, note that **section 14 in "This session's work" is uncommitted** and the user's push policy is "never push without explicit user instruction."
 
 If the user asks you to move CRM PipelineItem into the work-item model, read section 6 first, then the "Future design: unified work items / next-action system" CRM extension list — the offer-side helpers (`src/lib/quotes/lifecycle.ts`) are the pattern to follow.

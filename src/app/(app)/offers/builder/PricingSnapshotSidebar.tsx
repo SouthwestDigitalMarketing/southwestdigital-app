@@ -34,23 +34,23 @@ export default function PricingSnapshotSidebar({
 
   return (
     <aside className="xl:sticky xl:top-8 xl:self-start">
-      {hideLabel ? null : (<p className="px-1 text-sm font-semibold text-slate-500">
+      {hideLabel ? null : (<p className="px-1 text-base font-semibold text-slate-500">
         Pricing calculator
       </p>)}
       <div className={`proposal-builder-card overflow-hidden rounded-[1.25rem] border border-slate-300 shadow-[0_18px_40px_rgba(15,23,42,0.12)] ${hideLabel ? "" : "mt-3"}`}>
-        {hideLabel ? (<div className="border-b border-slate-200 bg-white px-5 py-6"><h2 className="text-lg font-semibold tracking-tight text-slate-900">Pricing</h2></div>) : null}
+        {hideLabel ? (<div className="border-b border-slate-200 bg-white px-5 py-6"><h2 className="text-xl font-semibold tracking-tight text-slate-900">Pricing</h2></div>) : null}
         <div className="space-y-3 p-4">
           {cleanupCard ? (
             <div className="text-left">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-lg font-semibold tracking-tight text-slate-900">Historical cleanup</p>
+                  <p className="text-xl font-semibold tracking-tight text-slate-900">Historical cleanup</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-base font-medium uppercase tracking-[0.12em] text-slate-500">
+                  <p className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-500">
                     One-Time
                   </p>
-                  <p className="mt-1 text-lg font-semibold tabular-nums text-slate-900">
+                  <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900">
                     {cleanupCard.amountLabel}
                   </p>
                 </div>

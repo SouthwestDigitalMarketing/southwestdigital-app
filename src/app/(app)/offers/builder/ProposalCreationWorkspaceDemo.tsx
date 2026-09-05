@@ -777,9 +777,9 @@ const PACKAGES: PackageDefinition[] = [
 const MAINTAIN_PACKAGE = PACKAGES.find((pkg) => pkg.id === "maintain") as PackageDefinition;
 
 const INPUT_CLASS_NAME =
-  "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm transition focus:border-brandnavy focus:outline-none focus:ring-2 focus:ring-brandnavy/10";
+  "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 shadow-sm transition focus:border-brandnavy focus:outline-none focus:ring-2 focus:ring-brandnavy/10";
 const FIELD_LABEL_CLASS =
-  "text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500";
+  "text-sm font-semibold uppercase tracking-[0.08em] text-slate-500";
 
 
 export const BOOK_SET_OPTIONS: Array<{ value: BookSetType; label: string; description: string }> = [
@@ -1053,7 +1053,7 @@ function renderPricingBreakdownRows(items: MonthlyRateBreakdownItem[], keyPrefix
   return items.map((item, index) => (
     <div
       key={`${keyPrefix}-${item.label}`}
-      className={`proposal-builder-breakdown-card flex items-center justify-between gap-4 py-2 text-sm ${
+      className={`proposal-builder-breakdown-card flex items-center justify-between gap-4 py-2 text-base ${
         index === 0 ? "border-t border-slate-200" : ""
       }`}
     >
@@ -2079,7 +2079,7 @@ export default function ProposalCreationWorkspaceDemo({
           <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_440px] 2xl:grid-cols-[minmax(0,1.55fr)_470px]">
             <div className="space-y-3">
               {isScaleStep || isComplexityStep || isCalculatorStep ? null : !isIncludedStep ? (
-                <p className="mb-3 px-1 text-sm font-semibold text-slate-500">Assessment</p>
+                <p className="mb-3 px-1 text-base font-semibold text-slate-500">Assessment</p>
               ) : (
                 <div className="flex justify-start px-1">
                   <ProposalAppExpandAllControl
@@ -2112,7 +2112,7 @@ export default function ProposalCreationWorkspaceDemo({
                         </FieldLabel>
                       </div>
                     ) : (
-                      <p className="text-sm text-slate-500">Property count does not apply to the selected book-set type.</p>
+                      <p className="text-base text-slate-500">Property count does not apply to the selected book-set type.</p>
                     )}
                   </AssessmentCardSection>
                 ) : null}
@@ -2241,7 +2241,7 @@ export default function ProposalCreationWorkspaceDemo({
                               key={platform.value}
                               type="button"
                               onClick={() => togglePaymentPlatform(platform.value)}
-                              className={`proposal-builder-option rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                              className={`proposal-builder-option rounded-full border px-4 py-2 text-base font-semibold transition ${
                                 selected
                                   ? "border-brandnavy bg-brandnavy text-white"
                                   : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
@@ -2350,7 +2350,7 @@ export default function ProposalCreationWorkspaceDemo({
                       </label>
                       <FieldLabel label="Do They Run Payroll?">
                         <div className="flex h-[50px] items-center gap-6 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
-                          <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                          <label className="inline-flex items-center gap-2 text-base font-medium text-slate-700">
                             <input
                               type="radio"
                               name="runs-payroll"
@@ -2360,7 +2360,7 @@ export default function ProposalCreationWorkspaceDemo({
                             />
                             Yes
                           </label>
-                          <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                          <label className="inline-flex items-center gap-2 text-base font-medium text-slate-700">
                             <input
                               type="radio"
                               name="runs-payroll"
@@ -2370,7 +2370,7 @@ export default function ProposalCreationWorkspaceDemo({
                             />
                             No
                           </label>
-                          <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                          <label className="inline-flex items-center gap-2 text-base font-medium text-slate-700">
                             <input
                               type="radio"
                               name="runs-payroll"
@@ -2460,7 +2460,7 @@ export default function ProposalCreationWorkspaceDemo({
                     {assessment.runsPayroll ? (
                       <>
                         {selectedPayrollQboIntegrationStatus?.description ? (
-                          <p className="mt-2 text-sm text-slate-500">
+                          <p className="mt-2 text-base text-slate-500">
                             {selectedPayrollQboIntegrationStatus.description}
                           </p>
                         ) : null}
@@ -2477,7 +2477,7 @@ export default function ProposalCreationWorkspaceDemo({
                                     key={method.value}
                                     type="button"
                                     onClick={() => togglePayrollPaymentMethod(method.value)}
-                                  className={`proposal-builder-option rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                                  className={`proposal-builder-option rounded-full border px-4 py-2 text-base font-semibold transition ${
                                       selected
                                         ? "border-brandnavy bg-brandnavy text-white"
                                         : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
@@ -2533,7 +2533,7 @@ export default function ProposalCreationWorkspaceDemo({
                                 key={contractorType.value}
                                 type="button"
                                 onClick={() => toggleContractorType(contractorType.value)}
-                                className={`proposal-builder-option rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                                className={`proposal-builder-option rounded-full border px-4 py-2 text-base font-semibold transition ${
                                   selected
                                     ? "border-brandnavy bg-brandnavy text-white"
                                     : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
@@ -2567,7 +2567,7 @@ export default function ProposalCreationWorkspaceDemo({
                         </select>
                       </FieldLabel>
                       {selectedContractorPayCadence?.description ? (
-                        <p className="mt-2 text-sm text-slate-500">
+                        <p className="mt-2 text-base text-slate-500">
                           {selectedContractorPayCadence.description}
                         </p>
                       ) : null}
@@ -2576,7 +2576,7 @@ export default function ProposalCreationWorkspaceDemo({
                     <div className="mt-4 max-w-[420px]">
                       <FieldLabel label="Do They Have an Admin Assistant Who Provides Requested Documentation?">
                         <div className="flex h-[50px] items-center gap-6 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
-                          <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                          <label className="inline-flex items-center gap-2 text-base font-medium text-slate-700">
                             <input
                               type="radio"
                               name="has-admin-assistant"
@@ -2586,7 +2586,7 @@ export default function ProposalCreationWorkspaceDemo({
                             />
                             Yes
                           </label>
-                          <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                          <label className="inline-flex items-center gap-2 text-base font-medium text-slate-700">
                             <input
                               type="radio"
                               name="has-admin-assistant"
@@ -2596,7 +2596,7 @@ export default function ProposalCreationWorkspaceDemo({
                             />
                             No
                           </label>
-                          <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                          <label className="inline-flex items-center gap-2 text-base font-medium text-slate-700">
                             <input
                               type="radio"
                               name="has-admin-assistant"
@@ -2660,7 +2660,7 @@ export default function ProposalCreationWorkspaceDemo({
                               key={method.value}
                               type="button"
                               onClick={() => toggleCustomerInvoicingMethod(method.value)}
-                            className={`proposal-builder-option rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                            className={`proposal-builder-option rounded-full border px-4 py-2 text-base font-semibold transition ${
                                 selected
                                   ? "border-brandnavy bg-brandnavy text-white"
                                   : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
@@ -2676,7 +2676,7 @@ export default function ProposalCreationWorkspaceDemo({
                     <div className="mt-4 max-w-[420px]">
                       <FieldLabel label="Do They Accept Tips That Must Be Passed on to Contractors?">
                         <div className="flex h-[50px] items-center gap-6 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
-                          <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                          <label className="inline-flex items-center gap-2 text-base font-medium text-slate-700">
                             <input
                               type="radio"
                               name="accepts-tips-for-contractors"
@@ -2686,7 +2686,7 @@ export default function ProposalCreationWorkspaceDemo({
                             />
                             Yes
                           </label>
-                          <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                          <label className="inline-flex items-center gap-2 text-base font-medium text-slate-700">
                             <input
                               type="radio"
                               name="accepts-tips-for-contractors"
@@ -2696,7 +2696,7 @@ export default function ProposalCreationWorkspaceDemo({
                             />
                             No
                           </label>
-                          <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                          <label className="inline-flex items-center gap-2 text-base font-medium text-slate-700">
                             <input
                               type="radio"
                               name="accepts-tips-for-contractors"
@@ -2714,7 +2714,7 @@ export default function ProposalCreationWorkspaceDemo({
                       <div className="mt-4 max-w-[420px]">
                         <FieldLabel label="Do They Have a Tips Liability Account Set Up? (They Should)">
                           <div className="flex h-[50px] items-center gap-6 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
-                            <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                            <label className="inline-flex items-center gap-2 text-base font-medium text-slate-700">
                               <input
                                 type="radio"
                                 name="has-tips-liability-account"
@@ -2724,7 +2724,7 @@ export default function ProposalCreationWorkspaceDemo({
                               />
                               Yes
                             </label>
-                            <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                            <label className="inline-flex items-center gap-2 text-base font-medium text-slate-700">
                               <input
                                 type="radio"
                                 name="has-tips-liability-account"
@@ -2734,7 +2734,7 @@ export default function ProposalCreationWorkspaceDemo({
                               />
                               No
                             </label>
-                            <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                            <label className="inline-flex items-center gap-2 text-base font-medium text-slate-700">
                               <input
                                 type="radio"
                                 name="has-tips-liability-account"
@@ -2747,7 +2747,7 @@ export default function ProposalCreationWorkspaceDemo({
                           </div>
                         </FieldLabel>
                         {assessment.hasTipsLiabilityAccount === false ? (
-                          <p className="mt-2 text-sm text-slate-500">
+                          <p className="mt-2 text-base text-slate-500">
                             Without a tips liability account, tips collected on behalf of
                             contractors are hard to track separately from revenue — this should be
                             set up as part of the engagement.
@@ -2766,7 +2766,7 @@ export default function ProposalCreationWorkspaceDemo({
                                 key={bank.value}
                                 type="button"
                                 onClick={() => toggleBankUsed(bank.value)}
-                                className={`proposal-builder-option rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                                className={`proposal-builder-option rounded-full border px-4 py-2 text-base font-semibold transition ${
                                   selected
                                     ? "border-brandnavy bg-brandnavy text-white"
                                     : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
@@ -2783,7 +2783,7 @@ export default function ProposalCreationWorkspaceDemo({
                     <div className="mt-4 max-w-[420px]">
                       <FieldLabel label="Do Their Banks Allow Delegate Access?">
                         <div className="flex h-[50px] items-center gap-6 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
-                          <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                          <label className="inline-flex items-center gap-2 text-base font-medium text-slate-700">
                             <input
                               type="radio"
                               name="banks-allow-delegate-access"
@@ -2793,7 +2793,7 @@ export default function ProposalCreationWorkspaceDemo({
                             />
                             Yes
                           </label>
-                          <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                          <label className="inline-flex items-center gap-2 text-base font-medium text-slate-700">
                             <input
                               type="radio"
                               name="banks-allow-delegate-access"
@@ -2803,7 +2803,7 @@ export default function ProposalCreationWorkspaceDemo({
                             />
                             No
                           </label>
-                          <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                          <label className="inline-flex items-center gap-2 text-base font-medium text-slate-700">
                             <input
                               type="radio"
                               name="banks-allow-delegate-access"
@@ -2839,7 +2839,7 @@ export default function ProposalCreationWorkspaceDemo({
                               <CircleHelp className="h-3.5 w-3.5" />
                               <span
                                 role="tooltip"
-                                className="ui-tooltip pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-80 -translate-x-1/2 rounded-xl px-3 py-2.5 text-left text-xs font-normal normal-case leading-relaxed tracking-normal shadow-xl group-hover:block group-focus:block"
+                                className="ui-tooltip pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-80 -translate-x-1/2 rounded-xl px-3 py-2.5 text-left text-base font-normal normal-case leading-relaxed tracking-normal shadow-xl group-hover:block group-focus:block"
                               >
                                 In QBO, open the General Ledger, set the date range, and export it as
                                 a CSV. Open the CSV in a spreadsheet or upload it to an AI chatbot to
@@ -2866,7 +2866,7 @@ export default function ProposalCreationWorkspaceDemo({
 
                       <FieldLabel label="Books Over Two Months Behind?">
                         <div className="flex h-[50px] items-center gap-6 rounded-2xl border border-slate-200 bg-white px-4 shadow-sm">
-                          <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                          <label className="inline-flex items-center gap-2 text-base font-medium text-slate-700">
                             <input
                               type="radio"
                               name="books-over-two-months-behind"
@@ -2876,7 +2876,7 @@ export default function ProposalCreationWorkspaceDemo({
                             />
                             Yes
                           </label>
-                          <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                          <label className="inline-flex items-center gap-2 text-base font-medium text-slate-700">
                             <input
                               type="radio"
                               name="books-over-two-months-behind"
@@ -2886,7 +2886,7 @@ export default function ProposalCreationWorkspaceDemo({
                             />
                             No
                           </label>
-                          <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                          <label className="inline-flex items-center gap-2 text-base font-medium text-slate-700">
                             <input
                               type="radio"
                               name="books-over-two-months-behind"
@@ -2914,12 +2914,12 @@ export default function ProposalCreationWorkspaceDemo({
                             <div className="flex items-center justify-between gap-4">
                               <div>
                                 <p className={FIELD_LABEL_CLASS}>Historical Cleanup Periods</p>
-                                <p className="mt-1 text-xs text-slate-500">Every selected month includes reconciliation. Current-year cleanup ends with last month; prior years default to January–December.</p>
+                                <p className="mt-1 text-base text-slate-500">Every selected month includes reconciliation. Current-year cleanup ends with last month; prior years default to January–December.</p>
                               </div>
                               <button
                                 type="button"
                                 onClick={addHistoricalCleanupPeriod}
-                                className="inline-flex items-center gap-1.5 text-sm font-semibold text-brandnavy hover:underline"
+                                className="inline-flex items-center gap-1.5 text-base font-semibold text-brandnavy hover:underline"
                               >
                                 <Plus className="h-4 w-4" /> Add Year
                               </button>
@@ -3033,7 +3033,7 @@ export default function ProposalCreationWorkspaceDemo({
                             </select>
                           </FieldLabel>
                           <FieldLabel label="Platform Change">
-                            <label className="flex h-[50px] items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm">
+                            <label className="flex h-[50px] items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-base font-medium text-slate-700 shadow-sm">
                               <input
                                 type="checkbox"
                                 checked={assessment.platformMigrationEnabled}
@@ -3075,7 +3075,7 @@ export default function ProposalCreationWorkspaceDemo({
                       onCancel={setAssessment}
                       readOnly
                     >
-                      <p className="mb-3 text-sm font-semibold text-slate-800">{formatCurrency(maintainBaseMonthlyTotal, "/mo")}</p>
+                      <p className="mb-3 text-base font-semibold text-slate-800">{formatCurrency(maintainBaseMonthlyTotal, "/mo")}</p>
                       {renderPricingBreakdownRows(maintainBaseItems, "maintain-base")}
                     </AssessmentCardSection>
 
@@ -3088,7 +3088,7 @@ export default function ProposalCreationWorkspaceDemo({
                           {maintainAdjustmentItems.length > 0 ? (
                             renderPricingBreakdownRows(maintainAdjustmentItems, "maintain-adjustment")
                           ) : (
-                            <p className="border-t border-slate-200 px-5 py-3 text-sm text-slate-500">
+                            <p className="border-t border-slate-200 px-5 py-3 text-base text-slate-500">
                               No adjustments applied.
                             </p>
                           )}
@@ -3108,7 +3108,7 @@ export default function ProposalCreationWorkspaceDemo({
                                   }
                                   className={`${INPUT_CLASS_NAME} pr-10`}
                                 />
-                                <span className="pointer-events-none absolute inset-y-0 right-3 inline-flex items-center text-sm font-semibold text-slate-400">
+                                <span className="pointer-events-none absolute inset-y-0 right-3 inline-flex items-center text-base font-semibold text-slate-400">
                                   x
                                 </span>
                               </div>
@@ -3147,12 +3147,12 @@ export default function ProposalCreationWorkspaceDemo({
                                   }
                                   className={`${INPUT_CLASS_NAME} pr-10`}
                                 />
-                                <span className="pointer-events-none absolute inset-y-0 right-3 inline-flex items-center text-sm font-semibold text-slate-400">
+                                <span className="pointer-events-none absolute inset-y-0 right-3 inline-flex items-center text-base font-semibold text-slate-400">
                                   %
                                 </span>
                               </div>
                             </FieldLabel>
-                            <p className="self-end text-xs text-slate-500">
+                            <p className="self-end text-base text-slate-500">
                               Discount applied to monthly recurring services when the client chooses a 12-month agreement. Default 20%.
                             </p>
                           </div>
@@ -3171,8 +3171,8 @@ export default function ProposalCreationWorkspaceDemo({
                                 className={INPUT_CLASS_NAME}
                               />
                             </FieldLabel>
-                            <p className="mt-2 text-xs text-slate-500">Leave blank for the calculated fee. If waived, this amount is shown with a strikethrough on the proposal.</p>
-                            <label className="mt-3 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700">
+                            <p className="mt-2 text-base text-slate-500">Leave blank for the calculated fee. If waived, this amount is shown with a strikethrough on the proposal.</p>
+                            <label className="mt-3 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-medium text-slate-700">
                               <input
                                 type="checkbox"
                                 checked={assessment.waiveOnboardingFee}
@@ -3188,7 +3188,7 @@ export default function ProposalCreationWorkspaceDemo({
                                 }}
                                 className="h-4 w-4 rounded border-slate-300 text-brandnavy focus:ring-brandnavy"
                               />
-                              <span><span className="block">Waive onboarding fee</span><span className="block text-xs font-normal text-slate-500">Keeps the amount above and strikes it through on the proposal.</span></span>
+                              <span><span className="block">Waive onboarding fee</span><span className="block text-base font-normal text-slate-500">Keeps the amount above and strikes it through on the proposal.</span></span>
                             </label>
                           </div>
                     </AssessmentCardSection>
@@ -3205,7 +3205,7 @@ export default function ProposalCreationWorkspaceDemo({
                             onChange={(event) =>
                               updateAssessment("assessmentNotes", event.target.value)
                             }
-                            className="min-h-[84px] w-full resize-none border-0 border-t border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-none outline-none transition focus:border-brandnavy focus:outline-none focus:ring-0"
+                            className="min-h-[84px] w-full resize-none border-0 border-t border-slate-200 bg-white px-4 py-3 text-base text-slate-900 shadow-none outline-none transition focus:border-brandnavy focus:outline-none focus:ring-0"
                           />
                     </AssessmentCardSection>
 
@@ -3215,12 +3215,12 @@ export default function ProposalCreationWorkspaceDemo({
                       onCancel={setAssessment}
                       readOnly
                     >
-                      <label className="flex items-center gap-2 text-xs font-medium text-slate-700">
+                      <label className="flex items-center gap-2 text-base font-medium text-slate-700">
                         <input
                           type="checkbox"
                           checked={assessment.isTestProposal}
                           onChange={(event) => updateAssessment("isTestProposal", event.target.checked)}
-                          className="h-3.5 w-3.5 rounded border-slate-300 text-brandnavy focus:ring-brandnavy"
+                          className="h-4 w-4 rounded border-slate-300 text-brandnavy focus:ring-brandnavy"
                         />
                         <span>Mark as a $1 test proposal</span>
                       </label>
