@@ -319,8 +319,17 @@ function buildCleanupRows(periods: HistoricalCleanupPeriod[], maintainMonthly: n
     });
 }
 
-function buildOptions(assessment: AssessmentState, publishedPricing?: PublicProposalPricing): Record<OptionId, ProposalOption> {
-  const packagePricing = publishedPricing ?? getProposalPricingSnapshotData(assessment).packagePricing;
+function buildOptions(
+  assessment: AssessmentState,
+  publishedPricing?: PublicProposalPricing,
+  isTestProposal = false,
+): Record<OptionId, ProposalOption> {
+  const calculatedPricing = publishedPricing ?? getProposalPricingSnapshotData(assessment).packagePricing;
+  const packagePricing = isTestProposal
+    ? Object.fromEntries(
+        optionMeta.map(({ id }) => [id, { ...calculatedPricing[id], monthly: 1 }]),
+      ) as Record<OptionId, PublicProposalPricing[OptionId]>
+    : calculatedPricing;
   const periods = hasCatchUpPricingInputs(assessment)
     ? assessment.historicalCleanupPeriods.filter((p) => periodMonthCount(p) > 0)
     : [];
@@ -571,7 +580,7 @@ export default function OfferProposalPreview({
   const accentHeaderBg = getProposalAccentHeaderBackground(proposalMode, accentColor);
   const urgencyOffer = catalogOffer?.active ? catalogOffer : getUrgencyOfferDisplay(DEFAULT_URGENCY_OFFER);
 
-  const options = buildOptions(assessment, publishedPricing);
+  const options = buildOptions(assessment, publishedPricing, isTestProposal || assessment.isTestProposal);
   const [selectedOptionId, setSelectedOptionId] = useState<OptionId | null>(null);
   const [selectionSubmittingId, setSelectionSubmittingId] = useState<OptionId | null>(null);
   const [selectionError, setSelectionError] = useState<string | null>(null);

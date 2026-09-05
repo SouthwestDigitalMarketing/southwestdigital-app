@@ -1821,6 +1821,19 @@ export function getProposalPricingSnapshotData(assessment: AssessmentState) {
     ),
   };
 
+  // Test proposals exercise the complete signing and payment flow with a
+  // single-dollar charge. Keep every package card aligned with that mode so
+  // the pricing calculator never presents normal commercial rates after the
+  // adjustment is enabled.
+  if (assessment.isTestProposal) {
+    for (const pkg of PACKAGES) {
+      packagePricing[pkg.id] = {
+        ...packagePricing[pkg.id],
+        monthly: 1,
+      };
+    }
+  }
+
   return {
     cleanupMonths,
     recommendation,
