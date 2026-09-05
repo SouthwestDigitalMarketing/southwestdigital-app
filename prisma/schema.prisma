@@ -569,6 +569,7 @@ model Brand {
   features               BrandFeature[]
   integrations           BrandIntegration[]
   agreementTemplates     AgreementTemplate[]
+  optionsTemplates       ProposalOptionsTemplate[]
   auditEvents            AuditEvent[]
   customerAccounts       CustomerAccount[]
   leads                  Lead[]
@@ -2610,6 +2611,24 @@ model AgreementTemplate {
   @@index([brandId, status, name])
   @@index([brandId, isDefault, status])
   @@index([brandId, defaultForProductKind, status])
+}
+
+model ProposalOptionsTemplate {
+  id                    String    @id @default(cuid())
+  brandId               String
+  name                  String
+  description           String?
+  productKind           String    @default("bookkeeping")
+  snapshotJson          Json
+  defaultForProductKind String?
+  archivedAt            DateTime?
+  createdById           String?
+  brand                 Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([brandId, defaultForProductKind])
+  @@index([brandId, productKind, archivedAt])
 }
 
 model AuditEvent {

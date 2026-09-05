@@ -3,6 +3,7 @@
 import { Archive, ArchiveRestore, Check, ChevronDown, ChevronUp, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import ProposalAppDemoHeader from "./ProposalAppDemoHeader";
+import OptionsTemplatesToolbar from "./OptionsTemplatesToolbar";
 import {
   getOptionsCatalogOrder,
   getProposalAdditionalOptions,
@@ -18,6 +19,7 @@ import {
   proposalCatalogItemApplicability,
   type ProposalOptionCatalogItem,
 } from "@/lib/quotes/catalog";
+import type { OptionsTemplateAssessmentSlice } from "@/lib/quotes/optionsTemplates";
 
 const PACKAGES: Array<{ id: PackageId; label: string }> = [
   { id: "grow", label: "Grow" },
@@ -286,13 +288,53 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
         <ProposalAppDemoHeader currentStep="add-ons" previousHref="/offers/calculator" nextHref="/offers/intro" />
         <div className="proposal-options-editor mt-4 min-w-0">
           <div className="px-1">
-            <div className="mb-2 flex flex-wrap gap-2">
-              <button type="button" onClick={() => addRow("optional")} className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-base font-medium text-slate-700 transition hover:border-slate-500 hover:bg-slate-100 hover:text-slate-900">
-                <Plus className="h-3.5 w-3.5" /> Add optional service
-              </button>
-              <button type="button" onClick={() => addRow("included")} className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-base font-medium text-slate-700 transition hover:border-slate-500 hover:bg-slate-100 hover:text-slate-900">
-                <Plus className="h-3.5 w-3.5" /> Add included service
-              </button>
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <OptionsTemplatesToolbar
+                currentSlice={{
+                  optionsCatalogOrder: assessment.optionsCatalogOrder,
+                  additionalOptions: assessment.additionalOptions,
+                  bonuses: assessment.bonuses,
+                  bonusPackageSelections: assessment.bonusPackageSelections,
+                }}
+                hasCustomizedOptions={
+                  assessment.additionalOptions.length > 0 || assessment.bonuses.length > 0
+                }
+                onApply={(slice: OptionsTemplateAssessmentSlice) => {
+                  setAssessment((current) => ({
+                    ...current,
+                    optionsCatalogOrder: slice.optionsCatalogOrder,
+                    additionalOptions: slice.additionalOptions.map((item) => ({
+                      id: item.id,
+                      name: item.name,
+                      description: item.description,
+                      monthlyPrice: item.monthlyPrice,
+                      showInProposal: item.showInProposal,
+                      archived: item.archived,
+                      realEstateSpecific: item.realEstateSpecific,
+                    })),
+                    bonuses: slice.bonuses.map((item) => ({
+                      id: item.id,
+                      name: item.name,
+                      description: item.description,
+                      archived: item.archived,
+                      realEstateSpecific: item.realEstateSpecific,
+                      billingCadence: item.billingCadence,
+                      defaultPackageIds: item.defaultPackageIds,
+                    })),
+                    bonusPackageSelections: slice.bonusPackageSelections,
+                  }));
+                }}
+                middleSlot={
+                  <>
+                    <button type="button" onClick={() => addRow("optional")} className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-base font-medium text-slate-700 transition hover:border-slate-500 hover:bg-slate-100 hover:text-slate-900">
+                      <Plus className="h-3.5 w-3.5" /> Add optional service
+                    </button>
+                    <button type="button" onClick={() => addRow("included")} className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-base font-medium text-slate-700 transition hover:border-slate-500 hover:bg-slate-100 hover:text-slate-900">
+                      <Plus className="h-3.5 w-3.5" /> Add included service
+                    </button>
+                  </>
+                }
+              />
             </div>
           </div>
 

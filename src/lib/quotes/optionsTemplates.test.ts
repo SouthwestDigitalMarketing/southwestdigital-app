@@ -1,0 +1,117 @@
+import { describe, expect, it } from "vitest";
+import {
+  OPTIONS_TEMPLATE_SNAPSHOT_VERSION,
+  buildOptionsTemplateSnapshot,
+  parseOptionsTemplateSnapshot,
+  reconcileOptionsTemplateSnapshot,
+  type OptionsTemplateAssessmentSlice,
+} from "./optionsTemplates";
+
+const baseSlice: OptionsTemplateAssessmentSlice = {
+  optionsCatalogOrder: ["stessa-migration", "quarterly-review", "advanced-receipts"],
+  additionalOptions: [
+    {
+      id: "advanced-receipts",
+      name: "Advanced Receipt Management",
+      description: "Receipts routed through Zoho.",
+      monthlyPrice: 60,
+      showInProposal: true,
+      archived: false,
+    },
+  ],
+  bonuses: [
+    {
+      id: "stessa-migration",
+      name: "Stessa Migration",
+      description: "Move all books to Stessa.",
+      archived: false,
+      billingCadence: "one-time",
+      defaultPackageIds: ["grow", "improve"],
+    },
+    {
+      id: "quarterly-review",
+      name: "Quarterly Review",
+      description: "Meet quarterly to review the books.",
+      archived: false,
+      billingCadence: "monthly",
+    },
+  ],
+  bonusPackageSelections: {
+    "stessa-migration": ["grow", "improve"],
+    "quarterly-review": ["grow"],
+  },
+};
+
+describe("buildOptionsTemplateSnapshot", () => {
+  it("round-trips a well-formed slice via parse", () => {
+    const snapshot = buildOptionsTemplateSnapshot(baseSlice);
+    expect(snapshot.version).toBe(OPTIONS_TEMPLATE_SNAPSHOT_VERSION);
+    expect(snapshot.productKind).toBe("bookkeeping");
+    const roundTripped = parseOptionsTemplateSnapshot(JSON.parse(JSON.stringify(snapshot)));
+    expect(roundTripped).toEqual(snapshot);
+  });
+
+  it("drops items without an id and deduplicates the catalog order", () => {
+    const snapshot = buildOptionsTemplateSnapshot({
+      ...baseSlice,
+      optionsCatalogOrder: ["stessa-migration", "stessa-migration", "quarterly-review"],
+      additionalOptions: [
+        ...baseSlice.additionalOptions,
+        { ...baseSlice.additionalOptions[0], id: "" },
+      ],
+    });
+    expect(snapshot.optionsCatalogOrder).toEqual(["stessa-migration", "quarterly-review"]);
+    expect(snapshot.additionalOptions).toHaveLength(1);
+  });
+
+  it("normalizes package selections to unique valid ids", () => {
+    const snapshot = buildOptionsTemplateSnapshot({
+      ...baseSlice,
+      bonusPackageSelections: {
+        "stessa-migration": ["grow", "grow", "improve", "invalid" as never],
+      },
+    });
+    expect(snapshot.bonusPackageSelections["stessa-migration"]).toEqual(["grow", "improve"]);
+  });
+});
+
+describe("parseOptionsTemplateSnapshot", () => {
+  it("returns null for the wrong version", () => {
+    const snapshot = buildOptionsTemplateSnapshot(baseSlice);
+    expect(parseOptionsTemplateSnapshot({ ...snapshot, version: 999 })).toBeNull();
+  });
+
+  it("returns null for a non-bookkeeping product kind", () => {
+    const snapshot = buildOptionsTemplateSnapshot(baseSlice);
+    expect(parseOptionsTemplateSnapshot({ ...snapshot, productKind: "coaching" })).toBeNull();
+  });
+
+  it("returns null for unrelated payloads", () => {
+    expect(parseOptionsTemplateSnapshot(null)).toBeNull();
+    expect(parseOptionsTemplateSnapshot("hi")).toBeNull();
+    expect(parseOptionsTemplateSnapshot({ hello: "world" })).toBeNull();
+  });
+});
+
+describe("reconcileOptionsTemplateSnapshot", () => {
+  it("keeps items that still exist in the catalog and reports the rest", () => {
+    const snapshot = buildOptionsTemplateSnapshot(baseSlice);
+    const result = reconcileOptionsTemplateSnapshot(snapshot, [
+      "stessa-migration",
+      "advanced-receipts",
+    ]);
+    expect(result.skippedIds).toEqual(["quarterly-review"]);
+    expect(result.slice.bonuses.map((b) => b.id)).toEqual(["stessa-migration"]);
+    expect(result.slice.additionalOptions.map((o) => o.id)).toEqual(["advanced-receipts"]);
+    expect(result.slice.optionsCatalogOrder).toEqual(["stessa-migration", "advanced-receipts"]);
+    expect(result.slice.bonusPackageSelections).toEqual({ "stessa-migration": ["grow", "improve"] });
+  });
+
+  it("keeps everything when the catalog list is empty (unknown catalog state)", () => {
+    const snapshot = buildOptionsTemplateSnapshot(baseSlice);
+    const result = reconcileOptionsTemplateSnapshot(snapshot, []);
+    expect(result.skippedIds).toEqual([]);
+    expect(result.slice.additionalOptions).toEqual(snapshot.additionalOptions);
+    expect(result.slice.bonuses).toEqual(snapshot.bonuses);
+  });
+});
