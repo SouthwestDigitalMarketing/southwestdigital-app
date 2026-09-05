@@ -1,6 +1,6 @@
 # Coding-agent handoff
 
-Updated: 2026-09-05 (America/Chicago) — offer-builder Finalize step + builder caption/alignment pass landed (see §12).
+Updated: 2026-09-04 (America/Chicago) — offer-builder card and Manage Offers UX pass in progress (see §13).
 
 ## Start here
 
@@ -15,7 +15,7 @@ The user has instructed: **never push without explicit user instruction**. Commi
 
 ## Current commit state
 
-- `HEAD` == `origin/main` at `eb903d8 Add offer lifecycle tracking and hourly preview safety` (the old §§6–11 lifecycle batch; the "21 unpushed commits" note from 09-04 is resolved — all pushed).
+- `HEAD` == `origin/main` at `467fbee Add offer-builder Finalize step with sequential save/publish/send`.
 - **Line-ending noise warning (still true):** ~100 tracked files show as modified with identical content (worktree CRLF vs blob LF — `git diff --ignore-all-space` is empty for them). Do NOT commit that noise: stage only the files you changed, and normalize any touched file back to LF (`sed`/python CRLF→LF) so the commit holds only the logical diff.
 - §12 (Finalize step) committed and pushed this session; working tree otherwise still carries the CRLF noise above.
 
@@ -185,6 +185,20 @@ User asked for a real Finalize step at the end of the bookkeeping builder (was: 
 - Commit holds only the logical diff (4 tracked files: 18 insertions / 7 deletions, plus 2 new files) — touched files normalized back to LF per the warning above.
 
 Key files: `builder/{ProposalAppDemoStepper,ProposalFinalizeDemo,ProposalContactInfoDemo,ProposalCreationWorkspaceDemo,PricingSnapshotSidebar}.tsx`, `offers/finalize/page.tsx`.
+
+### 13) Offer-builder card and Manage Offers UX pass — UNCOMMITTED
+
+This session continued the builder and offer-list UX work. The changes are present in the working tree and have not been committed or pushed.
+
+- **Adjustments test proposal control:** `isTestProposal` is part of the assessment builder state and is carried through save/publish actions into the offer snapshot and engagement. The small `Mark as a $1 test proposal` checkbox is now its own final section on the Adjustments step.
+- **Assessment card pattern:** Scale, Complexity, and Adjustments use the Contact-step pattern: one rounded main card, alternating section surfaces, summary values, and section-level Edit dialogs. The pricing sidebar remains a separate card.
+- **Alternating surfaces:** `AssessmentCardSection.tsx` and `globals.css` use explicit alternating surfaces because the theme CSS otherwise overrides Tailwind background utilities.
+- **Manage Offers responsive layout:** narrow desktop widths keep Edit and Send visible, move secondary actions into a More popover, truncate contact labels, reduce cell padding, hide Type / Last sent / pricing columns as needed, and avoid horizontal scrolling through a fixed table layout and container queries. Hidden values remain available in More.
+- **Draft edit emphasis:** reviewed the lifecycle logic that makes the Edit pencil blue for the `DRAFT` stage (`nextStaffAction(...)=EDIT_DRAFT`).
+
+Validation: `npm run typecheck` ✅ · focused ESLint ✅ · `git diff --check` ✅. Browser visual verification was unavailable because no browser connection was available.
+
+Key files: `src/app/(app)/offers/builder/AssessmentCardSection.tsx`, `src/app/(app)/offers/builder/ProposalCreationWorkspaceDemo.tsx`, `src/app/(app)/offers/page.tsx`, `src/app/(app)/offers/OfferStatusButtons.tsx`, `src/app/(app)/offers/OfferContactCell.tsx`, `src/app/(app)/offers/DuplicateOfferButton.tsx`, `src/app/(app)/offers/OfferEditButton.tsx`, `src/app/(app)/offers/offers-table.module.css`, `src/app/globals.css`, and the offer persistence files under `offers/builder`, `offers/new`, and `offers/who`.
 
 ### Suggested commit split for this batch
 
@@ -437,12 +451,12 @@ Zoho on Vercel: register a **separate** OAuth app for prod (not shared with loca
 ## Suggested first commands for the next agent
 
 ```powershell
-git status --short                        # will show a big uncommitted working tree — sections 6–11
-git log --oneline origin/main..HEAD       # 21 committed-not-pushed commits
+git status --short                        # shows the uncommitted offer-builder / Manage Offers UX pass in §13
+git log --oneline origin/main..HEAD       # should be empty; HEAD is currently pushed
 npm run typecheck                         # should be clean
 npm test -- --run                         # 40 files / 265 tests, all green
 ```
 
-Then read this file top-to-bottom, note that **sections 6–11 in "This session's work" are uncommitted** and the user's push policy is "never push without explicit user instruction." Suggested commit split is at the end of section 11.
+Then read this file top-to-bottom, note that **section 13 in "This session's work" is uncommitted** and the user's push policy is "never push without explicit user instruction."
 
 If the user asks you to move CRM PipelineItem into the work-item model, read section 6 first, then the "Future design: unified work items / next-action system" CRM extension list — the offer-side helpers (`src/lib/quotes/lifecycle.ts`) are the pattern to follow.

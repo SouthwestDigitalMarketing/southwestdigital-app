@@ -23,6 +23,7 @@ export default async function NewQuotePage({ searchParams }: { searchParams: Sea
           contactIds?: string[];
           contactInfo?: Record<string, unknown>;
           assessment?: Record<string, unknown>;
+          isTestProposal?: boolean;
         })
       : {};
   const contactIds = parseContactIds(params.contacts ?? params.contact ?? snapshot.contactIds);
@@ -55,7 +56,10 @@ export default async function NewQuotePage({ searchParams }: { searchParams: Sea
           (snapshot.contactInfo as ReturnType<typeof contactInfoFromCrm>) ?? contactInfoFromCrm(ordered)
         }
         initialAssessment={
-          (snapshot.assessment as ReturnType<typeof assessmentFromCrm>) ?? assessmentFromCrm(ordered)
+          {
+            ...((snapshot.assessment as ReturnType<typeof assessmentFromCrm>) ?? assessmentFromCrm(ordered)),
+            isTestProposal: snapshot.isTestProposal === true,
+          }
         }
       />
     </Suspense>

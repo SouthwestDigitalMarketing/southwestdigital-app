@@ -428,6 +428,16 @@ body {
   background-color: var(--surface-row-alt);
 }
 
+/* Summary sections use the same surfaces as the Contact step. Keep these
+   explicit so theme overrides cannot flatten the alternating backgrounds. */
+.proposal-assessment-section {
+  background-color: var(--surface, #ffffff);
+}
+
+.proposal-assessment-section:nth-child(even of .proposal-assessment-section) {
+  background-color: var(--surface-subtle, #f8fafc);
+}
+
 /* Collapsible builder sections alternate by rendered sibling order, so the pattern
    stays correct when steps are reordered or sections are added/removed. */
 [data-theme] .proposal-builder-section {

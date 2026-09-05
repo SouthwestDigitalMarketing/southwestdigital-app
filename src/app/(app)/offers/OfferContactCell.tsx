@@ -173,14 +173,15 @@ export function OfferContactCell({
 
   return (
     <div ref={capturePortalTarget} className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex min-w-0 items-center gap-2">
         <button
           type="button"
           aria-expanded={contactDialogView !== null}
           aria-haspopup="dialog"
           disabled={pending}
           onClick={toggleContactOptions}
-          className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-base text-slate-700 focus:border-slate-500 focus:outline-none"
+          title={currentContact.contactId ? currentContact.company || currentContact.name : "Select contact"}
+          className="min-w-0 max-w-full truncate rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 focus:border-slate-500 focus:outline-none"
         >
           {currentContact.contactId ? currentContact.company || currentContact.name : "Select contact"}
         </button>

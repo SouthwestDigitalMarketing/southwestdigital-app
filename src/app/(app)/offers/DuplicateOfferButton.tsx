@@ -24,11 +24,13 @@ export function DuplicateOfferButton({
   currentContact,
   contacts,
   archived,
+  menuItem = false,
 }: {
   offerId: string;
   currentContact: CurrentContact;
   contacts: ContactOption[];
   archived: boolean;
+  menuItem?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -74,9 +76,12 @@ export function DuplicateOfferButton({
           setTestProposal(false);
           setError(null);
         }}
-        className="ui-action-secondary inline-flex h-9 w-9 items-center justify-center rounded-full border transition disabled:opacity-40"
+        className={menuItem
+          ? "flex min-h-9 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 focus-visible:outline-2 disabled:opacity-40"
+          : "ui-action-secondary inline-flex h-9 w-9 items-center justify-center rounded-full border transition disabled:opacity-40"}
       >
         <Copy className="h-4 w-4" />
+        {menuItem ? "Duplicate offer" : null}
       </button>
 
       {open && typeof document !== "undefined"

@@ -313,7 +313,7 @@ export async function startOfferDraftAction(kind: OfferKindKey, contactIds: stri
 
 export async function saveOfferDraftAction(
   offerId: string,
-  state: { contactInfo?: unknown; assessment?: unknown; pricing?: unknown },
+  state: { contactInfo?: unknown; assessment?: unknown; pricing?: unknown; isTestProposal?: boolean },
 ) {
   const { brand } = await requireQuoteStaffOrThrow();
   const existing = await prisma.quote.findFirst({
@@ -345,6 +345,7 @@ export async function saveOfferDraftAction(
     contactInfo: state.contactInfo ?? previous.contactInfo,
     assessment,
     pricing: state.pricing ?? previous.pricing,
+    isTestProposal: state.isTestProposal ?? previous.isTestProposal,
   });
 
   await prisma.$transaction(async (tx) => {
@@ -368,7 +369,7 @@ export async function saveOfferDraftAction(
 
 export async function publishOfferChangesAction(
   offerId: string,
-  state: { contactInfo?: unknown; assessment?: unknown; pricing?: unknown },
+  state: { contactInfo?: unknown; assessment?: unknown; pricing?: unknown; isTestProposal?: boolean },
 ) {
   const { brand } = await requireQuoteStaffOrThrow();
   const existing = await prisma.quote.findFirst({
@@ -402,6 +403,7 @@ export async function publishOfferChangesAction(
     contactInfo: state.contactInfo ?? previous.contactInfo,
     assessment,
     pricing: state.pricing ?? previous.pricing,
+    isTestProposal: state.isTestProposal ?? previous.isTestProposal,
   });
   const publicToken = existing.publicToken ?? randomBytes(32).toString("base64url");
   const { quoteRevisions, quoteEngagement } = await getSchemaCapabilities();

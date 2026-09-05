@@ -1,0 +1,80 @@
+.manager {
+  container-type: inline-size;
+}
+
+.table {
+  width: 100%;
+  table-layout: fixed;
+  font-size: 0.875rem;
+}
+
+.table > thead > tr > th,
+.table > tbody > tr > td {
+  padding: 0.5rem 0.625rem;
+  vertical-align: middle;
+  font-size: inherit;
+}
+
+.table > thead > tr > th {
+  white-space: nowrap;
+}
+
+.table > thead > tr > th:nth-child(1) { width: 8.5rem; }
+.table > thead > tr > th:nth-child(2) { width: 7.5rem; }
+.table > thead > tr > th:nth-child(4) { width: 7rem; }
+.table > thead > tr > th:nth-child(5),
+.table > thead > tr > th:nth-child(6) { width: 6rem; }
+.table > thead > tr > th:nth-child(7) { width: 7rem; }
+.table > thead > tr > th:nth-child(8) { width: 8.5rem; }
+
+.table > tbody > tr > td:nth-child(4) > span {
+  max-width: 100%;
+  display: block;
+  width: fit-content;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table > tbody > tr > td:nth-child(5),
+.table > tbody > tr > td:nth-child(6),
+.table > tbody > tr > td:nth-child(7) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Use available table width, including the space taken by the app sidebar. */
+@container (max-width: 1000px) {
+  .table > thead > tr > th:nth-child(2),
+  .table > tbody > tr > td:nth-child(2),
+  .table > thead > tr > th:nth-child(7),
+  .table > tbody > tr > td:nth-child(7) {
+    display: none;
+  }
+}
+
+@container (max-width: 700px) {
+  .table > thead > tr > th:nth-child(1),
+  .table > tbody > tr > td:nth-child(1) {
+    display: none;
+  }
+  .table > thead > tr > th:nth-child(5),
+  .table > thead > tr > th:nth-child(6) { width: 5.5rem; }
+}
+
+@container (max-width: 520px) {
+  .table > thead > tr > th:nth-child(5),
+  .table > tbody > tr > td:nth-child(5),
+  .table > thead > tr > th:nth-child(6),
+  .table > tbody > tr > td:nth-child(6) {
+    display: none;
+  }
+}
+
+@container (max-width: 380px) {
+  .table > thead > tr > th:nth-child(4),
+  .table > tbody > tr > td:nth-child(4) {
+    display: none;
+  }
+}

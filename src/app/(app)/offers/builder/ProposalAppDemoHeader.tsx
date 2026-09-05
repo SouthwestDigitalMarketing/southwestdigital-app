@@ -84,6 +84,7 @@ export default function ProposalAppDemoHeader({
         await saveOfferDraftAction(offerId, {
           contactInfo,
           assessment: localState.assessment,
+          isTestProposal: localState.assessment?.isTestProposal === true,
           pricing: getProposalPricingSnapshotData(localState.assessment as AssessmentState).packagePricing,
         });
       }
@@ -126,6 +127,7 @@ export default function ProposalAppDemoHeader({
       const result = await publishOfferChangesAction(offerId, {
         contactInfo,
         assessment: localState.assessment,
+        isTestProposal: localState.assessment?.isTestProposal === true,
         pricing: getProposalPricingSnapshotData(localState.assessment as AssessmentState).packagePricing,
       });
       window.localStorage.setItem(`proposal-public-path:${offerId}`, result.publicPath);

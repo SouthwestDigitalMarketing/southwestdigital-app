@@ -28,6 +28,7 @@ import { DuplicateOfferButton } from "./DuplicateOfferButton";
 import { DuplicateOfferFocus } from "./DuplicateOfferFocus";
 import { SendOfferEmailButton } from "./SendOfferEmailButton";
 import { OfferEditButton } from "./OfferEditButton";
+import styles from "./offers-table.module.css";
 
 type SortKey = "contact" | "status" | "mrr" | "lump" | "lastSent";
 type SearchParams = Promise<{
@@ -302,7 +303,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
 
       <section className="-mx-8 px-8 pb-10 pt-8">
         <h2 className="text-lg font-semibold text-slate-700">Manage offers</h2>
-        <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className={`${styles.manager} mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm`}>
           <OffersListControls
             archived={archived}
             statusFilter={statusFilter}
@@ -316,7 +317,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
             </p>
           </div>
         ) : (
-          <table className="w-full text-base">
+          <table className={styles.table}>
             <thead>
               <tr className="bg-slate-50 text-left">
                 <th className="px-5 py-2 text-base font-semibold normal-case text-slate-700">Offer ID</th>
@@ -470,6 +471,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                     <td className="px-5 py-4">
                       <span
                         className={`inline-flex rounded-full px-3 py-1 font-medium ${BUCKET_STYLE[itemBucket]}`}
+                        title={outcomeLabel(quote.status)}
                       >
                         {outcomeLabel(quote.status)}
                       </span>
@@ -491,26 +493,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                       {formatLastSentAge(quote.lastSentAt ?? quote.sentAt)}
                     </td>
                     <td className="px-5 py-4">
-                      <div className="flex flex-wrap items-center justify-end gap-2">
-                        {!isDraft && publishedProposalHref ? (
-                          <Link
-                            href={publishedProposalHref}
-                            target="_blank"
-                            rel="noreferrer"
-                            aria-label="View published proposal (opens in new tab)"
-                            title="View published proposal (opens in new tab)"
-                            className="ui-action-secondary inline-flex h-9 w-9 items-center justify-center rounded-full border transition"
-                          >
-                            <Eye className="h-4 w-4" aria-hidden="true" />
-                          </Link>
-                        ) : !isDraft ? (
-                          <Link
-                            href={`/offers/${quote.id}`}
-                            className="ui-action-secondary inline-flex h-9 items-center justify-center rounded-full border px-3 text-base font-semibold leading-none transition"
-                          >
-                            Details
-                          </Link>
-                        ) : null}
+                      <div className="flex items-center justify-end gap-1 [&>*]:shrink-0">
                         <OfferEditButton
                           href={editHref}
                           offerId={quote.id}
@@ -528,11 +511,29 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                           followUpKind={followUpKind}
                         />
                         <OfferStatusButtons offerId={quote.id} bucket={itemBucket}>
+                          <div className="border-b border-slate-200 px-3 py-2 text-xs text-slate-500">
+                            <p className="break-words">{quote.offerCode}</p>
+                            <p>{OFFER_KINDS.find((k) => k.key === kind)?.name ?? kind} · {outcomeLabel(quote.status)}</p>
+                            <p>Last sent: {formatLastSentAge(quote.lastSentAt ?? quote.sentAt)}</p>
+                            <p>MRR: {formatUsd(monthlyTotal)} · Lump: {formatUsd(oneTimeTotal)}</p>
+                          </div>
+                          {!isDraft ? (
+                            <Link
+                              href={publishedProposalHref ?? `/offers/${quote.id}`}
+                              target={publishedProposalHref ? "_blank" : undefined}
+                              rel={publishedProposalHref ? "noreferrer" : undefined}
+                              className="flex min-h-9 items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 focus-visible:outline-2"
+                            >
+                              <Eye className="h-4 w-4" aria-hidden="true" />
+                              {publishedProposalHref ? "View proposal (new tab)" : "Offer details"}
+                            </Link>
+                          ) : null}
                           <DuplicateOfferButton
                             offerId={quote.id}
                             currentContact={currentContact}
                             contacts={contacts}
                             archived={archived}
+                            menuItem
                           />
                         </OfferStatusButtons>
                       </div>

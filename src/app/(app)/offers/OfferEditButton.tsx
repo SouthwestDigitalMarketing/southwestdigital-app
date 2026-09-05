@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Pencil, TriangleAlert, X } from "lucide-react";
 
 type OfferEditButtonProps = {
@@ -15,6 +16,7 @@ type OfferEditButtonProps = {
 
 export function OfferEditButton({ href, offerId, viewed, signed, paid, primary = false }: OfferEditButtonProps) {
   const [warningOpen, setWarningOpen] = useState(false);
+  const [dialogTarget, setDialogTarget] = useState<HTMLElement | null>(null);
   const hasProgress = viewed || signed || paid;
   const hasCommittedProgress = signed || paid;
   const dialogTitleId = `edit-offer-warning-title-${offerId}`;
@@ -46,7 +48,10 @@ export function OfferEditButton({ href, offerId, viewed, signed, paid, primary =
         aria-label="Edit offer — review warning"
         title="Edit offer — review warning"
         aria-haspopup="dialog"
-        onClick={() => setWarningOpen(true)}
+        onClick={(event) => {
+          setDialogTarget((event.currentTarget.closest("[data-theme]") as HTMLElement | null) ?? document.body);
+          setWarningOpen(true);
+        }}
         className={iconButtonClass}
       >
         <Pencil className="h-4 w-4" aria-hidden="true" />
@@ -58,7 +63,7 @@ export function OfferEditButton({ href, offerId, viewed, signed, paid, primary =
         </span>
       </button>
 
-      {warningOpen ? (
+      {warningOpen && dialogTarget ? createPortal(
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"
           role="presentation"
@@ -125,7 +130,8 @@ export function OfferEditButton({ href, offerId, viewed, signed, paid, primary =
               </Link>
             </div>
           </div>
-        </div>
+        </div>,
+        dialogTarget,
       ) : null}
     </>
   );

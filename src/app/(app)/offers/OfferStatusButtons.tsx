@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useTransition, type ReactNode } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Archive, ArchiveRestore, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Ellipsis, Trash2 } from "lucide-react";
 import { deleteQuoteAction, setOfferStatusAction } from "./actions";
 import type { OfferBucket } from "@/lib/quotes/status";
 
@@ -16,8 +17,18 @@ export function OfferStatusButtons({
   children: ReactNode;
 }) {
   const router = useRouter();
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [dialogTarget, setDialogTarget] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    const close = () => popoverRef.current?.hidePopover();
+    window.addEventListener("resize", close);
+    return () => window.removeEventListener("resize", close);
+  }, [moreOpen]);
 
   function setStatus(next: "draft" | "completed" | "archived" | "sent" | "accepted" | "rejected") {
     const data = new FormData();
@@ -29,7 +40,8 @@ export function OfferStatusButtons({
     });
   }
 
-  function requestDelete() {
+  function requestDelete(event: React.MouseEvent<HTMLButtonElement>) {
+    setDialogTarget((event.currentTarget.closest("[data-theme]") as HTMLElement | null) ?? document.body);
     setDeleteConfirmOpen(true);
   }
 
@@ -44,10 +56,41 @@ export function OfferStatusButtons({
   }
 
   const iconBtn =
-    "ui-action-secondary inline-flex h-9 w-9 items-center justify-center rounded-full border transition disabled:opacity-50";
+    "flex min-h-9 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 focus-visible:outline-2 disabled:opacity-50";
 
   return (
-    <div className="flex flex-wrap justify-end gap-1">
+    <div className="shrink-0">
+      <button
+        type="button"
+        popoverTarget={`offer-more-${offerId}`}
+        aria-label="More offer actions"
+        title="More offer actions"
+        className="ui-action-secondary inline-flex h-9 w-9 items-center justify-center rounded-full border transition"
+        onClick={(event) => {
+          const panel = popoverRef.current;
+          if (!panel) return;
+          const rect = event.currentTarget.getBoundingClientRect();
+          panel.style.left = `${Math.max(8, Math.min(rect.right - 224, window.innerWidth - 232))}px`;
+          const below = window.innerHeight - rect.bottom;
+          const openBelow = below >= 320 || below >= rect.top;
+          panel.style.top = openBelow ? `${rect.bottom + 4}px` : "auto";
+          panel.style.bottom = openBelow ? "auto" : `${window.innerHeight - rect.top + 4}px`;
+          panel.style.maxHeight = `${Math.max(0, (openBelow ? below : rect.top) - 12)}px`;
+        }}
+      >
+        <Ellipsis className="h-4 w-4" aria-hidden="true" />
+      </button>
+      <div
+        id={`offer-more-${offerId}`}
+        ref={popoverRef}
+        popover="auto"
+        onToggle={(event) => setMoreOpen(event.newState === "open")}
+        aria-label="More offer actions"
+        className="fixed m-0 w-56 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 text-sm text-slate-700 shadow-xl"
+        onClick={(event) => {
+          if ((event.target as HTMLElement).closest("button, a")) popoverRef.current?.hidePopover();
+        }}
+      >
       {children}
       {bucket === "draft" ? (
         <button
@@ -59,6 +102,7 @@ export function OfferStatusButtons({
           title="Archive offer"
         >
           <Archive className="h-4 w-4" />
+          Archive offer
         </button>
       ) : null}
       {bucket === "sent" ? (
@@ -67,17 +111,17 @@ export function OfferStatusButtons({
             type="button"
             disabled={pending}
             onClick={() => setStatus("accepted")}
-            className="ui-action-ghost inline-flex h-9 items-center justify-center rounded-full px-3 text-base font-medium leading-none transition disabled:opacity-50"
+            className={iconBtn}
           >
-            Accepted
+            Mark accepted
           </button>
           <button
             type="button"
             disabled={pending}
             onClick={() => setStatus("rejected")}
-            className="ui-action-ghost inline-flex h-9 items-center justify-center rounded-full px-3 text-base font-medium leading-none transition disabled:opacity-50"
+            className={iconBtn}
           >
-            Rejected
+            Mark rejected
           </button>
         </>
       ) : null}
@@ -91,6 +135,7 @@ export function OfferStatusButtons({
           title="Archive offer"
         >
           <Archive className="h-4 w-4" />
+          Archive offer
         </button>
       ) : null}
       {bucket === "archived" ? (
@@ -103,6 +148,7 @@ export function OfferStatusButtons({
           title="Unarchive offer"
         >
           <ArchiveRestore className="h-4 w-4" />
+          Unarchive offer
         </button>
       ) : null}
       <button
@@ -114,8 +160,10 @@ export function OfferStatusButtons({
         title="Delete offer permanently"
       >
         <Trash2 className="h-4 w-4" />
+        Delete offer
       </button>
-      {deleteConfirmOpen ? (
+      </div>
+      {deleteConfirmOpen && dialogTarget ? createPortal(
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4"
           role="presentation"
@@ -153,7 +201,8 @@ export function OfferStatusButtons({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        dialogTarget,
       ) : null}
     </div>
   );
