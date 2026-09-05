@@ -16,9 +16,11 @@ type CleanupSnapshotCard = {
 export default function PricingSnapshotSidebar({
   items,
   cleanupCard,
+  hideLabel,
 }: {
   items: PricingSnapshotItem[];
   cleanupCard?: CleanupSnapshotCard;
+  hideLabel?: boolean;
 }) {
   const orderedItems = [...items].sort((a, b) => {
     const order: Record<string, number> = {
@@ -32,10 +34,11 @@ export default function PricingSnapshotSidebar({
 
   return (
     <aside className="xl:sticky xl:top-8 xl:self-start">
-      <p className="px-1 text-sm font-semibold text-slate-500">
+      {hideLabel ? null : (<p className="px-1 text-sm font-semibold text-slate-500">
         Pricing calculator
-      </p>
-      <div className="proposal-builder-card mt-3 overflow-hidden rounded-[1.25rem] border border-slate-300 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
+      </p>)}
+      <div className={`proposal-builder-card overflow-hidden rounded-[1.25rem] border border-slate-300 shadow-[0_18px_40px_rgba(15,23,42,0.12)] ${hideLabel ? "" : "mt-3"}`}>
+        {hideLabel ? (<div className="border-b border-slate-200 bg-white px-5 py-6"><h2 className="text-lg font-semibold tracking-tight text-slate-900">Pricing</h2></div>) : null}
         <div className="space-y-3 p-4">
           {cleanupCard ? (
             <div className="text-left">

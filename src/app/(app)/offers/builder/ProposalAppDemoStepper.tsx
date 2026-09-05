@@ -13,7 +13,8 @@ export type ProposalAppDemoStep =
   | "add-ons"
   | "intro"
   | "cover"
-  | "preview";
+  | "preview"
+  | "finalize";
 
 const STEP_ITEMS: Array<{
   id: ProposalAppDemoStep;
@@ -45,6 +46,11 @@ const STEP_ITEMS: Array<{
     id: "intro",
     label: "Preview",
     href: "/offers/intro",
+  },
+  {
+    id: "finalize",
+    label: "Finalize",
+    href: "/offers/finalize",
   },
 ];
 

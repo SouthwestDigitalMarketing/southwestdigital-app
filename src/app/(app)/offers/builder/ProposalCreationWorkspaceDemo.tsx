@@ -2004,7 +2004,7 @@ export default function ProposalCreationWorkspaceDemo({
 
           <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_440px] 2xl:grid-cols-[minmax(0,1.55fr)_470px]">
             <div className="space-y-3">
-              {!isIncludedStep ? (
+              {isScaleStep || isComplexityStep || isCalculatorStep ? null : !isIncludedStep ? (
                 <p className="mb-3 px-1 text-sm font-semibold text-slate-500">Assessment</p>
               ) : (
                 <div className="flex justify-start px-1">
@@ -3147,6 +3147,7 @@ export default function ProposalCreationWorkspaceDemo({
             <PricingSnapshotSidebar
               items={getProposalPricingSnapshotItems(assessment)}
               cleanupCard={getProposalPricingSnapshotCleanupCard(assessment)}
+              hideLabel={isScaleStep || isComplexityStep || isCalculatorStep}
             />
           </div>
         </div>

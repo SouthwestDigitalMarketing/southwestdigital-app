@@ -1,6 +1,6 @@
 # Coding-agent handoff
 
-Updated: 2026-09-04 (America/Chicago, later same day) — work-item / next-action lifecycle system + hourly Stripe wiring + staff-preview gating landed.
+Updated: 2026-09-05 (America/Chicago) — offer-builder Finalize step + builder caption/alignment pass landed (see §12).
 
 ## Start here
 
@@ -15,9 +15,9 @@ The user has instructed: **never push without explicit user instruction**. Commi
 
 ## Current commit state
 
-- Latest commit on `origin/main`: `2731c3a Document product-kind architecture and mark refactor complete`
-- **Local, committed but not pushed:** 21 commits (last: `dcd262e Refresh coding agent handoff`). Covers the manage-offers modal, contact fields, client/tag creation, action styling/order, send/resend behavior, duplicate markers, published proposal viewing, progressed-edit warnings, draft editing, and relative last-sent age. Run `git log --oneline origin/main..HEAD` for the complete list.
-- **Uncommitted working tree** (all of the new sections 6–11 below, plus a new migration folder `prisma/migrations/20260904200000_add_quote_lifecycle_tracking/` and two new library files `src/lib/quotes/lifecycle.{ts,test.ts}`). Ready to be reviewed and committed in phase-sized chunks — see "Suggested commit split" at the bottom of the new-work sections.
+- `HEAD` == `origin/main` at `eb903d8 Add offer lifecycle tracking and hourly preview safety` (the old §§6–11 lifecycle batch; the "21 unpushed commits" note from 09-04 is resolved — all pushed).
+- **Line-ending noise warning (still true):** ~100 tracked files show as modified with identical content (worktree CRLF vs blob LF — `git diff --ignore-all-space` is empty for them). Do NOT commit that noise: stage only the files you changed, and normalize any touched file back to LF (`sed`/python CRLF→LF) so the commit holds only the logical diff.
+- §12 (Finalize step) committed and pushed this session; working tree otherwise still carries the CRLF noise above.
 
 ## This session's work
 
@@ -173,6 +173,18 @@ A refinement of section 6 driven by the observation that publishing doesn't equa
 - **User's `...zd5n` row** (hit before preview guards existed) will now be derived as `VIEWED` because `firstViewedAt` is set. If that's stale test data and not a real client view, `UPDATE quotes SET "firstViewedAt" = NULL, "firstSentAt" = NULL WHERE id = '<id>'` in Prisma Studio.
 - **Test-proposal Lump/MRR display.** User explicitly opted to leave the Lump column showing the real list price on `$1` test rows (the `FlaskConical` icon + tooltip carries the "$1 will be charged" meaning). If this ever confuses in practice, section-based options are captured in conversation history.
 - **CRM `PipelineItem` still uncoupled.** The work-item primitive lives on `Quote` only; the "proposals also appear as cards in the CRM pipeline board" pass is deferred. See the future-design section below for the linkage.
+
+### 12) Offer-builder Finalize step + builder caption/alignment pass — DONE, committed and pushed this session
+
+User asked for a real Finalize step at the end of the bookkeeping builder (was: Preview's Next button became View Proposal).
+
+- **Stepper:** `ProposalAppDemoStep` + `STEP_ITEMS` gain `finalize` → `/offers/finalize` after Preview (`ProposalAppDemoStepper.tsx`). Preview's inline View Proposal button untouched per user.
+- **New route** `src/app/(app)/offers/finalize/page.tsx` (staff-gated, Suspense) + client `ProposalFinalizeDemo.tsx`: single main card with **1. Save / 2. Publish / 3. Send** sections (white/tinted/white, `h2` headers matching other steps). Each section has its own button running the same actions as the header icons (`saveOfferDraftAction` / `publishOfferChangesAction` + contact sync + `proposal-public-path` localStorage).
+- **Sequential gating:** Publish locked until Save; Send renders as a muted non-link pill until Publish (tooltip reasons on both). Done steps render emerald-tint (`border-emerald-300 bg-emerald-50 text-emerald-800`); active step keeps `ui-action-primary`. Returning state restores on load (`?offer=` ⇒ saved; `getOfferPublicPathAction` ⇒ published).
+- **Caption/alignment pass** (Contact, Scale, Complexity, Adjustments, Finalize): removed floating captions ("Contact information" label + its CSS, "Assessment" label on scale/complexity/adjustments) and hid the sidebar's "Pricing calculator" caption behind a new optional `hideLabel` prop on `PricingSnapshotSidebar`. With `hideLabel` the card drops its caption offset (card tops align) and renders an in-card `Pricing` section header (`border-b px-5 py-6`, same `h2` style). Included step intentionally still captioned.
+- Commit holds only the logical diff (4 tracked files: 18 insertions / 7 deletions, plus 2 new files) — touched files normalized back to LF per the warning above.
+
+Key files: `builder/{ProposalAppDemoStepper,ProposalFinalizeDemo,ProposalContactInfoDemo,ProposalCreationWorkspaceDemo,PricingSnapshotSidebar}.tsx`, `offers/finalize/page.tsx`.
 
 ### Suggested commit split for this batch
 
