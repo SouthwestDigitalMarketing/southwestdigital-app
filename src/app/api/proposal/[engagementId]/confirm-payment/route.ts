@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getStripeClient } from "@/lib/stripe";
-import { markEngagementDepositPaid } from "@/lib/engagements/fromOffer";
+import { PaymentReconciliationError, reconcileProposalPayment } from "@/lib/stripe/reconcileProposalPayment";
 import { hasPublicProposalAccess, publicProposalNotFound } from "@/lib/engagements/publicProposalAccess";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -35,18 +35,12 @@ export async function POST(
       expand: ["latest_charge"],
     });
     if (paymentIntent.status === "succeeded") {
-      const latestCharge = typeof paymentIntent.latest_charge === "object" ? paymentIntent.latest_charge : null;
-      await markEngagementDepositPaid(engagementId, engagement.brandId, {
-        provider: "stripe",
-        reference: paymentIntent.id,
-        amount: paymentIntent.amount_received / 100,
-        currency: paymentIntent.currency.toUpperCase(),
-        receiptUrl: latestCharge?.receipt_url ?? null,
-      });
+      await reconcileProposalPayment(paymentIntent, engagementId, engagement.brandId);
       return NextResponse.json({ ok: true, paid: true });
     }
     return NextResponse.json({ ok: true, paid: false, status: paymentIntent.status });
   } catch (error) {
+    if (error instanceof PaymentReconciliationError) return NextResponse.json({ error: error.message }, { status: 409 });
     console.error("[confirm-payment] Failed:", error);
     return NextResponse.json({ error: "We couldn't confirm this payment." }, { status: 500 });
   }

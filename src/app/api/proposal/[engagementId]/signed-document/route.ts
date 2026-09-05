@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { resolvePublicBrand } from "@/lib/brands/resolve";
 import { createSignedProposalPdf } from "@/lib/agreements/signedPdf";
-import { parseStoredProposalCheckout } from "@/lib/engagements/proposalCheckout";
+import { readAcceptedSelection } from "@/lib/engagements/acceptedPayment";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -44,9 +44,7 @@ export async function GET(
   }
 
   const onboardingData = isRecord(engagement.onboardingData) ? engagement.onboardingData : {};
-  const builderState = isRecord(onboardingData.proposalBuilderState) ? onboardingData.proposalBuilderState : {};
-  const services = isRecord(builderState.services) ? builderState.services : {};
-  const checkout = parseStoredProposalCheckout(services);
+  const { bookkeeping: checkout, hourly } = readAcceptedSelection(onboardingData);
   const acceptance = isRecord(onboardingData.proposalAcceptance) ? onboardingData.proposalAcceptance : {};
   const payment = isRecord(acceptance.payment) ? acceptance.payment : {};
   const amountPaid = typeof payment.amount === "number" ? payment.amount : null;
@@ -56,9 +54,9 @@ export async function GET(
     brandName: brand.name,
     offerCode: quote.offerCode,
     clientName: engagement.clientName,
-    tierLabel: checkout?.tierLabel ?? "Recorded package",
+    tierLabel: hourly ? `${hourly.catalogItemLabel} (${hourly.quantity} hours)` : checkout?.tierLabel ?? "Recorded in agreement",
     recurringMonthlyTotal: checkout?.recurringMonthlyTotal ?? 0,
-    oneTimeTotal: checkout?.oneTimeTotal ?? 0,
+    oneTimeTotal: hourly?.total ?? checkout?.oneTimeTotal ?? 0,
     amountPaid,
     currency: typeof payment.currency === "string" ? payment.currency : "USD",
     agreementText: engagement.agreementText,

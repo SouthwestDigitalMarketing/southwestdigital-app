@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { generateProposalAgreementText } from "@/lib/engagements/agreementGenerator";
 import { renderAgreementTemplate } from "@/lib/agreements/template";
 import { hasPublicProposalAccess, publicProposalNotFound } from "@/lib/engagements/publicProposalAccess";
+import { readAcceptedSelection } from "@/lib/engagements/acceptedPayment";
 
 export async function GET(
   request: Request,
@@ -15,6 +16,7 @@ export async function GET(
     where: { id: engagementId },
     select: {
       brandId: true,
+      updatedAt: true,
       clientName: true,
       primaryContactName: true,
       primaryContactEmail: true,
@@ -47,7 +49,9 @@ export async function GET(
   const onboardingData = isRecord(engagement.onboardingData) ? engagement.onboardingData : {};
   const builderState = isRecord(onboardingData.proposalBuilderState) ? onboardingData.proposalBuilderState : {};
   const assessment = isRecord(builderState.assessment) ? builderState.assessment : {};
-  const services = isRecord(builderState.services) ? builderState.services : {};
+  const services = engagement.signedAt
+    ? readAcceptedSelection(onboardingData).services
+    : isRecord(builderState.services) ? builderState.services : {};
   const tierLabel = typeof services.tierLabel === "string"
     ? services.tierLabel
     : typeof services.selectedTierLabel === "string" ? services.selectedTierLabel : null;
@@ -95,10 +99,11 @@ export async function GET(
     text = templateContent
       ? renderAgreementTemplate(templateContent, renderInput)
       : generateProposalAgreementText(renderInput);
-    await prisma.engagement.update({
-      where: { id: engagementId },
+    const updated = await prisma.engagement.updateMany({
+      where: { id: engagementId, brandId: engagement.brandId, signedAt: null, updatedAt: engagement.updatedAt },
       data: { agreementText: text },
     });
+    if (updated.count !== 1) return NextResponse.json({ error: "The agreement changed. Reload before signing." }, { status: 409 });
   }
 
   return NextResponse.json({

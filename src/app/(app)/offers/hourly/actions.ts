@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireQuoteStaffOrThrow } from "@/lib/quotes/access";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
 import { ensureQuoteEngagement } from "@/lib/engagements/fromOffer";
+import { lockQuoteMutation } from "@/lib/quotes/mutationLock";
 import {
   buildHourlyCheckoutSummary,
   parseHourlyCheckoutSelection,
@@ -128,6 +129,7 @@ export async function publishHourlyOfferAction(offerId: string, snapshot: Hourly
   const { quoteRevisions, quoteEngagement } = await getSchemaCapabilities();
 
   await prisma.$transaction(async (tx) => {
+    await lockQuoteMutation(tx, brand.id, existing.id, "publish");
     await tx.quote.update({
       where: { id: existing.id },
       data: {
@@ -162,8 +164,6 @@ export async function publishHourlyOfferAction(offerId: string, snapshot: Hourly
         },
       });
     }
-  });
-
   if (quoteEngagement) {
     const engagementId = await ensureQuoteEngagement({
       brandId: brand.id,
@@ -177,16 +177,16 @@ export async function publishHourlyOfferAction(offerId: string, snapshot: Hourly
         },
         isTestProposal: merged.isTestProposal,
       },
-    });
+    }, tx);
     // Store hourly checkout summary in onboardingData.proposalBuilderState.services
     // so the payment-intent route (dispatched by productKind) can find it via
     // parseStoredHourlyCheckout. Also set engagement.agreementText so the
     // existing sign / signed-PDF pipeline works unchanged.
-    const eng = await prisma.engagement.findFirst({
+    const eng = await tx.engagement.findFirst({
       where: { id: engagementId, brandId: brand.id },
-      select: { onboardingData: true, signedAt: true },
+      select: { onboardingData: true, signedAt: true, updatedAt: true },
     });
-    if (eng) {
+    if (eng && !eng.signedAt) {
       const onboardingData = eng.onboardingData && typeof eng.onboardingData === "object" && !Array.isArray(eng.onboardingData)
         ? (eng.onboardingData as Record<string, unknown>)
         : {};
@@ -205,8 +205,8 @@ export async function publishHourlyOfferAction(offerId: string, snapshot: Hourly
           updatedAt: new Date().toISOString(),
         },
       };
-      await prisma.engagement.update({
-        where: { id: engagementId },
+      const updated = await tx.engagement.updateMany({
+        where: { id: engagementId, brandId: brand.id, signedAt: null, updatedAt: eng.updatedAt },
         data: {
           onboardingData: nextData as Prisma.InputJsonValue,
           // Only set agreementText if not already signed — mirrors the
@@ -216,8 +216,11 @@ export async function publishHourlyOfferAction(offerId: string, snapshot: Hourly
             : { agreementText: merged.agreementText }),
         },
       });
+      if (updated.count !== 1) throw new Error("The agreement changed during publishing. Reload before continuing.");
     }
   }
+
+  });
 
   revalidatePath("/offers");
   revalidatePath(`/offers/${existing.id}`);

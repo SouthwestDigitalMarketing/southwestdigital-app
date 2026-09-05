@@ -31,7 +31,6 @@ import { extraIsRealEstateSpecific } from "@/lib/quotes/catalog";
 import { ProposalReviewsSection } from "./ProposalReviewsSection";
 import AgreementTextView from "./AgreementTextView";
 import DepositPaymentForm from "./DepositPaymentForm";
-import PaypalPaymentButton from "./PaypalPaymentButton";
 import {
   formatPersonName,
   resolvePrimaryContact,
@@ -1705,20 +1704,6 @@ export default function OfferProposalPreview({
                       ) : (
                         <p className="text-sm text-slate-600">Preparing your payment form…</p>
                       )}
-                      {engagementId && paymentClientSecret ? (
-                        <>
-                          <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                            <div className="h-px flex-1 bg-slate-200" />
-                            or pay with PayPal
-                            <div className="h-px flex-1 bg-slate-200" />
-                          </div>
-                          <PaypalPaymentButton
-                            engagementId={engagementId}
-                            proposalToken={proposalToken}
-                            onPaid={(status) => { setPaymentStatus(status); setStep(3); }}
-                          />
-                        </>
-                      ) : null}
                     </div>
 
                     <div className="order-1 space-y-4 md:order-2">
@@ -1738,7 +1723,7 @@ export default function OfferProposalPreview({
                       <div className="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-4">
                         <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />
                         <p className="text-xs leading-5 text-slate-500">
-                          Payments are processed securely by Stripe and PayPal. Your card and bank details are never stored on our servers.
+                          Payments are processed securely by Stripe. Your card details are never stored on our servers.
                         </p>
                       </div>
                     </div>
@@ -1838,20 +1823,6 @@ export default function OfferProposalPreview({
                   ) : (
                     <p className="text-sm text-slate-600">Preparing your payment form...</p>
                   )}
-                  {engagementId && paymentClientSecret ? (
-                    <>
-                      <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                        <div className="h-px flex-1 bg-slate-200" />
-                        or pay with PayPal
-                        <div className="h-px flex-1 bg-slate-200" />
-                      </div>
-                      <PaypalPaymentButton
-                        engagementId={engagementId}
-                        proposalToken={proposalToken}
-                        onPaid={(status) => setPaymentStatus(status)}
-                      />
-                    </>
-                  ) : null}
                 </div>
                 <div className="order-1 space-y-4 md:order-2">
                   <div className="rounded-xl border border-slate-200 bg-white p-5">
@@ -1867,7 +1838,7 @@ export default function OfferProposalPreview({
                   </div>
                   <div className="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />
-                    <p className="text-xs leading-5 text-slate-500">Payments are processed securely by Stripe and PayPal. Your card and bank details are never stored on our servers.</p>
+                    <p className="text-xs leading-5 text-slate-500">Payments are processed securely by Stripe. Your card details are never stored on our servers.</p>
                   </div>
                 </div>
               </div>

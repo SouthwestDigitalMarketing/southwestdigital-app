@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { readAcceptedPayment } from "./acceptedPayment";
 import { extractOfferEngagementFields } from "./offerFields";
 
 export { extractOfferEngagementFields, offerHasCleanup } from "./offerFields";
@@ -20,9 +21,10 @@ export async function ensureQuoteEngagement(input: {
   brandId: string;
   quoteId: string;
   snapshot: { contactInfo?: unknown; assessment?: unknown; isTestProposal?: unknown };
-}) {
+}, transaction?: Prisma.TransactionClient) {
+  const database = transaction ?? prisma;
   const fields = extractOfferEngagementFields(input.snapshot);
-  const quote = await prisma.quote.findFirst({
+  const quote = await database.quote.findFirst({
     where: { id: input.quoteId, brandId: input.brandId },
     select: { id: true, engagementId: true, kind: true },
   });
@@ -38,17 +40,18 @@ export async function ensureQuoteEngagement(input: {
   };
 
   if (quote.engagementId) {
-    const existing = await prisma.engagement.findFirst({
+    const existing = await database.engagement.findFirst({
       where: { id: quote.engagementId, brandId: input.brandId },
-      select: { id: true, onboardingData: true, signedAt: true },
+      select: { id: true, onboardingData: true, signedAt: true, updatedAt: true },
     });
     if (existing) {
+      if (existing.signedAt) return existing.id;
       const onboardingData = isRecord(existing.onboardingData) ? existing.onboardingData : {};
       const previousState = isRecord(onboardingData.proposalBuilderState)
         ? onboardingData.proposalBuilderState
         : {};
-      await prisma.engagement.update({
-        where: { id: existing.id },
+      const updated = await database.engagement.updateMany({
+        where: { id: existing.id, brandId: input.brandId, signedAt: null, updatedAt: existing.updatedAt },
         data: {
           clientName: fields.clientName,
           clientLegalName: fields.clientLegalName,
@@ -66,16 +69,17 @@ export async function ensureQuoteEngagement(input: {
             proposalBuilderState: {
               ...previousState,
               ...proposalBuilderState,
-              services: isRecord(previousState.services) ? previousState.services : undefined,
+              services: null,
             },
           } as Prisma.InputJsonValue,
         },
       });
+      if (updated.count !== 1) throw new Error("The agreement changed during publishing. Reload before continuing.");
       return existing.id;
     }
   }
 
-  const created = await prisma.engagement.create({
+  const created = await database.engagement.create({
     data: {
       brandId: input.brandId,
       clientName: fields.clientName,
@@ -92,7 +96,7 @@ export async function ensureQuoteEngagement(input: {
     select: { id: true },
   });
 
-  await prisma.quote.update({
+  await database.quote.update({
     where: { id: quote.id },
     data: { engagementId: created.id },
   });
@@ -102,8 +106,8 @@ export async function ensureQuoteEngagement(input: {
 
 export async function markEngagementDepositPaid(
   engagementId: string,
-  brandId?: string,
-  payment?: {
+  brandId: string,
+  payment: {
     provider: "stripe" | "paypal";
     reference: string;
     amount: number;
@@ -111,16 +115,30 @@ export async function markEngagementDepositPaid(
     receiptUrl?: string | null;
   },
 ) {
-  const engagement = await prisma.engagement.findFirst({
-    where: { id: engagementId, ...(brandId ? { brandId } : {}) },
-    select: { id: true, brandId: true, onboardingData: true },
+  if (!brandId || !payment.reference) throw new Error("Payment identity is required.");
+  return prisma.$transaction(async (tx) => {
+  const engagement = await tx.engagement.findFirst({
+    where: { id: engagementId, brandId },
+    select: { id: true, brandId: true, onboardingData: true, updatedAt: true, signedAt: true, onboardingFeeStatus: true },
   });
-  if (!engagement) return;
+  if (!engagement?.signedAt) throw new Error("Signed engagement not found.");
   const onboardingData = isRecord(engagement.onboardingData) ? engagement.onboardingData : {};
   const acceptance = isRecord(onboardingData.proposalAcceptance) ? onboardingData.proposalAcceptance : {};
+  const obligation = readAcceptedPayment(onboardingData);
+  if (!obligation || !Number.isFinite(payment.amount) || payment.amount <= 0 ||
+      Math.round(payment.amount * 100) !== obligation.amountInCents ||
+      payment.currency.toLowerCase() !== obligation.currency) throw new Error("Payment does not match the signed obligation.");
+  const previousPayment = isRecord(acceptance.payment) ? acceptance.payment : {};
+  if (previousPayment.status === "paid" || engagement.onboardingFeeStatus === "PAID") {
+    if (previousPayment.provider !== payment.provider || previousPayment.reference !== payment.reference ||
+        previousPayment.amount !== payment.amount || previousPayment.currency !== payment.currency) {
+      throw new Error("A different payment is already recorded; reconciliation is required.");
+    }
+    return; // Preserve the original evidence and timestamp on retries.
+  }
   const paidAt = new Date();
-  await prisma.engagement.update({
-    where: { id: engagement.id },
+  const updated = await tx.engagement.updateMany({
+    where: { id: engagement.id, brandId, updatedAt: engagement.updatedAt },
     data: {
       onboardingFeeStatus: "PAID",
       status: "DEPOSIT_PAID",
@@ -128,15 +146,15 @@ export async function markEngagementDepositPaid(
         ...onboardingData,
         proposalAcceptance: {
           ...acceptance,
-          payment: payment
-            ? { ...payment, status: "paid", paidAt: paidAt.toISOString() }
-            : { status: "paid", paidAt: paidAt.toISOString() },
+          payment: { ...payment, status: "paid", paidAt: paidAt.toISOString() },
         },
       } as Prisma.InputJsonValue,
     },
   });
-  await prisma.quote.updateMany({
+  if (updated.count !== 1) throw new Error("Payment state changed concurrently; retry reconciliation.");
+  await tx.quote.updateMany({
     where: { engagementId, brandId: engagement.brandId, status: { not: "archived" } },
     data: { status: "completed", lastActivityAt: paidAt },
+  });
   });
 }

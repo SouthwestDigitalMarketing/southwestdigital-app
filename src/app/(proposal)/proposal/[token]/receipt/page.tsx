@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { Download, ExternalLink } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { resolvePublicBrand } from "@/lib/brands/resolve";
-import { parseStoredProposalCheckout } from "@/lib/engagements/proposalCheckout";
+import { readAcceptedSelection } from "@/lib/engagements/acceptedPayment";
 import AgreementTextView from "@/app/(app)/offers/builder/AgreementTextView";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -48,15 +48,13 @@ export default async function ProposalReceiptPage({ params }: { params: Promise<
   if (!quote.engagement.signedAt || !quote.engagement.agreementText) redirect(`/proposal/${token}`);
 
   const onboardingData = isRecord(quote.engagement.onboardingData) ? quote.engagement.onboardingData : {};
-  const builderState = isRecord(onboardingData.proposalBuilderState) ? onboardingData.proposalBuilderState : {};
-  const services = isRecord(builderState.services) ? builderState.services : {};
-  const checkout = parseStoredProposalCheckout(services);
+  const { bookkeeping: checkout, hourly } = readAcceptedSelection(onboardingData);
   const acceptance = isRecord(onboardingData.proposalAcceptance) ? onboardingData.proposalAcceptance : {};
   const payment = isRecord(acceptance.payment) ? acceptance.payment : {};
   const paid = quote.engagement.onboardingFeeStatus === "PAID" || payment.status === "paid";
   const amountPaid = typeof payment.amount === "number"
     ? payment.amount
-    : paid && checkout ? (quote.engagement.isTestProposal ? 1 : checkout.amountDueNow) : null;
+    : null;
   const paidAt = typeof payment.paidAt === "string" ? new Date(payment.paidAt) : null;
   const paymentReference = typeof payment.reference === "string" ? payment.reference : null;
   const receiptUrl = typeof payment.receiptUrl === "string" ? payment.receiptUrl : null;
@@ -74,7 +72,7 @@ export default async function ProposalReceiptPage({ params }: { params: Promise<
           <div className="flex flex-wrap items-start justify-between gap-5">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Signed proposal record</p>
-              <h1 className="mt-2 text-3xl font-bold">{clientName}</h1>
+              <h1 className="mt-2 break-words text-2xl font-bold sm:text-3xl">{clientName}</h1>
               <p className="mt-2 font-mono text-xs text-slate-500">Offer {quote.offerCode}</p>
             </div>
             <span className={`rounded-full px-3 py-1 text-sm font-semibold ${paid ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
@@ -83,10 +81,10 @@ export default async function ProposalReceiptPage({ params }: { params: Promise<
           </div>
 
           <dl className="mt-8 grid gap-4 rounded-xl bg-slate-50 p-5 sm:grid-cols-2">
-            <div><dt className="text-xs font-bold uppercase tracking-wide text-slate-500">Package</dt><dd className="mt-1 text-lg font-semibold">{checkout?.tierLabel ?? "Recorded in agreement"}</dd></div>
+            <div><dt className="text-xs font-bold uppercase tracking-wide text-slate-500">Service</dt><dd className="mt-1 break-words text-lg font-semibold">{hourly?.catalogItemLabel ?? checkout?.tierLabel ?? "Recorded in agreement"}</dd></div>
             <div><dt className="text-xs font-bold uppercase tracking-wide text-slate-500">Signed</dt><dd className="mt-1 text-lg font-semibold">{quote.engagement.signedAt.toLocaleString("en-US")}</dd></div>
-            <div><dt className="text-xs font-bold uppercase tracking-wide text-slate-500">Ongoing services</dt><dd className="mt-1 text-lg font-semibold">{checkout ? `${formatUsd(checkout.recurringMonthlyTotal)}/month` : "See agreement"}</dd></div>
-            <div><dt className="text-xs font-bold uppercase tracking-wide text-slate-500">Paid now</dt><dd className="mt-1 text-lg font-semibold">{amountPaid === null ? "Pending" : formatUsd(amountPaid)}</dd></div>
+            <div><dt className="text-xs font-bold uppercase tracking-wide text-slate-500">{hourly ? "Accepted scope" : "Ongoing services"}</dt><dd className="mt-1 text-lg font-semibold">{hourly ? `${hourly.quantity} hours · ${formatUsd(hourly.total)} total` : checkout ? `${formatUsd(checkout.recurringMonthlyTotal)}/month` : "See agreement"}</dd></div>
+            <div><dt className="text-xs font-bold uppercase tracking-wide text-slate-500">Paid now</dt><dd className="mt-1 text-lg font-semibold">{amountPaid === null ? paid ? "Amount not recorded" : "Pending" : formatUsd(amountPaid)}</dd></div>
             <div><dt className="text-xs font-bold uppercase tracking-wide text-slate-500">Signed by</dt><dd className="mt-1 font-semibold">{quote.engagement.signerName}{quote.engagement.signerTitle ? ` · ${quote.engagement.signerTitle}` : ""}</dd></div>
             <div><dt className="text-xs font-bold uppercase tracking-wide text-slate-500">Payment confirmation</dt><dd className="mt-1 font-semibold">{paidAt && !Number.isNaN(paidAt.getTime()) ? paidAt.toLocaleString("en-US") : paid ? "Confirmed" : "Not yet confirmed"}</dd></div>
           </dl>
@@ -101,7 +99,7 @@ export default async function ProposalReceiptPage({ params }: { params: Promise<
               </a>
             ) : null}
           </div>
-          {paymentReference ? <p className="mt-4 text-xs text-slate-500">Payment reference: {paymentReference}</p> : null}
+          {paymentReference ? <p className="mt-4 break-all text-xs text-slate-500">Payment reference: {paymentReference}</p> : null}
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">

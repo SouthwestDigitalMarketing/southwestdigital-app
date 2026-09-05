@@ -6,6 +6,8 @@ import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/simpleRateLimit";
 import { getSelectedProposalTier } from "@/lib/engagements/proposalSelection";
 import { hasPublicProposalAccess, publicProposalNotFound } from "@/lib/engagements/publicProposalAccess";
+import { buildAcceptedPayment } from "@/lib/engagements/acceptedPayment";
+import { lockQuoteMutation, QuoteMutationConflictError } from "@/lib/quotes/mutationLock";
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -54,7 +56,7 @@ export async function POST(
 
   const engagement = await prisma.engagement.findUnique({
     where: { id: engagementId },
-    select: { brandId: true, onboardingData: true, onboardingFeeStatus: true, agreementText: true, signedAt: true, signerName: true, agreementManagerStatus: true, productKind: true },
+    select: { brandId: true, onboardingData: true, onboardingFeeStatus: true, agreementText: true, signedAt: true, signerName: true, agreementManagerStatus: true, productKind: true, isTestProposal: true, updatedAt: true },
   });
   if (!engagement) return NextResponse.json({ error: "Engagement not found" }, { status: 404 });
   const isHourlyKind = engagement.productKind === "consulting" || engagement.productKind === "coaching";
@@ -64,10 +66,6 @@ export async function POST(
   }
 
   if (engagement.signedAt) {
-    await prisma.quote.updateMany({
-      where: { engagementId, brandId: engagement.brandId, status: { not: "archived" } },
-      data: { status: "accepted" },
-    });
     return NextResponse.json({ ok: true, signedAt: engagement.signedAt.toISOString(), signerName: engagement.signerName });
   }
 
@@ -91,12 +89,15 @@ export async function POST(
   const onboardingData = isRecord(engagement.onboardingData) ? engagement.onboardingData : {};
   const builderState = isRecord(onboardingData.proposalBuilderState) ? onboardingData.proposalBuilderState : {};
   const services = isRecord(builderState.services) ? builderState.services : {};
+  const paymentObligation = buildAcceptedPayment(services, engagement.isTestProposal);
+  if (!paymentObligation) return NextResponse.json({ error: "The pricing could not be frozen. Please reload and select the published offer again." }, { status: 409 });
   const proposalAcceptance = {
-    version: 1,
+    version: 2,
     signedAt: signedAt.toISOString(),
     agreementText: engagement.agreementText,
     agreementTextHash,
     selection: services,
+    paymentObligation,
     signer: {
       name: signerName,
       title: signerTitle || null,
@@ -110,8 +111,15 @@ export async function POST(
       scrolledToEnd: true,
     },
   };
-  await prisma.engagement.update({
-    where: { id: engagementId },
+  const recorded = await prisma.$transaction(async (tx) => {
+  const quote = await tx.quote.findFirst({ where: { engagementId, brandId: engagement.brandId }, select: { id: true } });
+  if (!quote) return false;
+  await lockQuoteMutation(tx, engagement.brandId, quote.id, "sign");
+  const revision = await tx.quoteRevision.findFirst({
+    where: { quoteId: quote.id, brandId: engagement.brandId }, orderBy: { version: "desc" }, select: { id: true, version: true },
+  });
+  const updated = await tx.engagement.updateMany({
+    where: { id: engagementId, brandId: engagement.brandId, signedAt: null, updatedAt: engagement.updatedAt },
     data: {
       signerName,
       signerTitle: signerTitle || null,
@@ -126,13 +134,23 @@ export async function POST(
       agreementScrolledAt: signedAt,
       billingContactEmail: email,
       onboardingFeeStatus,
-      onboardingData: { ...onboardingData, proposalAcceptance } as Prisma.InputJsonValue,
+      onboardingData: { ...onboardingData, proposalAcceptance: {
+        ...proposalAcceptance,
+        publication: { quoteId: quote.id, revisionId: revision?.id ?? null, version: revision?.version ?? null },
+      } } as Prisma.InputJsonValue,
     },
   });
-  await prisma.quote.updateMany({
-    where: { engagementId, brandId: engagement.brandId, status: { not: "archived" } },
+  if (updated.count !== 1) return false;
+  await tx.quote.updateMany({
+    where: { engagementId, brandId: engagement.brandId, status: { notIn: ["archived", "completed"] } },
     data: { status: "accepted", lastActivityAt: signedAt },
   });
+  return true;
+  }).catch((error: unknown) => {
+    if (error instanceof QuoteMutationConflictError) return false;
+    throw error;
+  });
+  if (!recorded) return NextResponse.json({ error: "The proposal changed or was signed in another tab. Reload to see the current agreement." }, { status: 409 });
 
   return NextResponse.json({ ok: true, signedAt: signedAt.toISOString(), signerName });
 }

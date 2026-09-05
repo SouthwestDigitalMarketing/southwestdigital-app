@@ -26,6 +26,8 @@ export async function POST(
     where: { id: engagementId },
     select: {
       onboardingData: true,
+      updatedAt: true,
+      brandId: true,
       onboardingFeeStatus: true,
       signedAt: true,
       agreementManagerStatus: true,
@@ -84,8 +86,8 @@ export async function POST(
 
   const onboardingFeeStatus = checkout.onboardingFee === 0 ? "WAIVED" : "REQUIRED";
 
-  await prisma.engagement.update({
-    where: { id: engagementId },
+  const updated = await prisma.engagement.updateMany({
+    where: { id: engagementId, brandId: engagement.brandId, signedAt: null, updatedAt: engagement.updatedAt },
     data: {
       onboardingData: { ...onboardingData, proposalBuilderState } as Prisma.InputJsonValue,
       onboardingFee: checkout.onboardingFee,
@@ -96,6 +98,7 @@ export async function POST(
       agreementTextHash: null,
     },
   });
+  if (updated.count !== 1) return NextResponse.json({ error: "The proposal changed in another tab. Reload before selecting again." }, { status: 409 });
 
   return NextResponse.json({ ok: true, checkout });
 }

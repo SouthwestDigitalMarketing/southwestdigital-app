@@ -13,6 +13,7 @@ import { materializeProposalCatalog } from "@/lib/quotes/materializeProposalCata
 import { materializeAgreementTemplate } from "@/lib/agreements/materialize";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
 import { ensureQuoteEngagement } from "@/lib/engagements/fromOffer";
+import { lockQuoteMutation } from "@/lib/quotes/mutationLock";
 import { quoteClientDetailsFromSnapshot } from "@/lib/quotes/clientInfo";
 import { applyTagPipelineAutomation } from "@/lib/contacts/automation";
 
@@ -411,6 +412,7 @@ export async function publishOfferChangesAction(
 
   if (!quoteRevisions) {
     await prisma.$transaction(async (tx) => {
+      await lockQuoteMutation(tx, brand.id, existing.id, "publish");
       const clientId = await ensureExclusiveQuoteClient(tx, {
         brandId: brand.id,
         quoteId: existing.id,
@@ -430,7 +432,6 @@ export async function publishOfferChangesAction(
           lastActivityAt: publishedAt,
         },
       });
-    });
     if (quoteEngagement) {
       await ensureQuoteEngagement({
         brandId: brand.id,
@@ -440,22 +441,24 @@ export async function publishOfferChangesAction(
           assessment: snapshot.assessment,
           isTestProposal: snapshot.isTestProposal,
         },
-      });
+      }, tx);
     }
+    });
     revalidatePath("/offers");
     revalidatePath(`/offers/${existing.id}`);
     revalidatePath(`/proposal/${publicToken}`);
     return { publicPath: `/proposal/${publicToken}`, version: 1 };
   }
 
-  const latestRevision = await prisma.quoteRevision.findFirst({
+  const version = await prisma.$transaction(async (tx) => {
+    await lockQuoteMutation(tx, brand.id, existing.id, "publish");
+  const latestRevision = await tx.quoteRevision.findFirst({
     where: { brandId: brand.id, quoteId: existing.id },
     orderBy: { version: "desc" },
     select: { version: true },
   });
   const version = (latestRevision?.version ?? 0) + 1;
 
-  await prisma.$transaction(async (tx) => {
     const clientId = await ensureExclusiveQuoteClient(tx, {
       brandId: brand.id,
       quoteId: existing.id,
@@ -488,8 +491,6 @@ export async function publishOfferChangesAction(
         lastActivityAt: publishedAt,
       },
     });
-  });
-
   if (quoteEngagement) {
     await ensureQuoteEngagement({
       brandId: brand.id,
@@ -499,8 +500,10 @@ export async function publishOfferChangesAction(
         assessment: snapshot.assessment,
         isTestProposal: snapshot.isTestProposal,
       },
-    });
+    }, tx);
   }
+  return version;
+  });
 
   revalidatePath("/offers");
   revalidatePath(`/offers/${existing.id}`);

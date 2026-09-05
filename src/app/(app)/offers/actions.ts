@@ -9,6 +9,7 @@ import { requireQuoteStaffOrThrow } from "@/lib/quotes/access";
 import { contactInfoFromCrm } from "@/lib/quotes/fromContacts";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
 import { ensureQuoteEngagement } from "@/lib/engagements/fromOffer";
+import { lockQuoteMutation } from "@/lib/quotes/mutationLock";
 import {
   quoteClientDetailsFromSnapshot,
 } from "@/lib/quotes/clientInfo";
@@ -137,7 +138,13 @@ export async function reassignQuoteContactAction(formData: FormData) {
     ]),
   };
   const client = quoteClientDetailsFromSnapshot(snapshot, quote.client);
-  const clientRecord = await prisma.quoteClient.create({
+  const { quoteRevisions, quoteEngagement } = await getSchemaCapabilities();
+  const publishedAt = quote.publishedAt;
+  const publicToken = quote.publicToken ?? randomBytes(32).toString("base64url");
+
+  await prisma.$transaction(async (tx) => {
+  await lockQuoteMutation(tx, brand.id, quote.id, "publish");
+  const clientRecord = await tx.quoteClient.create({
     data: {
       brandId: brand.id,
       name: client.name,
@@ -147,12 +154,8 @@ export async function reassignQuoteContactAction(formData: FormData) {
     select: { id: true },
   });
 
-  const { quoteRevisions, quoteEngagement } = await getSchemaCapabilities();
-  const publishedAt = quote.publishedAt;
-  const publicToken = quote.publicToken ?? randomBytes(32).toString("base64url");
-
   if (!publishedAt) {
-    await prisma.quote.update({
+    await tx.quote.update({
       where: { id: quote.id },
       data: {
         clientId: clientRecord.id,
@@ -160,7 +163,7 @@ export async function reassignQuoteContactAction(formData: FormData) {
       },
     });
   } else if (!quoteRevisions) {
-    await prisma.quote.update({
+    await tx.quote.update({
       where: { id: quote.id },
       data: {
         clientId: clientRecord.id,
@@ -171,19 +174,18 @@ export async function reassignQuoteContactAction(formData: FormData) {
       },
     });
   } else {
-    const latestRevision = await prisma.quoteRevision.findFirst({
+    const latestRevision = await tx.quoteRevision.findFirst({
       where: { brandId: brand.id, quoteId: quote.id },
       orderBy: { version: "desc" },
       select: { version: true },
     });
     const version = (latestRevision?.version ?? 0) + 1;
 
-    await prisma.$transaction([
-      prisma.quoteRevision.updateMany({
+      await tx.quoteRevision.updateMany({
         where: { brandId: brand.id, quoteId: quote.id, supersededAt: null },
         data: { supersededAt: publishedAt },
-      }),
-      prisma.quoteRevision.create({
+      });
+      await tx.quoteRevision.create({
         data: {
           brandId: brand.id,
           quoteId: quote.id,
@@ -191,8 +193,8 @@ export async function reassignQuoteContactAction(formData: FormData) {
           snapshotJson: snapshot,
           publishedAt,
         },
-      }),
-      prisma.quote.update({
+      });
+      await tx.quote.update({
         where: { id: quote.id },
         data: {
           clientId: clientRecord.id,
@@ -201,8 +203,7 @@ export async function reassignQuoteContactAction(formData: FormData) {
           publicToken,
           publishedAt,
         },
-      }),
-    ]);
+      });
   }
 
   if (quoteEngagement && (quote.engagementId || publishedAt)) {
@@ -214,8 +215,9 @@ export async function reassignQuoteContactAction(formData: FormData) {
           assessment: (snapshot as Record<string, unknown>).assessment,
           isTestProposal: (snapshot as Record<string, unknown>).isTestProposal,
         },
-    });
+    }, tx);
   }
+  });
 
   revalidatePath("/offers");
   revalidatePath(`/offers/${quote.id}`);
