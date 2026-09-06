@@ -70,6 +70,7 @@ import {
   resolveProposalInteractionEngagementId,
 } from "@/lib/quotes/previewSafety";
 import type { PublicProposalPricing } from "@/lib/quotes/publicProposal";
+import { resolveProposalPackageName } from "./proposalPackageNames";
 
 type CloudflareStreamEvent = "play" | "pause" | "ended";
 
@@ -421,6 +422,7 @@ function buildOptions(
 
     return [id, {
       ...base,
+      name: resolveProposalPackageName(assessment.packageNames, id),
       monthlyPrice: packagePricing[id].monthly,
       recurringRows: recurringBonuses.map((row) =>
         isMonthlyBookkeepingRow(row)

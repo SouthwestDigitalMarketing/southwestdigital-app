@@ -7,6 +7,7 @@ describe("public proposal data boundary", () => {
     const result = toPublicBookkeepingProposal({
       assessment: {
         assessmentNotes: privateValue, discretionaryMultiplierNote: privateValue,
+        packageNames: { grow: "Advisory", improve: "Momentum", maintain: "Essentials" },
         discretionaryMultiplier: 8, payrollContactEmail: privateValue,
         bankAccountsCount: 31, adminAssistantPhone: privateValue,
         introHeadline: "Your bookkeeping plan",
@@ -25,6 +26,11 @@ describe("public proposal data boundary", () => {
     expect(JSON.stringify(result)).not.toContain(privateValue);
     expect(result.assessment).not.toHaveProperty("discretionaryMultiplier");
     expect(result.assessment).not.toHaveProperty("bankAccountsCount");
+    expect(result.assessment.packageNames).toEqual({
+      grow: "Advisory",
+      improve: "Momentum",
+      maintain: "Essentials",
+    });
     expect(result.pricing.maintain).toEqual({ monthly: 500 });
     expect(result.contactInfo.primaryContact.email).toBe("alex@example.test");
     expect(result.contactInfo.owners).toEqual([]);

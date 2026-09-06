@@ -1,7 +1,9 @@
 "use client";
 
+import type { PackageId, ProposalPackageNames } from "./proposalPackageNames";
+
 type PricingSnapshotItem = {
-  id: string;
+  id: PackageId;
   name: string;
   monthlyLabel: string;
   isRecommended?: boolean;
@@ -16,10 +18,14 @@ export default function PricingSnapshotSidebar({
   items,
   cleanupCard,
   hideLabel,
+  editablePackageNames,
+  onPackageNameChange,
 }: {
   items: PricingSnapshotItem[];
   cleanupCard?: OneTimeSnapshotCard;
   hideLabel?: boolean;
+  editablePackageNames?: ProposalPackageNames;
+  onPackageNameChange?: (id: PackageId, name: string) => void;
 }) {
   const orderedItems = [...items].sort((a, b) => {
     const order: Record<string, number> = {
@@ -37,7 +43,14 @@ export default function PricingSnapshotSidebar({
         Pricing calculator
       </p>)}
       <div className={`proposal-builder-card overflow-hidden rounded-[1.25rem] border border-slate-300 shadow-[0_18px_40px_rgba(15,23,42,0.12)] ${hideLabel ? "" : "mt-3"}`}>
-        {hideLabel ? (<div className="border-b border-slate-200 bg-white px-5 py-6"><h2 className="text-xl font-semibold tracking-tight text-slate-900">Pricing</h2></div>) : null}
+        {hideLabel ? (
+          <div className="border-b border-slate-200 bg-white px-5 py-5">
+            <h2 className="text-xl font-semibold tracking-tight text-slate-900">Pricing</h2>
+            {onPackageNameChange ? (
+              <p className="mt-1 text-sm text-slate-500">Edit package names below.</p>
+            ) : null}
+          </div>
+        ) : null}
         <div className="space-y-3 p-4">
           {cleanupCard ? (
             <div className="text-left">
@@ -68,6 +81,9 @@ export default function PricingSnapshotSidebar({
                   ? "border-brandnavy theme-white shadow-sm"
                   : "border-slate-200 theme-white";
             const titleClassName = isGrow ? "text-white" : "text-slate-900";
+            const nameInputClassName = isGrow
+              ? "border-white/30 bg-white/10 text-white hover:border-white/50 focus:border-white/70"
+              : "border-slate-300 bg-white text-slate-900 hover:border-slate-400 focus:border-slate-500";
 
             return (
               <div
@@ -75,7 +91,21 @@ export default function PricingSnapshotSidebar({
                 className={`w-full rounded-[1.15rem] border px-4 py-2.5 text-left ${cardClassName}`}
               >
                 <div className="flex items-center justify-between gap-3">
-                  <p className={`min-w-0 break-words text-base font-semibold ${titleClassName}`}>{item.name}</p>
+                  {onPackageNameChange ? (
+                    <input
+                      aria-label={`Name for the ${item.name} pricing package`}
+                      maxLength={40}
+                      value={editablePackageNames?.[item.id] ?? item.name}
+                      onChange={(event) => onPackageNameChange(item.id, event.target.value)}
+                      onBlur={(event) => {
+                        if (!event.currentTarget.value.trim()) onPackageNameChange(item.id, item.name);
+                      }}
+                      title="Edit package name"
+                      className={`min-w-0 flex-1 rounded-md border px-2 py-0.5 text-base font-semibold outline-none transition ${nameInputClassName}`}
+                    />
+                  ) : (
+                    <p className={`min-w-0 break-words text-base font-semibold ${titleClassName}`}>{item.name}</p>
+                  )}
                   <p className={`shrink-0 whitespace-nowrap text-base font-semibold ${titleClassName}`}>{item.monthlyLabel}</p>
                 </div>
               </div>

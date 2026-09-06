@@ -38,8 +38,15 @@ import {
   type UrgencyOfferConfig,
 } from "./urgencyOffer";
 import { DEFAULT_PROPOSAL_THEME_ID, DEFAULT_PROPOSAL_MODE } from "./proposalThemes";
+import {
+  DEFAULT_PROPOSAL_PACKAGE_NAMES,
+  normalizeProposalPackageNames,
+  resolveProposalPackageName,
+  type PackageId,
+  type ProposalPackageNames,
+} from "./proposalPackageNames";
 
-export type PackageId = "maintain" | "improve" | "grow";
+export type { PackageId } from "./proposalPackageNames";
 export type ProposalBonusId =
   | "stessa-migration"
   | "tax-preparer-coordination"
@@ -273,6 +280,7 @@ export type AssessmentState = {
   waiveOnboardingFee: boolean;
   onboardingFeeOverride: number | null;
   annualSavingsPercent: number;
+  packageNames: ProposalPackageNames;
   includeConditionalStessaMigration: boolean;
   includeTaxPreparerCoordinationCall: boolean;
   includePropertyLevelReportingSetup: boolean;
@@ -452,6 +460,7 @@ const INITIAL_ASSESSMENT: AssessmentState = {
   waiveOnboardingFee: false,
   onboardingFeeOverride: null,
   annualSavingsPercent: 20,
+  packageNames: { ...DEFAULT_PROPOSAL_PACKAGE_NAMES },
   includeConditionalStessaMigration: false,
   includeTaxPreparerCoordinationCall: true,
   includePropertyLevelReportingSetup: false,
@@ -1178,6 +1187,7 @@ function roundUpToNearestIncrement(value: number, increment = 5) {
 function withComplexityUnknownDefaults(assessment: AssessmentState): AssessmentState {
   return {
     ...assessment,
+    packageNames: normalizeProposalPackageNames(assessment.packageNames),
     payrollProvider: assessment.payrollProvider || "unknown",
     payCadence: assessment.payCadence || "unknown",
     payrollResponsibleParty: assessment.payrollResponsibleParty || "unknown",
@@ -1851,7 +1861,7 @@ export function getProposalPricingSnapshotItems(assessment: AssessmentState) {
 
   return PACKAGES.map((pkg) => ({
     id: pkg.id,
-    name: pkg.name,
+    name: resolveProposalPackageName(assessment.packageNames, pkg.id),
     monthlyLabel: hasMonthlyPricing
       ? formatCurrency(packagePricing[pkg.id].monthly, "/mo")
       : "- /mo",
@@ -1906,7 +1916,7 @@ export function getProposalPreviewPackages(assessment: AssessmentState) {
     const pricing = packagePricing[pkg.id];
     return {
       id: pkg.id,
-      name: pkg.name,
+      name: resolveProposalPackageName(assessment.packageNames, pkg.id),
       description: pkg.description,
       clientFit: pkg.clientFit,
       includedServices: pkg.includedServices,
@@ -3093,6 +3103,7 @@ export default function ProposalCreationWorkspaceDemo({
                   <IncludedServicesBuilder
                     catalogServices={catalogServices}
                     forceOpen={expandAllSignal}
+                    packageNames={assessment.packageNames}
                     realEstateBookSet={
                       assessment.bookSetType === "real-estate-only" || assessment.bookSetType === "mixed-books"
                     }
@@ -3102,7 +3113,7 @@ export default function ProposalCreationWorkspaceDemo({
                 {isCalculatorStep ? (
                   <>
                     <AssessmentCardSection
-                      title="Monthly Base (Maintain)"
+                      title={`Monthly Base (${resolveProposalPackageName(assessment.packageNames, "maintain")})`}
                       assessment={assessment}
                       onCancel={setAssessment}
                       readOnly

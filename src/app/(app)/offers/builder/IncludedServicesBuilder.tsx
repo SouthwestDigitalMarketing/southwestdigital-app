@@ -3,8 +3,11 @@
 import { ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProposalAppCollapsibleForceSignal } from "./ProposalAppCollapsibleSection";
-
-type PackageId = "grow" | "improve" | "maintain";
+import {
+  resolveProposalPackageName,
+  type PackageId,
+  type ProposalPackageNames,
+} from "./proposalPackageNames";
 
 export type IncludedCatalogService = {
   id: string;
@@ -69,34 +72,10 @@ const TEMPLATE_STORAGE_KEY = "proposal-app-demo-included-templates-v2";
 const SELECTION_STORAGE_KEY = "proposal-app-demo-included-selection-v2";
 const ACTIVE_TEMPLATE_STORAGE_KEY = "proposal-app-demo-included-active-template-v2";
 
-const PACKAGE_COLUMNS: Array<{
-  id: PackageId;
-  name: string;
-  description: string;
-  cardClass: string;
-  subtleCardClass: string;
-}> = [
-  {
-    id: "grow",
-    name: "Grow",
-    description: "Concierge support, executive reporting, and higher-touch partnership.",
-    cardClass: "border-slate-950 bg-slate-950 text-white",
-    subtleCardClass: "border-slate-200 bg-slate-50 text-slate-900",
-  },
-  {
-    id: "improve",
-    name: "Improve",
-    description: "Maintain plus stronger reporting visibility and better operating insight.",
-    cardClass: "border-slate-200 bg-slate-100 text-slate-900",
-    subtleCardClass: "border-slate-200 bg-slate-50 text-slate-900",
-  },
-  {
-    id: "maintain",
-    name: "Maintain",
-    description: "Core monthly bookkeeping and a clean, reliable close process.",
-    cardClass: "border-slate-200 bg-white text-slate-900",
-    subtleCardClass: "border-slate-200 bg-white text-slate-900",
-  },
+const PACKAGE_COLUMNS: Array<{ id: PackageId }> = [
+  { id: "grow" },
+  { id: "improve" },
+  { id: "maintain" },
 ];
 
 function createEmptySelections(): PackageSelections {
@@ -316,10 +295,12 @@ export default function IncludedServicesBuilder({
   catalogServices,
   forceOpen,
   realEstateBookSet = false,
+  packageNames,
 }: {
   catalogServices: IncludedCatalogService[];
   forceOpen?: ProposalAppCollapsibleForceSignal;
   realEstateBookSet?: boolean;
+  packageNames: ProposalPackageNames;
 }) {
   const hydratedRef = useRef(false);
   const sortedServices = useMemo(
@@ -332,6 +313,15 @@ export default function IncludedServicesBuilder({
   const builtInTemplates = useMemo(
     () => buildBuiltInTemplates(sortedServices),
     [sortedServices],
+  );
+  const packageAssignmentOptions = useMemo(
+    () => PACKAGE_ASSIGNMENT_OPTIONS.map((option) => ({
+      ...option,
+      label: option.value === "none"
+        ? option.label
+        : resolveProposalPackageName(packageNames, option.value),
+    })),
+    [packageNames],
   );
   const [customTemplates, setCustomTemplates] = useState<SavedTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState(() => builtInTemplates[0]?.id ?? "");
@@ -428,13 +418,13 @@ export default function IncludedServicesBuilder({
   const selectedTemplateIsCustom = activeTemplate?.kind === "custom";
   const servicesByAssignment = useMemo(
     () =>
-      PACKAGE_ASSIGNMENT_OPTIONS.map((option) => ({
+      packageAssignmentOptions.map((option) => ({
         ...option,
         services: sortedServices.filter(
           (service) => getPackageAssignment(packageSelections, service.id) === option.value,
         ),
       })),
-    [packageSelections, sortedServices],
+    [packageAssignmentOptions, packageSelections, sortedServices],
   );
 
   function applyTemplate(templateId: string) {
@@ -671,7 +661,7 @@ export default function IncludedServicesBuilder({
                                 }
                                 className="h-7 w-full appearance-none border-0 bg-transparent px-2 pr-6 text-sm font-medium text-slate-700 shadow-none outline-none focus:ring-0"
                               >
-                                {PACKAGE_ASSIGNMENT_OPTIONS.map((option) => (
+                                {packageAssignmentOptions.map((option) => (
                                   <option key={option.value} value={option.value}>
                                     {option.label}
                                   </option>

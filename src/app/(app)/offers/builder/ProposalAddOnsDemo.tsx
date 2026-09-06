@@ -12,10 +12,15 @@ import {
   getProposalPricingSnapshotCleanupCard,
   getProposalPricingSnapshotItems,
   useProposalAssessmentDemoState,
-  type PackageId,
   type ProposalAdditionalOption,
   type ProposalBonus,
 } from "./ProposalCreationWorkspaceDemo";
+import {
+  PROPOSAL_PACKAGE_IDS,
+  abbreviateProposalPackageName,
+  resolveProposalPackageName,
+  type PackageId,
+} from "./proposalPackageNames";
 import {
   extraIsAvailableForBookSet,
   extraIsRealEstateSpecific,
@@ -23,12 +28,6 @@ import {
   type ProposalOptionCatalogItem,
 } from "@/lib/quotes/catalog";
 import type { OptionsTemplateAssessmentSlice } from "@/lib/quotes/optionsTemplates";
-
-const PACKAGES: Array<{ id: PackageId; label: string }> = [
-  { id: "grow", label: "Grow" },
-  { id: "improve", label: "Improve" },
-  { id: "maintain", label: "Maintain" },
-];
 
 type CatalogKind = "optional" | "included";
 type BonusCadence = "monthly" | "one-time";
@@ -47,6 +46,10 @@ type CatalogRow = {
 export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: ProposalOptionCatalogItem[] }) {
   const { assessment, setAssessment, storageReady, updateAssessment } = useProposalAssessmentDemoState();
   const [editingIds, setEditingIds] = useState<string[]>([]);
+  const packageOptions = PROPOSAL_PACKAGE_IDS.map((id) => ({
+    id,
+    label: resolveProposalPackageName(assessment.packageNames, id),
+  }));
   const additionalOptions = getProposalAdditionalOptions(assessment, catalog);
   const bonuses = getProposalBonuses(assessment, catalog);
   const catalogOrder = getOptionsCatalogOrder(assessment, catalog);
@@ -159,7 +162,7 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
       persistBonuses([...bonuses, { id, name: "New included extra", description: "Describe the included benefit.", archived: false }]);
       updateAssessment("bonusPackageSelections", {
         ...assessment.bonusPackageSelections,
-        [id]: PACKAGES.map(({ id: packageId }) => packageId),
+        [id]: packageOptions.map(({ id: packageId }) => packageId),
       });
     }
     persistOrder([...catalogOrder, id]);
@@ -208,7 +211,7 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
       if (!Array.isArray(assessment.bonusPackageSelections[row.id])) {
         updateAssessment("bonusPackageSelections", {
           ...assessment.bonusPackageSelections,
-          [row.id]: PACKAGES.map(({ id }) => id),
+          [row.id]: packageOptions.map(({ id }) => id),
         });
       }
     } else {
@@ -266,7 +269,7 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
     const saved = assessment.bonusPackageSelections[bonus.id];
     return Array.isArray(saved)
       ? saved
-      : bonus.defaultPackageIds ?? (legacyBonusIncluded(bonus.id) ? PACKAGES.map(({ id }) => id) : []);
+      : bonus.defaultPackageIds ?? (legacyBonusIncluded(bonus.id) ? packageOptions.map(({ id }) => id) : []);
   }
 
   function toggleBonusPackage(bonus: ProposalBonus, packageId: PackageId) {
@@ -277,7 +280,7 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
 
   function selectedOptionPackages(option: ProposalAdditionalOption) {
     const saved = assessment.bonusPackageSelections[option.id];
-    return Array.isArray(saved) ? saved : PACKAGES.map(({ id }) => id);
+    return Array.isArray(saved) ? saved : packageOptions.map(({ id }) => id);
   }
 
   function toggleOptionPackage(option: ProposalAdditionalOption, packageId: PackageId) {
@@ -351,7 +354,7 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
                 <colgroup>
                   <col className="w-10" />
                   <col />
-                  <col className="w-32" />
+                  <col className="w-40" />
                   <col className="w-40" />
                   <col className="w-14" />
                 </colgroup>
@@ -394,12 +397,12 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
                           onChange={(changes) => updateRow(row, changes)}
                         />
                         <td className="px-2 py-3 align-middle">
-                          <KindToggle
-                            name={row.name || "item"}
-                            value={row.kind}
-                            onChange={(kind) => setKind(row, kind)}
-                          />
-                          <div className="mt-2 border-t border-slate-200 pt-2">
+                          <div className="flex items-start justify-center gap-3">
+                            <KindToggle
+                              name={row.name || "item"}
+                              value={row.kind}
+                              onChange={(kind) => setKind(row, kind)}
+                            />
                             {row.kind === "included" ? (
                               <CadenceToggle
                                 name={row.name || "included extra"}
@@ -407,7 +410,7 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
                                 onChange={(cadence) => setBonusCadence(row, cadence)}
                               />
                             ) : option ? (
-                              <div>
+                              <div className="min-w-0 text-center">
                                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Price / mo</p>
                                 <div className="mt-1">
                                   {isEditing ? (
@@ -435,7 +438,7 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
                         </td>
                         <td className="px-2 py-3 text-center align-middle">
                           <div className="flex items-center justify-center gap-1.5" role="group" aria-label={`Pricing cards for ${row.name}`}>
-                            {PACKAGES.map(({ id, label }) =>
+                            {packageOptions.map(({ id, label }) =>
                               row.kind === "included" && bonus ? (
                                 applicable ? (
                                   <button
@@ -448,7 +451,7 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
                                     className={pricingCardClass(selected.includes(id))}
                                     title={label}
                                   >
-                                    <span aria-hidden="true">{label.charAt(0)}</span>
+                                    <span aria-hidden="true">{abbreviateProposalPackageName(label)}</span>
                                   </button>
                                 ) : (
                                   <span key={id} className="grid h-8 w-9 place-items-center text-xs font-medium text-slate-300" title={`${label}: not applicable`}>—</span>
@@ -464,7 +467,7 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
                                   className={pricingCardClass(selected.includes(id))}
                                   title={label}
                                 >
-                                  <span aria-hidden="true">{label.charAt(0)}</span>
+                                  <span aria-hidden="true">{abbreviateProposalPackageName(label)}</span>
                                 </button>
                               ) : (
                                 <span key={id} className="grid h-8 w-9 place-items-center text-sm text-slate-300">—</span>
@@ -507,6 +510,11 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
             items={getProposalPricingSnapshotItems(assessment)}
             cleanupCard={getProposalPricingSnapshotCleanupCard(assessment)}
             hideLabel
+            editablePackageNames={assessment.packageNames}
+            onPackageNameChange={(packageId, name) => updateAssessment("packageNames", {
+              ...assessment.packageNames,
+              [packageId]: name,
+            })}
           />
         </div>
       </section>
@@ -772,7 +780,7 @@ function ArchivedItems({
 }
 
 function pricingCardClass(checked: boolean) {
-  return `grid h-8 w-9 cursor-pointer place-items-center rounded-md border text-sm font-bold transition ${
+  return `grid h-8 w-8 cursor-pointer place-items-center rounded-full border text-xs font-bold transition ${
     checked ? "proposal-options-check text-white" : "border-slate-300 bg-white text-slate-500 hover:border-slate-500 hover:text-slate-900"
   }`;
 }

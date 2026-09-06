@@ -4,15 +4,13 @@ import { Check, Minus } from "lucide-react";
 import ProposalAppDemoHeader from "./ProposalAppDemoHeader";
 import {
   useProposalAssessmentDemoState,
-  type PackageId,
   type ProposalBonusId,
 } from "./ProposalCreationWorkspaceDemo";
-
-export const PACKAGE_COLUMNS: Array<{ id: PackageId; label: string }> = [
-  { id: "grow", label: "Grow" },
-  { id: "improve", label: "Improve" },
-  { id: "maintain", label: "Maintain" },
-];
+import {
+  PROPOSAL_PACKAGE_IDS,
+  resolveProposalPackageName,
+  type PackageId,
+} from "./proposalPackageNames";
 
 export const BONUS_OPTIONS = [
   { id: "stessa-migration", assessmentKey: "includeConditionalStessaMigration", name: "QuickBooks to Stessa Migration", description: "We will move the client's books to Stessa for free when they buy the cleanup and monthly bookkeeping in this offer." },
@@ -39,6 +37,10 @@ export const BONUS_OPTIONS = [
 
 export default function ProposalBonusesDemo() {
   const { assessment, updateAssessment } = useProposalAssessmentDemoState();
+  const packageColumns = PROPOSAL_PACKAGE_IDS.map((id) => ({
+    id,
+    label: resolveProposalPackageName(assessment.packageNames, id),
+  }));
 
   function isApplicable(bonus: (typeof BONUS_OPTIONS)[number]) {
     const isRealEstateBookSet =
@@ -59,7 +61,7 @@ export default function ProposalBonusesDemo() {
     if (!isApplicable(bonus)) return [];
     const saved = assessment.bonusPackageSelections?.[bonus.id];
     if (Array.isArray(saved)) return saved;
-    return assessment[bonus.assessmentKey] ? PACKAGE_COLUMNS.map(({ id }) => id) : [];
+    return assessment[bonus.assessmentKey] ? packageColumns.map(({ id }) => id) : [];
   }
 
   function togglePackage(bonus: (typeof BONUS_OPTIONS)[number], packageId: PackageId) {
@@ -114,12 +116,12 @@ export default function ProposalBonusesDemo() {
             <table className="w-full table-fixed border-collapse">
               <colgroup>
                 <col />
-                {PACKAGE_COLUMNS.map(({ id }) => <col key={id} className="w-20 sm:w-24" />)}
+                {packageColumns.map(({ id }) => <col key={id} className="w-20 sm:w-24" />)}
               </colgroup>
               <thead>
                 <tr className="bg-slate-50">
                   <th className="px-4 py-3 text-left text-sm font-semibold normal-case text-slate-700">Bonus</th>
-                  {PACKAGE_COLUMNS.map(({ id, label }) => {
+                  {packageColumns.map(({ id, label }) => {
                     const applicableBonuses = BONUS_OPTIONS.filter(isApplicable);
                     const selectedCount = applicableBonuses.filter((bonus) => selectedPackages(bonus).includes(id)).length;
                     const allChecked = applicableBonuses.length > 0 && selectedCount === applicableBonuses.length;
@@ -151,7 +153,7 @@ export default function ProposalBonusesDemo() {
                         <p className="font-semibold text-slate-950">{bonus.name}</p>
                         <p className="mt-0.5 text-xs leading-4 text-slate-500">{bonus.description}</p>
                       </td>
-                      {PACKAGE_COLUMNS.map(({ id, label }) => {
+                      {packageColumns.map(({ id, label }) => {
                         const applicable = isApplicable(bonus);
                         const checked = selected.includes(id);
                         return (

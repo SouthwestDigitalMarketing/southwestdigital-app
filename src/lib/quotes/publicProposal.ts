@@ -4,6 +4,11 @@ import { z } from "zod";
 
 const tier = z.enum(["maintain", "improve", "grow"]);
 const text = z.string().max(100_000);
+const packageNames = z.object({
+  grow: z.string().max(40),
+  improve: z.string().max(40),
+  maintain: z.string().max(40),
+});
 const money = z.number().finite().nonnegative();
 const mediaUrl = z.string().refine((value) => {
   if (!value) return true;
@@ -38,6 +43,7 @@ const publicAssessmentSchema = z.object({
   waiveOnboardingFee: z.boolean().optional(),
   onboardingFeeOverride: money.nullable().optional(),
   annualSavingsPercent: z.number().min(0).max(100).optional(),
+  packageNames: packageNames.optional(),
   includeConditionalStessaMigration: z.boolean().optional(),
   includeTaxPreparerCoordinationCall: z.boolean().optional(),
   includePropertyLevelReportingSetup: z.boolean().optional(),
