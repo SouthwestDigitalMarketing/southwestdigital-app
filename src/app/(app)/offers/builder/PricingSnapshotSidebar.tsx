@@ -33,7 +33,7 @@ export default function PricingSnapshotSidebar({
   });
 
   return (
-    <aside className="xl:sticky xl:top-8 xl:self-start">
+    <aside className="w-full xl:sticky xl:top-8 xl:w-[280px] xl:self-start 2xl:w-[300px]">
       {hideLabel ? null : (<p className="px-1 text-base font-semibold text-slate-500">
         Pricing calculator
       </p>)}

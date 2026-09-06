@@ -4,10 +4,13 @@ import { Archive, ArchiveRestore, Check, ChevronDown, ChevronUp, Ellipsis, Eye, 
 import { useEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import ProposalAppDemoHeader from "./ProposalAppDemoHeader";
 import OptionsTemplatesToolbar from "./OptionsTemplatesToolbar";
+import PricingSnapshotSidebar from "./PricingSnapshotSidebar";
 import {
   getOptionsCatalogOrder,
   getProposalAdditionalOptions,
   getProposalBonuses,
+  getProposalPricingSnapshotCleanupCard,
+  getProposalPricingSnapshotItems,
   useProposalAssessmentDemoState,
   type PackageId,
   type ProposalAdditionalOption,
@@ -289,10 +292,11 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
     <main className="min-h-screen">
       <section className="w-full px-5 py-6 lg:px-8">
         <ProposalAppDemoHeader currentStep="add-ons" previousHref="/offers/calculator" nextHref="/offers/intro" />
-        <div className="proposal-options-editor mt-4 min-w-0">
-          <div className="px-1">
-            <div className="mb-2 flex flex-wrap items-center gap-2">
-              <OptionsTemplatesToolbar
+        <div className="mt-4 grid gap-5 xl:grid-cols-[minmax(0,1fr)_280px] 2xl:grid-cols-[minmax(0,1fr)_300px]">
+          <div className="proposal-options-editor min-w-0">
+            <div className="px-1">
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <OptionsTemplatesToolbar
                 currentSlice={{
                   optionsCatalogOrder: assessment.optionsCatalogOrder,
                   additionalOptions: assessment.additionalOptions,
@@ -337,25 +341,27 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
                     </button>
                   </>
                 }
-              />
+                />
+              </div>
             </div>
-          </div>
 
-          <section>
+            <section>
             <div className="proposal-builder-card overflow-x-auto rounded-xl border border-slate-200">
-              <table className="min-w-[880px] w-full border-collapse">
+              <table className="w-full min-w-[680px] table-fixed border-collapse">
+                <colgroup>
+                  <col className="w-10" />
+                  <col />
+                  <col className="w-32" />
+                  <col className="w-40" />
+                  <col className="w-14" />
+                </colgroup>
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50">
-                    <Heading className="w-12"><span className="sr-only">Reorder</span></Heading>
-                    <Heading>Service</Heading>
-                    <Heading>Description</Heading>
-                    <Heading className="w-24 text-center whitespace-nowrap">Offer As</Heading>
-                    <Heading className="w-24 text-center whitespace-nowrap">Cadence</Heading>
-                    <Heading className="text-center">Price / month</Heading>
-                    {PACKAGES.map(({ id, label }) => (
-                      <Heading key={id} className="w-20 text-center">{label}</Heading>
-                    ))}
-                    <Heading className="w-16 text-center"><span className="sr-only">Actions</span></Heading>
+                    <Heading><span className="sr-only">Reorder</span></Heading>
+                    <Heading>Service details</Heading>
+                    <Heading className="text-center">Setup</Heading>
+                    <Heading className="text-center">Pricing cards</Heading>
+                    <Heading><span className="sr-only">Actions</span></Heading>
                   </tr>
                 </thead>
                 <tbody>
@@ -372,7 +378,7 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
                     const isRowIncluded = row.kind !== "optional" || Boolean(option?.showInProposal);
                     return (
                       <tr key={row.id} className={rowClass(isRowIncluded)}>
-                        <td className="w-12 px-1 py-4 text-center align-middle">
+                        <td className="px-1 py-3 text-center align-middle">
                           <MoveButtons
                             label={row.name || (row.kind === "optional" ? "optional service" : "included extra")}
                             disableUp={index === 0}
@@ -381,84 +387,91 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
                             onMoveDown={() => moveRow(row.id, 1)}
                           />
                         </td>
-                        <EditableCells
+                        <EditableServiceCell
                           editing={isEditing}
                           item={row}
+                          hiddenFromLead={row.kind === "optional" && !option?.showInProposal}
                           onChange={(changes) => updateRow(row, changes)}
                         />
-                        <td className="w-0 whitespace-nowrap px-3 py-4 align-middle">
+                        <td className="px-2 py-3 align-middle">
                           <KindToggle
                             name={row.name || "item"}
                             value={row.kind}
                             onChange={(kind) => setKind(row, kind)}
                           />
-                        </td>
-                        <td className="w-0 whitespace-nowrap px-3 py-4 align-middle">
-                          {row.kind === "included" ? (
-                            <CadenceToggle
-                              name={row.name || "included extra"}
-                              value={row.cadence}
-                              onChange={(cadence) => setBonusCadence(row, cadence)}
-                            />
-                          ) : (
-                            <span className="text-sm text-slate-300">—</span>
-                          )}
-                        </td>
-                        <td className="w-32 px-3 py-4 text-center align-middle">
-                          {row.kind === "optional" && option ? (
-                            isEditing ? (
-                              <span className="mx-auto flex w-24 rounded-md border border-slate-300 bg-white px-2.5 py-2 text-sm">
-                                <span className="mr-1 text-slate-400">$</span>
-                                <input
-                                  aria-label={`${row.name || "Optional service"} monthly price`}
-                                  type="number"
-                                  min="0"
-                                  step="1"
-                                  value={option.monthlyPrice}
-                                  onChange={(event) => updateOption(row.id, { monthlyPrice: Math.max(0, Number(event.target.value) || 0) })}
-                                  className="w-16 bg-transparent text-right outline-none"
-                                />
-                              </span>
+                          <div className="mt-2 border-t border-slate-200 pt-2">
+                            {row.kind === "included" ? (
+                              <CadenceToggle
+                                name={row.name || "included extra"}
+                                value={row.cadence}
+                                onChange={(cadence) => setBonusCadence(row, cadence)}
+                              />
+                            ) : option ? (
+                              <div>
+                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Price / mo</p>
+                                <div className="mt-1">
+                                  {isEditing ? (
+                                    <span className="mx-auto flex w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm">
+                                      <span className="mr-1 text-slate-400">$</span>
+                                      <input
+                                        aria-label={`${row.name || "Optional service"} monthly price`}
+                                        type="number"
+                                        min="0"
+                                        step="1"
+                                        value={option.monthlyPrice}
+                                        onChange={(event) => updateOption(row.id, { monthlyPrice: Math.max(0, Number(event.target.value) || 0) })}
+                                        className="min-w-0 flex-1 bg-transparent text-right outline-none"
+                                      />
+                                    </span>
+                                  ) : (
+                                    <p className="text-sm font-medium tabular-nums text-slate-900">${option.monthlyPrice.toLocaleString("en-US")}</p>
+                                  )}
+                                </div>
+                              </div>
                             ) : (
-                              <p className="text-sm font-medium tabular-nums text-slate-900">${option.monthlyPrice.toLocaleString("en-US")}</p>
-                            )
-                          ) : (
-                            <span className="text-sm text-slate-300">—</span>
-                          )}
+                              <span className="text-sm text-slate-300">—</span>
+                            )}
+                          </div>
                         </td>
-                        {PACKAGES.map(({ id, label }) => (
-                          <td key={id} className="px-2 py-4 text-center align-middle">
-                            {row.kind === "included" && bonus ? (
-                              applicable ? (
+                        <td className="px-2 py-3 text-center align-middle">
+                          <div className="flex items-center justify-center gap-1.5" role="group" aria-label={`Pricing cards for ${row.name}`}>
+                            {PACKAGES.map(({ id, label }) =>
+                              row.kind === "included" && bonus ? (
+                                applicable ? (
+                                  <button
+                                    key={id}
+                                    type="button"
+                                    role="checkbox"
+                                    aria-checked={selected.includes(id)}
+                                    aria-label={`${selected.includes(id) ? "Remove" : "Add"} ${row.name} ${selected.includes(id) ? "from" : "to"} ${label}`}
+                                    onClick={() => toggleBonusPackage(bonus, id)}
+                                    className={pricingCardClass(selected.includes(id))}
+                                    title={label}
+                                  >
+                                    <span aria-hidden="true">{label.charAt(0)}</span>
+                                  </button>
+                                ) : (
+                                  <span key={id} className="grid h-8 w-9 place-items-center text-xs font-medium text-slate-300" title={`${label}: not applicable`}>—</span>
+                                )
+                              ) : row.kind === "optional" && option ? (
                                 <button
+                                  key={id}
                                   type="button"
                                   role="checkbox"
                                   aria-checked={selected.includes(id)}
                                   aria-label={`${selected.includes(id) ? "Remove" : "Add"} ${row.name} ${selected.includes(id) ? "from" : "to"} ${label}`}
-                                  onClick={() => toggleBonusPackage(bonus, id)}
-                                  className={checkboxClass(selected.includes(id))}
+                                  onClick={() => toggleOptionPackage(option, id)}
+                                  className={pricingCardClass(selected.includes(id))}
+                                  title={label}
                                 >
-                                  <Check className="h-4 w-4" strokeWidth={3} />
+                                  <span aria-hidden="true">{label.charAt(0)}</span>
                                 </button>
                               ) : (
-                                <span className="text-xs font-medium text-slate-300">N/A</span>
-                              )
-                            ) : row.kind === "optional" && option ? (
-                              <button
-                                type="button"
-                                role="checkbox"
-                                aria-checked={selected.includes(id)}
-                                aria-label={`${selected.includes(id) ? "Remove" : "Add"} ${row.name} ${selected.includes(id) ? "from" : "to"} ${label}`}
-                                onClick={() => toggleOptionPackage(option, id)}
-                                className={checkboxClass(selected.includes(id))}
-                              >
-                                <Check className="h-4 w-4" strokeWidth={3} />
-                              </button>
-                            ) : (
-                              <span className="text-sm text-slate-300">—</span>
+                                <span key={id} className="grid h-8 w-9 place-items-center text-sm text-slate-300">—</span>
+                              ),
                             )}
-                          </td>
-                        ))}
+                          </div>
+                        </td>
                         <Actions
                           editing={isEditing}
                           itemLabel={row.name || (row.kind === "optional" ? "optional service" : "included extra")}
@@ -488,7 +501,13 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
                 if (row) deleteRow(row);
               }}
             />
-          </section>
+            </section>
+          </div>
+          <PricingSnapshotSidebar
+            items={getProposalPricingSnapshotItems(assessment)}
+            cleanupCard={getProposalPricingSnapshotCleanupCard(assessment)}
+            hideLabel
+          />
         </div>
       </section>
     </main>
@@ -552,46 +571,52 @@ function CadenceToggle({
 }
 
 function Heading({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <th className={`px-4 py-3 text-left text-sm font-semibold normal-case text-slate-700 ${className}`}>{children}</th>;
+  return <th className={`px-2 py-3 text-left text-sm font-semibold normal-case text-slate-700 ${className}`}>{children}</th>;
 }
 
-function EditableCells({
+function EditableServiceCell({
   editing,
   item,
+  hiddenFromLead,
   onChange,
 }: {
   editing: boolean;
   item: { name: string; description: string };
+  hiddenFromLead: boolean;
   onChange: (changes: { name?: string; description?: string }) => void;
 }) {
   return (
-    <>
-      <td className="w-[22%] px-4 py-3 align-top">
-        {editing ? (
+    <td className="px-3 py-3 align-middle">
+      {editing ? (
+        <div className="space-y-2">
           <input
             aria-label="Service name"
             value={item.name}
             onChange={(event) => onChange({ name: event.target.value })}
             className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 font-medium text-slate-900 outline-none focus:border-brandnavy"
           />
-        ) : (
-          <p className="font-medium leading-5 text-slate-900">{item.name || "Untitled service"}</p>
-        )}
-      </td>
-      <td className="w-[28%] px-4 py-3 align-top">
-        {editing ? (
           <textarea
             aria-label={`${item.name || "Service"} description`}
             value={item.description}
             onChange={(event) => onChange({ description: event.target.value })}
-            rows={2}
+            rows={3}
             className="w-full resize-y rounded-md border border-slate-300 bg-white px-2.5 py-1.5 leading-5 text-slate-700 outline-none focus:border-brandnavy"
           />
-        ) : (
-          <p className="leading-5 text-slate-500">{item.description || "No description"}</p>
-        )}
-      </td>
-    </>
+        </div>
+      ) : (
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="min-w-0 font-medium leading-5 text-slate-900">{item.name || "Untitled service"}</p>
+            {hiddenFromLead ? (
+              <span className="shrink-0 rounded-full bg-slate-200 px-2 py-0.5 text-xs font-semibold text-slate-600">Hidden from lead</span>
+            ) : null}
+          </div>
+          <p className="mt-1 line-clamp-2 leading-5 text-slate-500" title={item.description || undefined}>
+            {item.description || "No description"}
+          </p>
+        </div>
+      )}
+    </td>
   );
 }
 
@@ -746,9 +771,9 @@ function ArchivedItems({
   ) : null;
 }
 
-function checkboxClass(checked: boolean) {
-  return `mx-auto grid h-6 w-6 cursor-pointer place-items-center rounded-md border transition ${
-    checked ? "proposal-options-check text-white" : "border-slate-300 bg-white text-transparent hover:border-slate-400"
+function pricingCardClass(checked: boolean) {
+  return `grid h-8 w-9 cursor-pointer place-items-center rounded-md border text-sm font-bold transition ${
+    checked ? "proposal-options-check text-white" : "border-slate-300 bg-white text-slate-500 hover:border-slate-500 hover:text-slate-900"
   }`;
 }
 
