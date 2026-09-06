@@ -1,7 +1,7 @@
 "use client";
 
-import { Archive, ArchiveRestore, Check, ChevronDown, ChevronUp, Pencil, Plus, Trash2, X } from "lucide-react";
-import { useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { Archive, ArchiveRestore, Check, ChevronDown, ChevronUp, Ellipsis, Eye, EyeOff, Pencil, Plus, Trash2, X } from "lucide-react";
+import { useEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import ProposalAppDemoHeader from "./ProposalAppDemoHeader";
 import OptionsTemplatesToolbar from "./OptionsTemplatesToolbar";
 import {
@@ -30,14 +30,6 @@ const PACKAGES: Array<{ id: PackageId; label: string }> = [
 type CatalogKind = "optional" | "included";
 type BonusCadence = "monthly" | "one-time";
 
-const KIND_OPTIONS: Array<{ value: CatalogKind; label: string }> = [
-  { value: "optional", label: "Add-on" },
-  { value: "included", label: "Included" },
-];
-const CADENCE_OPTIONS: Array<{ value: BonusCadence; label: string }> = [
-  { value: "one-time", label: "One-time" },
-  { value: "monthly", label: "Recurring" },
-];
 type CatalogRow = {
   id: string;
   name: string;
@@ -351,20 +343,19 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
 
           <section>
             <div className="proposal-builder-card overflow-x-auto rounded-xl border border-slate-200">
-              <table className="min-w-[1080px] w-full border-collapse">
+              <table className="min-w-[880px] w-full border-collapse">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50">
-                    <Heading className="w-20"><span className="sr-only">Reorder</span></Heading>
-                    <Heading className="w-20 text-center">Show lead</Heading>
+                    <Heading className="w-12"><span className="sr-only">Reorder</span></Heading>
                     <Heading>Service</Heading>
                     <Heading>Description</Heading>
-                    <Heading className="whitespace-nowrap">Offer As</Heading>
-                    <Heading className="whitespace-nowrap">Cadence</Heading>
+                    <Heading className="w-24 text-center whitespace-nowrap">Offer As</Heading>
+                    <Heading className="w-24 text-center whitespace-nowrap">Cadence</Heading>
                     <Heading className="text-center">Price / month</Heading>
                     {PACKAGES.map(({ id, label }) => (
                       <Heading key={id} className="w-20 text-center">{label}</Heading>
                     ))}
-                    <Heading className="w-28 text-right">Actions</Heading>
+                    <Heading className="w-16 text-center"><span className="sr-only">Actions</span></Heading>
                   </tr>
                 </thead>
                 <tbody>
@@ -381,7 +372,7 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
                     const isRowIncluded = row.kind !== "optional" || Boolean(option?.showInProposal);
                     return (
                       <tr key={row.id} className={rowClass(isRowIncluded)}>
-                        <td className="w-20 px-2 py-4 text-center align-middle">
+                        <td className="w-12 px-1 py-4 text-center align-middle">
                           <MoveButtons
                             label={row.name || (row.kind === "optional" ? "optional service" : "included extra")}
                             disableUp={index === 0}
@@ -390,24 +381,13 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
                             onMoveDown={() => moveRow(row.id, 1)}
                           />
                         </td>
-                        <td className="proposal-options-include-cell w-20 px-3 py-4 text-center align-middle">
-                          {row.kind === "optional" && option ? (
-                            <Toggle
-                              checked={option.showInProposal}
-                              label={`Show ${row.name || "optional service"} in proposal`}
-                              onToggle={() => updateOption(row.id, { showInProposal: !option.showInProposal })}
-                            />
-                          ) : (
-                            <span className="text-sm text-slate-300">—</span>
-                          )}
-                        </td>
                         <EditableCells
                           editing={isEditing}
                           item={row}
                           onChange={(changes) => updateRow(row, changes)}
                         />
                         <td className="w-0 whitespace-nowrap px-3 py-4 align-middle">
-                          <KindSelect
+                          <KindToggle
                             name={row.name || "item"}
                             value={row.kind}
                             onChange={(kind) => setKind(row, kind)}
@@ -415,7 +395,7 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
                         </td>
                         <td className="w-0 whitespace-nowrap px-3 py-4 align-middle">
                           {row.kind === "included" ? (
-                            <CadenceSelect
+                            <CadenceToggle
                               name={row.name || "included extra"}
                               value={row.cadence}
                               onChange={(cadence) => setBonusCadence(row, cadence)}
@@ -486,6 +466,10 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
                           id={row.id}
                           onArchive={() => archiveRow(row, true)}
                           onDelete={() => deleteRow(row)}
+                          visibleToLead={row.kind === "optional" && option ? option.showInProposal : undefined}
+                          onToggleLeadVisibility={row.kind === "optional" && option
+                            ? () => updateOption(row.id, { showInProposal: !option.showInProposal })
+                            : undefined}
                         />
                       </tr>
                     );
@@ -511,7 +495,7 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
   );
 }
 
-function KindSelect({
+function KindToggle({
   name,
   value,
   onChange,
@@ -520,38 +504,26 @@ function KindSelect({
   value: CatalogKind;
   onChange: (kind: CatalogKind) => void;
 }) {
+  const included = value === "included";
   return (
-    <div className="grid">
-      {KIND_OPTIONS.map((option) => (
-        <span
-          key={option.value}
-          aria-hidden
-          className="invisible col-start-1 row-start-1 whitespace-nowrap rounded-md border border-transparent py-1.5 pl-2.5 pr-9 font-semibold"
-        >
-          {option.label}
-        </span>
-      ))}
-      <select
-        aria-label={`Offer ${name} as`}
-        value={value}
-        onChange={(event) => onChange(event.target.value as CatalogKind)}
-        className={`proposal-options-kind col-start-1 row-start-1 w-full cursor-pointer rounded-md border py-1.5 pl-2.5 font-semibold outline-none ${
-          value === "optional"
-            ? "proposal-options-kind-optional"
-            : "border-slate-300 bg-slate-100 text-slate-800 hover:border-slate-500"
-        }`}
+    <div className="flex flex-col items-center gap-1">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={included}
+        aria-label={`Offer ${name} as ${included ? "included" : "an add-on"}. Switch to ${included ? "add-on" : "included"}.`}
+        title={`Switch to ${included ? "Add-on" : "Included"}`}
+        onClick={() => onChange(included ? "optional" : "included")}
+        className="ui-toggle-switch focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brandnavy focus-visible:ring-offset-2"
       >
-        {KIND_OPTIONS.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+        <span className="ui-toggle-switch-thumb" />
+      </button>
+      <span className="whitespace-nowrap text-sm font-semibold text-slate-700">{included ? "Included" : "Add-on"}</span>
     </div>
   );
 }
 
-function CadenceSelect({
+function CadenceToggle({
   name,
   value,
   onChange,
@@ -560,29 +532,21 @@ function CadenceSelect({
   value: BonusCadence;
   onChange: (cadence: BonusCadence) => void;
 }) {
+  const recurring = value === "monthly";
   return (
-    <div className="grid">
-      {CADENCE_OPTIONS.map((option) => (
-        <span
-          key={option.value}
-          aria-hidden
-          className="invisible col-start-1 row-start-1 whitespace-nowrap rounded-md border border-transparent py-1.5 pl-2.5 pr-9 font-semibold"
-        >
-          {option.label}
-        </span>
-      ))}
-      <select
-        aria-label={`Billing cadence for ${name}`}
-        value={value}
-        onChange={(event) => onChange(event.target.value as BonusCadence)}
-        className="proposal-options-kind col-start-1 row-start-1 w-full cursor-pointer rounded-md border border-slate-300 bg-slate-100 py-1.5 pl-2.5 font-semibold text-slate-800 outline-none hover:border-slate-500"
+    <div className="flex flex-col items-center gap-1">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={recurring}
+        aria-label={`${name} is ${recurring ? "recurring" : "one-time"}. Switch to ${recurring ? "one-time" : "recurring"}.`}
+        title={`Switch to ${recurring ? "One-time" : "Recurring"}`}
+        onClick={() => onChange(recurring ? "one-time" : "monthly")}
+        className="ui-toggle-switch focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brandnavy focus-visible:ring-offset-2"
       >
-        {CADENCE_OPTIONS.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+        <span className="ui-toggle-switch-thumb" />
+      </button>
+      <span className="whitespace-nowrap text-sm font-semibold text-slate-700">{recurring ? "Recurring" : "One-time"}</span>
     </div>
   );
 }
@@ -645,18 +609,18 @@ function MoveButtons({
   onMoveDown: () => void;
 }) {
   const buttonClass = (disabled: boolean) =>
-    `grid h-8 w-8 place-items-center rounded-md border-0 bg-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brandnavy focus-visible:ring-offset-1 ${
+    `grid h-6 w-7 place-items-center rounded-md border-0 bg-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brandnavy focus-visible:ring-offset-1 ${
       disabled
         ? "cursor-not-allowed text-slate-300"
         : "cursor-pointer text-slate-600 hover:bg-slate-100 hover:text-slate-950"
     }`;
   return (
-    <div className="inline-flex items-center gap-0.5">
+    <div className="inline-flex flex-col items-center">
       <button type="button" aria-label={`Move ${label} up`} disabled={disableUp} onClick={onMoveUp} className={buttonClass(disableUp)}>
-        <ChevronUp className="h-5 w-5" strokeWidth={2.75} />
+        <ChevronUp className="h-4 w-4" strokeWidth={2.75} />
       </button>
       <button type="button" aria-label={`Move ${label} down`} disabled={disableDown} onClick={onMoveDown} className={buttonClass(disableDown)}>
-        <ChevronDown className="h-5 w-5" strokeWidth={2.75} />
+        <ChevronDown className="h-4 w-4" strokeWidth={2.75} />
       </button>
     </div>
   );
@@ -669,6 +633,8 @@ function Actions({
   setEditing,
   onArchive,
   onDelete,
+  visibleToLead,
+  onToggleLeadVisibility,
 }: {
   editing: boolean;
   itemLabel: string;
@@ -676,27 +642,72 @@ function Actions({
   setEditing: Dispatch<SetStateAction<string[]>>;
   onArchive: () => void;
   onDelete: () => void;
+  visibleToLead?: boolean;
+  onToggleLeadVisibility?: () => void;
 }) {
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
   const toggle = () => setEditing((ids) => (ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]));
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    const close = () => popoverRef.current?.hidePopover();
+    window.addEventListener("resize", close);
+    return () => window.removeEventListener("resize", close);
+  }, [moreOpen]);
+
+  const actionClass = "flex min-h-9 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100 focus-visible:outline-2";
+
   return (
-    <td className="px-3 py-3 text-right align-top">
-      <div className="flex justify-end gap-1">
-        <button
-          type="button"
-          aria-label={`${editing ? "Done editing" : "Edit"} ${itemLabel}`}
-          title={editing ? "Done editing" : "Edit"}
-          onClick={toggle}
-          className={`inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md transition ${
-            editing ? "bg-brandnavy text-white hover:opacity-90" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
-          }`}
-        >
+    <td className="w-16 px-2 py-3 text-center align-middle">
+      <button
+        type="button"
+        popoverTarget={`option-actions-${id}`}
+        aria-label={`More actions for ${itemLabel}`}
+        title={`More actions for ${itemLabel}`}
+        className="ui-action-secondary inline-flex h-9 w-9 items-center justify-center rounded-full border transition"
+        onClick={(event) => {
+          const panel = popoverRef.current;
+          if (!panel) return;
+          const rect = event.currentTarget.getBoundingClientRect();
+          panel.style.left = `${Math.max(8, Math.min(rect.right - 224, window.innerWidth - 232))}px`;
+          const below = window.innerHeight - rect.bottom;
+          const openBelow = below >= 200 || below >= rect.top;
+          panel.style.top = openBelow ? `${rect.bottom + 4}px` : "auto";
+          panel.style.bottom = openBelow ? "auto" : `${window.innerHeight - rect.top + 4}px`;
+          panel.style.maxHeight = `${Math.max(0, (openBelow ? below : rect.top) - 12)}px`;
+        }}
+      >
+        <Ellipsis className="h-4 w-4" aria-hidden="true" />
+      </button>
+      <div
+        id={`option-actions-${id}`}
+        ref={popoverRef}
+        popover="auto"
+        onToggle={(event) => setMoreOpen(event.newState === "open")}
+        aria-label={`Actions for ${itemLabel}`}
+        className="fixed m-0 w-56 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 text-sm text-slate-700 shadow-xl"
+        onClick={(event) => {
+          if ((event.target as HTMLElement).closest("button")) popoverRef.current?.hidePopover();
+        }}
+      >
+        <button type="button" onClick={toggle} className={actionClass}>
           {editing ? <Check className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+          {editing ? "Done editing" : "Edit"}
         </button>
-        <button type="button" aria-label={`Archive ${itemLabel}`} onClick={onArchive} className="cursor-pointer rounded-md p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-900">
+        {onToggleLeadVisibility ? (
+          <button type="button" onClick={onToggleLeadVisibility} className={actionClass}>
+            {visibleToLead ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            {visibleToLead ? "Hide from lead" : "Show to lead"}
+          </button>
+        ) : null}
+        <button type="button" onClick={onArchive} className={actionClass}>
           <Archive className="h-4 w-4" />
+          Archive
         </button>
-        <button type="button" aria-label={`Delete ${itemLabel}`} onClick={onDelete} className="cursor-pointer rounded-md p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-700">
+        <button type="button" onClick={onDelete} className={`${actionClass} text-rose-700 hover:bg-rose-50`}>
           <Trash2 className="h-4 w-4" />
+          Delete
         </button>
       </div>
     </td>
@@ -733,14 +744,6 @@ function ArchivedItems({
       </div>
     </section>
   ) : null;
-}
-
-function Toggle({ checked, label, onToggle }: { checked: boolean; label: string; onToggle: () => void }) {
-  return (
-    <button type="button" role="checkbox" aria-checked={checked} aria-label={label} onClick={onToggle} className={checkboxClass(checked)}>
-      <Check className="h-4 w-4" strokeWidth={3} />
-    </button>
-  );
 }
 
 function checkboxClass(checked: boolean) {
