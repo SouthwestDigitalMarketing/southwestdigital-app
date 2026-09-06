@@ -76,6 +76,40 @@ describe("buildOptionsTemplateSnapshot", () => {
 });
 
 describe("parseOptionsTemplateSnapshot", () => {
+  it("replaces legacy overpromising bookkeeping copy while preserving the service ids", () => {
+    const snapshot = buildOptionsTemplateSnapshot({
+      ...baseSlice,
+      bonuses: [
+        {
+          id: "monthly-bookkeeping",
+          name: "Monthly Bookkeeping",
+          description: "We categorize transactions, reconcile accounts, complete the monthly close, and deliver a clear Balance Sheet and Profit & Loss statement.",
+          archived: false,
+          billingCadence: "monthly",
+        },
+        {
+          id: "document-organization",
+          name: "Audit-Ready Document System",
+          description: "Use one organized process for sending records, resolving missing items, and keeping supporting documents connected to the books.",
+          archived: false,
+        },
+      ],
+    });
+
+    expect(snapshot.bonuses).toEqual([
+      expect.objectContaining({
+        id: "monthly-bookkeeping",
+        name: "Monthly QuickBooks Bookkeeping",
+        description: "Recurring categorization and reconciliation for the QuickBooks accounts included in your plan, using the information and access available to us.",
+      }),
+      expect.objectContaining({
+        id: "document-organization",
+        name: "Bookkeeping Document Organization",
+        description: "We organize the documents you provide as part of the bookkeeping process.",
+      }),
+    ]);
+  });
+
   it("returns null for the wrong version", () => {
     const snapshot = buildOptionsTemplateSnapshot(baseSlice);
     expect(parseOptionsTemplateSnapshot({ ...snapshot, version: 999 })).toBeNull();

@@ -24,7 +24,7 @@ The templates below are additive experiments. None replaces the current default.
 
 Purpose: establish a low-friction baseline and a clear package ladder.
 
-- All packages: Monthly Bookkeeping, Audit-Ready Document System, Secure Client Portal.
+- All packages: Monthly QuickBooks Bookkeeping, Bookkeeping Document Organization, Secure Client Portal.
 - Maintain: Standard Client Support.
 - Improve and Grow: Monthly Performance Reporting, First Quarterly Review.
 - Improve: Priority Client Support.
@@ -72,6 +72,7 @@ For each template, review Maintain, Improve, and Grow as if seeing the offer for
 6. Do the higher packages feel more valuable rather than merely longer?
 7. Are real-estate and platform-specific items absent when irrelevant?
 8. Are support and turnaround promises operationally realistic?
+9. Does every package card stand on its own with at least one concrete item under **Included with this package**?
 
 ## Next evaluation fields
 

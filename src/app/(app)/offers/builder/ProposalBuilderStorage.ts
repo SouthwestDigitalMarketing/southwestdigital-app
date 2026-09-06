@@ -1,5 +1,10 @@
 export const ASSESSMENT_STORAGE_KEY = "proposal-app-demo-assessment-v14";
 export const CONTACT_INFO_STORAGE_KEY = "proposal-app-demo-contact-v1";
+export const PROPOSAL_BUILDER_STATE_CHANGE_EVENT = "proposal-builder-state-change";
+
+export function announceProposalBuilderStateChange() {
+  window.dispatchEvent(new Event(PROPOSAL_BUILDER_STATE_CHANGE_EVENT));
+}
 
 export function scopedProposalStorageKey(baseKey: string, engagementId?: string | null) {
   return engagementId ? `${baseKey}:${engagementId}` : baseKey;
@@ -48,4 +53,5 @@ export function writeProposalBuilderLocalState(
       JSON.stringify(state.contactInfo),
     );
   }
+  announceProposalBuilderStateChange();
 }

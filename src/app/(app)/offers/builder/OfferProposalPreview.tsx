@@ -65,6 +65,10 @@ import {
   renderAgreementTemplate,
 } from "@/lib/agreements/template";
 import type { AgreementTemplateOption } from "@/lib/agreements/types";
+import {
+  isProposalPreviewSimulation,
+  resolveProposalInteractionEngagementId,
+} from "@/lib/quotes/previewSafety";
 import type { PublicProposalPricing } from "@/lib/quotes/publicProposal";
 
 type CloudflareStreamEvent = "play" | "pause" | "ended";
@@ -521,7 +525,17 @@ export default function OfferProposalPreview({
   const assessment = assessmentOverride ?? storedAssessment;
   const { contactInfo } = useProposalContactInfoDemoState({ initialContactInfo, persist: !live });
   const searchParams = useSearchParams();
-  const engagementId = engagementIdProp ?? searchParams.get("engagementId");
+  const isSimulation = isProposalPreviewSimulation({ live, embedded, isStaffPreview });
+  // Preview surfaces are deliberately detached from engagement-backed APIs.
+  // Even if an engagement id is accidentally supplied, preview interactions
+  // must remain local and must not affect proposal or CRM lifecycle state.
+  const engagementId = resolveProposalInteractionEngagementId({
+    live,
+    embedded,
+    isStaffPreview,
+    engagementId: engagementIdProp,
+    searchParamEngagementId: searchParams.get("engagementId"),
+  });
 
   const primary = resolvePrimaryContact(contactInfo);
   const contactName = formatPersonName(primary.firstName, primary.lastName) || contactInfo.owners[0]?.firstName || "";
@@ -778,9 +792,13 @@ export default function OfferProposalPreview({
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
   }
 
-  const canSignAgreement = !isStaffPreview && signerName.trim().length > 0 && isValidEmail(email) && consentChecked && readAndAgreedChecked && hasScrolledToEnd;
+  const canSignAgreement = signerName.trim().length > 0 && isValidEmail(email) && consentChecked && readAndAgreedChecked && hasScrolledToEnd;
 
   async function confirmStripePayment(status: "succeeded" | "processing") {
+    if (isSimulation) {
+      setPaymentStatus(status);
+      return;
+    }
     if (status === "processing") {
       setPaymentStatus("processing");
       return;
@@ -841,8 +859,16 @@ export default function OfferProposalPreview({
   }
 
   async function submitSignatureAndContinue() {
-    if (isStaffPreview) return;
     if (!alreadySigned && !canSignAgreement) return;
+    if (isSimulation) {
+      if (!alreadySigned) {
+        setAlreadySigned(true);
+        setSignedSignerName(signerName.trim());
+        setSignedAt(new Date().toISOString());
+      }
+      setStep(3);
+      return;
+    }
     if (!engagementId) { setStep(3); return; }
     setSignSubmitting(true);
     setSignError(null);
@@ -904,6 +930,10 @@ export default function OfferProposalPreview({
   }
 
   async function acknowledgeCancellation() {
+    if (isSimulation) {
+      setAgreementManagerStatus("TERMINATED_AFTER_SIGNATURE");
+      return;
+    }
     if (!engagementId || !cancellationName.trim() || !isValidEmail(cancellationEmail)) return;
     setCancellationSubmitting(true);
     setCancellationError(null);
@@ -1115,11 +1145,11 @@ export default function OfferProposalPreview({
             data-appearance="standard"
             className="rounded-2xl border-2 border-dashed border-amber-400 bg-amber-50 px-5 py-3 text-sm text-amber-900"
           >
-            <p className="font-semibold">Staff preview — the client has NOT signed or paid.</p>
+            <p className="font-semibold">Staff preview — nothing here will be recorded.</p>
             <p className="mt-1 text-amber-800">
-              This is exactly what the client sees. Sign and pay actions are disabled in preview so
-              you can&apos;t accidentally submit on their behalf. Send this proposal to the client
-              via the Send button on Manage Offers to enable submission.
+              This is an interactive simulation of the client experience. Package selections,
+              signatures, payments, and navigation stay in this browser preview and do not update
+              the proposal, Agreement Manager, or CRM.
             </p>
           </div>
         ) : null}
@@ -1317,9 +1347,9 @@ export default function OfferProposalPreview({
               ) : null}
 
               {/* Annual toggle */}
-              <div className="mb-8 flex flex-wrap items-center justify-center gap-4 text-base font-bold sm:text-lg">
-                <span className={hasTwelveMonthAgreement ? "text-slate-400" : undefined} style={hasTwelveMonthAgreement ? undefined : { color: inkColor }}>Month-to-month</span>
-                <button type="button" role="switch" aria-checked={hasTwelveMonthAgreement} onClick={() => setHasTwelveMonthAgreement((v) => !v)} className={`relative h-9 w-16 rounded-full transition ${hasTwelveMonthAgreement ? "" : "bg-slate-300"}`} style={hasTwelveMonthAgreement ? { backgroundColor: brandDark } : undefined}>
+              <div className="mb-8 grid grid-cols-[minmax(0,1fr)_4rem_minmax(0,1fr)] items-center gap-2 text-base font-bold sm:gap-4 sm:text-lg">
+                <span className={`justify-self-end text-right ${hasTwelveMonthAgreement ? "text-slate-400" : ""}`} style={hasTwelveMonthAgreement ? undefined : { color: inkColor }}>Month-to-month</span>
+                <button type="button" role="switch" aria-checked={hasTwelveMonthAgreement} onClick={() => setHasTwelveMonthAgreement((v) => !v)} className={`relative h-9 w-16 justify-self-center rounded-full transition ${hasTwelveMonthAgreement ? "" : "bg-slate-300"}`} style={hasTwelveMonthAgreement ? { backgroundColor: brandDark } : undefined}>
                   <span className={`absolute top-1 h-7 w-7 rounded-full bg-white shadow-sm transition ${hasTwelveMonthAgreement ? "left-8" : "left-1"}`} />
                   <span className="sr-only">
                     {annualSavingsPercent > 0
@@ -1327,7 +1357,7 @@ export default function OfferProposalPreview({
                       : "Choose a 12-month agreement"}
                   </span>
                 </button>
-                <button type="button" aria-pressed={hasTwelveMonthAgreement} onClick={() => setHasTwelveMonthAgreement(true)} className={`inline-flex items-center gap-1.5 rounded-lg border bg-accent-100 px-3 py-1.5 transition hover:brightness-95 ${hasTwelveMonthAgreement ? "" : "border-transparent"}`} style={{ color: inkColor, borderColor: hasTwelveMonthAgreement ? brandDark : undefined }}>
+                <button type="button" aria-pressed={hasTwelveMonthAgreement} onClick={() => setHasTwelveMonthAgreement(true)} className={`inline-flex items-center justify-self-start gap-1.5 rounded-lg border bg-emerald-100 px-3 py-1.5 text-emerald-900 transition hover:brightness-95 ${hasTwelveMonthAgreement ? "border-emerald-600" : "border-transparent"}`}>
                   <Sparkles className="h-5 w-5" />
                   {annualSavingsPercent > 0 ? `Annual · Save ${annualSavingsPercent}%` : "Annual"}
                   <Sparkles className="h-4 w-4" />
@@ -1375,26 +1405,32 @@ export default function OfferProposalPreview({
                   const lowerTierId: OptionId | null = id === "grow" ? "improve" : id === "improve" ? "maintain" : null;
                   const lowerTierName = lowerTierId ? options[lowerTierId].name : null;
                   const lowerTierRecurring = new Set(lowerTierId ? options[lowerTierId].recurringRows.map((r) => r.serviceName) : []);
-                  const currentRecurring = new Set(option.recurringRows.map((row) => row.serviceName));
-                  const inheritsLowerTierRecurring = lowerTierId !== null && options[lowerTierId].recurringRows
-                    .filter((row) => !row.serviceName.endsWith("Client Support"))
-                    .every((row) => currentRecurring.has(row.serviceName));
-                  const recurringLeadInName = inheritsLowerTierRecurring ? lowerTierName : null;
-                  const isNew = (name: string) => inheritsLowerTierRecurring && !lowerTierRecurring.has(name);
+                  const recurringLeadInName = lowerTierName;
+                  const isNew = (name: string) => lowerTierId !== null && !lowerTierRecurring.has(name);
                   const lowerTierZero = new Set(lowerTierId ? options[lowerTierId].oneTimeRows.filter((r) => r.price === 0).map((r) => r.serviceName) : []);
-                  const currentZero = new Set(zeroPriceRows.map((row) => row.serviceName));
-                  const inheritsLowerTierBonuses = lowerTierId !== null && [...lowerTierZero].every((name) => currentZero.has(name));
-                  const bonusLeadInName = inheritsLowerTierBonuses ? lowerTierName : null;
-                  const displayedBonuses = inheritsLowerTierBonuses
-                    ? zeroPriceRows.filter((r) => !lowerTierZero.has(r.serviceName))
-                    : zeroPriceRows;
 
                   const bkRow      = option.recurringRows.find((r) => r.serviceName === "Monthly Bookkeeping");
                   const supportRow = option.recurringRows.find((r) => r.serviceName.endsWith("Client Support"));
                   const otherRecurring = option.recurringRows.filter((r) => r.serviceName !== "Monthly Bookkeeping" && !r.serviceName.endsWith("Client Support"));
-                  const orderedRecurring = inheritsLowerTierRecurring
+                  const orderedRecurring = lowerTierId
                     ? otherRecurring.filter((r) => isNew(r.serviceName))
                     : otherRecurring;
+                  const incrementalBonuses = lowerTierId
+                    ? zeroPriceRows.filter((row) => !lowerTierZero.has(row.serviceName))
+                    : zeroPriceRows;
+                  // Maintain shows its concrete inclusions. Improve and Grow show only
+                  // what their tier adds after the inheritance statement. When custom
+                  // content has no new one-time inclusion, highlight a real recurring
+                  // upgrade (or the tier-specific support promise) rather than filler.
+                  const displayedBonuses = incrementalBonuses.length > 0
+                    ? incrementalBonuses
+                    : orderedRecurring.length > 0
+                      ? [orderedRecurring[0]]
+                      : supportRow
+                        ? [supportRow]
+                        : bkRow
+                          ? [bkRow]
+                          : option.recurringRows.slice(0, 1);
 
                   return (
                     <section key={id} className="grid grid-rows-subgrid row-span-7 overflow-hidden rounded-xl border bg-white shadow-sm transition-colors" style={{ borderColor: selected ? brandDark : "#e2e8f0" }}>
@@ -1452,7 +1488,7 @@ export default function OfferProposalPreview({
                       <section>
                         <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ backgroundColor: brandDark, color: brandDarkForeground }}>Recurring services</p>
                         {bkRow && !lowerTierId ? <div className="px-5 pt-4"><p className="text-sm font-semibold text-slate-700">Monthly Bookkeeping</p><p className="mt-1 text-sm leading-6 text-slate-600">{getTooltip(bkRow)}</p></div> : null}
-                        {recurringLeadInName ? <p className="px-5 pt-4 text-sm font-semibold text-slate-700">Everything in {recurringLeadInName}, plus:</p> : null}
+                        {recurringLeadInName ? <p className="px-5 pt-4 text-sm font-semibold text-slate-700">Everything included with {recurringLeadInName}, plus:</p> : null}
                         <ul className="space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600">
                           {orderedRecurring.map((row) => (
                             <li key={row.id} className={`flex justify-between gap-3 ${isNew(row.serviceName) ? "font-semibold text-emerald-700" : ""}`}>
@@ -1499,7 +1535,7 @@ export default function OfferProposalPreview({
                       {displayedBonuses.length > 0 ? (
                         <section>
                           <p className="bg-emerald-100 px-5 py-3 text-xs font-bold uppercase tracking-[0.12em] text-emerald-900">Included with this package</p>
-                          {bonusLeadInName ? <p className="px-5 pt-4 text-sm font-semibold text-slate-700">Everything in {bonusLeadInName}, plus:</p> : null}
+                          {lowerTierName ? <p className="px-5 pt-4 text-sm font-semibold text-slate-700">Everything included with {lowerTierName}, plus:</p> : null}
                           <ul className="space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600">
                             {displayedBonuses.map((row) => (
                               <li key={row.id} className="flex justify-between gap-3 font-semibold text-emerald-700">
@@ -1573,9 +1609,11 @@ export default function OfferProposalPreview({
                   <div>
                     <h2 className="text-sm font-bold text-slate-900">{agreementTitle}</h2>
                     <p className="mt-1 text-sm font-semibold" style={{ color: inkColor }}>
-                      {engagementId
-                        ? "You must read the entire agreement below before you can sign."
-                        : "Review your agreement. In a live proposal, you would sign here before paying."}
+                      {isSimulation
+                        ? "Complete the fields below to preview signing and payment. Nothing will be recorded."
+                        : engagementId
+                          ? "You must read the entire agreement below before you can sign."
+                          : "Review your agreement. In a live proposal, you would sign here before paying."}
                     </p>
                     <div
                       data-proposal-surface="light"
@@ -1685,7 +1723,12 @@ export default function OfferProposalPreview({
                     onClick={() => void submitSignatureAndContinue()}
                     className="ui-action-primary inline-flex w-full items-center justify-center gap-2 rounded-lg border-2 px-5 py-3 text-sm font-bold transition-all hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(15,23,42,0.22)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:shadow-none"
                   >
-                    {!engagementId
+                    {isSimulation
+                      ? <>
+                          {requiresOnboardingPayment ? "Preview Sign & Continue to Payment" : "Preview Sign & Continue"}
+                          <ChevronRight strokeWidth={3} className="h-4 w-4" />
+                        </>
+                      : !engagementId
                       ? <>Continue <ChevronRight strokeWidth={3} className="h-4 w-4" /></>
                       : signSubmitting
                         ? "Submitting…"
@@ -1825,7 +1868,21 @@ export default function OfferProposalPreview({
               {signedAgreementCollapsible ? <div className="mt-3">{signedAgreementCollapsible}</div> : null}
               <div className="mt-4 grid gap-6 md:grid-cols-[1fr_380px] md:items-start">
                 <div className="order-2 space-y-4 rounded-xl border border-slate-200 p-6 md:order-1">
-                  {paymentClientSecret ? (
+                  {isSimulation ? (
+                    <div className="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sky-950">
+                      <p className="text-sm font-bold">Payment preview</p>
+                      <p className="mt-1 text-sm leading-6 text-sky-800">
+                        No payment method is collected and no charge will be created in preview mode.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentStatus("succeeded")}
+                        className="ui-action-primary mt-4 inline-flex items-center rounded-lg border-2 px-4 py-2.5 text-sm font-bold"
+                      >
+                        Simulate successful payment
+                      </button>
+                    </div>
+                  ) : paymentClientSecret ? (
                     <DepositPaymentForm
                       clientSecret={paymentClientSecret}
                       onPaid={confirmStripePayment}
@@ -1923,7 +1980,9 @@ export default function OfferProposalPreview({
                     You&apos;re all set
                   </h1>
                   <p className="mt-3 text-slate-600">
-                    {engagementId
+                    {isSimulation
+                      ? "Preview complete — nothing was signed, charged, or recorded."
+                      : engagementId
                       ? `Your agreement is signed and ${paymentWaived ? "your onboarding fee has been waived" : chargeIsFirstMonth ? "your first month is paid" : "your deposit is paid"}. We'll be in touch shortly to kick off onboarding.`
                       : "We have your selection and will be in touch to kick off onboarding. Reach out any time if you have questions."}
                   </p>

@@ -14,6 +14,7 @@ import { quoteContactSummaryFromSnapshot } from "@/lib/quotes/clientInfo";
 import { HourlyPublicView } from "./HourlyPublicView";
 import { isHourlyOfferKind, OFFER_KINDS } from "@/lib/quotes/kinds";
 import { parseStoredHourlyCheckout } from "@/lib/engagements/hourlyCheckout";
+import { isProposalPreviewSimulation } from "@/lib/quotes/previewSafety";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -42,6 +43,9 @@ export default async function PublicProposalPage({
       })
     : null;
   const isAuthorizedStaffPreview = staffPreviewAccess?.allowed === true;
+  const isPreviewSimulation = isProposalPreviewSimulation({
+    isStaffPreview: isAuthorizedStaffPreview,
+  });
   const { quoteRevisions, quoteEngagement } = await getSchemaCapabilities();
   const quote = await prisma.quote.findFirst({
     where: { brandId: brand.id, publicToken: token, publishedAt: { not: null } },
@@ -105,7 +109,7 @@ export default async function PublicProposalPage({
   const suppressPromotions = isFreshDuplicate || snapshot.suppressPromotions === true;
 
   let engagementId = quoteEngagement ? quote?.engagementId ?? null : null;
-  if (quote && quoteEngagement && !engagementId) {
+  if (quote && quoteEngagement && !engagementId && !isPreviewSimulation) {
     try {
       engagementId = await ensureQuoteEngagement({
         brandId: brand.id,
@@ -169,7 +173,7 @@ export default async function PublicProposalPage({
     },
   );
 
-  if (engagement?.signedAt && (quote?.status === "completed" || quote?.status === "archived")) {
+  if (!isPreviewSimulation && engagement?.signedAt && (quote?.status === "completed" || quote?.status === "archived")) {
     redirect(`/proposal/${token}/receipt`);
   }
 
@@ -204,8 +208,8 @@ export default async function PublicProposalPage({
     return (
       <HourlyPublicView
         proposalToken={token}
-        engagementId={engagementId}
-        isTestProposal={engagement?.isTestProposal === true}
+        engagementId={isPreviewSimulation ? null : engagementId}
+        isTestProposal={engagement?.isTestProposal === true || snapshot.isTestProposal === true}
         isStaffPreview={isAuthorizedStaffPreview}
         kindLabel={kindMeta?.name ?? snapshotKind}
         clientName={
@@ -226,7 +230,7 @@ export default async function PublicProposalPage({
           amountDueNow: hourlyCheckout.amountDueNow,
         }}
         agreementText={agreementText || "Agreement text unavailable. Please contact the sender."}
-        alreadySigned={Boolean(engagement?.signedAt)}
+        alreadySigned={isPreviewSimulation ? false : Boolean(engagement?.signedAt)}
       />
     );
   }
@@ -239,8 +243,8 @@ export default async function PublicProposalPage({
       publishedPricing={publicProposal.pricing}
       live
       catalogOffer={catalogOffer}
-      engagementId={engagementId}
-      isTestProposal={engagement?.isTestProposal === true}
+      engagementId={isPreviewSimulation ? null : engagementId}
+      isTestProposal={engagement?.isTestProposal === true || snapshot.isTestProposal === true}
       isStaffPreview={isAuthorizedStaffPreview}
       proposalToken={token}
     />

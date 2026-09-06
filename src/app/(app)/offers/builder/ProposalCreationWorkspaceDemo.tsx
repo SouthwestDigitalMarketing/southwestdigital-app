@@ -583,7 +583,7 @@ export function getProposalAdditionalOptions(
 const DEFAULT_PROPOSAL_BONUSES: ProposalBonus[] = [
   { id: "stessa-migration", name: "QuickBooks to Stessa Migration", description: "We will move the client's books to Stessa for free when they buy the cleanup and monthly bookkeeping in this offer.", archived: false, realEstateSpecific: true },
   { id: "property-reporting-setup", name: "Reports by Property", description: "We will set up the books so the client can see income and costs for each property.", archived: false, realEstateSpecific: true },
-  { id: "document-organization", name: "Organized, Audit-Ready Records", description: "We replace paper files and loose digital files with one clear system. The client uploads records to the portal. We organize them and link them to the right items in the books.", archived: false },
+  { id: "document-organization", name: "Bookkeeping Document Organization", description: "We organize the documents you provide as part of the bookkeeping process.", archived: false },
   { id: "quarterly-review", name: "First Quarterly Review", description: "After the first full quarter, we will meet with the client to review reports, answer questions, and plan the next steps.", archived: false },
   { id: "doublehq-client-portal", name: "DoubleHQ Client Portal", description: "The client gets one online place to talk with our team, send files, view requests, and check the work in progress.", archived: false },
   { id: "real-estate-chart-of-accounts", name: "Real Estate Chart of Accounts", description: "We will add our real estate Chart of Accounts to the client's current QuickBooks file. This makes reports easier to read and keeps the books consistent.", archived: false, realEstateSpecific: true },

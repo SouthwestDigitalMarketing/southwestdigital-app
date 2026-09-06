@@ -73,7 +73,7 @@ describe("real-estate catalog markers", () => {
     }
 
     const nonRealEstateDefaults = [
-      { id: "document-organization", name: "Organized, Audit-Ready Records" },
+      { id: "document-organization", name: "Bookkeeping Document Organization" },
       { id: "quarterly-review", name: "First Quarterly Review" },
       { id: "doublehq-client-portal", name: "DoubleHQ Client Portal" },
     ];

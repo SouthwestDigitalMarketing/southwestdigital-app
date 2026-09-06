@@ -39,6 +39,12 @@ export type OptionsTemplateAssessmentSlice = {
 };
 
 const VALID_PACKAGES: readonly OptionsTemplatePackageId[] = ["grow", "improve", "maintain"];
+const MONTHLY_BOOKKEEPING_NAME = "Monthly QuickBooks Bookkeeping";
+const MONTHLY_BOOKKEEPING_DESCRIPTION =
+  "Recurring categorization and reconciliation for the QuickBooks accounts included in your plan, using the information and access available to us.";
+const DOCUMENT_ORGANIZATION_NAME = "Bookkeeping Document Organization";
+const DOCUMENT_ORGANIZATION_DESCRIPTION =
+  "We organize the documents you provide as part of the bookkeeping process.";
 
 function isPackageId(value: unknown): value is OptionsTemplatePackageId {
   return typeof value === "string" && (VALID_PACKAGES as readonly string[]).includes(value);
@@ -75,7 +81,7 @@ function sanitizeBonus(raw: unknown): OptionsTemplateBonus | null {
     record.billingCadence === "monthly" || record.billingCadence === "one-time"
       ? record.billingCadence
       : undefined;
-  return {
+  const bonus: OptionsTemplateBonus = {
     id: record.id,
     name: typeof record.name === "string" ? record.name : "",
     description: typeof record.description === "string" ? record.description : "",
@@ -86,6 +92,29 @@ function sanitizeBonus(raw: unknown): OptionsTemplateBonus | null {
       ? sanitizePackageIds(record.defaultPackageIds)
       : undefined,
   };
+  const hasLegacyAuditClaim =
+    bonus.id === "document-organization" &&
+    (/audit[- ]ready/i.test(bonus.name) ||
+      bonus.description === "Use one organized process for sending records, resolving missing items, and keeping supporting documents connected to the books." ||
+      bonus.description === "We replace paper files and loose digital files with one clear system. The client uploads records to the portal. We organize them and link them to the right items in the books.");
+  if (hasLegacyAuditClaim) {
+    return {
+      ...bonus,
+      name: DOCUMENT_ORGANIZATION_NAME,
+      description: DOCUMENT_ORGANIZATION_DESCRIPTION,
+    };
+  }
+  const hasLegacyMonthlyClaim =
+    bonus.id === "monthly-bookkeeping" &&
+    bonus.description === "We categorize transactions, reconcile accounts, complete the monthly close, and deliver a clear Balance Sheet and Profit & Loss statement.";
+  if (hasLegacyMonthlyClaim) {
+    return {
+      ...bonus,
+      name: MONTHLY_BOOKKEEPING_NAME,
+      description: MONTHLY_BOOKKEEPING_DESCRIPTION,
+    };
+  }
+  return bonus;
 }
 
 export function buildOptionsTemplateSnapshot(

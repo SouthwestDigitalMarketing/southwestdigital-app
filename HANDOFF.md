@@ -1,6 +1,6 @@
 # Coding-agent handoff
 
-Updated: 2026-09-05 (America/Chicago) — client-ready options-template review set added after the per-package add-on work (see §16–§19).
+Updated: 2026-09-05 (America/Chicago) — bookkeeping copy narrowed and offer-builder identity line added (see §20–§27).
 
 ## Start here
 
@@ -15,8 +15,8 @@ The user has instructed: **never push without explicit user instruction**. Commi
 
 ## Current commit state
 
-- `HEAD` == `origin/main` at `c8444d8 Add options templates for the offer builder's Options step`.
-- Working tree has uncommitted work for §18–§19 (per-package selection for optional add-ons and the client-ready template review set). Everything through §17 is pushed.
+- The §20–§27 batch is shipped in the commit titled `Improve proposal preview and pricing cards`; verify the exact commit with `git log -1 --oneline`.
+- The working tree should be clean after that commit. The bookkeeping-copy migration is committed but intentionally not applied to any database.
 - **Line-ending noise warning (still true):** ~100 tracked files show as modified with identical content (worktree CRLF vs blob LF — `git diff --ignore-all-space` is empty for them). Do NOT commit that noise: stage only the files you changed, and normalize any touched file back to LF (`sed`/python CRLF→LF) so the commit holds only the logical diff.
 - The line-ending warning above is historical guidance; it was not present after the latest commit. Re-check `git status` before editing and avoid staging unrelated normalization noise.
 
@@ -279,7 +279,7 @@ Reusable, brand-owned snapshots of the Options step so staff don't rebuild the s
 
 **Seed helper** (`src/lib/quotes/optionsTemplatesSeed.ts`) — `ensureDefaultOptionsTemplate(brandId)` idempotently seeds three curated starter templates on first hit for any brand. Hand-picks catalog items by `offerKey` so a proposal shows ~5 items instead of the ~40 raw catalog rows. Templates:
 
-1. **Basic bookkeeping services** (default) — 2 optional (Advanced Receipts, Tax Preparer Coordination) + 3 bonuses (Organized Audit-Ready Records all packages, First Quarterly Review Improve+Grow, DoubleHQ Client Portal all packages).
+1. **Basic bookkeeping services** (default) — 2 optional (Advanced Receipts, Tax Preparer Coordination) + 3 bonuses (Bookkeeping Document Organization all packages, First Quarterly Review Improve+Grow, DoubleHQ Client Portal all packages).
 2. **Real-estate bookkeeping** — same base plus Property Reporting, RE Chart of Accounts, Per-Property Class Tracking, and Stessa Migration (Grow only).
 3. **Bookkeeping with all add-ons** — every optional pre-checked.
 
@@ -299,7 +299,7 @@ Ensure runs from three call sites: `/offers/options-templates` page load, `listO
 
 Key files: `prisma/migrations/20260905120000_add_proposal_options_templates/`, `prisma/schema.prisma`, `src/lib/quotes/optionsTemplates.{ts,test.ts}`, `src/lib/quotes/optionsTemplatesSeed.ts`, `src/app/(app)/offers/options-templates/{page.tsx,OptionsTemplatesManager.tsx,actions.ts}`, `src/app/(app)/offers/builder/OptionsTemplatesToolbar.tsx`, `src/app/(app)/offers/builder/ProposalAddOnsDemo.tsx`, `scripts/seedOptionsTemplates.cjs`.
 
-### 18) Per-package selection for optional add-ons — DONE, uncommitted
+### 18) Per-package selection for optional add-ons — DONE, pushed (`b8273c1`)
 
 Previously only "included" bonuses had Grow/Improve/Maintain checkboxes in the Options-step table. Optional add-ons showed a "—" — the client saw them on every package card indiscriminately. Now every row has the three checkboxes regardless of `Offer As` mode.
 
@@ -317,7 +317,7 @@ Validation: `npm run typecheck` ✅ · `npm test -- --run` 53 files / 357 tests 
 
 Key files: `src/app/(app)/offers/builder/ProposalAddOnsDemo.tsx`, `src/app/(app)/offers/builder/OfferProposalPreview.tsx`, `src/lib/quotes/optionsTemplatesSeed.ts`, `scripts/seedOptionsTemplates.cjs`.
 
-### 19) Client-ready options-template review set — DONE, uncommitted; seeded in live DB
+### 19) Client-ready options-template review set — DONE, pushed (`b8273c1`); seeded in live DB
 
 Added four non-default, additive templates so the user can compare real proposal cards without replacing the customized default:
 
@@ -334,7 +334,73 @@ The Options-step **Load template** menu now sizes itself to its longest item ins
 
 The idempotent backfill script was updated and run against the configured Supabase DB. The four templates were created for Bookkeeping Conroe, Southwest Digital Marketing, Contigo Accounting, and Melbourne CFO. TREB was skipped because it currently has no bookkeeping options/core catalog rows. A durable review rubric lives at `docs/offers/client-ready-options-templates.md` for later Sol/Astra passes.
 
-Validation: typecheck ✅ · 53 test files / 357 tests ✅ · focused ESLint ✅ (one existing `no-img-element` warning) · `git diff --check` ✅. No push and no commit.
+Validation: typecheck ✅ · 53 test files / 357 tests ✅ · focused ESLint ✅ (one existing `no-img-element` warning) · `git diff --check` ✅.
+
+### 20) Full-screen proposal-builder preview — DONE, pushed
+
+The Preview section at the bottom of the bookkeeping proposal builder now has a **Full screen** button. It uses the browser Fullscreen API on the preview boundary, keeping the editor out of view while the rendered proposal fills the screen. Full-screen mode has no persistent toolbar; only a compact floating exit icon remains in the top-right corner. The browser's Escape behavior is also supported through `fullscreenchange` state synchronization.
+
+Key file: `src/app/(app)/offers/builder/ProposalIntroDemo.tsx`.
+
+Validation: typecheck ✅ · 53 test files / 357 tests ✅ · focused ESLint ✅ · `git diff --check` ✅. Visual browser verification remains for the user.
+
+### 21) Side-effect-free proposal previews — DONE, pushed
+
+Both preview surfaces are now simulations, not live proposal sessions:
+
+- The embedded bookkeeping preview and authorized `?staffPreview=1` view discard any engagement id before client interaction code can use it. Package selection, signing, payment, and navigation remain local React state.
+- The public proposal server route no longer creates an Engagement for an authorized staff preview, does not pass an existing engagement id into either public proposal client, and does not redirect a staff preview to a signed receipt.
+- Bookkeeping and hourly staff previews now allow a simulated signature and simulated successful payment so staff can walk the whole lead journey without calling selection, signature, PaymentIntent, confirmation, or cancellation endpoints.
+- Preview confirmation copy explicitly says nothing was signed, charged, or recorded. Existing real Agreement Manager, payment, proposal, and CRM records remain unchanged.
+
+Key files: `src/app/(proposal)/proposal/[token]/page.tsx`, `src/app/(app)/offers/builder/OfferProposalPreview.tsx`, `src/app/(proposal)/proposal/[token]/HourlyPublicView.tsx`, `src/lib/quotes/previewSafety.{ts,test.ts}`.
+
+Validation: typecheck ✅ · 54 test files / 362 tests ✅ · focused ESLint ✅ (one existing `no-img-element` warning) · `git diff --check` ✅.
+
+### 22) Centered pricing-page agreement toggle — DONE, pushed
+
+The Month-to-month / Annual control on the proposal's pricing step now uses three equal layout columns. The switch occupies the fixed center column, so it is geometrically centered on the proposal page even though the labels on either side have different widths.
+
+Key file: `src/app/(app)/offers/builder/OfferProposalPreview.tsx`.
+
+### 23) Annual-savings badge uses bonus colors — DONE, pushed
+
+The `Annual · Save N%` control on the proposal pricing step now uses the same emerald background and text treatment as `Included with this package` and the other bonus cues. This gives Modern Dark the requested green savings treatment and keeps the savings signal semantically consistent across themes.
+
+Key file: `src/app/(app)/offers/builder/OfferProposalPreview.tsx`.
+
+### 24) Every pricing card has an included-service section — DONE, pushed
+
+Every pricing card now renders an Included with this package section with at least one truthful item. Maintain shows its direct included services; the higher-tier inheritance and incremental-item behavior is described in §25. Custom configurations fall back to a real recurring upgrade, package-specific support promise, or core bookkeeping service rather than invented placeholder value.
+
+The Sol/Astra review rubric in `docs/offers/client-ready-options-templates.md` now includes this as an explicit evaluation criterion.
+
+Key files: `src/app/(app)/offers/builder/OfferProposalPreview.tsx`, `docs/offers/client-ready-options-templates.md`.
+
+Validation: typecheck ✅ · 54 test files / 362 tests ✅ · focused ESLint ✅ (one existing `no-img-element` warning) · `git diff --check` ✅.
+
+### 25) Higher-tier inclusion inheritance copy — DONE, pushed
+
+Improve and Grow now always state `Everything included with [lower tier], plus:` in both Recurring services and Included with this package. Maintain lists its direct inclusions. Higher-tier green sections list only their incremental included bonuses; when a custom configuration has no new one-time bonus, the card highlights a real incremental recurring upgrade, then its tier-specific support promise as fallback. This preserves both requirements: every card has a concrete green inclusion and the package ladder remains explicit.
+
+Key file: `src/app/(app)/offers/builder/OfferProposalPreview.tsx`.
+
+### 26) Narrow bookkeeping service copy — DONE, pushed; migration not applied
+
+Approved lead-facing core copy:
+
+- **Monthly QuickBooks Bookkeeping** — “Recurring categorization and reconciliation for the QuickBooks accounts included in your plan, using the information and access available to us.”
+- The separate legacy audit-oriented item is now **Bookkeeping Document Organization** — “We organize the documents you provide as part of the bookkeeping process.”
+
+Removed the implied guarantees around audit readiness, completing a monthly close, delivering reports, resolving every missing item, and connecting every supporting document. Template parsing normalizes only the known legacy wording, preserving unrelated staff-customized copy. Migration `20260905210000_refine_bookkeeping_service_copy` updates CatalogService and the seven app-seeded options templates, but deliberately does not alter published Quote or QuoteRevision snapshots.
+
+Key files: `src/lib/quotes/optionsTemplates.{ts,test.ts}`, `src/lib/quotes/optionsTemplatesSeed.ts`, `scripts/seedOptionsTemplates.cjs`, `src/app/(app)/offers/builder/ProposalCreationWorkspaceDemo.tsx`, `src/app/(app)/offers/builder/ProposalBonusesDemo.tsx`, `prisma/migrations/20260905210000_refine_bookkeeping_service_copy/migration.sql`.
+
+### 27) Offer identity above builder navigation — DONE, pushed
+
+Every offer-builder step now shows `...[last four of Offer ID] for [primary contact name]` above the header icon controls. The full offer code is loaded through a brand-authorized server action; the primary-contact name comes from the scoped builder state and updates live through a same-tab builder-state event. New/unsaved flows show `New offer`, and missing contact data is explicit rather than guessed.
+
+Key files: `src/app/(app)/offers/builder/ProposalAppDemoHeader.tsx`, `src/app/(app)/offers/builder/ProposalBuilderStorage.ts`, `src/app/(app)/offers/builder/ProposalContactInfoState.ts`, `src/app/(app)/offers/who/actions.ts`.
 
 ### Suggested commit split for the prior batch
 
@@ -588,12 +654,12 @@ Zoho on Vercel: register a **separate** OAuth app for prod (not shared with loca
 ## Suggested first commands for the next agent
 
 ```powershell
-git status --short                        # §18 is uncommitted; everything else clean
-git log --oneline origin/main..HEAD       # should be empty; HEAD is currently pushed at c8444d8
+git status --short                        # should be clean
+git log --oneline origin/main..HEAD       # should be empty after the authorized push
 npm run typecheck                         # should be clean
-npm test -- --run                         # 53 files / 357 tests as of §18
+npm test                                  # 54 files / 363 tests as of §27
 ```
 
-Then read this file top-to-bottom. §17 is the latest shipped work; §18 is uncommitted. The user's push policy remains "never push without explicit user instruction".
+Then read this file top-to-bottom. §27 is the latest shipped work. The user's push policy remains "never push without explicit user instruction".
 
 If the user asks you to move CRM PipelineItem into the work-item model, read section 6 first, then the "Future design: unified work items / next-action system" CRM extension list — the offer-side helpers (`src/lib/quotes/lifecycle.ts`) are the pattern to follow.

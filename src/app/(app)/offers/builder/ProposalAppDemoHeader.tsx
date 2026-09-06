@@ -5,14 +5,22 @@ import { useEffect, useRef, useState } from "react";
 import { Check, ChevronLeft, ChevronRight, Eye, LogOut, Save, Send, Upload } from "lucide-react";
 import { Modal } from "@/components/Modal";
 import ProposalAppDemoStepper, { type ProposalAppDemoStep } from "./ProposalAppDemoStepper";
-import { readProposalBuilderLocalState } from "./ProposalBuilderStorage";
 import {
+  PROPOSAL_BUILDER_STATE_CHANGE_EVENT,
+  readProposalBuilderLocalState,
+} from "./ProposalBuilderStorage";
+import {
+  getOfferBuilderContextAction,
   getOfferPublicPathAction,
   publishOfferChangesAction,
   saveOfferDraftAction,
   syncOfferContactsAction,
 } from "../who/actions";
-import type { ContactInfoState } from "./ProposalContactInfoState";
+import {
+  formatPersonName,
+  resolvePrimaryContact,
+  type ContactInfoState,
+} from "./ProposalContactInfoState";
 import {
   getProposalPricingSnapshotData,
   type AssessmentState,
@@ -31,6 +39,7 @@ export default function ProposalAppDemoHeader({
 }) {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const offerId = searchParams.get("offer");
   const scopedHref = (href: string) => {
     const params = searchParams.toString();
     if (!params || href === "/offers" || href.startsWith("/offers?")) return href;
@@ -40,6 +49,10 @@ export default function ProposalAppDemoHeader({
   const [publishStatus, setPublishStatus] = useState<"idle" | "publishing" | "published" | "error">("idle");
   const [publishedVersion, setPublishedVersion] = useState<number | null>(null);
   const [isExitDialogOpen, setIsExitDialogOpen] = useState(false);
+  const [builderContext, setBuilderContext] = useState({
+    offerCode: offerId ?? "",
+    contactName: "",
+  });
   const savedSnapshotRef = useRef<string | null>(null);
 
   const getBuilderSnapshot = () => JSON.stringify(readProposalBuilderLocalState());
@@ -47,6 +60,51 @@ export default function ProposalAppDemoHeader({
   useEffect(() => {
     savedSnapshotRef.current = getBuilderSnapshot();
   }, []);
+
+  useEffect(() => {
+    let disposed = false;
+
+    function localPrimaryContactName() {
+      const contactInfo = readProposalBuilderLocalState().contactInfo as ContactInfoState | undefined;
+      if (!contactInfo?.primaryContact || !Array.isArray(contactInfo.owners)) return "";
+      const primary = resolvePrimaryContact(contactInfo);
+      return formatPersonName(primary.firstName, primary.lastName);
+    }
+
+    function syncLocalContactName() {
+      const contactName = localPrimaryContactName();
+      setBuilderContext((current) => ({
+        ...current,
+        contactName,
+      }));
+    }
+
+    // Hydrate the label from the builder's external localStorage state, then
+    // keep it current through the subscription below.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setBuilderContext({
+      offerCode: offerId ?? "",
+      contactName: localPrimaryContactName(),
+    });
+    window.addEventListener(PROPOSAL_BUILDER_STATE_CHANGE_EVENT, syncLocalContactName);
+    window.addEventListener("storage", syncLocalContactName);
+
+    if (offerId) {
+      void getOfferBuilderContextAction(offerId).then((context) => {
+        if (disposed || !context) return;
+        setBuilderContext((current) => ({
+          offerCode: context.offerCode,
+          contactName: localPrimaryContactName() || current.contactName || context.contactName,
+        }));
+      }).catch(() => {});
+    }
+
+    return () => {
+      disposed = true;
+      window.removeEventListener(PROPOSAL_BUILDER_STATE_CHANGE_EVENT, syncLocalContactName);
+      window.removeEventListener("storage", syncLocalContactName);
+    };
+  }, [offerId]);
 
   useEffect(() => {
     if (saveStatus !== "saved") return;
@@ -181,6 +239,15 @@ export default function ProposalAppDemoHeader({
   return (
     <header className="proposal-builder-header pb-4 [&_a]:cursor-pointer [&_button:not(:disabled)]:cursor-pointer [&_button:disabled]:cursor-not-allowed">
       <div>
+        <p
+          className="mb-1 text-center text-sm font-semibold text-slate-600"
+          title={builderContext.offerCode || undefined}
+        >
+          <span className="font-mono text-slate-800">
+            {builderContext.offerCode ? `...${builderContext.offerCode.slice(-4)}` : "New offer"}
+          </span>{" "}
+          for {builderContext.contactName || "Primary contact not set"}
+        </p>
         <div className="flex items-center justify-center gap-2">
         <div className="flex h-11 items-center gap-2">
           <button

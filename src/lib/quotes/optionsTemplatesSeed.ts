@@ -113,8 +113,9 @@ const CLIENT_READY_ESSENTIAL_TEMPLATE: TemplateConfig = {
     {
       offerKey: "monthly-bookkeeping",
       packages: ALL_PACKAGES,
+      leadName: "Monthly QuickBooks Bookkeeping",
       leadDescription:
-        "We categorize transactions, reconcile accounts, complete the monthly close, and deliver a clear Balance Sheet and Profit & Loss statement.",
+        "Recurring categorization and reconciliation for the QuickBooks accounts included in your plan, using the information and access available to us.",
       billingCadence: "monthly",
     },
     {
@@ -157,9 +158,9 @@ const CLIENT_READY_ESSENTIAL_TEMPLATE: TemplateConfig = {
     {
       offerKey: "document-organization",
       packages: ALL_PACKAGES,
-      leadName: "Audit-Ready Document System",
+      leadName: "Bookkeeping Document Organization",
       leadDescription:
-        "Use one organized process for sending records, resolving missing items, and keeping supporting documents connected to the books.",
+        "We organize the documents you provide as part of the bookkeeping process.",
     },
     {
       offerKey: "quarterly-review",

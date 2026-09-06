@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CONTACT_INFO_STORAGE_KEY } from "./ProposalBuilderStorage";
+import {
+  announceProposalBuilderStateChange,
+  CONTACT_INFO_STORAGE_KEY,
+} from "./ProposalBuilderStorage";
 
 export type OwnerContact = {
   id: string;
@@ -194,6 +197,7 @@ export function useProposalContactInfoDemoState({
     if (!persist || !hydratedFromStorage) return;
     try {
       window.localStorage.setItem(storageKey, JSON.stringify(contactInfo));
+      announceProposalBuilderStateChange();
     } catch {
       // Ignore localStorage failures in demo mode.
     }

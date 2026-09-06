@@ -45,11 +45,12 @@ export function HourlyPublicView(props: HourlyPublicViewProps) {
     | { kind: "signing" }
     | { kind: "signed" }
     | { kind: "error"; message: string }
-  >(props.alreadySigned ? { kind: "signed" } : { kind: "idle" });
+  >(props.alreadySigned && !props.isStaffPreview ? { kind: "signed" } : { kind: "idle" });
   const [payState, setPayState] = useState<
     | { kind: "idle" }
     | { kind: "loading" }
     | { kind: "ready"; clientSecret: string; amountDueNow: number }
+    | { kind: "preview" }
     | { kind: "waived" }
     | { kind: "paid" }
     | { kind: "error"; message: string }
@@ -62,15 +63,18 @@ export function HourlyPublicView(props: HourlyPublicViewProps) {
           email.trim() &&
           scrolled &&
           readAndAgreed &&
-          consent &&
-          !props.isStaffPreview,
+          consent,
       ),
-    [signerName, email, scrolled, readAndAgreed, consent, props.isStaffPreview],
+    [signerName, email, scrolled, readAndAgreed, consent],
   );
 
   async function handleSign() {
-    if (props.isStaffPreview) return;
-    if (!props.engagementId || !canSubmitSignature) return;
+    if (!canSubmitSignature) return;
+    if (props.isStaffPreview) {
+      setSignState({ kind: "signed" });
+      return;
+    }
+    if (!props.engagementId) return;
     setSignState({ kind: "signing" });
     try {
       const response = await fetch(`/api/proposal/${props.engagementId}/sign`, {
@@ -97,7 +101,10 @@ export function HourlyPublicView(props: HourlyPublicViewProps) {
   }
 
   async function handleStartPayment() {
-    if (props.isStaffPreview) return;
+    if (props.isStaffPreview) {
+      setPayState({ kind: "preview" });
+      return;
+    }
     if (!props.engagementId) return;
     setPayState({ kind: "loading" });
     try {
@@ -136,6 +143,10 @@ export function HourlyPublicView(props: HourlyPublicViewProps) {
   }
 
   async function confirmStripePayment(status: "succeeded" | "processing") {
+    if (props.isStaffPreview) {
+      setPayState({ kind: "paid" });
+      return;
+    }
     if (status === "processing") return;
     if (!props.engagementId) return;
     try {
@@ -161,11 +172,10 @@ export function HourlyPublicView(props: HourlyPublicViewProps) {
       <div className="mx-auto grid w-full max-w-4xl gap-6 px-4">
         {props.isStaffPreview ? (
           <div className="rounded-xl border-2 border-dashed border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <p className="font-semibold">Staff preview — the client has NOT signed or paid.</p>
+            <p className="font-semibold">Staff preview — nothing here will be recorded.</p>
             <p className="mt-1 text-amber-800">
-              This is exactly what the client sees. Sign and pay actions are disabled in preview so
-              you can&apos;t accidentally submit on their behalf. Send this proposal to the client
-              via the Send button on Manage Offers to enable submission.
+              This is an interactive simulation of the client experience. Signatures and payments
+              stay in this browser preview and do not update the proposal, Agreement Manager, or CRM.
             </p>
           </div>
         ) : null}
@@ -282,6 +292,22 @@ export function HourlyPublicView(props: HourlyPublicViewProps) {
             ) : null}
             {payState.kind === "loading" ? (
               <p className="mt-4 text-sm text-emerald-800">Preparing checkout…</p>
+            ) : null}
+            {payState.kind === "preview" ? (
+              <div className="mt-4 rounded-lg border border-sky-200 bg-white p-4 text-sky-950">
+                <p className="text-sm font-bold">Payment preview</p>
+                <p className="mt-1 text-sm text-sky-800">
+                  No payment method is collected and no charge will be created in preview mode.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setPayState({ kind: "paid" })}
+                  className="ui-action-primary mt-4 inline-flex h-11 items-center rounded-lg px-4 text-sm font-semibold"
+                  style={props.brandAccent ? { backgroundColor: props.brandAccent } : undefined}
+                >
+                  Simulate successful payment
+                </button>
+              </div>
             ) : null}
             {payState.kind === "waived" ? (
               <p className="mt-4 text-sm text-emerald-800">No payment required.</p>

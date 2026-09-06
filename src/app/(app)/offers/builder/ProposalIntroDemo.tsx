@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Check, Image as ImageIcon, Video } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Check, Image as ImageIcon, Maximize2, Minimize2, Video } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { resolveVideoEmbedUrl } from "./OfferProposalPreview";
@@ -51,6 +51,29 @@ export default function ProposalIntroDemo({
   const { assessment, setAssessment, updateAssessment } = useProposalAssessmentDemoState();
   const { brand } = useBrand();
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
+  const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false);
+  const previewContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function syncFullscreenState() {
+      setIsPreviewFullscreen(document.fullscreenElement === previewContainerRef.current);
+    }
+
+    document.addEventListener("fullscreenchange", syncFullscreenState);
+    return () => document.removeEventListener("fullscreenchange", syncFullscreenState);
+  }, []);
+
+  async function togglePreviewFullscreen() {
+    const previewContainer = previewContainerRef.current;
+    if (!previewContainer) return;
+
+    if (document.fullscreenElement === previewContainer) {
+      await document.exitFullscreen();
+      return;
+    }
+
+    await previewContainer.requestFullscreen();
+  }
   const selectedAgreement =
     agreementTemplates.find((template) => template.id === assessment.agreementTemplateId)
     ?? agreementTemplates.find((template) => template.isDefault)
@@ -360,8 +383,40 @@ export default function ProposalIntroDemo({
               </div>
             </AssessmentCardSection>
             </section>
-            <p className="mb-3 mt-6 text-base font-semibold uppercase tracking-[0.08em] text-slate-500">Preview</p>
-              <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
+            <div
+              ref={previewContainerRef}
+              className={isPreviewFullscreen ? "h-screen overflow-y-auto bg-slate-100 p-4 sm:p-6" : ""}
+            >
+              <div
+                className={`z-50 flex items-center ${
+                  isPreviewFullscreen
+                    ? "fixed right-4 top-4 justify-end"
+                    : "mb-3 mt-6 justify-between gap-3"
+                }`}
+              >
+                {!isPreviewFullscreen ? (
+                  <p className="text-base font-semibold uppercase tracking-[0.08em] text-slate-500">Preview</p>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => void togglePreviewFullscreen()}
+                  className={`border border-slate-300 bg-white text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brandnavy/20 ${
+                    isPreviewFullscreen
+                      ? "grid h-10 w-10 place-items-center rounded-full"
+                      : "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold"
+                  }`}
+                  aria-label={isPreviewFullscreen ? "Exit full-screen proposal preview" : "Open proposal preview full screen"}
+                  title={isPreviewFullscreen ? "Exit full screen (Esc)" : "View proposal full screen"}
+                >
+                  {isPreviewFullscreen ? (
+                    <Minimize2 aria-hidden="true" className="h-4 w-4" />
+                  ) : (
+                    <Maximize2 aria-hidden="true" className="h-4 w-4" />
+                  )}
+                  {!isPreviewFullscreen ? "Full screen" : null}
+                </button>
+              </div>
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <OfferProposalPreview
                   embedded
                   assessment={assessment}
@@ -369,6 +424,7 @@ export default function ProposalIntroDemo({
                   agreementTemplate={selectedAgreement}
                 />
               </div>
+            </div>
           </div>
         </div>
       </section>
