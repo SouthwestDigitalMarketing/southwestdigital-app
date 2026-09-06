@@ -7,10 +7,9 @@ type PricingSnapshotItem = {
   isRecommended?: boolean;
 };
 
-type CleanupSnapshotCard = {
+type OneTimeSnapshotCard = {
   amountLabel: string;
-  baseRow?: string;
-  addOnsRow?: string;
+  detailRows?: string[];
 };
 
 export default function PricingSnapshotSidebar({
@@ -19,7 +18,7 @@ export default function PricingSnapshotSidebar({
   hideLabel,
 }: {
   items: PricingSnapshotItem[];
-  cleanupCard?: CleanupSnapshotCard;
+  cleanupCard?: OneTimeSnapshotCard;
   hideLabel?: boolean;
 }) {
   const orderedItems = [...items].sort((a, b) => {
@@ -42,23 +41,19 @@ export default function PricingSnapshotSidebar({
         <div className="space-y-3 p-4">
           {cleanupCard ? (
             <div className="text-left">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-xl font-semibold tracking-tight text-slate-900">Historical cleanup</p>
-                </div>
-                <div className="shrink-0 text-right">
-                  <p className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-500">
-                    One-Time
-                  </p>
-                  <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900">
-                    {cleanupCard.amountLabel}
-                  </p>
-                </div>
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-500">
+                  One-Time
+                </p>
+                <p className="shrink-0 whitespace-nowrap text-xl font-semibold tabular-nums text-slate-900">
+                  {cleanupCard.amountLabel}
+                </p>
               </div>
-              <div className="mt-3 space-y-1 text-base leading-6 text-slate-500">
-                {cleanupCard.baseRow ? <p>{cleanupCard.baseRow}</p> : null}
-                {cleanupCard.addOnsRow ? <p>{cleanupCard.addOnsRow}</p> : null}
-              </div>
+              {cleanupCard.detailRows?.length ? (
+                <div className="mt-3 space-y-1 text-base leading-6 text-slate-500">
+                  {cleanupCard.detailRows.map((row) => <p key={row}>{row}</p>)}
+                </div>
+              ) : null}
             </div>
           ) : null}
 

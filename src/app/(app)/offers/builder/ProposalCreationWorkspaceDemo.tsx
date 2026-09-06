@@ -1867,22 +1867,34 @@ export function getProposalPricingSnapshotCleanupCard(assessment: AssessmentStat
     return { amountLabel: formatCurrency(1) };
   }
 
-  if (!hasCatchUpPricing) {
-    return undefined;
+  const maintainPricing = packagePricing.maintain;
+  const onboardingFee = assessment.waiveOnboardingFee
+    ? 0
+    : assessment.onboardingFeeOverride !== null
+      ? Math.max(0, assessment.onboardingFeeOverride)
+      : getStandardOnboardingFee(getCleanupMonthCount(assessment));
+  const totalOneTime = maintainPricing.totalOneTime + onboardingFee;
+
+  if (totalOneTime <= 0) return undefined;
+
+  const detailRows: string[] = [];
+  if (hasCatchUpPricing && cleanupMonths > 0) {
+    detailRows.push(
+      `Historical cleanup: ${formatCurrency(maintainPricing.monthly)} x ${cleanupMonths} ${
+        cleanupMonths === 1 ? "month" : "months"
+      } = ${formatCurrency(maintainPricing.catchUpBase)}`,
+    );
+  }
+  if (maintainPricing.assessmentOneTimeAdjustments > 0) {
+    detailRows.push(`${formatCurrency(maintainPricing.assessmentOneTimeAdjustments)} required adjustments`);
+  }
+  if (onboardingFee > 0) {
+    detailRows.push(`Onboarding: ${formatCurrency(onboardingFee)}`);
   }
 
-  const maintainPricing = packagePricing.maintain;
-  const baseRow =
-    cleanupMonths > 0
-      ? `${formatCurrency(maintainPricing.monthly)} x ${cleanupMonths} ${
-          cleanupMonths === 1 ? "month" : "months"
-        } = ${formatCurrency(maintainPricing.catchUpBase)}`
-      : undefined;
-
   return {
-    amountLabel: formatCurrency(maintainPricing.totalOneTimeBeforeManual),
-    baseRow,
-    addOnsRow: `${formatCurrency(maintainPricing.assessmentOneTimeAdjustments)} required adjustments`,
+    amountLabel: formatCurrency(totalOneTime),
+    detailRows,
   };
 }
 
