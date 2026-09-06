@@ -61,7 +61,247 @@ const STARTER_TEMPLATES = [
       { offerKey: "doublehq-client-portal", packages: ALL_PACKAGES },
     ],
   },
+  {
+    name: "Client-ready review — Essential bookkeeping",
+    description:
+      "A low-friction package ladder focused on reliable monthly books, clearer reporting, and realistic support promises. Paid add-ons stay hidden unless staff recommends them.",
+    optionals: [
+      {
+        offerKey: "advanced-receipt-management",
+        showInProposal: false,
+        packages: ALL_PACKAGES,
+        leadName: "Receipt Capture & Matching",
+        leadDescription:
+          "We help collect receipts, match them to transactions, and keep supporting documents attached to the books.",
+      },
+    ],
+    bonuses: [
+      {
+        offerKey: "monthly-bookkeeping",
+        packages: ALL_PACKAGES,
+        leadDescription:
+          "We categorize transactions, reconcile accounts, complete the monthly close, and deliver a clear Balance Sheet and Profit & Loss statement.",
+        billingCadence: "monthly",
+      },
+      {
+        offerKey: "standard-client-support",
+        packages: ["maintain"],
+        leadDescription:
+          "Bookkeeping questions are answered within 1–2 business days during normal business hours.",
+        billingCadence: "monthly",
+      },
+      {
+        offerKey: "monthly-reporting-package",
+        packages: HIGHER_PACKAGES,
+        leadName: "Monthly Performance Reporting",
+        leadDescription:
+          "Receive monthly reports with clear comparisons and highlights so you can spot changes and act sooner.",
+        billingCadence: "monthly",
+      },
+      {
+        offerKey: "priority-client-support",
+        packages: ["improve"],
+        leadDescription:
+          "Bookkeeping questions receive same-business-day attention during normal business hours.",
+        billingCadence: "monthly",
+      },
+      {
+        offerKey: "concierge-client-support",
+        packages: GROW_ONLY,
+        leadDescription:
+          "Receive priority access, proactive follow-up, and coordinated support for time-sensitive bookkeeping needs during business hours.",
+        billingCadence: "monthly",
+      },
+      {
+        offerKey: "monthly-advisory-calls",
+        packages: GROW_ONLY,
+        leadName: "Monthly Financial Review",
+        leadDescription:
+          "Meet with us each month to review results, answer questions, and agree on the next financial priorities.",
+        billingCadence: "monthly",
+      },
+      {
+        offerKey: "document-organization",
+        packages: ALL_PACKAGES,
+        leadName: "Audit-Ready Document System",
+        leadDescription:
+          "Use one organized process for sending records, resolving missing items, and keeping supporting documents connected to the books.",
+      },
+      {
+        offerKey: "quarterly-review",
+        packages: HIGHER_PACKAGES,
+        leadDescription:
+          "After the first full quarter, we meet to review the reports, answer questions, and identify the next priorities.",
+      },
+      {
+        offerKey: "doublehq-client-portal",
+        packages: ALL_PACKAGES,
+        leadName: "Secure Client Portal",
+        leadDescription:
+          "Use one secure place to send files, answer requests, communicate with our team, and follow the work in progress.",
+      },
+    ],
+  },
+  {
+    name: "Client-ready review — Visibility & control",
+    description:
+      "A reporting-led package ladder with two focused add-ons for clients who need project profitability or active budget management.",
+    optionals: [
+      {
+        offerKey: "project-tracking",
+        showInProposal: true,
+        packages: HIGHER_PACKAGES,
+        leadName: "Project Profitability Tracking",
+        leadDescription:
+          "Track income, direct costs, and profitability by project so you can see which work is producing the best results.",
+      },
+      {
+        offerKey: "budget-reporting",
+        showInProposal: true,
+        packages: HIGHER_PACKAGES,
+        leadName: "Budget & Monthly Variance Review",
+        leadDescription:
+          "We build your operating budget and show where actual results are ahead of or behind plan each month.",
+      },
+      {
+        offerKey: "advanced-receipt-management",
+        showInProposal: false,
+        packages: ALL_PACKAGES,
+        leadName: "Receipt Capture & Matching",
+        leadDescription:
+          "We help collect receipts, match them to transactions, and keep supporting documents attached to the books.",
+      },
+    ],
+    bonuses: [],
+    extendBonusesFrom: "essential",
+  },
+  {
+    name: "Client-ready review — Real estate portfolio",
+    description:
+      "A real-estate-focused package ladder that makes property reporting and portfolio insight easy for a prospect to understand.",
+    optionals: [
+      {
+        offerKey: "advanced-receipt-management",
+        showInProposal: true,
+        packages: ALL_PACKAGES,
+        leadName: "Receipt Capture & Property Matching",
+        leadDescription:
+          "We collect and match receipts to transactions and, when the records support it, connect costs to the correct property.",
+      },
+      {
+        offerKey: "budget-reporting",
+        showInProposal: true,
+        packages: HIGHER_PACKAGES,
+        leadName: "Portfolio Budget & Variance Review",
+        leadDescription:
+          "We build a portfolio budget and show where actual income and spending differ from plan each month.",
+      },
+    ],
+    bonuses: [],
+    extendBonusesFrom: "essential-real-estate",
+  },
+  {
+    name: "Client-ready review — Compliance & coordination",
+    description:
+      "A focused template for clients with sales-tax, documentation, and tax-preparer coordination needs. Registered-agent service is intentionally excluded.",
+    optionals: [
+      {
+        offerKey: "sales-tax-filing",
+        showInProposal: true,
+        packages: ALL_PACKAGES,
+        leadName: "Sales Tax Filing & Remittance",
+        leadDescription:
+          "We prepare and file the agreed sales-tax returns and coordinate remittance using the registrations and information you provide. Additional jurisdictions or notices require separate approval.",
+      },
+      {
+        offerKey: "advanced-receipt-management",
+        showInProposal: true,
+        packages: ALL_PACKAGES,
+        leadName: "Receipt Capture & Matching",
+        leadDescription:
+          "We help collect receipts, match them to transactions, and keep supporting documents attached to the books.",
+      },
+    ],
+    bonuses: [],
+    extendBonusesFrom: "essential-compliance",
+  },
 ];
+
+const essentialTemplate = STARTER_TEMPLATES.find(
+  (template) => template.name === "Client-ready review — Essential bookkeeping",
+);
+const essentialBonuses = essentialTemplate ? essentialTemplate.bonuses : [];
+for (const template of STARTER_TEMPLATES) {
+  if (template.extendBonusesFrom === "essential") {
+    template.bonuses = [
+      ...essentialBonuses,
+      {
+        offerKey: "investor-reporting-kpi-review",
+        packages: GROW_ONLY,
+        leadName: "Owner & Investor KPI Scorecard",
+        leadDescription:
+          "Receive a concise scorecard showing the financial and operating measures that matter most to owners and investors.",
+        billingCadence: "monthly",
+      },
+      {
+        offerKey: "cash-flow-analysis",
+        packages: GROW_ONLY,
+        leadName: "Cash Flow Review",
+        leadDescription:
+          "See where cash is coming from, where it is going, and which near-term risks or opportunities deserve attention.",
+        billingCadence: "monthly",
+      },
+    ];
+  }
+  if (template.extendBonusesFrom === "essential-real-estate") {
+    template.bonuses = [
+      ...essentialBonuses,
+      {
+        offerKey: "property-reporting-setup",
+        packages: ALL_PACKAGES,
+        leadName: "Property-Level Reporting Setup",
+        leadDescription:
+          "We organize the books so income and expenses can be reviewed by property, using the records and platform available.",
+      },
+      {
+        offerKey: "per-property-class-tracking",
+        packages: HIGHER_PACKAGES,
+        leadName: "Ongoing Property-Level Tracking",
+        leadDescription:
+          "We maintain property assignments each month so you can compare performance across the portfolio.",
+        billingCadence: "monthly",
+      },
+      {
+        offerKey: "investor-reporting-kpi-review",
+        packages: GROW_ONLY,
+        leadName: "Portfolio KPI Scorecard",
+        leadDescription:
+          "Receive a concise owner-and-investor scorecard focused on portfolio performance and the measures selected for your business.",
+        billingCadence: "monthly",
+      },
+      {
+        offerKey: "stessa-migration",
+        packages: GROW_ONLY,
+        leadName: "QuickBooks-to-Stessa Migration",
+        leadDescription:
+          "When Stessa is selected for ongoing bookkeeping, we move the agreed bookkeeping data and establish the new monthly workflow.",
+      },
+    ];
+  }
+  if (template.extendBonusesFrom === "essential-compliance") {
+    template.bonuses = [
+      ...essentialBonuses,
+      {
+        offerKey: "tax-preparer-coordination",
+        packages: HIGHER_PACKAGES,
+        leadName: "Tax-Ready Handoff & CPA Coordination",
+        leadDescription:
+          "We provide organized year-end bookkeeping records and coordinate reasonable bookkeeping questions with your tax preparer.",
+        billingCadence: "one-time",
+      },
+    ];
+  }
+}
 
 async function loadCatalogLookup(brandId) {
   const services = await prisma.catalogService.findMany({
@@ -101,13 +341,17 @@ function buildSnapshot(config, catalog) {
     if (!meta) continue;
     additionalOptions.push({
       id: option.offerKey,
-      name: meta.name,
-      description: meta.description,
-      monthlyPrice: meta.defaultPrice,
+      name: option.leadName ?? meta.name,
+      description: option.leadDescription ?? meta.description,
+      monthlyPrice: option.monthlyPrice ?? meta.defaultPrice,
       showInProposal: option.showInProposal,
       archived: false,
       ...(meta.realEstateSpecific ? { realEstateSpecific: true } : {}),
     });
+    const optionPackages = option.packages ?? ALL_PACKAGES;
+    if (optionPackages.length > 0) {
+      bonusPackageSelections[option.offerKey] = [...optionPackages];
+    }
     order.push(option.offerKey);
   }
 
@@ -116,11 +360,11 @@ function buildSnapshot(config, catalog) {
     if (!meta) continue;
     bonuses.push({
       id: bonus.offerKey,
-      name: meta.name,
-      description: meta.description,
+      name: bonus.leadName ?? meta.name,
+      description: bonus.leadDescription ?? meta.description,
       archived: false,
       ...(meta.realEstateSpecific ? { realEstateSpecific: true } : {}),
-      billingCadence: meta.billingCadence,
+      billingCadence: bonus.billingCadence ?? meta.billingCadence,
       ...(bonus.packages.length > 0 ? { defaultPackageIds: [...bonus.packages] } : {}),
     });
     if (bonus.packages.length > 0) {
@@ -164,6 +408,10 @@ async function main() {
       });
       if (existing) continue;
       const snapshot = buildSnapshot(config, catalog);
+      if (snapshot.additionalOptions.length === 0 && snapshot.bonuses.length === 0) {
+        console.log(`  ${brand.slug}: skipped empty ${config.name}`);
+        continue;
+      }
       await prisma.proposalOptionsTemplate.create({
         data: {
           brandId: brand.id,

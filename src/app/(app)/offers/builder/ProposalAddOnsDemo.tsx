@@ -31,7 +31,7 @@ type CatalogKind = "optional" | "included";
 type BonusCadence = "monthly" | "one-time";
 
 const KIND_OPTIONS: Array<{ value: CatalogKind; label: string }> = [
-  { value: "optional", label: "Optional" },
+  { value: "optional", label: "Add-on" },
   { value: "included", label: "Included" },
 ];
 const CADENCE_OPTIONS: Array<{ value: BonusCadence; label: string }> = [
@@ -158,7 +158,7 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
     if (kind === "optional") {
       persistOptions([
         ...additionalOptions,
-        { id, name: "New optional service", description: "Describe what the client can select.", monthlyPrice: 0, showInProposal: true, archived: false },
+        { id, name: "New add-on", description: "Describe what the client can select.", monthlyPrice: 0, showInProposal: true, archived: false },
       ]);
     } else {
       persistBonuses([...bonuses, { id, name: "New included extra", description: "Describe the included benefit.", archived: false }]);
@@ -177,13 +177,11 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
       return;
     }
     if (row.kind === "optional") persistOptions(additionalOptions.filter((item) => item.id !== row.id));
-    else {
-      persistBonuses(bonuses.filter((item) => item.id !== row.id));
-      const selections = Object.fromEntries(
-        Object.entries(assessment.bonusPackageSelections).filter(([selectionId]) => selectionId !== row.id),
-      );
-      updateAssessment("bonusPackageSelections", selections);
-    }
+    else persistBonuses(bonuses.filter((item) => item.id !== row.id));
+    const selections = Object.fromEntries(
+      Object.entries(assessment.bonusPackageSelections).filter(([selectionId]) => selectionId !== row.id),
+    );
+    updateAssessment("bonusPackageSelections", selections);
     persistOrder(catalogOrder.filter((id) => id !== row.id));
   }
 
@@ -210,10 +208,14 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
         realEstateSpecific: carriedRealEstateSpecific,
         billingCadence: row.bonus?.billingCadence ?? "one-time",
       }]);
-      updateAssessment("bonusPackageSelections", {
-        ...assessment.bonusPackageSelections,
-        [row.id]: PACKAGES.map(({ id }) => id),
-      });
+      // Preserve any prior per-package selections (they apply to bonuses AND
+      // options now); only initialize to all packages when none exist.
+      if (!Array.isArray(assessment.bonusPackageSelections[row.id])) {
+        updateAssessment("bonusPackageSelections", {
+          ...assessment.bonusPackageSelections,
+          [row.id]: PACKAGES.map(({ id }) => id),
+        });
+      }
     } else {
       persistBonuses(bonuses.filter((item) => item.id !== row.id));
       persistOptions([
@@ -228,10 +230,6 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
           realEstateSpecific: carriedRealEstateSpecific,
         },
       ]);
-      const selections = Object.fromEntries(
-        Object.entries(assessment.bonusPackageSelections).filter(([selectionId]) => selectionId !== row.id),
-      );
-      updateAssessment("bonusPackageSelections", selections);
     }
   }
 
@@ -282,6 +280,19 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
     updateAssessment("bonusPackageSelections", { ...assessment.bonusPackageSelections, [bonus.id]: next });
   }
 
+  function selectedOptionPackages(option: ProposalAdditionalOption) {
+    const saved = assessment.bonusPackageSelections[option.id];
+    return Array.isArray(saved) ? saved : PACKAGES.map(({ id }) => id);
+  }
+
+  function toggleOptionPackage(option: ProposalAdditionalOption, packageId: PackageId) {
+    const selected = selectedOptionPackages(option);
+    const next = selected.includes(packageId)
+      ? selected.filter((id) => id !== packageId)
+      : [...selected, packageId];
+    updateAssessment("bonusPackageSelections", { ...assessment.bonusPackageSelections, [option.id]: next });
+  }
+
   return (
     <main className="min-h-screen">
       <section className="w-full px-5 py-6 lg:px-8">
@@ -327,7 +338,7 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
                 middleSlot={
                   <>
                     <button type="button" onClick={() => addRow("optional")} className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-base font-medium text-slate-700 transition hover:border-slate-500 hover:bg-slate-100 hover:text-slate-900">
-                      <Plus className="h-3.5 w-3.5" /> Add optional service
+                      <Plus className="h-3.5 w-3.5" /> Add add-on
                     </button>
                     <button type="button" onClick={() => addRow("included")} className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-base font-medium text-slate-700 transition hover:border-slate-500 hover:bg-slate-100 hover:text-slate-900">
                       <Plus className="h-3.5 w-3.5" /> Add included service
@@ -344,12 +355,12 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50">
                     <Heading className="w-20"><span className="sr-only">Reorder</span></Heading>
-                    <Heading className="w-20 text-center">Include</Heading>
+                    <Heading className="w-20 text-center">Show lead</Heading>
                     <Heading>Service</Heading>
                     <Heading>Description</Heading>
                     <Heading className="whitespace-nowrap">Offer As</Heading>
                     <Heading className="whitespace-nowrap">Cadence</Heading>
-                    <Heading className="text-center">Price / Mo</Heading>
+                    <Heading className="text-center">Price / month</Heading>
                     {PACKAGES.map(({ id, label }) => (
                       <Heading key={id} className="w-20 text-center">{label}</Heading>
                     ))}
@@ -361,8 +372,12 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
                     const isEditing = editingIds.includes(row.id);
                     const option = row.option;
                     const bonus = row.bonus;
-                    const applicable = bonus ? isBonusApplicable(bonus) : false;
-                    const selected = bonus ? selectedBonusPackages(bonus) : [];
+                    const applicable = bonus ? isBonusApplicable(bonus) : true;
+                    const selected = bonus
+                      ? selectedBonusPackages(bonus)
+                      : option
+                        ? selectedOptionPackages(option)
+                        : [];
                     const isRowIncluded = row.kind !== "optional" || Boolean(option?.showInProposal);
                     return (
                       <tr key={row.id} className={rowClass(isRowIncluded)}>
@@ -448,6 +463,17 @@ export default function ProposalAddOnsDemo({ catalog = [] }: { catalog?: Proposa
                               ) : (
                                 <span className="text-xs font-medium text-slate-300">N/A</span>
                               )
+                            ) : row.kind === "optional" && option ? (
+                              <button
+                                type="button"
+                                role="checkbox"
+                                aria-checked={selected.includes(id)}
+                                aria-label={`${selected.includes(id) ? "Remove" : "Add"} ${row.name} ${selected.includes(id) ? "from" : "to"} ${label}`}
+                                onClick={() => toggleOptionPackage(option, id)}
+                                className={checkboxClass(selected.includes(id))}
+                              >
+                                <Check className="h-4 w-4" strokeWidth={3} />
+                              </button>
                             ) : (
                               <span className="text-sm text-slate-300">—</span>
                             )}
@@ -694,7 +720,7 @@ function ArchivedItems({
           <span key={item.id} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
             {item.name || "Untitled item"}
             <span className={`rounded px-1.5 py-0.5 text-xs font-semibold ${item.kind === "optional" ? "proposal-options-kind-optional" : "bg-slate-100 text-slate-700"}`}>
-              {item.kind === "optional" ? "Optional" : "Included"}
+              {item.kind === "optional" ? "Add-on" : "Included"}
             </span>
             <button type="button" aria-label={`Restore ${item.name || "item"}`} onClick={() => onRestore(item.id)} className="cursor-pointer text-brandnavy hover:opacity-70">
               <ArchiveRestore className="h-4 w-4" />

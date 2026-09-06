@@ -1,6 +1,6 @@
 # Coding-agent handoff
 
-Updated: 2026-09-05 (America/Chicago) — typography floor pass across the first four builder steps (see §14).
+Updated: 2026-09-05 (America/Chicago) — client-ready options-template review set added after the per-package add-on work (see §16–§19).
 
 ## Start here
 
@@ -15,9 +15,10 @@ The user has instructed: **never push without explicit user instruction**. Commi
 
 ## Current commit state
 
-- `HEAD` == `origin/main` at `69d6fc0 Refine offer builder and manage offers UX`.
+- `HEAD` == `origin/main` at `c8444d8 Add options templates for the offer builder's Options step`.
+- Working tree has uncommitted work for §18–§19 (per-package selection for optional add-ons and the client-ready template review set). Everything through §17 is pushed.
 - **Line-ending noise warning (still true):** ~100 tracked files show as modified with identical content (worktree CRLF vs blob LF — `git diff --ignore-all-space` is empty for them). Do NOT commit that noise: stage only the files you changed, and normalize any touched file back to LF (`sed`/python CRLF→LF) so the commit holds only the logical diff.
-- **Uncommitted this session:** §14 typography floor pass (5 files under `src/app/(app)/offers/builder/`) plus this HANDOFF refresh.
+- The line-ending warning above is historical guidance; it was not present after the latest commit. Re-check `git status` before editing and avoid staging unrelated normalization noise.
 
 ## This session's work
 
@@ -200,7 +201,7 @@ Validation: `npm run typecheck` ✅ · focused ESLint ✅ · `git diff --check` 
 
 Key files: `src/app/(app)/offers/builder/AssessmentCardSection.tsx`, `src/app/(app)/offers/builder/ProposalCreationWorkspaceDemo.tsx`, `src/app/(app)/offers/page.tsx`, `src/app/(app)/offers/OfferStatusButtons.tsx`, `src/app/(app)/offers/OfferContactCell.tsx`, `src/app/(app)/offers/DuplicateOfferButton.tsx`, `src/app/(app)/offers/OfferEditButton.tsx`, `src/app/(app)/offers/offers-table.module.css`, `src/app/globals.css`, and the offer persistence files under `offers/builder`, `offers/new`, and `offers/who`.
 
-### 14) Typography floor pass across the first four builder steps — UNCOMMITTED
+### 14) Typography floor pass across the first four builder steps — DONE, committed and pushed
 
 Raises the readable-content floor to the browser base (16px Arial = `text-base`) across Contact, Scale, Complexity, and Adjustments. Preserves a clear hierarchy by lifting section headings one step above the new body floor.
 
@@ -233,7 +234,109 @@ Validation: `npm run typecheck` ✅ · focused ESLint on the five touched files 
 
 Key files: `src/app/(app)/offers/builder/AssessmentCardSection.tsx`, `src/app/(app)/offers/builder/PricingSnapshotSidebar.tsx`, `src/app/(app)/offers/builder/ProposalAppDemoHeader.tsx`, `src/app/(app)/offers/builder/ProposalContactInfoDemo.tsx`, `src/app/(app)/offers/builder/ProposalCreationWorkspaceDemo.tsx`.
 
-### Suggested commit split for this batch
+### 15) Proposal Cover + Agreements manager UX pass — DONE, committed and pushed (`8d53f32`)
+
+This is the latest shipped batch. It includes the responsive builder refinements and the agreements-manager workflow requested by the user.
+
+**Offer builder / Proposal Cover**
+
+- Proposal Cover now follows the same read-only summary + section-level Pencil/Edit modal pattern as Contact, Scale, Complexity, and Adjustments.
+- Cover Content uses a two-column modal for Headline and Body text. Cover Media separates media, video button, and continue-button controls into its own section/modal. Theme and Agreement have their own summary sections and editors.
+- Removed the redundant “Proposal Cover” page heading and “Customize the first screen” description.
+- Agreement copy now refers to selecting an agreement managed in Agreement Manager, with a link to `/agreements`; internal template identifiers remain unchanged for compatibility.
+- Builder page frames now use the full available width with stable page-centered navigation, reduced nav-to-card spacing, consistent horizontal padding when the sidebar is expanded or collapsed, and narrower pricing sidebars (`280px` / `300px` at large breakpoints).
+- Summary grids use four columns where the content fits, with three/two-column fallbacks to prevent clipping. Manage Offers type cells no longer wrap.
+
+**Agreements**
+
+- `/agreements` now focuses on issued agreements. Its action row contains `New agreement` and `Manage Agreement Templates`, followed by a full-width legal-review reminder.
+- Added `/agreements/templates` as a dedicated template manager route. The old page heading/intro was removed; the New template action and legal reminder remain visible in the compact page header.
+- Template rows now have icon actions for edit, duplicate, archive/restore, and delete. Delete requires browser confirmation; active templates are archived before deletion, while archived templates can be permanently deleted. Default templates cannot be archived/deleted.
+- Added a Current/Archived toggle. New and duplicated templates are treated as drafts until saved; Cancel/X exits without saving and cleans up the unsaved draft.
+- Issued agreements table now shows a short designator (`....last4`) instead of the full agreement ID, removes the redundant Agreement column, and removes secondary client/signer lines.
+- Added `.agreements-readable` typography floor so table, modal, and control text does not fall below the app base font size.
+
+Validation for this batch: `npm run typecheck` ✅ · `npm run lint` ✅ (7 existing `@next/next/no-img-element` warnings) · `git diff --check` ✅ · browser visual verification unavailable in this environment.
+
+Key files: `src/app/(app)/agreements/AgreementTemplatesManager.tsx`, `src/app/(app)/agreements/IssuedAgreementsTable.tsx`, `src/app/(app)/agreements/actions.ts`, `src/app/(app)/agreements/page.tsx`, `src/app/(app)/agreements/templates/page.tsx`, `src/app/(app)/offers/builder/ProposalIntroDemo.tsx`, `src/app/(app)/offers/builder/AssessmentCardSection.tsx`, `src/app/(app)/offers/builder/PricingSnapshotSidebar.tsx`, `src/app/(app)/offers/offers-table.module.css`, and `src/app/globals.css`.
+
+### 16) Test-proposal pricing display fixes — DONE, committed and pushed (`6455afd`, `d13f6f9`)
+
+Two hotfixes for the `$1 test proposal` mode where the displayed pricing didn't match what `resolveAmountDueNow` actually charges.
+
+- **Pricing sidebar** (`ProposalCreationWorkspaceDemo.tsx`) — the test override only forced monthly to `$1` and left the cleanup-card at the real onboarding+cleanup total (e.g. `$500`). Now zeros the recurring (`monthly: 0`) and collapses one-time totals to `$1` across every package. The cleanup card also renders unconditionally in test mode as a single `$1.00` line (no `$0 × N months` breakdown that would look nonsensical).
+- **Proposal preview cards** (`OfferProposalPreview.tsx`) — the preview had its own separate test override that only set `monthly: 1` and never touched `getOnboardingFee`. Now `getOnboardingFee` returns `1` when `assessment.isTestProposal`, and the monthly override sets `0`. Card header + row breakdown + pricing summary all agree on `$1 one-time / $0 recurring`.
+
+`resolveAmountDueNow` was already correct — this batch only fixed display-side inconsistency.
+
+### 17) Options templates for the offer builder — DONE, committed and pushed (`c8444d8`)
+
+Reusable, brand-owned snapshots of the Options step so staff don't rebuild the same option config every proposal. Mirrors the `/agreements/templates` pattern.
+
+**Data model** — new `ProposalOptionsTemplate` (per-brand, JSON snapshot, `defaultForProductKind` flag; unique index `(brandId, defaultForProductKind)`). Migration `20260905120000_add_proposal_options_templates` is additive+idempotent; applied via `prisma db execute`.
+
+**Snapshot library** (`src/lib/quotes/optionsTemplates.ts` + tests) — `buildOptionsTemplateSnapshot`, `parseOptionsTemplateSnapshot` (rejects wrong version or product kind), `reconcileOptionsTemplateSnapshot(snapshot, catalogOfferKeys)` (drops items whose `offerKey` is no longer in the catalog and returns the skipped ids so the toolbar can surface a "N items skipped" toast). 8 unit tests.
+
+**Seed helper** (`src/lib/quotes/optionsTemplatesSeed.ts`) — `ensureDefaultOptionsTemplate(brandId)` idempotently seeds three curated starter templates on first hit for any brand. Hand-picks catalog items by `offerKey` so a proposal shows ~5 items instead of the ~40 raw catalog rows. Templates:
+
+1. **Basic bookkeeping services** (default) — 2 optional (Advanced Receipts, Tax Preparer Coordination) + 3 bonuses (Organized Audit-Ready Records all packages, First Quarterly Review Improve+Grow, DoubleHQ Client Portal all packages).
+2. **Real-estate bookkeeping** — same base plus Property Reporting, RE Chart of Accounts, Per-Property Class Tracking, and Stessa Migration (Grow only).
+3. **Bookkeeping with all add-ons** — every optional pre-checked.
+
+Ensure runs from three call sites: `/offers/options-templates` page load, `listOptionsTemplatesAction` (fired by the Options-step toolbar on mount), and `getDefaultOptionsTemplateSnapshotAction` (used by auto-apply).
+
+**Server actions** (`src/app/(app)/offers/options-templates/actions.ts`) — list, get snapshot (reconciled), get default snapshot, create-from-catalog (seeds a new row from current catalog defaults), save-from-slice, update name/description, overwrite snapshot, duplicate, set/unset default, archive, restore, delete. Delete requires archived + non-default.
+
+**Manager page** (`/offers/options-templates`) — `New template` primary button + Current/Archived `ui-toggle-switch` toggle below the header (matches the `/agreements/templates` pattern). Row actions: edit (rename/describe only — see below), duplicate, set/unset default, archive/restore, delete. No explanatory copy — kept minimal per user preference.
+
+**Options-step toolbar** (`OptionsTemplatesToolbar.tsx`) — inline in the same button row as `Add optional service` / `Add included service` via the toolbar's outer `display: contents` wrapper and a `middleSlot` prop that receives those Add buttons from `ProposalAddOnsDemo`. Layout: `[Load template ▾] [Add optional] [Add included] [Save as template] [Manage templates ↗]`. Save modal has a mode toggle: **Update existing template** (dropdown of active templates, overwrites in place) or **Save as new template** (name/description/make-default). Auto-apply of the brand default fires once per offer scope, keyed off `engagementId`/`offer` query param in localStorage; guarded by `hasCustomizedOptions` so it never overwrites existing user work.
+
+**Author-flow model** (intentional) — templates are authored by editing an offer's Options step and using **Save current as template → Update existing template**, not by editing snapshot contents on the manager page. The manager only lets you rename/describe/organize. Users tried to author on the manager page and it wasn't discoverable — added the New button + the Update-existing mode to close that loop without building a full snapshot editor.
+
+**One-off backfill script** (`scripts/seedOptionsTemplates.cjs`) — plain node CJS (doesn't trip `server-only`) that seeds every active brand. Ran during this session; safe to rerun. Skips already-existing rows by name.
+
+**Bookkeeping-only for now.** Product kind is `"bookkeeping"` throughout. When Consulting/Coaching hourly builders grow an equivalent Options step, extend the snapshot type and the seed with `productKind` variants.
+
+Key files: `prisma/migrations/20260905120000_add_proposal_options_templates/`, `prisma/schema.prisma`, `src/lib/quotes/optionsTemplates.{ts,test.ts}`, `src/lib/quotes/optionsTemplatesSeed.ts`, `src/app/(app)/offers/options-templates/{page.tsx,OptionsTemplatesManager.tsx,actions.ts}`, `src/app/(app)/offers/builder/OptionsTemplatesToolbar.tsx`, `src/app/(app)/offers/builder/ProposalAddOnsDemo.tsx`, `scripts/seedOptionsTemplates.cjs`.
+
+### 18) Per-package selection for optional add-ons — DONE, uncommitted
+
+Previously only "included" bonuses had Grow/Improve/Maintain checkboxes in the Options-step table. Optional add-ons showed a "—" — the client saw them on every package card indiscriminately. Now every row has the three checkboxes regardless of `Offer As` mode.
+
+**Storage** — reuses the existing `bonusPackageSelections: Record<string, PackageId[]>` field on `AssessmentState` because keys are just item ids. No schema change. Downstream code that only looked at bonuses now applies to options too. Backward-compat: `undefined` selection defaults to all packages (so pre-existing offers show every option on every package card, as before).
+
+**Editor** (`ProposalAddOnsDemo.tsx`) — new `selectedOptionPackages(option)` / `toggleOptionPackage(option, packageId)` mirror the bonus helpers. The per-package `<td>` render now branches on `row.kind === "optional"` too. `setKind` no longer clears selections when switching between optional/included — the array is preserved. `deleteRow` cleans up the selection entry uniformly.
+
+**Client-facing preview** (`OfferProposalPreview.tsx`) — every package card only shows optional add-ons assigned to it, and its recurring total only sums those:
+- New `additionalOptionRowsFor(packageId)` filters by the option's `bonusPackageSelections`, defaulting to all-packages when missing.
+- Fixed five call sites: card render (`packageAdditionalOptionRows`), per-package recurring total, `selectedAdditionalMonthlyTotal`, submission payload (`selectedAdditionalOptionIds`), and `selectedAdditionalOptionNames` in the checkout summary.
+
+**Template seed** — `OptionalConfig` gained an optional `packages` field (defaults to all three). Existing seeded rows (which don't carry per-option selections yet) still work because of the all-packages fallback. Both `optionsTemplatesSeed.ts` and `scripts/seedOptionsTemplates.cjs` were updated so future re-seeds populate the field.
+
+Validation: `npm run typecheck` ✅ · `npm test -- --run` 53 files / 357 tests ✅ · focused lint ✅. Browser visual verification unavailable in this session — sanity-check the Options step for a full row of checkboxes and confirm a package card's total drops when you uncheck an option's package.
+
+Key files: `src/app/(app)/offers/builder/ProposalAddOnsDemo.tsx`, `src/app/(app)/offers/builder/OfferProposalPreview.tsx`, `src/lib/quotes/optionsTemplatesSeed.ts`, `scripts/seedOptionsTemplates.cjs`.
+
+### 19) Client-ready options-template review set — DONE, uncommitted; seeded in live DB
+
+Added four non-default, additive templates so the user can compare real proposal cards without replacing the customized default:
+
+1. **Client-ready review — Essential bookkeeping** — low-friction package ladder; paid receipt add-on stays hidden unless staff recommends it.
+2. **Client-ready review — Visibility & control** — Project Profitability Tracking and Budget & Monthly Variance Review are visible only in Improve/Grow; Grow adds KPI and cash-flow outcomes.
+3. **Client-ready review — Real estate portfolio** — property reporting, ongoing property-level tracking, portfolio KPIs, and conditional Stessa migration with two focused add-ons.
+4. **Client-ready review — Compliance & coordination** — Sales Tax and Receipt Capture add-ons plus Tax-Ready Handoff & CPA Coordination in Improve/Grow; Registered Agent is intentionally excluded.
+
+Template snapshots override lead-facing names/descriptions and cadence where needed while preserving stable catalog `offerKey` identities and existing catalog prices. Core services are explicitly included in each snapshot so the package ladder being reviewed is deterministic. Existing templates and defaults are left untouched.
+
+Staff/client terminology now matches the shared cipher without changing data values: the Options table says **Add-on**, **Show lead**, and **Price / month**; proposal cards say **Optional add-ons** and **Included with this package**.
+
+The Options-step **Load template** menu now sizes itself to its longest item instead of using a fixed `w-72`; it retains a viewport-width cap and wraps only on small screens so full template names remain readable.
+
+The idempotent backfill script was updated and run against the configured Supabase DB. The four templates were created for Bookkeeping Conroe, Southwest Digital Marketing, Contigo Accounting, and Melbourne CFO. TREB was skipped because it currently has no bookkeeping options/core catalog rows. A durable review rubric lives at `docs/offers/client-ready-options-templates.md` for later Sol/Astra passes.
+
+Validation: typecheck ✅ · 53 test files / 357 tests ✅ · focused ESLint ✅ (one existing `no-img-element` warning) · `git diff --check` ✅. No push and no commit.
+
+### Suggested commit split for the prior batch
 
 If you want to slice the uncommitted work into reviewable chunks before pushing:
 
@@ -485,12 +588,12 @@ Zoho on Vercel: register a **separate** OAuth app for prod (not shared with loca
 ## Suggested first commands for the next agent
 
 ```powershell
-git status --short                        # shows the uncommitted offer-builder / Manage Offers UX pass in §13
-git log --oneline origin/main..HEAD       # should be empty; HEAD is currently pushed
+git status --short                        # §18 is uncommitted; everything else clean
+git log --oneline origin/main..HEAD       # should be empty; HEAD is currently pushed at c8444d8
 npm run typecheck                         # should be clean
-npm test -- --run                         # 40 files / 265 tests, all green
+npm test -- --run                         # 53 files / 357 tests as of §18
 ```
 
-Then read this file top-to-bottom, note that **section 14 in "This session's work" is uncommitted** and the user's push policy is "never push without explicit user instruction."
+Then read this file top-to-bottom. §17 is the latest shipped work; §18 is uncommitted. The user's push policy remains "never push without explicit user instruction".
 
 If the user asks you to move CRM PipelineItem into the work-item model, read section 6 first, then the "Future design: unified work items / next-action system" CRM extension list — the offer-side helpers (`src/lib/quotes/lifecycle.ts`) are the pattern to follow.

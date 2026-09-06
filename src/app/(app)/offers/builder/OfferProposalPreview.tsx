@@ -808,7 +808,7 @@ export default function OfferProposalPreview({
       const selectedCleanupPeriodKeys = cleanupPeriods
         .map((period) => `${period.year}-${period.startMonth}-${period.endMonth}`)
         .filter((periodKey) => cleanupIsSelected(id, periodKey));
-      const selectedAdditionalOptionIds = additionalOptionRows
+      const selectedAdditionalOptionIds = additionalOptionRowsFor(id)
         .filter((row) => additionalOptionSelections[id][row.id] === true)
         .map((row) => row.id);
       const response = await fetch(`/api/proposal/${engagementId}/select`, {
@@ -936,20 +936,30 @@ export default function OfferProposalPreview({
   const cleanupKey = (optionId: OptionId, periodKey: string) => `${optionId}:${periodKey}`;
   const cleanupIsSelected = (optionId: OptionId, periodKey: string) => cleanupSelections[cleanupKey(optionId, periodKey)] !== false;
 
+  const ALL_PACKAGE_IDS: OptionId[] = ["grow", "improve", "maintain"];
+  const additionalOptionPackageMap: Record<string, OptionId[]> = {};
   const additionalOptionRows = getProposalAdditionalOptions(assessment)
     .filter((option) => option.applicable !== false && option.showInProposal && !option.archived && option.name.trim())
-    .map((option): ServiceRow => ({
-      id: option.id,
-      serviceName: option.name,
-      billStart: "On Acceptance",
-      billEnd: "Until Cancelled",
-      billEvery: "1 Month",
-      invoiceType: "Automatic",
-      priceType: "Fixed",
-      quantity: 1,
-      price: option.monthlyPrice,
-      note: option.description,
-    }));
+    .map((option): ServiceRow => {
+      const savedPackages = assessment.bonusPackageSelections?.[option.id];
+      additionalOptionPackageMap[option.id] = Array.isArray(savedPackages)
+        ? savedPackages.filter((id): id is OptionId => ALL_PACKAGE_IDS.includes(id as OptionId))
+        : [...ALL_PACKAGE_IDS];
+      return {
+        id: option.id,
+        serviceName: option.name,
+        billStart: "On Acceptance",
+        billEnd: "Until Cancelled",
+        billEvery: "1 Month",
+        invoiceType: "Automatic",
+        priceType: "Fixed",
+        quantity: 1,
+        price: option.monthlyPrice,
+        note: option.description,
+      };
+    });
+  const additionalOptionRowsFor = (packageId: OptionId): ServiceRow[] =>
+    additionalOptionRows.filter((row) => additionalOptionPackageMap[row.id]?.includes(packageId));
 
   const recurringServiceNames = Array.from(new Set(optionMeta.flatMap(({ id }) => options[id].recurringRows.map((r) => r.serviceName))));
   const oneTimeServiceNames   = Array.from(new Set(optionMeta.flatMap(({ id }) => options[id].oneTimeRows.map((r) => r.serviceName))));
@@ -973,7 +983,7 @@ export default function OfferProposalPreview({
         .reduce((total, row) => total + row.price * row.quantity, 0)
     : 0;
   const selectedAdditionalMonthlyTotal = selectedOptionId
-    ? additionalOptionRows.reduce(
+    ? additionalOptionRowsFor(selectedOptionId).reduce(
         (total, row) => total + (additionalOptionSelections[selectedOptionId][row.id] ? row.price : 0),
         0,
       )
@@ -1036,7 +1046,7 @@ export default function OfferProposalPreview({
         .filter((period) => selectedOptionId && cleanupIsSelected(selectedOptionId, `${period.year}-${period.startMonth}-${period.endMonth}`))
         .map((period) => `${period.year}: months ${period.startMonth}-${period.endMonth}`),
       selectedAdditionalOptionNames: selectedOptionId
-        ? additionalOptionRows
+        ? additionalOptionRowsFor(selectedOptionId)
             .filter((row) => additionalOptionSelections[selectedOptionId][row.id])
             .map((row) => row.serviceName)
         : [],
@@ -1344,9 +1354,10 @@ export default function OfferProposalPreview({
                     (row) => !row.cleanupPeriodKey || cleanupIsSelected(id, row.cleanupPeriodKey),
                   );
 
+                  const packageAdditionalOptionRows = additionalOptionRowsFor(id);
                   const recurringTotal =
                     option.monthlyPrice * recurringDiscountMultiplier +
-                    additionalOptionRows.reduce(
+                    packageAdditionalOptionRows.reduce(
                       (total, row) => total + (additionalOptionSelections[id][row.id] ? row.price : 0),
                       0,
                     );
@@ -1461,12 +1472,12 @@ export default function OfferProposalPreview({
                       {/* Support row */}
                       {supportRow ? <div className="border-t border-slate-200 px-5 py-4"><p className="text-sm font-semibold text-slate-700">{supportRow.serviceName}</p><p className="mt-1 text-sm leading-6 text-slate-600">{getTooltip(supportRow)}</p></div> : <div />}
 
-                      {additionalOptionRows.length > 0 ? (
+                      {packageAdditionalOptionRows.length > 0 ? (
                         <section>
-                          <p className="bg-accent-100 px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ color: inkColor }}>Additional options</p>
+                          <p className="bg-accent-100 px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ color: inkColor }}>Optional add-ons</p>
                           <div className="px-5 py-4">
                             <ul className="space-y-2 text-sm text-slate-600">
-                              {additionalOptionRows.map((row) => (
+                              {packageAdditionalOptionRows.map((row) => (
                                 <ServiceLine
                                   key={row.id}
                                   row={{ ...row, id: `${id}-${row.id}` }}
@@ -1487,7 +1498,7 @@ export default function OfferProposalPreview({
                       {/* Bonuses */}
                       {displayedBonuses.length > 0 ? (
                         <section>
-                          <p className="bg-emerald-100 px-5 py-3 text-xs font-bold uppercase tracking-[0.12em] text-emerald-900">Included bonuses</p>
+                          <p className="bg-emerald-100 px-5 py-3 text-xs font-bold uppercase tracking-[0.12em] text-emerald-900">Included with this package</p>
                           {bonusLeadInName ? <p className="px-5 pt-4 text-sm font-semibold text-slate-700">Everything in {bonusLeadInName}, plus:</p> : null}
                           <ul className="space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600">
                             {displayedBonuses.map((row) => (
