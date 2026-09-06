@@ -292,6 +292,12 @@ function getTooltip(row: ServiceRow) {
   return row.note ?? `Details about ${row.serviceName}.`;
 }
 
+function isMonthlyBookkeepingRow(row: ServiceRow) {
+  return row.id.endsWith("-bonus-monthly-bookkeeping")
+    || row.serviceName === "Monthly QuickBooks Bookkeeping"
+    || row.serviceName === "Monthly Bookkeeping";
+}
+
 function isOnboarding(row: ServiceRow) {
   return row.serviceName === "Onboarding";
 }
@@ -417,7 +423,7 @@ function buildOptions(
       ...base,
       monthlyPrice: packagePricing[id].monthly,
       recurringRows: recurringBonuses.map((row) =>
-        row.serviceName === "Monthly Bookkeeping"
+        isMonthlyBookkeepingRow(row)
           ? {
               ...row,
               platformTag: assessment.ongoingBookkeepingPlatform === "stessa" ? "Stessa" as const : "QBO" as const,
@@ -1409,16 +1415,17 @@ export default function OfferProposalPreview({
                   const isNew = (name: string) => lowerTierId !== null && !lowerTierRecurring.has(name);
                   const lowerTierZero = new Set(lowerTierId ? options[lowerTierId].oneTimeRows.filter((r) => r.price === 0).map((r) => r.serviceName) : []);
 
-                  const bkRow      = option.recurringRows.find((r) => r.serviceName === "Monthly Bookkeeping");
+                  const bkRow      = option.recurringRows.find(isMonthlyBookkeepingRow);
                   const supportRow = option.recurringRows.find((r) => r.serviceName.endsWith("Client Support"));
-                  const otherRecurring = option.recurringRows.filter((r) => r.serviceName !== "Monthly Bookkeeping" && !r.serviceName.endsWith("Client Support"));
+                  const otherRecurring = option.recurringRows.filter((r) => r !== bkRow && !r.serviceName.endsWith("Client Support"));
                   const orderedRecurring = lowerTierId
                     ? otherRecurring.filter((r) => isNew(r.serviceName))
                     : otherRecurring;
                   const incrementalBonuses = lowerTierId
                     ? zeroPriceRows.filter((row) => !lowerTierZero.has(row.serviceName))
-                    : zeroPriceRows;
-                  // Maintain shows its concrete inclusions. Improve and Grow show only
+                    : [...(bkRow ? [bkRow] : []), ...zeroPriceRows];
+                  // Maintain foregrounds monthly bookkeeping alongside its other
+                  // concrete inclusions. Improve and Grow show only
                   // what their tier adds after the inheritance statement. When custom
                   // content has no new one-time inclusion, highlight a real recurring
                   // upgrade (or the tier-specific support promise) rather than filler.
@@ -1487,7 +1494,7 @@ export default function OfferProposalPreview({
                       {/* Recurring services */}
                       <section>
                         <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ backgroundColor: brandDark, color: brandDarkForeground }}>Recurring services</p>
-                        {bkRow && !lowerTierId ? <div className="px-5 pt-4"><p className="text-sm font-semibold text-slate-700">Monthly Bookkeeping</p><p className="mt-1 text-sm leading-6 text-slate-600">{getTooltip(bkRow)}</p></div> : null}
+                        {bkRow && !lowerTierId ? <div className="px-5 pt-4"><p className="text-sm font-semibold text-slate-700">{bkRow.serviceName}</p><p className="mt-1 text-sm leading-6 text-slate-600">{getTooltip(bkRow)}</p></div> : null}
                         {recurringLeadInName ? <p className="px-5 pt-4 text-sm font-semibold text-slate-700">Everything included with {recurringLeadInName}, plus:</p> : null}
                         <ul className="space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600">
                           {orderedRecurring.map((row) => (
