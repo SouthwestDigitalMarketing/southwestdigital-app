@@ -239,7 +239,7 @@ export default function ProposalAddOnsDemo({
               setBrowsing(!browsing);
               setEditingId(null);
             }}
-            className="inline-flex items-center gap-2 rounded-lg bg-brandnavy px-4 py-2.5 text-sm font-semibold text-white"
+            className="ui-action-primary inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold"
           >
             <Plus className="h-4 w-4" aria-hidden="true" />
             {browsing ? "Back to offer" : "Add services"}
@@ -327,7 +327,7 @@ export default function ProposalAddOnsDemo({
                           setQuery("");
                           setEditingId(item.offerKey);
                         }}
-                        className="rounded-lg border border-brandnavy/25 px-3 py-2 text-sm font-semibold text-brandnavy"
+                        className="ui-action-secondary rounded-lg border px-3 py-2 text-sm font-semibold"
                       >
                         Add
                       </button>
@@ -624,7 +624,7 @@ export default function ProposalAddOnsDemo({
                           {packageName(id)}
                         </h3>
                       )}
-                      <p className="mt-1 text-sm font-semibold text-brandnavy">
+                      <p className="mt-1 text-sm font-semibold text-slate-900">
                         {prices.find((item) => item.id === id)?.monthlyLabel}
                         <span className="ml-1 text-xs font-normal text-slate-500">
                           base

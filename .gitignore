@@ -36,3 +36,8 @@ next-env.d.ts
 .netlify
 
 .vercel
+
+# Playwright
+/playwright-report
+/blob-report
+/.playwright

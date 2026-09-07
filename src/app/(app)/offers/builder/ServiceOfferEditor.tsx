@@ -51,7 +51,7 @@ export default function ServiceOfferEditor({
       <div>
         <h3 className="font-semibold text-slate-900">{name}</h3>
         <p className="mt-1 text-sm text-slate-600">{description}</p>
-        <p className="mt-2 text-xs font-medium text-brandnavy">
+        <p className="mt-2 text-xs font-medium text-slate-700">
           Settings for this offer
         </p>
       </div>
@@ -152,14 +152,14 @@ export default function ServiceOfferEditor({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold"
+            className="ui-action-secondary rounded-lg border px-4 py-2 text-sm font-semibold"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={draft.optional.length > 0 && !validPrice}
-            className="rounded-lg bg-brandnavy px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            className="ui-action-primary rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50"
           >
             Apply changes
           </button>

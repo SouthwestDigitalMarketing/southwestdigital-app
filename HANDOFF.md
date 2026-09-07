@@ -576,7 +576,40 @@ Implemented the user's approval of the six UI recommendations. The user requeste
 - Package coverage replaces the pricing-only sidebar, showing included/optional counts and clearly labeled base prices. Package renaming remains secondary.
 - Pure editing helpers preserve exact saved tiers and existing service order. Existing checkout/publication rules and golden fixtures are unchanged.
 
-Validation: 64 files / 424 tests, typecheck, focused lint and production build pass. Browser discovery still returned no connected browsers, so visual/interaction QA is the remaining follow-up. Work is committed locally; no push requested for this phase.
+Validation: 64 files / 424 tests, typecheck, focused lint and production build pass. Committed locally as `0cc0151`; not pushed. The visual/interaction QA that was outstanding here is now closed — see §33.
+
+### 33) Browser QA via Playwright + invisible-primary-button fix — DONE, committed locally
+
+The §32 batch had never been seen in a browser. Playwright is now installed and the Services step has been exercised for real against a running dev server.
+
+**Setup** — `@playwright/test` devDependency, `playwright.config.ts`, and `e2e/` (`services-step.spec.ts` + `support.ts`), plus `npm run test:e2e`. Deliberately **no `webServer` block**: `npm run dev` runs `prisma generate`, which trips the known Windows EPERM lock when a dev server already holds `query_engine-windows.dll.node`. Start the dev server yourself; the specs skip themselves when nothing is listening. `vitest.config.mts` only globs `src/**/*.test.ts`, so `e2e/` stays out of the unit suite.
+
+**The defect it found.** Inside the app shell, `div.app-shell-root[data-theme="light"]` redefines `--theme-light` and `--theme-ink` to `#f5f5f5`. The legacy override at `globals.css:596`, `[data-theme] .bg-brandnavy { background-color: var(--theme-light) }`, therefore repaints every `bg-brandnavy` element near-white. Paired with `text-white` that is **1.09:1 contrast — an invisible button**. Measured, not guessed. Affected in the new Services UI:
+
+| Element | Before | After |
+|---|---|---|
+| "Add services" primary | 1.09:1 | 15.14:1 |
+| "Apply changes" primary | 1.09:1 | 15.14:1 |
+| "Add" buttons in the catalogue picker (`text-brandnavy`) | 1.09:1 | readable |
+| "Settings for this offer" caption | 1.09:1 | readable |
+| Package base prices in the coverage sidebar (`text-brandnavy`) | 1.09:1 | readable |
+
+The fix routes these through the app's existing, theme-aware `ui-action-primary` / `ui-action-secondary` tokens (which resolve to `#1b263b` on white = 15.14:1) instead of raw `bg-brandnavy`/`text-brandnavy`. Remaining `brandnavy` uses in these two files are `focus-visible:outline-*`, `focus-within:ring-*`, and a `border-brandnavy/15` — none are matched by the override, which only targets the exact `.bg-`/`.text-`/`.border-brandnavy` and `focus:` variants.
+
+**⚠ Still open, app-wide and NOT fixed here.** The same override breaks `bg-brandnavy`/`text-brandnavy` everywhere else it is used with light text — `PricingSnapshotSidebar.tsx`, the selected-pill states in `ProposalCreationWorkspaceDemo.tsx` (5 sites) and `ProposalIntroDemo.tsx`, `AgreementTemplatesManager.tsx`, `DiscountsCatalog.tsx`, `MediaLibraryClient.tsx`, and others. Two ways out, and it is the user's call because the blast radius is every builder screen:
+
+1. Sweep the call sites onto `ui-action-*` tokens (safe, incremental, verifiable one screen at a time).
+2. Change the `globals.css` override itself (one edit, but it silently restyles every screen at once — and some `bg-brandnavy` uses may legitimately want a light surface, so those would invert).
+
+Do not do (2) without looking at each remaining call site first.
+
+**What the browser pass confirmed working:** the curated default view renders 9 rows (not the ~121-row catalogue); tier substitution is correct on screen — Standard/Priority/Concierge Client Support each appear on exactly one package, which is the non-cumulative invariant a floor model would have broken; the editor opens with contiguous-range selects that exclude already-included tiers; Cancel discards; the catalogue picker shows 42 candidates and returns without leaving the offer; package rename exposes 3 inputs; row toggles take keyboard focus; and mobile (390px) stacks package cells with repeated package names and zero horizontal overflow. No console errors.
+
+`e2e/services-step.spec.ts` has 7 specs covering the above, including a contrast guard. The guard was validated by reintroducing the bug and confirming it fails — it is not a test that cannot fail.
+
+**No writes were performed.** The Services step keeps its draft in `localStorage`, so a fresh browser context is a throwaway offer. Nothing was saved, published, emailed, charged, or migrated.
+
+Validation: 64 files / 424 unit tests, 7/7 Playwright specs, typecheck, focused ESLint, and `npx next build` all pass.
 
 ## Product Type refactor plan
 

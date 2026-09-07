@@ -40,6 +40,6 @@ User approved implementing the UI recommendations, with limited remaining Codex 
 - Full suite: 64 files / 424 tests pass.
 - TypeScript and focused ESLint pass. Production build passes.
 - Existing golden fixtures were not updated.
-- Browser discovery was retried and still returned an empty list. No live visual or interactive verification was possible.
-- Next useful task: connect a browser and check desktop/laptop/mobile layouts, keyboard navigation, expansion and Apply/Cancel, Add services, hidden-service recovery and package renaming on a disposable draft.
-- No required code work is knowingly left half-finished. Do not restart the redesign or change the saved tier model merely because visual QA is outstanding.
+- **Browser QA is now done.** Playwright drives the real page; see `e2e/services-step.spec.ts` and HANDOFF §33. Desktop/laptop/tablet/mobile layouts, keyboard focus, expansion with Apply/Cancel, Add services, hidden-service recovery and package renaming were all exercised against a running dev server.
+- That pass found and fixed one real defect: the legacy `[data-theme] .bg-brandnavy` override made both primary actions invisible (1.09:1). See HANDOFF §33 — the wider app-side occurrences are still open and are a decision for the user.
+- No required code work is knowingly left half-finished. Do not restart the redesign or change the saved tier model.
