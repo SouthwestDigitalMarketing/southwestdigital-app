@@ -45,6 +45,15 @@ import {
   type PackageId,
   type ProposalPackageNames,
 } from "./proposalPackageNames";
+import {
+  proposalCatalogOptionPrice,
+  proposalCatalogOptionSelected,
+} from "./proposalCatalogSync";
+
+export {
+  reconcileProposalAssessmentWithCatalog,
+  type ProposalCatalogAssessmentSlice,
+} from "./proposalCatalogSync";
 
 export type { PackageId } from "./proposalPackageNames";
 export type ProposalBonusId =
@@ -541,26 +550,6 @@ export function getSalesTaxFilingPrice(assessment: AssessmentState) {
   return assessment.salesTaxFilingPriceOverride ?? 650;
 }
 
-function catalogOptionPrice(item: ProposalOptionCatalogItem, assessment: AssessmentState) {
-  if (item.offerKey === "advanced-receipt-management") return getAdvancedReceiptManagementPrice(assessment);
-  if (item.offerKey === "project-tracking") return getProjectTrackingPrice(assessment);
-  if (item.offerKey === "budget-reporting") return getBudgetReportingPrice(assessment);
-  if (item.offerKey === "sales-tax-filing") return getSalesTaxFilingPrice(assessment);
-  return item.defaultPrice;
-}
-
-function catalogOptionSelected(item: ProposalOptionCatalogItem, assessment: AssessmentState) {
-  const legacySelections: Record<string, boolean> = {
-    "advanced-receipt-management": assessment.offerAdvancedReceiptManagement,
-    "project-tracking": assessment.offerProjectTracking,
-    "budget-reporting": assessment.offerBudgetReporting,
-    "sales-tax-filing": assessment.offerSalesTaxFiling,
-    "tax-preparer-coordination": assessment.includeTaxPreparerCoordinationCall,
-    "registered-agent-service": assessment.includeRegisteredAgentService,
-  };
-  return legacySelections[item.offerKey] ?? true;
-}
-
 export function getProposalAdditionalOptions(
   assessment: AssessmentState,
   catalogItems: ProposalOptionCatalogItem[] = [],
@@ -572,8 +561,8 @@ export function getProposalAdditionalOptions(
       id: item.offerKey,
       name: item.name,
       description: item.description,
-      monthlyPrice: catalogOptionPrice(item, assessment),
-      showInProposal: catalogOptionSelected(item, assessment),
+      monthlyPrice: proposalCatalogOptionPrice(item, assessment),
+      showInProposal: proposalCatalogOptionSelected(item, assessment),
       archived: false,
       realEstateSpecific: item.realEstateSpecific,
     }));

@@ -62,7 +62,7 @@ export default async function QuotesAddOnsPage() {
   });
   return (
     <Suspense fallback={<div className="p-8 text-sm text-slate-400">Loading pricing generator…</div>}>
-      <ProposalAddOnsDemo catalog={catalog} />
+      <ProposalAddOnsDemo catalog={catalog} catalogAuthoritative={proposalCatalog} />
     </Suspense>
   );
 }

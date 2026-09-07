@@ -102,8 +102,6 @@ export async function materializeProposalCatalog(
       realEstateSpecific: true,
     },
   });
-  if (catalog.length === 0) return value;
-
   const applicabilityById = new Map(
     catalog.flatMap((item) => {
       const effectiveOfferKey = item.offerKey ?? slugifyTagKey(item.code ?? item.name);
@@ -163,62 +161,81 @@ export async function materializeProposalCatalog(
     ? value.additionalOptions
     : [];
   const existingBonuses = Array.isArray(value.bonuses) ? value.bonuses : [];
-  const additionalOptions =
-    existingOptions.length > 0
-      ? withPublicationApplicability(existingOptions)
-      : withPublicationApplicability(
-          catalog
-            .filter(
-              (item) => item.defaultInclusion === "optional" && item.offerKey,
-            )
-            .map((item) => ({
-              id: item.offerKey,
-              name: item.name,
-              description: item.clientBenefit ?? item.internalDescription ?? "",
-              monthlyPrice: optionPrice(
-                item.offerKey!,
-                item.defaultPrice == null ? 0 : Number(item.defaultPrice),
-                value,
-              ),
-              showInProposal: optionSelected(item.offerKey!, value),
-              archived: false,
-              realEstateSpecific: item.realEstateSpecific,
-            })),
-        );
-  const catalogBonuses = catalog
-    .filter((item) => item.defaultInclusion !== "optional" && item.offerKey)
-    .map((item) => ({
-      id: item.offerKey!,
+  const existingOptionsById = new Map(
+    existingOptions.flatMap((item) =>
+      isRecord(item) && typeof item.id === "string" ? [[item.id, item] as const] : [],
+    ),
+  );
+  const existingBonusesById = new Map(
+    existingBonuses.flatMap((item) =>
+      isRecord(item) && typeof item.id === "string" ? [[item.id, item] as const] : [],
+    ),
+  );
+  const catalogIds = new Set<string>();
+  const additionalOptions = withPublicationApplicability(catalog.flatMap((item) => {
+    const id = item.offerKey ?? slugifyTagKey(item.code ?? item.name);
+    if (!id) return [];
+    catalogIds.add(id);
+    const existingOption = existingOptionsById.get(id);
+    if (existingOption) {
+      return [{
+        ...existingOption,
+        id,
+        name: item.name,
+        description: item.clientBenefit ?? item.internalDescription ?? "",
+        archived: false,
+        realEstateSpecific: item.realEstateSpecific,
+      }];
+    }
+    if (existingBonusesById.has(id) || item.defaultInclusion !== "optional") return [];
+    return [{
+      id,
+      name: item.name,
+      description: item.clientBenefit ?? item.internalDescription ?? "",
+      monthlyPrice: optionPrice(
+        id,
+        item.defaultPrice == null ? 0 : Number(item.defaultPrice),
+        value,
+      ),
+      showInProposal: optionSelected(id, value),
+      archived: false,
+      realEstateSpecific: item.realEstateSpecific,
+    }];
+  }));
+  const catalogBonuses = catalog.flatMap((item) => {
+    const id = item.offerKey ?? slugifyTagKey(item.code ?? item.name);
+    if (!id) return [];
+    catalogIds.add(id);
+    const existingBonus = existingBonusesById.get(id);
+    if (!existingBonus && (existingOptionsById.has(id) || item.defaultInclusion === "optional")) return [];
+    const defaultPackageIds = "defaultPackageKeys" in item && Array.isArray(item.defaultPackageKeys)
+      ? item.defaultPackageKeys.filter(
+          (key): key is "grow" | "improve" | "maintain" =>
+            key === "grow" || key === "improve" || key === "maintain",
+        )
+      : [];
+    return [{
+      ...(existingBonus ?? {}),
+      id,
       name: item.name,
       description: item.clientBenefit ?? item.internalDescription ?? "",
       archived: false,
       realEstateSpecific: item.realEstateSpecific,
-      billingCadence: item.billingCadence === "monthly" ? "monthly" : "one-time",
-      defaultPackageIds: "defaultPackageKeys" in item && Array.isArray(item.defaultPackageKeys)
-        ? item.defaultPackageKeys.filter(
-            (key): key is "grow" | "improve" | "maintain" =>
-              key === "grow" || key === "improve" || key === "maintain",
-          )
-        : [],
+      billingCadence:
+        existingBonus?.billingCadence === "monthly" || existingBonus?.billingCadence === "one-time"
+          ? existingBonus.billingCadence
+          : item.billingCadence === "monthly" ? "monthly" : "one-time",
+      defaultPackageIds,
       offerSection: item.offerSection,
-    }));
-  const existingBonusIds = new Set(
-    [...existingBonuses, ...existingOptions].flatMap((item) =>
-      isRecord(item) && typeof item.id === "string" ? [item.id] : [],
-    ),
-  );
-  const newlyCatalogedCoreServices = catalogBonuses.filter(
-    (item) => item.offerSection === "core-services" && !existingBonusIds.has(item.id),
-  );
-  const bonuses = withPublicationApplicability(
-    existingBonuses.length > 0 || existingOptions.length > 0
-      ? [...existingBonuses, ...newlyCatalogedCoreServices]
-      : catalogBonuses,
-  );
+    }];
+  });
+  const bonuses = withPublicationApplicability(catalogBonuses);
   const existingBonusPackageSelections = isRecord(value.bonusPackageSelections)
     ? value.bonusPackageSelections
     : {};
-  const bonusPackageSelections: JsonRecord = { ...existingBonusPackageSelections };
+  const bonusPackageSelections: JsonRecord = Object.fromEntries(
+    Object.entries(existingBonusPackageSelections).filter(([id]) => catalogIds.has(id)),
+  );
   for (const item of catalogBonuses) {
     if (
       !Object.prototype.hasOwnProperty.call(bonusPackageSelections, item.id) &&

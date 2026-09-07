@@ -4,13 +4,20 @@ import { requireStaffBrand } from "@/lib/brands/staff";
 import { ensureDefaultContactTags } from "@/lib/contacts/seed";
 import { parseArchivedView } from "@/lib/quotes/status";
 import { ServicesCatalog, type ServiceRow } from "./ServicesCatalog";
+import { safeOfferOptionsReturnPath } from "./serviceCatalogNavigation";
 
-type SearchParams = Promise<{ archived?: string }>;
+type SearchParams = Promise<{
+  archived?: string;
+  returnTo?: string | string[];
+  service?: string | string[];
+}>;
 
 export default async function ServicesPage({ searchParams }: { searchParams: SearchParams }) {
   const { brand } = await requireStaffBrand();
   const params = await searchParams;
   const archived = parseArchivedView(params.archived);
+  const returnTo = safeOfferOptionsReturnPath(params.returnTo);
+  const requestedServiceId = Array.isArray(params.service) ? params.service[0] : params.service;
   await ensureDefaultContactTags(brand.id);
   const { proposalCatalog } = await getSchemaCapabilities();
 
@@ -88,6 +95,8 @@ export default async function ServicesPage({ searchParams }: { searchParams: Sea
         archived={archived}
         tags={tags}
         services={services}
+        returnTo={returnTo}
+        requestedServiceId={requestedServiceId}
       />
     </div>
   );

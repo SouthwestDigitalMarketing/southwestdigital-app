@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, ArchiveRestore, ChevronDown, ChevronsUpDown, ChevronUp, Pencil, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronUp, Pencil, Trash2 } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -119,14 +119,22 @@ export function ServicesCatalog({
   services,
   tags,
   archived,
+  returnTo,
+  requestedServiceId,
 }: {
   services: ServiceRow[];
   tags: ServiceTag[];
   archived: boolean;
+  returnTo: string | null;
+  requestedServiceId?: string;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(() =>
+    requestedServiceId && services.some((service) => service.id === requestedServiceId)
+      ? requestedServiceId
+      : null,
+  );
   const [creating, setCreating] = useState(false);
   const [pending, startTransition] = useTransition();
   const [sort, setSort] = useState<{ column: SortColumn; direction: SortDirection }>({
@@ -147,14 +155,15 @@ export function ServicesCatalog({
     );
   }
 
-  function run(action: () => Promise<void>) {
+  function run(action: () => Promise<void>, returnAfterSave = false) {
     setError(null);
     startTransition(async () => {
       try {
         await action();
         setEditingId(null);
         setCreating(false);
-        router.refresh();
+        if (returnAfterSave && returnTo) router.push(returnTo);
+        else router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not save the service.");
       }
@@ -163,6 +172,16 @@ export function ServicesCatalog({
 
   return (
     <div className="space-y-5">
+      {returnTo ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <p className="text-sm text-slate-600">
+            Service titles, descriptions, additions, and lifecycle changes made here flow back to the offer.
+          </p>
+          <Link href={returnTo} className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" /> Back to offer options
+          </Link>
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-5">
           <h2 className="text-lg font-semibold text-slate-900">Service catalogue</h2>
@@ -173,7 +192,12 @@ export function ServicesCatalog({
               role="switch"
               aria-checked={archived}
               aria-label="Show archived services"
-              onClick={() => router.push(archived ? "/services" : "/services?archived=1", { scroll: false })}
+              onClick={() => {
+                const params = new URLSearchParams();
+                if (!archived) params.set("archived", "1");
+                if (returnTo) params.set("returnTo", returnTo);
+                router.push(`/services${params.size ? `?${params.toString()}` : ""}`, { scroll: false });
+              }}
               className="ui-toggle-switch"
             >
               <span className="ui-toggle-switch-thumb" />
@@ -195,7 +219,11 @@ export function ServicesCatalog({
           tags={tags}
           pending={pending}
           onCancel={() => setCreating(false)}
-          onSubmit={(data) => run(async () => createCatalogServiceAction(data))}
+          returnToOffer={Boolean(returnTo)}
+          onSubmit={(data, returnAfterSave) => run(
+            async () => createCatalogServiceAction(data),
+            returnAfterSave,
+          )}
         />
       ) : null}
 
@@ -231,9 +259,10 @@ export function ServicesCatalog({
                         tags={tags}
                         pending={pending}
                         onCancel={() => setEditingId(null)}
-                        onSubmit={(data) => {
+                        returnToOffer={Boolean(returnTo)}
+                        onSubmit={(data, returnAfterSave) => {
                           data.set("id", service.id);
-                          run(async () => updateCatalogServiceAction(data));
+                          run(async () => updateCatalogServiceAction(data), returnAfterSave);
                         }}
                       />
                     </td>
@@ -323,12 +352,14 @@ function ServiceForm({
   pending,
   onCancel,
   onSubmit,
+  returnToOffer,
 }: {
   service?: ServiceRow;
   tags: ServiceTag[];
   pending: boolean;
   onCancel: () => void;
-  onSubmit: (data: FormData) => void;
+  onSubmit: (data: FormData, returnAfterSave: boolean) => void;
+  returnToOffer: boolean;
 }) {
   const tagsByKind = (Object.keys(TAG_KIND_LABELS) as ContactTagKindName[])
     .map((kind) => ({ kind, label: TAG_KIND_LABELS[kind], tags: tags.filter((tag) => tag.kind === kind) }))
@@ -338,7 +369,10 @@ function ServiceForm({
       className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4"
       onSubmit={(event) => {
         event.preventDefault();
-        onSubmit(new FormData(event.currentTarget));
+        const data = new FormData(event.currentTarget);
+        const returnAfterSave = data.get("submitIntent") === "save-return";
+        data.delete("submitIntent");
+        onSubmit(data, returnAfterSave);
       }}
     >
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">
@@ -346,7 +380,7 @@ function ServiceForm({
       </p>
       <div className="grid gap-3 md:grid-cols-2">
         <label className="grid gap-1 text-sm font-medium text-slate-600">
-          Name
+          Service title
           <input name="name" required defaultValue={service?.name ?? ""} className={inputClass} />
         </label>
         <label className="grid gap-1 text-sm font-medium text-slate-600">
@@ -354,8 +388,8 @@ function ServiceForm({
           <input name="code" defaultValue={service?.code ?? ""} placeholder="Optional unique code" className={inputClass} />
         </label>
         <label className="grid gap-1 text-sm font-medium text-slate-600 md:col-span-2">
-          Client benefit
-          <input name="clientBenefit" defaultValue={service?.clientBenefit ?? ""} className={inputClass} />
+          Client-facing description
+          <textarea name="clientBenefit" rows={2} defaultValue={service?.clientBenefit ?? ""} className={inputClass} />
         </label>
         <label className="grid gap-1 text-sm font-medium text-slate-600">
           Card label
@@ -458,8 +492,13 @@ function ServiceForm({
         )}
       </div>
       <div className="flex flex-wrap gap-2">
-        <button type="submit" disabled={pending} className={primary}>
-          {pending ? "Saving…" : service ? "Save" : "Add service"}
+        {returnToOffer ? (
+          <button type="submit" name="submitIntent" value="save-return" disabled={pending} className={primary}>
+            {pending ? "Saving…" : service ? "Save & return to offer" : "Add & return to offer"}
+          </button>
+        ) : null}
+        <button type="submit" name="submitIntent" value="save" disabled={pending} className={returnToOffer ? ghost : primary}>
+          {pending ? "Saving…" : service ? (returnToOffer ? "Save here" : "Save") : "Add service"}
         </button>
         <button type="button" disabled={pending} onClick={onCancel} className={ghost}>
           Cancel
