@@ -1,12 +1,18 @@
 "use client";
 
-import { LibraryBig, Search } from "lucide-react";
+import { Check, ChevronDown, Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import ProposalAppDemoHeader from "./ProposalAppDemoHeader";
 import OptionsTemplatesToolbar from "./OptionsTemplatesToolbar";
-import PricingSnapshotSidebar from "./PricingSnapshotSidebar";
+import ServiceOfferEditor from "./ServiceOfferEditor";
+export { TierRangeControl } from "./ServiceOfferEditor";
+import {
+  applyServiceConfiguration,
+  readServiceConfiguration,
+  type ServiceRow,
+} from "./proposalServiceConfiguration";
 import {
   getOptionsCatalogOrder,
   getProposalAdditionalOptions,
@@ -15,8 +21,6 @@ import {
   getProposalPricingSnapshotItems,
   useProposalAssessmentDemoState,
   type AssessmentState,
-  type ProposalAdditionalOption,
-  type ProposalBonus,
 } from "./ProposalCreationWorkspaceDemo";
 import {
   reconcileProposalAssessmentWithCatalog,
@@ -28,8 +32,8 @@ import {
 } from "./proposalPackageNames";
 import { normalizeTierPackageIds, TIER_ORDER } from "./proposalTierRanges";
 import {
-  includedServicePackages,
-  servicePackageIds,
+  proposalServiceAddOns,
+  serviceIsApplicable,
 } from "@/lib/quotes/proposalServices";
 import {
   proposalCatalogItemApplicability,
@@ -37,14 +41,6 @@ import {
 } from "@/lib/quotes/catalog";
 
 const EMPTY_CATALOG: ProposalOptionCatalogItem[] = [];
-const CONTROL =
-  "w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800";
-type Row = {
-  id: string;
-  option?: ProposalAdditionalOption;
-  bonus?: ProposalBonus;
-};
-
 export default function ProposalAddOnsDemo({
   catalog = EMPTY_CATALOG,
   catalogAuthoritative = false,
@@ -58,6 +54,8 @@ export default function ProposalAddOnsDemo({
   const [query, setQuery] = useState("");
   const [browsing, setBrowsing] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [renamePackages, setRenamePackages] = useState(false);
   const returnPath = `/offers/add-ons${searchParams.size ? `?${searchParams.toString()}` : ""}`;
   const catalogHref = `/services?returnTo=${encodeURIComponent(returnPath)}`;
 
@@ -76,7 +74,7 @@ export default function ProposalAddOnsDemo({
   }
   const current = resolved(assessment);
   const catalogById = new Map(catalog.map((item) => [item.offerKey, item]));
-  const rowsById = new Map<string, Row>();
+  const rowsById = new Map<string, ServiceRow>();
   for (const bonus of current.bonuses)
     rowsById.set(bonus.id, { id: bonus.id, bonus });
   for (const option of current.additionalOptions)
@@ -86,7 +84,7 @@ export default function ProposalAddOnsDemo({
   ];
   const rows = ids
     .map((id) => rowsById.get(id))
-    .filter((row): row is Row => Boolean(row));
+    .filter((row): row is ServiceRow => Boolean(row));
 
   useEffect(() => {
     if (!storageReady || !catalogAuthoritative) return;
@@ -106,83 +104,6 @@ export default function ProposalAddOnsDemo({
       ...fn(resolved(saved)),
       servicesInitialized: true,
     }));
-  }
-  function updateOption(id: string, fields: Partial<ProposalAdditionalOption>) {
-    change((saved) => ({
-      ...saved,
-      additionalOptions: saved.additionalOptions.map((item) =>
-        item.id === id ? { ...item, ...fields } : item,
-      ),
-    }));
-  }
-  function updateBonus(id: string, fields: Partial<ProposalBonus>) {
-    change((saved) => ({
-      ...saved,
-      bonuses: saved.bonuses.map((item) =>
-        item.id === id ? { ...item, ...fields } : item,
-      ),
-    }));
-  }
-  function setKind(id: string, kind: "included" | "optional") {
-    change((saved) => {
-      const option = saved.additionalOptions.find((item) => item.id === id);
-      const bonus = saved.bonuses.find((item) => item.id === id);
-      if (kind === "included" && option) {
-        const packages = servicePackageIds(
-          option.packageIds ?? saved.bonusPackageSelections[id] ?? TIER_ORDER,
-        );
-        return {
-          ...saved,
-          additionalOptions: saved.additionalOptions.filter(
-            (item) => item.id !== id,
-          ),
-          bonuses: [
-            ...saved.bonuses,
-            {
-              id,
-              name: option.name,
-              description: option.description,
-              archived: option.archived,
-              realEstateSpecific: option.realEstateSpecific,
-              billingCadence: option.billingCadence ?? "monthly",
-              defaultPackageIds: packages,
-              addOnPrice: option.monthlyPrice,
-              addOnPackageIds: [],
-            },
-          ],
-          bonusPackageSelections: {
-            ...saved.bonusPackageSelections,
-            [id]: packages,
-          },
-        };
-      }
-      if (kind === "optional" && bonus) {
-        const included = includedServicePackages(saved, bonus);
-        return {
-          ...saved,
-          bonuses: saved.bonuses.filter((item) => item.id !== id),
-          additionalOptions: [
-            ...saved.additionalOptions,
-            {
-              id,
-              name: bonus.name,
-              description: bonus.description,
-              archived: bonus.archived,
-              realEstateSpecific: bonus.realEstateSpecific,
-              billingCadence: bonus.billingCadence ?? "one-time",
-              monthlyPrice:
-                bonus.addOnPrice ?? catalogById.get(id)?.defaultPrice ?? 0,
-              showInProposal: true,
-              packageIds: servicePackageIds([
-                ...included,
-                ...(bonus.addOnPackageIds ?? []),
-              ]),
-            },
-          ],
-        };
-      }
-      return saved;
-    });
   }
   function addService(item: ProposalOptionCatalogItem) {
     change((saved) => {
@@ -233,31 +154,35 @@ export default function ProposalAddOnsDemo({
       };
     });
   }
+  const paidChoices = new Map(
+    proposalServiceAddOns(current).map((item) => [item.id, item]),
+  );
+  function applicable(row: ServiceRow) {
+    const catalogItem = catalogById.get(row.id);
+    return catalogItem
+      ? proposalCatalogItemApplicability(catalogItem, current).applicable
+      : serviceIsApplicable(current, row.option ?? row.bonus);
+  }
+  function cellState(row: ServiceRow, tier: PackageId) {
+    const config = readServiceConfiguration(current, row);
+    if (!config.visible || !applicable(row)) return "unavailable";
+    if (config.included.includes(tier)) return "included";
+    return paidChoices.get(row.id)?.packageIds.includes(tier)
+      ? "optional"
+      : "unavailable";
+  }
   const matches = (name: string, description: string) =>
     `${name} ${description}`.toLowerCase().includes(query.trim().toLowerCase());
-  function isActive(row: Row) {
-    if (row.option)
-      return (
-        !row.option.archived &&
-        row.option.showInProposal &&
-        servicePackageIds(
-          row.option.packageIds ??
-            current.bonusPackageSelections[row.id] ??
-            TIER_ORDER,
-        ).length > 0
-      );
-    return (
-      !row.bonus!.archived &&
-      (includedServicePackages(current, row.bonus).length > 0 ||
-        servicePackageIds(row.bonus!.addOnPackageIds).length > 0)
-    );
+  function isActive(row: ServiceRow) {
+    return TIER_ORDER.some((id) => cellState(row, id) !== "unavailable");
   }
   const activeCount = rows.filter(isActive).length;
   const visibleRows = rows.filter((row) => {
     const item = row.option ?? row.bonus!;
     // Keep saved, currently inapplicable rows editable; changing the assessment can make them applicable again.
     return (
-      (showInactive || isActive(row)) && matches(item.name, item.description)
+      (showInactive || isActive(row) || row.id === editingId) &&
+      matches(item.name, item.description)
     );
   });
   const candidates = catalog.filter(
@@ -267,77 +192,109 @@ export default function ProposalAddOnsDemo({
       matches(item.name, item.description),
   );
 
+  const groups = [
+    {
+      cadence: "monthly",
+      title: "Recurring services",
+      detail: "Ongoing work included in the package or selected as an add-on.",
+    },
+    {
+      cadence: "one-time",
+      title: "One-time work",
+      detail: "Setup and other services delivered once.",
+    },
+  ] as const;
+  const prices = getProposalPricingSnapshotItems(current);
+  const cleanup = getProposalPricingSnapshotCleanupCard(current);
+  const packageName = (id: PackageId) =>
+    resolveProposalPackageName(current.packageNames, id);
+  const formatPrice = (price: number) =>
+    price.toLocaleString("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 2,
+    });
+  function openEditor(id: string) {
+    setEditingId((previous) => (previous === id ? null : id));
+  }
+
   return (
     <main className="min-h-screen">
       <section className="w-full px-5 py-6 lg:px-8">
         <ProposalAppDemoHeader currentStep="add-ons" />
-        <div className="mt-4 grid gap-5 xl:grid-cols-[minmax(0,1fr)_280px]">
-          <div className="proposal-options-editor min-w-0">
-            {storageReady ? (
-              <OptionsTemplatesToolbar
-                currentSlice={current}
-                hasCustomizedOptions
-                onApply={(slice) => change((saved) => ({ ...saved, ...slice }))}
-                middleSlot={
-                  <Link
-                    href={catalogHref}
-                    className="inline-flex items-center gap-2 text-sm font-medium text-brandnavy"
-                  >
-                    <LibraryBig className="h-4 w-4" />
-                    Manage service catalogue
-                  </Link>
-                }
-              />
-            ) : null}
-            <div className="my-4 flex flex-wrap items-center gap-3">
-              <label className="flex min-w-52 flex-1 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3">
+        <div className="mt-6 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+              Build your service lineup
+            </h1>
+            <p className="mt-1 text-sm text-slate-600">
+              Compare what each package includes. Select a service to adjust
+              this offer.
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-pressed={browsing}
+            onClick={() => {
+              setBrowsing(!browsing);
+              setEditingId(null);
+            }}
+            className="inline-flex items-center gap-2 rounded-lg bg-brandnavy px-4 py-2.5 text-sm font-semibold text-white"
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            {browsing ? "Back to offer" : "Add services"}
+          </button>
+        </div>
+        <div className="mt-5 grid items-start gap-6 2xl:grid-cols-[minmax(0,1fr)_260px]">
+          <div className="min-w-0">
+            <div className="mb-4 flex flex-wrap items-center gap-3">
+              <label className="flex min-w-52 flex-1 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 focus-within:ring-2 focus-within:ring-brandnavy">
                 <Search className="h-4 w-4 text-slate-500" aria-hidden="true" />
                 <input
                   type="search"
                   aria-label="Search services"
-                  placeholder="Search services"
+                  placeholder={
+                    browsing
+                      ? "Search the service catalogue"
+                      : "Search this offer"
+                  }
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  className="w-full bg-transparent py-2 text-sm outline-none"
+                  className="w-full bg-transparent py-2.5 text-sm outline-none"
                 />
               </label>
-              <button
-                type="button"
-                aria-pressed={browsing}
-                onClick={() => setBrowsing(!browsing)}
-                className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold"
-              >
-                {browsing ? "Back to offer" : "Add services"}
-              </button>
-              <span className="text-sm text-slate-500">
-                {activeCount} services in offer
-              </span>
+              {!browsing ? (
+                <label className="flex items-center gap-2 text-xs text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={showInactive}
+                    onChange={(event) => setShowInactive(event.target.checked)}
+                  />
+                  Show hidden or unassigned services (
+                  {rows.length - activeCount})
+                </label>
+              ) : null}
             </div>
-            {!browsing ? (
-              <label className="mb-3 flex items-center gap-2 text-sm text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={showInactive}
-                  onChange={(event) => setShowInactive(event.target.checked)}
-                />
-                Show hidden or unassigned services ({rows.length - activeCount})
-              </label>
-            ) : null}
-            <p className="mb-3 text-sm text-slate-600">
-              Included services have no separate charge. Add-ons can be
-              purchased only in the selected tiers; a service is never charged
-              where it is included.
-            </p>
             {!storageReady ? (
               <p role="status">Loading saved services…</p>
             ) : browsing ? (
               <section
                 aria-label="Add catalogue services"
-                className="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white"
+                className="divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-white"
               >
+                <div className="bg-slate-50 p-4">
+                  <h2 className="font-semibold text-slate-900">
+                    Choose a service
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Add a service, then adjust its packages and pricing for this
+                    offer.
+                  </p>
+                </div>
                 {candidates.length === 0 ? (
                   <p className="p-5 text-sm text-slate-500">
-                    No additional applicable services match your search.
+                    No additional applicable services match your search. Hidden
+                    services can be restored from the offer view.
                   </p>
                 ) : (
                   candidates.map((item) => (
@@ -346,16 +303,31 @@ export default function ProposalAddOnsDemo({
                       className="flex items-center gap-4 p-4"
                     >
                       <div className="min-w-0 flex-1">
-                        <h3 className="font-semibold">{item.name}</h3>
-                        <p className="text-sm text-slate-500">
+                        <h3 className="font-semibold text-slate-900">
+                          {item.name}
+                        </h3>
+                        <p className="mt-1 text-sm text-slate-500">
                           {item.description}
+                        </p>
+                        <p className="mt-2 text-xs font-medium text-slate-500">
+                          {item.billingCadence === "monthly"
+                            ? "Recurring monthly"
+                            : "One-time work"}
+                          {item.defaultInclusion === "optional"
+                            ? ` · Catalogue price ${formatPrice(item.defaultPrice)}`
+                            : ""}
                         </p>
                       </div>
                       <button
                         type="button"
                         aria-label={`Add ${item.name} to offer`}
-                        onClick={() => addService(item)}
-                        className="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold"
+                        onClick={() => {
+                          addService(item);
+                          setBrowsing(false);
+                          setQuery("");
+                          setEditingId(item.offerKey);
+                        }}
+                        className="rounded-lg border border-brandnavy/25 px-3 py-2 text-sm font-semibold text-brandnavy"
                       >
                         Add
                       </button>
@@ -364,289 +336,328 @@ export default function ProposalAddOnsDemo({
                 )}
               </section>
             ) : (
-              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-                <table className="w-full min-w-[800px] border-collapse text-sm">
-                  <thead className="bg-slate-50 text-left">
-                    <tr>
-                      {[
-                        "Service",
-                        "Treatment / billing",
-                        "Included in",
-                        "Available as add-on",
-                        "Visibility",
-                      ].map((heading) => (
-                        <th
-                          key={heading}
-                          scope="col"
-                          className="px-3 py-3 font-semibold"
-                        >
-                          {heading}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {visibleRows.map((row) => {
-                      const item = row.option ?? row.bonus!;
-                      const included = row.bonus
-                        ? includedServicePackages(current, row.bonus)
-                        : [];
-                      const available = row.option
-                        ? servicePackageIds(
-                            row.option.packageIds ??
-                              current.bonusPackageSelections[row.id] ??
-                              TIER_ORDER,
-                          )
-                        : servicePackageIds(row.bonus?.addOnPackageIds).filter(
-                            (id) => !included.includes(id),
-                          );
-                      const cadence =
-                        item.billingCadence ??
-                        (row.option ? "monthly" : "one-time");
-                      const catalogItem = catalogById.get(row.id);
-                      const applicability = catalogItem
-                        ? proposalCatalogItemApplicability(catalogItem, current)
-                        : null;
-                      const hidden =
-                        item.archived || row.option?.showInProposal === false;
-                      return (
-                        <tr
-                          key={row.id}
-                          className={`border-t border-slate-200 align-top ${hidden ? "bg-slate-50" : ""}`}
-                        >
-                          <td className="max-w-80 px-3 py-4">
-                            <Link
-                              className="font-semibold text-brandnavy"
-                              href={
-                                catalogItem
-                                  ? `${catalogHref}&service=${encodeURIComponent(catalogItem.id)}`
-                                  : catalogHref
-                              }
-                            >
-                              {item.name}
-                            </Link>
-                            <p className="mt-1 text-slate-500">
-                              {item.description}
-                            </p>
-                            {applicability?.applicable === false ? (
-                              <p className="mt-2 text-amber-700">
-                                Not applicable to this assessment:{" "}
-                                {applicability.reason}
-                              </p>
-                            ) : null}
-                          </td>
-                          <td className="w-40 px-3 py-4">
-                            <select
-                              aria-label={`Treatment for ${item.name}`}
-                              className={CONTROL}
-                              value={row.option ? "optional" : "included"}
-                              onChange={(event) =>
-                                setKind(
-                                  row.id,
-                                  event.target.value as "included" | "optional",
-                                )
-                              }
-                            >
-                              <option value="included">Included</option>
-                              <option value="optional">Add-on</option>
-                            </select>
-                            <select
-                              aria-label={`Billing for ${item.name}`}
-                              className={`${CONTROL} mt-2`}
-                              value={cadence}
-                              onChange={(event) => {
-                                const billingCadence = event.target.value as
-                                  | "monthly"
-                                  | "one-time";
-                                if (row.option)
-                                  updateOption(row.id, { billingCadence });
-                                else updateBonus(row.id, { billingCadence });
-                              }}
-                            >
-                              <option value="monthly">Monthly</option>
-                              <option value="one-time">One-time</option>
-                            </select>
-                          </td>
-                          <td className="w-44 px-3 py-4">
-                            {row.bonus ? (
-                              <TierRangeControl
-                                label={`Included in ${item.name}`}
-                                value={included}
-                                names={current.packageNames}
-                                onChange={(packages) =>
-                                  change((saved) => ({
-                                    ...saved,
-                                    bonusPackageSelections: {
-                                      ...saved.bonusPackageSelections,
-                                      [row.id]: packages,
-                                    },
-                                    bonuses: saved.bonuses.map((bonus) =>
-                                      bonus.id === row.id
-                                        ? {
-                                            ...bonus,
-                                            addOnPackageIds:
-                                              bonus.addOnPackageIds?.filter(
-                                                (id) => !packages.includes(id),
-                                              ),
-                                          }
-                                        : bonus,
-                                    ),
-                                  }))
-                                }
-                              />
-                            ) : (
-                              <span className="text-slate-400">
-                                Not included
-                              </span>
-                            )}
-                          </td>
-                          <td className="w-52 px-3 py-4">
-                            <TierRangeControl
-                              label={`Available as add-on for ${item.name}`}
-                              value={available}
-                              names={current.packageNames}
-                              excluded={included}
-                              onChange={(packageIds) =>
-                                row.option
-                                  ? updateOption(row.id, { packageIds })
-                                  : updateBonus(row.id, {
-                                      addOnPackageIds: packageIds,
-                                      addOnPrice:
-                                        row.bonus?.addOnPrice ??
-                                        catalogItem?.defaultPrice ??
-                                        0,
-                                    })
-                              }
-                            />
-                            <label className="mt-2 block text-xs text-slate-500">
-                              Price (${" "}
-                              {cadence === "monthly" ? "/ month" : "one-time"})
-                              <input
-                                type="number"
-                                min={0}
-                                step="0.01"
-                                aria-label={`Add-on price for ${item.name}`}
-                                className={`${CONTROL} mt-1`}
-                                value={
-                                  row.option?.monthlyPrice ??
-                                  row.bonus?.addOnPrice ??
-                                  ""
-                                }
-                                placeholder="0.00"
-                                onChange={(event) => {
-                                  const amount = Number(event.target.value);
-                                  if (!Number.isFinite(amount)) return;
-                                  if (row.option)
-                                    updateOption(row.id, {
-                                      monthlyPrice: Math.max(0, amount),
-                                    });
-                                  else
-                                    updateBonus(row.id, {
-                                      addOnPrice: Math.max(0, amount),
-                                    });
-                                }}
-                              />
-                            </label>
-                          </td>
-                          <td className="px-3 py-4">
-                            <button
-                              type="button"
-                              aria-label={`${hidden ? "Show" : "Hide"} ${item.name} in offer`}
-                              onClick={() =>
-                                row.option
-                                  ? updateOption(row.id, {
-                                      archived: false,
-                                      showInProposal: hidden,
-                                    })
-                                  : updateBonus(row.id, { archived: !hidden })
-                              }
-                              className="rounded-md border border-slate-300 px-2 py-2"
-                            >
-                              {hidden ? "Show" : "Hide"}
-                            </button>
-                            {hidden ? (
-                              <p className="mt-2 text-xs text-slate-500">
-                                Hidden from lead
-                              </p>
-                            ) : null}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              <div className="space-y-5">
+                <p className="text-xs text-slate-500">
+                  {activeCount} services in offer · Included = no extra charge ·
+                  Optional = client chooses and pays separately
+                </p>
+                {groups.map((group) => {
+                  const groupRows = visibleRows.filter(
+                    (row) =>
+                      readServiceConfiguration(current, row).cadence ===
+                      group.cadence,
+                  );
+                  if (groupRows.length === 0) return null;
+                  return (
+                    <section
+                      key={group.cadence}
+                      aria-label={group.title}
+                      className="overflow-hidden rounded-xl border border-slate-200 bg-white"
+                    >
+                      <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+                        <h2 className="font-semibold text-slate-900">
+                          {group.title}{" "}
+                          <span className="ml-1 text-sm font-normal text-slate-400">
+                            {groupRows.length}
+                          </span>
+                        </h2>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {group.detail}
+                        </p>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="block w-full table-fixed border-collapse text-sm sm:table sm:min-w-[620px]">
+                          <caption className="sr-only">
+                            {group.title} by package. Select a service to edit
+                            its availability.
+                          </caption>
+                          <colgroup className="hidden sm:table-column-group">
+                            <col className="w-[40%]" />
+                            {TIER_ORDER.map((id) => (
+                              <col key={id} className="w-[20%]" />
+                            ))}
+                          </colgroup>
+                          <thead className="hidden sm:table-header-group">
+                            <tr>
+                              <th
+                                scope="col"
+                                className="px-4 py-3 text-left text-xs font-medium text-slate-500"
+                              >
+                                Service
+                              </th>
+                              {TIER_ORDER.map((id) => (
+                                <th
+                                  scope="col"
+                                  key={id}
+                                  className="break-words px-2 py-3 text-center font-semibold text-slate-800"
+                                >
+                                  {packageName(id)}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="block sm:table-row-group">
+                            {groupRows.map((row) => {
+                              const item = row.option ?? row.bonus!;
+                              const config = readServiceConfiguration(
+                                current,
+                                row,
+                              );
+                              const catalogItem = catalogById.get(row.id);
+                              const expanded = editingId === row.id;
+                              return (
+                                <Fragment key={row.id}>
+                                  <tr
+                                    className={`block border-t border-slate-100 pb-2 sm:table-row sm:pb-0 ${expanded ? "bg-slate-50" : "hover:bg-slate-50/60"}`}
+                                  >
+                                    <th
+                                      scope="row"
+                                      className="block px-4 py-3 text-left font-normal sm:table-cell"
+                                    >
+                                      <button
+                                        type="button"
+                                        aria-expanded={expanded}
+                                        aria-controls={
+                                          expanded
+                                            ? `service-editor-${row.id}`
+                                            : undefined
+                                        }
+                                        onClick={() => openEditor(row.id)}
+                                        className="flex w-full items-start gap-2 rounded text-left font-medium text-slate-900 focus-visible:outline-2 focus-visible:outline-brandnavy"
+                                      >
+                                        <ChevronDown
+                                          aria-hidden="true"
+                                          className={`mt-0.5 h-4 w-4 shrink-0 text-slate-400 transition-transform ${expanded ? "rotate-180" : ""}`}
+                                        />
+                                        <span>{item.name}</span>
+                                      </button>
+                                      {!config.visible ? (
+                                        <p className="ml-6 mt-1 text-xs text-slate-500">
+                                          Hidden from lead
+                                        </p>
+                                      ) : !applicable(row) ? (
+                                        <p className="ml-6 mt-1 text-xs text-amber-700">
+                                          {catalogItem
+                                            ? proposalCatalogItemApplicability(
+                                                catalogItem,
+                                                current,
+                                              ).reason
+                                            : "Not applicable to this assessment"}
+                                        </p>
+                                      ) : null}
+                                    </th>
+                                    {TIER_ORDER.map((id) => {
+                                      const state = cellState(row, id);
+                                      const text =
+                                        state === "included"
+                                          ? "Included"
+                                          : state === "optional"
+                                            ? `Optional · ${formatPrice(config.price)}${config.cadence === "monthly" ? "/mo" : " once"}`
+                                            : "Not offered";
+                                      return (
+                                        <td
+                                          key={id}
+                                          className="inline-block w-1/3 px-1 py-2 text-center align-top sm:table-cell sm:w-auto sm:py-3"
+                                        >
+                                          <span className="mb-1 block break-words text-xs font-medium text-slate-600 sm:hidden">
+                                            {packageName(id)}
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() => openEditor(row.id)}
+                                            aria-label={`${item.name}, ${packageName(id)}: ${text}. Edit service`}
+                                            aria-expanded={expanded}
+                                            className={`inline-flex min-h-10 items-center justify-center gap-1 rounded-lg px-2 py-1 text-xs leading-5 focus-visible:outline-2 focus-visible:outline-brandnavy ${state === "included" ? "font-medium text-emerald-700" : state === "optional" ? "bg-blue-50 font-medium text-blue-800" : "text-slate-400"}`}
+                                          >
+                                            {state === "included" ? (
+                                              <Check
+                                                className="h-3.5 w-3.5 shrink-0"
+                                                aria-hidden="true"
+                                              />
+                                            ) : null}
+                                            {text}
+                                          </button>
+                                        </td>
+                                      );
+                                    })}
+                                  </tr>
+                                  {expanded ? (
+                                    <tr className="block sm:table-row">
+                                      <td
+                                        colSpan={4}
+                                        className="block border-t border-slate-200 p-3 sm:table-cell"
+                                      >
+                                        <div id={`service-editor-${row.id}`}>
+                                          <ServiceOfferEditor
+                                            key={row.id}
+                                            name={item.name}
+                                            description={item.description}
+                                            initial={config}
+                                            names={current.packageNames}
+                                            catalogHref={
+                                              catalogItem
+                                                ? `${catalogHref}&service=${encodeURIComponent(catalogItem.id)}`
+                                                : undefined
+                                            }
+                                            onApply={(next) => {
+                                              change((saved) =>
+                                                applyServiceConfiguration(
+                                                  saved,
+                                                  row.id,
+                                                  next,
+                                                ),
+                                              );
+                                              setEditingId(null);
+                                            }}
+                                            onCancel={() => setEditingId(null)}
+                                          />
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  ) : null}
+                                </Fragment>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
+                  );
+                })}
                 {visibleRows.length === 0 ? (
-                  <p className="p-5 text-sm text-slate-500">
+                  <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
                     {query
                       ? "No services match your search."
-                      : "No services configured. Use Add services or load a template."}
-                  </p>
+                      : "No services assigned. Add services, load a template, or show hidden services to restore them."}
+                  </div>
                 ) : null}
               </div>
             )}
+            {storageReady ? (
+              <details className="mt-5 rounded-lg border border-slate-200 bg-white px-4 py-3">
+                <summary className="cursor-pointer text-sm font-medium text-slate-600">
+                  Templates and catalogue tools
+                </summary>
+                <div className="mt-3">
+                  <OptionsTemplatesToolbar
+                    currentSlice={current}
+                    hasCustomizedOptions
+                    onApply={(slice) => {
+                      change((saved) => ({ ...saved, ...slice }));
+                      setEditingId(null);
+                    }}
+                    middleSlot={
+                      <Link
+                        href={catalogHref}
+                        className="text-xs text-slate-500 underline underline-offset-4"
+                      >
+                        Manage shared service catalogue
+                      </Link>
+                    }
+                  />
+                </div>
+              </details>
+            ) : null}
           </div>
-          <PricingSnapshotSidebar
-            items={getProposalPricingSnapshotItems(current)}
-            cleanupCard={getProposalPricingSnapshotCleanupCard(current)}
-            hideLabel
-            editablePackageNames={assessment.packageNames}
-            onPackageNameChange={(id, name) =>
-              updateAssessment("packageNames", {
-                ...assessment.packageNames,
-                [id]: name,
-              })
-            }
-          />
+          {storageReady ? (
+            <aside
+              aria-label="Package coverage"
+              className="rounded-xl border border-slate-200 bg-white p-4 2xl:sticky 2xl:top-8"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="font-semibold text-slate-900">
+                  Package coverage
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setRenamePackages(!renamePackages)}
+                  aria-pressed={renamePackages}
+                  className="text-xs text-slate-500 underline underline-offset-4"
+                >
+                  {renamePackages ? "Done" : "Rename"}
+                </button>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-slate-500">
+                Base monthly prices below exclude optional add-ons. Including a
+                service does not change the base price.
+              </p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-3 2xl:grid-cols-1">
+                {TIER_ORDER.map((id) => {
+                  const includedRows = rows.filter(
+                    (row) => cellState(row, id) === "included",
+                  );
+                  const recurring = includedRows.filter(
+                    (row) =>
+                      readServiceConfiguration(current, row).cadence ===
+                      "monthly",
+                  ).length;
+                  const optional = rows.filter(
+                    (row) => cellState(row, id) === "optional",
+                  ).length;
+                  return (
+                    <div
+                      key={id}
+                      className="rounded-lg border border-slate-200 p-3"
+                    >
+                      {renamePackages ? (
+                        <input
+                          aria-label={`Name for ${packageName(id)} package`}
+                          maxLength={40}
+                          value={current.packageNames[id]}
+                          onChange={(event) =>
+                            updateAssessment("packageNames", {
+                              ...current.packageNames,
+                              [id]: event.target.value,
+                            })
+                          }
+                          onBlur={(event) => {
+                            if (!event.target.value.trim())
+                              updateAssessment("packageNames", {
+                                ...current.packageNames,
+                                [id]: resolveProposalPackageName({}, id),
+                              });
+                          }}
+                          className="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                        />
+                      ) : (
+                        <h3 className="break-words text-sm font-semibold text-slate-900">
+                          {packageName(id)}
+                        </h3>
+                      )}
+                      <p className="mt-1 text-sm font-semibold text-brandnavy">
+                        {prices.find((item) => item.id === id)?.monthlyLabel}
+                        <span className="ml-1 text-xs font-normal text-slate-500">
+                          base
+                        </span>
+                      </p>
+                      <p className="mt-3 text-xs leading-6 text-slate-600">
+                        {recurring} recurring included
+                        <br />
+                        {includedRows.length - recurring} one-time included
+                        <br />
+                        {optional} optional add-ons
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+              {cleanup ? (
+                <div className="mt-4 border-t border-slate-200 pt-3">
+                  <p className="text-xs font-medium text-slate-500">
+                    Onboarding &amp; catch-up estimate
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-slate-800">
+                    {cleanup.amountLabel}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Excludes optional one-time services.
+                  </p>
+                </div>
+              ) : null}
+            </aside>
+          ) : null}
         </div>
       </section>
     </main>
-  );
-}
-
-export function TierRangeControl({
-  label,
-  value,
-  names,
-  excluded = [],
-  onChange,
-}: {
-  label: string;
-  value: PackageId[];
-  names: AssessmentState["packageNames"];
-  excluded?: PackageId[];
-  onChange: (packages: PackageId[]) => void;
-}) {
-  const ranges = TIER_ORDER.flatMap((from, start) =>
-    TIER_ORDER.slice(start).map((to) =>
-      TIER_ORDER.slice(start, TIER_ORDER.indexOf(to) + 1),
-    ),
-  ).filter((range) => range.every((id) => !excluded.includes(id)));
-  const selected = normalizeTierPackageIds(value).join(",");
-  const custom =
-    selected !== "" && !ranges.some((range) => range.join(",") === selected);
-  const name = (id: PackageId) => resolveProposalPackageName(names, id);
-  return (
-    <select
-      aria-label={label}
-      className={CONTROL}
-      value={selected}
-      onChange={(event) =>
-        onChange(servicePackageIds(event.target.value.split(",")))
-      }
-    >
-      <option value="">None</option>
-      {custom ? (
-        <option value={selected} disabled>
-          Custom: {value.map(name).join(" + ")} (saved)
-        </option>
-      ) : null}
-      {ranges.map((range) => (
-        <option key={range.join(",")} value={range.join(",")}>
-          {range.length === 1
-            ? name(range[0])
-            : `${name(range[0])} through ${name(range[range.length - 1])}`}
-        </option>
-      ))}
-    </select>
   );
 }

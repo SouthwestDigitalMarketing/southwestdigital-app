@@ -55,7 +55,12 @@ describe("service editor rendering", () => {
     expect(html).toContain('aria-label="Search services"');
     expect(html).toContain("Add services");
     expect(html).toContain("Show hidden or unassigned services (1)");
-    expect(html).toContain('aria-label="Add-on price for Active service"');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain("Included");
+    expect(html).toContain("Not offered");
+    expect(html).toContain("Package coverage");
+    expect(html).not.toContain("Treatment / billing");
+    expect(html).not.toContain("Apply changes");
     expect(html).not.toContain('role="checkbox"');
   });
   it("displays saved tier gaps explicitly instead of presenting them as None or expanding them", () => {

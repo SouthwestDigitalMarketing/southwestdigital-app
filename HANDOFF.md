@@ -1,12 +1,12 @@
 # Coding-agent handoff
 
-Updated: 2026-09-07 (America/Chicago) — Services feature-branch review and fixes complete locally; see §31 for verified behavior and remaining visual QA.
+Updated: 2026-09-07 (America/Chicago) — Services comparison UI implemented; see §32 and docs/offers/services-ui-handoff.md for continuation.
 
 ## Start here
 
 - Read `AGENTS.md` before changing code. Its tenant, authorization, secret-handling, analytics, migration-safety, and Next.js 16 rules are non-negotiable.
 - Whenever this handoff is read, also read `.local/COMPUTERS.md` for the local computer inventory. That file is intentionally ignored by Git and must remain private.
-- Current branch: **`feature/services-step-redesign`** (branched from `main` at `776316a`). The latest review changes are local only. Deployment is on **Vercel** (not Netlify — that's stale in older docs). Vercel CLI is not installed; use dashboard for env vars until user installs `npm i -g vercel`.
+- Current branch: **`feature/services-step-redesign`** (branched from `main` at `776316a`). Review commit `75b4f18` was pushed at the user's request. The subsequent §32 UI implementation is local only. Deployment is on **Vercel** (not Netlify — that's stale in older docs). Vercel CLI is not installed; use dashboard for env vars until user installs `npm i -g vercel`.
 - `.claude/` is untracked user-owned content. Do not modify.
 - Never commit `.env.local` or any secret. `AUTH_SECRET`, `ZOHO_MAIL_CLIENT_ID`, `ZOHO_MAIL_CLIENT_SECRET`, `INTEGRATION_ENCRYPTION_KEY`, Stripe/PayPal keys, and Supabase URLs are all secrets.
 
@@ -19,7 +19,8 @@ The user has instructed: **never push without explicit user instruction**. Commi
 - Working branch: `feature/services-step-redesign`.
 - Prior implementation commits: `d68e92a` (redesign) and `2e9f2b8` (one-time charges).
 - At review start, the locally cached upstream branch pointed to `ef4ebee`; no fetch or push was performed during this review.
-- §31 is preserved in the local commit titled `Fix service editor persistence and checkout eligibility`. No changes from this review were pushed.
+- §31 was committed as `75b4f18` and subsequently pushed to `origin/feature/services-step-redesign` at the user's explicit request.
+- §32 UI implementation follows the local plan checkpoint `ede2e8e`; the implementation commit is titled `Redesign services around package comparison and offer-specific editing`. This new phase has not been pushed.
 - **§28's batch is no longer uncommitted.** It was swept into `f270e02` together with the URL renames. The "Suggested commit split for the prior batch" below is therefore historical — it was not followed.
 - The bookkeeping-copy migration remains committed but intentionally not applied to any database.
 - **Line-ending noise warning (still true):** ~100 tracked files show as modified with identical content (worktree CRLF vs blob LF — `git diff --ignore-all-space` is empty for them). Do NOT commit that noise: stage only the files you changed, and normalize any touched file back to LF (`sed`/python CRLF→LF) so the commit holds only the logical diff.
@@ -563,6 +564,19 @@ The review found functional gaps despite the original 389 passing tests. See [re
 - No database migrations, catalogue edits, offer publications, email sends or payments were performed. Golden fixture files and snapshots remain unchanged.
 
 Verification: 63 test files / 415 tests pass; TypeScript passes; focused ESLint has no errors and one pre-existing image warning; production `npx next build` passes. Tests use mocked database boundaries, not live billing. Browser skill discovery returned no connected browsers, so live interaction/responsive visual QA remains before merge.
+
+### 32) Services UI: package comparison and expandable offer editor
+
+Implemented the user's approval of the six UI recommendations. The user requested resumable work because their Codex allowance was low; start with [the dedicated continuation handoff](docs/offers/services-ui-handoff.md).
+
+- Compact service rows show Included, Optional with price/cadence, or Not offered across the three packages.
+- Recurring services and one-time work have separate groups; narrow screens stack package cells with visible package names.
+- Service names open an offer-specific form with included/optional ranges, cadence, conditional pricing and visibility. Apply/Cancel replaces immediate multi-field editing; there is no binary treatment selector.
+- Shared catalogue editing is a labeled secondary action; template/catalogue tools are collapsed by default.
+- Package coverage replaces the pricing-only sidebar, showing included/optional counts and clearly labeled base prices. Package renaming remains secondary.
+- Pure editing helpers preserve exact saved tiers and existing service order. Existing checkout/publication rules and golden fixtures are unchanged.
+
+Validation: 64 files / 424 tests, typecheck, focused lint and production build pass. Browser discovery still returned no connected browsers, so visual/interaction QA is the remaining follow-up. Work is committed locally; no push requested for this phase.
 
 ## Product Type refactor plan
 
