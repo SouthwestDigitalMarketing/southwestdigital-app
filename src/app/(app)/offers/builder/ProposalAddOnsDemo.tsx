@@ -1,9 +1,9 @@
 "use client";
 
-import { Eye, EyeOff, LibraryBig, Pencil } from "lucide-react";
+import { Eye, EyeOff, LibraryBig, Pencil, Search } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, type ReactNode } from "react";
+import { Fragment, useEffect, type ReactNode } from "react";
 import ProposalAppDemoHeader from "./ProposalAppDemoHeader";
 import OptionsTemplatesToolbar from "./OptionsTemplatesToolbar";
 import PricingSnapshotSidebar from "./PricingSnapshotSidebar";
@@ -25,6 +25,13 @@ import {
   type PackageId,
 } from "./proposalPackageNames";
 import {
+  normalizeTierPackageIds,
+  packageIdsFromTierRange,
+  TIER_ORDER,
+  tierRangeFromPackageIds,
+  type TierRange,
+} from "./proposalTierRanges";
+import {
   extraIsAvailableForBookSet,
   extraIsRealEstateSpecific,
   proposalCatalogItemApplicability,
@@ -42,6 +49,7 @@ type CatalogRow = {
   archived: boolean;
   kind: CatalogKind;
   cadence: BonusCadence;
+  offerSection?: string;
   option?: ProposalAdditionalOption;
   bonus?: ProposalBonus;
 };
@@ -82,6 +90,7 @@ export default function ProposalAddOnsDemo({
         archived: option.archived,
         kind: "optional",
         cadence: "monthly",
+        offerSection: catalogByKey.get(id)?.offerSection,
         option,
       }];
     }
@@ -95,6 +104,7 @@ export default function ProposalAddOnsDemo({
         archived: bonus.archived,
         kind: "included",
         cadence,
+        offerSection: catalogByKey.get(id)?.offerSection,
         bonus,
       }];
     }
@@ -107,6 +117,9 @@ export default function ProposalAddOnsDemo({
     return !item || extraIsAvailableForBookSet(item, catalog, assessment.bookSetType);
   });
   const visibleRows = eligibleRows.filter((row) => !row.archived);
+  const coreRows = visibleRows.filter((row) => row.kind === "included" && row.offerSection === "core-services");
+  const addOnRows = visibleRows.filter((row) => !coreRows.includes(row));
+  const orderedVisibleRows = [...coreRows, ...addOnRows];
 
   useEffect(() => {
     if (!storageReady || !catalogAuthoritative) return;
@@ -152,6 +165,7 @@ export default function ProposalAddOnsDemo({
     const carriedRealEstateSpecific =
       row.option?.realEstateSpecific ?? row.bonus?.realEstateSpecific;
     if (kind === "included") {
+      const priorPackages = row.option ? selectedOptionPackages(row.option) : packageOptions.map(({ id }) => id);
       persistOptions(additionalOptions.filter((item) => item.id !== row.id));
       persistBonuses([...bonuses, {
         id: row.id,
@@ -160,13 +174,14 @@ export default function ProposalAddOnsDemo({
         archived: row.archived,
         realEstateSpecific: carriedRealEstateSpecific,
         billingCadence: row.bonus?.billingCadence ?? "one-time",
+        defaultPackageIds: normalizeTierPackageIds(priorPackages),
       }]);
       // Preserve any prior per-package selections (they apply to bonuses AND
       // options now); only initialize to all packages when none exist.
       if (!Array.isArray(assessment.bonusPackageSelections[row.id])) {
         updateAssessment("bonusPackageSelections", {
           ...assessment.bonusPackageSelections,
-          [row.id]: packageOptions.map(({ id }) => id),
+          [row.id]: normalizeTierPackageIds(priorPackages),
         });
       }
     } else {
@@ -180,6 +195,8 @@ export default function ProposalAddOnsDemo({
           monthlyPrice: row.option?.monthlyPrice ?? 0,
           showInProposal: row.option?.showInProposal ?? true,
           archived: row.archived,
+          billingCadence: row.option?.billingCadence ?? "monthly",
+          packageIds: normalizeTierPackageIds(row.option?.packageIds ?? assessment.bonusPackageSelections[row.id] ?? packageOptions.map(({ id }) => id)),
           realEstateSpecific: carriedRealEstateSpecific,
         },
       ]);
@@ -222,9 +239,9 @@ export default function ProposalAddOnsDemo({
   function selectedBonusPackages(bonus: ProposalBonus) {
     if (!isBonusApplicable(bonus)) return [];
     const saved = assessment.bonusPackageSelections[bonus.id];
-    return Array.isArray(saved)
+    return normalizeTierPackageIds(Array.isArray(saved)
       ? saved
-      : bonus.defaultPackageIds ?? (legacyBonusIncluded(bonus.id) ? packageOptions.map(({ id }) => id) : []);
+      : bonus.defaultPackageIds ?? (legacyBonusIncluded(bonus.id) ? packageOptions.map(({ id }) => id) : []));
   }
 
   function toggleBonusPackage(bonus: ProposalBonus, packageId: PackageId) {
@@ -235,7 +252,7 @@ export default function ProposalAddOnsDemo({
 
   function selectedOptionPackages(option: ProposalAdditionalOption) {
     const saved = assessment.bonusPackageSelections[option.id];
-    return Array.isArray(saved) ? saved : packageOptions.map(({ id }) => id);
+    return normalizeTierPackageIds(option.packageIds ?? (Array.isArray(saved) ? saved : packageOptions.map(({ id }) => id)));
   }
 
   function toggleOptionPackage(option: ProposalAdditionalOption, packageId: PackageId) {
@@ -244,6 +261,26 @@ export default function ProposalAddOnsDemo({
       ? selected.filter((id) => id !== packageId)
       : [...selected, packageId];
     updateAssessment("bonusPackageSelections", { ...assessment.bonusPackageSelections, [option.id]: next });
+  }
+
+  function updateIncludedRange(bonus: ProposalBonus, range: TierRange | null) {
+    updateAssessment("bonusPackageSelections", {
+      ...assessment.bonusPackageSelections,
+      [bonus.id]: packageIdsFromTierRange(range),
+    });
+  }
+
+  function updateAddOnRange(row: CatalogRow, range: TierRange | null) {
+    const packageIds = packageIdsFromTierRange(range);
+    if (row.option) {
+      updateOption(row.id, { packageIds });
+      updateAssessment("bonusPackageSelections", {
+        ...assessment.bonusPackageSelections,
+        [row.id]: packageIds,
+      });
+    } else if (row.bonus) {
+      updateBonus(row.id, { addOnPackageIds: packageIds });
+    }
   }
 
   return (
@@ -276,6 +313,8 @@ export default function ProposalAddOnsDemo({
                       monthlyPrice: item.monthlyPrice,
                       showInProposal: item.showInProposal,
                       archived: item.archived,
+                      billingCadence: item.billingCadence,
+                      packageIds: item.packageIds,
                       realEstateSpecific: item.realEstateSpecific,
                     })),
                     bonuses: slice.bonuses.map((item) => ({
@@ -286,6 +325,8 @@ export default function ProposalAddOnsDemo({
                       realEstateSpecific: item.realEstateSpecific,
                       billingCadence: item.billingCadence,
                       defaultPackageIds: item.defaultPackageIds,
+                      addOnPrice: item.addOnPrice,
+                      addOnPackageIds: item.addOnPackageIds,
                     })),
                     bonusPackageSelections: slice.bonusPackageSelections,
                   }));
@@ -300,27 +341,35 @@ export default function ProposalAddOnsDemo({
                 }
                 />
               </div>
+              <div className="mb-4 flex items-center gap-2 rounded-lg border border-brandnavy/10 bg-brandnavy/[0.03] px-4 py-3 text-sm text-slate-700">
+                <Search className="h-4 w-4 shrink-0 text-brandnavy" aria-hidden="true" />
+                <span><strong>{coreRows.length}</strong> curated package services</span>
+                <span className="text-slate-400">·</span>
+                <span><strong>{addOnRows.filter((row) => row.kind === "optional").length}</strong> add-on choices</span>
+              </div>
             </div>
 
             <section>
             <div className="proposal-builder-card overflow-x-auto rounded-xl border border-slate-200">
-              <table className="w-full min-w-[680px] table-fixed border-collapse">
+              <table className="w-full min-w-[940px] table-fixed border-collapse">
                 <colgroup>
                   <col />
-                  <col className="w-40" />
-                  <col className="w-40" />
+                  <col className="w-44" />
+                  <col className="w-56" />
+                  <col className="w-60" />
                   <col className="w-14" />
                 </colgroup>
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50">
                     <Heading>Service details</Heading>
                     <Heading className="text-center">Setup</Heading>
-                    <Heading className="text-center">Pricing cards</Heading>
+                    <Heading className="text-center">Included in</Heading>
+                    <Heading className="text-center">Available as add-on</Heading>
                     <Heading><span className="sr-only">Actions</span></Heading>
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleRows.map((row) => {
+                  {orderedVisibleRows.map((row, index) => {
                     const option = row.option;
                     const bonus = row.bonus;
                     const catalogItem = catalogByKey.get(row.id);
@@ -328,14 +377,18 @@ export default function ProposalAddOnsDemo({
                       ? `${catalogHref}&service=${encodeURIComponent(catalogItem.id)}`
                       : catalogHref;
                     const applicable = bonus ? isBonusApplicable(bonus) : true;
-                    const selected = bonus
-                      ? selectedBonusPackages(bonus)
+                    const selected = bonus ? selectedBonusPackages(bonus) : [];
+                    const addOnPackages = bonus
+                      ? normalizeTierPackageIds(bonus.addOnPackageIds)
                       : option
                         ? selectedOptionPackages(option)
                         : [];
                     const isRowIncluded = row.kind !== "optional" || Boolean(option?.showInProposal);
                     return (
-                      <tr key={row.id} className={rowClass(isRowIncluded)}>
+                      <Fragment key={row.id}>
+                      {index === 0 && coreRows.length > 0 ? <SectionRow label="Standard package lineup" colSpan={5} /> : null}
+                      {index === coreRows.length && addOnRows.length > 0 ? <SectionRow label="Optional add-ons and other services" colSpan={5} /> : null}
+                      <tr className={rowClass(isRowIncluded)}>
                         <ServiceDetailsCell
                           item={row}
                           hiddenFromLead={row.kind === "optional" && !option?.showInProposal}
@@ -378,7 +431,15 @@ export default function ProposalAddOnsDemo({
                           </div>
                         </td>
                         <td className="px-2 py-3 text-center align-middle">
-                          <div className="flex items-center justify-center gap-1.5" role="group" aria-label={`Pricing cards for ${row.name}`}>
+                          {row.kind === "included" && bonus ? (
+                            <TierRangeControl
+                              label={`Included in ${row.name}`}
+                              value={selected}
+                              packageOptions={packageOptions}
+                              onChange={(range) => updateIncludedRange(bonus, range)}
+                            />
+                          ) : <span className="block text-sm text-slate-400">—</span>}
+                          <div className="hidden" aria-hidden="true">
                             {packageOptions.map(({ id, label }) =>
                               row.kind === "included" && bonus ? (
                                 applicable ? (
@@ -416,6 +477,26 @@ export default function ProposalAddOnsDemo({
                             )}
                           </div>
                         </td>
+                        <td className="px-2 py-3 align-middle">
+                          {row.kind === "included" && bonus && bonus.addOnPrice != null ? (
+                            <div className="grid gap-1.5">
+                              <TierRangeControl
+                                label={`Available as an add-on for ${row.name}`}
+                                value={addOnPackages}
+                                packageOptions={packageOptions}
+                                onChange={(range) => updateAddOnRange(row, range)}
+                              />
+                              <span className="text-center text-xs text-slate-500">${bonus.addOnPrice.toFixed(2)} {bonus.billingCadence === "one-time" ? "one time" : "/ month"}</span>
+                            </div>
+                          ) : row.kind === "optional" && option ? (
+                            <TierRangeControl
+                              label={`Available as an add-on for ${row.name}`}
+                              value={addOnPackages}
+                              packageOptions={packageOptions}
+                              onChange={(range) => updateAddOnRange(row, range)}
+                            />
+                          ) : <span className="block text-sm text-slate-400">—</span>}
+                        </td>
                         <LeadVisibilityAction
                           itemLabel={row.name || (row.kind === "optional" ? "optional service" : "included extra")}
                           visibleToLead={row.kind === "optional" && option ? option.showInProposal : undefined}
@@ -424,6 +505,7 @@ export default function ProposalAddOnsDemo({
                             : undefined}
                         />
                       </tr>
+                      </Fragment>
                     );
                   })}
                 </tbody>
@@ -505,6 +587,66 @@ function CadenceToggle({
 
 function Heading({ children, className = "" }: { children: ReactNode; className?: string }) {
   return <th className={`px-2 py-3 text-left text-sm font-semibold normal-case text-slate-700 ${className}`}>{children}</th>;
+}
+
+function TierRangeControl({
+  label,
+  value,
+  packageOptions,
+  onChange,
+}: {
+  label: string;
+  value: PackageId[];
+  packageOptions: Array<{ id: PackageId; label: string }>;
+  onChange: (range: TierRange | null) => void;
+}) {
+  const range = tierRangeFromPackageIds(value);
+  const orderedOptions = [...packageOptions].sort(
+    (a, b) => TIER_ORDER.indexOf(a.id) - TIER_ORDER.indexOf(b.id),
+  );
+  return (
+    <div className="grid gap-1.5">
+      <span className="sr-only">{label}</span>
+      <div className="flex items-center justify-center gap-1.5 text-sm">
+        <select
+          aria-label={`${label}: starting package`}
+          value={range?.from ?? ""}
+          onChange={(event) => {
+            const from = event.target.value as PackageId;
+            onChange(from ? { from, to: range?.to ?? from } : null);
+          }}
+          className="min-w-0 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm font-medium text-slate-700"
+        >
+          <option value="">None</option>
+          {orderedOptions.map(({ id, label: optionLabel }) => <option key={id} value={id}>{optionLabel}</option>)}
+        </select>
+        {range ? <span className="text-slate-400">to</span> : null}
+        {range ? (
+          <select
+            aria-label={`${label}: ending package`}
+            value={range.to}
+            onChange={(event) => onChange({ from: range.from, to: event.target.value as PackageId })}
+            className="min-w-0 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm font-medium text-slate-700"
+          >
+            {orderedOptions.map(({ id, label: optionLabel }) => <option key={id} value={id}>{optionLabel}</option>)}
+          </select>
+        ) : null}
+      </div>
+      <span className="text-center text-xs text-slate-500">
+        {range ? "Contiguous package range" : "Not offered"}
+      </span>
+    </div>
+  );
+}
+
+function SectionRow({ label, colSpan }: { label: string; colSpan: number }) {
+  return (
+    <tr className="border-b border-slate-200 bg-slate-50">
+      <th colSpan={colSpan} className="px-3 py-2 text-left text-xs font-bold uppercase tracking-[0.08em] text-slate-500">
+        {label}
+      </th>
+    </tr>
+  );
 }
 
 function ServiceDetailsCell({

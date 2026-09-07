@@ -21,6 +21,18 @@ function numericValue(record: JsonRecord, key: string) {
     : null;
 }
 
+const PACKAGE_ORDER = ["maintain", "improve", "grow"] as const;
+
+function normalizePackageIds(value: unknown) {
+  if (!Array.isArray(value)) return [] as Array<(typeof PACKAGE_ORDER)[number]>;
+  const selected = PACKAGE_ORDER.filter((id) => value.includes(id));
+  if (selected.length < 2) return selected;
+  return PACKAGE_ORDER.slice(
+    PACKAGE_ORDER.indexOf(selected[0]),
+    PACKAGE_ORDER.indexOf(selected[selected.length - 1]) + 1,
+  );
+}
+
 function optionPrice(
   offerKey: string,
   defaultPrice: number,
@@ -174,6 +186,9 @@ export async function materializeProposalCatalog(
       isRecord(item) && typeof item.id === "string" ? [[item.id, item] as const] : [],
     ),
   );
+  const hasPersistedOptions = existingOptions.length > 0
+    || existingBonuses.length > 0
+    || (isRecord(value.bonusPackageSelections) && Object.keys(value.bonusPackageSelections).length > 0);
   const catalogIds = new Set<string>();
   const additionalOptions = withPublicationApplicability(catalog.flatMap((item) => {
     const id = item.offerKey ?? slugifyTagKey(item.code ?? item.name);
@@ -191,6 +206,7 @@ export async function materializeProposalCatalog(
       }];
     }
     if (existingBonusesById.has(id) || item.defaultInclusion !== "optional") return [];
+    if (hasPersistedOptions || item.offerSection !== "options") return [];
     return [{
       id,
       name: item.name,
@@ -200,8 +216,10 @@ export async function materializeProposalCatalog(
         item.defaultPrice == null ? 0 : Number(item.defaultPrice),
         value,
       ),
-      showInProposal: optionSelected(id, value),
+      showInProposal: hasPersistedOptions ? optionSelected(id, value) : false,
       archived: false,
+      billingCadence: item.billingCadence === "monthly" ? "monthly" : "one-time",
+      packageIds: normalizePackageIds(item.defaultPackageKeys),
       realEstateSpecific: item.realEstateSpecific,
     }];
   }));
@@ -210,13 +228,9 @@ export async function materializeProposalCatalog(
     if (!id) return [];
     catalogIds.add(id);
     const existingBonus = existingBonusesById.get(id);
-    if (!existingBonus && (existingOptionsById.has(id) || item.defaultInclusion === "optional")) return [];
-    const defaultPackageIds = "defaultPackageKeys" in item && Array.isArray(item.defaultPackageKeys)
-      ? item.defaultPackageKeys.filter(
-          (key): key is "grow" | "improve" | "maintain" =>
-            key === "grow" || key === "improve" || key === "maintain",
-        )
-      : [];
+    if (existingOptionsById.has(id) || item.defaultInclusion === "optional") return [];
+    const defaultPackageIds = normalizePackageIds("defaultPackageKeys" in item ? item.defaultPackageKeys : null);
+    if (!existingBonus && (hasPersistedOptions || item.offerSection !== "core-services" || defaultPackageIds.length === 0)) return [];
     return [{
       ...(existingBonus ?? {}),
       id,
@@ -229,6 +243,12 @@ export async function materializeProposalCatalog(
           ? existingBonus.billingCadence
           : item.billingCadence === "monthly" ? "monthly" : "one-time",
       defaultPackageIds,
+      ...(existingBonus?.addOnPrice != null || (!hasPersistedOptions && item.defaultPrice != null && Number(item.defaultPrice) > 0)
+        ? {
+            addOnPrice: existingBonus?.addOnPrice ?? Number(item.defaultPrice),
+            addOnPackageIds: existingBonus?.addOnPackageIds ?? PACKAGE_ORDER.filter((id) => !defaultPackageIds.includes(id)),
+          }
+        : {}),
       offerSection: item.offerSection,
     }];
   });
@@ -244,7 +264,7 @@ export async function materializeProposalCatalog(
       !Object.prototype.hasOwnProperty.call(bonusPackageSelections, item.id) &&
       item.defaultPackageIds.length > 0
     ) {
-      bonusPackageSelections[item.id] = item.defaultPackageIds;
+      bonusPackageSelections[item.id] = normalizePackageIds(item.defaultPackageIds);
     }
   }
   const knownIds = [

@@ -1,5 +1,6 @@
 import type { ProposalOptionCatalogItem } from "@/lib/quotes/catalog";
-import type { PackageId } from "./proposalPackageNames";
+import { PROPOSAL_PACKAGE_IDS, type PackageId } from "./proposalPackageNames";
+import { normalizeTierPackageIds } from "./proposalTierRanges";
 
 export type SyncedProposalAdditionalOption = {
   id: string;
@@ -8,6 +9,8 @@ export type SyncedProposalAdditionalOption = {
   monthlyPrice: number;
   showInProposal: boolean;
   archived: boolean;
+  billingCadence?: "monthly" | "one-time";
+  packageIds?: PackageId[];
   realEstateSpecific?: boolean;
   applicable?: boolean;
   applicabilityReason?: string;
@@ -21,6 +24,8 @@ export type SyncedProposalBonus = {
   realEstateSpecific?: boolean;
   billingCadence?: "monthly" | "one-time";
   defaultPackageIds?: PackageId[];
+  addOnPrice?: number;
+  addOnPackageIds?: PackageId[];
   applicable?: boolean;
   applicabilityReason?: string;
 };
@@ -100,6 +105,9 @@ export function reconcileProposalAssessmentWithCatalog(
 ): ProposalCatalogAssessmentSlice {
   const existingOptions = new Map(assessment.additionalOptions.map((item) => [item.id, item]));
   const existingBonuses = new Map(assessment.bonuses.map((item) => [item.id, item]));
+  const hasPersistedOptions = assessment.additionalOptions.length > 0
+    || assessment.bonuses.length > 0
+    || Object.keys(assessment.bonusPackageSelections).length > 0;
   const catalogIds = new Set(catalogItems.map((item) => item.offerKey));
   const additionalOptions: SyncedProposalAdditionalOption[] = [];
   const bonuses: SyncedProposalBonus[] = [];
@@ -129,21 +137,29 @@ export function reconcileProposalAssessmentWithCatalog(
         realEstateSpecific: catalogItem.realEstateSpecific,
         billingCadence: existingBonus.billingCadence
           ?? (catalogItem.billingCadence === "monthly" ? "monthly" : "one-time"),
-        defaultPackageIds: catalogItem.defaultPackageIds,
+        defaultPackageIds: existingBonus.defaultPackageIds
+          ?? normalizeTierPackageIds(catalogItem.defaultPackageIds),
       });
       continue;
     }
 
-    if (catalogItem.defaultInclusion === "optional") {
+    const defaultPackageIds = normalizeTierPackageIds(catalogItem.defaultPackageIds);
+    if (!hasPersistedOptions && catalogItem.defaultInclusion === "optional" && catalogItem.offerSection === "options") {
       additionalOptions.push({
         id,
         name: catalogItem.name,
         description: catalogItem.description,
         monthlyPrice: proposalCatalogOptionPrice(catalogItem, assessment),
-        showInProposal: proposalCatalogOptionSelected(catalogItem, assessment),
+        showInProposal: false,
         archived: false,
+        billingCadence: catalogItem.billingCadence === "monthly" ? "monthly" : "one-time",
+        packageIds: defaultPackageIds,
         realEstateSpecific: catalogItem.realEstateSpecific,
       });
+      continue;
+    }
+
+    if (hasPersistedOptions || catalogItem.defaultInclusion !== "included" || defaultPackageIds.length === 0) {
       continue;
     }
 
@@ -154,7 +170,13 @@ export function reconcileProposalAssessmentWithCatalog(
       archived: false,
       realEstateSpecific: catalogItem.realEstateSpecific,
       billingCadence: catalogItem.billingCadence === "monthly" ? "monthly" : "one-time",
-      defaultPackageIds: catalogItem.defaultPackageIds,
+      defaultPackageIds,
+      ...(catalogItem.defaultPrice > 0
+        ? {
+            addOnPrice: catalogItem.defaultPrice,
+            addOnPackageIds: PROPOSAL_PACKAGE_IDS.filter((packageId) => !defaultPackageIds.includes(packageId)),
+          }
+        : {}),
     });
   }
 
@@ -166,7 +188,7 @@ export function reconcileProposalAssessmentWithCatalog(
       !Object.prototype.hasOwnProperty.call(bonusPackageSelections, bonus.id)
       && bonus.defaultPackageIds?.length
     ) {
-      bonusPackageSelections[bonus.id] = bonus.defaultPackageIds;
+      bonusPackageSelections[bonus.id] = normalizeTierPackageIds(bonus.defaultPackageIds);
     }
   }
 

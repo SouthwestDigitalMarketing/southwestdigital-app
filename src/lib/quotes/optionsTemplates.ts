@@ -9,6 +9,8 @@ export type OptionsTemplateAdditionalOption = {
   monthlyPrice: number;
   showInProposal: boolean;
   archived: boolean;
+  billingCadence?: "monthly" | "one-time";
+  packageIds?: OptionsTemplatePackageId[];
   realEstateSpecific?: boolean;
 };
 
@@ -20,6 +22,8 @@ export type OptionsTemplateBonus = {
   realEstateSpecific?: boolean;
   billingCadence?: "monthly" | "one-time";
   defaultPackageIds?: OptionsTemplatePackageId[];
+  addOnPrice?: number;
+  addOnPackageIds?: OptionsTemplatePackageId[];
 };
 
 export type OptionsTemplateSnapshot = {
@@ -69,6 +73,10 @@ function sanitizeAdditionalOption(raw: unknown): OptionsTemplateAdditionalOption
         : 0,
     showInProposal: record.showInProposal !== false,
     archived: record.archived === true,
+    billingCadence: record.billingCadence === "monthly" || record.billingCadence === "one-time"
+      ? record.billingCadence
+      : undefined,
+    packageIds: Array.isArray(record.packageIds) ? sanitizePackageIds(record.packageIds) : undefined,
     realEstateSpecific: record.realEstateSpecific === true ? true : undefined,
   };
 }
@@ -90,6 +98,13 @@ function sanitizeBonus(raw: unknown): OptionsTemplateBonus | null {
     billingCadence,
     defaultPackageIds: Array.isArray(record.defaultPackageIds)
       ? sanitizePackageIds(record.defaultPackageIds)
+      : undefined,
+    addOnPrice:
+      typeof record.addOnPrice === "number" && Number.isFinite(record.addOnPrice)
+        ? Math.max(0, record.addOnPrice)
+        : undefined,
+    addOnPackageIds: Array.isArray(record.addOnPackageIds)
+      ? sanitizePackageIds(record.addOnPackageIds)
       : undefined,
   };
   const hasLegacyAuditClaim =

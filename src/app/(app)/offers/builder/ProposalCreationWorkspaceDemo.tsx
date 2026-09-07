@@ -37,6 +37,7 @@ import { DEFAULT_PROPOSAL_THEME_ID, DEFAULT_PROPOSAL_MODE } from "./proposalThem
 import {
   DEFAULT_PROPOSAL_PACKAGE_NAMES,
   normalizeProposalPackageNames,
+  PROPOSAL_PACKAGE_IDS,
   resolveProposalPackageName,
   type PackageId,
   type ProposalPackageNames,
@@ -45,6 +46,7 @@ import {
   proposalCatalogOptionPrice,
   proposalCatalogOptionSelected,
 } from "./proposalCatalogSync";
+import { normalizeTierPackageIds } from "./proposalTierRanges";
 
 export {
   reconcileProposalAssessmentWithCatalog,
@@ -203,6 +205,8 @@ export type ProposalAdditionalOption = {
   monthlyPrice: number;
   showInProposal: boolean;
   archived: boolean;
+  billingCadence?: ProposalBonusCadence;
+  packageIds?: PackageId[];
   realEstateSpecific?: boolean;
   applicable?: boolean;
   applicabilityReason?: string;
@@ -216,6 +220,8 @@ export type ProposalBonus = {
   realEstateSpecific?: boolean;
   billingCadence?: ProposalBonusCadence;
   defaultPackageIds?: PackageId[];
+  addOnPrice?: number;
+  addOnPackageIds?: PackageId[];
   applicable?: boolean;
   applicabilityReason?: string;
 };
@@ -559,6 +565,8 @@ export function getProposalAdditionalOptions(
       monthlyPrice: proposalCatalogOptionPrice(item, assessment),
       showInProposal: proposalCatalogOptionSelected(item, assessment),
       archived: false,
+      billingCadence: item.billingCadence === "monthly" ? "monthly" : "one-time",
+      packageIds: normalizeTierPackageIds(item.defaultPackageIds),
       realEstateSpecific: item.realEstateSpecific,
     }));
   }
@@ -596,7 +604,15 @@ export function getProposalBonuses(
     archived: false,
     realEstateSpecific: item.realEstateSpecific,
     billingCadence: item.billingCadence === "monthly" ? "monthly" : "one-time",
-    defaultPackageIds: item.defaultPackageIds,
+    defaultPackageIds: normalizeTierPackageIds(item.defaultPackageIds),
+    ...(item.defaultPrice > 0 && normalizeTierPackageIds(item.defaultPackageIds).length > 0
+      ? {
+          addOnPrice: item.defaultPrice,
+          addOnPackageIds: PROPOSAL_PACKAGE_IDS.filter(
+            (id) => !normalizeTierPackageIds(item.defaultPackageIds).includes(id),
+          ),
+        }
+      : {}),
   });
   if (assessment.bonuses.length > 0 || assessment.additionalOptions.length > 0) {
     const existingIds = new Set([

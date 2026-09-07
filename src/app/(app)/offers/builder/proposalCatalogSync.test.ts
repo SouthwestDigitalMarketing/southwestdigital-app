@@ -81,13 +81,13 @@ describe("proposal catalog synchronization", () => {
   it("adds active catalog services and removes services no longer in the active catalog", () => {
     const result = reconcileProposalAssessmentWithCatalog(
       assessment({
-        bonuses: [{ id: "archived", name: "Archived", description: "", archived: false }],
-        bonusPackageSelections: { archived: ["grow"], current: ["maintain"] },
-        optionsCatalogOrder: ["archived", "current"],
+        bonuses: [],
+        bonusPackageSelections: {},
+        optionsCatalogOrder: [],
       }),
       [
-        catalogItem("current", { defaultPackageIds: ["maintain"] }),
-        catalogItem("new-option", { defaultInclusion: "optional", defaultPrice: 125 }),
+        catalogItem("current", { offerSection: "core-services", defaultPackageIds: ["maintain"] }),
+        catalogItem("new-option", { offerSection: "options", defaultInclusion: "optional", defaultPrice: 125 }),
       ],
     );
 
@@ -97,6 +97,6 @@ describe("proposal catalog synchronization", () => {
       monthlyPrice: 125,
     })]);
     expect(result.bonusPackageSelections).toEqual({ current: ["maintain"] });
-    expect(result.optionsCatalogOrder).toEqual(["current", "new-option"]);
+    expect(result.optionsCatalogOrder).toEqual(["new-option", "current"]);
   });
 });

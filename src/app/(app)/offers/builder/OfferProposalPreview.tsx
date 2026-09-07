@@ -72,6 +72,7 @@ import {
 } from "@/lib/quotes/previewSafety";
 import type { PublicProposalPricing } from "@/lib/quotes/publicProposal";
 import { resolveProposalPackageName } from "./proposalPackageNames";
+import { normalizeTierPackageIds } from "./proposalTierRanges";
 
 type CloudflareStreamEvent = "play" | "pause" | "ended";
 
@@ -399,8 +400,8 @@ export function buildOptions(
       })
       .filter((bonus) => {
         const selectedPackages = assessment.bonusPackageSelections[bonus.id];
-        if (Array.isArray(selectedPackages)) return selectedPackages.includes(id);
-        if (bonus.defaultPackageIds) return bonus.defaultPackageIds.includes(id);
+        if (Array.isArray(selectedPackages)) return normalizeTierPackageIds(selectedPackages).includes(id);
+        if (bonus.defaultPackageIds) return normalizeTierPackageIds(bonus.defaultPackageIds).includes(id);
         return legacyBonusIncluded(bonus.id);
       });
 
@@ -1023,15 +1024,16 @@ export default function OfferProposalPreview({
     .filter((option) => option.applicable !== false && option.showInProposal && !option.archived && option.name.trim())
     .map((option): ServiceRow => {
       const savedPackages = assessment.bonusPackageSelections?.[option.id];
-      additionalOptionPackageMap[option.id] = Array.isArray(savedPackages)
-        ? savedPackages.filter((id): id is OptionId => ALL_PACKAGE_IDS.includes(id as OptionId))
-        : [...ALL_PACKAGE_IDS];
+      additionalOptionPackageMap[option.id] = normalizeTierPackageIds(
+        option.packageIds ?? (Array.isArray(savedPackages) ? savedPackages : ALL_PACKAGE_IDS),
+      );
+      const monthly = option.billingCadence !== "one-time";
       return {
         id: option.id,
         serviceName: option.name,
         billStart: "On Acceptance",
-        billEnd: "Until Cancelled",
-        billEvery: "1 Month",
+        billEnd: monthly ? "Until Cancelled" : "-",
+        ...(monthly ? { billEvery: "1 Month" } : {}),
         invoiceType: "Automatic",
         priceType: "Fixed",
         quantity: 1,
@@ -1640,7 +1642,7 @@ export default function OfferProposalPreview({
                                     [id]: { ...previous[id], [row.id]: checked },
                                   }))}
                                   showPriceWhenUnselected={row.price > 0}
-                                  priceSuffix={row.price > 0 ? "/mo" : undefined}
+                                  priceSuffix={row.price > 0 ? (row.billEvery ? "/mo" : " one time") : undefined}
                                 />
                               ))}
                             </ul>

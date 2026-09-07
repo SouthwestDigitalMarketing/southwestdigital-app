@@ -21,12 +21,16 @@ const option = z.object({
   id: z.string(), name: text, description: text, monthlyPrice: money,
   showInProposal: z.boolean(), archived: z.boolean(), applicable: z.boolean().optional(),
   realEstateSpecific: z.boolean().optional(),
+  billingCadence: z.enum(["monthly", "one-time"]).optional(),
+  packageIds: z.array(tier).optional(),
 });
 const bonus = z.object({
   id: z.string(), name: text, description: text, archived: z.boolean(),
   applicable: z.boolean().optional(), realEstateSpecific: z.boolean().optional(),
   billingCadence: z.enum(["monthly", "one-time"]).optional(),
   defaultPackageIds: z.array(tier).optional(),
+  addOnPrice: money.optional(),
+  addOnPackageIds: z.array(tier).optional(),
 });
 
 // Deliberately allowlisted at every object boundary. New staff fields must not

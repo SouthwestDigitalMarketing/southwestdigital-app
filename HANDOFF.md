@@ -5,6 +5,7 @@ Updated: 2026-09-07 (America/Chicago) — offer-builder step URLs renamed and th
 ## Start here
 
 - Read `AGENTS.md` before changing code. Its tenant, authorization, secret-handling, analytics, migration-safety, and Next.js 16 rules are non-negotiable.
+- Whenever this handoff is read, also read `.local/COMPUTERS.md` for the local computer inventory. That file is intentionally ignored by Git and must remain private.
 - Current branch: **`feature/services-step-redesign`** (branched from `main` at `776316a`). Nothing is pushed. Deployment is on **Vercel** (not Netlify — that's stale in older docs). Vercel CLI is not installed; use dashboard for env vars until user installs `npm i -g vercel`.
 - `.claude/` is untracked user-owned content. Do not modify.
 - Never commit `.env.local` or any secret. `AUTH_SECRET`, `ZOHO_MAIL_CLIENT_ID`, `ZOHO_MAIL_CLIENT_SECRET`, `INTEGRATION_ENCRYPTION_KEY`, Stripe/PayPal keys, and Supabase URLs are all secrets.
@@ -538,6 +539,18 @@ New offers will open with only the catalog-curated lineup: a service with no `de
 **Live data as of this session** — 4 offers total (2 draft, 1 accepted/signed, 1 archived); 146 active catalog services (121 bookkeeping / 25 hourly); `defaultPackageKeys` populated on exactly the 36 `core-services` rows; `defaultPrice > 0` on 41.
 
 Validation: TypeScript OK, ESLint OK (1 pre-existing `no-img-element` warning), `next build` OK, 58 files / 385 tests OK.
+
+### 30) Services step redesign implementation — DONE locally, uncommitted
+
+The visible Services/Options redesign is now implemented on `feature/services-step-redesign`.
+
+- New offers use only catalog-curated bookkeeping services in the standard package lineup. Optional catalog services remain in a separate add-on tail and start hidden from the lead.
+- Package membership is represented by a contiguous range (`from`/`to`) in the UI and persisted through the existing package-id arrays. Legacy non-contiguous arrays are normalized at read time by filling the missing middle tier.
+- The builder replaces the three independent package circles with range controls for `Included in` and `Available as add-on`. A priced core service can therefore be included in Improve/Grow and offered as a paid add-on for Maintain.
+- Catalog cadence now travels through the assessment, templates, materialization, and public allowlist. One-time optional services are no longer labeled `$X/mo` in the public preview.
+- Existing persisted offers retain their current option/bonus set and are not routed through the new-offer default rule.
+
+Validation: `npm run typecheck` ✅ · `npm test` ✅ (59 files / 388 tests) · focused ESLint ✅ (one pre-existing `no-img-element` warning) · `npx next build` ✅. The `npm run build` wrapper still hits the known Windows Prisma query-engine DLL lock during `prisma generate`; stop the dev server before running that wrapper.
 
 ## Product Type refactor plan
 
