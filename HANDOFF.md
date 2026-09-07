@@ -1,11 +1,11 @@
 # Coding-agent handoff
 
-Updated: 2026-09-07 (America/Chicago) — offer-builder navigation, dedicated editable preview, and exit workflow refined (see §28).
+Updated: 2026-09-07 (America/Chicago) — offer-builder step URLs renamed and the Services step redesign started on a feature branch (see §29). §28's batch is now committed.
 
 ## Start here
 
 - Read `AGENTS.md` before changing code. Its tenant, authorization, secret-handling, analytics, migration-safety, and Next.js 16 rules are non-negotiable.
-- Current branch: `main`. Deployment is on **Vercel** (not Netlify — that's stale in older docs). Vercel CLI is not installed; use dashboard for env vars until user installs `npm i -g vercel`.
+- Current branch: **`feature/services-step-redesign`** (branched from `main` at `776316a`). Nothing is pushed. Deployment is on **Vercel** (not Netlify — that's stale in older docs). Vercel CLI is not installed; use dashboard for env vars until user installs `npm i -g vercel`.
 - `.claude/` is untracked user-owned content. Do not modify.
 - Never commit `.env.local` or any secret. `AUTH_SECRET`, `ZOHO_MAIL_CLIENT_ID`, `ZOHO_MAIL_CLIENT_SECRET`, `INTEGRATION_ENCRYPTION_KEY`, Stripe/PayPal keys, and Supabase URLs are all secrets.
 
@@ -15,8 +15,13 @@ The user has instructed: **never push without explicit user instruction**. Commi
 
 ## Current commit state
 
-- Latest commit: `776316a Link offer services to catalog` on `main`. Earlier related commits include `8ae5597 Allow proposal-specific package names`, `d69e834 Clarify one-time pricing summary`, and `cf6c9d3 Compact options table and restore pricing sidebar`.
-- The §28 offer-builder/navigation batch is **uncommitted and unpushed**. The working tree currently contains the source changes listed in §28 plus this handoff update. Do not discard or overwrite them.
+- On `main`: `776316a Link offer services to catalog` (unchanged; nothing has been pushed).
+- Working branch `feature/services-step-redesign`, four commits, none pushed:
+  - `f270e02` — checkpoint: step-URL renames plus the previously uncommitted §28 batch, captured so the redesign has a rollback point.
+  - `066533a` — Services step scoped to the curated package lineup (990 lines deleted).
+  - `fef462c` — fixes for findings from a review of the above.
+  - `6e4f226` — golden fixtures pinning what a client sees.
+- **§28's batch is no longer uncommitted.** It was swept into `f270e02` together with the URL renames. The "Suggested commit split for the prior batch" below is therefore historical — it was not followed.
 - The bookkeeping-copy migration remains committed but intentionally not applied to any database.
 - **Line-ending noise warning (still true):** ~100 tracked files show as modified with identical content (worktree CRLF vs blob LF — `git diff --ignore-all-space` is empty for them). Do NOT commit that noise: stage only the files you changed, and normalize any touched file back to LF (`sed`/python CRLF→LF) so the commit holds only the logical diff.
 - The line-ending warning above is historical guidance; it was not present after the latest commit. Re-check `git status` before editing and avoid staging unrelated normalization noise.
@@ -471,6 +476,68 @@ If you want to slice the uncommitted work into reviewable chunks before pushing:
 9. HANDOFF refresh (this file).
 
 Or squash into one commit if you'd rather not manage the split — the batch is coherent as a single "work-item lifecycle + hourly + preview safety" landing.
+
+### 29) Offer-builder step URLs + Services step redesign — IN PROGRESS on `feature/services-step-redesign`
+
+Supersedes §28's stepper description. Nothing here is pushed.
+
+**Step URLs renamed to match their pill labels**
+
+| pill | was | now |
+|---|---|---|
+| Contact | `/offers/new` | `/offers/contact` |
+| Complexity | `/offers/pricing` | `/offers/complexity` |
+| Adjustments | `/offers/calculator` | `/offers/adjustments` |
+
+`/offers/pricing` was the Complexity step while `/offers/calculator` was the pricing step — `pricing` meant three different things depending on where you read it. Old paths redirect in `next.config.ts` (`permanent: false`) so in-flight draft links keep working. Internal step ids were renamed to match.
+
+Also: the stepper's last pill split into **Publish** + **Email**, because `/offers/cover` passed `currentStep="cover"` which was not in `STEP_ITEMS`, so `findIndex` returned -1 and the whole progress bar rendered inert on the final step. The `included` and `preview` ids were removed from the union — neither was reachable.
+
+**What the Services step investigation found**
+
+The step felt clunky for reasons that were mostly structural, not visual:
+
+- **It rendered all 146 active catalog rows**, each with five controls, no search, no grouping — including 25 `hourly-services` rows belonging to the separate `/offers/hourly` builder. Volume was the dominant problem.
+- **`getProposalPreviewPackages` and `PACKAGES[].includedServices` were dead code.** The `20260830123500_catalog_core_package_services` migration had already moved the lead-facing lineup into `CatalogService.defaultPackageKeys`; the constant and its only reader were left behind. An early diagnosis in this session wrongly called those bullets client-facing — they never were.
+- **`/offers/included` was an orphan.** It persisted to its own localStorage keys and reached neither the assessment nor the proposal.
+- **The reorder chevrons were inert.** `optionsCatalogOrder` is read by neither `buildOptions` nor the public proposal schema, so it was stripped at publish.
+- **The catalog editor silently destroyed the package lineup.** `services/actions.ts` read an `offerSection` form field that `ServicesCatalog.tsx` never rendered, so every save rewrote the row to `included-services`, demoting curated `core-services` rows. There was also no way to set `defaultPackageKeys` in the UI — that lineup was only maintainable by direct DB edits.
+- **~110 of 146 services render on zero cards, silently.** `materializeProposalCatalog.ts` sets `defaultPackageIds: []` when `defaultPackageKeys` is absent, and `OfferProposalPreview.tsx`'s tier filter does `if (bonus.defaultPackageIds) return bonus.defaultPackageIds.includes(id)` — `[]` is truthy, so it returns false and short-circuits the legacy fallback.
+
+**Landed so far**
+
+- Both catalog queries scoped to `productKind: "bookkeeping"` (146 → 121), behind a new `catalogProductKind` schema capability.
+- Deleted: the dead package bullets, `/offers/included` + `IncludedServicesBuilder`, the reorder controls, and `ProposalAppCollapsibleSection` / `ProposalAppExpandAllControl` once their last consumer went. Stale `revalidatePath("/offers/included")` calls removed from the contacts and services actions.
+- `offerSection` and `defaultPackageKeys` are now editable in the catalog form, and `offerSection` is only written when present in the payload.
+- Golden fixtures: all seven real snapshots (four offers, including the signed one and its published record) are committed redacted under `builder/__fixtures__`, with `offerServiceRows.test.ts` asserting the rows each package card renders. `buildOptions` is now exported for this; it is pure but its file's import graph reaches the offer server actions, so the test stubs that leaf rather than extracting ~1400 lines to reach it. **Extracting the pure pricing/selector layer out of `ProposalCreationWorkspaceDemo.tsx` is still worth doing** — the stub is a shortcut, not a solution.
+
+**⚠ The most important finding: tiers are NOT purely cumulative**
+
+A design panel and this agent all converged on modelling tier membership as `includedFrom: PackageId` — "the lowest tier that gets this, everything above inherits." **That model is wrong and would have corrupted a signed proposal.** The client-support family is *substituted* per tier, not inherited:
+
+- `standard-client-support` → `["maintain"]` alone
+- `priority-client-support` → `["improve"]` alone
+- `concierge-client-support` → `["grow"]`
+
+Under a floor model, Standard Client Support resolves to "from Maintain up" and renders on all three cards, putting three support levels on the Grow card.
+
+The correct shape is a **contiguous tier range** (`{from, to}`): "from Maintain up" is `maintain→grow`, "Maintain only" is `maintain→maintain`. Non-contiguous sets stay unrepresentable, and an audit of live data confirms none exist. `offerServiceRows.test.ts` pins contiguity as the invariant.
+
+The earlier audit that misled the panel checked only whether a selection *skips* a middle tier. Single-tier assignment is a different property, and it was not tested. Do not re-derive a floor model.
+
+**Decided but not yet implemented**
+
+New offers will open with only the catalog-curated lineup: a service with no `defaultPackageKeys` defaults to out-of-offer. Today `proposalCatalogSync.ts` ends `return legacySelections[item.offerKey] ?? true`, so every `optional` catalog row auto-enters each proposal as a paid add-on on all three cards — the reason staff hand-hide ~2.75 options per offer via the eye icon. This changes what a *new* proposal contains; existing offers normalize from their persisted state and must never be routed through the default rule.
+
+**Next, in order**
+
+1. The two rendering bugs, now that the golden test can prove what changes: the `[]`-is-truthy fallback, and `billEvery: "1 Month"` hardcoded on add-on rows (`ProposalAdditionalOption` has no cadence field, so a one-time optional service — e.g. sales-tax filing at $650 — prints to the prospect as `$650/mo`).
+2. The tier-range model plus its read-time normalizer, with the substitution case as an explicit test.
+3. The step UI: scoped default view (~15 rows, not 146), a contiguous-range control replacing the three package circles, and an add-on tail so a service can be included at Improve *and* purchasable at Maintain.
+
+**Live data as of this session** — 4 offers total (2 draft, 1 accepted/signed, 1 archived); 146 active catalog services (121 bookkeeping / 25 hourly); `defaultPackageKeys` populated on exactly the 36 `core-services` rows; `defaultPrice > 0` on 41.
+
+Validation: TypeScript OK, ESLint OK (1 pre-existing `no-img-element` warning), `next build` OK, 58 files / 385 tests OK.
 
 ## Product Type refactor plan
 
