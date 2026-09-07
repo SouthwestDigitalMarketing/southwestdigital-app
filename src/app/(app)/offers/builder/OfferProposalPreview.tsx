@@ -1067,7 +1067,13 @@ export default function OfferProposalPreview({
     : 0;
   const selectedAdditionalMonthlyTotal = selectedOptionId
     ? additionalOptionRowsFor(selectedOptionId).reduce(
-        (total, row) => total + (additionalOptionSelections[selectedOptionId][row.id] ? row.price : 0),
+        (total, row) => total + (row.billEvery && additionalOptionSelections[selectedOptionId][row.id] ? row.price : 0),
+        0,
+      )
+    : 0;
+  const selectedAdditionalOneTimeTotal = selectedOptionId
+    ? additionalOptionRowsFor(selectedOptionId).reduce(
+        (total, row) => total + (!row.billEvery && additionalOptionSelections[selectedOptionId][row.id] ? row.price : 0),
         0,
       )
     : 0;
@@ -1077,7 +1083,7 @@ export default function OfferProposalPreview({
   const hasCleanup = selectedCleanupTotal > 0;
   const chargeFirstMonth = !hasCleanup && selectedMonthlyCharge > 0 ? selectedMonthlyCharge : 0;
   const chargeOnboarding = selectedOnboardingFee ?? 0;
-  const calculatedChargeAmount = chargeOnboarding + selectedCleanupTotal + chargeFirstMonth;
+  const calculatedChargeAmount = chargeOnboarding + selectedCleanupTotal + selectedAdditionalOneTimeTotal + chargeFirstMonth;
   const chargeAmount = isTestProposal ? 1 : checkoutSummary?.amountDueNow ?? calculatedChargeAmount;
   const chargeIsFirstMonth = chargeFirstMonth > 0;
   const requiresOnboardingPayment = chargeAmount > 0;
@@ -1477,7 +1483,11 @@ export default function OfferProposalPreview({
                     0,
                   );
 
-                  const effectiveOneTimeRows = option.oneTimeRows.map((row) =>
+                  const packageAdditionalOptionRows = additionalOptionRowsFor(id);
+                  const selectedOneTimeAdditionalRows = packageAdditionalOptionRows.filter(
+                    (row) => !row.billEvery && additionalOptionSelections[id][row.id],
+                  );
+                  const effectiveOneTimeRows = [...option.oneTimeRows, ...selectedOneTimeAdditionalRows].map((row) =>
                     isOnboarding(row)
                       ? { ...row, price: getOnboardingFee(assessment, selectedCleanupMonths) }
                       : row,
@@ -1486,11 +1496,10 @@ export default function OfferProposalPreview({
                     (row) => !row.cleanupPeriodKey || cleanupIsSelected(id, row.cleanupPeriodKey),
                   );
 
-                  const packageAdditionalOptionRows = additionalOptionRowsFor(id);
                   const recurringTotal =
                     option.monthlyPrice * recurringDiscountMultiplier +
                     packageAdditionalOptionRows.reduce(
-                      (total, row) => total + (additionalOptionSelections[id][row.id] ? row.price : 0),
+                      (total, row) => total + (row.billEvery && additionalOptionSelections[id][row.id] ? row.price : 0),
                       0,
                     );
 

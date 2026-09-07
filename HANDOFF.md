@@ -547,10 +547,10 @@ The visible Services/Options redesign is now implemented on `feature/services-st
 - New offers use only catalog-curated bookkeeping services in the standard package lineup. Optional catalog services remain in a separate add-on tail and start hidden from the lead.
 - Package membership is represented by a contiguous range (`from`/`to`) in the UI and persisted through the existing package-id arrays. Legacy non-contiguous arrays are normalized at read time by filling the missing middle tier.
 - The builder replaces the three independent package circles with range controls for `Included in` and `Available as add-on`. A priced core service can therefore be included in Improve/Grow and offered as a paid add-on for Maintain.
-- Catalog cadence now travels through the assessment, templates, materialization, and public allowlist. One-time optional services are no longer labeled `$X/mo` in the public preview.
+- Catalog cadence now travels through the assessment, templates, materialization, checkout, and public allowlist. One-time optional services are no longer labeled `$X/mo` in the public preview and are charged as one-time amounts rather than added to MRR.
 - Existing persisted offers retain their current option/bonus set and are not routed through the new-offer default rule.
 
-Validation: `npm run typecheck` ✅ · `npm test` ✅ (59 files / 388 tests) · focused ESLint ✅ (one pre-existing `no-img-element` warning) · `npx next build` ✅. The `npm run build` wrapper still hits the known Windows Prisma query-engine DLL lock during `prisma generate`; stop the dev server before running that wrapper.
+Validation: `npm run typecheck` ✅ · `npm test` ✅ (59 files / 389 tests) · focused ESLint ✅ (one pre-existing `no-img-element` warning) · `npx next build` ✅. The `npm run build` wrapper still hits the known Windows Prisma query-engine DLL lock during `prisma generate`; stop the dev server before running that wrapper.
 
 ## Product Type refactor plan
 

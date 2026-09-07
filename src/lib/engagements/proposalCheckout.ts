@@ -122,7 +122,21 @@ export function buildProposalCheckoutSummary(
   );
   const selectedAdditionalOptionIds = selection.selectedAdditionalOptionIds.filter((id) => availableAdditionalOptions.has(id));
   const additionalMonthlyTotal = selectedAdditionalOptionIds.reduce(
-    (total, id) => total + finiteNumber(availableAdditionalOptions.get(id)?.monthlyPrice),
+    (total, id) => {
+      const option = availableAdditionalOptions.get(id);
+      return option?.billingCadence === "one-time"
+        ? total
+        : total + finiteNumber(option?.monthlyPrice);
+    },
+    0,
+  );
+  const additionalOneTimeTotal = selectedAdditionalOptionIds.reduce(
+    (total, id) => {
+      const option = availableAdditionalOptions.get(id);
+      return option?.billingCadence === "one-time"
+        ? total + finiteNumber(option.monthlyPrice)
+        : total;
+    },
     0,
   );
   const recurringMonthlyTotal = money(discountedBaseMonthly + additionalMonthlyTotal);
@@ -156,11 +170,11 @@ export function buildProposalCheckoutSummary(
           ? override
           : 500 + selectedCleanupMonths * 20,
       );
-  const oneTimeTotal = money(cleanupTotal + onboardingFee);
+  const oneTimeTotal = money(cleanupTotal + onboardingFee + additionalOneTimeTotal);
   const amountDueNow = money(
     cleanupTotal > 0
-      ? cleanupTotal + onboardingFee
-      : onboardingFee + recurringMonthlyTotal,
+      ? cleanupTotal + onboardingFee + additionalOneTimeTotal
+      : onboardingFee + additionalOneTimeTotal + recurringMonthlyTotal,
   );
   const chargeKind: ProposalCheckoutSummary["chargeKind"] = cleanupTotal > 0
     ? onboardingFee > 0 ? "onboarding_and_cleanup" : "cleanup"

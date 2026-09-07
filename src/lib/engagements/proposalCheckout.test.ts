@@ -61,6 +61,28 @@ describe("proposal checkout", () => {
     expect(result.chargeKind).toBe("onboarding_and_cleanup");
   });
 
+  it("charges a selected one-time add-on now instead of adding it to MRR", () => {
+    const oneTimeSnapshot = {
+      ...snapshot,
+      assessment: {
+        ...snapshot.assessment,
+        additionalOptions: [
+          ...snapshot.assessment.additionalOptions,
+          { id: "sales-tax", monthlyPrice: 650, billingCadence: "one-time", showInProposal: true, archived: false },
+        ],
+      },
+    };
+    const result = buildProposalCheckoutSummary(oneTimeSnapshot, {
+      tier: "maintain",
+      hasTwelveMonthAgreement: false,
+      selectedCleanupPeriodKeys: [],
+      selectedAdditionalOptionIds: ["sales-tax"],
+    });
+    expect(result.recurringMonthlyTotal).toBe(300);
+    expect(result.oneTimeTotal).toBe(1150);
+    expect(result.amountDueNow).toBe(1450);
+  });
+
   it("subtracts only onboarding when a promotion waives it", () => {
     expect(resolveAmountDueNow({
       checkout: { amountDueNow: 875, onboardingFee: 500 },
