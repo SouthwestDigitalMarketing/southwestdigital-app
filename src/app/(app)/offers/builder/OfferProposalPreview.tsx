@@ -341,7 +341,10 @@ function buildCleanupRows(periods: HistoricalCleanupPeriod[], maintainMonthly: n
     });
 }
 
-function buildOptions(
+// Exported so the golden fixtures can assert that the service rows a signed
+// proposal renders never change. This is the only place an assessment becomes
+// what the client actually sees.
+export function buildOptions(
   assessment: AssessmentState,
   publishedPricing?: PublicProposalPricing,
   isTestProposal = false,

@@ -1,0 +1,465 @@
+{
+  "kind": "bookkeeping",
+  "pricing": {
+    "grow": {
+      "monthly": 825,
+      "packageId": "grow",
+      "catchUpBase": 0,
+      "totalOneTime": 0,
+      "complexityLevel": "standard",
+      "totalOneTimeBeforeManual": 0,
+      "assessmentOneTimeAdjustments": 0
+    },
+    "improve": {
+      "monthly": 650,
+      "packageId": "improve",
+      "catchUpBase": 0,
+      "totalOneTime": 0,
+      "complexityLevel": "standard",
+      "totalOneTimeBeforeManual": 0,
+      "assessmentOneTimeAdjustments": 0
+    },
+    "maintain": {
+      "monthly": 550,
+      "packageId": "maintain",
+      "catchUpBase": 0,
+      "totalOneTime": 0,
+      "complexityLevel": "standard",
+      "totalOneTimeBeforeManual": 0,
+      "assessmentOneTimeAdjustments": 0
+    }
+  },
+  "assessment": {
+    "bonuses": [
+      {
+        "id": "property-reporting-setup",
+        "name": "Reports by Property",
+        "archived": false,
+        "description": "We will set up the books so the client can see income and costs for each property."
+      },
+      {
+        "id": "document-organization",
+        "name": "Organized, Audit-Ready Records",
+        "archived": false,
+        "description": "We replace paper files and loose digital files with one clear system. The client uploads records to the portal. We organize them and link them to the right items in the books."
+      },
+      {
+        "id": "quarterly-review",
+        "name": "First Quarterly Review",
+        "archived": false,
+        "description": "After the first full quarter, we will meet with the client to review reports, answer questions, and plan the next steps."
+      },
+      {
+        "id": "doublehq-client-portal",
+        "name": "DoubleHQ Client Portal",
+        "archived": false,
+        "description": "The client gets one online place to talk with our team, send files, view requests, and check the work in progress."
+      },
+      {
+        "id": "real-estate-chart-of-accounts",
+        "name": "Real Estate Chart of Accounts",
+        "archived": false,
+        "description": "We will add our real estate Chart of Accounts to the client's current QuickBooks file. This makes reports easier to read and keeps the books consistent."
+      },
+      {
+        "id": "new-quickbooks-file",
+        "name": "New QuickBooks Setup",
+        "archived": false,
+        "description": "If a fresh start is best, we will build a new QuickBooks file for monthly bookkeeping. It will include our Real Estate Chart of Accounts."
+      },
+      {
+        "id": "registered-agent-service",
+        "name": "Registered Agent Service",
+        "archived": false,
+        "description": "Forward official state correspondence to the designated contact."
+      },
+      {
+        "id": "tax-preparer-coordination",
+        "name": "Tax Preparer Coordination",
+        "archived": false,
+        "description": "Coordinate with the client’s tax preparer and provide organized bookkeeping records.",
+        "billingCadence": "one-time"
+      },
+      {
+        "id": "monthly-bookkeeping",
+        "name": "Monthly Bookkeeping",
+        "archived": false,
+        "description": "Includes categorizing transactions, reconciling accounts, generating the Balance Sheet and Profit & Loss statement, and completing the monthly close process. Reports and communication are delivered through the client portal.",
+        "billingCadence": "monthly",
+        "defaultPackageIds": [
+          "grow",
+          "improve",
+          "maintain"
+        ],
+        "realEstateSpecific": false
+      },
+      {
+        "id": "standard-client-support",
+        "name": "Standard Client Support",
+        "archived": false,
+        "description": "Responses within 1–2 business days for bookkeeping questions and support requests.",
+        "billingCadence": "monthly",
+        "defaultPackageIds": [
+          "maintain"
+        ],
+        "realEstateSpecific": false
+      },
+      {
+        "id": "monthly-reporting-package",
+        "name": "Monthly Reporting Package",
+        "archived": false,
+        "description": "A recurring financial reporting package that provides clear visibility into performance.",
+        "billingCadence": "monthly",
+        "defaultPackageIds": [
+          "grow",
+          "improve"
+        ],
+        "realEstateSpecific": false
+      },
+      {
+        "id": "priority-client-support",
+        "name": "Priority Client Support",
+        "archived": false,
+        "description": "Same-business-day responses for bookkeeping questions and support requests.",
+        "billingCadence": "monthly",
+        "defaultPackageIds": [
+          "improve"
+        ],
+        "realEstateSpecific": false
+      },
+      {
+        "id": "investor-reporting-kpi-review",
+        "name": "Investor Reporting & KPI Review",
+        "archived": false,
+        "description": "Investor-focused financial reporting and KPI review to support portfolio decisions.",
+        "billingCadence": "monthly",
+        "defaultPackageIds": [
+          "grow"
+        ],
+        "realEstateSpecific": false
+      },
+      {
+        "id": "concierge-client-support",
+        "name": "Concierge Client Support",
+        "archived": false,
+        "description": "24/7 priority access for bookkeeping questions and time-sensitive support needs.",
+        "billingCadence": "monthly",
+        "defaultPackageIds": [
+          "grow"
+        ],
+        "realEstateSpecific": false
+      },
+      {
+        "id": "monthly-advisory-calls",
+        "name": "Monthly Advisory Calls",
+        "archived": false,
+        "description": "A recurring call with the bookkeeper to review the numbers and talk through decisions.",
+        "billingCadence": "monthly",
+        "defaultPackageIds": [
+          "grow"
+        ],
+        "realEstateSpecific": false
+      },
+      {
+        "id": "cfo-pack",
+        "name": "CFO Pack",
+        "archived": false,
+        "description": "Executive-level financial reporting built for owner and investor decision-making.",
+        "billingCadence": "monthly",
+        "defaultPackageIds": [
+          "grow"
+        ],
+        "realEstateSpecific": false
+      },
+      {
+        "id": "cash-flow-analysis",
+        "name": "Cash Flow Analysis",
+        "archived": false,
+        "description": "Ongoing analysis of cash inflows and outflows to support planning and investment decisions.",
+        "billingCadence": "monthly",
+        "defaultPackageIds": [
+          "grow"
+        ],
+        "realEstateSpecific": false
+      }
+    ],
+    "banksUsed": [
+      "chase"
+    ],
+    "introBody": "Your responsible accounting partner.  Get monthly reports to improve business decisions and enjoy our proactive coordination with your tax preparer.  Registered agent services included at no charge.",
+    "clientName": "Khaled Hossain",
+    "entityType": "llc",
+    "loansCount": 0,
+    "payCadence": "weekly",
+    "bookSetType": "other-business",
+    "companyName": "[redacted]",
+    "contactRole": "Owner / Founder",
+    "runsPayroll": true,
+    "taxElection": "disregarded",
+    "contactEmail": "khaled@uspromoline.com",
+    "contactPhone": "+18776593458",
+    "proposalMode": "light",
+    "urgencyOffer": {
+      "kind": "percent-off",
+      "title": "",
+      "amount": 250,
+      "details": "",
+      "enabled": true,
+      "percent": 10,
+      "deadlineDate": "",
+      "deadlineMode": "relative",
+      "durationDays": 14
+    },
+    "introHeadline": "Professional local bookkeeping and registered agent services",
+    "proposalTheme": "brand-light",
+    "employeesCount": 1,
+    "assessmentNotes": "",
+    "cleanupEndMonth": "2026-07",
+    "featuredMediaId": "cmtj4g2kr0001inz44x3tnyvb",
+    "heroMediaButton": {
+      "icon": "play",
+      "label": "Why We're Special",
+      "visible": true,
+      "iconPlacement": "end"
+    },
+    "payrollProvider": "quickbooks-payroll",
+    "qboAccessStatus": "review_completed",
+    "transactionBand": "500-999",
+    "contractorsCount": 1,
+    "creditCardsCount": 0,
+    "featuredImageUrl": "",
+    "featuredMediaUrl": "",
+    "featuredVideoUrl": "https://customer-8urn5752m36lkzxs.cloudflarestream.com/edb9adf7aa319e1852631fa9acda6b0f/watch",
+    "numberOfEntities": 0,
+    "paymentPlatforms": [
+      "unknown"
+    ],
+    "additionalOptions": [
+      {
+        "id": "project-tracking",
+        "name": "Project Tracking",
+        "archived": false,
+        "description": "Income, cost, and profitability tracking for Improve and Grow.",
+        "monthlyPrice": 150,
+        "showInProposal": false
+      },
+      {
+        "id": "budget-reporting",
+        "name": "Budget Setup, Tracking, & Reporting",
+        "archived": false,
+        "description": "Build the client’s budget and provide recurring budget-versus-actuals reporting.",
+        "monthlyPrice": 150,
+        "showInProposal": true
+      },
+      {
+        "id": "sales-tax-filing",
+        "name": "Sales Tax Filing & Remittance",
+        "archived": false,
+        "description": "Calculate, file, and remit the client’s sales tax payments.",
+        "monthlyPrice": 250,
+        "showInProposal": true
+      },
+      {
+        "id": "stessa-migration",
+        "name": "QuickBooks to Stessa Migration",
+        "archived": false,
+        "description": "We will move the client's books to Stessa for free when they buy the cleanup and monthly bookkeeping in this offer.",
+        "monthlyPrice": 0,
+        "showInProposal": false
+      },
+      {
+        "id": "advanced-receipt-management",
+        "name": "Advanced Receipt Management",
+        "archived": false,
+        "description": "Enhanced receipt collection, organization, and matching support.",
+        "monthlyPrice": 500,
+        "showInProposal": true
+      }
+    ],
+    "bankAccountsCount": 2,
+    "cleanupStartMonth": "2026-01",
+    "hasAdminAssistant": false,
+    "vehicleNotesCount": 0,
+    "heroContinueButton": {
+      "icon": "",
+      "label": "Shop pricing",
+      "visible": true,
+      "iconPlacement": "none"
+    },
+    "linesOfCreditCount": 0,
+    "numberOfProperties": 0,
+    "waiveOnboardingFee": false,
+    "adminAssistantEmail": "",
+    "adminAssistantPhone": "",
+    "agreementTemplateId": "cmtk5mrcb0001in9ws8e9y6lb",
+    "offerSalesTaxFiling": true,
+    "optionsCatalogOrder": [
+      "advanced-receipt-management",
+      "project-tracking",
+      "budget-reporting",
+      "sales-tax-filing",
+      "tax-preparer-coordination",
+      "stessa-migration",
+      "property-reporting-setup",
+      "doublehq-client-portal",
+      "document-organization",
+      "quarterly-review",
+      "real-estate-chart-of-accounts",
+      "new-quickbooks-file",
+      "registered-agent-service",
+      "monthly-bookkeeping",
+      "standard-client-support",
+      "monthly-reporting-package",
+      "priority-client-support",
+      "investor-reporting-kpi-review",
+      "concierge-client-support",
+      "monthly-advisory-calls",
+      "cfo-pack",
+      "cash-flow-analysis"
+    ],
+    "payrollContactEmail": "",
+    "payrollContactPhone": "",
+    "annualSavingsPercent": 10,
+    "contractorPayCadence": "regular-schedule",
+    "offerBudgetReporting": true,
+    "offerProjectTracking": false,
+    "payrollContactSource": "",
+    "realEstateOperations": [],
+    "agreementTemplateName": "Bookkeeping Services Agreement",
+    "onboardingFeeOverride": 350,
+    "payrollContactOwnerId": "owner-1",
+    "payrollPaymentMethods": [
+      "direct-deposit"
+    ],
+    "adminAssistantLastName": "",
+    "bonusPackageSelections": {
+      "cfo-pack": [
+        "grow"
+      ],
+      "quarterly-review": [
+        "maintain",
+        "grow",
+        "improve"
+      ],
+      "cash-flow-analysis": [
+        "grow"
+      ],
+      "monthly-bookkeeping": [
+        "grow",
+        "improve",
+        "maintain"
+      ],
+      "new-quickbooks-file": [
+        "grow",
+        "improve",
+        "maintain"
+      ],
+      "document-organization": [
+        "maintain",
+        "grow",
+        "improve"
+      ],
+      "doublehq-client-portal": [
+        "maintain",
+        "grow",
+        "improve"
+      ],
+      "monthly-advisory-calls": [
+        "grow"
+      ],
+      "priority-client-support": [
+        "improve"
+      ],
+      "standard-client-support": [
+        "maintain"
+      ],
+      "concierge-client-support": [
+        "grow"
+      ],
+      "property-reporting-setup": [
+        "grow",
+        "improve",
+        "maintain"
+      ],
+      "registered-agent-service": [
+        "grow",
+        "improve",
+        "maintain"
+      ],
+      "monthly-reporting-package": [
+        "grow",
+        "improve"
+      ],
+      "tax-preparer-coordination": [
+        "grow",
+        "improve",
+        "maintain"
+      ],
+      "investor-reporting-kpi-review": [
+        "grow"
+      ],
+      "real-estate-chart-of-accounts": [
+        "grow",
+        "improve",
+        "maintain"
+      ]
+    },
+    "payrollContactLastName": "",
+    "adminAssistantFirstName": "",
+    "discretionaryMultiplier": 0.82,
+    "hasTipsLiabilityAccount": null,
+    "payrollContactFirstName": "",
+    "payrollResponsibleParty": "payroll-provider-managed",
+    "agreementTemplateContent": "BOOKKEEPING SERVICES AGREEMENT\n──────────────────────────────────────────────────────────────\n\nClient:           {{clientName}}\n{{contactLine}}\nDate:             {{date}}\nEngagement:       {{engagementType}}\nPackage:          {{packageName}}\n\n\nSCOPE OF WORK\n──────────────────────────────────────────────────────────────\n\n{{scopeOfWork}}\n\n\nFEE STRUCTURE\n──────────────────────────────────────────────────────────────\n\n{{feeStructure}}\n\n\nDOCUMENT SUBMISSION TIMELINE\n──────────────────────────────────────────────────────────────\n\nOnboarding work begins once the engagement fee has been paid and required documents have been received.\n\n  • Documents are due within 10 business days of the engagement fee clearing.\n  • If documents are not received within that window, {{brandName}} cannot guarantee the client's place in the active work queue. The engagement will be rescheduled behind clients who are ready to proceed.\n  • If documents are not received within 30 days of payment, a $150/month file-maintenance fee applies to keep the engagement open.\n  • If documents are not received within 60 days of payment, the engagement will be placed on hold. Scope and pricing will be reconfirmed before work resumes.\n  • The engagement fee is fully earned upon signing and is non-refundable regardless of how long document submission takes.\n\n\nEXCLUSIONS\n──────────────────────────────────────────────────────────────\n\nThe following services are not included in this engagement unless separately agreed in writing:\n\n  • Tax preparation, tax planning, or tax filing of any kind\n  • CPA, enrolled agent, or licensed tax preparer services\n  • Payroll processing (unless separately agreed in writing)\n  • Financial statements intended for bank loan applications, audits, or regulatory filings (unless separately agreed in writing)\n  • Legal, compliance, or regulatory advice\n  • Business consulting beyond the scope of bookkeeping\n  • Forensic accounting or fraud investigation\n\n\nTERMS AND CONDITIONS\n──────────────────────────────────────────────────────────────\n\n1. Confidentiality\nAll client financial information provided to {{brandName}} will be kept strictly confidential and will not be shared with third parties except as required by law or with written consent from the client.\n\n2. Electronic Communications\n{{brandName}} may communicate with the client by email or other electronic means. The client is responsible for keeping its own email accounts, passwords, and devices secure, and {{brandName}} may rely on instructions received from an account the client has identified as its own unless {{brandName}} has reason to believe the communication is not genuine.\n\n3. Client Cooperation\nThis engagement depends on the client providing complete, accurate, and timely information and records. {{brandName}} is not responsible for errors, omissions, or delays resulting from incomplete or inaccurate information provided by the client.\n\n4. Unanticipated and Out-of-Scope Services\nOnly the services described in this agreement are included. If an unanticipated need arises, {{brandName}} will provide a separate quote before performing that work. That work will begin only after the client agrees to the pricing and provides signed authorization.\n\n5. Client Responsibilities\nThe client is responsible for providing accurate, complete records and information, and for making relevant staff and documents available to {{brandName}} as needed to complete the engagement. Final business decisions remain the client's.\n\n6. Ownership of Documents\nOriginal documents provided during this engagement remain the property of the client. {{brandName}} may retain copies of client documents for its own records.\n\n7. Proprietary Materials\nThe templates, checklists, workflows, and other materials {{brandName}} uses to deliver its services remain {{brandName}}'s property. The client may use materials provided during the engagement for its own internal recordkeeping but may not copy, resell, or share them with a third party without {{brandName}}'s written consent.\n\n8. Record Retention and Third-Party Platforms\n{{brandName}} may use third-party or cloud-based platforms for bookkeeping, file storage, and service delivery. The client remains responsible for maintaining its own copies of original documents. {{brandName}} retains engagement records for active clients for the duration of the engagement and for seven (7) years following termination.\n\n9. Termination\nEither party may terminate this agreement with seven (7) days written notice. All fees for work completed through the termination date are due upon termination, and any deposit or prepayment on file will be applied against amounts owed as of that date.\n\n10. Payment Terms and Delinquent Accounts\nInvoices are due upon receipt unless other terms are agreed to in writing. {{brandName}} may pause work on any engagement with a delinquent invoice until the account is brought current. The client agrees to reimburse {{brandName}} for reasonable collection costs incurred in collecting a delinquent balance.\n\n11. Retainers\n{{brandName}} may request a retainer before starting services. Retainer funds are held and applied against future invoices. If the engagement ends with a balance remaining, {{brandName}} will refund the balance within sixty (60) days of termination or upon the client's request, whichever is sooner.\n\n12. Service and Price Guarantee\nIf the client is dissatisfied with services performed, the client should notify {{brandName}} promptly so it can be addressed, which may include correcting the work, adjusting pricing, or issuing a partial or full credit at {{brandName}}'s discretion.\n\n13. Indemnification\nThe client agrees to indemnify and hold {{brandName}} harmless from claims, damages, or costs arising out of inaccurate or incomplete information provided by the client, or out of the client's business operations, except to the extent such claims arise from {{brandName}}'s gross negligence or willful misconduct.\n\n14. Limitation of Liability\n{{brandName}}'s liability under this agreement is limited to the fees paid under this agreement. {{brandName}} is not liable for tax, legal, audit, or financial outcomes based on the work product of this engagement.\n\n15. Governing Law, Venue, and Attorneys' Fees\nThis agreement is governed by the laws of the State of Texas. Any action related to this agreement must be brought in the state or federal courts located in Montgomery County, Texas, and both parties consent to the jurisdiction of those courts. The prevailing party in any such action is entitled to recover its reasonable attorneys' fees and court costs.\n\n16. Entire Agreement\nThis agreement, together with any schedules or exhibits referenced in it, constitutes the entire agreement between the parties and supersedes all prior discussions, understandings, or agreements relating to this engagement.\n\n17. Severability\nIf any provision of this agreement is found to be invalid or unenforceable, the remaining provisions will remain in full force and effect.\n\n18. Electronic Signature\nThe client agrees that signing this agreement electronically has the same legal effect as a handwritten signature.\n\n\nSIGNATURE\n──────────────────────────────────────────────────────────────\n\nBy signing below, the client confirms they have read, understood, and agreed to the terms of this agreement.\n\nBusiness: {{clientName}}\nDate: {{date}}",
+    "banksAllowDelegateAccess": null,
+    "booksOverTwoMonthsBehind": false,
+    "currentBookkeepingStatus": "",
+    "customerInvoicingMethods": [
+      "quickbooks-invoicing"
+    ],
+    "historicalCleanupPeriods": [
+      {
+        "id": "cleanup-2026",
+        "year": 2026,
+        "endMonth": 7,
+        "platform": "qbo",
+        "startMonth": 1,
+        "purchasedOrSoldPropertiesCount": 0
+      }
+    ],
+    "platformMigrationEnabled": false,
+    "recurringContractorTypes": [
+      "unknown"
+    ],
+    "zeroBalancePlatformCount": 0,
+    "acceptsTipsForContractors": false,
+    "ongoingBookkeepingPlatform": "qbo",
+    "adminAssistantContactSource": "",
+    "discretionaryMultiplierNote": "",
+    "includeDoubleHqClientPortal": true,
+    "payrollQboIntegrationStatus": "fully-integrated",
+    "salesTaxFilingPriceOverride": null,
+    "unconnectedCreditCardsCount": 0,
+    "adminAssistantContactOwnerId": "owner-1",
+    "budgetReportingPriceOverride": null,
+    "projectTrackingPriceOverride": null,
+    "unconnectedBankAccountsCount": 0,
+    "includeNewQuickBooksFileSetup": true,
+    "includeRegisteredAgentService": true,
+    "unconnectedLinesOfCreditCount": 0,
+    "offerAdvancedReceiptManagement": false,
+    "includeQuarterlyFinancialReview": true,
+    "platformMigrationEffectiveMonth": "",
+    "includeDocumentOrganizationSetup": true,
+    "includeRealEstateChartOfAccounts": true,
+    "includeConditionalStessaMigration": true,
+    "includePropertyLevelReportingSetup": true,
+    "includeTaxPreparerCoordinationCall": true,
+    "cleanupPurchasedOrSoldPropertiesCount": 0,
+    "advancedReceiptManagementPriceOverride": null
+  },
+  "contactIds": [
+    "cmt7qyxd70005inf8nj4x2z5i"
+  ],
+  "contactInfo": "[redacted]"
+}

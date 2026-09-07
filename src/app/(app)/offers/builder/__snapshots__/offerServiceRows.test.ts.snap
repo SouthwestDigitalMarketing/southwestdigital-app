@@ -1,0 +1,1219 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildOptions golden fixtures > renders 01-draft-draft.snapshot.json unchanged 1`] = `
+{
+  "grow": {
+    "monthlyPrice": 825,
+    "name": "Grow",
+    "oneTime": [
+      [
+        "Onboarding",
+        350,
+        "Includes our review and assessment, document collection, QuickBooks setup, and the work needed to begin. The fee is $500 plus $20 for each selected cleanup month.",
+      ],
+      [
+        "Organized, Audit-Ready Records",
+        0,
+        "We replace paper files and loose digital files with one clear system. The client uploads records to the portal. We organize them and link them to the right items in the books.",
+      ],
+      [
+        "First Quarterly Review",
+        0,
+        "After the first full quarter, we will meet with the client to review reports, answer questions, and plan the next steps.",
+      ],
+      [
+        "DoubleHQ Client Portal",
+        0,
+        "The client gets one online place to talk with our team, send files, view requests, and check the work in progress.",
+      ],
+      [
+        "Registered Agent Service",
+        0,
+        "Forward official state correspondence to the designated contact.",
+      ],
+      [
+        "Tax Preparer Coordination",
+        0,
+        "Coordinate with the client’s tax preparer and provide organized bookkeeping records.",
+      ],
+    ],
+    "recurring": [
+      [
+        "Monthly Bookkeeping",
+        0,
+        "Includes categorizing transactions, reconciling accounts, generating the Balance Sheet and Profit & Loss statement, and completing the monthly close process. Reports and communication are delivered through the client portal.",
+      ],
+      [
+        "Monthly Reporting Package",
+        0,
+        "A recurring financial reporting package that provides clear visibility into performance.",
+      ],
+      [
+        "Investor Reporting & KPI Review",
+        0,
+        "Investor-focused financial reporting and KPI review to support portfolio decisions.",
+      ],
+      [
+        "Concierge Client Support",
+        0,
+        "24/7 priority access for bookkeeping questions and time-sensitive support needs.",
+      ],
+      [
+        "Monthly Advisory Calls",
+        0,
+        "A recurring call with the bookkeeper to review the numbers and talk through decisions.",
+      ],
+      [
+        "CFO Pack",
+        0,
+        "Executive-level financial reporting built for owner and investor decision-making.",
+      ],
+      [
+        "Cash Flow Analysis",
+        0,
+        "Ongoing analysis of cash inflows and outflows to support planning and investment decisions.",
+      ],
+    ],
+  },
+  "improve": {
+    "monthlyPrice": 650,
+    "name": "Improve",
+    "oneTime": [
+      [
+        "Onboarding",
+        350,
+        "Includes our review and assessment, document collection, QuickBooks setup, and the work needed to begin. The fee is $500 plus $20 for each selected cleanup month.",
+      ],
+      [
+        "Organized, Audit-Ready Records",
+        0,
+        "We replace paper files and loose digital files with one clear system. The client uploads records to the portal. We organize them and link them to the right items in the books.",
+      ],
+      [
+        "First Quarterly Review",
+        0,
+        "After the first full quarter, we will meet with the client to review reports, answer questions, and plan the next steps.",
+      ],
+      [
+        "DoubleHQ Client Portal",
+        0,
+        "The client gets one online place to talk with our team, send files, view requests, and check the work in progress.",
+      ],
+      [
+        "Registered Agent Service",
+        0,
+        "Forward official state correspondence to the designated contact.",
+      ],
+      [
+        "Tax Preparer Coordination",
+        0,
+        "Coordinate with the client’s tax preparer and provide organized bookkeeping records.",
+      ],
+    ],
+    "recurring": [
+      [
+        "Monthly Bookkeeping",
+        0,
+        "Includes categorizing transactions, reconciling accounts, generating the Balance Sheet and Profit & Loss statement, and completing the monthly close process. Reports and communication are delivered through the client portal.",
+      ],
+      [
+        "Monthly Reporting Package",
+        0,
+        "A recurring financial reporting package that provides clear visibility into performance.",
+      ],
+      [
+        "Priority Client Support",
+        0,
+        "Same-business-day responses for bookkeeping questions and support requests.",
+      ],
+    ],
+  },
+  "maintain": {
+    "monthlyPrice": 550,
+    "name": "Maintain",
+    "oneTime": [
+      [
+        "Onboarding",
+        350,
+        "Includes our review and assessment, document collection, QuickBooks setup, and the work needed to begin. The fee is $500 plus $20 for each selected cleanup month.",
+      ],
+      [
+        "Organized, Audit-Ready Records",
+        0,
+        "We replace paper files and loose digital files with one clear system. The client uploads records to the portal. We organize them and link them to the right items in the books.",
+      ],
+      [
+        "First Quarterly Review",
+        0,
+        "After the first full quarter, we will meet with the client to review reports, answer questions, and plan the next steps.",
+      ],
+      [
+        "DoubleHQ Client Portal",
+        0,
+        "The client gets one online place to talk with our team, send files, view requests, and check the work in progress.",
+      ],
+      [
+        "Registered Agent Service",
+        0,
+        "Forward official state correspondence to the designated contact.",
+      ],
+      [
+        "Tax Preparer Coordination",
+        0,
+        "Coordinate with the client’s tax preparer and provide organized bookkeeping records.",
+      ],
+    ],
+    "recurring": [
+      [
+        "Monthly Bookkeeping",
+        0,
+        "Includes categorizing transactions, reconciling accounts, generating the Balance Sheet and Profit & Loss statement, and completing the monthly close process. Reports and communication are delivered through the client portal.",
+      ],
+      [
+        "Standard Client Support",
+        0,
+        "Responses within 1–2 business days for bookkeeping questions and support requests.",
+      ],
+    ],
+  },
+}
+`;
+
+exports[`buildOptions golden fixtures > renders 01-draft-published.snapshot.json unchanged 1`] = `
+{
+  "grow": {
+    "monthlyPrice": 825,
+    "name": "Grow",
+    "oneTime": [
+      [
+        "Onboarding",
+        350,
+        "Includes our review and assessment, document collection, QuickBooks setup, and the work needed to begin. The fee is $500 plus $20 for each selected cleanup month.",
+      ],
+      [
+        "Organized, Audit-Ready Records",
+        0,
+        "We replace paper files and loose digital files with one clear system. The client uploads records to the portal. We organize them and link them to the right items in the books.",
+      ],
+      [
+        "First Quarterly Review",
+        0,
+        "After the first full quarter, we will meet with the client to review reports, answer questions, and plan the next steps.",
+      ],
+      [
+        "DoubleHQ Client Portal",
+        0,
+        "The client gets one online place to talk with our team, send files, view requests, and check the work in progress.",
+      ],
+      [
+        "Registered Agent Service",
+        0,
+        "Forward official state correspondence to the designated contact.",
+      ],
+      [
+        "Tax Preparer Coordination",
+        0,
+        "Coordinate with the client’s tax preparer and provide organized bookkeeping records.",
+      ],
+    ],
+    "recurring": [
+      [
+        "Monthly Bookkeeping",
+        0,
+        "Includes categorizing transactions, reconciling accounts, generating the Balance Sheet and Profit & Loss statement, and completing the monthly close process. Reports and communication are delivered through the client portal.",
+      ],
+      [
+        "Monthly Reporting Package",
+        0,
+        "A recurring financial reporting package that provides clear visibility into performance.",
+      ],
+      [
+        "Investor Reporting & KPI Review",
+        0,
+        "Investor-focused financial reporting and KPI review to support portfolio decisions.",
+      ],
+      [
+        "Concierge Client Support",
+        0,
+        "24/7 priority access for bookkeeping questions and time-sensitive support needs.",
+      ],
+      [
+        "Monthly Advisory Calls",
+        0,
+        "A recurring call with the bookkeeper to review the numbers and talk through decisions.",
+      ],
+      [
+        "CFO Pack",
+        0,
+        "Executive-level financial reporting built for owner and investor decision-making.",
+      ],
+      [
+        "Cash Flow Analysis",
+        0,
+        "Ongoing analysis of cash inflows and outflows to support planning and investment decisions.",
+      ],
+    ],
+  },
+  "improve": {
+    "monthlyPrice": 650,
+    "name": "Improve",
+    "oneTime": [
+      [
+        "Onboarding",
+        350,
+        "Includes our review and assessment, document collection, QuickBooks setup, and the work needed to begin. The fee is $500 plus $20 for each selected cleanup month.",
+      ],
+      [
+        "Organized, Audit-Ready Records",
+        0,
+        "We replace paper files and loose digital files with one clear system. The client uploads records to the portal. We organize them and link them to the right items in the books.",
+      ],
+      [
+        "First Quarterly Review",
+        0,
+        "After the first full quarter, we will meet with the client to review reports, answer questions, and plan the next steps.",
+      ],
+      [
+        "DoubleHQ Client Portal",
+        0,
+        "The client gets one online place to talk with our team, send files, view requests, and check the work in progress.",
+      ],
+      [
+        "Registered Agent Service",
+        0,
+        "Forward official state correspondence to the designated contact.",
+      ],
+      [
+        "Tax Preparer Coordination",
+        0,
+        "Coordinate with the client’s tax preparer and provide organized bookkeeping records.",
+      ],
+    ],
+    "recurring": [
+      [
+        "Monthly Bookkeeping",
+        0,
+        "Includes categorizing transactions, reconciling accounts, generating the Balance Sheet and Profit & Loss statement, and completing the monthly close process. Reports and communication are delivered through the client portal.",
+      ],
+      [
+        "Monthly Reporting Package",
+        0,
+        "A recurring financial reporting package that provides clear visibility into performance.",
+      ],
+      [
+        "Priority Client Support",
+        0,
+        "Same-business-day responses for bookkeeping questions and support requests.",
+      ],
+    ],
+  },
+  "maintain": {
+    "monthlyPrice": 550,
+    "name": "Maintain",
+    "oneTime": [
+      [
+        "Onboarding",
+        350,
+        "Includes our review and assessment, document collection, QuickBooks setup, and the work needed to begin. The fee is $500 plus $20 for each selected cleanup month.",
+      ],
+      [
+        "Organized, Audit-Ready Records",
+        0,
+        "We replace paper files and loose digital files with one clear system. The client uploads records to the portal. We organize them and link them to the right items in the books.",
+      ],
+      [
+        "First Quarterly Review",
+        0,
+        "After the first full quarter, we will meet with the client to review reports, answer questions, and plan the next steps.",
+      ],
+      [
+        "DoubleHQ Client Portal",
+        0,
+        "The client gets one online place to talk with our team, send files, view requests, and check the work in progress.",
+      ],
+      [
+        "Registered Agent Service",
+        0,
+        "Forward official state correspondence to the designated contact.",
+      ],
+      [
+        "Tax Preparer Coordination",
+        0,
+        "Coordinate with the client’s tax preparer and provide organized bookkeeping records.",
+      ],
+    ],
+    "recurring": [
+      [
+        "Monthly Bookkeeping",
+        0,
+        "Includes categorizing transactions, reconciling accounts, generating the Balance Sheet and Profit & Loss statement, and completing the monthly close process. Reports and communication are delivered through the client portal.",
+      ],
+      [
+        "Standard Client Support",
+        0,
+        "Responses within 1–2 business days for bookkeeping questions and support requests.",
+      ],
+    ],
+  },
+}
+`;
+
+exports[`buildOptions golden fixtures > renders 02-accepted-draft.snapshot.json unchanged 1`] = `
+{
+  "grow": {
+    "monthlyPrice": 1005,
+    "name": "Grow",
+    "oneTime": [
+      [
+        "Onboarding",
+        350,
+        "Includes our review and assessment, document collection, QuickBooks setup, and the work needed to begin. The fee is $500 plus $20 for each selected cleanup month.",
+      ],
+      [
+        "Organized, Audit-Ready Records",
+        0,
+        "We replace paper files and loose digital files with one clear system. The client uploads records to the portal. We organize them and link them to the right items in the books.",
+      ],
+      [
+        "First Quarterly Review",
+        0,
+        "After the first full quarter, we will meet with the client to review reports, answer questions, and plan the next steps.",
+      ],
+      [
+        "DoubleHQ Client Portal",
+        0,
+        "The client gets one online place to talk with our team, send files, view requests, and check the work in progress.",
+      ],
+      [
+        "Registered Agent Service",
+        0,
+        "Forward official state correspondence to the designated contact.",
+      ],
+      [
+        "Tax Preparer Coordination",
+        0,
+        "Coordinate with the client’s tax preparer and provide organized bookkeeping records.",
+      ],
+    ],
+    "recurring": [
+      [
+        "Monthly Bookkeeping",
+        0,
+        "Includes categorizing transactions, reconciling accounts, generating the Balance Sheet and Profit & Loss statement, and completing the monthly close process. Reports and communication are delivered through the client portal.",
+      ],
+      [
+        "Monthly Reporting Package",
+        0,
+        "A recurring financial reporting package that provides clear visibility into performance.",
+      ],
+      [
+        "Investor Reporting & KPI Review",
+        0,
+        "Investor-focused financial reporting and KPI review to support portfolio decisions.",
+      ],
+      [
+        "Concierge Client Support",
+        0,
+        "24/7 priority access for bookkeeping questions and time-sensitive support needs.",
+      ],
+      [
+        "Monthly Advisory Calls",
+        0,
+        "A recurring call with the bookkeeper to review the numbers and talk through decisions.",
+      ],
+      [
+        "CFO Pack",
+        0,
+        "Executive-level financial reporting built for owner and investor decision-making.",
+      ],
+      [
+        "Cash Flow Analysis",
+        0,
+        "Ongoing analysis of cash inflows and outflows to support planning and investment decisions.",
+      ],
+    ],
+  },
+  "improve": {
+    "monthlyPrice": 790,
+    "name": "Improve",
+    "oneTime": [
+      [
+        "Onboarding",
+        350,
+        "Includes our review and assessment, document collection, QuickBooks setup, and the work needed to begin. The fee is $500 plus $20 for each selected cleanup month.",
+      ],
+      [
+        "Organized, Audit-Ready Records",
+        0,
+        "We replace paper files and loose digital files with one clear system. The client uploads records to the portal. We organize them and link them to the right items in the books.",
+      ],
+      [
+        "First Quarterly Review",
+        0,
+        "After the first full quarter, we will meet with the client to review reports, answer questions, and plan the next steps.",
+      ],
+      [
+        "DoubleHQ Client Portal",
+        0,
+        "The client gets one online place to talk with our team, send files, view requests, and check the work in progress.",
+      ],
+      [
+        "Registered Agent Service",
+        0,
+        "Forward official state correspondence to the designated contact.",
+      ],
+      [
+        "Tax Preparer Coordination",
+        0,
+        "Coordinate with the client’s tax preparer and provide organized bookkeeping records.",
+      ],
+    ],
+    "recurring": [
+      [
+        "Monthly Bookkeeping",
+        0,
+        "Includes categorizing transactions, reconciling accounts, generating the Balance Sheet and Profit & Loss statement, and completing the monthly close process. Reports and communication are delivered through the client portal.",
+      ],
+      [
+        "Monthly Reporting Package",
+        0,
+        "A recurring financial reporting package that provides clear visibility into performance.",
+      ],
+      [
+        "Priority Client Support",
+        0,
+        "Same-business-day responses for bookkeeping questions and support requests.",
+      ],
+    ],
+  },
+  "maintain": {
+    "monthlyPrice": 670,
+    "name": "Maintain",
+    "oneTime": [
+      [
+        "Onboarding",
+        350,
+        "Includes our review and assessment, document collection, QuickBooks setup, and the work needed to begin. The fee is $500 plus $20 for each selected cleanup month.",
+      ],
+      [
+        "Organized, Audit-Ready Records",
+        0,
+        "We replace paper files and loose digital files with one clear system. The client uploads records to the portal. We organize them and link them to the right items in the books.",
+      ],
+      [
+        "First Quarterly Review",
+        0,
+        "After the first full quarter, we will meet with the client to review reports, answer questions, and plan the next steps.",
+      ],
+      [
+        "DoubleHQ Client Portal",
+        0,
+        "The client gets one online place to talk with our team, send files, view requests, and check the work in progress.",
+      ],
+      [
+        "Registered Agent Service",
+        0,
+        "Forward official state correspondence to the designated contact.",
+      ],
+      [
+        "Tax Preparer Coordination",
+        0,
+        "Coordinate with the client’s tax preparer and provide organized bookkeeping records.",
+      ],
+    ],
+    "recurring": [
+      [
+        "Monthly Bookkeeping",
+        0,
+        "Includes categorizing transactions, reconciling accounts, generating the Balance Sheet and Profit & Loss statement, and completing the monthly close process. Reports and communication are delivered through the client portal.",
+      ],
+      [
+        "Standard Client Support",
+        0,
+        "Responses within 1–2 business days for bookkeeping questions and support requests.",
+      ],
+    ],
+  },
+}
+`;
+
+exports[`buildOptions golden fixtures > renders 02-accepted-published.snapshot.json unchanged 1`] = `
+{
+  "grow": {
+    "monthlyPrice": 1005,
+    "name": "Grow",
+    "oneTime": [
+      [
+        "Onboarding",
+        350,
+        "Includes our review and assessment, document collection, QuickBooks setup, and the work needed to begin. The fee is $500 plus $20 for each selected cleanup month.",
+      ],
+      [
+        "Organized, Audit-Ready Records",
+        0,
+        "We replace paper files and loose digital files with one clear system. The client uploads records to the portal. We organize them and link them to the right items in the books.",
+      ],
+      [
+        "First Quarterly Review",
+        0,
+        "After the first full quarter, we will meet with the client to review reports, answer questions, and plan the next steps.",
+      ],
+      [
+        "DoubleHQ Client Portal",
+        0,
+        "The client gets one online place to talk with our team, send files, view requests, and check the work in progress.",
+      ],
+      [
+        "Registered Agent Service",
+        0,
+        "Forward official state correspondence to the designated contact.",
+      ],
+      [
+        "Tax Preparer Coordination",
+        0,
+        "Coordinate with the client’s tax preparer and provide organized bookkeeping records.",
+      ],
+    ],
+    "recurring": [
+      [
+        "Monthly Bookkeeping",
+        0,
+        "Includes categorizing transactions, reconciling accounts, generating the Balance Sheet and Profit & Loss statement, and completing the monthly close process. Reports and communication are delivered through the client portal.",
+      ],
+      [
+        "Monthly Reporting Package",
+        0,
+        "A recurring financial reporting package that provides clear visibility into performance.",
+      ],
+      [
+        "Investor Reporting & KPI Review",
+        0,
+        "Investor-focused financial reporting and KPI review to support portfolio decisions.",
+      ],
+      [
+        "Concierge Client Support",
+        0,
+        "24/7 priority access for bookkeeping questions and time-sensitive support needs.",
+      ],
+      [
+        "Monthly Advisory Calls",
+        0,
+        "A recurring call with the bookkeeper to review the numbers and talk through decisions.",
+      ],
+      [
+        "CFO Pack",
+        0,
+        "Executive-level financial reporting built for owner and investor decision-making.",
+      ],
+      [
+        "Cash Flow Analysis",
+        0,
+        "Ongoing analysis of cash inflows and outflows to support planning and investment decisions.",
+      ],
+    ],
+  },
+  "improve": {
+    "monthlyPrice": 790,
+    "name": "Improve",
+    "oneTime": [
+      [
+        "Onboarding",
+        350,
+        "Includes our review and assessment, document collection, QuickBooks setup, and the work needed to begin. The fee is $500 plus $20 for each selected cleanup month.",
+      ],
+      [
+        "Organized, Audit-Ready Records",
+        0,
+        "We replace paper files and loose digital files with one clear system. The client uploads records to the portal. We organize them and link them to the right items in the books.",
+      ],
+      [
+        "First Quarterly Review",
+        0,
+        "After the first full quarter, we will meet with the client to review reports, answer questions, and plan the next steps.",
+      ],
+      [
+        "DoubleHQ Client Portal",
+        0,
+        "The client gets one online place to talk with our team, send files, view requests, and check the work in progress.",
+      ],
+      [
+        "Registered Agent Service",
+        0,
+        "Forward official state correspondence to the designated contact.",
+      ],
+      [
+        "Tax Preparer Coordination",
+        0,
+        "Coordinate with the client’s tax preparer and provide organized bookkeeping records.",
+      ],
+    ],
+    "recurring": [
+      [
+        "Monthly Bookkeeping",
+        0,
+        "Includes categorizing transactions, reconciling accounts, generating the Balance Sheet and Profit & Loss statement, and completing the monthly close process. Reports and communication are delivered through the client portal.",
+      ],
+      [
+        "Monthly Reporting Package",
+        0,
+        "A recurring financial reporting package that provides clear visibility into performance.",
+      ],
+      [
+        "Priority Client Support",
+        0,
+        "Same-business-day responses for bookkeeping questions and support requests.",
+      ],
+    ],
+  },
+  "maintain": {
+    "monthlyPrice": 670,
+    "name": "Maintain",
+    "oneTime": [
+      [
+        "Onboarding",
+        350,
+        "Includes our review and assessment, document collection, QuickBooks setup, and the work needed to begin. The fee is $500 plus $20 for each selected cleanup month.",
+      ],
+      [
+        "Organized, Audit-Ready Records",
+        0,
+        "We replace paper files and loose digital files with one clear system. The client uploads records to the portal. We organize them and link them to the right items in the books.",
+      ],
+      [
+        "First Quarterly Review",
+        0,
+        "After the first full quarter, we will meet with the client to review reports, answer questions, and plan the next steps.",
+      ],
+      [
+        "DoubleHQ Client Portal",
+        0,
+        "The client gets one online place to talk with our team, send files, view requests, and check the work in progress.",
+      ],
+      [
+        "Registered Agent Service",
+        0,
+        "Forward official state correspondence to the designated contact.",
+      ],
+      [
+        "Tax Preparer Coordination",
+        0,
+        "Coordinate with the client’s tax preparer and provide organized bookkeeping records.",
+      ],
+    ],
+    "recurring": [
+      [
+        "Monthly Bookkeeping",
+        0,
+        "Includes categorizing transactions, reconciling accounts, generating the Balance Sheet and Profit & Loss statement, and completing the monthly close process. Reports and communication are delivered through the client portal.",
+      ],
+      [
+        "Standard Client Support",
+        0,
+        "Responses within 1–2 business days for bookkeeping questions and support requests.",
+      ],
+    ],
+  },
+}
+`;
+
+exports[`buildOptions golden fixtures > renders 03-archived-draft.snapshot.json unchanged 1`] = `
+{
+  "grow": {
+    "monthlyPrice": 1005,
+    "name": "Grow",
+    "oneTime": [
+      [
+        "Onboarding",
+        350,
+        "Includes our review and assessment, document collection, QuickBooks setup, and the work needed to begin. The fee is $500 plus $20 for each selected cleanup month.",
+      ],
+      [
+        "Organized, Audit-Ready Records",
+        0,
+        "We replace paper files and loose digital files with one clear system. The client uploads records to the portal. We organize them and link them to the right items in the books.",
+      ],
+      [
+        "First Quarterly Review",
+        0,
+        "After the first full quarter, we will meet with the client to review reports, answer questions, and plan the next steps.",
+      ],
+      [
+        "DoubleHQ Client Portal",
+        0,
+        "The client gets one online place to talk with our team, send files, view requests, and check the work in progress.",
+      ],
+      [
+        "Registered Agent Service",
+        0,
+        "Forward official state correspondence to the designated contact.",
+      ],
+      [
+        "Tax Preparer Coordination",
+        0,
+        "Coordinate with the client’s tax preparer and provide organized bookkeeping records.",
+      ],
+    ],
+    "recurring": [
+      [
+        "Monthly Bookkeeping",
+        0,
+        "Includes categorizing transactions, reconciling accounts, generating the Balance Sheet and Profit & Loss statement, and completing the monthly close process. Reports and communication are delivered through the client portal.",
+      ],
+      [
+        "Monthly Reporting Package",
+        0,
+        "A recurring financial reporting package that provides clear visibility into performance.",
+      ],
+      [
+        "Investor Reporting & KPI Review",
+        0,
+        "Investor-focused financial reporting and KPI review to support portfolio decisions.",
+      ],
+      [
+        "Concierge Client Support",
+        0,
+        "24/7 priority access for bookkeeping questions and time-sensitive support needs.",
+      ],
+      [
+        "Monthly Advisory Calls",
+        0,
+        "A recurring call with the bookkeeper to review the numbers and talk through decisions.",
+      ],
+      [
+        "CFO Pack",
+        0,
+        "Executive-level financial reporting built for owner and investor decision-making.",
+      ],
+      [
+        "Cash Flow Analysis",
+        0,
+        "Ongoing analysis of cash inflows and outflows to support planning and investment decisions.",
+      ],
+    ],
+  },
+  "improve": {
+    "monthlyPrice": 790,
+    "name": "Improve",
+    "oneTime": [
+      [
+        "Onboarding",
+        350,
+        "Includes our review and assessment, document collection, QuickBooks setup, and the work needed to begin. The fee is $500 plus $20 for each selected cleanup month.",
+      ],
+      [
+        "Organized, Audit-Ready Records",
+        0,
+        "We replace paper files and loose digital files with one clear system. The client uploads records to the portal. We organize them and link them to the right items in the books.",
+      ],
+      [
+        "First Quarterly Review",
+        0,
+        "After the first full quarter, we will meet with the client to review reports, answer questions, and plan the next steps.",
+      ],
+      [
+        "DoubleHQ Client Portal",
+        0,
+        "The client gets one online place to talk with our team, send files, view requests, and check the work in progress.",
+      ],
+      [
+        "Registered Agent Service",
+        0,
+        "Forward official state correspondence to the designated contact.",
+      ],
+      [
+        "Tax Preparer Coordination",
+        0,
+        "Coordinate with the client’s tax preparer and provide organized bookkeeping records.",
+      ],
+    ],
+    "recurring": [
+      [
+        "Monthly Bookkeeping",
+        0,
+        "Includes categorizing transactions, reconciling accounts, generating the Balance Sheet and Profit & Loss statement, and completing the monthly close process. Reports and communication are delivered through the client portal.",
+      ],
+      [
+        "Monthly Reporting Package",
+        0,
+        "A recurring financial reporting package that provides clear visibility into performance.",
+      ],
+      [
+        "Priority Client Support",
+        0,
+        "Same-business-day responses for bookkeeping questions and support requests.",
+      ],
+    ],
+  },
+  "maintain": {
+    "monthlyPrice": 670,
+    "name": "Maintain",
+    "oneTime": [
+      [
+        "Onboarding",
+        350,
+        "Includes our review and assessment, document collection, QuickBooks setup, and the work needed to begin. The fee is $500 plus $20 for each selected cleanup month.",
+      ],
+      [
+        "Organized, Audit-Ready Records",
+        0,
+        "We replace paper files and loose digital files with one clear system. The client uploads records to the portal. We organize them and link them to the right items in the books.",
+      ],
+      [
+        "First Quarterly Review",
+        0,
+        "After the first full quarter, we will meet with the client to review reports, answer questions, and plan the next steps.",
+      ],
+      [
+        "DoubleHQ Client Portal",
+        0,
+        "The client gets one online place to talk with our team, send files, view requests, and check the work in progress.",
+      ],
+      [
+        "Registered Agent Service",
+        0,
+        "Forward official state correspondence to the designated contact.",
+      ],
+      [
+        "Tax Preparer Coordination",
+        0,
+        "Coordinate with the client’s tax preparer and provide organized bookkeeping records.",
+      ],
+    ],
+    "recurring": [
+      [
+        "Monthly Bookkeeping",
+        0,
+        "Includes categorizing transactions, reconciling accounts, generating the Balance Sheet and Profit & Loss statement, and completing the monthly close process. Reports and communication are delivered through the client portal.",
+      ],
+      [
+        "Standard Client Support",
+        0,
+        "Responses within 1–2 business days for bookkeeping questions and support requests.",
+      ],
+    ],
+  },
+}
+`;
+
+exports[`buildOptions golden fixtures > renders 03-archived-published.snapshot.json unchanged 1`] = `
+{
+  "grow": {
+    "monthlyPrice": 1005,
+    "name": "Grow",
+    "oneTime": [
+      [
+        "Onboarding",
+        350,
+        "Includes our review and assessment, document collection, QuickBooks setup, and the work needed to begin. The fee is $500 plus $20 for each selected cleanup month.",
+      ],
+      [
+        "Organized, Audit-Ready Records",
+        0,
+        "We replace paper files and loose digital files with one clear system. The client uploads records to the portal. We organize them and link them to the right items in the books.",
+      ],
+      [
+        "First Quarterly Review",
+        0,
+        "After the first full quarter, we will meet with the client to review reports, answer questions, and plan the next steps.",
+      ],
+      [
+        "DoubleHQ Client Portal",
+        0,
+        "The client gets one online place to talk with our team, send files, view requests, and check the work in progress.",
+      ],
+      [
+        "Registered Agent Service",
+        0,
+        "Forward official state correspondence to the designated contact.",
+      ],
+      [
+        "Tax Preparer Coordination",
+        0,
+        "Coordinate with the client’s tax preparer and provide organized bookkeeping records.",
+      ],
+    ],
+    "recurring": [
+      [
+        "Monthly Bookkeeping",
+        0,
+        "Includes categorizing transactions, reconciling accounts, generating the Balance Sheet and Profit & Loss statement, and completing the monthly close process. Reports and communication are delivered through the client portal.",
+      ],
+      [
+        "Monthly Reporting Package",
+        0,
+        "A recurring financial reporting package that provides clear visibility into performance.",
+      ],
+      [
+        "Investor Reporting & KPI Review",
+        0,
+        "Investor-focused financial reporting and KPI review to support portfolio decisions.",
+      ],
+      [
+        "Concierge Client Support",
+        0,
+        "24/7 priority access for bookkeeping questions and time-sensitive support needs.",
+      ],
+      [
+        "Monthly Advisory Calls",
+        0,
+        "A recurring call with the bookkeeper to review the numbers and talk through decisions.",
+      ],
+      [
+        "CFO Pack",
+        0,
+        "Executive-level financial reporting built for owner and investor decision-making.",
+      ],
+      [
+        "Cash Flow Analysis",
+        0,
+        "Ongoing analysis of cash inflows and outflows to support planning and investment decisions.",
+      ],
+    ],
+  },
+  "improve": {
+    "monthlyPrice": 790,
+    "name": "Improve",
+    "oneTime": [
+      [
+        "Onboarding",
+        350,
+        "Includes our review and assessment, document collection, QuickBooks setup, and the work needed to begin. The fee is $500 plus $20 for each selected cleanup month.",
+      ],
+      [
+        "Organized, Audit-Ready Records",
+        0,
+        "We replace paper files and loose digital files with one clear system. The client uploads records to the portal. We organize them and link them to the right items in the books.",
+      ],
+      [
+        "First Quarterly Review",
+        0,
+        "After the first full quarter, we will meet with the client to review reports, answer questions, and plan the next steps.",
+      ],
+      [
+        "DoubleHQ Client Portal",
+        0,
+        "The client gets one online place to talk with our team, send files, view requests, and check the work in progress.",
+      ],
+      [
+        "Registered Agent Service",
+        0,
+        "Forward official state correspondence to the designated contact.",
+      ],
+      [
+        "Tax Preparer Coordination",
+        0,
+        "Coordinate with the client’s tax preparer and provide organized bookkeeping records.",
+      ],
+    ],
+    "recurring": [
+      [
+        "Monthly Bookkeeping",
+        0,
+        "Includes categorizing transactions, reconciling accounts, generating the Balance Sheet and Profit & Loss statement, and completing the monthly close process. Reports and communication are delivered through the client portal.",
+      ],
+      [
+        "Monthly Reporting Package",
+        0,
+        "A recurring financial reporting package that provides clear visibility into performance.",
+      ],
+      [
+        "Priority Client Support",
+        0,
+        "Same-business-day responses for bookkeeping questions and support requests.",
+      ],
+    ],
+  },
+  "maintain": {
+    "monthlyPrice": 670,
+    "name": "Maintain",
+    "oneTime": [
+      [
+        "Onboarding",
+        350,
+        "Includes our review and assessment, document collection, QuickBooks setup, and the work needed to begin. The fee is $500 plus $20 for each selected cleanup month.",
+      ],
+      [
+        "Organized, Audit-Ready Records",
+        0,
+        "We replace paper files and loose digital files with one clear system. The client uploads records to the portal. We organize them and link them to the right items in the books.",
+      ],
+      [
+        "First Quarterly Review",
+        0,
+        "After the first full quarter, we will meet with the client to review reports, answer questions, and plan the next steps.",
+      ],
+      [
+        "DoubleHQ Client Portal",
+        0,
+        "The client gets one online place to talk with our team, send files, view requests, and check the work in progress.",
+      ],
+      [
+        "Registered Agent Service",
+        0,
+        "Forward official state correspondence to the designated contact.",
+      ],
+      [
+        "Tax Preparer Coordination",
+        0,
+        "Coordinate with the client’s tax preparer and provide organized bookkeeping records.",
+      ],
+    ],
+    "recurring": [
+      [
+        "Monthly Bookkeeping",
+        0,
+        "Includes categorizing transactions, reconciling accounts, generating the Balance Sheet and Profit & Loss statement, and completing the monthly close process. Reports and communication are delivered through the client portal.",
+      ],
+      [
+        "Standard Client Support",
+        0,
+        "Responses within 1–2 business days for bookkeeping questions and support requests.",
+      ],
+    ],
+  },
+}
+`;
+
+exports[`buildOptions golden fixtures > renders 04-draft-draft.snapshot.json unchanged 1`] = `
+{
+  "grow": {
+    "monthlyPrice": 0,
+    "name": "Grow",
+    "oneTime": [
+      [
+        "Onboarding",
+        1,
+        "Includes our review and assessment, document collection, QuickBooks setup, and the work needed to begin. The fee is $500 plus $20 for each selected cleanup month.",
+      ],
+      [
+        "Organized, Audit-Ready Records",
+        0,
+        "We replace paper files and loose digital files with one clear system. The client uploads records to the portal. We organize them and link them to the right items in the books.",
+      ],
+      [
+        "First Quarterly Review",
+        0,
+        "After the first full quarter, we will meet with the client to review reports, answer questions, and plan the next steps.",
+      ],
+      [
+        "DoubleHQ Client Portal",
+        0,
+        "The client gets one online place to talk with our team, send files, view requests, and check the work in progress.",
+      ],
+    ],
+    "recurring": [
+      [
+        "Monthly Bookkeeping",
+        0,
+        "Includes categorizing transactions, reconciling accounts, generating the Balance Sheet and Profit & Loss statement, and completing the monthly close process. Reports and communication are delivered through the client portal.",
+      ],
+      [
+        "Monthly Reporting Package",
+        0,
+        "A recurring financial reporting package that provides clear visibility into performance.",
+      ],
+      [
+        "Investor Reporting & KPI Review",
+        0,
+        "Investor-focused financial reporting and KPI review to support portfolio decisions.",
+      ],
+      [
+        "Concierge Client Support",
+        0,
+        "24/7 priority access for bookkeeping questions and time-sensitive support needs.",
+      ],
+      [
+        "Monthly Advisory Calls",
+        0,
+        "A recurring call with the bookkeeper to review the numbers and talk through decisions.",
+      ],
+      [
+        "CFO Pack",
+        0,
+        "Executive-level financial reporting built for owner and investor decision-making.",
+      ],
+      [
+        "Cash Flow Analysis",
+        0,
+        "Ongoing analysis of cash inflows and outflows to support planning and investment decisions.",
+      ],
+    ],
+  },
+  "improve": {
+    "monthlyPrice": 0,
+    "name": "Improve",
+    "oneTime": [
+      [
+        "Onboarding",
+        1,
+        "Includes our review and assessment, document collection, QuickBooks setup, and the work needed to begin. The fee is $500 plus $20 for each selected cleanup month.",
+      ],
+      [
+        "Organized, Audit-Ready Records",
+        0,
+        "We replace paper files and loose digital files with one clear system. The client uploads records to the portal. We organize them and link them to the right items in the books.",
+      ],
+      [
+        "First Quarterly Review",
+        0,
+        "After the first full quarter, we will meet with the client to review reports, answer questions, and plan the next steps.",
+      ],
+      [
+        "DoubleHQ Client Portal",
+        0,
+        "The client gets one online place to talk with our team, send files, view requests, and check the work in progress.",
+      ],
+    ],
+    "recurring": [
+      [
+        "Monthly Bookkeeping",
+        0,
+        "Includes categorizing transactions, reconciling accounts, generating the Balance Sheet and Profit & Loss statement, and completing the monthly close process. Reports and communication are delivered through the client portal.",
+      ],
+      [
+        "Monthly Reporting Package",
+        0,
+        "A recurring financial reporting package that provides clear visibility into performance.",
+      ],
+      [
+        "Priority Client Support",
+        0,
+        "Same-business-day responses for bookkeeping questions and support requests.",
+      ],
+    ],
+  },
+  "maintain": {
+    "monthlyPrice": 0,
+    "name": "Maintain",
+    "oneTime": [
+      [
+        "Onboarding",
+        1,
+        "Includes our review and assessment, document collection, QuickBooks setup, and the work needed to begin. The fee is $500 plus $20 for each selected cleanup month.",
+      ],
+      [
+        "Organized, Audit-Ready Records",
+        0,
+        "We replace paper files and loose digital files with one clear system. The client uploads records to the portal. We organize them and link them to the right items in the books.",
+      ],
+      [
+        "DoubleHQ Client Portal",
+        0,
+        "The client gets one online place to talk with our team, send files, view requests, and check the work in progress.",
+      ],
+    ],
+    "recurring": [
+      [
+        "Monthly Bookkeeping",
+        0,
+        "Includes categorizing transactions, reconciling accounts, generating the Balance Sheet and Profit & Loss statement, and completing the monthly close process. Reports and communication are delivered through the client portal.",
+      ],
+      [
+        "Standard Client Support",
+        0,
+        "Responses within 1–2 business days for bookkeeping questions and support requests.",
+      ],
+    ],
+  },
+}
+`;
