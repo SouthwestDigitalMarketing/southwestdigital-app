@@ -3,7 +3,18 @@
 /* Keep the app canvas width stable as route content crosses the scrollbar
    threshold. Builder navigation uses the sidebar width to center against the
    viewport instead of the remaining content column. */
-.app-shell-main { scrollbar-gutter: stable; }
+/* `scrollbar-gutter: stable` reserves the scrollbar width, so this element's
+   content box is always narrower than 100vw. The full-bleed builder header below
+   is sized in viewport units and therefore overhangs it by exactly that gutter
+   (~15px), which shows up as a stray horizontal scrollbar. Clip the horizontal
+   axis: the overhang is empty header background, and nothing in the app relies
+   on scrolling this element sideways — wide content (e.g. the services table)
+   carries its own `overflow-x-auto` wrapper. `clip` keeps the element a vertical
+   scrollport, so `position: sticky` descendants still work. */
+.app-shell-main {
+  scrollbar-gutter: stable;
+  overflow-x: clip;
+}
 .proposal-builder-header {
   width: 100vw;
   margin-left: calc((100% - 100vw - var(--app-sidebar-width, 0px)) / 2);

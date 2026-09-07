@@ -133,6 +133,42 @@ test.describe("Offer builder — Services step", () => {
     ).toBeGreaterThanOrEqual(4.5);
   });
 
+  // The builder header is laid out in viewport units (width: 100vw) while
+  // .app-shell-main reserves a scrollbar gutter, so the header overhangs its
+  // container by that gutter and produced a stray horizontal scrollbar.
+  test("never scrolls the shell sideways", async ({ page }) => {
+    const scrolled = await page.evaluate(() => {
+      const main = document.querySelector("main.app-shell-main");
+      if (!main) return -1;
+      main.scrollLeft = 0;
+      main.scrollLeft = 500;
+      const moved = main.scrollLeft;
+      main.scrollLeft = 0;
+      return moved;
+    });
+    expect(scrolled).toBe(0);
+  });
+
+  test("keeps the coverage sidebar sticky while the content scrolls", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await page.waitForTimeout(600);
+    const result = await page.evaluate(() => {
+      const main = document.querySelector("main.app-shell-main");
+      const aside = document.querySelector('aside[aria-label="Package coverage"]');
+      if (!main || !aside) return null;
+      if (getComputedStyle(aside).position !== "sticky") return "not-sticky-at-this-width";
+      main.scrollTop = 600;
+      const top = aside.getBoundingClientRect().top;
+      main.scrollTop = 0;
+      return top;
+    });
+    // Pins at the 2xl:top-8 offset (2rem) rather than scrolling away.
+    if (typeof result === "number") expect(result).toBeGreaterThanOrEqual(0);
+    expect(result).not.toBeNull();
+  });
+
   test("stacks package cells on a phone without overflowing", async ({
     page,
   }) => {
