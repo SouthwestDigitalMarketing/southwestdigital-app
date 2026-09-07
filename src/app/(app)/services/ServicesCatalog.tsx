@@ -10,6 +10,11 @@ import {
   setCatalogServiceActiveAction,
   updateCatalogServiceAction,
 } from "./actions";
+import {
+  DEFAULT_PROPOSAL_PACKAGE_NAMES,
+  PROPOSAL_PACKAGE_IDS,
+  type PackageId,
+} from "@/app/(app)/offers/builder/proposalPackageNames";
 import { TAG_KIND_LABELS, type ContactTagKindName } from "@/lib/contacts/tags";
 
 export type ServiceTag = {
@@ -33,6 +38,7 @@ export type ServiceRow = {
   defaultInclusion: string | null;
   offerKey: string | null;
   offerSection: string;
+  defaultPackageKeys: PackageId[];
   defaultPrice: number | null;
   billingCadence: string;
   requiresPlatformMigration: boolean;
@@ -406,6 +412,33 @@ function ServiceForm({
             <option value="optional">Optional service</option>
           </select>
         </label>
+        <label className="grid gap-1 text-sm font-medium text-slate-600">
+          Offer section
+          <select name="offerSection" defaultValue={service?.offerSection ?? "included-services"} className={`${inputClass} bg-white`}>
+            <option value="core-services">Package lineup (core)</option>
+            <option value="included-services">Included service</option>
+            <option value="options">Optional add-on</option>
+          </select>
+        </label>
+        <fieldset className="grid gap-1 text-sm font-medium text-slate-600">
+          <legend>Shown on package cards</legend>
+          <div className="flex flex-wrap gap-3 pt-1">
+            {PROPOSAL_PACKAGE_IDS.map((id) => (
+              <label key={id} className="inline-flex items-center gap-1.5 font-normal">
+                <input
+                  type="checkbox"
+                  name="defaultPackageKeys"
+                  value={id}
+                  defaultChecked={service?.defaultPackageKeys?.includes(id) ?? false}
+                />
+                {DEFAULT_PROPOSAL_PACKAGE_NAMES[id]}
+              </label>
+            ))}
+          </div>
+          <p className="text-xs font-normal text-slate-500">
+            Leave all unchecked to keep this service out of the standard lineup.
+          </p>
+        </fieldset>
         <label className="grid gap-1 text-sm font-medium text-slate-600">
           Stable proposal key
           <input name="offerKey" defaultValue={service?.offerKey ?? ""} placeholder="Generated from name when needed" className={inputClass} />

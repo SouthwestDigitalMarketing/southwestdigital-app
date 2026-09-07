@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronUp, Eye, EyeOff, LibraryBig, Pencil } from "lucide-react";
+import { Eye, EyeOff, LibraryBig, Pencil } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
@@ -131,10 +131,6 @@ export default function ProposalAddOnsDemo({
     storageReady,
   ]);
 
-  function persistOrder(order: string[]) {
-    updateAssessment("optionsCatalogOrder", order);
-  }
-
   function persistOptions(next: ProposalAdditionalOption[]) {
     updateAssessment("additionalOptions", next);
   }
@@ -149,10 +145,6 @@ export default function ProposalAddOnsDemo({
 
   function updateBonus(id: string, changes: Partial<ProposalBonus>) {
     persistBonuses(bonuses.map((item) => (item.id === id ? { ...item, ...changes } : item)));
-  }
-
-  function moveRow(id: string, direction: -1 | 1) {
-    persistOrder(moveOrderId(catalogOrder, id, direction, visibleRows.map((row) => row.id)));
   }
 
   function setKind(row: CatalogRow, kind: CatalogKind) {
@@ -314,7 +306,6 @@ export default function ProposalAddOnsDemo({
             <div className="proposal-builder-card overflow-x-auto rounded-xl border border-slate-200">
               <table className="w-full min-w-[680px] table-fixed border-collapse">
                 <colgroup>
-                  <col className="w-10" />
                   <col />
                   <col className="w-40" />
                   <col className="w-40" />
@@ -322,7 +313,6 @@ export default function ProposalAddOnsDemo({
                 </colgroup>
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50">
-                    <Heading><span className="sr-only">Reorder</span></Heading>
                     <Heading>Service details</Heading>
                     <Heading className="text-center">Setup</Heading>
                     <Heading className="text-center">Pricing cards</Heading>
@@ -330,7 +320,7 @@ export default function ProposalAddOnsDemo({
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleRows.map((row, index) => {
+                  {visibleRows.map((row) => {
                     const option = row.option;
                     const bonus = row.bonus;
                     const catalogItem = catalogByKey.get(row.id);
@@ -346,15 +336,6 @@ export default function ProposalAddOnsDemo({
                     const isRowIncluded = row.kind !== "optional" || Boolean(option?.showInProposal);
                     return (
                       <tr key={row.id} className={rowClass(isRowIncluded)}>
-                        <td className="px-1 py-3 text-center align-middle">
-                          <MoveButtons
-                            label={row.name || (row.kind === "optional" ? "optional service" : "included extra")}
-                            disableUp={index === 0}
-                            disableDown={index === visibleRows.length - 1}
-                            onMoveUp={() => moveRow(row.id, -1)}
-                            onMoveDown={() => moveRow(row.id, 1)}
-                          />
-                        </td>
                         <ServiceDetailsCell
                           item={row}
                           hiddenFromLead={row.kind === "optional" && !option?.showInProposal}
@@ -560,37 +541,6 @@ function ServiceDetailsCell({
   );
 }
 
-function MoveButtons({
-  label,
-  disableUp,
-  disableDown,
-  onMoveUp,
-  onMoveDown,
-}: {
-  label: string;
-  disableUp: boolean;
-  disableDown: boolean;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
-}) {
-  const buttonClass = (disabled: boolean) =>
-    `grid h-6 w-7 place-items-center rounded-md border-0 bg-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brandnavy focus-visible:ring-offset-1 ${
-      disabled
-        ? "cursor-not-allowed text-slate-300"
-        : "cursor-pointer text-slate-600 hover:bg-slate-100 hover:text-slate-950"
-    }`;
-  return (
-    <div className="inline-flex flex-col items-center">
-      <button type="button" aria-label={`Move ${label} up`} disabled={disableUp} onClick={onMoveUp} className={buttonClass(disableUp)}>
-        <ChevronUp className="h-4 w-4" strokeWidth={2.75} />
-      </button>
-      <button type="button" aria-label={`Move ${label} down`} disabled={disableDown} onClick={onMoveDown} className={buttonClass(disableDown)}>
-        <ChevronDown className="h-4 w-4" strokeWidth={2.75} />
-      </button>
-    </div>
-  );
-}
-
 function LeadVisibilityAction({
   itemLabel,
   visibleToLead,
@@ -627,16 +577,4 @@ function rowClass(isIncluded: boolean) {
   const backgroundClass = isIncluded ? "bg-white" : "proposal-options-row-not-included bg-slate-100";
 
   return `border-b border-slate-200 transition-colors last:border-0 [&>td]:!py-3 ${backgroundClass}`;
-}
-
-function moveOrderId(order: string[], id: string, direction: -1 | 1, visibleIds: string[]) {
-  const visibleIndex = visibleIds.indexOf(id);
-  const targetId = visibleIds[visibleIndex + direction];
-  if (!targetId) return order;
-  const sourceIndex = order.indexOf(id);
-  const targetIndex = order.indexOf(targetId);
-  if (sourceIndex < 0 || targetIndex < 0) return order;
-  const next = [...order];
-  [next[sourceIndex], next[targetIndex]] = [next[targetIndex], next[sourceIndex]];
-  return next;
 }

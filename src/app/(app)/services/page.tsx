@@ -5,12 +5,18 @@ import { ensureDefaultContactTags } from "@/lib/contacts/seed";
 import { parseArchivedView } from "@/lib/quotes/status";
 import { ServicesCatalog, type ServiceRow } from "./ServicesCatalog";
 import { safeOfferOptionsReturnPath } from "./serviceCatalogNavigation";
+import { PROPOSAL_PACKAGE_IDS, type PackageId } from "@/app/(app)/offers/builder/proposalPackageNames";
 
 type SearchParams = Promise<{
   archived?: string;
   returnTo?: string | string[];
   service?: string | string[];
 }>;
+
+function normalizePackageKeys(value: unknown): PackageId[] {
+  if (!Array.isArray(value)) return [];
+  return PROPOSAL_PACKAGE_IDS.filter((id) => value.includes(id));
+}
 
 export default async function ServicesPage({ searchParams }: { searchParams: SearchParams }) {
   const { brand } = await requireStaffBrand();
@@ -19,7 +25,7 @@ export default async function ServicesPage({ searchParams }: { searchParams: Sea
   const returnTo = safeOfferOptionsReturnPath(params.returnTo);
   const requestedServiceId = Array.isArray(params.service) ? params.service[0] : params.service;
   await ensureDefaultContactTags(brand.id);
-  const { proposalCatalog } = await getSchemaCapabilities();
+  const { proposalCatalog, proposalPackageDefaults } = await getSchemaCapabilities();
 
   const baseSelect = {
     id: true,
@@ -50,6 +56,7 @@ export default async function ServicesPage({ searchParams }: { searchParams: Sea
           ...baseSelect,
           offerKey: true,
           offerSection: true,
+          ...(proposalPackageDefaults ? { defaultPackageKeys: true } : {}),
           defaultPrice: true,
           billingCadence: true,
           requiresPlatformMigration: true,
@@ -59,6 +66,9 @@ export default async function ServicesPage({ searchParams }: { searchParams: Sea
       }).then((services) => services.map((service) => ({
         ...service,
         tags: service.tags.map((link) => link.tag),
+        defaultPackageKeys: normalizePackageKeys(
+          "defaultPackageKeys" in service ? service.defaultPackageKeys : null,
+        ),
         defaultPrice: service.defaultPrice == null ? null : Number(service.defaultPrice),
         packageCount: service._count.packageServices,
       })))
@@ -71,6 +81,7 @@ export default async function ServicesPage({ searchParams }: { searchParams: Sea
         tags: service.tags.map((link) => link.tag),
         offerKey: null,
         offerSection: "included-services",
+        defaultPackageKeys: [] as PackageId[],
         defaultPrice: null,
         billingCadence: "monthly",
         requiresPlatformMigration: false,

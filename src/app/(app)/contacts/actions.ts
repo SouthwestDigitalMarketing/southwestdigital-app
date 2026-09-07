@@ -38,7 +38,6 @@ function revalidateTagPaths(contactId?: string) {
   revalidatePath("/settings");
   revalidatePath("/settings/tags");
   revalidatePath("/services");
-  revalidatePath("/offers/included");
   revalidatePath("/offers/add-ons");
   if (contactId) revalidatePath(`/contacts/${contactId}`);
 }

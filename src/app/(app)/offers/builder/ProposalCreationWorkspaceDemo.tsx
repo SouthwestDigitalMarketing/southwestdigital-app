@@ -2,13 +2,9 @@
 
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import IncludedServicesBuilder from "./IncludedServicesBuilder";
 import AssessmentCardSection from "./AssessmentCardSection";
-import type { ProposalAppCollapsibleForceSignal } from "./ProposalAppCollapsibleSection";
-import type { IncludedCatalogService } from "./IncludedServicesBuilder";
 import type { ProposalOptionCatalogItem } from "@/lib/quotes/catalog";
 import ProposalAppDemoHeader from "./ProposalAppDemoHeader";
-import ProposalAppExpandAllControl from "./ProposalAppExpandAllControl";
 import PricingSnapshotSidebar from "./PricingSnapshotSidebar";
 import { ASSESSMENT_STORAGE_KEY } from "./ProposalBuilderStorage";
 import {
@@ -360,7 +356,6 @@ type PackageDefinition = {
   name: string;
   monthlyPrice: number;
   description: string;
-  includedServices: string[];
   accentClass: string;
   icon: typeof ShieldCheck;
   clientFit: string;
@@ -390,7 +385,7 @@ type MonthlyRateBreakdownItem = {
   amount: number;
 };
 
-type ProposalAssessmentStep = "scale" | "complexity" | "included" | "adjustments";
+type ProposalAssessmentStep = "scale" | "complexity" | "adjustments";
 
 const CLEANUP_PURCHASED_OR_SOLD_PROPERTY_COST = 200;
 const CURRENT_DATE = new Date();
@@ -638,14 +633,6 @@ const PACKAGES: PackageDefinition[] = [
     monthlyPrice: 250,
     description:
       "Includes everything in Improve, plus concierge support, CFO-level reporting, faster turnaround, and more proactive financial guidance.",
-    includedServices: [
-      "Everything in Improve",
-      "Concierge support",
-      "CFO-level reporting",
-      "Faster turnaround",
-      "Proactive advisory guidance",
-      "Dedicated coordination",
-    ],
     accentClass: "text-emerald-600",
     icon: Sparkles,
     clientFit:
@@ -684,14 +671,6 @@ const PACKAGES: PackageDefinition[] = [
     monthlyPrice: 250,
     description:
       "Includes everything in Maintain, plus budgeting, advanced reporting, A/R and A/P reporting visibility, and stronger operating insight.",
-    includedServices: [
-      "Everything in Maintain",
-      "Budgeting support",
-      "Advanced reporting",
-      "A/R reporting visibility",
-      "A/P reporting visibility",
-      "Priority communication",
-    ],
     accentClass: "text-indigo-600",
     icon: TrendingUp,
     clientFit:
@@ -730,14 +709,6 @@ const PACKAGES: PackageDefinition[] = [
     monthlyPrice: 250,
     description:
       "Core monthly bookkeeping, reconciliations, and clean monthly financials for owners who want reliable books and a steady close process.",
-    includedServices: [
-      "Monthly bookkeeping",
-      "Account reconciliation",
-      "Monthly financial statements",
-      "Core real-estate reporting",
-      "Core loan accounting",
-      "Standard support",
-    ],
     accentClass: "text-amber-600",
     icon: ShieldCheck,
     clientFit:
@@ -1897,31 +1868,10 @@ export function getProposalPricingSnapshotCleanupCard(assessment: AssessmentStat
   };
 }
 
-export function getProposalPreviewPackages(assessment: AssessmentState) {
-  const { packagePricing, recommendation, hasCatchUpPricing } = getProposalPricingSnapshotData(assessment);
-  const hasMonthly = hasMonthlyPricingInputs(assessment);
-
-  return PACKAGES.map((pkg) => {
-    const pricing = packagePricing[pkg.id];
-    return {
-      id: pkg.id,
-      name: resolveProposalPackageName(assessment.packageNames, pkg.id),
-      description: pkg.description,
-      clientFit: pkg.clientFit,
-      includedServices: pkg.includedServices,
-      monthlyLabel: hasMonthly ? formatCurrency(pricing.monthly, "/mo") : "— /mo",
-      isRecommended: hasMonthly && recommendation.packageId === pkg.id,
-      oneTimeLabel: hasCatchUpPricing && pricing.totalOneTime > 0 ? formatCurrency(pricing.totalOneTime) : null,
-    };
-  });
-}
-
 export default function ProposalCreationWorkspaceDemo({
   step = "scale",
-  catalogServices = [],
 }: {
   step?: ProposalAssessmentStep;
-  catalogServices?: IncludedCatalogService[];
 }) {
   const {
     assessment,
@@ -1933,13 +1883,8 @@ export default function ProposalCreationWorkspaceDemo({
     toggleBankUsed,
     togglePayrollPaymentMethod,
   } = useProposalAssessmentDemoState();
-  const [expandAllSignal, setExpandAllSignal] = useState<ProposalAppCollapsibleForceSignal>({
-    value: false,
-    token: 0,
-  });
   const isScaleStep = step === "scale";
   const isComplexityStep = step === "complexity";
-  const isIncludedStep = step === "included";
   const isAdjustmentsStep = step === "adjustments";
   const showRealEstateFields =
     assessment.bookSetType === "real-estate-only" ||
@@ -2084,34 +2029,16 @@ export default function ProposalCreationWorkspaceDemo({
         <div>
           <ProposalAppDemoHeader
             currentStep={
-              // Included services has no pill of its own — it edits what the
-              // Services step sells, so it lights that pill up.
-              isScaleStep
-                ? "scale"
-                : isComplexityStep
-                  ? "complexity"
-                  : isIncludedStep
-                    ? "add-ons"
-                    : "adjustments"
+              isScaleStep ? "scale" : isComplexityStep ? "complexity" : "adjustments"
             }
           />
 
           <div className="mt-4 grid gap-6 xl:grid-cols-[minmax(0,1fr)_280px] 2xl:grid-cols-[minmax(0,1fr)_300px]">
             <div className="space-y-3">
-              {isScaleStep || isComplexityStep || isAdjustmentsStep ? null : !isIncludedStep ? (
+              {isScaleStep || isComplexityStep || isAdjustmentsStep ? null : (
                 <p className="mb-3 px-1 text-base font-semibold text-slate-500">Assessment</p>
-              ) : (
-                <div className="flex justify-start px-1">
-                  <ProposalAppExpandAllControl
-                    onExpandAll={() => setExpandAllSignal({ value: true, token: Date.now() })}
-                    onCollapseAll={() => setExpandAllSignal({ value: false, token: Date.now() })}
-                  />
-                </div>
               )}
-              <section className={isIncludedStep
-                ? "proposal-builder-card overflow-visible rounded-[1.5rem]"
-                : "proposal-builder-card overflow-hidden rounded-[1.5rem] border border-slate-300 shadow-sm"}
-              >
+              <section className="proposal-builder-card overflow-hidden rounded-[1.5rem] border border-slate-300 shadow-sm">
                 {isScaleStep && showRealEstateFields ? (
                   <AssessmentCardSection
                     title="Portfolio Scale"
@@ -3075,17 +3002,6 @@ export default function ProposalCreationWorkspaceDemo({
                           ) : null}
                     </div>
                   </AssessmentCardSection>
-                ) : null}
-
-                {isIncludedStep ? (
-                  <IncludedServicesBuilder
-                    catalogServices={catalogServices}
-                    forceOpen={expandAllSignal}
-                    packageNames={assessment.packageNames}
-                    realEstateBookSet={
-                      assessment.bookSetType === "real-estate-only" || assessment.bookSetType === "mixed-books"
-                    }
-                  />
                 ) : null}
 
                 {isAdjustmentsStep ? (

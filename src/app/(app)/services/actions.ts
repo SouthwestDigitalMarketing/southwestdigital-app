@@ -6,6 +6,12 @@ import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
 import { tagMarksRealEstate } from "@/lib/quotes/catalog";
 import { slugifyTagKey } from "@/lib/contacts/tags";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
+import { PROPOSAL_PACKAGE_IDS } from "@/app/(app)/offers/builder/proposalPackageNames";
+
+// "core-services" is the curated lead-facing package lineup; it was previously
+// unreachable from this form, so every save demoted those rows.
+const OFFER_SECTIONS = ["core-services", "included-services", "options"] as const;
+type OfferSection = (typeof OFFER_SECTIONS)[number];
 
 function clean(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
@@ -28,7 +34,6 @@ function parseOptionalPrice(raw: string) {
 function revalidateServicePaths() {
   revalidatePath("/services");
   revalidatePath("/tags");
-  revalidatePath("/offers/included");
   revalidatePath("/offers/add-ons");
 }
 
@@ -49,7 +54,14 @@ async function readServiceFields(formData: FormData, brandId: string) {
   const internalDescription = clean(formData.get("internalDescription")) || null;
   const rawDefaultInclusion = clean(formData.get("defaultInclusion"));
   const defaultInclusion = rawDefaultInclusion === "optional" || rawDefaultInclusion === "included" ? rawDefaultInclusion : null;
-  const offerSection = clean(formData.get("offerSection")) === "options" ? "options" : "included-services";
+  const rawOfferSection = clean(formData.get("offerSection"));
+  const offerSection = OFFER_SECTIONS.includes(rawOfferSection as OfferSection)
+    ? (rawOfferSection as OfferSection)
+    : null;
+  // Tier keys are what put a service on the lead-facing package cards.
+  const defaultPackageKeys = PROPOSAL_PACKAGE_IDS.filter(
+    (id) => formData.getAll("defaultPackageKeys").includes(id),
+  );
   const offerKey = slugifyTagKey(clean(formData.get("offerKey")) || code || name) || null;
   const defaultPrice = parseOptionalPrice(clean(formData.get("defaultPrice")));
   const rawBillingCadence = clean(formData.get("billingCadence"));
@@ -88,7 +100,9 @@ async function readServiceFields(formData: FormData, brandId: string) {
       internalDescription,
       defaultInclusion,
       offerKey,
-      offerSection,
+      // Absent from the payload means "leave as-is" rather than "reset".
+      ...(offerSection ? { offerSection } : {}),
+      defaultPackageKeys,
       defaultPrice,
       billingCadence,
       requiresPlatformMigration,
@@ -104,8 +118,14 @@ async function readServiceFields(formData: FormData, brandId: string) {
 function fieldsForAvailableSchema(
   fields: Awaited<ReturnType<typeof readServiceFields>>["fields"],
   proposalCatalog: boolean,
+  proposalPackageDefaults: boolean,
 ) {
-  if (proposalCatalog) return fields;
+  if (proposalCatalog) {
+    if (proposalPackageDefaults) return fields;
+    const withoutPackageKeys = { ...fields };
+    delete (withoutPackageKeys as Partial<typeof fields>).defaultPackageKeys;
+    return withoutPackageKeys;
+  }
   return {
     name: fields.name,
     category: fields.category,
@@ -132,7 +152,7 @@ export async function listCatalogRealEstateMarkersAction() {
 export async function createCatalogServiceAction(formData: FormData) {
   const { brand } = await requireStaffBrandOrThrow();
   const { fields, tagIds } = await readServiceFields(formData, brand.id);
-  const { proposalCatalog } = await getSchemaCapabilities();
+  const { proposalCatalog, proposalPackageDefaults } = await getSchemaCapabilities();
 
   if (fields.code) {
     const existing = await prisma.catalogService.findFirst({
@@ -152,7 +172,7 @@ export async function createCatalogServiceAction(formData: FormData) {
   await prisma.catalogService.create({
     data: {
       brandId: brand.id,
-      ...fieldsForAvailableSchema(fields, proposalCatalog),
+      ...fieldsForAvailableSchema(fields, proposalCatalog, proposalPackageDefaults),
       tags: {
         create: tagIds.map((tagId) => ({ brandId: brand.id, tagId })),
       },
@@ -168,7 +188,7 @@ export async function updateCatalogServiceAction(formData: FormData) {
   if (!id) throw new Error("Service id is required.");
   await serviceForBrand(id, brand.id);
   const { fields, tagIds } = await readServiceFields(formData, brand.id);
-  const { proposalCatalog } = await getSchemaCapabilities();
+  const { proposalCatalog, proposalPackageDefaults } = await getSchemaCapabilities();
 
   if (fields.code) {
     const existing = await prisma.catalogService.findFirst({
@@ -189,7 +209,7 @@ export async function updateCatalogServiceAction(formData: FormData) {
     prisma.catalogServiceTag.deleteMany({ where: { serviceId: id, brandId: brand.id } }),
     prisma.catalogService.update({
       where: { id },
-      data: fieldsForAvailableSchema(fields, proposalCatalog),
+      data: fieldsForAvailableSchema(fields, proposalCatalog, proposalPackageDefaults),
       select: { id: true },
     }),
     ...tagIds.map((tagId) =>

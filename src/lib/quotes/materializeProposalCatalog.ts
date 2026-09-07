@@ -83,6 +83,9 @@ export async function materializeProposalCatalog(
     where: {
       brandId,
       active: true,
+      // Hourly rows belong to the /offers/hourly builder; keeping them out
+      // stops another product line leaking into the bookkeeping proposal.
+      productKind: "bookkeeping",
     },
     orderBy: [{ priority: "asc" }, { name: "asc" }],
     select: {
