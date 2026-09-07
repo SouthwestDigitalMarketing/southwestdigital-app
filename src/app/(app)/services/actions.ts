@@ -10,8 +10,14 @@ import { PROPOSAL_PACKAGE_IDS } from "@/app/(app)/offers/builder/proposalPackage
 
 // "core-services" is the curated lead-facing package lineup; it was previously
 // unreachable from this form, so every save demoted those rows.
-const OFFER_SECTIONS = ["core-services", "included-services", "options"] as const;
+const OFFER_SECTIONS = ["core-services", "included-services", "options", "hourly-services"] as const;
 type OfferSection = (typeof OFFER_SECTIONS)[number];
+
+function omitKey<T extends object, K extends keyof T>(source: T, key: K): Omit<T, K> {
+  const next = { ...source };
+  delete next[key];
+  return next;
+}
 
 function clean(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
@@ -121,10 +127,7 @@ function fieldsForAvailableSchema(
   proposalPackageDefaults: boolean,
 ) {
   if (proposalCatalog) {
-    if (proposalPackageDefaults) return fields;
-    const withoutPackageKeys = { ...fields };
-    delete (withoutPackageKeys as Partial<typeof fields>).defaultPackageKeys;
-    return withoutPackageKeys;
+    return proposalPackageDefaults ? fields : omitKey(fields, "defaultPackageKeys");
   }
   return {
     name: fields.name,

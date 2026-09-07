@@ -418,6 +418,7 @@ function ServiceForm({
             <option value="core-services">Package lineup (core)</option>
             <option value="included-services">Included service</option>
             <option value="options">Optional add-on</option>
+            <option value="hourly-services">Hourly service</option>
           </select>
         </label>
         <fieldset className="grid gap-1 text-sm font-medium text-slate-600">

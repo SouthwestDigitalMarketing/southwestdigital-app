@@ -76,7 +76,7 @@ export async function materializeProposalCatalog(
   { freezeApplicability = false }: { freezeApplicability?: boolean } = {},
 ) {
   if (!isRecord(value)) return value;
-  const { proposalCatalog, proposalPackageDefaults } = await getSchemaCapabilities();
+  const { proposalCatalog, proposalPackageDefaults, catalogProductKind } = await getSchemaCapabilities();
   if (!proposalCatalog) return value;
 
   const catalog = await prisma.catalogService.findMany({
@@ -85,7 +85,7 @@ export async function materializeProposalCatalog(
       active: true,
       // Hourly rows belong to the /offers/hourly builder; keeping them out
       // stops another product line leaking into the bookkeeping proposal.
-      productKind: "bookkeeping",
+      ...(catalogProductKind ? { productKind: "bookkeeping" } : {}),
     },
     orderBy: [{ priority: "asc" }, { name: "asc" }],
     select: {

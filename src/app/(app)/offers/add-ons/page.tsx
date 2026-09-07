@@ -8,9 +8,9 @@ import ProposalAddOnsDemo from "../builder/ProposalAddOnsDemo";
 
 export default async function QuotesAddOnsPage() {
   const { brand } = await requireQuoteStaff();
-  const { proposalCatalog, proposalPackageDefaults } = await getSchemaCapabilities();
+  const { proposalCatalog, proposalPackageDefaults, catalogProductKind } = await getSchemaCapabilities();
   const services = proposalCatalog ? await prisma.catalogService.findMany({
-    where: { brandId: brand.id, active: true, productKind: "bookkeeping" },
+    where: { brandId: brand.id, active: true, ...(catalogProductKind ? { productKind: "bookkeeping" } : {}) },
     orderBy: [{ priority: "asc" }, { name: "asc" }],
     select: {
       id: true,

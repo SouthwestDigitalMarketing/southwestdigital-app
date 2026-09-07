@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 export type SchemaCapabilities = {
   proposalCatalog: boolean;
   proposalPackageDefaults: boolean;
+  catalogProductKind: boolean;
   quoteRevisions: boolean;
   quoteEngagement: boolean;
   agreementTemplates: boolean;
@@ -13,6 +14,7 @@ export type SchemaCapabilities = {
 type CapabilityRow = {
   proposalCatalog: boolean;
   proposalPackageDefaults: boolean;
+  catalogProductKind: boolean;
   quoteRevisions: boolean;
   quoteEngagement: boolean;
   agreementTemplates: boolean;
@@ -21,6 +23,7 @@ type CapabilityRow = {
 const NO_CAPABILITIES: SchemaCapabilities = {
   proposalCatalog: false,
   proposalPackageDefaults: false,
+  catalogProductKind: false,
   quoteRevisions: false,
   quoteEngagement: false,
   agreementTemplates: false,
@@ -44,6 +47,13 @@ export async function getSchemaCapabilities(): Promise<SchemaCapabilities> {
             AND table_name = 'catalog_services'
             AND column_name = 'default_package_keys'
         ) AS "proposalPackageDefaults",
+        EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_schema = current_schema()
+            AND table_name = 'catalog_services'
+            AND column_name = 'product_kind'
+        ) AS "catalogProductKind",
         to_regclass(current_schema() || '.quote_revisions') IS NOT NULL AS "quoteRevisions",
         EXISTS (
           SELECT 1
