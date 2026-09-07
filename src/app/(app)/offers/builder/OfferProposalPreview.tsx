@@ -9,6 +9,7 @@ import {
   ChevronRight,
   CircleHelp,
   LineChart,
+  Pencil,
   ShieldCheck,
   Sparkles,
   X,
@@ -73,6 +74,15 @@ import type { PublicProposalPricing } from "@/lib/quotes/publicProposal";
 import { resolveProposalPackageName } from "./proposalPackageNames";
 
 type CloudflareStreamEvent = "play" | "pause" | "ended";
+
+export type ProposalPreviewEditTarget =
+  | "contact"
+  | "cover-content"
+  | "cover-media"
+  | "theme"
+  | "pricing"
+  | "services"
+  | "agreement";
 
 type CloudflareStreamPlayer = {
   play: () => Promise<void>;
@@ -495,6 +505,32 @@ function ServiceLine({ row, selected = true, onToggle, showPriceWhenUnselected =
   );
 }
 
+function PreviewEditButton({
+  label,
+  onClick,
+  className = "",
+}: {
+  label: string;
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onClick();
+      }}
+      className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-md transition hover:border-slate-500 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brandnavy/30 ${className}`}
+    >
+      <Pencil aria-hidden="true" className="h-3.5 w-3.5" />
+    </button>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function OfferProposalPreview({
@@ -508,6 +544,8 @@ export default function OfferProposalPreview({
   agreementTemplate = null,
   isTestProposal = false,
   isStaffPreview = false,
+  editMode = false,
+  onEdit,
   proposalToken = null,
   publishedPricing,
 }: {
@@ -522,6 +560,8 @@ export default function OfferProposalPreview({
   agreementTemplate?: AgreementTemplateOption | null;
   isTestProposal?: boolean;
   isStaffPreview?: boolean;
+  editMode?: boolean;
+  onEdit?: (target: ProposalPreviewEditTarget) => void;
   proposalToken?: string | null;
   publishedPricing?: PublicProposalPricing;
 } = {}) {
@@ -1211,7 +1251,14 @@ export default function OfferProposalPreview({
 
           {/* Header (cover + deposit only) */}
           {(step === 0 || step === 2) ? (
-            <header className="flex flex-wrap items-center justify-between gap-4">
+            <header className="relative flex flex-wrap items-center justify-between gap-4">
+              {editMode && onEdit ? (
+                <PreviewEditButton
+                  label="Edit client details"
+                  onClick={() => onEdit("contact")}
+                  className="absolute -right-2 -top-2 z-20"
+                />
+              ) : null}
               <div>
                 {logoUrl ? (
                   <div className="h-10 w-full max-w-44">
@@ -1251,9 +1298,23 @@ export default function OfferProposalPreview({
                 primary ? "ui-action-primary" : "ui-action-secondary"
               }`;
             return (
-              <div className="pb-12 sm:pb-16">
+              <div className="relative pb-12 sm:pb-16">
+                {editMode && onEdit ? (
+                  <PreviewEditButton
+                    label="Edit proposal theme"
+                    onClick={() => onEdit("theme")}
+                    className="absolute -right-2 -top-2 z-20"
+                  />
+                ) : null}
                 <div className={`grid items-center gap-8 ${hasMedia ? "md:grid-cols-2" : ""}`}>
-                  <div>
+                  <div className="relative">
+                    {editMode && onEdit ? (
+                      <PreviewEditButton
+                        label="Edit cover content"
+                        onClick={() => onEdit("cover-content")}
+                        className="absolute -left-2 -top-2 z-20"
+                      />
+                    ) : null}
                     <h1 className="text-3xl font-bold tracking-tight sm:text-4xl" style={{ color: inkColor }}>
                       {customHeadline ?? (
                         <>
@@ -1302,6 +1363,13 @@ export default function OfferProposalPreview({
                       className="relative overflow-hidden rounded-xl border shadow-sm"
                       style={{ borderColor: "#cbd5e1" }}
                     >
+                      {editMode && onEdit ? (
+                        <PreviewEditButton
+                          label="Edit cover media"
+                          onClick={() => onEdit("cover-media")}
+                          className="absolute right-3 top-3 z-20"
+                        />
+                      ) : null}
                       <div className="aspect-video">
                         {isCloudflareStreamEmbed(embedUrl) && !streamSdkReady ? (
                           <div className="grid h-full place-items-center bg-slate-100 text-sm font-medium text-slate-500">Loading video…</div>
@@ -1321,6 +1389,13 @@ export default function OfferProposalPreview({
                       className="relative overflow-hidden rounded-xl border shadow-sm"
                       style={{ borderColor: "#cbd5e1" }}
                     >
+                      {editMode && onEdit ? (
+                        <PreviewEditButton
+                          label="Edit cover media"
+                          onClick={() => onEdit("cover-media")}
+                          className="absolute right-3 top-3 z-20"
+                        />
+                      ) : null}
                       <div className="aspect-video bg-slate-100">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
@@ -1339,7 +1414,14 @@ export default function OfferProposalPreview({
 
           {/* Step 1 — Services */}
           {step === 1 && (
-            <div>
+            <div className="relative">
+              {editMode && onEdit ? (
+                <PreviewEditButton
+                  label="Edit package services and options"
+                  onClick={() => onEdit("services")}
+                  className="absolute right-0 top-0 z-20"
+                />
+              ) : null}
               <div className="mb-5 text-center">
                 <h1 className="text-2xl font-bold tracking-tight sm:text-3xl" style={{ color: inkColor }}>Select your services</h1>
               </div>
@@ -1355,7 +1437,14 @@ export default function OfferProposalPreview({
               ) : null}
 
               {/* Annual toggle */}
-              <div className="mb-8 grid grid-cols-[minmax(0,1fr)_4rem_minmax(0,1fr)] items-center gap-2 text-base font-bold sm:gap-4 sm:text-lg">
+              <div className="relative mb-8 grid grid-cols-[minmax(0,1fr)_4rem_minmax(0,1fr)] items-center gap-2 text-base font-bold sm:gap-4 sm:text-lg">
+                {editMode && onEdit ? (
+                  <PreviewEditButton
+                    label="Edit annual pricing discount"
+                    onClick={() => onEdit("pricing")}
+                    className="absolute right-0 top-1/2 z-20 -translate-y-1/2"
+                  />
+                ) : null}
                 <span className={`justify-self-end text-right ${hasTwelveMonthAgreement ? "text-slate-400" : ""}`} style={hasTwelveMonthAgreement ? undefined : { color: inkColor }}>Month-to-month</span>
                 <button type="button" role="switch" aria-checked={hasTwelveMonthAgreement} onClick={() => setHasTwelveMonthAgreement((v) => !v)} className={`relative h-9 w-16 justify-self-center rounded-full transition ${hasTwelveMonthAgreement ? "" : "bg-slate-300"}`} style={hasTwelveMonthAgreement ? { backgroundColor: brandDark } : undefined}>
                   <span className={`absolute top-1 h-7 w-7 rounded-full bg-white shadow-sm transition ${hasTwelveMonthAgreement ? "left-8" : "left-1"}`} />
@@ -1447,12 +1536,27 @@ export default function OfferProposalPreview({
                       <div className="p-5">
                         <div className="flex items-start justify-between gap-4">
                           <div>
-                            <h2 className="text-2xl font-bold" style={{ color: inkColor }}>{option.name}</h2>
+                            <div className="flex items-center gap-2">
+                              <h2 className="text-2xl font-bold" style={{ color: inkColor }}>{option.name}</h2>
+                              {editMode && onEdit ? (
+                                <PreviewEditButton
+                                  label={`Edit ${option.name} package name and services`}
+                                  onClick={() => onEdit("services")}
+                                />
+                              ) : null}
+                            </div>
                             <button type="button" onClick={() => setComparisonOpen(true)} className="mt-1 hidden text-xs font-semibold underline underline-offset-2" style={{ color: inkColor }}>
                               See everything included
                             </button>
                           </div>
-                          <div className="space-y-1 text-right text-sm">
+                          <div className="flex items-start gap-2">
+                            {editMode && onEdit ? (
+                              <PreviewEditButton
+                                label={`Edit ${option.name} pricing`}
+                                onClick={() => onEdit("pricing")}
+                              />
+                            ) : null}
+                            <div className="space-y-1 text-right text-sm">
                             <p>
                               {onboardingWaived && originalOnboardingFee > 0 ? (
                                 <span className="mr-1.5 text-slate-400 line-through">{fmt(originalOneTimeTotal)}</span>
@@ -1463,6 +1567,7 @@ export default function OfferProposalPreview({
                               <p className="text-xs font-semibold text-emerald-700">Onboarding fee waived</p>
                             ) : null}
                             <p><span className={`font-bold ${hasTwelveMonthAgreement ? "rounded bg-accent-100 px-1.5 py-0.5" : ""}`} style={{ color: inkColor }}>{fmt(recurringTotal)}</span> <span className="text-slate-500">/mo</span></p>
+                            </div>
                           </div>
                         </div>
                         <p className="mt-4 text-center text-xs font-bold uppercase tracking-[0.12em] text-slate-700">{serviceLevel} service level</p>
@@ -1609,7 +1714,14 @@ export default function OfferProposalPreview({
 
           {/* Step 2 — Deposit / Contract */}
           {step === 2 && !alreadySigned && agreementIsOpen && (
-            <div className="py-6">
+            <div className="relative py-6">
+              {editMode && onEdit ? (
+                <PreviewEditButton
+                  label="Edit agreement"
+                  onClick={() => onEdit("agreement")}
+                  className="absolute right-0 top-0 z-20"
+                />
+              ) : null}
               {!alreadySigned ? (
                 <div className="space-y-5">
                   {urgencyOffer.active ? (
@@ -1781,7 +1893,14 @@ export default function OfferProposalPreview({
                     </div>
 
                     <div className="order-1 space-y-4 md:order-2">
-                      <div className="rounded-xl border border-slate-200 bg-white p-5">
+                      <div className="relative rounded-xl border border-slate-200 bg-white p-5">
+                        {editMode && onEdit ? (
+                          <PreviewEditButton
+                            label="Edit payment pricing"
+                            onClick={() => onEdit("pricing")}
+                            className="absolute right-3 top-3 z-20"
+                          />
+                        ) : null}
                         <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{chargeLabel}</p>
                         {selectedOptionId ? (
                           <p className="mt-1 text-sm text-slate-600">{options[selectedOptionId].name} package</p>
@@ -1913,7 +2032,14 @@ export default function OfferProposalPreview({
                   )}
                 </div>
                 <div className="order-1 space-y-4 md:order-2">
-                  <div className="rounded-xl border border-slate-200 bg-white p-5">
+                  <div className="relative rounded-xl border border-slate-200 bg-white p-5">
+                    {editMode && onEdit ? (
+                      <PreviewEditButton
+                        label="Edit payment pricing"
+                        onClick={() => onEdit("pricing")}
+                        className="absolute right-3 top-3 z-20"
+                      />
+                    ) : null}
                     <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{chargeLabel}</p>
                     {selectedOptionId ? <p className="mt-1 text-sm text-slate-600">{options[selectedOptionId].name} package</p> : null}
                     <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-3">

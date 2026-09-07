@@ -144,8 +144,6 @@ export default function ProposalFinalizeDemo() {
       <section className="w-full px-5 py-6 lg:px-8">
         <ProposalAppDemoHeader
           currentStep="finalize"
-          previousHref="/offers/intro"
-          nextHref="/offers/cover"
         />
 
         <div className="mt-4 grid gap-5 xl:grid-cols-[minmax(0,1fr)_280px] 2xl:grid-cols-[minmax(0,1fr)_300px]">
@@ -231,7 +229,7 @@ export default function ProposalFinalizeDemo() {
                   )}
                 </div>
                 <p className="mt-3 text-xs text-slate-400">
-                  Tip: the eye icon above opens a staff preview in a new tab.
+                  Tip: the eye icon above opens the full-screen proposal preview.
                 </p>
               </div>
             </section>

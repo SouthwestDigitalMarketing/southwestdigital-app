@@ -1,6 +1,6 @@
 # Coding-agent handoff
 
-Updated: 2026-09-05 (America/Chicago) — bookkeeping copy narrowed and offer-builder identity line added (see §20–§27).
+Updated: 2026-09-07 (America/Chicago) — offer-builder navigation, dedicated editable preview, and exit workflow refined (see §28).
 
 ## Start here
 
@@ -15,8 +15,9 @@ The user has instructed: **never push without explicit user instruction**. Commi
 
 ## Current commit state
 
-- The §20–§27 batch is shipped in the commit titled `Improve proposal preview and pricing cards`; verify the exact commit with `git log -1 --oneline`.
-- The working tree should be clean after that commit. The bookkeeping-copy migration is committed but intentionally not applied to any database.
+- Latest commit: `776316a Link offer services to catalog` on `main`. Earlier related commits include `8ae5597 Allow proposal-specific package names`, `d69e834 Clarify one-time pricing summary`, and `cf6c9d3 Compact options table and restore pricing sidebar`.
+- The §28 offer-builder/navigation batch is **uncommitted and unpushed**. The working tree currently contains the source changes listed in §28 plus this handoff update. Do not discard or overwrite them.
+- The bookkeeping-copy migration remains committed but intentionally not applied to any database.
 - **Line-ending noise warning (still true):** ~100 tracked files show as modified with identical content (worktree CRLF vs blob LF — `git diff --ignore-all-space` is empty for them). Do NOT commit that noise: stage only the files you changed, and normalize any touched file back to LF (`sed`/python CRLF→LF) so the commit holds only the logical diff.
 - The line-ending warning above is historical guidance; it was not present after the latest commit. Re-check `git status` before editing and avoid staging unrelated normalization noise.
 
@@ -402,6 +403,59 @@ Every offer-builder step now shows `...[last four of Offer ID] for [primary cont
 
 Key files: `src/app/(app)/offers/builder/ProposalAppDemoHeader.tsx`, `src/app/(app)/offers/builder/ProposalBuilderStorage.ts`, `src/app/(app)/offers/builder/ProposalContactInfoState.ts`, `src/app/(app)/offers/who/actions.ts`.
 
+### 28) Offer-builder navigation + dedicated editable preview — DONE, uncommitted
+
+This section supersedes the current-behavior descriptions in §20, §21, §27, and the older §9 statement that builder previews open in a new tab. Those sections remain useful history, but the current builder behavior is:
+
+**Stepper and header**
+
+- The bookkeeping stepper is now: **Contact → Scale → Complexity → Services → Adjustments → Style → Publish & Send**.
+- The former **Options** step is named **Services** and appears before **Adjustments**.
+- The former **Preview** step is named **Style**. Its embedded preview was removed; it now contains only the proposal styling/configuration editors (cover content, cover media, theme, and agreement).
+- The former **Finalize** step is named **Publish & Send**. Publishing and email/send actions remain on that dedicated step.
+- Removed the Back and Next/View Proposal buttons that previously flanked the stepper. The step pills remain clickable.
+- Removed the Publish and Email/Send icons from the header row. The remaining icons are ordered **Preview, Save, Exit**.
+- The last-four offer reference now uses `*` rather than an ellipsis: `*A1B2 for [primary contact]`. The Manage Offers table and duplicate-source copy use the same asterisk convention.
+
+**Dedicated preview behavior**
+
+- The header eye icon is labelled/tooled as **Preview proposal** and is now the sole entry point to the bookkeeping builder preview.
+- Clicking it requests browser fullscreen and client-navigates to `/offers/intro?...&preview=fullscreen`; it does not open a new tab or load the published public proposal path.
+- `ProposalIntroDemo` renders `OfferProposalPreview` only while `preview=fullscreen` is present, in a fixed full-viewport surface. A compact icon exits the preview; Escape is synchronized through `fullscreenchange`. If the browser rejects the Fullscreen API request, the fixed full-viewport fallback still works.
+- The preview remains an embedded simulation. Package selection, signature, payment, and proposal navigation do not update proposal tracking, Agreement Manager, CRM, or payment records.
+- The Publish & Send page's help text now accurately says the eye opens the full-screen proposal preview.
+
+**Contextual editing from preview**
+
+- A circular pencil button lives in the preview's top-right controls. It is white/slate when inactive and navy/white when active, with `aria-pressed` and state-specific accessible labels/tooltips.
+- Active edit mode shows small circular pencil controls on editable proposal elements: client details, cover content, cover media, proposal theme, annual discount, package names/services, package pricing, agreement, and payment pricing.
+- Clicking a contextual pencil exits fullscreen, preserves the current `offer` query, and routes to the relevant builder page. Cover/theme/agreement targets use section anchors on Style; service/package configuration routes to Services; price/discount targets route to Adjustments; client details route to Contact.
+- `AssessmentCardSection` now accepts an optional `sectionId` so contextual preview edits can land on the relevant Style card.
+
+**Exit confirmation**
+
+- Clicking the header Exit icon always opens a save confirmation, even when the builder appears unchanged.
+- The dialog contains only the heading **Save before exiting?** and three single-line, base-font actions: **Continue editing**, **Exit without saving**, and **Save & exit**.
+- The dialog width hugs the no-wrap action row instead of leaving a large empty left area.
+
+**Files currently modified for this batch**
+
+- `src/app/(app)/offers/builder/AssessmentCardSection.tsx`
+- `src/app/(app)/offers/builder/OfferProposalPreview.tsx`
+- `src/app/(app)/offers/builder/ProposalAddOnsDemo.tsx`
+- `src/app/(app)/offers/builder/ProposalAppDemoHeader.tsx`
+- `src/app/(app)/offers/builder/ProposalAppDemoStepper.tsx`
+- `src/app/(app)/offers/builder/ProposalBonusesDemo.tsx`
+- `src/app/(app)/offers/builder/ProposalContactInfoDemo.tsx`
+- `src/app/(app)/offers/builder/ProposalCoverLetterDemo.tsx`
+- `src/app/(app)/offers/builder/ProposalCreationWorkspaceDemo.tsx`
+- `src/app/(app)/offers/builder/ProposalFinalizeDemo.tsx`
+- `src/app/(app)/offers/builder/ProposalIntroDemo.tsx`
+- `src/app/(app)/offers/page.tsx`
+- `handoff.md`
+
+Validation for this uncommitted batch: TypeScript ✅ · focused ESLint ✅ · 57 test files / 370 tests ✅ · `git diff --check` ✅. The in-app browser had no connected browser instance, so final visual click-through remains for the user/next agent.
+
 ### Suggested commit split for the prior batch
 
 If you want to slice the uncommitted work into reviewable chunks before pushing:
@@ -654,12 +708,12 @@ Zoho on Vercel: register a **separate** OAuth app for prod (not shared with loca
 ## Suggested first commands for the next agent
 
 ```powershell
-git status --short                        # should be clean
-git log --oneline origin/main..HEAD       # should be empty after the authorized push
+git status --short                        # should show the uncommitted §28 files listed above
+git log -5 --oneline                      # latest committed work starts at 776316a
 npm run typecheck                         # should be clean
-npm test                                  # 54 files / 363 tests as of §27
+npm test                                  # 57 files / 370 tests as of §28
 ```
 
-Then read this file top-to-bottom. §27 is the latest shipped work. The user's push policy remains "never push without explicit user instruction".
+Then read this file top-to-bottom. §28 is the latest work and is not yet committed or pushed. The user's push policy remains "never push without explicit user instruction".
 
 If the user asks you to move CRM PipelineItem into the work-item model, read section 6 first, then the "Future design: unified work items / next-action system" CRM extension list — the offer-side helpers (`src/lib/quotes/lifecycle.ts`) are the pattern to follow.

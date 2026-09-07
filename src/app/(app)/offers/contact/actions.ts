@@ -77,7 +77,7 @@ export async function createQuoteAction(formData: FormData) {
   const packageId = str(formData, "packageId");
 
   if (!packageId) {
-    redirect("/offers/new?error=package-required");
+    redirect("/offers/contact?error=package-required");
   }
 
   let clientId: string;
@@ -88,7 +88,7 @@ export async function createQuoteAction(formData: FormData) {
       select: { name: true, email: true, company: true },
     });
     if (!existing) {
-      redirect("/offers/new?error=client-required");
+      redirect("/offers/contact?error=client-required");
     }
     const client = await prisma.quoteClient.create({
       data: {
@@ -102,7 +102,7 @@ export async function createQuoteAction(formData: FormData) {
     clientId = client.id;
   } else {
     if (!clientName || !clientEmail) {
-      redirect("/offers/new?error=client-required");
+      redirect("/offers/contact?error=client-required");
     }
     const client = await prisma.quoteClient.create({
       data: {
@@ -122,6 +122,6 @@ export async function createQuoteAction(formData: FormData) {
     redirect(`/offers/${result.quoteId}?created=1`);
   } catch (error) {
     if (error && typeof error === "object" && "digest" in error) throw error;
-    redirect("/offers/new?error=package-required");
+    redirect("/offers/contact?error=package-required");
   }
 }

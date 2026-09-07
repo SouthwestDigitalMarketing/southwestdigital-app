@@ -129,7 +129,7 @@ export function IssuedAgreementsTable({ agreements }: { agreements: IssuedAgreem
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap gap-2">
             <Link
-              href="/offers/new"
+              href="/offers/contact"
               className="ui-action-primary inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-lg border px-4 py-2 text-sm font-semibold transition"
             >
               New agreement

@@ -390,7 +390,7 @@ type MonthlyRateBreakdownItem = {
   amount: number;
 };
 
-type ProposalAssessmentStep = "scale" | "pricing" | "included" | "calculator";
+type ProposalAssessmentStep = "scale" | "complexity" | "included" | "adjustments";
 
 const CLEANUP_PURCHASED_OR_SOLD_PROPERTY_COST = 200;
 const CURRENT_DATE = new Date();
@@ -1938,26 +1938,9 @@ export default function ProposalCreationWorkspaceDemo({
     token: 0,
   });
   const isScaleStep = step === "scale";
-  const isComplexityStep = step === "pricing";
+  const isComplexityStep = step === "complexity";
   const isIncludedStep = step === "included";
-  const isCalculatorStep = step === "calculator";
-  const nextStepHref =
-    step === "scale"
-        ? "/offers/pricing"
-      : step === "pricing"
-        ? "/offers/included"
-        : step === "included"
-          ? "/offers/calculator"
-          : "/offers/add-ons";
-  const previousStepHref =
-    step === "scale"
-        ? "/offers/new"
-      : step === "pricing"
-        ? "/offers/scale"
-        : step === "included"
-          ? "/offers/pricing"
-          : "/offers/included";
-
+  const isAdjustmentsStep = step === "adjustments";
   const showRealEstateFields =
     assessment.bookSetType === "real-estate-only" ||
     assessment.bookSetType === "mixed-books";
@@ -2101,15 +2084,21 @@ export default function ProposalCreationWorkspaceDemo({
         <div>
           <ProposalAppDemoHeader
             currentStep={
-              isScaleStep ? "scale" : isComplexityStep ? "complexity" : "pricing"
+              // Included services has no pill of its own — it edits what the
+              // Services step sells, so it lights that pill up.
+              isScaleStep
+                ? "scale"
+                : isComplexityStep
+                  ? "complexity"
+                  : isIncludedStep
+                    ? "add-ons"
+                    : "adjustments"
             }
-            previousHref={previousStepHref}
-            nextHref={nextStepHref}
           />
 
           <div className="mt-4 grid gap-6 xl:grid-cols-[minmax(0,1fr)_280px] 2xl:grid-cols-[minmax(0,1fr)_300px]">
             <div className="space-y-3">
-              {isScaleStep || isComplexityStep || isCalculatorStep ? null : !isIncludedStep ? (
+              {isScaleStep || isComplexityStep || isAdjustmentsStep ? null : !isIncludedStep ? (
                 <p className="mb-3 px-1 text-base font-semibold text-slate-500">Assessment</p>
               ) : (
                 <div className="flex justify-start px-1">
@@ -3099,7 +3088,7 @@ export default function ProposalCreationWorkspaceDemo({
                   />
                 ) : null}
 
-                {isCalculatorStep ? (
+                {isAdjustmentsStep ? (
                   <>
                     <AssessmentCardSection
                       title={`Monthly Base (${resolveProposalPackageName(assessment.packageNames, "maintain")})`}
@@ -3265,7 +3254,7 @@ export default function ProposalCreationWorkspaceDemo({
             <PricingSnapshotSidebar
               items={getProposalPricingSnapshotItems(assessment)}
               cleanupCard={getProposalPricingSnapshotCleanupCard(assessment)}
-              hideLabel={isScaleStep || isComplexityStep || isCalculatorStep}
+              hideLabel={isScaleStep || isComplexityStep || isAdjustmentsStep}
             />
           </div>
         </div>

@@ -37,9 +37,9 @@ describe("offer kinds", () => {
 });
 
 describe("builderHref", () => {
-  it("routes bookkeeping to /offers/new without a kind param", () => {
+  it("routes bookkeeping to /offers/contact without a kind param", () => {
     const href = builderHref("bookkeeping", ["c1"], "q1");
-    expect(href.startsWith("/offers/new?")).toBe(true);
+    expect(href.startsWith("/offers/contact?")).toBe(true);
     expect(href).toContain("contacts=c1");
     expect(href).toContain("offer=q1");
     expect(href).not.toContain("kind=");

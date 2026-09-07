@@ -6,6 +6,7 @@ import type { AssessmentState } from "./ProposalCreationWorkspaceDemo";
 
 export default function AssessmentCardSection({
   title,
+  sectionId,
   summary,
   children,
   assessment,
@@ -14,6 +15,7 @@ export default function AssessmentCardSection({
   footer,
 }: {
   title: string;
+  sectionId?: string;
   summary?: Array<[string, string]>;
   children: ReactNode;
   assessment: AssessmentState;
@@ -31,7 +33,7 @@ export default function AssessmentCardSection({
   }
 
   return (
-    <div className="proposal-assessment-section border-b border-slate-200 px-5 py-6 last:border-b-0">
+    <div id={sectionId} className="proposal-assessment-section scroll-mt-6 border-b border-slate-200 px-5 py-6 last:border-b-0">
       <div className="flex items-start justify-between gap-4">
         <h2 className="text-xl font-semibold tracking-tight text-slate-900">{title}</h2>
         {!readOnly ? (

@@ -257,7 +257,7 @@ export default function ProposalAddOnsDemo({
   return (
     <main className="min-h-screen">
       <section className="w-full px-5 py-6 lg:px-8">
-        <ProposalAppDemoHeader currentStep="add-ons" previousHref="/offers/calculator" nextHref="/offers/intro" />
+        <ProposalAppDemoHeader currentStep="add-ons" />
         <div className="mt-4 grid gap-5 xl:grid-cols-[minmax(0,1fr)_280px] 2xl:grid-cols-[minmax(0,1fr)_300px]">
           <div className="proposal-options-editor min-w-0">
             <div className="px-1">

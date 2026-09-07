@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Check, Image as ImageIcon, Maximize2, Minimize2, Video } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Check, Image as ImageIcon, Minimize2, Pencil, Video } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { resolveVideoEmbedUrl } from "./OfferProposalPreview";
+import { useRouter, useSearchParams } from "next/navigation";
+import { resolveVideoEmbedUrl, type ProposalPreviewEditTarget } from "./OfferProposalPreview";
 
 // Load the preview client-only. Its state is entirely localStorage-backed
 // (contact info + assessment), so SSR would render defaults and then re-render
@@ -50,29 +51,83 @@ export default function ProposalIntroDemo({
 }) {
   const { assessment, setAssessment, updateAssessment } = useProposalAssessmentDemoState();
   const { brand } = useBrand();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const isRoutedFullscreenPreview = searchParams.get("preview") === "fullscreen";
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
-  const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false);
-  const previewContainerRef = useRef<HTMLDivElement>(null);
+  const [showPreviewEditControls, setShowPreviewEditControls] = useState(false);
+  const routedNativeFullscreenSeenRef = useRef(false);
+  const previewEditNavigationRef = useRef(false);
+
+  const clearRoutedFullscreenPreview = useCallback(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("preview");
+    const query = params.toString();
+    router.replace(query ? `/offers/intro?${query}` : "/offers/intro", { scroll: false });
+  }, [router, searchParams]);
 
   useEffect(() => {
+    if (!isRoutedFullscreenPreview) return;
+
     function syncFullscreenState() {
-      setIsPreviewFullscreen(document.fullscreenElement === previewContainerRef.current);
+      const fullscreenElement = document.fullscreenElement;
+      const documentIsRoutedFullscreen = fullscreenElement === document.documentElement;
+
+      if (documentIsRoutedFullscreen) routedNativeFullscreenSeenRef.current = true;
+
+      if (
+        routedNativeFullscreenSeenRef.current
+        && !previewEditNavigationRef.current
+        && fullscreenElement === null
+      ) {
+        routedNativeFullscreenSeenRef.current = false;
+        clearRoutedFullscreenPreview();
+      }
     }
 
+    syncFullscreenState();
     document.addEventListener("fullscreenchange", syncFullscreenState);
     return () => document.removeEventListener("fullscreenchange", syncFullscreenState);
-  }, []);
+  }, [clearRoutedFullscreenPreview, isRoutedFullscreenPreview]);
 
-  async function togglePreviewFullscreen() {
-    const previewContainer = previewContainerRef.current;
-    if (!previewContainer) return;
+  useEffect(() => {
+    if (!isRoutedFullscreenPreview) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isRoutedFullscreenPreview]);
 
-    if (document.fullscreenElement === previewContainer) {
-      await document.exitFullscreen();
-      return;
-    }
+  async function closeProposalPreview() {
+    setShowPreviewEditControls(false);
+    if (document.fullscreenElement) await document.exitFullscreen();
+    clearRoutedFullscreenPreview();
+  }
 
-    await previewContainer.requestFullscreen();
+  async function editPreviewElement(target: ProposalPreviewEditTarget) {
+    setShowPreviewEditControls(false);
+    previewEditNavigationRef.current = true;
+    if (document.fullscreenElement) await document.exitFullscreen();
+
+    const destinations: Record<ProposalPreviewEditTarget, { path: string; sectionId?: string }> = {
+      contact: { path: "/offers/contact" },
+      "cover-content": { path: "/offers/intro", sectionId: "cover-content" },
+      "cover-media": { path: "/offers/intro", sectionId: "cover-media" },
+      theme: { path: "/offers/intro", sectionId: "proposal-theme" },
+      pricing: { path: "/offers/adjustments" },
+      services: { path: "/offers/add-ons" },
+      agreement: { path: "/offers/intro", sectionId: "proposal-agreement" },
+    };
+    const destination = destinations[target];
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("preview");
+    const query = params.toString();
+    const hash = destination.sectionId ? `#${destination.sectionId}` : "";
+    router.push(`${destination.path}${query ? `?${query}` : ""}${hash}`);
+    window.setTimeout(() => {
+      previewEditNavigationRef.current = false;
+    }, 0);
   }
   const selectedAgreement =
     agreementTemplates.find((template) => template.id === assessment.agreementTemplateId)
@@ -171,8 +226,6 @@ export default function ProposalIntroDemo({
       <section className="w-full px-5 py-6 lg:px-8">
         <ProposalAppDemoHeader
           currentStep="intro"
-          previousHref="/offers/add-ons"
-          viewProposalAsNext
           />
 
         <div className="mt-4">
@@ -180,6 +233,7 @@ export default function ProposalIntroDemo({
             <section className="mt-4 proposal-builder-card overflow-hidden rounded-[1.5rem] border border-slate-300 shadow-sm">
               <AssessmentCardSection
                 title="Cover content"
+                sectionId="cover-content"
                 assessment={assessment}
                 onCancel={setAssessment}
                 summary={coverContentSummary}
@@ -218,6 +272,7 @@ export default function ProposalIntroDemo({
 
             <AssessmentCardSection
               title="Cover media"
+              sectionId="cover-media"
               assessment={assessment}
               onCancel={setAssessment}
               summary={coverMediaSummary}
@@ -272,6 +327,7 @@ export default function ProposalIntroDemo({
 
             <AssessmentCardSection
               title="Theme"
+              sectionId="proposal-theme"
               assessment={assessment}
               onCancel={setAssessment}
               summary={themeSummary}
@@ -342,6 +398,7 @@ export default function ProposalIntroDemo({
 
             <AssessmentCardSection
               title="Agreement"
+              sectionId="proposal-agreement"
               assessment={assessment}
               onCancel={setAssessment}
               summary={agreementSummary}
@@ -383,38 +440,34 @@ export default function ProposalIntroDemo({
               </div>
             </AssessmentCardSection>
             </section>
-            <div
-              ref={previewContainerRef}
-              className={isPreviewFullscreen ? "h-screen overflow-y-auto bg-slate-100 p-4 sm:p-6" : ""}
-            >
-              <div
-                className={`z-50 flex items-center ${
-                  isPreviewFullscreen
-                    ? "fixed right-4 top-4 justify-end"
-                    : "mb-3 mt-6 justify-between gap-3"
-                }`}
-              >
-                {!isPreviewFullscreen ? (
-                  <p className="text-base font-semibold uppercase tracking-[0.08em] text-slate-500">Preview</p>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => void togglePreviewFullscreen()}
-                  className={`border border-slate-300 bg-white text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brandnavy/20 ${
-                    isPreviewFullscreen
-                      ? "grid h-10 w-10 place-items-center rounded-full"
-                      : "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold"
-                  }`}
-                  aria-label={isPreviewFullscreen ? "Exit full-screen proposal preview" : "Open proposal preview full screen"}
-                  title={isPreviewFullscreen ? "Exit full screen (Esc)" : "View proposal full screen"}
-                >
-                  {isPreviewFullscreen ? (
+            {isRoutedFullscreenPreview ? (
+              <div className="fixed inset-0 z-[100] h-screen overflow-y-auto bg-slate-100 p-4 sm:p-6">
+                <div className="fixed right-4 top-4 z-50 flex items-center justify-end gap-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowPreviewEditControls((visible) => !visible)}
+                    aria-pressed={showPreviewEditControls}
+                    aria-label={showPreviewEditControls ? "Hide proposal edit controls" : "Show proposal edit controls"}
+                    title={showPreviewEditControls ? "Hide edit controls" : "Edit proposal"}
+                    className={`grid h-10 w-10 place-items-center rounded-full border shadow-sm transition focus:outline-none focus:ring-2 focus:ring-brandnavy/20 ${
+                      showPreviewEditControls
+                        ? "border-brandnavy bg-brandnavy text-white"
+                        : "border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+                    }`}
+                  >
+                    <Pencil aria-hidden="true" className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void closeProposalPreview()}
+                    className="grid h-10 w-10 place-items-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brandnavy/20"
+                    aria-label="Exit full-screen proposal preview"
+                    title="Exit full screen (Esc)"
+                  >
                     <Minimize2 aria-hidden="true" className="h-4 w-4" />
-                  ) : (
-                    <Maximize2 aria-hidden="true" className="h-4 w-4" />
-                  )}
-                  {!isPreviewFullscreen ? "Full screen" : null}
-                </button>
+                  </button>
+                </div>
               </div>
               <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <OfferProposalPreview
@@ -422,9 +475,12 @@ export default function ProposalIntroDemo({
                   assessment={assessment}
                   catalogOffer={catalogOffer}
                   agreementTemplate={selectedAgreement}
+                  editMode={showPreviewEditControls}
+                  onEdit={(target) => void editPreviewElement(target)}
                 />
               </div>
-            </div>
+              </div>
+            ) : null}
           </div>
         </div>
       </section>

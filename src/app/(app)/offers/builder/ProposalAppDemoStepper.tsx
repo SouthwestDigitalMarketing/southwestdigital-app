@@ -8,20 +8,18 @@ export type ProposalAppDemoStep =
   | "contact"
   | "scale"
   | "complexity"
-  | "included"
-  | "pricing"
   | "add-ons"
+  | "adjustments"
   | "intro"
-  | "cover"
-  | "preview"
-  | "finalize";
+  | "finalize"
+  | "cover";
 
 const STEP_ITEMS: Array<{
   id: ProposalAppDemoStep;
   label: string;
   href?: string;
 }> = [
-  { id: "contact", label: "Contact", href: "/offers/new" },
+  { id: "contact", label: "Contact", href: "/offers/contact" },
   {
     id: "scale",
     label: "Scale",
@@ -30,27 +28,32 @@ const STEP_ITEMS: Array<{
   {
     id: "complexity",
     label: "Complexity",
-    href: "/offers/pricing",
-  },
-  {
-    id: "pricing",
-    label: "Adjustments",
-    href: "/offers/calculator",
+    href: "/offers/complexity",
   },
   {
     id: "add-ons",
-    label: "Options",
+    label: "Services",
     href: "/offers/add-ons",
   },
   {
+    id: "adjustments",
+    label: "Adjustments",
+    href: "/offers/adjustments",
+  },
+  {
     id: "intro",
-    label: "Preview",
+    label: "Style",
     href: "/offers/intro",
   },
   {
     id: "finalize",
-    label: "Finalize",
+    label: "Publish",
     href: "/offers/finalize",
+  },
+  {
+    id: "cover",
+    label: "Email",
+    href: "/offers/cover",
   },
 ];
 

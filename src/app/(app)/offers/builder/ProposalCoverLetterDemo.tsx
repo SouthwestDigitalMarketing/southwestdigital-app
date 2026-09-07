@@ -260,7 +260,6 @@ ${effectiveEmailBody}`;
       <section className="w-full px-5 py-6 lg:px-8">
         <ProposalAppDemoHeader
           currentStep="cover"
-          previousHref="/offers/add-ons"
         />
 
         <div className="mt-4 grid gap-8 lg:grid-cols-2">

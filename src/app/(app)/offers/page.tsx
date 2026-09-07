@@ -204,7 +204,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
         summary.name ||
         summary.company ||
         quote.client.name ||
-        `Offer …${quote.offerCode.slice(-4)}`;
+        `Offer *${quote.offerCode.slice(-4)}`;
       // For SEND_READY the "quiet" timer is measured against publishedAt
       // (how long has it sat unshared), not lastActivityAt.
       const referenceDate =
@@ -415,7 +415,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                     ? snapshot.duplicatedFromOfferCode
                     : null;
                 const duplicateTooltip = duplicatedFromOfferCode
-                  ? `Duplicated from ...${duplicatedFromOfferCode.slice(-4)}`
+                  ? `Duplicated from *${duplicatedFromOfferCode.slice(-4)}`
                   : "Duplicated from another offer";
                 return (
                   <tr
@@ -433,7 +433,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                           title={quote.offerCode}
                           aria-label={`Offer ID ${quote.offerCode}`}
                         >
-                          ...{quote.offerCode.slice(-4)}
+                          *{quote.offerCode.slice(-4)}
                         </span>
                         {isTestProposal ? (
                           <span

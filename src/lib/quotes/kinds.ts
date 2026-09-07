@@ -3,7 +3,7 @@ export const OFFER_KINDS = [
     key: "bookkeeping",
     name: "Bookkeeping services",
     summary: "Price monthly bookkeeping, cleanup, and add-ons for a client.",
-    href: "/offers/new",
+    href: "/offers/contact",
   },
   {
     key: "consulting",
@@ -50,7 +50,7 @@ export function whoHref(kind: OfferKindKey, contactId?: string) {
 
 export function builderHref(kind: OfferKindKey, contactIds: string[], offerId?: string) {
   const match = OFFER_KINDS.find((item) => item.key === kind);
-  const href = match?.href ?? "/offers/new";
+  const href = match?.href ?? "/offers/contact";
   const params = new URLSearchParams();
   if (contactIds.length) params.set("contacts", contactIds.join(","));
   if (offerId) params.set("offer", offerId);
