@@ -1,12 +1,12 @@
 # Coding-agent handoff
 
-Updated: 2026-09-07 (America/Chicago) — offer-builder step URLs renamed and the Services step redesign started on a feature branch (see §29). §28's batch is now committed.
+Updated: 2026-09-07 (America/Chicago) — Services feature-branch review and fixes complete locally; see §31 for verified behavior and remaining visual QA.
 
 ## Start here
 
 - Read `AGENTS.md` before changing code. Its tenant, authorization, secret-handling, analytics, migration-safety, and Next.js 16 rules are non-negotiable.
 - Whenever this handoff is read, also read `.local/COMPUTERS.md` for the local computer inventory. That file is intentionally ignored by Git and must remain private.
-- Current branch: **`feature/services-step-redesign`** (branched from `main` at `776316a`). Nothing is pushed. Deployment is on **Vercel** (not Netlify — that's stale in older docs). Vercel CLI is not installed; use dashboard for env vars until user installs `npm i -g vercel`.
+- Current branch: **`feature/services-step-redesign`** (branched from `main` at `776316a`). The latest review changes are local only. Deployment is on **Vercel** (not Netlify — that's stale in older docs). Vercel CLI is not installed; use dashboard for env vars until user installs `npm i -g vercel`.
 - `.claude/` is untracked user-owned content. Do not modify.
 - Never commit `.env.local` or any secret. `AUTH_SECRET`, `ZOHO_MAIL_CLIENT_ID`, `ZOHO_MAIL_CLIENT_SECRET`, `INTEGRATION_ENCRYPTION_KEY`, Stripe/PayPal keys, and Supabase URLs are all secrets.
 
@@ -16,12 +16,10 @@ The user has instructed: **never push without explicit user instruction**. Commi
 
 ## Current commit state
 
-- On `main`: `776316a Link offer services to catalog` (unchanged; nothing has been pushed).
-- Working branch `feature/services-step-redesign`, four commits, none pushed:
-  - `f270e02` — checkpoint: step-URL renames plus the previously uncommitted §28 batch, captured so the redesign has a rollback point.
-  - `066533a` — Services step scoped to the curated package lineup (990 lines deleted).
-  - `fef462c` — fixes for findings from a review of the above.
-  - `6e4f226` — golden fixtures pinning what a client sees.
+- Working branch: `feature/services-step-redesign`.
+- Prior implementation commits: `d68e92a` (redesign) and `2e9f2b8` (one-time charges).
+- At review start, the locally cached upstream branch pointed to `ef4ebee`; no fetch or push was performed during this review.
+- §31 is preserved in the local commit titled `Fix service editor persistence and checkout eligibility`. No changes from this review were pushed.
 - **§28's batch is no longer uncommitted.** It was swept into `f270e02` together with the URL renames. The "Suggested commit split for the prior batch" below is therefore historical — it was not followed.
 - The bookkeeping-copy migration remains committed but intentionally not applied to any database.
 - **Line-ending noise warning (still true):** ~100 tracked files show as modified with identical content (worktree CRLF vs blob LF — `git diff --ignore-all-space` is empty for them). Do NOT commit that noise: stage only the files you changed, and normalize any touched file back to LF (`sed`/python CRLF→LF) so the commit holds only the logical diff.
@@ -540,17 +538,31 @@ New offers will open with only the catalog-curated lineup: a service with no `de
 
 Validation: TypeScript OK, ESLint OK (1 pre-existing `no-img-element` warning), `next build` OK, 58 files / 385 tests OK.
 
-### 30) Services step redesign implementation — DONE locally, uncommitted
+### 30) Initial Services step implementation — historical report, corrected by §31
 
-The visible Services/Options redesign is now implemented on `feature/services-step-redesign`.
+The initial implementation landed in `d68e92a` and `2e9f2b8`. The following was the original completion report, not a verified statement of current behavior; §31 documents the gaps found and fixed.
 
 - New offers use only catalog-curated bookkeeping services in the standard package lineup. Optional catalog services remain in a separate add-on tail and start hidden from the lead.
-- Package membership is represented by a contiguous range (`from`/`to`) in the UI and persisted through the existing package-id arrays. Legacy non-contiguous arrays are normalized at read time by filling the missing middle tier.
+- Package membership is represented by a contiguous range (`from`/`to`) in the UI and persisted through the existing package-id arrays. The initial normalizer filled gaps; §31 removes that behavior because reading saved data must not expand a service's promised scope.
 - The builder replaces the three independent package circles with range controls for `Included in` and `Available as add-on`. A priced core service can therefore be included in Improve/Grow and offered as a paid add-on for Maintain.
 - Catalog cadence now travels through the assessment, templates, materialization, checkout, and public allowlist. One-time optional services are no longer labeled `$X/mo` in the public preview and are charged as one-time amounts rather than added to MRR.
 - Existing persisted offers retain their current option/bonus set and are not routed through the new-offer default rule.
 
 Validation: `npm run typecheck` ✅ · `npm test` ✅ (59 files / 389 tests) · focused ESLint ✅ (one pre-existing `no-img-element` warning) · `npx next build` ✅. The `npm run build` wrapper still hits the known Windows Prisma query-engine DLL lock during `prisma generate`; stop the dev server before running that wrapper.
+
+### 31) Feature-branch review and fixes — complete locally, not pushed
+
+The review found functional gaps despite the original 389 passing tests. See [review findings and verification](docs/offers/services-step-review.md).
+
+- Fresh assessment selection placeholders prevented curated initialization. Fresh assessments now start with an empty selection map; `servicesInitialized` distinguishes intentional empty offers from new ones and survives the public allowlist.
+- Editor and server materialization now share reconciliation. Converting a catalogue-default add-on to included no longer loses it on save. Hidden status, cadence, price and saved package membership are preserved.
+- Preview and checkout share add-on eligibility. Hybrid services reach both paths, charge once, and cannot be purchased in a tier where already included. Checkout filters unavailable tiers and duplicate IDs. Agreement labels resolve hybrid service names.
+- Tier-range controls preserve legacy gaps as a labeled custom selection. New edits offer contiguous ranges and exclude tiers where the service is included.
+- Search, Add services, hidden/unassigned recovery, explicit cadence/price controls, and atomic treatment conversion replace the incomplete editor controls. Default view shows assigned services only. Catalogue initialization owns defaults; templates are loaded explicitly, avoiding asynchronous default-template overwrite.
+- Public cards no longer claim full inheritance when a support service is substituted. Active real-estate tags are used consistently during server publication.
+- No database migrations, catalogue edits, offer publications, email sends or payments were performed. Golden fixture files and snapshots remain unchanged.
+
+Verification: 63 test files / 415 tests pass; TypeScript passes; focused ESLint has no errors and one pre-existing image warning; production `npx next build` passes. Tests use mocked database boundaries, not live billing. Browser skill discovery returned no connected browsers, so live interaction/responsive visual QA remains before merge.
 
 ## Product Type refactor plan
 
@@ -788,12 +800,12 @@ Zoho on Vercel: register a **separate** OAuth app for prod (not shared with loca
 ## Suggested first commands for the next agent
 
 ```powershell
-git status --short                        # should show the uncommitted §28 files listed above
-git log -5 --oneline                      # latest committed work starts at 776316a
+git status --short                        # verify the local review commit left a clean tree
+git log -5 --oneline                      # latest review commit and prior feature work
 npm run typecheck                         # should be clean
-npm test                                  # 57 files / 370 tests as of §28
+npm test                                  # 63 files / 415 tests as of §31
 ```
 
-Then read this file top-to-bottom. §28 is the latest work and is not yet committed or pushed. The user's push policy remains "never push without explicit user instruction".
+Then read this file together with `.local/COMPUTERS.md`. §31 is the latest work, preserved locally and not pushed. The user's push policy remains "never push without explicit user instruction".
 
 If the user asks you to move CRM PipelineItem into the work-item model, read section 6 first, then the "Future design: unified work items / next-action system" CRM extension list — the offer-side helpers (`src/lib/quotes/lifecycle.ts`) are the pattern to follow.

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { proposalServiceAddOns } from "@/lib/quotes/proposalServices";
 
 const TIER_IDS = ["maintain", "improve", "grow"] as const;
 export type ProposalCheckoutTier = (typeof TIER_IDS)[number];
@@ -111,16 +112,13 @@ export function buildProposalCheckoutSummary(
     ? baseMonthlyTotal * (1 - annualSavingsPercent / 100)
     : baseMonthlyTotal;
 
-  const additionalOptions = Array.isArray(assessment.additionalOptions)
-    ? assessment.additionalOptions.filter(isRecord)
-    : [];
   const availableAdditionalOptions = new Map(
-    additionalOptions
-      .filter((option) => option.showInProposal === true && option.archived !== true && option.applicable !== false)
-      .filter((option) => typeof option.id === "string")
-      .map((option) => [option.id as string, option]),
+    proposalServiceAddOns(assessment)
+      .filter((option) => option.packageIds.includes(selection.tier))
+      .map((option) => [option.id, option]),
   );
-  const selectedAdditionalOptionIds = selection.selectedAdditionalOptionIds.filter((id) => availableAdditionalOptions.has(id));
+  const selectedAdditionalOptionIds = [...new Set(selection.selectedAdditionalOptionIds)]
+    .filter((id) => availableAdditionalOptions.has(id));
   const additionalMonthlyTotal = selectedAdditionalOptionIds.reduce(
     (total, id) => {
       const option = availableAdditionalOptions.get(id);
@@ -153,7 +151,7 @@ export function buildProposalCheckoutSummary(
       return [[`${year}-${startMonth}-${endMonth}`, { startMonth, endMonth }] as const];
     }),
   );
-  const selectedCleanupPeriodKeys = selection.selectedCleanupPeriodKeys.filter((key) => availablePeriods.has(key));
+  const selectedCleanupPeriodKeys = [...new Set(selection.selectedCleanupPeriodKeys)].filter((key) => availablePeriods.has(key));
   const selectedCleanupMonths = selectedCleanupPeriodKeys.reduce((total, key) => {
     const period = availablePeriods.get(key);
     return total + (period ? period.endMonth - period.startMonth + 1 : 0);

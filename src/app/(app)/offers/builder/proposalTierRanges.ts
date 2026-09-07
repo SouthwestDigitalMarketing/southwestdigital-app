@@ -10,15 +10,14 @@ export type TierRange = {
 export function normalizeTierPackageIds(value: unknown): PackageId[] {
   if (!Array.isArray(value)) return [];
   const selected = TIER_ORDER.filter((id) => value.includes(id));
-  if (selected.length < 2) return selected;
-  const first = TIER_ORDER.indexOf(selected[0]);
-  const last = TIER_ORDER.indexOf(selected[selected.length - 1]);
-  return TIER_ORDER.slice(first, last + 1);
+  // Reading a saved offer must never expand its promised scope.
+  return selected;
 }
 
 export function tierRangeFromPackageIds(value: unknown): TierRange | null {
   const ids = normalizeTierPackageIds(value);
   if (ids.length === 0) return null;
+  if (TIER_ORDER.indexOf(ids[ids.length - 1]) - TIER_ORDER.indexOf(ids[0]) + 1 !== ids.length) return null;
   return { from: ids[0], to: ids[ids.length - 1] };
 }
 

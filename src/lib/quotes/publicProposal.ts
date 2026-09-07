@@ -36,6 +36,7 @@ const bonus = z.object({
 // Deliberately allowlisted at every object boundary. New staff fields must not
 // silently become public merely because they are added to a saved assessment.
 const publicAssessmentSchema = z.object({
+  servicesInitialized: z.boolean().optional(),
   bookSetType: z.enum(["", "real-estate-only", "mixed-books", "other-business", "unknown"]).optional(),
   booksOverTwoMonthsBehind: z.boolean().nullable().optional(),
   cleanupStartMonth: z.string().optional(),

@@ -71,6 +71,11 @@ export async function GET(
       if (isRecord(value)) additionalOptions.push(value);
     }
   }
+  if (Array.isArray(assessment.bonuses)) {
+    for (const value of assessment.bonuses) {
+      if (isRecord(value)) additionalOptions.push(value);
+    }
+  }
   const selectedAdditionalOptionNames = selectedAdditionalOptionIds.map((id) => {
     const option = additionalOptions.find((item) => item.id === id);
     return typeof option?.name === "string" ? option.name : id;

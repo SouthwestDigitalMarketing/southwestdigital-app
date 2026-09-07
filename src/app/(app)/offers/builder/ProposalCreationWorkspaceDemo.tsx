@@ -233,6 +233,7 @@ export type QboAccessStatus =
   | "unknown";
 
 export type AssessmentState = {
+  servicesInitialized?: boolean;
   clientName: string;
   contactEmail: string;
   contactPhone: string;
@@ -479,17 +480,7 @@ const INITIAL_ASSESSMENT: AssessmentState = {
   includeDoubleHqClientPortal: false,
   includeRealEstateChartOfAccounts: false,
   includeNewQuickBooksFileSetup: false,
-  bonusPackageSelections: {
-    "stessa-migration": [],
-    "tax-preparer-coordination": [],
-    "property-reporting-setup": [],
-    "document-organization": [],
-    "quarterly-review": [],
-    "doublehq-client-portal": [],
-    "real-estate-chart-of-accounts": [],
-    "new-quickbooks-file": [],
-    "per-property-class-tracking": ["grow", "improve"],
-  },
+  bonusPackageSelections: {},
   offerAdvancedReceiptManagement: false,
   advancedReceiptManagementPriceOverride: null,
   offerProjectTracking: false,
@@ -555,7 +546,7 @@ export function getProposalAdditionalOptions(
   assessment: AssessmentState,
   catalogItems: ProposalOptionCatalogItem[] = [],
 ): ProposalAdditionalOption[] {
-  if (assessment.additionalOptions.length > 0) return assessment.additionalOptions;
+  if (assessment.servicesInitialized || assessment.additionalOptions.length > 0) return assessment.additionalOptions;
   const catalogOptions = catalogItems.filter((item) => item.defaultInclusion === "optional");
   if (catalogOptions.length > 0) {
     return catalogOptions.map((item) => ({
@@ -596,6 +587,7 @@ export function getProposalBonuses(
   assessment: AssessmentState,
   catalogItems: ProposalOptionCatalogItem[] = [],
 ): ProposalBonus[] {
+  if (assessment.servicesInitialized) return assessment.bonuses;
   const catalogBonuses = catalogItems.filter((item) => item.defaultInclusion === "included");
   const mapCatalogBonus = (item: ProposalOptionCatalogItem): ProposalBonus => ({
     id: item.offerKey,

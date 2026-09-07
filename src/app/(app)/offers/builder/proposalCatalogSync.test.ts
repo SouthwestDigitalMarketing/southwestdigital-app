@@ -73,12 +73,12 @@ describe("proposal catalog synchronization", () => {
       description: "Current catalog copy",
       monthlyPrice: 275,
       showInProposal: false,
-      archived: false,
+      archived: true,
     })]);
     expect(result.bonusPackageSelections.reporting).toEqual(["grow"]);
   });
 
-  it("adds active catalog services and removes services no longer in the active catalog", () => {
+  it("initializes only services with explicit curated package defaults", () => {
     const result = reconcileProposalAssessmentWithCatalog(
       assessment({
         bonuses: [],
@@ -87,7 +87,7 @@ describe("proposal catalog synchronization", () => {
       }),
       [
         catalogItem("current", { offerSection: "core-services", defaultPackageIds: ["maintain"] }),
-        catalogItem("new-option", { offerSection: "options", defaultInclusion: "optional", defaultPrice: 125 }),
+        catalogItem("new-option", { offerSection: "options", defaultInclusion: "optional", defaultPackageIds: ["maintain"], defaultPrice: 125 }),
       ],
     );
 
@@ -98,5 +98,36 @@ describe("proposal catalog synchronization", () => {
     })]);
     expect(result.bonusPackageSelections).toEqual({ current: ["maintain"] });
     expect(result.optionsCatalogOrder).toEqual(["new-option", "current"]);
+  });
+});
+
+describe("saved offer preservation", () => {
+  const curated = catalogItem("core", { defaultPackageIds: ["maintain", "improve", "grow"], defaultPrice: 100 });
+  it("does not repopulate an intentionally empty initialized offer", () => {
+    const result = reconcileProposalAssessmentWithCatalog(assessment({ servicesInitialized: true }), [curated]);
+    expect(result.bonuses).toEqual([]);
+    expect(result.additionalOptions).toEqual([]);
+  });
+  it("does not opt uncurated catalogue services into a fresh offer", () => {
+    const result = reconcileProposalAssessmentWithCatalog(assessment({}), [
+      curated, catalogItem("other"), catalogItem("optional", { defaultInclusion: "optional" }),
+    ]);
+    expect(result.bonuses.map((item) => item.id)).toEqual(["core"]);
+    expect(result.additionalOptions).toEqual([]);
+    expect(result.bonuses[0].addOnPrice).toBeUndefined();
+    expect(result.servicesInitialized).toBe(true);
+  });
+  it("keeps saved gaps, empty selections, hidden rows, cadence, prices and converted treatment", () => {
+    const saved = assessment({
+      bonuses: [{ id: "core", name: "Old", description: "", archived: true, defaultPackageIds: ["maintain", "grow"], addOnPrice: 65, addOnPackageIds: ["improve"] }],
+      bonusPackageSelections: { core: [] },
+      optionsCatalogOrder: ["core", "core"],
+    });
+    const result = reconcileProposalAssessmentWithCatalog(saved, [{ ...curated, defaultInclusion: "optional", billingCadence: "monthly" }]);
+    expect(result.additionalOptions).toEqual([]);
+    expect(result.bonuses[0]).toMatchObject({ archived: true, billingCadence: "one-time", defaultPackageIds: ["maintain", "grow"], addOnPrice: 65, addOnPackageIds: ["improve"] });
+    expect(result.bonusPackageSelections.core).toEqual([]);
+    expect(result.optionsCatalogOrder).toEqual(["core"]);
+    expect(reconcileProposalAssessmentWithCatalog({ ...saved, ...result }, [curated])).toEqual(result);
   });
 });

@@ -1,5 +1,5 @@
 import type { ProposalOptionCatalogItem } from "@/lib/quotes/catalog";
-import { PROPOSAL_PACKAGE_IDS, type PackageId } from "./proposalPackageNames";
+import { type PackageId } from "./proposalPackageNames";
 import { normalizeTierPackageIds } from "./proposalTierRanges";
 
 export type SyncedProposalAdditionalOption = {
@@ -31,6 +31,7 @@ export type SyncedProposalBonus = {
 };
 
 export type ProposalCatalogSyncAssessment = {
+  servicesInitialized?: boolean;
   transactionBand: string;
   advancedReceiptManagementPriceOverride: number | null;
   projectTrackingPriceOverride: number | null;
@@ -50,7 +51,7 @@ export type ProposalCatalogSyncAssessment = {
 
 export type ProposalCatalogAssessmentSlice = Pick<
   ProposalCatalogSyncAssessment,
-  "additionalOptions" | "bonuses" | "bonusPackageSelections" | "optionsCatalogOrder"
+  "additionalOptions" | "bonuses" | "bonusPackageSelections" | "optionsCatalogOrder" | "servicesInitialized"
 >;
 
 const RECEIPT_MANAGEMENT_MINIMUMS: Record<string, number> = {
@@ -68,7 +69,7 @@ export function proposalCatalogOptionPrice(
 ) {
   if (item.offerKey === "advanced-receipt-management") {
     const minimum = RECEIPT_MANAGEMENT_MINIMUMS[assessment.transactionBand] ?? item.defaultPrice;
-    return assessment.advancedReceiptManagementPriceOverride === null
+    return assessment.advancedReceiptManagementPriceOverride == null
       ? minimum
       : Math.max(minimum, assessment.advancedReceiptManagementPriceOverride);
   }
@@ -96,7 +97,7 @@ export function proposalCatalogOptionSelected(
     "tax-preparer-coordination": assessment.includeTaxPreparerCoordinationCall,
     "registered-agent-service": assessment.includeRegisteredAgentService,
   };
-  return legacySelections[item.offerKey] ?? true;
+  return legacySelections[item.offerKey] ?? false;
 }
 
 export function reconcileProposalAssessmentWithCatalog(
@@ -105,7 +106,7 @@ export function reconcileProposalAssessmentWithCatalog(
 ): ProposalCatalogAssessmentSlice {
   const existingOptions = new Map(assessment.additionalOptions.map((item) => [item.id, item]));
   const existingBonuses = new Map(assessment.bonuses.map((item) => [item.id, item]));
-  const hasPersistedOptions = assessment.additionalOptions.length > 0
+  const hasPersistedOptions = assessment.servicesInitialized === true || assessment.additionalOptions.length > 0
     || assessment.bonuses.length > 0
     || Object.keys(assessment.bonusPackageSelections).length > 0;
   const catalogIds = new Set(catalogItems.map((item) => item.offerKey));
@@ -122,7 +123,7 @@ export function reconcileProposalAssessmentWithCatalog(
         ...existingOption,
         name: catalogItem.name,
         description: catalogItem.description,
-        archived: false,
+        archived: existingOption.archived,
         realEstateSpecific: catalogItem.realEstateSpecific,
       });
       continue;
@@ -133,24 +134,22 @@ export function reconcileProposalAssessmentWithCatalog(
         ...existingBonus,
         name: catalogItem.name,
         description: catalogItem.description,
-        archived: false,
+        archived: existingBonus.archived,
         realEstateSpecific: catalogItem.realEstateSpecific,
-        billingCadence: existingBonus.billingCadence
-          ?? (catalogItem.billingCadence === "monthly" ? "monthly" : "one-time"),
-        defaultPackageIds: existingBonus.defaultPackageIds
-          ?? normalizeTierPackageIds(catalogItem.defaultPackageIds),
+        billingCadence: existingBonus.billingCadence ?? "one-time",
+        defaultPackageIds: existingBonus.defaultPackageIds,
       });
       continue;
     }
 
     const defaultPackageIds = normalizeTierPackageIds(catalogItem.defaultPackageIds);
-    if (!hasPersistedOptions && catalogItem.defaultInclusion === "optional" && catalogItem.offerSection === "options") {
+    if (!hasPersistedOptions && catalogItem.defaultInclusion === "optional" && defaultPackageIds.length > 0) {
       additionalOptions.push({
         id,
         name: catalogItem.name,
         description: catalogItem.description,
         monthlyPrice: proposalCatalogOptionPrice(catalogItem, assessment),
-        showInProposal: false,
+        showInProposal: true,
         archived: false,
         billingCadence: catalogItem.billingCadence === "monthly" ? "monthly" : "one-time",
         packageIds: defaultPackageIds,
@@ -171,12 +170,7 @@ export function reconcileProposalAssessmentWithCatalog(
       realEstateSpecific: catalogItem.realEstateSpecific,
       billingCadence: catalogItem.billingCadence === "monthly" ? "monthly" : "one-time",
       defaultPackageIds,
-      ...(catalogItem.defaultPrice > 0
-        ? {
-            addOnPrice: catalogItem.defaultPrice,
-            addOnPackageIds: PROPOSAL_PACKAGE_IDS.filter((packageId) => !defaultPackageIds.includes(packageId)),
-          }
-        : {}),
+
     });
   }
 
@@ -185,7 +179,7 @@ export function reconcileProposalAssessmentWithCatalog(
   );
   for (const bonus of bonuses) {
     if (
-      !Object.prototype.hasOwnProperty.call(bonusPackageSelections, bonus.id)
+      !hasPersistedOptions && !Object.prototype.hasOwnProperty.call(bonusPackageSelections, bonus.id)
       && bonus.defaultPackageIds?.length
     ) {
       bonusPackageSelections[bonus.id] = normalizeTierPackageIds(bonus.defaultPackageIds);
@@ -193,9 +187,10 @@ export function reconcileProposalAssessmentWithCatalog(
   }
 
   const knownIds = [...additionalOptions.map((item) => item.id), ...bonuses.map((item) => item.id)];
-  const storedOrder = assessment.optionsCatalogOrder.filter((id) => catalogIds.has(id));
+  const storedOrder = [...new Set(assessment.optionsCatalogOrder.filter((id) => knownIds.includes(id)))];
 
   return {
+    servicesInitialized: true,
     additionalOptions,
     bonuses,
     bonusPackageSelections,

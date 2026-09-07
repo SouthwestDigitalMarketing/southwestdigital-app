@@ -29,7 +29,6 @@ import {
   DEFAULT_PROPOSAL_MODE,
   type ProposalMode,
 } from "./proposalThemes";
-import { extraIsRealEstateSpecific } from "@/lib/quotes/catalog";
 import { ProposalReviewsSection } from "./ProposalReviewsSection";
 import AgreementTextView from "./AgreementTextView";
 import DepositPaymentForm from "./DepositPaymentForm";
@@ -72,7 +71,7 @@ import {
 } from "@/lib/quotes/previewSafety";
 import type { PublicProposalPricing } from "@/lib/quotes/publicProposal";
 import { resolveProposalPackageName } from "./proposalPackageNames";
-import { normalizeTierPackageIds } from "./proposalTierRanges";
+import { includedServicePackages, proposalServiceAddOns, serviceIsApplicable } from "@/lib/quotes/proposalServices";
 
 type CloudflareStreamEvent = "play" | "pause" | "ended";
 
@@ -379,31 +378,10 @@ export function buildOptions(
         : "Includes our review and assessment, document collection, and the work needed to begin. The fee is $500 plus $20 for each selected cleanup month.",
     };
 
-    const legacyBonusIncluded = (bonusId: string) => ({
-      "stessa-migration": assessment.includeConditionalStessaMigration,
-      "property-reporting-setup": assessment.includePropertyLevelReportingSetup,
-      "document-organization": assessment.includeDocumentOrganizationSetup,
-      "quarterly-review": assessment.includeQuarterlyFinancialReview,
-      "doublehq-client-portal": assessment.includeDoubleHqClientPortal,
-      "real-estate-chart-of-accounts": assessment.includeRealEstateChartOfAccounts,
-      "new-quickbooks-file": assessment.includeNewQuickBooksFileSetup,
-    } as Record<string, boolean>)[bonusId] ?? false;
     const eligibleBonuses = getProposalBonuses(assessment)
       .filter((bonus) => !bonus.archived)
-      .filter((bonus) => bonus.applicable !== false)
-      .filter((bonus) => {
-        const realEstate = assessment.bookSetType === "real-estate-only" || assessment.bookSetType === "mixed-books";
-        if (bonus.id === "stessa-migration") return assessment.platformMigrationEnabled && assessment.ongoingBookkeepingPlatform === "stessa";
-        if (!extraIsRealEstateSpecific(bonus, [])) return true;
-        if (bonus.id === "new-quickbooks-file") return realEstate && assessment.ongoingBookkeepingPlatform === "qbo";
-        return realEstate;
-      })
-      .filter((bonus) => {
-        const selectedPackages = assessment.bonusPackageSelections[bonus.id];
-        if (Array.isArray(selectedPackages)) return normalizeTierPackageIds(selectedPackages).includes(id);
-        if (bonus.defaultPackageIds) return normalizeTierPackageIds(bonus.defaultPackageIds).includes(id);
-        return legacyBonusIncluded(bonus.id);
-      });
+      .filter((bonus) => serviceIsApplicable(assessment, bonus))
+      .filter((bonus) => includedServicePackages(assessment, bonus).includes(id));
 
     const recurringBonuses = eligibleBonuses
       .filter((bonus) => bonus.billingCadence === "monthly")
@@ -1018,31 +996,24 @@ export default function OfferProposalPreview({
   const cleanupKey = (optionId: OptionId, periodKey: string) => `${optionId}:${periodKey}`;
   const cleanupIsSelected = (optionId: OptionId, periodKey: string) => cleanupSelections[cleanupKey(optionId, periodKey)] !== false;
 
-  const ALL_PACKAGE_IDS: OptionId[] = ["grow", "improve", "maintain"];
-  const additionalOptionPackageMap: Record<string, OptionId[]> = {};
-  const additionalOptionRows = getProposalAdditionalOptions(assessment)
-    .filter((option) => option.applicable !== false && option.showInProposal && !option.archived && option.name.trim())
-    .map((option): ServiceRow => {
-      const savedPackages = assessment.bonusPackageSelections?.[option.id];
-      additionalOptionPackageMap[option.id] = normalizeTierPackageIds(
-        option.packageIds ?? (Array.isArray(savedPackages) ? savedPackages : ALL_PACKAGE_IDS),
-      );
-      const monthly = option.billingCadence !== "one-time";
-      return {
-        id: option.id,
-        serviceName: option.name,
-        billStart: "On Acceptance",
-        billEnd: monthly ? "Until Cancelled" : "-",
-        ...(monthly ? { billEvery: "1 Month" } : {}),
-        invoiceType: "Automatic",
-        priceType: "Fixed",
-        quantity: 1,
-        price: option.monthlyPrice,
-        note: option.description,
-      };
-    });
+  const addOns = proposalServiceAddOns({
+    ...assessment,
+    additionalOptions: getProposalAdditionalOptions(assessment),
+    bonuses: getProposalBonuses(assessment),
+  });
   const additionalOptionRowsFor = (packageId: OptionId): ServiceRow[] =>
-    additionalOptionRows.filter((row) => additionalOptionPackageMap[row.id]?.includes(packageId));
+    addOns.filter((option) => option.packageIds.includes(packageId)).map((option) => ({
+      id: option.id,
+      serviceName: option.name,
+      billStart: "On Acceptance",
+      billEnd: option.billingCadence === "monthly" ? "Until Cancelled" : "-",
+      ...(option.billingCadence === "monthly" ? { billEvery: "1 Month" } : {}),
+      invoiceType: "Automatic",
+      priceType: "Fixed",
+      quantity: 1,
+      price: option.monthlyPrice,
+      note: option.description,
+    }));
 
   const recurringServiceNames = Array.from(new Set(optionMeta.flatMap(({ id }) => options[id].recurringRows.map((r) => r.serviceName))));
   const oneTimeServiceNames   = Array.from(new Set(optionMeta.flatMap(({ id }) => options[id].oneTimeRows.map((r) => r.serviceName))));
@@ -1510,23 +1481,28 @@ export default function OfferProposalPreview({
                   const paidOneTime      = effectiveOneTimeRows.filter((r) => r.price > 0);
                   const optionalCleanup  = paidOneTime.filter((r) => r.cleanupPeriodKey);
                   const requiredOnboard  = effectiveOneTimeRows.filter((r) => !r.cleanupPeriodKey && isOnboarding(r) && (r.price > 0 || onboardingWaived));
-                  const additionalSetup  = paidOneTime.filter((r) => !r.cleanupPeriodKey && !isOnboarding(r));
+                  const additionalSetup  = paidOneTime.filter((r) => !r.cleanupPeriodKey && !isOnboarding(r) && !packageAdditionalOptionRows.some((addOn) => addOn.id === r.id));
                   const zeroPriceRows    = option.oneTimeRows.filter((r) => r.price === 0 && !isOnboarding(r));
 
                   const lowerTierId: OptionId | null = id === "grow" ? "improve" : id === "improve" ? "maintain" : null;
                   const lowerTierName = lowerTierId ? options[lowerTierId].name : null;
                   const lowerTierRecurring = new Set(lowerTierId ? options[lowerTierId].recurringRows.map((r) => r.serviceName) : []);
-                  const recurringLeadInName = lowerTierName;
+                  const recurringLeadInName = lowerTierName && [...lowerTierRecurring].every(
+                    (name) => option.recurringRows.some((row) => row.serviceName === name),
+                  ) ? lowerTierName : null;
                   const isNew = (name: string) => lowerTierId !== null && !lowerTierRecurring.has(name);
                   const lowerTierZero = new Set(lowerTierId ? options[lowerTierId].oneTimeRows.filter((r) => r.price === 0).map((r) => r.serviceName) : []);
 
                   const bkRow      = option.recurringRows.find(isMonthlyBookkeepingRow);
                   const supportRow = option.recurringRows.find((r) => r.serviceName.endsWith("Client Support"));
                   const otherRecurring = option.recurringRows.filter((r) => r !== bkRow && !r.serviceName.endsWith("Client Support"));
-                  const orderedRecurring = lowerTierId
+                  const orderedRecurring = recurringLeadInName
                     ? otherRecurring.filter((r) => isNew(r.serviceName))
                     : otherRecurring;
-                  const incrementalBonuses = lowerTierId
+                  const inheritsOneTime = lowerTierName && [...lowerTierZero].every(
+                    (name) => zeroPriceRows.some((row) => row.serviceName === name),
+                  );
+                  const incrementalBonuses = inheritsOneTime
                     ? zeroPriceRows.filter((row) => !lowerTierZero.has(row.serviceName))
                     : [...(bkRow ? [bkRow] : []), ...zeroPriceRows];
                   // Maintain foregrounds monthly bookkeeping alongside its other
@@ -1615,7 +1591,7 @@ export default function OfferProposalPreview({
                       {/* Recurring services */}
                       <section>
                         <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ backgroundColor: brandDark, color: brandDarkForeground }}>Recurring services</p>
-                        {bkRow && !lowerTierId ? <div className="px-5 pt-4"><p className="text-sm font-semibold text-slate-700">{bkRow.serviceName}</p><p className="mt-1 text-sm leading-6 text-slate-600">{getTooltip(bkRow)}</p></div> : null}
+                        {bkRow && !recurringLeadInName ? <div className="px-5 pt-4"><p className="text-sm font-semibold text-slate-700">{bkRow.serviceName}</p><p className="mt-1 text-sm leading-6 text-slate-600">{getTooltip(bkRow)}</p></div> : null}
                         {recurringLeadInName ? <p className="px-5 pt-4 text-sm font-semibold text-slate-700">Everything included with {recurringLeadInName}, plus:</p> : null}
                         <ul className="space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600">
                           {orderedRecurring.map((row) => (
@@ -1663,7 +1639,7 @@ export default function OfferProposalPreview({
                       {displayedBonuses.length > 0 ? (
                         <section>
                           <p className="bg-emerald-100 px-5 py-3 text-xs font-bold uppercase tracking-[0.12em] text-emerald-900">Included with this package</p>
-                          {lowerTierName ? <p className="px-5 pt-4 text-sm font-semibold text-slate-700">Everything included with {lowerTierName}, plus:</p> : null}
+                          {inheritsOneTime ? <p className="px-5 pt-4 text-sm font-semibold text-slate-700">Includes the one-time services in {lowerTierName}, plus:</p> : null}
                           <ul className="space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600">
                             {displayedBonuses.map((row) => (
                               <li key={row.id} className="flex justify-between gap-3 font-semibold text-emerald-700">

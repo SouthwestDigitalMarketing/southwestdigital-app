@@ -6,12 +6,12 @@ import {
 } from "./proposalTierRanges";
 
 describe("proposal tier ranges", () => {
-  it("fills the missing middle tier in legacy non-contiguous data", () => {
+  it("preserves a saved gap instead of silently adding a contracted service", () => {
     expect(normalizeTierPackageIds(["maintain", "grow"])).toEqual([
       "maintain",
-      "improve",
       "grow",
     ]);
+    expect(tierRangeFromPackageIds(["maintain", "grow"])).toBeNull();
   });
 
   it("represents a single package as a one-tier range", () => {
