@@ -38,7 +38,7 @@ export function CommandMenu() {
   const { commands, isMac, closeMenu, runCommand } = useKeyboard();
   const [query, setQuery] = useState("");
   const [parentId, setParentId] = useState<string | null>(null);
-  const [cursor, setCursor] = useState(0);
+  const [requestedCursor, setCursor] = useState(0);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -63,10 +63,11 @@ export function CommandMenu() {
     ];
   }, [commands, parentId, query, currentDepth]);
 
-  // Keep the cursor inside the list as it shrinks under a narrowing query.
-  useEffect(() => {
-    setCursor((current) => (current >= rows.length ? Math.max(0, rows.length - 1) : current));
-  }, [rows.length]);
+  // Derived rather than corrected in an effect: as a narrowing query shrinks the
+  // list, the cursor must already be in range on the very render that shows the
+  // shorter list, or the wrong row is briefly marked active.
+  const cursor = rows.length === 0 ? 0 : Math.min(requestedCursor, rows.length - 1);
+
 
   useEffect(() => {
     const active = listRef.current?.querySelector<HTMLElement>('[data-active="true"]');
@@ -111,6 +112,15 @@ export function CommandMenu() {
 
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
+      // The door toggles: pressing the open chord again closes the menu. The
+      // global listener stands down while an overlay is open, so this has to be
+      // handled here.
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        closeMenu();
+        return;
+      }
+
       switch (event.key) {
         case "ArrowDown":
           event.preventDefault();
@@ -175,7 +185,7 @@ export function CommandMenu() {
           break;
       }
     },
-    [activate, cursor, descend, goBack, move, query, rows],
+    [activate, closeMenu, cursor, descend, goBack, move, query, rows],
   );
 
   const activeRow = rows[cursor];

@@ -8,10 +8,20 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
 import { chordCandidates, formatSequence, type Chord } from "@/lib/keyboard/chords";
+import {
+  getIsMac,
+  getIsMacServerSnapshot,
+  getSingleKeyPreference,
+  getSingleKeyPreferenceServerSnapshot,
+  setSingleKeyPreference,
+  subscribeToPlatform,
+  subscribeToSingleKeyPreference,
+} from "@/lib/keyboard/preferences";
 import {
   activeBindings,
   flattenCommands,
@@ -22,18 +32,10 @@ import {
 import { EMPTY_SEQUENCE_STATE, feedSequence, type SequenceState } from "@/lib/keyboard/sequences";
 import { chordAllowedWhileTyping, isTypingContext } from "@/lib/keyboard/typingContext";
 import { CommandMenu } from "./CommandMenu";
+import { useLatestRef } from "./useLatestRef";
 import { ShortcutHelp } from "./ShortcutHelp";
 
 type ActionHandler = () => void;
-
-/**
- * Persisted opt-out for shortcuts that fire without a modifier.
- *
- * Single-character shortcuts are a documented accessibility problem for speech-
- * input and switch-device users, whose input can emit stray characters. GitHub
- * ships the same setting; so do we, and the help sheet exposes it.
- */
-const SINGLE_KEY_PREFERENCE_STORAGE_KEY = "swapp.keyboard.singleKeyShortcuts";
 
 type KeyboardContextValue = {
   commands: FlatCommand[];
@@ -50,12 +52,26 @@ type KeyboardContextValue = {
   openHelp: () => void;
   closeHelp: () => void;
   runCommand: (command: FlatCommand | Command) => void;
-  registerAction: (id: string, handler: ActionHandler) => () => void;
-  pushScope: (scope: CommandScope) => () => void;
-  hasAction: (id: string) => boolean;
 };
 
 const KeyboardContext = createContext<KeyboardContextValue | null>(null);
+
+/**
+ * Registration API, deliberately split from the value above.
+ *
+ * The main context value changes on every keystroke (it carries `pending`,
+ * `menuOpen`, and the live scope set). If `useKeyboardScope` depended on that
+ * object, its effect would re-run constantly: pop the scope, push it again,
+ * mutate `scopeCounts`, produce a new context value, and re-run — an infinite
+ * loop. These two callbacks never change identity, so effects that depend on
+ * them fire exactly once per mount.
+ */
+type KeyboardApi = {
+  registerAction: (id: string, handler: ActionHandler) => () => void;
+  pushScope: (scope: CommandScope) => () => void;
+};
+
+const KeyboardApiContext = createContext<KeyboardApi | null>(null);
 
 export function useKeyboard(): KeyboardContextValue {
   const value = useContext(KeyboardContext);
@@ -78,28 +94,15 @@ export function KeyboardProvider({
   const router = useRouter();
   const commands = useMemo(() => flattenCommands(commandTree), [commandTree]);
 
-  // Resolved after mount: reading navigator during render would desync hydration.
-  const [isMac, setIsMac] = useState(false);
-  const [singleKeyShortcutsEnabled, setSingleKeyShortcutsEnabledState] = useState(true);
-
-  useEffect(() => {
-    setIsMac(/Mac|iPhone|iPad|iPod/.test(navigator.userAgent));
-    try {
-      const stored = window.localStorage.getItem(SINGLE_KEY_PREFERENCE_STORAGE_KEY);
-      if (stored === "off") setSingleKeyShortcutsEnabledState(false);
-    } catch {
-      // Private mode or blocked storage: the default (enabled) is correct.
-    }
-  }, []);
-
-  const setSingleKeyShortcutsEnabled = useCallback((enabled: boolean) => {
-    setSingleKeyShortcutsEnabledState(enabled);
-    try {
-      window.localStorage.setItem(SINGLE_KEY_PREFERENCE_STORAGE_KEY, enabled ? "on" : "off");
-    } catch {
-      // Preference simply does not persist; the session still honours it.
-    }
-  }, []);
+  // Both are browser facts with no server equivalent, so they are read through
+  // an external store: a server snapshot avoids a hydration mismatch, and the
+  // preference additionally syncs across tabs.
+  const isMac = useSyncExternalStore(subscribeToPlatform, getIsMac, getIsMacServerSnapshot);
+  const singleKeyShortcutsEnabled = useSyncExternalStore(
+    subscribeToSingleKeyPreference,
+    getSingleKeyPreference,
+    getSingleKeyPreferenceServerSnapshot,
+  );
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -143,8 +146,6 @@ export function KeyboardProvider({
     };
   }, []);
 
-  const hasAction = useCallback((id: string) => actionHandlers.current.has(id), []);
-
   const openMenu = useCallback(() => {
     setHelpOpen(false);
     setMenuOpen(true);
@@ -155,9 +156,6 @@ export function KeyboardProvider({
     setHelpOpen(true);
   }, []);
   const closeHelp = useCallback(() => setHelpOpen(false), []);
-
-  const singleKeyRef = useRef(singleKeyShortcutsEnabled);
-  singleKeyRef.current = singleKeyShortcutsEnabled;
 
   const runCommand = useCallback(
     (command: FlatCommand | Command) => {
@@ -183,7 +181,7 @@ export function KeyboardProvider({
           setHelpOpen((open) => !open);
           return;
         case "prefs.toggleSingleKeyShortcuts":
-          setSingleKeyShortcutsEnabled(!singleKeyRef.current);
+          setSingleKeyPreference(!getSingleKeyPreference());
           return;
         default:
           break;
@@ -197,26 +195,19 @@ export function KeyboardProvider({
         handler();
       }
     },
-    [router, setSingleKeyShortcutsEnabled],
+    [router],
   );
 
-  const runCommandRef = useRef(runCommand);
-  runCommandRef.current = runCommand;
-
   const bindings = useMemo(() => activeBindings(commands, activeScopes), [commands, activeScopes]);
-  const bindingsRef = useRef(bindings);
-  bindingsRef.current = bindings;
 
-  const commandsRef = useRef(commands);
-  commandsRef.current = commands;
-
-  const isMacRef = useRef(isMac);
-  isMacRef.current = isMac;
-
+  const runCommandRef = useLatestRef(runCommand);
+  const bindingsRef = useLatestRef(bindings);
+  const commandsRef = useLatestRef(commands);
+  const isMacRef = useLatestRef(isMac);
+  const singleKeyRef = useLatestRef(singleKeyShortcutsEnabled);
   // While an overlay owns the keyboard, global bindings stand down: the overlay
   // handles its own keys and would otherwise fight the sequence matcher.
-  const overlayOpenRef = useRef(false);
-  overlayOpenRef.current = menuOpen || helpOpen;
+  const overlayOpenRef = useLatestRef(menuOpen || helpOpen);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -226,7 +217,9 @@ export function KeyboardProvider({
       if (event.defaultPrevented) return;
       if (overlayOpenRef.current) return;
 
-      const typing = isTypingContext(event.target as unknown as Parameters<typeof isTypingContext>[0]);
+      const typing = isTypingContext(
+        event.target as unknown as Parameters<typeof isTypingContext>[0],
+      );
       const candidates = chordCandidates(event, isMacRef.current);
 
       for (const chord of candidates) {
@@ -267,7 +260,7 @@ export function KeyboardProvider({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [bindingsRef, commandsRef, isMacRef, overlayOpenRef, runCommandRef, singleKeyRef]);
 
   // Drop a half-typed sequence when focus leaves the document, so returning to
   // the tab does not resume a prefix the user has long forgotten.
@@ -289,15 +282,12 @@ export function KeyboardProvider({
       menuOpen,
       helpOpen,
       singleKeyShortcutsEnabled,
-      setSingleKeyShortcutsEnabled,
+      setSingleKeyShortcutsEnabled: setSingleKeyPreference,
       openMenu,
       closeMenu,
       openHelp,
       closeHelp,
       runCommand,
-      registerAction,
-      pushScope,
-      hasAction,
     }),
     [
       commands,
@@ -307,25 +297,28 @@ export function KeyboardProvider({
       menuOpen,
       helpOpen,
       singleKeyShortcutsEnabled,
-      setSingleKeyShortcutsEnabled,
       openMenu,
       closeMenu,
       openHelp,
       closeHelp,
       runCommand,
-      registerAction,
-      pushScope,
-      hasAction,
     ],
   );
 
+  const api = useMemo<KeyboardApi>(
+    () => ({ registerAction, pushScope }),
+    [registerAction, pushScope],
+  );
+
   return (
-    <KeyboardContext.Provider value={value}>
-      {children}
-      <SequenceHint pending={pending} isMac={isMac} />
-      {menuOpen ? <CommandMenu /> : null}
-      {helpOpen ? <ShortcutHelp /> : null}
-    </KeyboardContext.Provider>
+    <KeyboardApiContext.Provider value={api}>
+      <KeyboardContext.Provider value={value}>
+        {children}
+        <SequenceHint pending={pending} isMac={isMac} />
+        {menuOpen ? <CommandMenu /> : null}
+        {helpOpen ? <ShortcutHelp /> : null}
+      </KeyboardContext.Provider>
+    </KeyboardApiContext.Provider>
   );
 }
 
@@ -336,34 +329,36 @@ export function KeyboardProvider({
  */
 function SequenceHint({ pending, isMac }: { pending: Chord[]; isMac: boolean }) {
   if (pending.length === 0) return null;
+  const label = formatSequence(pending, isMac);
   return (
     <div className="ui-key-hint" role="status" aria-live="polite">
       <span className="ui-key-hint-chord" aria-hidden="true">
-        {formatSequence(pending, isMac)}
+        {label}
       </span>
       <span aria-hidden="true">…</span>
-      <span className="sr-only">{`Waiting for the next key after ${formatSequence(pending, isMac)}`}</span>
+      <span className="sr-only">{`Waiting for the next key after ${label}`}</span>
     </div>
   );
 }
 
 /** Register a handler for a named command action while this component is mounted. */
 export function useKeyboardAction(id: string, handler: ActionHandler, enabled = true): void {
-  const keyboard = useKeyboardOptional();
-  const handlerRef = useRef(handler);
-  handlerRef.current = handler;
+  const api = useContext(KeyboardApiContext);
+  const handlerRef = useLatestRef(handler);
 
   useEffect(() => {
-    if (!keyboard || !enabled) return;
-    return keyboard.registerAction(id, () => handlerRef.current());
-  }, [keyboard, id, enabled]);
+    if (!api || !enabled) return;
+    // The handler is read through a ref, so a caller passing an inline closure
+    // does not re-register on every render.
+    return api.registerAction(id, () => handlerRef.current());
+  }, [api, id, enabled, handlerRef]);
 }
 
 /** Activate a command scope while this component is mounted. */
 export function useKeyboardScope(scope: CommandScope, enabled = true): void {
-  const keyboard = useKeyboardOptional();
+  const api = useContext(KeyboardApiContext);
   useEffect(() => {
-    if (!keyboard || !enabled) return;
-    return keyboard.pushScope(scope);
-  }, [keyboard, scope, enabled]);
+    if (!api || !enabled) return;
+    return api.pushScope(scope);
+  }, [api, scope, enabled]);
 }

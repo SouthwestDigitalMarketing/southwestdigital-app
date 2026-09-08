@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cursorId, moveCursor, reconcileCursor } from "@/lib/keyboard/listNavigation";
 import { useKeyboardAction, useKeyboardScope } from "./KeyboardProvider";
+import { useLatestRef } from "./useLatestRef";
 
 /**
  * Keyboard cursor for a list or table.
@@ -30,14 +31,9 @@ export function useListKeyboardNavigation({
   const rowElements = useRef(new Map<string, HTMLElement>());
   const activeId = cursorId(ids, activeIndex);
 
-  const activeIdRef = useRef<string | null>(null);
-  activeIdRef.current = activeId;
-
-  const activeIndexRef = useRef(activeIndex);
-  activeIndexRef.current = activeIndex;
-
-  const idsRef = useRef(ids);
-  idsRef.current = ids;
+  const activeIdRef = useLatestRef(activeId);
+  const activeIndexRef = useLatestRef(activeIndex);
+  const idsRef = useLatestRef(ids);
 
   // Rows change identity as filters and sorts are applied; follow the focused
   // row rather than whatever slid into the index it used to occupy.
@@ -47,7 +43,7 @@ export function useListKeyboardNavigation({
     setActiveIndex((previous) => reconcileCursor(activeIdRef.current, idsRef.current, previous));
     // idsKey is the value-identity of `ids`; depending on the array itself would
     // re-run on every render for callers that build it inline.
-  }, [idsKey]);
+  }, [idsKey, activeIdRef, idsRef]);
 
   /** Move the cursor and give the row real DOM focus. */
   const focusIndex = useCallback((index: number) => {
@@ -55,13 +51,13 @@ export function useListKeyboardNavigation({
     const id = cursorId(idsRef.current, index);
     if (!id) return;
     rowElements.current.get(id)?.focus({ preventScroll: false });
-  }, []);
+  }, [idsRef]);
 
   const move = useCallback(
     (delta: number) => {
       focusIndex(moveCursor(activeIndexRef.current, idsRef.current.length, delta));
     },
-    [focusIndex],
+    [activeIndexRef, focusIndex, idsRef],
   );
 
   useKeyboardScope("list", enabled && ids.length > 0);
@@ -98,7 +94,7 @@ export function useListKeyboardNavigation({
       },
       onFocus: () => setActiveIndex(index),
     }),
-    [],
+    [activeIndexRef],
   );
 
   return { activeId, activeIndex, rowProps, focusIndex };
