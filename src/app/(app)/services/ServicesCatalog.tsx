@@ -115,11 +115,13 @@ function SortHeader({
 }
 
 const inputClass =
-  "rounded-md border border-slate-300 px-3 py-2 text-base text-slate-800 focus:border-slate-500 focus:outline-none";
+  "ui-focus-ring rounded-md border border-slate-300 px-3 py-2 text-base text-slate-800 focus:border-slate-500 focus:outline-none";
+// Colour, hover and keyboard focus come from the shared action tokens; only
+// shape and type stay local. The tokens are what carry the :focus-visible ring.
 const ghost =
-  "inline-flex h-9 cursor-pointer items-center rounded-full border border-slate-300 bg-white px-3 text-base font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50";
+  "ui-action-ghost inline-flex h-9 items-center rounded-full px-3 text-base font-medium disabled:opacity-50";
 const primary =
-  "inline-flex h-9 cursor-pointer items-center rounded-full bg-slate-900 px-4 text-base font-semibold text-white hover:bg-slate-700 disabled:opacity-50";
+  "ui-action-primary inline-flex h-9 items-center rounded-full px-4 text-base font-semibold disabled:opacity-50";
 
 export function ServicesCatalog({
   services,

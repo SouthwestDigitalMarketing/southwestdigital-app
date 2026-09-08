@@ -439,7 +439,7 @@ function TooltipIcon({ row }: { row: ServiceRow }) {
   const tip = getTooltip(row);
   return (
     <span className="group relative inline-flex shrink-0">
-      <button type="button" aria-label={`More information about ${row.serviceName}`} className="text-slate-400 hover:text-brandnavy focus:text-brandnavy focus:outline-none">
+      <button type="button" aria-label={`More information about ${row.serviceName}`} className="ui-focus-ring rounded-full text-slate-400 hover:text-brandnavy focus:text-brandnavy focus:outline-none">
         <CircleHelp className="h-3.5 w-3.5" />
       </button>
       <span role="tooltip" className="ui-tooltip pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-64 rounded-lg px-3 py-2 text-left text-xs font-normal leading-5 shadow-lg group-hover:block group-focus-within:block">
@@ -1598,7 +1598,7 @@ export default function OfferProposalPreview({
                             <li key={row.id} className={`flex justify-between gap-3 ${isNew(row.serviceName) ? "font-semibold text-emerald-700" : ""}`}>
                               <span className="inline-flex items-start gap-1.5">
                                 <span className="group relative inline-flex shrink-0">
-                                  <button type="button" aria-label={`More information about ${row.serviceName}`} className={`${isNew(row.serviceName) ? "text-emerald-600" : "text-slate-400"} hover:text-brandnavy focus:text-brandnavy focus:outline-none`}><CircleHelp className="h-3.5 w-3.5" /></button>
+                                  <button type="button" aria-label={`More information about ${row.serviceName}`} className={`ui-focus-ring rounded-full ${isNew(row.serviceName) ? "text-emerald-600" : "text-slate-400"} hover:text-brandnavy focus:text-brandnavy focus:outline-none`}><CircleHelp className="h-3.5 w-3.5" /></button>
                                   <span role="tooltip" className="ui-tooltip pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-64 rounded-lg px-3 py-2 text-left text-xs font-normal leading-5 shadow-lg group-hover:block group-focus-within:block">{getTooltip(row)}</span>
                                 </span>
                                 <span>{row.serviceName}</span>
@@ -1645,7 +1645,7 @@ export default function OfferProposalPreview({
                               <li key={row.id} className="flex justify-between gap-3 font-semibold text-emerald-700">
                                 <span className="inline-flex items-start gap-1.5">
                                   <span className="group relative inline-flex shrink-0">
-                                    <button type="button" aria-label={`More information about ${row.serviceName}`} className="text-emerald-600 hover:text-brandnavy focus:outline-none"><CircleHelp className="h-3.5 w-3.5" /></button>
+                                    <button type="button" aria-label={`More information about ${row.serviceName}`} className="ui-focus-ring rounded-full text-emerald-600 hover:text-brandnavy focus:outline-none"><CircleHelp className="h-3.5 w-3.5" /></button>
                                     <span role="tooltip" className="ui-tooltip pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-64 rounded-lg px-3 py-2 text-left text-xs font-normal leading-5 shadow-lg group-hover:block group-focus-within:block">{getTooltip(row)}</span>
                                   </span>
                                   <span>{row.serviceName}</span>
@@ -1733,7 +1733,7 @@ export default function OfferProposalPreview({
                       tabIndex={0}
                       role="region"
                       aria-label={`${agreementTitle} text, scroll to review`}
-                      className="mt-2 max-h-[50vh] overflow-y-auto rounded-lg border border-slate-200 bg-white p-6 focus:outline-none focus:ring-2 focus:ring-brandnavy sm:max-h-[65vh]"
+                      className="ui-focus-ring mt-2 max-h-[50vh] overflow-y-auto rounded-lg border border-slate-200 bg-white p-6 focus:outline-none sm:max-h-[65vh]"
                       style={{ "--proposal-light-surface-ink": lightSurfaceInk } as React.CSSProperties}
                     >
                       {agreementLoading ? (

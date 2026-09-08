@@ -101,7 +101,7 @@ export default function PricingSnapshotSidebar({
                         if (!event.currentTarget.value.trim()) onPackageNameChange(item.id, item.name);
                       }}
                       title="Edit package name"
-                      className={`min-w-0 flex-1 rounded-md border px-2 py-0.5 text-base font-semibold outline-none transition ${nameInputClassName}`}
+                      className={`ui-focus-ring min-w-0 flex-1 rounded-md border px-2 py-0.5 text-base font-semibold outline-none transition ${nameInputClassName}`}
                     />
                   ) : (
                     <p className={`min-w-0 break-words text-base font-semibold ${titleClassName}`}>{item.name}</p>

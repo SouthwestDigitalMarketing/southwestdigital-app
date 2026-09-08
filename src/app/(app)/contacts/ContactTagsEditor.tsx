@@ -20,11 +20,13 @@ type TagRow = {
 };
 
 const inputClass =
-  "rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+  "ui-focus-ring rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+// Colour, hover and keyboard focus come from the shared action tokens; only
+// shape and type stay local. The tokens are what carry the :focus-visible ring.
 const ghost =
-  "rounded-full border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700 hover:bg-slate-50 disabled:opacity-50";
+  "ui-action-ghost rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide disabled:opacity-50";
 const danger =
-  "rounded-full border border-rose-200 bg-white px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-rose-700 hover:bg-rose-50 disabled:opacity-50";
+  "ui-action-danger rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide disabled:opacity-50";
 
 function KindSelect({ name, defaultValue }: { name: string; defaultValue?: string }) {
   return (

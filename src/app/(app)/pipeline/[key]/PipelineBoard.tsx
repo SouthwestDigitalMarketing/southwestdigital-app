@@ -32,8 +32,10 @@ type Item = {
   weightedValueUsd: number;
 };
 
+// Colour, hover and keyboard focus come from the shared action tokens; only
+// shape and type stay local. The token is what carries the :focus-visible ring.
 const chipButton =
-  "rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50";
+  "ui-action-ghost rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide disabled:opacity-50";
 
 export default function PipelineBoard({
   pipelineKey,

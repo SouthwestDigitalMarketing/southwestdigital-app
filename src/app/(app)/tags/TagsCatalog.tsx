@@ -33,13 +33,15 @@ type CatalogServiceRow = {
 };
 
 const inputClass =
-  "rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+  "ui-focus-ring rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
+// Colour, hover and keyboard focus come from the shared action tokens; only
+// shape and type stay local. The tokens are what carry the :focus-visible ring.
 const ghost =
-  "rounded-full border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-700 hover:bg-slate-50 disabled:opacity-50";
+  "ui-action-ghost rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide disabled:opacity-50";
 const danger =
-  "rounded-full border border-rose-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-rose-700 hover:bg-rose-50 disabled:opacity-50";
+  "ui-action-danger rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide disabled:opacity-50";
 const primary =
-  "rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-slate-700 disabled:opacity-50";
+  "ui-action-primary rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide disabled:opacity-50";
 
 function TagAutomationForm({
   tag,
@@ -169,24 +171,18 @@ export function TagsCatalog({
     setManagingServicesTagId(null);
   }
 
+  // The panel below is a native <dialog>, so Escape already reaches
+  // Modal's onCancel -> closeServiceManager. A second keydown listener here
+  // would run the same discard confirm() a second time on every Escape.
   useEffect(() => {
     if (!managingServicesTagId) return;
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key !== "Escape") return;
-      if (serviceAssignmentsDirty && !confirm("Discard unsaved service assignments?")) return;
-      setManagingServicesTagId(null);
-    }
-
-    document.addEventListener("keydown", closeOnEscape);
     return () => {
       document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", closeOnEscape);
     };
-  }, [managingServicesTagId, serviceAssignmentsDirty]);
+  }, [managingServicesTagId]);
 
   function run(action: () => Promise<void>) {
     setError(null);

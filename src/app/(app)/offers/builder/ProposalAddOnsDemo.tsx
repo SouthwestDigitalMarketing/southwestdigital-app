@@ -423,7 +423,7 @@ export default function ProposalAddOnsDemo({
                                             : undefined
                                         }
                                         onClick={() => openEditor(row.id)}
-                                        className="flex w-full items-start gap-2 rounded text-left font-medium text-slate-900 focus-visible:outline-2 focus-visible:outline-brandnavy"
+                                        className="ui-focus-ring flex w-full items-start gap-2 rounded text-left font-medium text-slate-900"
                                       >
                                         <ChevronDown
                                           aria-hidden="true"
@@ -467,7 +467,7 @@ export default function ProposalAddOnsDemo({
                                             onClick={() => openEditor(row.id)}
                                             aria-label={`${item.name}, ${packageName(id)}: ${text}. Edit service`}
                                             aria-expanded={expanded}
-                                            className={`inline-flex min-h-10 items-center justify-center gap-1 rounded-lg px-2 py-1 text-xs leading-5 focus-visible:outline-2 focus-visible:outline-brandnavy ${state === "included" ? "font-medium text-emerald-700" : state === "optional" ? "bg-blue-50 font-medium text-blue-800" : "text-slate-400"}`}
+                                            className={`ui-focus-ring inline-flex min-h-10 items-center justify-center gap-1 rounded-lg px-2 py-1 text-xs leading-5 ${state === "included" ? "font-medium text-emerald-700" : state === "optional" ? "bg-blue-50 font-medium text-blue-800" : "text-slate-400"}`}
                                           >
                                             {state === "included" ? (
                                               <Check

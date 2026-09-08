@@ -8,12 +8,14 @@ type SearchParams = Promise<{
   error?: string;
 }>;
 
+// Colour, hover and keyboard focus come from the shared action tokens; only
+// shape and type stay local. The tokens are what carry the :focus-visible ring.
 const ghost =
-  "inline-flex h-9 cursor-pointer items-center rounded-full border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50";
+  "ui-action-ghost inline-flex h-9 items-center rounded-full px-3 text-sm font-medium disabled:opacity-50";
 const primary =
-  "inline-flex h-9 cursor-pointer items-center rounded-full bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50";
+  "ui-action-primary inline-flex h-9 items-center rounded-full px-4 text-sm font-semibold disabled:opacity-50";
 const inputClass =
-  "w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-slate-500 focus:outline-none";
+  "ui-focus-ring w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-slate-500 focus:outline-none";
 
 function errorMessage(code: string) {
   if (code === "name-required") return "Pipeline name is required.";

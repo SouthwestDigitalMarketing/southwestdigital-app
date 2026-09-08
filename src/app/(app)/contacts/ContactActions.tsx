@@ -5,12 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { archiveContactAction, deleteContactAction } from "./actions";
 
+// Colour, hover and keyboard focus come from the shared action tokens; only
+// shape and type stay local. The tokens are what carry the :focus-visible ring.
 const ghost =
-  "rounded-full border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700 hover:bg-slate-50 disabled:opacity-50";
+  "ui-action-ghost rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide disabled:opacity-50";
 const danger =
-  "rounded-full border border-rose-200 bg-white px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-rose-700 hover:bg-rose-50 disabled:opacity-50";
+  "ui-action-danger rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide disabled:opacity-50";
 const primary =
-  "rounded-full bg-slate-900 px-2.5 py-1 text-center text-[11px] font-semibold uppercase tracking-wide text-white hover:bg-slate-700";
+  "ui-action-primary rounded-full px-2.5 py-1 text-center text-[11px] font-semibold uppercase tracking-wide";
 
 export function ContactActions({
   contactId,

@@ -11,8 +11,11 @@ import {
 } from "./proposalPackageNames";
 import type { ServiceConfiguration } from "./proposalServiceConfiguration";
 
+// `outline-brandnavy` is missing from the brandnavy remap in globals.css, so it
+// keeps the literal navy and disappears on dark themes. This is the only focus
+// indicator on every control in this editor, so it uses the accent token.
 const CONTROL =
-  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brandnavy";
+  "ui-focus-ring w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900";
 
 export default function ServiceOfferEditor({
   name,

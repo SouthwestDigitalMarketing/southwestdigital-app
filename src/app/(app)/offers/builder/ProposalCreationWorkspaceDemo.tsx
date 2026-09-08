@@ -2788,7 +2788,7 @@ export default function ProposalCreationWorkspaceDemo({
                             Average Monthly Transaction Volume
                             <span
                               tabIndex={0}
-                              className="group relative inline-flex cursor-help text-slate-400 outline-none transition hover:text-slate-700 focus:text-slate-700"
+                              className="ui-focus-ring group relative inline-flex cursor-help rounded-full text-slate-400 outline-none transition hover:text-slate-700 focus:text-slate-700"
                               aria-label="How to calculate average monthly transaction volume"
                             >
                               <CircleHelp className="h-3.5 w-3.5" />
@@ -3150,7 +3150,7 @@ export default function ProposalCreationWorkspaceDemo({
                             onChange={(event) =>
                               updateAssessment("assessmentNotes", event.target.value)
                             }
-                            className="min-h-[84px] w-full resize-none border-0 border-t border-slate-200 bg-white px-4 py-3 text-base text-slate-900 shadow-none outline-none transition focus:border-brandnavy focus:outline-none focus:ring-0"
+                            className="ui-focus-ring-inset min-h-[84px] w-full resize-none border-0 border-t border-slate-200 bg-white px-4 py-3 text-base text-slate-900 shadow-none outline-none transition focus:border-brandnavy focus:outline-none focus:ring-0"
                           />
                     </AssessmentCardSection>
 

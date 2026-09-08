@@ -33,7 +33,7 @@ export function DashboardControls({
           value={selectedRange}
           onChange={(event) => update(event.target.value)}
           disabled={isPending}
-          className="min-w-48 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm outline-none transition focus:border-slate-400 disabled:cursor-wait disabled:opacity-60"
+          className="ui-focus-ring min-w-48 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm outline-none transition focus:border-slate-400 disabled:cursor-wait disabled:opacity-60"
         >
           {options.map((option) => (
             <option key={option.value} value={option.value}>

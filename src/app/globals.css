@@ -233,6 +233,25 @@ body {
   outline-offset: 2px;
 }
 
+/* Shared keyboard focus indicator for controls that are not semantic actions
+   (inputs, scrollable regions, custom tooltip triggers). Uses --theme-accent so
+   it stays visible in every preset: `outline-brandnavy` is absent from the
+   brandnavy remap block below, so it keeps the literal navy and vanishes on dark
+   themes, and the remapped `focus:ring-brandnavy` only reaches a 30% ink tint.
+   This rule is unlayered, so it beats Tailwind's layered
+   `outline-none`/`focus:outline-none` utilities without needing !important. */
+.ui-focus-ring:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 2px;
+}
+
+/* Same ring drawn inside the border box, for full-bleed controls whose parent
+   clips overflow — an offset ring there would be cut off or add a scrollbar. */
+.ui-focus-ring-inset:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: -2px;
+}
+
 :is(.ui-action-primary, .ui-action-secondary, .ui-action-danger, .ui-action-ghost):disabled {
   cursor: not-allowed;
 }
@@ -343,6 +362,11 @@ body {
 }
 [data-theme="dark"] .ui-toggle-switch {
   background-color: #ffffff;
+}
+
+.ui-toggle-switch:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 2px;
 }
 
 .ui-toggle-switch-thumb {
@@ -863,4 +887,296 @@ body {
   [data-theme="system"][data-appearance="grok"] textarea::placeholder {
     color: #78716c;
   }
+}
+
+/* ==========================================================================
+   Keyboard-first surfaces: command menu, help sheet, sequence hint, skip link.
+
+   Everything below is built only from the app's semantic tokens (--surface,
+   --text-*, --border*, --theme-accent). Deliberately no `brandnavy`: inside the
+   app shell `[data-theme] .bg-brandnavy` repaints to `--theme-light`, which is
+   what made earlier primary buttons render at 1.09:1 contrast. Tokens are
+   already correct in both themes, so these surfaces follow automatically.
+   ========================================================================== */
+
+/* Keycap. Shared by the menu, the help sheet and the sequence hint. */
+.ui-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  min-width: 1.5rem;
+  padding: 0.125rem 0.4rem;
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 0.375rem;
+  background: var(--surface-control);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* --- Sequence hint (vim `showcmd`, Hyprland's submap indicator) ----------- */
+.ui-key-hint {
+  position: fixed;
+  bottom: 1.25rem;
+  left: 1.25rem;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 18%);
+  pointer-events: none;
+}
+.ui-key-hint-chord { font-weight: 700; color: var(--text-primary); }
+
+/* --- Command menu -------------------------------------------------------- */
+.ui-modal.ui-command-menu {
+  inset: 0 0 auto 0;
+  margin: 12vh auto auto;
+  width: min(40rem, calc(100vw - 2rem));
+  max-width: none;
+  max-height: min(60vh, 34rem);
+  overflow: hidden;
+  background: var(--surface);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+@media (max-width: 640px) {
+  .ui-modal.ui-command-menu { margin-top: 6vh; max-height: 76vh; }
+}
+
+.ui-command-menu-search {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+/* Breadcrumb for the level you have descended into. */
+.ui-command-menu-crumb {
+  flex-shrink: 0;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.ui-command-menu-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+/* The card itself is the focus surface; a ring on the bare input would double up. */
+.ui-command-menu-input:focus { outline: none; }
+.ui-command-menu-input::placeholder { color: var(--text-muted); }
+
+.ui-command-menu-list {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.375rem;
+}
+
+.ui-command-menu-section {
+  padding: 0.6rem 0.65rem 0.3rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.ui-command-menu-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 0.6rem;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+/* Driven by the cursor, not :hover, so keyboard and mouse never disagree
+   about which row Enter will run. */
+.ui-command-menu-row[data-active="true"] {
+  background: var(--surface-control);
+  outline: 2px solid var(--theme-accent);
+  outline-offset: -2px;
+}
+
+.ui-command-menu-row-title {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ui-command-menu-row-path {
+  margin-top: 0.1rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ui-command-menu-row-chevron { color: var(--text-muted); font-size: 1.125rem; line-height: 1; }
+
+.ui-command-menu-empty {
+  padding: 1.5rem 1rem;
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.ui-command-menu-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  padding: 0.6rem 1rem;
+  border-top: 1px solid var(--border);
+  background: var(--surface-subtle);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.ui-command-menu-hint { display: inline-flex; align-items: center; gap: 0.35rem; }
+
+/* --- Shortcut help sheet -------------------------------------------------- */
+.ui-modal.ui-shortcut-help {
+  width: min(46rem, calc(100vw - 2rem));
+  max-width: none;
+  max-height: min(82vh, 44rem);
+  overflow: hidden;
+  background: var(--surface);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.ui-shortcut-help-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.15rem 1.25rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+.ui-shortcut-help-subtitle { margin-top: 0.25rem; font-size: 0.875rem; color: var(--text-secondary); }
+
+.ui-shortcut-help-search { padding: 0.75rem 1.25rem; border-bottom: 1px solid var(--border); }
+.ui-shortcut-help-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.6rem;
+  background: var(--surface-subtle);
+  color: var(--text-primary);
+  font-size: 0.9375rem;
+}
+.ui-shortcut-help-input:focus-visible { outline: 2px solid var(--theme-accent); outline-offset: 2px; }
+
+.ui-shortcut-help-body {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.75rem 1.25rem 1rem;
+  display: grid;
+  gap: 1.25rem;
+}
+@media (min-width: 768px) {
+  .ui-shortcut-help-body { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.ui-shortcut-help-group-title {
+  margin-bottom: 0.35rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.ui-shortcut-help-list { display: flex; flex-direction: column; gap: 0.125rem; }
+
+.ui-shortcut-help-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.5rem;
+  text-align: left;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+}
+.ui-shortcut-help-row:not(:disabled):hover { background: var(--surface-control); }
+.ui-shortcut-help-row:focus-visible { outline: 2px solid var(--theme-accent); outline-offset: -2px; }
+.ui-shortcut-help-row:disabled { opacity: 0.55; cursor: default; }
+.ui-shortcut-help-row-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ui-shortcut-help-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1.25rem;
+  border-top: 1px solid var(--border);
+  background: var(--surface-subtle);
+}
+.ui-shortcut-help-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.ui-shortcut-help-toggle input { margin-top: 0.2rem; }
+.ui-shortcut-help-toggle-note { display: block; color: var(--text-muted); font-size: 0.75rem; }
+
+/* --- Skip to content ------------------------------------------------------
+   The sidebar is ~18 tab stops, and it is the first thing focused on every
+   page load. Without this a keyboard user tabs the entire nav before reaching
+   content, on every single navigation. */
+.ui-skip-link {
+  position: fixed;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 100;
+  padding: 0.6rem 0.9rem;
+  border-radius: 0.6rem;
+  background: var(--surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 10px 30px rgb(15 23 42 / 22%);
+  font-size: 0.875rem;
+  font-weight: 600;
+  transform: translateY(-160%);
+}
+.ui-skip-link:focus-visible {
+  transform: translateY(0);
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ui-skip-link { transition: transform 120ms ease-out; }
 }
