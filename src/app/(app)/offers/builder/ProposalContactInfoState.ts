@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import {
   announceProposalBuilderStateChange,
-  CONTACT_INFO_STORAGE_KEY,
+  contactInfoStorageKey,
 } from "./ProposalBuilderStorage";
+import { useProposalBuilderStateSync } from "./useProposalBuilderStateSync";
 
 export type OwnerContact = {
   id: string;
@@ -84,12 +85,8 @@ export const INITIAL_CONTACT_INFO: ContactInfoState = {
 };
 
 
-function readStoredContactInfo(
-  storageKey: string,
-  initialContactInfo?: Partial<ContactInfoState>,
-  readStorage = true,
-): ContactInfoState {
-  const initialState = {
+function baseContactInfo(initialContactInfo?: Partial<ContactInfoState>): ContactInfoState {
+  return {
     ...INITIAL_CONTACT_INFO,
     ...initialContactInfo,
     owners:
@@ -101,15 +98,10 @@ function readStoredContactInfo(
       ...initialContactInfo?.primaryContact,
     },
   };
+}
 
-  if (typeof window === "undefined" || !readStorage) {
-    return initialState;
-  }
-
+export function mergeStoredContactInfo(raw: string, initialState: ContactInfoState): ContactInfoState {
   try {
-    const raw = window.localStorage.getItem(storageKey);
-    if (!raw) return initialState;
-
     const parsed = JSON.parse(raw) as Partial<ContactInfoState>;
     return {
       ...initialState,
@@ -122,6 +114,26 @@ function readStoredContactInfo(
         ...parsed.primaryContact,
       },
     };
+  } catch {
+    return initialState;
+  }
+}
+
+function readStoredContactInfo(
+  storageKey: string,
+  initialContactInfo?: Partial<ContactInfoState>,
+  readStorage = true,
+): ContactInfoState {
+  const initialState = baseContactInfo(initialContactInfo);
+
+  if (typeof window === "undefined" || !readStorage) {
+    return initialState;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) return initialState;
+    return mergeStoredContactInfo(raw, initialState);
   } catch {
     return initialState;
   }
@@ -151,37 +163,53 @@ export function useProposalContactInfoDemoState({
   engagementId,
   initialContactInfo,
   persist = true,
+  syncExternal = false,
 }: {
   engagementId?: string;
   initialContactInfo?: Partial<ContactInfoState>;
   persist?: boolean;
+  /**
+   * Mirror edits made in another tab. Implies read-only: a mirror never writes
+   * back, so two surfaces can never clobber each other or echo.
+   */
+  syncExternal?: boolean;
 } = {}) {
-  const resolvedEngagementId =
-    engagementId ??
-    (typeof window !== "undefined"
-      ? new URLSearchParams(window.location.search).get("engagementId") ?? undefined
-      : undefined);
-  const contactsKey =
-    typeof window !== "undefined"
-      ? new URLSearchParams(window.location.search).get("offer") ??
-        new URLSearchParams(window.location.search).get("contacts") ??
-        new URLSearchParams(window.location.search).get("contact") ??
-        undefined
-      : undefined;
-  const storageKey = contactsKey
-    ? `${CONTACT_INFO_STORAGE_KEY}:crm:${contactsKey}`
-    : resolvedEngagementId
-      ? `${CONTACT_INFO_STORAGE_KEY}:${resolvedEngagementId}`
-      : CONTACT_INFO_STORAGE_KEY;
+  const storageKey = contactInfoStorageKey({ engagementId });
   // Initialize with SSR-safe defaults (no localStorage read) so server and client
   // agree on the first render. Then hydrate from localStorage in an effect below.
+  // A mirror is strictly read-only. Enforcing it here rather than at the call
+  // site means no caller can accidentally create a second writer for this key.
+  const persistState = persist && !syncExternal;
   const [contactInfo, setContactInfo] = useState<ContactInfoState>(() =>
     readStoredContactInfo(storageKey, initialContactInfo, false),
   );
-  const [hydratedFromStorage, setHydratedFromStorage] = useState(() => !persist);
+  const [hydratedFromStorage, setHydratedFromStorage] = useState(() => !persistState);
+
+  useProposalBuilderStateSync({
+    storageKey,
+    enabled: syncExternal,
+    onExternalValue: (raw) => {
+      // A removed key means the draft was reset; fall back to defaults rather
+      // than keep rendering a draft that no longer exists.
+      setContactInfo(
+        raw === null
+          ? readStoredContactInfo(storageKey, initialContactInfo, false)
+          : mergeStoredContactInfo(raw, baseContactInfo(initialContactInfo)),
+      );
+    },
+  });
 
   useEffect(() => {
-    if (!persist) {
+    if (!syncExternal) return;
+    // A mirror still needs its own first read; it renders SSR-safe defaults.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setContactInfo(readStoredContactInfo(storageKey, initialContactInfo, true));
+    // initialContactInfo is a fresh object each render, so it is excluded.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey, syncExternal]);
+
+  useEffect(() => {
+    if (!persistState) {
       return;
     }
     // Hydration is an intentional client-only state sync after SSR-safe markup.
@@ -191,17 +219,17 @@ export function useProposalContactInfoDemoState({
     // Only hydrate on mount / when the storage key changes. initialContactInfo is
     // an unstable object each render so intentionally excluded.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storageKey, persist]);
+  }, [storageKey, persistState]);
 
   useEffect(() => {
-    if (!persist || !hydratedFromStorage) return;
+    if (!persistState || !hydratedFromStorage) return;
     try {
       window.localStorage.setItem(storageKey, JSON.stringify(contactInfo));
-      announceProposalBuilderStateChange();
+      announceProposalBuilderStateChange(storageKey);
     } catch {
       // Ignore localStorage failures in demo mode.
     }
-  }, [contactInfo, hydratedFromStorage, persist, storageKey]);
+  }, [contactInfo, hydratedFromStorage, persistState, storageKey]);
 
   function updateField<Key extends keyof ContactInfoState>(key: Key, value: ContactInfoState[Key]) {
     setContactInfo((current) => ({ ...current, [key]: value }));

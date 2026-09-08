@@ -93,7 +93,7 @@ test.describe("mouse paths still work", () => {
 
   test("native fullscreen preview opens from the header and exits by click", async ({ page }) => {
     await page.goto("/offers/intro", { waitUntil: "domcontentloaded" });
-    const open = page.getByRole("button", { name: "Preview proposal" });
+    const open = page.getByRole("button", { name: "Preview fullscreen in this tab" });
     await expect(open).toBeVisible({ timeout: 30000 });
     await open.click();
     const dialog = page.locator('dialog[open][aria-label="Full-screen proposal preview"]');

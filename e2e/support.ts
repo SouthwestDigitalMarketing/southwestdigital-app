@@ -61,13 +61,32 @@ export function contrastRatio(foreground: string, background: string) {
  */
 export async function effectiveColors(target: Locator) {
   return target.evaluate((el) => {
-    const color = getComputedStyle(el).color;
+    // Tailwind v4 serializes many colours as lab()/oklch(), which the numeric
+    // parser below cannot read - it would take the first three components as
+    // if they were RGB and report nonsense. Round-trip through a canvas so
+    // every colour comes back as sRGB regardless of the authored notation.
+    const canvas = document.createElement("canvas");
+    canvas.width = 1;
+    canvas.height = 1;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+    const toRgb = (value: string) => {
+      if (!ctx) return value;
+      ctx.clearRect(0, 0, 1, 1);
+      ctx.fillStyle = "#000";
+      ctx.fillStyle = value;
+      ctx.fillRect(0, 0, 1, 1);
+      const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+      return `rgb(${r}, ${g}, ${b})`;
+    };
+
+    const color = toRgb(getComputedStyle(el).color);
     let node: Element | null = el;
     let background = "rgba(0, 0, 0, 0)";
     while (node) {
       const bg = getComputedStyle(node).backgroundColor;
       if (bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") {
-        background = bg;
+        background = toRgb(bg);
         break;
       }
       node = node.parentElement;

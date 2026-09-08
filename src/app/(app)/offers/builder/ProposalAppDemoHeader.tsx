@@ -1,13 +1,15 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
-import { Check, Eye, LogOut, Save } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Check, Eye, LogOut, Maximize2, Save } from "lucide-react";
+
 import { Modal } from "@/components/Modal";
 import ProposalAppDemoStepper, { type ProposalAppDemoStep } from "./ProposalAppDemoStepper";
 import {
-  PROPOSAL_BUILDER_STATE_CHANGE_EVENT,
+  CONTACT_INFO_STORAGE_KEY,
   readProposalBuilderLocalState,
+  subscribeToProposalBuilderState,
 } from "./ProposalBuilderStorage";
 import {
   getOfferBuilderContextAction,
@@ -24,6 +26,9 @@ import {
   type AssessmentState,
 } from "./ProposalCreationWorkspaceDemo";
 
+/** Named target so repeat Preview clicks reuse one tab. */
+const PROPOSAL_PREVIEW_WINDOW_NAME = "proposal-live-preview";
+
 export default function ProposalAppDemoHeader({
   currentStep,
 }: {
@@ -34,6 +39,7 @@ export default function ProposalAppDemoHeader({
   const offerId = searchParams.get("offer");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [isExitDialogOpen, setIsExitDialogOpen] = useState(false);
+  const previewWindowRef = useRef<Window | null>(null);
   const [builderContext, setBuilderContext] = useState({
     offerCode: offerId ?? "",
     contactName: "",
@@ -50,10 +56,11 @@ export default function ProposalAppDemoHeader({
 
     function syncLocalContactName() {
       const contactName = localPrimaryContactName();
-      setBuilderContext((current) => ({
-        ...current,
-        contactName,
-      }));
+      // Assessment edits announce on every keystroke, so bail out when the
+      // label is unchanged rather than re-rendering the header each time.
+      setBuilderContext((current) =>
+        current.contactName === contactName ? current : { ...current, contactName },
+      );
     }
 
     // Hydrate the label from the builder's external localStorage state, then
@@ -63,8 +70,12 @@ export default function ProposalAppDemoHeader({
       offerCode: offerId ?? "",
       contactName: localPrimaryContactName(),
     });
-    window.addEventListener(PROPOSAL_BUILDER_STATE_CHANGE_EVENT, syncLocalContactName);
-    window.addEventListener("storage", syncLocalContactName);
+    // Only contact-info writes can change this label. Filtering here keeps the
+    // header from re-parsing both stored blobs on every assessment keystroke.
+    const unsubscribe = subscribeToProposalBuilderState((changedKey) => {
+      if (changedKey !== undefined && !changedKey.startsWith(CONTACT_INFO_STORAGE_KEY)) return;
+      syncLocalContactName();
+    });
 
     if (offerId) {
       void getOfferBuilderContextAction(offerId).then((context) => {
@@ -78,8 +89,7 @@ export default function ProposalAppDemoHeader({
 
     return () => {
       disposed = true;
-      window.removeEventListener(PROPOSAL_BUILDER_STATE_CHANGE_EVENT, syncLocalContactName);
-      window.removeEventListener("storage", syncLocalContactName);
+      unsubscribe();
     };
   }, [offerId]);
 
@@ -146,6 +156,40 @@ export default function ProposalAppDemoHeader({
     exitToOffers();
   }
 
+  function openLiveProposalPreviewTab() {
+    // Already open: just focus it. Re-opening the same URL would navigate the
+    // tab, discarding the reader's scroll position and step — and the mirror is
+    // already live, so there is nothing to refresh.
+    const openPreview = previewWindowRef.current;
+    if (openPreview && !openPreview.closed) {
+      openPreview.focus();
+      return;
+    }
+
+    // Forward the builder's audience params — the preview derives its storage
+    // keys from them, so without these it would read the wrong draft.
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("preview");
+
+    const query = params.toString();
+    // A named target means repeat clicks reuse the same tab instead of piling
+    // up, and must stay inside the click handler to survive popup blockers.
+    const previewWindow = window.open(
+      query ? `/offer-preview?${query}` : "/offer-preview",
+      PROPOSAL_PREVIEW_WINDOW_NAME,
+    );
+
+    if (!previewWindow) {
+      // Blocked. Falling back keeps the button useful instead of silently
+      // doing nothing.
+      openFullscreenProposalPreview();
+      return;
+    }
+
+    previewWindowRef.current = previewWindow;
+    previewWindow.focus();
+  }
+
   function openFullscreenProposalPreview() {
     const params = new URLSearchParams(searchParams.toString());
     params.set("preview", "fullscreen");
@@ -176,13 +220,23 @@ export default function ProposalAppDemoHeader({
         <div className="flex h-11 items-center gap-2">
           <button
             type="button"
-            onClick={openFullscreenProposalPreview}
+            onClick={openLiveProposalPreviewTab}
             disabled={saveStatus === "saving"}
-            aria-label="Preview proposal"
-            title="Preview proposal"
+            aria-label="Open live preview in a new tab"
+            title="Open live preview in a new tab"
             className="inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:text-slate-900 hover:opacity-75 disabled:opacity-40"
           >
             <Eye className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={openFullscreenProposalPreview}
+            disabled={saveStatus === "saving"}
+            aria-label="Preview fullscreen in this tab"
+            title="Preview fullscreen in this tab"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:text-slate-900 hover:opacity-75 disabled:opacity-40"
+          >
+            <Maximize2 className="h-4 w-4" />
           </button>
           <button
             type="button"

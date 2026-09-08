@@ -530,6 +530,7 @@ export default function OfferProposalPreview({
   onEdit,
   proposalToken = null,
   publishedPricing,
+  mirrorBuilderState = false,
 }: {
   initialAssessment?: Partial<AssessmentState>;
   initialContactInfo?: Partial<ContactInfoState>;
@@ -546,14 +547,24 @@ export default function OfferProposalPreview({
   onEdit?: (target: ProposalPreviewEditTarget) => void;
   proposalToken?: string | null;
   publishedPricing?: PublicProposalPricing;
+  /**
+   * Render as a live mirror of the builder running in another tab: read the
+   * builder's local state, follow its edits, and never write back.
+   */
+  mirrorBuilderState?: boolean;
 } = {}) {
   const { brand } = useBrand();
   const { assessment: storedAssessment } = useProposalAssessmentDemoState({
     initialAssessment,
     persist: !live && !assessmentOverride,
+    syncExternal: mirrorBuilderState,
   });
   const assessment = assessmentOverride ?? storedAssessment;
-  const { contactInfo } = useProposalContactInfoDemoState({ initialContactInfo, persist: !live });
+  const { contactInfo } = useProposalContactInfoDemoState({
+    initialContactInfo,
+    persist: !live,
+    syncExternal: mirrorBuilderState,
+  });
   const searchParams = useSearchParams();
   const isSimulation = isProposalPreviewSimulation({ live, embedded, isStaffPreview });
   // Preview surfaces are deliberately detached from engagement-backed APIs.
