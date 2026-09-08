@@ -11,10 +11,7 @@ import {
 // fresh context is a throwaway offer and no database row is written.
 test.describe("Offer builder — Services step", () => {
   test.beforeEach(async ({ page, baseURL }) => {
-    test.skip(
-      !(await serverIsUp(baseURL)),
-      `No dev server on ${baseURL}. Run "npm run dev" first.`,
-    );
+    expect(await serverIsUp(baseURL), `Start a dev server on ${baseURL} before browser QA`).toBe(true);
     await signInAsStaff(page);
     await page.goto("/offers/add-ons", { waitUntil: "domcontentloaded" });
     await expect(

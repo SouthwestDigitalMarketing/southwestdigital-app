@@ -1,24 +1,34 @@
-import type { Locator, Page } from "@playwright/test";
+import type { Cookie, Locator, Page } from "@playwright/test";
 
 export const DEV_STAFF_EMAIL =
   process.env.E2E_STAFF_EMAIL ?? "thomas@bookkeepingconroe.com";
 
+// Authentication is shared in memory within a worker; each test still gets a
+// fresh browser context and fresh localStorage. No auth-state file is exported.
+let staffCookies: Cookie[] | undefined;
+
 /** Sign in through the local dev-bypass credentials provider. */
 export async function signInAsStaff(page: Page) {
+  if (staffCookies) {
+    await page.context().addCookies(staffCookies);
+    return;
+  }
   await page.goto("/login", { waitUntil: "domcontentloaded" });
   await page.fill('input[name="email"]', DEV_STAFF_EMAIL);
   await page.click('button[type="submit"]');
   await page.waitForURL((url) => !url.pathname.startsWith("/login"), {
-    timeout: 30_000,
+    timeout: 60_000,
+    waitUntil: "domcontentloaded",
   });
+  staffCookies = await page.context().cookies();
 }
 
-/** True when a dev server is answering, so specs can skip instead of failing. */
+/** Probe server availability before browser QA. Callers assert this is true. */
 export async function serverIsUp(baseURL: string | undefined) {
   if (!baseURL) return false;
   try {
     const res = await fetch(`${baseURL}/login`, {
-      signal: AbortSignal.timeout(4000),
+      signal: AbortSignal.timeout(15000),
     });
     return res.ok;
   } catch {
@@ -65,4 +75,22 @@ export async function effectiveColors(target: Locator) {
     if (background === "rgba(0, 0, 0, 0)") background = "rgb(255, 255, 255)";
     return { color, background };
   });
+}
+
+/**
+ * Navigate and wait until the keyboard layer is actually listening.
+ *
+ * `domcontentloaded` fires long before React hydrates — especially in dev, where
+ * a cold route compile takes several seconds — so a keypress sent right after a
+ * goto lands before the global listener exists and is silently lost. The
+ * provider sets `data-keyboard-ready` on <html> once it is mounted.
+ */
+export async function gotoReady(page: Page, path: string) {
+  await page.goto(path, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector("html[data-keyboard-ready]", { timeout: 60_000 });
+}
+
+/** Options inside the command menu, excluding any native <select> on the page. */
+export function menuOptions(page: Page) {
+  return page.locator('#command-menu-list [role="option"]');
 }

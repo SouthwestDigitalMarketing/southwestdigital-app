@@ -2,13 +2,11 @@ import { defineConfig, devices } from "@playwright/test";
 
 // Browser QA for staff-facing builder screens.
 //
-// No `webServer` block on purpose: `npm run dev` runs `prisma generate` first,
-// which hits the known Windows EPERM lock when another dev server already holds
-// query_engine-windows.dll.node. Start the dev server yourself, then run
-// `npm run test:e2e`. Specs skip themselves when nothing is listening.
+// Use an existing dev server so Prisma generation cannot conflict with a server
+// on Windows. Start it yourself with npm run dev; an unavailable server fails QA.
 export default defineConfig({
   testDir: "./e2e",
-  timeout: 60_000,
+  timeout: 120_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
   workers: 1,
