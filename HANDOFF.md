@@ -1,13 +1,13 @@
 # Coding-agent handoff
 
-Updated: 2026-09-08 (America/Chicago) — Keyboard-first pass; see §35 and docs/keyboard/README.md.
+Updated: 2026-09-08 (America/Chicago) — Keyboard review and completion; start at §36 and docs/keyboard/README.md.
 
 ## Start here
 
 - Read `AGENTS.md` before changing code. Its tenant, authorization, secret-handling, analytics, migration-safety, and Next.js 16 rules are non-negotiable.
 - If you are touching anything keyboard-related, read `docs/keyboard/README.md` first — it holds the keymap, the chords that must never be bound, and the two invariants that are easy to break.
 - Whenever this handoff is read, also read `.local/COMPUTERS.md` for the local computer inventory. That file is intentionally ignored by Git and must remain private.
-- Current branch: **`feature/services-step-redesign`** (branched from `main` at `776316a`). Review commit `75b4f18` was pushed at the user's request. The subsequent §32 UI implementation is local only. Deployment is on **Vercel** (not Netlify — that's stale in older docs). Vercel CLI is not installed; use dashboard for env vars until user installs `npm i -g vercel`.
+- Current branch: **`feature/services-step-redesign`**. Deployment is on **Vercel** (older Netlify notes are historical). Start with §36 for the latest local work.
 - `.claude/` is untracked user-owned content. Do not modify.
 - Never commit `.env.local` or any secret. `AUTH_SECRET`, `ZOHO_MAIL_CLIENT_ID`, `ZOHO_MAIL_CLIENT_SECRET`, `INTEGRATION_ENCRYPTION_KEY`, Stripe/PayPal keys, and Supabase URLs are all secrets.
 
@@ -18,17 +18,11 @@ The user has instructed: **never push without explicit user instruction**. Commi
 ## Current commit state
 
 - Working branch: `feature/services-step-redesign`.
-- **Latest work is §35, the keyboard-first pass — START THERE.** Eight commits
-  are local and unpushed, and there is a further uncommitted batch on top of
-  them that is passing but never got committed. §35 lists both, plus the one
-  fix that has not been re-verified in a browser.
+- **Latest work is §36, the keyboard review and completion — START THERE.**
+  The §35 batch has been reviewed, extended, and verified. All new work stays
+  local; nothing was pushed. The prior §35 handoff itself is `53800e0`.
 - Everything through §34 is pushed; `origin/feature/services-step-redesign` was
   at `122a6de` when the §35 work started.
-- Prior implementation commits: `d68e92a` (redesign) and `2e9f2b8` (one-time charges).
-- At review start, the locally cached upstream branch pointed to `ef4ebee`; no fetch or push was performed during this review.
-- §31 was committed as `75b4f18` and subsequently pushed to `origin/feature/services-step-redesign` at the user's explicit request.
-- §32 UI implementation follows the local plan checkpoint `ede2e8e`; the implementation commit is titled `Redesign services around package comparison and offer-specific editing`. This new phase has not been pushed.
-- **§28's batch is no longer uncommitted.** It was swept into `f270e02` together with the URL renames. The "Suggested commit split for the prior batch" below is therefore historical — it was not followed.
 - The bookkeeping-copy migration remains committed but intentionally not applied to any database.
 - **Line-ending noise: resolved, and the warning is now historical.** Earlier
   sessions saw ~100 tracked files show as modified with identical content
@@ -845,6 +839,88 @@ the rest of the app, but it is a real visual change on `/contacts`, `/tags`,
 6. Still pointer-only: the sidebar resize handle (§34 flagged it too) and moving
    a CRM pipeline card between stages (drag-and-drop only).
 
+### 36) Keyboard review and completion — local, not pushed
+
+Supersedes §35's unfinished-work list. The user authorized reviewing, completing,
+optimizing, testing, and locally committing that work. Push still requires an
+explicit instruction.
+
+**Review findings fixed**
+
+- Builder digit commands used plain hrefs and lost the current query, including
+  `offer`. Digits, menu actions, and previous/next now go through the stepper's
+  query-preserving handlers.
+- The uncommitted list opener went directly to offer editing, bypassing the
+  viewed/signed edit warning. Drafts still open their editor; other offers open
+  authorized staff preview, falling back to details when no token exists.
+- Global arrows could steal native widget behavior. Arrow navigation, Enter,
+  and `o` now belong to the focused row. `o` respects the single-key opt-out and
+  lets a queued `g o` finish global navigation.
+- Native dialogs/popovers now suspend background shortcuts, including shortcuts
+  from focused non-text controls. Menu IME composition, modified browser chords,
+  and Home/End while editing its filter keep their native behavior.
+- Missing action handlers no longer swallow a key. The menu hides unavailable
+  contextual commands; help disables unavailable and documentation-only rows.
+- Prefix hints expire after 1.2 seconds. Normal single-key motions avoid
+  unnecessary provider rerenders, and command lookup uses an id map.
+- Fullscreen-preview closing uses Next's integrated `history.replaceState` for
+  its local query flag, avoiding a server/database refetch before dismissal.
+
+**Completed coverage**
+
+- `/` focuses and selects the existing Contacts or Clients search field. Pages
+  with no search retain the browser's handling of `/`.
+- `KeyboardListRegion` covers Offers, Contacts, Clients, Agreements, Services,
+  Tags, Discounts, Media, pipeline index, and pipeline cards. It observes DOM row
+  changes and preserves record identity across sorting. Inline editors gain
+  focus, suspend list motions, and restore the row cursor on keyboard-opened
+  editor dismissal. Native agreement checkboxes still receive Space.
+- Removed the unused parallel `useListKeyboardNavigation` hook; the small
+  `useSearchFocusShortcut` remains. Server and client lists share one cursor.
+- Sidebar separator supports Left/Right, Home/End and exposes its current width
+  through ARIA. Pointer dragging still works; its grab area no longer protrudes
+  and adds horizontal overflow.
+- Pipeline stage movement was already available through native buttons in the
+  card-details modal; the old handoff's drag-only claim was stale. Updated the
+  board's instruction, added the row cursor, and kept the existing authorized
+  stage-move action.
+
+**Browser infrastructure**
+
+- Keep one Playwright process per output directory. An early overlapping run
+  collided over trace files and is not valid verification evidence.
+- Tests assert server availability instead of silently skipping everything.
+  Authentication cookies are cached in memory per worker; each test still has
+  fresh localStorage and an isolated browser context. No auth-state file is saved.
+- The assignment picker is on the contact-detail page. Overlay tests navigate
+  there, open/close the picker and inspect layout without toggling live assignments.
+- Browser QA does not submit offer edits, move live pipeline cards, publish,
+  send emails, sign, or charge payments. Agreement checkbox selection is local UI.
+
+**Verification completed:**
+
+- 71 unit-test files / **552 tests passed**.
+- **49 Chromium browser checks passed across suite runs**: 17 keyboard, 7
+  overlays, 10 Services regressions, and 15 completion checks. The final
+  completion run passed 15/15 with no skips, including a populated pipeline.
+- `npm run typecheck`, `npx next build`, and `git diff --check` passed.
+- Full ESLint passed with 7 existing warnings; focused final lint passed cleanly.
+- The early builder test raced child hydration. It now waits for the builder
+  scope (`data-keyboard-scopes`) before sending a digit. The Tags test uses the
+  actual editor field rather than expecting React's `autoFocus` prop to produce
+  an HTML attribute. Both corrected checks passed.
+
+**Local commits:** `ae26e93` contains the implementation and unit guards;
+`ace8975` contains browser verification and test infrastructure. This handoff and
+`docs/keyboard/README.md` form the final documentation checkpoint. All are local
+and unpushed; no §35 completion items remain pending. The dev server was restarted
+on :3000 after the execution environment changed during final verification.
+
+The earlier §35 ghost-button cosmetic change remains: themed transparent ghost
+buttons can take the tint of their containing rows. No extra global theme rewrite
+was part of this pass. Firefox, alternate physical keyboard layouts, and screen
+reader interaction have not been exercised on real devices; browser QA uses Chromium.
+
 ## Product Type refactor plan
 
 ### Data model
@@ -1081,22 +1157,18 @@ Zoho on Vercel: register a **separate** OAuth app for prod (not shared with loca
 ## Suggested first commands for the next agent
 
 ```bash
-git status --short     # expect a dirty tree: the §35 batch is uncommitted
-git log -8 --oneline   # the eight local keyboard commits
-npm run typecheck      # clean
-npm test               # 71 files / 550 tests as of §35
-npx next build         # passes
+git status --short
+git log -8 --oneline
+npm run typecheck
+npm test
 
-# Browser specs need a dev server; they silently skip without one.
+# Use an existing dev server on :3000, or start one first.
 npm run dev
-npx playwright test e2e/keyboard.spec.ts   # was 16/17; the fix for the 17th is applied but unverified
+npm run test:e2e
 ```
 
-Then read this file together with `.local/COMPUTERS.md` (note: that file did not
-exist on the user's new Omarchy machine and was recreated from scratch on
-2026-09-08 — entries for their other computers still need re-adding).
-
-§35 is the latest work. The user's push policy remains "never push without
-explicit user instruction", and nothing from §35 has been pushed.
+Start at §36 and `docs/keyboard/README.md`. Read `.local/COMPUTERS.md` privately.
+§35 and older sections describe historical checkpoints, not current outstanding
+work. The push policy remains "never push without explicit user instruction".
 
 If the user asks you to move CRM PipelineItem into the work-item model, read section 6 first, then the "Future design: unified work items / next-action system" CRM extension list — the offer-side helpers (`src/lib/quotes/lifecycle.ts`) are the pattern to follow.

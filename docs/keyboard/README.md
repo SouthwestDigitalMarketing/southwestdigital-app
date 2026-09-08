@@ -1,6 +1,6 @@
 # Keyboard-first SWapp
 
-The staff app is usable without a mouse. This document is the reference for the
+The staff app provides keyboard navigation and native control access. This document is the reference for the
 keymap, the reasoning behind it, and how to extend it.
 
 Design brief: someone fluent in **Omarchy** keyboard use should find this app a
@@ -64,15 +64,28 @@ Live on any list with a keyboard cursor.
 
 | Key | Action |
 |---|---|
-| `j` / `↓` | Next row |
-| `k` / `↑` | Previous row |
+| `j` | Next row |
+| `k` | Previous row |
+| `↓` / `↑` | Next / previous row, only when the row itself has focus |
 | `Enter` / `o` | Open the focused row |
 | `g g` | First row |
 | `Shift` + `G` | Last row |
 
-Lists use a **roving tabindex**: one row is tabbable at a time, so `Tab` steps
-past the whole list in one press while `j`/`k` move within it. A row's inner
-buttons stay independently reachable.
+Lists use a **roving tabindex**: one row is tabbable at a time, and `j`/`k`
+moves that row cursor. Inner buttons remain independently tabbable; the roving
+cursor does not remove those native tab stops.
+
+Coverage: Offers, Contacts, Clients, Agreements, Services, Tags, Discounts,
+Media, the pipeline index, and cards within a pipeline. Enter opens an inline
+editor on catalogue lists. On Offers it edits drafts, and opens authorized staff
+preview for published offers so it cannot bypass the edit warning. Search `/`
+focuses the existing search input on Contacts and Clients; on pages with no
+search handler the key is left to the browser.
+
+`o` respects the single-key opt-out; Enter and row-local arrows remain available
+as ordinary focused-element controls. In a `g o` sequence, the `o` belongs to
+navigation even if a row has focus. List shortcuts stand down during inline
+editing and while a native modal or popover is open.
 
 ### Offer builder
 
@@ -81,7 +94,8 @@ buttons stay independently reachable.
 | `1` … `8` | Jump to that step |
 | `[` / `]` | Previous / next step |
 
-Bare digits are safe here only because the typing guard is airtight. Never
+Digits and menu step actions use the same offer-aware navigation as the stepper,
+preserving the current query string. Bare digits are guarded while typing. Never
 change them to `Ctrl`+digit — see §4.
 
 ---
@@ -191,6 +205,11 @@ the help sheet and the key dispatcher all read from it.
   `useKeyboardAction("some.action", handler)` in the component that owns it. The
   most recently mounted handler wins, so a modal naturally takes precedence over
   the page behind it.
+- Use `documentationOnly: true` for keys owned by a focused element, such as
+  Enter and arrows. They appear in help but are never global bindings.
+- Action commands without a mounted handler are inactive and do not consume a
+  key. The menu filters out unavailable contextual commands; help shows them
+  disabled. Documentation-only help rows are also disabled.
 - Scoped commands only fire while a component has called
   `useKeyboardScope("list" | "builder")`.
 - Run `npx vitest run src/lib/keyboard` after any change. The suite checks for
@@ -265,9 +284,38 @@ address bar — which also means no browser chrome competing for your keystrokes
 | `src/components/keyboard/KeyboardProvider.tsx` | The single global key listener |
 | `src/components/keyboard/CommandMenu.tsx` | The Go menu |
 | `src/components/keyboard/ShortcutHelp.tsx` | The `?` sheet |
-| `src/components/keyboard/useListKeyboard.ts` | `useListKeyboardNavigation`, `useSearchFocusShortcut` |
+| `src/components/keyboard/KeyboardListRegion.tsx` | Shared cursor for server tables and client lists |
+| `src/components/keyboard/useListKeyboard.ts` | `useSearchFocusShortcut` |
+| `src/components/keyboard/SearchInput.tsx` | Reusable input with the page search shortcut |
 
 Everything in `src/lib/keyboard/` is pure TypeScript with no React and no DOM
 globals at module scope, so the node-environment vitest suite covers it
 directly. Keep it that way: the React layer should stay thin enough that its
 logic is not worth testing.
+
+
+## 9. Resizing, stage movement, and browser checks
+
+The sidebar separator is tabbable: Left/Right resize by 16 pixels, Home
+collapses, and End expands to its maximum. Pointer dragging uses the same width
+state. Its grab area stays inside the sidebar so it cannot add horizontal overflow.
+
+Pipeline cards open with Enter or a click. Their details dialog already provides
+**Move to stage** buttons; Tab to the desired stage and press Enter. This reuses
+the same authorized action as dragging a card.
+
+Run `npm run dev`, then `npm run test:e2e`. The browser suite fails explicitly if
+the server is unavailable; record-dependent cases identify missing fixtures as
+skips. Run a single Playwright process at a time: overlapping runs sharing the
+default output directory overwrite each other's traces. Authentication cookies
+are reused in memory within a worker; every test gets fresh localStorage and a
+fresh browser context. Cookies are never saved as an auth-state file.
+
+`e2e/keyboard-completion.spec.ts` covers query preservation, native control keys,
+modal isolation, opt-out, list editors and sorting, safe offer opening, and sidebar
+resizing. Overlay tests exercise the contact-detail assignment picker, template
+popover, fullscreen preview and logo file chooser. They do not toggle real client
+assignments or move real pipeline cards.
+
+A query-only fullscreen-preview exit uses Next.js's integrated native History API
+so closing the modal does not wait for a server/database refetch.
