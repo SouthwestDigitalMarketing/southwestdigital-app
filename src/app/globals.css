@@ -1180,3 +1180,19 @@ body {
 @media (prefers-reduced-motion: no-preference) {
   .ui-skip-link { transition: transform 120ms ease-out; }
 }
+
+/* Row cursor for keyboard-navigable lists.
+   Distinct from :hover on purpose — the mouse pointer and the j/k cursor are
+   independent, and a row must be able to show "Enter opens this" while the
+   pointer sits somewhere else entirely. */
+.ui-row-cursor:focus-visible,
+.ui-row-cursor[data-keyboard-active="true"] {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: -2px;
+  background: var(--surface-control);
+}
+/* Table rows cannot take an outline reliably across browsers, so give the row a
+   left marker as the primary cue and keep the outline as reinforcement. */
+tr.ui-row-cursor[data-keyboard-active="true"] > *:first-child {
+  box-shadow: inset 3px 0 0 0 var(--theme-accent);
+}
