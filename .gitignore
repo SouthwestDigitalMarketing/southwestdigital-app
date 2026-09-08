@@ -41,3 +41,6 @@ next-env.d.ts
 /playwright-report
 /blob-report
 /.playwright
+
+# private local inventory / notes (see HANDOFF.md)
+/.local
