@@ -431,6 +431,15 @@ export default function ProposalAddOnsDemo({
                                         />
                                         <span>{item.name}</span>
                                       </button>
+                                      {config.included.length > 0 ? (
+                                        <p className="ml-6 mt-1 text-xs text-slate-500">
+                                          Show in: {config.includedPlacement === "main"
+                                            ? "Main service list"
+                                            : config.includedPlacement === "included"
+                                              ? "Included with this package"
+                                              : "Automatic (existing layout)"}
+                                        </p>
+                                      ) : null}
                                       {!config.visible ? (
                                         <p className="ml-6 mt-1 text-xs text-slate-500">
                                           Hidden from lead

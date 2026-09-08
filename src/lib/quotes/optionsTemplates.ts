@@ -10,6 +10,7 @@ export type OptionsTemplateAdditionalOption = {
   showInProposal: boolean;
   archived: boolean;
   billingCadence?: "monthly" | "one-time";
+  includedPlacement?: "main" | "included";
   packageIds?: OptionsTemplatePackageId[];
   realEstateSpecific?: boolean;
 };
@@ -21,6 +22,7 @@ export type OptionsTemplateBonus = {
   archived: boolean;
   realEstateSpecific?: boolean;
   billingCadence?: "monthly" | "one-time";
+  includedPlacement?: "main" | "included";
   defaultPackageIds?: OptionsTemplatePackageId[];
   addOnPrice?: number;
   addOnPackageIds?: OptionsTemplatePackageId[];
@@ -73,6 +75,8 @@ function sanitizeAdditionalOption(raw: unknown): OptionsTemplateAdditionalOption
         : 0,
     showInProposal: record.showInProposal !== false,
     archived: record.archived === true,
+    includedPlacement: record.includedPlacement === "main" || record.includedPlacement === "included"
+      ? record.includedPlacement : undefined,
     billingCadence: record.billingCadence === "monthly" || record.billingCadence === "one-time"
       ? record.billingCadence
       : undefined,
@@ -96,6 +100,8 @@ function sanitizeBonus(raw: unknown): OptionsTemplateBonus | null {
     archived: record.archived === true,
     realEstateSpecific: record.realEstateSpecific === true ? true : undefined,
     billingCadence,
+    includedPlacement: record.includedPlacement === "main" || record.includedPlacement === "included"
+      ? record.includedPlacement : undefined,
     defaultPackageIds: Array.isArray(record.defaultPackageIds)
       ? sanitizePackageIds(record.defaultPackageIds)
       : undefined,

@@ -19,6 +19,7 @@ export type ServiceConfiguration = {
   included: PackageId[];
   optional: PackageId[];
   cadence: "monthly" | "one-time";
+  includedPlacement?: "main" | "included";
   price: number;
   visible: boolean;
 };
@@ -48,6 +49,7 @@ export function readServiceConfiguration(
         : row.bonus?.addOnPackageIds,
     ).filter((id) => !included.includes(id)),
     cadence: item.billingCadence ?? (row.option ? "monthly" : "one-time"),
+    includedPlacement: item.includedPlacement,
     price: row.option?.monthlyPrice ?? row.bonus?.addOnPrice ?? 0,
     visible: !item.archived && row.option?.showInProposal !== false,
   };
@@ -77,6 +79,7 @@ export function applyServiceConfiguration<T extends ServiceAssessment>(
     applicable: item.applicable,
     applicabilityReason: item.applicabilityReason,
     billingCadence: config.cadence,
+    includedPlacement: config.includedPlacement,
   };
   // Keep existing included rows in their historical representation even when unassigned.
   const asBonus = Boolean(bonus) || included.length > 0;

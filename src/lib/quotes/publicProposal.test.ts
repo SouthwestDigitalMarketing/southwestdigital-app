@@ -13,6 +13,8 @@ describe("public proposal data boundary", () => {
         introHeadline: "Your bookkeeping plan",
         historicalCleanupPeriods: [{ id: "2025", year: 2025, startMonth: 1, endMonth: 12, secret: privateValue }],
         additionalOptions: [{ id: "reports", name: "Reports", description: "Monthly reporting", monthlyPrice: 50, showInProposal: true, archived: false, applicabilityReason: privateValue }],
+        bonuses: [{ id: "included-reports", name: "Reports", description: "Details", archived: false,
+          billingCadence: "monthly", includedPlacement: "included", applicabilityReason: privateValue }],
         heroMediaButton: { label: "Watch", icon: "play", iconPlacement: "end", visible: true, secret: privateValue },
       },
       contactInfo: {
@@ -31,6 +33,7 @@ describe("public proposal data boundary", () => {
       improve: "Momentum",
       maintain: "Essentials",
     });
+    expect(result.assessment.bonuses[0]).toMatchObject({ billingCadence: "monthly", includedPlacement: "included" });
     expect(result.pricing.maintain).toEqual({ monthly: 500 });
     expect(result.contactInfo.primaryContact.email).toBe("alex@example.test");
     expect(result.contactInfo.owners).toEqual([]);

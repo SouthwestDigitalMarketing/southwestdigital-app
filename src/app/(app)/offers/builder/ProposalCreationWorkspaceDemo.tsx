@@ -210,6 +210,7 @@ export type ProposalAdditionalOption = {
   showInProposal: boolean;
   archived: boolean;
   billingCadence?: ProposalBonusCadence;
+  includedPlacement?: "main" | "included";
   packageIds?: PackageId[];
   realEstateSpecific?: boolean;
   applicable?: boolean;
@@ -223,6 +224,7 @@ export type ProposalBonus = {
   archived: boolean;
   realEstateSpecific?: boolean;
   billingCadence?: ProposalBonusCadence;
+  includedPlacement?: "main" | "included";
   defaultPackageIds?: PackageId[];
   addOnPrice?: number;
   addOnPackageIds?: PackageId[];

@@ -10,6 +10,8 @@ vi.mock("../who/actions", () => ({
 }));
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { pricingCardServices } from "./pricingCardServices";
+import { applyServiceConfiguration, readServiceConfiguration } from "./proposalServiceConfiguration";
 import { buildOptions } from "./OfferProposalPreview";
 import type { AssessmentState } from "./ProposalCreationWorkspaceDemo";
 
@@ -80,4 +82,85 @@ describe("buildOptions golden fixtures", () => {
     });
   }
 
+});
+
+
+describe("included service card placement", () => {
+  function configured(cadence: "monthly" | "one-time", placement: "main" | "included") {
+    const saved = assessmentFrom("01-draft-draft.snapshot.json");
+    const bonus = {
+      id: "placement-test", name: "Placement test", description: "Details",
+      archived: false, billingCadence: cadence,
+      defaultPackageIds: ["maintain", "improve", "grow"] as const,
+    };
+    const assessment: AssessmentState = {
+      ...saved, servicesInitialized: true, additionalOptions: [],
+      bonuses: [{ ...bonus, defaultPackageIds: [...bonus.defaultPackageIds] }],
+      bonusPackageSelections: {},
+    };
+    const config = readServiceConfiguration(assessment, { id: bonus.id, bonus: assessment.bonuses[0] });
+    const next = applyServiceConfiguration(assessment, bonus.id, { ...config, includedPlacement: placement });
+    return { before: buildOptions(assessment), after: buildOptions(next) };
+  }
+
+  it.each(["monthly", "one-time"] as const)("moves %s inclusions without changing cadence or prices", (cadence) => {
+    for (const placement of ["main", "included"] as const) {
+      const { before, after } = configured(cadence, placement);
+      for (const tier of PACKAGE_IDS) {
+        const card = pricingCardServices(after[tier]);
+        const main = [...card.orderedRecurring, ...card.mainOneTime];
+        expect(main.some((row) => row.serviceName === "Placement test")).toBe(placement === "main");
+        expect(card.displayedBonuses.some((row) => row.serviceName === "Placement test")).toBe(placement === "included");
+        expect(after[tier].monthlyPrice).toBe(before[tier].monthlyPrice);
+        for (const key of ["recurringRows", "oneTimeRows"] as const) {
+          expect(after[tier][key].map((row) => { const copy = { ...row }; delete copy.includedPlacement; return copy; }))
+            .toEqual(before[tier][key].map((row) => { const copy = { ...row }; delete copy.includedPlacement; return copy; }));
+        }
+      }
+    }
+  });
+
+  it("does not promote explicitly main-list bookkeeping or support as a fallback bonus", () => {
+    const row = (id: string, serviceName: string) => ({ id, serviceName, price: 0, includedPlacement: "main" as const });
+    const card = pricingCardServices({
+      name: "Maintain", oneTimeRows: [], recurringRows: [
+        row("maintain-bonus-monthly-bookkeeping", "Monthly Bookkeeping"),
+        row("support", "Standard Client Support"),
+      ],
+    });
+    expect(card.bkRow).toBeDefined();
+    expect(card.supportRow).toBeDefined();
+    expect(card.displayedBonuses).toEqual([]);
+  });
+
+  it("keeps explicitly placed support and bookkeeping out of the main section", () => {
+    const rows = ["Monthly Bookkeeping", "Standard Client Support"].map((serviceName) => ({
+      id: serviceName, serviceName, price: 0, includedPlacement: "included" as const,
+    }));
+    const card = pricingCardServices({ name: "Maintain", oneTimeRows: [], recurringRows: rows });
+    expect(card.bkRow).toBeUndefined();
+    expect(card.supportRow).toBeUndefined();
+    expect(card.orderedRecurring).toEqual([]);
+    expect(card.displayedBonuses).toEqual(rows);
+  });
+
+  it("shows an inheritance statement when all banner services are inherited and no automatic highlight remains", () => {
+    const { after } = configured("monthly", "included");
+    const card = pricingCardServices(after.improve, after.maintain);
+    expect(card.hasInheritedBonuses).toBe(true);
+    expect(card.displayedBonuses).toEqual([]);
+    expect(card.orderedRecurring).toEqual([]);
+  });
+
+  it("only inherits services from the same section of the lower tier", () => {
+    const lower = { name: "Maintain", oneTimeRows: [], recurringRows: [
+      { id: "lower-report", serviceName: "Reports", price: 0, includedPlacement: "main" as "main" | "included" },
+    ] };
+    const upper = { name: "Improve", oneTimeRows: [], recurringRows: [
+      { id: "upper-report", serviceName: "Reports", price: 0, includedPlacement: "included" as "main" | "included" },
+    ] };
+    const card = pricingCardServices(upper, lower);
+    expect(card.recurringLeadInName).toBeNull();
+    expect(card.displayedBonuses.map((row) => row.serviceName)).toEqual(["Reports"]);
+  });
 });

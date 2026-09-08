@@ -45,9 +45,24 @@ vi.mock("./ProposalCreationWorkspaceDemo", () => ({
   getProposalPricingSnapshotItems: () => [],
   getProposalPricingSnapshotCleanupCard: () => null,
 }));
+import ServiceOfferEditor from "./ServiceOfferEditor";
 import ProposalAddOnsDemo, { TierRangeControl } from "./ProposalAddOnsDemo";
 
 describe("service editor rendering", () => {
+  it("shows placement separately from frequency with the saved choice selected", () => {
+    const html = renderToStaticMarkup(createElement(ServiceOfferEditor, {
+      name: "Reports", description: "Details", names: saved.packageNames,
+      initial: { included: ["maintain"], optional: ["grow"], cadence: "monthly",
+        price: 65, visible: true, includedPlacement: "included" },
+      onApply: vi.fn(), onCancel: vi.fn(),
+    }));
+    expect(html).toContain("Show in");
+    expect(html).toContain('value="included" selected=""');
+    expect(html).toContain("Main service list");
+    expect(html).toContain("Included with this package");
+    expect(html).toContain('value="monthly" selected=""');
+    expect(html).toContain("Add-on price");
+  });
   it("shows only configured services, with discoverable search and restore controls", () => {
     const html = renderToStaticMarkup(createElement(ProposalAddOnsDemo));
     expect(html).toContain("Active service");

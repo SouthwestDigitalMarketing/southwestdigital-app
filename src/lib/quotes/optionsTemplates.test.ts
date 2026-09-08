@@ -26,6 +26,7 @@ const baseSlice: OptionsTemplateAssessmentSlice = {
       description: "Move all books to Stessa.",
       archived: false,
       billingCadence: "one-time",
+      includedPlacement: "main",
       defaultPackageIds: ["grow", "improve"],
     },
     {
@@ -34,6 +35,7 @@ const baseSlice: OptionsTemplateAssessmentSlice = {
       description: "Meet quarterly to review the books.",
       archived: false,
       billingCadence: "monthly",
+      includedPlacement: "included",
     },
   ],
   bonusPackageSelections: {

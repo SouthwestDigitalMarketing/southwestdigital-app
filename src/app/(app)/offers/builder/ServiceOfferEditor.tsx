@@ -102,6 +102,32 @@ export default function ServiceOfferEditor({
             <option value="one-time">One-time work</option>
           </select>
         </label>
+        {draft.included.length > 0 ? (
+          <label className="grid gap-2 text-sm font-medium text-slate-700">
+            Show in
+            <select
+              className={CONTROL}
+              value={draft.includedPlacement ?? "automatic"}
+              onChange={(event) =>
+                setDraft((saved) => ({
+                  ...saved,
+                  includedPlacement: event.target.value === "automatic"
+                    ? undefined
+                    : event.target.value as ServiceConfiguration["includedPlacement"],
+                }))
+              }
+            >
+              <option value="automatic">Automatic (existing layout)</option>
+              <option value="main">Main service list</option>
+              <option value="included">Included with this package</option>
+            </select>
+            <span className="text-xs font-normal text-slate-500">
+              Main service list appears above the divider. Included with this package
+              appears below the green banner. Applies wherever this service is included;
+              frequency and prices stay the same.
+            </span>
+          </label>
+        ) : null}
         {draft.optional.length > 0 ? (
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             Add-on price (${" "}

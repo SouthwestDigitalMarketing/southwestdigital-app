@@ -1,5 +1,7 @@
 "use client";
 
+import { pricingCardServices } from "./pricingCardServices";
+
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -182,6 +184,7 @@ type ServiceRow = {
   quantity: number;
   price: number;
   note?: string;
+  includedPlacement?: "main" | "included";
   cleanupPeriodKey?: string;
   platformTag?: "QBO" | "Stessa";
 };
@@ -396,6 +399,7 @@ export function buildOptions(
         quantity: 1,
         price: 0,
         note: bonus.description,
+        includedPlacement: bonus.includedPlacement,
       }));
 
     const oneTimeBonuses = eligibleBonuses
@@ -410,6 +414,7 @@ export function buildOptions(
         quantity: 1,
         price: 0,
         note: bonus.description,
+        includedPlacement: bonus.includedPlacement,
       }));
 
     return [id, {
@@ -1493,43 +1498,12 @@ export default function OfferProposalPreview({
                   const optionalCleanup  = paidOneTime.filter((r) => r.cleanupPeriodKey);
                   const requiredOnboard  = effectiveOneTimeRows.filter((r) => !r.cleanupPeriodKey && isOnboarding(r) && (r.price > 0 || onboardingWaived));
                   const additionalSetup  = paidOneTime.filter((r) => !r.cleanupPeriodKey && !isOnboarding(r) && !packageAdditionalOptionRows.some((addOn) => addOn.id === r.id));
-                  const zeroPriceRows    = option.oneTimeRows.filter((r) => r.price === 0 && !isOnboarding(r));
 
                   const lowerTierId: OptionId | null = id === "grow" ? "improve" : id === "improve" ? "maintain" : null;
-                  const lowerTierName = lowerTierId ? options[lowerTierId].name : null;
-                  const lowerTierRecurring = new Set(lowerTierId ? options[lowerTierId].recurringRows.map((r) => r.serviceName) : []);
-                  const recurringLeadInName = lowerTierName && [...lowerTierRecurring].every(
-                    (name) => option.recurringRows.some((row) => row.serviceName === name),
-                  ) ? lowerTierName : null;
-                  const isNew = (name: string) => lowerTierId !== null && !lowerTierRecurring.has(name);
-                  const lowerTierZero = new Set(lowerTierId ? options[lowerTierId].oneTimeRows.filter((r) => r.price === 0).map((r) => r.serviceName) : []);
-
-                  const bkRow      = option.recurringRows.find(isMonthlyBookkeepingRow);
-                  const supportRow = option.recurringRows.find((r) => r.serviceName.endsWith("Client Support"));
-                  const otherRecurring = option.recurringRows.filter((r) => r !== bkRow && !r.serviceName.endsWith("Client Support"));
-                  const orderedRecurring = recurringLeadInName
-                    ? otherRecurring.filter((r) => isNew(r.serviceName))
-                    : otherRecurring;
-                  const inheritsOneTime = lowerTierName && [...lowerTierZero].every(
-                    (name) => zeroPriceRows.some((row) => row.serviceName === name),
-                  );
-                  const incrementalBonuses = inheritsOneTime
-                    ? zeroPriceRows.filter((row) => !lowerTierZero.has(row.serviceName))
-                    : [...(bkRow ? [bkRow] : []), ...zeroPriceRows];
-                  // Maintain foregrounds monthly bookkeeping alongside its other
-                  // concrete inclusions. Improve and Grow show only
-                  // what their tier adds after the inheritance statement. When custom
-                  // content has no new one-time inclusion, highlight a real recurring
-                  // upgrade (or the tier-specific support promise) rather than filler.
-                  const displayedBonuses = incrementalBonuses.length > 0
-                    ? incrementalBonuses
-                    : orderedRecurring.length > 0
-                      ? [orderedRecurring[0]]
-                      : supportRow
-                        ? [supportRow]
-                        : bkRow
-                          ? [bkRow]
-                          : option.recurringRows.slice(0, 1);
+                  const {
+                    lowerTierName, recurringLeadInName, isNew, bkRow, supportRow,
+                    orderedRecurring, inheritsIncluded, hasInheritedBonuses, displayedBonuses, mainOneTime,
+                  } = pricingCardServices(option, lowerTierId ? options[lowerTierId] : undefined);
 
                   return (
                     <section key={id} className="grid grid-rows-subgrid row-span-7 overflow-hidden rounded-xl border bg-white shadow-sm transition-colors" style={{ borderColor: selected ? brandDark : "#e2e8f0" }}>
@@ -1595,7 +1569,7 @@ export default function OfferProposalPreview({
                         <div className="px-5 py-4">
                           {requiredOnboard.length ? <div className="mt-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Required to get started</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{requiredOnboard.map((row) => <ServiceLine key={row.id} row={row} originalPrice={onboardingWaived && isOnboarding(row) ? originalOnboardingFee : undefined} waivedLabel={onboardingWaived && isOnboarding(row) ? "Waived" : undefined} />)}</ul></div> : null}
                           {optionalCleanup.length ? <div className="mt-5 border-t border-slate-200 pt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Optional catch-up</p><ul className="mt-4 space-y-7 text-sm text-slate-600">{optionalCleanup.map((row) => <ServiceLine key={row.id} row={row} selected={cleanupIsSelected(id, row.cleanupPeriodKey!)} onToggle={(checked) => setCleanupSelections((prev) => ({ ...prev, [cleanupKey(id, row.cleanupPeriodKey!)]: checked }))} showPriceWhenUnselected />)}</ul></div> : null}
-                          {additionalSetup.length ? <div className="mt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Additional setup</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{additionalSetup.map((row) => <ServiceLine key={row.id} row={row} />)}</ul></div> : null}
+                          {(additionalSetup.length || mainOneTime.length) ? <div className="mt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Additional setup</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{[...additionalSetup, ...mainOneTime].map((row) => <ServiceLine key={row.id} row={row} />)}</ul></div> : null}
                         </div>
                       </section>
 
@@ -1647,10 +1621,10 @@ export default function OfferProposalPreview({
                       ) : null}
 
                       {/* Bonuses */}
-                      {displayedBonuses.length > 0 ? (
+                      {displayedBonuses.length > 0 || hasInheritedBonuses ? (
                         <section>
                           <p className="bg-emerald-100 px-5 py-3 text-xs font-bold uppercase tracking-[0.12em] text-emerald-900">Included with this package</p>
-                          {inheritsOneTime ? <p className="px-5 pt-4 text-sm font-semibold text-slate-700">Includes the one-time services in {lowerTierName}, plus:</p> : null}
+                          {inheritsIncluded ? <p className="px-5 pt-4 text-sm font-semibold text-slate-700">Includes the package extras from {lowerTierName}{displayedBonuses.length > 0 ? ", plus:" : "."}</p> : null}
                           <ul className="space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600">
                             {displayedBonuses.map((row) => (
                               <li key={row.id} className="flex justify-between gap-3 font-semibold text-emerald-700">

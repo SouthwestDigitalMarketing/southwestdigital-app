@@ -10,6 +10,7 @@ export type SyncedProposalAdditionalOption = {
   showInProposal: boolean;
   archived: boolean;
   billingCadence?: "monthly" | "one-time";
+  includedPlacement?: "main" | "included";
   packageIds?: PackageId[];
   realEstateSpecific?: boolean;
   applicable?: boolean;
@@ -23,6 +24,7 @@ export type SyncedProposalBonus = {
   archived: boolean;
   realEstateSpecific?: boolean;
   billingCadence?: "monthly" | "one-time";
+  includedPlacement?: "main" | "included";
   defaultPackageIds?: PackageId[];
   addOnPrice?: number;
   addOnPackageIds?: PackageId[];

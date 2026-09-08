@@ -22,12 +22,14 @@ const option = z.object({
   showInProposal: z.boolean(), archived: z.boolean(), applicable: z.boolean().optional(),
   realEstateSpecific: z.boolean().optional(),
   billingCadence: z.enum(["monthly", "one-time"]).optional(),
+  includedPlacement: z.enum(["main", "included"]).optional(),
   packageIds: z.array(tier).optional(),
 });
 const bonus = z.object({
   id: z.string(), name: text, description: text, archived: z.boolean(),
   applicable: z.boolean().optional(), realEstateSpecific: z.boolean().optional(),
   billingCadence: z.enum(["monthly", "one-time"]).optional(),
+  includedPlacement: z.enum(["main", "included"]).optional(),
   defaultPackageIds: z.array(tier).optional(),
   addOnPrice: money.optional(),
   addOnPackageIds: z.array(tier).optional(),
