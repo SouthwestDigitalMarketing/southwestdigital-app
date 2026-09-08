@@ -6,7 +6,11 @@ import AssessmentCardSection from "./AssessmentCardSection";
 import type { ProposalOptionCatalogItem } from "@/lib/quotes/catalog";
 import ProposalAppDemoHeader from "./ProposalAppDemoHeader";
 import PricingSnapshotSidebar from "./PricingSnapshotSidebar";
-import { ASSESSMENT_STORAGE_KEY } from "./ProposalBuilderStorage";
+import {
+  announceProposalBuilderStateChange,
+  assessmentStorageKey,
+} from "./ProposalBuilderStorage";
+import { useProposalBuilderStateSync } from "./useProposalBuilderStateSync";
 import {
   formatPersonName,
   resolvePrimaryContact,
@@ -1169,12 +1173,8 @@ function withComplexityUnknownDefaults(assessment: AssessmentState): AssessmentS
   };
 }
 
-function readStoredAssessment(
-  storageKey: string,
-  initialAssessment?: Partial<AssessmentState>,
-  readStorage = true,
-): AssessmentState {
-  const initialState = {
+function baseAssessment(initialAssessment?: Partial<AssessmentState>) {
+  return {
     ...INITIAL_ASSESSMENT,
     ...initialAssessment,
     annualSavingsPercent: getAnnualSavingsPercent({
@@ -1184,15 +1184,13 @@ function readStoredAssessment(
           : INITIAL_ASSESSMENT.annualSavingsPercent,
     }),
   };
+}
 
-  if (typeof window === "undefined" || !readStorage) {
-    return withComplexityUnknownDefaults(initialState);
-  }
-
+export function mergeStoredAssessment(
+  raw: string,
+  initialState: ReturnType<typeof baseAssessment>,
+): AssessmentState {
   try {
-    const raw = window.localStorage.getItem(storageKey);
-    if (!raw) return withComplexityUnknownDefaults(initialState);
-
     const parsed = JSON.parse(raw) as Partial<AssessmentState>;
     return withComplexityUnknownDefaults({
       ...initialState,
@@ -1239,6 +1237,26 @@ function readStoredAssessment(
   }
 }
 
+function readStoredAssessment(
+  storageKey: string,
+  initialAssessment?: Partial<AssessmentState>,
+  readStorage = true,
+): AssessmentState {
+  const initialState = baseAssessment(initialAssessment);
+
+  if (typeof window === "undefined" || !readStorage) {
+    return withComplexityUnknownDefaults(initialState);
+  }
+
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) return withComplexityUnknownDefaults(initialState);
+    return mergeStoredAssessment(raw, initialState);
+  } catch {
+    return withComplexityUnknownDefaults(initialState);
+  }
+}
+
 export function hasCatchUpPricingInputs(assessment: AssessmentState) {
   return (
     assessment.booksOverTwoMonthsBehind === true &&
@@ -1250,44 +1268,63 @@ export function useProposalAssessmentDemoState({
   engagementId,
   initialAssessment,
   persist = true,
+  syncExternal = false,
 }: {
   engagementId?: string;
   initialAssessment?: Partial<AssessmentState>;
   persist?: boolean;
+  /**
+   * Mirror edits made in another tab. Implies read-only: a mirror never writes
+   * back, so two surfaces can never clobber each other or echo.
+   */
+  syncExternal?: boolean;
 } = {}) {
-  const resolvedScopeId =
-    engagementId ??
-    (typeof window !== "undefined"
-      ? (() => {
-          const params = new URLSearchParams(window.location.search);
-          return params.get("engagementId") ?? params.get("offer") ?? params.get("contacts") ?? params.get("contact") ?? undefined;
-        })()
-      : undefined);
-  const storageKey = resolvedScopeId
-    ? `${ASSESSMENT_STORAGE_KEY}:${resolvedScopeId}`
-    : ASSESSMENT_STORAGE_KEY;
+  const storageKey = assessmentStorageKey({ engagementId });
+  // A mirror is strictly read-only. Enforcing it here rather than at the call
+  // site means no caller can accidentally create a second writer for this key.
+  const persistState = persist && !syncExternal;
   const [assessment, setAssessment] = useState<AssessmentState>(() =>
     readStoredAssessment(storageKey, initialAssessment, false),
   );
-  const [storageReady, setStorageReady] = useState(!persist);
+  const [storageReady, setStorageReady] = useState(!persistState);
+
+  useProposalBuilderStateSync({
+    storageKey,
+    enabled: syncExternal,
+    onExternalValue: (raw) => {
+      // A removed key means the draft was reset; fall back to defaults rather
+      // than keep rendering a draft that no longer exists.
+      setAssessment(
+        raw === null
+          ? readStoredAssessment(storageKey, initialAssessment, false)
+          : mergeStoredAssessment(raw, baseAssessment(initialAssessment)),
+      );
+    },
+  });
 
   useEffect(() => {
-    if (!persist) return;
+    if (!persistState && !syncExternal) return;
     const timeoutId = window.setTimeout(() => {
       setAssessment(readStoredAssessment(storageKey, initialAssessment, true));
       setStorageReady(true);
     }, 0);
     return () => window.clearTimeout(timeoutId);
-  }, [initialAssessment, persist, storageKey]);
+    // Matches the contact-info twin: initialAssessment is a fresh object each
+    // render, so including it would re-run this effect on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [persistState, storageKey, syncExternal]);
 
   useEffect(() => {
-    if (!persist || !storageReady) return;
+    if (!persistState || !storageReady) return;
     try {
       window.localStorage.setItem(storageKey, JSON.stringify(assessment));
+      // Assessment edits previously never announced, so nothing could mirror
+      // them — not even in the same tab.
+      announceProposalBuilderStateChange(storageKey);
     } catch {
       // Ignore localStorage failures in demo mode.
     }
-  }, [assessment, persist, storageKey, storageReady]);
+  }, [assessment, persistState, storageKey, storageReady]);
 
   function updateAssessment<Key extends keyof AssessmentState>(
     key: Key,

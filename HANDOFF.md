@@ -1,13 +1,13 @@
 # Coding-agent handoff
 
-Updated: 2026-09-08 (America/Chicago) — Keyboard review and completion; start at §36 and docs/keyboard/README.md.
+Updated: 2026-09-08 (America/Chicago) — Live preview in a second tab; start at §37.
 
 ## Start here
 
 - Read `AGENTS.md` before changing code. Its tenant, authorization, secret-handling, analytics, migration-safety, and Next.js 16 rules are non-negotiable.
 - If you are touching anything keyboard-related, read `docs/keyboard/README.md` first — it holds the keymap, the chords that must never be bound, and the two invariants that are easy to break.
 - Whenever this handoff is read, also read `.local/COMPUTERS.md` for the local computer inventory. That file is intentionally ignored by Git and must remain private.
-- Current branch: **`feature/services-step-redesign`**. Deployment is on **Vercel** (older Netlify notes are historical). Start with §36 for the latest local work.
+- Current branch: **`feature/live-preview-tab`**. Deployment is on **Vercel** (older Netlify notes are historical). Start with §37 for the latest local work.
 - `.claude/` is untracked user-owned content. Do not modify.
 - Never commit `.env.local` or any secret. `AUTH_SECRET`, `ZOHO_MAIL_CLIENT_ID`, `ZOHO_MAIL_CLIENT_SECRET`, `INTEGRATION_ENCRYPTION_KEY`, Stripe/PayPal keys, and Supabase URLs are all secrets.
 
@@ -17,18 +17,24 @@ The user has instructed: **never push without explicit user instruction**. Commi
 
 ## Current commit state
 
-- Working branch: `feature/services-step-redesign`.
-- **Latest work is §36, the keyboard review and completion — START THERE.**
-  The §35 batch has been reviewed, extended, and verified. All new work stays
-  local; nothing was pushed. The prior §35 handoff itself is `53800e0`.
-- Everything through §34 is pushed; `origin/feature/services-step-redesign` was
-  at `122a6de` when the §35 work started.
+- Working branch: `feature/live-preview-tab`, branched from `main`.
+- **Latest work is §37, the live preview tab — START THERE.**
+- `feature/services-step-redesign` (§30–§36) **was merged to `main`** and is done.
+  `origin/main` and `origin/feature/services-step-redesign` are the same commit,
+  `5f60af9`; the merge was a fast-forward. Local `main` had been 26 commits stale
+  and was fast-forwarded to match.
+- There is also an unpushed one-file branch, `chore/normalize-line-endings`
+  (`981d9be`), holding the `.gitattributes` described below.
 - The bookkeeping-copy migration remains committed but intentionally not applied to any database.
-- **Line-ending noise: resolved, and the warning is now historical.** Earlier
-  sessions saw ~100 tracked files show as modified with identical content
-  (worktree CRLF vs blob LF). None of that was present during §35 — every file
-  checked was LF and `git diff --stat` showed only logical changes. Still worth
-  a glance at `git status` before staging, but do not go looking for it.
+- **Line-ending noise: it came back, and is now fixed at the root.** A Windows
+  session rewrote all 168 tracked files LF -> CRLF, showing up as a 31,686
+  insertion / 31,686 deletion diff with zero real content change
+  (`git diff --ignore-cr-at-eol --name-only` returned nothing). That churn was
+  discarded. The actual fix — a `.gitattributes` pinning `* text=auto eol=lf` —
+  is committed on `chore/normalize-line-endings` but **not merged**, so the
+  protection is inactive on `main` and the churn can recur from Windows until
+  that branch lands. `git add --renormalize .` stages nothing against it, so
+  merging changes no file content.
 
 ### ⚠ The development machine changed — several older notes no longer apply
 
@@ -920,6 +926,78 @@ The earlier §35 ghost-button cosmetic change remains: themed transparent ghost
 buttons can take the tint of their containing rows. No extra global theme rewrite
 was part of this pass. Firefox, alternate physical keyboard layouts, and screen
 reader interaction have not been exercised on real devices; browser QA uses Chromium.
+
+### 37) Live preview in a second tab — local, not pushed
+
+**Ask:** clicking Preview should open the proposal in a new tab so builder edits
+appear there in real time.
+
+**Shipped.** The Eye button now opens `/offer-preview` in a named tab; the
+fullscreen preview stayed and moved to its own `Maximize2` button beside it.
+
+**How it works.** Builder draft state already lived in localStorage, so the tabs
+share state through it. `announceProposalBuilderStateChange(storageKey)` in
+`ProposalBuilderStorage.ts` is the single choke point: it dispatches a same-tab
+`CustomEvent` *and* posts to a `BroadcastChannel`, with the native `storage`
+event as fallback. Only the changed key is sent — receivers re-read localStorage,
+so it stays the single source of truth. `useProposalBuilderStateSync.ts`
+subscribes, debounces 150 ms with a 400 ms ceiling, and applies only when the
+stored *string* actually changed.
+
+**Two invariants worth protecting:**
+
+1. **The mirror never writes.** Both state hooks compute
+   `persistState = persist && !syncExternal` internally, so no call site can
+   create a second writer for a key. Two writers would clobber each other and
+   echo infinitely. `e2e/live-preview.spec.ts` asserts localStorage is untouched
+   after the preview renders.
+2. **Both tabs must derive identical storage keys.** `assessmentStorageKey()`
+   and `contactInfoStorageKey()` are now the only definition of that derivation
+   (previously duplicated inline in both hooks and in
+   `readProposalBuilderLocalState`, and they had already drifted on the URL
+   `engagementId` param). `proposalStorageKeys.test.ts` pins the precedence.
+
+**Why a new `(preview)` route group rather than the public `(proposal)` one.**
+This was the most important review catch. `(proposal)` resolves its brand from
+the request hostname; the builder resolves it from the staff session cookie.
+Sharing that layout would render brand A's proposal under brand B's theme
+whenever a member had switched brands, and would fail outright ("Proposal not
+available") on any host without a verified APP `BrandDomain` — invisible locally
+because `resolvePublicBrand` falls back to slug `bc` in development. The new
+group uses `requireQuoteStaff()`, so the preview is staff-only and always on the
+brand being edited. `src/app/(proposal)/proposal/preview/page.tsx` was left
+exactly as it was on main.
+
+`/offer-preview` also loads the same brand-scoped catalog offer and agreement
+templates the intro step passes to its embedded preview — without them the tab
+silently rendered a *different* proposal (no urgency banner, wrong agreement)
+than the one the client would receive.
+
+**Files:** `ProposalBuilderStorage.ts`, `useProposalBuilderStateSync.ts` (new),
+`ProposalContactInfoState.ts`, `ProposalCreationWorkspaceDemo.tsx`,
+`OfferProposalPreview.tsx` (`mirrorBuilderState` prop),
+`ProposalAppDemoHeader.tsx`, `src/app/(preview)/` (new group).
+
+**Verification:** 566 unit tests pass (14 new across
+`proposalBuilderBroadcast.test.ts` and `proposalStorageKeys.test.ts`); 53
+Playwright tests pass including 4 new two-tab specs; `tsc --noEmit`, ESLint, and
+`next build` clean. Two-tab sync was confirmed by screenshot, not just assertion.
+
+**Decisions a future session may want to revisit:**
+
+- The preview tab carries `isStaffPreview`, so it shows the amber "nothing here
+  will be recorded" banner. That is a deliberate safety-over-fidelity call —
+  staff can click "Simulate successful payment" there — but it does cost some
+  WYSIWYG accuracy. Dropping the prop removes the banner and changes nothing else.
+- Assessment writes now announce on every keystroke. They never did before, so
+  the header's listener was narrowed to contact-key changes and made to bail when
+  the label is unchanged. Any *new* subscriber must filter by key or it will run
+  on every keystroke.
+- `OfferProposalPreview` has no `useMemo` anywhere and is ~2200 lines, so each
+  applied change re-runs the pricing pipeline over the whole tree. Fine at
+  current size; memoize if the preview starts to feel heavy.
+
+**Not pushed.** Local commits only, per the push policy.
 
 ## Product Type refactor plan
 
