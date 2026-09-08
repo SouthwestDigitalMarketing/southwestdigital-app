@@ -235,7 +235,11 @@ function AssetDropzone({
 
   return (
     <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white">
-      <div
+      {/* A real button so the preview tile is reachable and operable from the
+          keyboard — Enter/Space open the file picker for free. Drag-and-drop
+          handlers stay on the same element, so mouse behaviour is unchanged. */}
+      <button
+        type="button"
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => {
           event.preventDefault();
@@ -243,7 +247,8 @@ function AssetDropzone({
           if (file) onUpload(kind, file);
         }}
         onClick={() => inputRef.current?.click()}
-        className="h-40 min-w-0 cursor-pointer p-6 transition-opacity hover:opacity-80"
+        aria-label={`${url ? "Replace" : "Upload"} ${label.toLowerCase()}`}
+        className="block h-40 w-full min-w-0 cursor-pointer p-6 transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-slate-900"
         style={{ backgroundColor: previewBg }}
       >
         {url ? (
@@ -261,7 +266,7 @@ function AssetDropzone({
             )}
           </div>
         )}
-      </div>
+      </button>
       <div className="border-t border-slate-100 p-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
         <p className="mt-1 text-base text-slate-400">{dims}</p>

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, useTransition, type ReactNode } from "react";
 import { ChevronDown, ExternalLink, Sparkles } from "lucide-react";
 import { Modal } from "@/components/Modal";
 import {
@@ -47,6 +47,10 @@ export default function OptionsTemplatesToolbar({
 }: OptionsTemplatesToolbarProps) {
   const [templates, setTemplates] = useState<OptionsTemplateListItem[]>([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  // Native popover so Escape, light dismiss and focus return come from the
+  // browser; the previous panel could only be closed with the mouse.
+  const dropdownId = `options-templates-${useId().replaceAll(":", "")}`;
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const [saveOpen, setSaveOpen] = useState(false);
   const [saveMode, setSaveMode] = useState<"new" | "overwrite">("new");
   const [saveTargetId, setSaveTargetId] = useState<string>("");
@@ -57,6 +61,14 @@ export default function OptionsTemplatesToolbar({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const autoAppliedRef = useRef(false);
+
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    // The panel is positioned once on open, so a resize would strand it.
+    const close = () => dropdownRef.current?.hidePopover();
+    window.addEventListener("resize", close);
+    return () => window.removeEventListener("resize", close);
+  }, [dropdownOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -115,7 +127,7 @@ export default function OptionsTemplatesToolbar({
   }, [hasCustomizedOptions, onApply]);
 
   function loadTemplate(id: string, name: string) {
-    setDropdownOpen(false);
+    dropdownRef.current?.hidePopover();
     setError(null);
     startTransition(async () => {
       try {
@@ -180,40 +192,57 @@ export default function OptionsTemplatesToolbar({
         <button
           type="button"
           disabled={isPending}
-          onClick={() => setDropdownOpen((v) => !v)}
-          className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-sm font-medium text-slate-700 transition hover:border-slate-500 hover:bg-slate-100 disabled:opacity-50"
+          popoverTarget={dropdownId}
+          aria-haspopup="true"
+          aria-expanded={dropdownOpen}
+          onClick={(event) => {
+            const panel = dropdownRef.current;
+            if (!panel) return;
+            const rect = event.currentTarget.getBoundingClientRect();
+            panel.style.minWidth = `${rect.width}px`;
+            panel.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - rect.width - 8))}px`;
+            const below = window.innerHeight - rect.bottom;
+            const openBelow = below >= 240 || below >= rect.top;
+            panel.style.top = openBelow ? `${rect.bottom + 4}px` : "auto";
+            panel.style.bottom = openBelow ? "auto" : `${window.innerHeight - rect.top + 4}px`;
+            panel.style.maxHeight = `${Math.max(0, (openBelow ? below : rect.top) - 12)}px`;
+          }}
+          className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-sm font-medium text-slate-700 transition hover:border-slate-500 hover:bg-slate-100 focus-visible:outline-2 disabled:opacity-50"
         >
           <Sparkles className="h-3.5 w-3.5" /> Load template
           <ChevronDown className="h-3.5 w-3.5" />
         </button>
-        {dropdownOpen ? (
-          <div
-            className="absolute left-0 top-full z-20 mt-1 w-max min-w-full max-w-[calc(100vw-2.5rem)] rounded-lg border border-slate-200 bg-white p-1 shadow-lg"
-            onMouseLeave={() => setDropdownOpen(false)}
-          >
-            {activeTemplates.length === 0 ? (
-              <p className="px-3 py-2 text-xs text-slate-500">
-                No templates yet. Save one below.
-              </p>
-            ) : (
-              activeTemplates.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => loadTemplate(t.id, t.name)}
-                  className="flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
-                >
-                  <span className="whitespace-nowrap max-sm:whitespace-normal">{t.name}</span>
-                  {t.defaultForProductKind ? (
-                    <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
-                      Default
-                    </span>
-                  ) : null}
-                </button>
-              ))
-            )}
-          </div>
-        ) : null}
+        <div
+          id={dropdownId}
+          ref={dropdownRef}
+          popover="auto"
+          onToggle={(event) => setDropdownOpen(event.newState === "open")}
+          aria-label="Load options template"
+          className="fixed m-0 w-max max-w-[calc(100vw-2.5rem)] overflow-y-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg"
+          onMouseLeave={() => dropdownRef.current?.hidePopover()}
+        >
+          {activeTemplates.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-slate-500">
+              No templates yet. Save one below.
+            </p>
+          ) : (
+            activeTemplates.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => loadTemplate(t.id, t.name)}
+                className="flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100 focus-visible:outline-2"
+              >
+                <span className="whitespace-nowrap max-sm:whitespace-normal">{t.name}</span>
+                {t.defaultForProductKind ? (
+                  <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                    Default
+                  </span>
+                ) : null}
+              </button>
+            ))
+          )}
+        </div>
       </div>
 
       {middleSlot}

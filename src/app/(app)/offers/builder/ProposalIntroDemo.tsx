@@ -5,6 +5,7 @@ import { Check, Image as ImageIcon, Minimize2, Pencil, Video } from "lucide-reac
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Modal } from "@/components/Modal";
 import { resolveVideoEmbedUrl, type ProposalPreviewEditTarget } from "./OfferProposalPreview";
 
 // Load the preview client-only. Its state is entirely localStorage-backed
@@ -441,7 +442,18 @@ export default function ProposalIntroDemo({
             </AssessmentCardSection>
             </section>
             {isRoutedFullscreenPreview ? (
-              <div className="fixed inset-0 z-[100] h-screen overflow-y-auto bg-slate-100 p-4 sm:p-6">
+              // Native <dialog> (top layer) instead of a plain fixed div: it
+              // traps focus, makes the builder behind it inert, and turns the
+              // "Esc" promised by the exit button into real behaviour via
+              // onCancel. The browser Fullscreen API stays in charge of the
+              // document itself — closing here still exits fullscreen first.
+              <Modal
+                onClose={() => void closeProposalPreview()}
+                label="Full-screen proposal preview"
+                className="ui-modal-fullscreen"
+                closeOnBackdrop={false}
+              >
+                <div className="min-h-full bg-slate-100 p-4 sm:p-6">
                 <div className="fixed right-4 top-4 z-50 flex items-center justify-end gap-2">
                 <div className="flex items-center gap-2">
                   <button
@@ -450,7 +462,7 @@ export default function ProposalIntroDemo({
                     aria-pressed={showPreviewEditControls}
                     aria-label={showPreviewEditControls ? "Hide proposal edit controls" : "Show proposal edit controls"}
                     title={showPreviewEditControls ? "Hide edit controls" : "Edit proposal"}
-                    className={`grid h-10 w-10 place-items-center rounded-full border shadow-sm transition focus:outline-none focus:ring-2 focus:ring-brandnavy/20 ${
+                    className={`grid h-10 w-10 place-items-center rounded-full border shadow-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brandnavy ${
                       showPreviewEditControls
                         ? "border-brandnavy bg-brandnavy text-white"
                         : "border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50"
@@ -461,7 +473,7 @@ export default function ProposalIntroDemo({
                   <button
                     type="button"
                     onClick={() => void closeProposalPreview()}
-                    className="grid h-10 w-10 place-items-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brandnavy/20"
+                    className="grid h-10 w-10 place-items-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brandnavy"
                     aria-label="Exit full-screen proposal preview"
                     title="Exit full screen (Esc)"
                   >
@@ -479,7 +491,8 @@ export default function ProposalIntroDemo({
                   onEdit={(target) => void editPreviewElement(target)}
                 />
               </div>
-              </div>
+                </div>
+              </Modal>
             ) : null}
           </div>
         </div>
