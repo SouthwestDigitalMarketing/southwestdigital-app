@@ -40,6 +40,8 @@ import {
 import { normalizeThemeChoice, resolveEffectiveThemeColors } from "@/lib/brands/themePresets";
 import { signOutAction } from "./actions";
 import { Modal } from "@/components/Modal";
+import { KeyboardProvider } from "@/components/keyboard/KeyboardProvider";
+import { APP_COMMANDS } from "@/lib/keyboard/commands";
 
 const NAV: Array<{
   label: string;
@@ -394,6 +396,15 @@ export function AppShell({
         "--app-sidebar-width": `${collapsed ? 64 : sidebarWidth}px`,
       } as React.CSSProperties}
     >
+      {/* The provider sits INSIDE .app-shell-root on purpose: it renders the
+          command menu and help sheet as <dialog>s, and although those paint in
+          the top layer they still inherit CSS custom properties through the DOM.
+          Mounted outside this element they would lose every theme token. */}
+      <KeyboardProvider commands={APP_COMMANDS}>
+      <a href="#main-content" className="ui-skip-link">
+        Skip to content
+      </a>
+
       <aside className="hidden lg:flex">{sidebar}</aside>
 
       {profileOpen ? (
@@ -466,6 +477,7 @@ export function AppShell({
           {children}
         </main>
       </div>
+      </KeyboardProvider>
     </div>
   );
 }
