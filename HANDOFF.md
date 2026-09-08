@@ -978,10 +978,29 @@ than the one the client would receive.
 `OfferProposalPreview.tsx` (`mirrorBuilderState` prop),
 `ProposalAppDemoHeader.tsx`, `src/app/(preview)/` (new group).
 
-**Verification:** 566 unit tests pass (14 new across
-`proposalBuilderBroadcast.test.ts` and `proposalStorageKeys.test.ts`); 53
-Playwright tests pass including 4 new two-tab specs; `tsc --noEmit`, ESLint, and
-`next build` clean. Two-tab sync was confirmed by screenshot, not just assertion.
+**Verification:** 573 unit tests pass (21 new across
+`proposalBuilderBroadcast.test.ts`, `proposalStorageKeys.test.ts`, and
+`proposalSyncSchedule.test.ts`); 5 new two-tab Playwright specs pass;
+`tsc --noEmit`, ESLint, and `next build` clean. Two-tab sync was confirmed by
+screenshot, not just assertion.
+
+The key-derivation refactor was checked differentially against main's original
+inline logic across 64 param combinations: **0 differences** for the two state
+hooks, so no existing saved draft is orphaned. It does change
+`readProposalBuilderLocalState` (the header's Save path) in 6 cases, all of them
+where a URL `engagementId` is present — and in every one it now agrees with the
+key the hook actually wrote, which main did not. No builder route puts
+`engagementId` in the URL, so none of it is reachable today.
+
+**⚠ Pre-existing flake, NOT caused by this branch.** `e2e/keyboard.spec.ts`
+fails exactly one test per full-file run, alternating between `:195` (stepper
+digit jump) and `:207` (`[`/`]` stepping) — both builder-step keyboard
+navigation, both timing out on `waitForURL`. Measured on **`main` at `5f60af9`**:
+one run clean, then two consecutive runs with the same one-of-two failure. Same
+rate on this branch. Each test passes 3/3 in isolation. Do not burn time
+bisecting a feature branch over it, as this session did; reproduce on `main`
+first. Worth fixing properly — likely a race between route compilation and the
+builder scope registering.
 
 **Decisions a future session may want to revisit:**
 
