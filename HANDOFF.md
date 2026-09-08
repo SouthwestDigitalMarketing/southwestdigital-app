@@ -1,10 +1,11 @@
 # Coding-agent handoff
 
-Updated: 2026-09-07 (America/Chicago) — Services comparison UI implemented; see §32 and docs/offers/services-ui-handoff.md for continuation.
+Updated: 2026-09-08 (America/Chicago) — Keyboard-first pass; see §35 and docs/keyboard/README.md.
 
 ## Start here
 
 - Read `AGENTS.md` before changing code. Its tenant, authorization, secret-handling, analytics, migration-safety, and Next.js 16 rules are non-negotiable.
+- If you are touching anything keyboard-related, read `docs/keyboard/README.md` first — it holds the keymap, the chords that must never be bound, and the two invariants that are easy to break.
 - Whenever this handoff is read, also read `.local/COMPUTERS.md` for the local computer inventory. That file is intentionally ignored by Git and must remain private.
 - Current branch: **`feature/services-step-redesign`** (branched from `main` at `776316a`). Review commit `75b4f18` was pushed at the user's request. The subsequent §32 UI implementation is local only. Deployment is on **Vercel** (not Netlify — that's stale in older docs). Vercel CLI is not installed; use dashboard for env vars until user installs `npm i -g vercel`.
 - `.claude/` is untracked user-owned content. Do not modify.
@@ -17,14 +18,45 @@ The user has instructed: **never push without explicit user instruction**. Commi
 ## Current commit state
 
 - Working branch: `feature/services-step-redesign`.
+- **Latest work is §35, the keyboard-first pass — START THERE.** Eight commits
+  are local and unpushed, and there is a further uncommitted batch on top of
+  them that is passing but never got committed. §35 lists both, plus the one
+  fix that has not been re-verified in a browser.
+- Everything through §34 is pushed; `origin/feature/services-step-redesign` was
+  at `122a6de` when the §35 work started.
 - Prior implementation commits: `d68e92a` (redesign) and `2e9f2b8` (one-time charges).
 - At review start, the locally cached upstream branch pointed to `ef4ebee`; no fetch or push was performed during this review.
 - §31 was committed as `75b4f18` and subsequently pushed to `origin/feature/services-step-redesign` at the user's explicit request.
 - §32 UI implementation follows the local plan checkpoint `ede2e8e`; the implementation commit is titled `Redesign services around package comparison and offer-specific editing`. This new phase has not been pushed.
 - **§28's batch is no longer uncommitted.** It was swept into `f270e02` together with the URL renames. The "Suggested commit split for the prior batch" below is therefore historical — it was not followed.
 - The bookkeeping-copy migration remains committed but intentionally not applied to any database.
-- **Line-ending noise warning (still true):** ~100 tracked files show as modified with identical content (worktree CRLF vs blob LF — `git diff --ignore-all-space` is empty for them). Do NOT commit that noise: stage only the files you changed, and normalize any touched file back to LF (`sed`/python CRLF→LF) so the commit holds only the logical diff.
-- The line-ending warning above is historical guidance; it was not present after the latest commit. Re-check `git status` before editing and avoid staging unrelated normalization noise.
+- **Line-ending noise: resolved, and the warning is now historical.** Earlier
+  sessions saw ~100 tracked files show as modified with identical content
+  (worktree CRLF vs blob LF). None of that was present during §35 — every file
+  checked was LF and `git diff --stat` showed only logical changes. Still worth
+  a glance at `git status` before staging, but do not go looking for it.
+
+### ⚠ The development machine changed — several older notes no longer apply
+
+§35 was the first session on **`dalliance`**, an HP Envy x360 running **Omarchy
+4.0.2** (Arch, Hyprland/Wayland), installed 2026-09-07. Everything before it was
+done on Windows. On this machine:
+
+- **There is no `prisma generate` EPERM lock.** The `query_engine-windows.dll.node`
+  workaround quoted in several sections above is Windows-only; you do not need to
+  stop the dev server before regenerating the Prisma client.
+- **`npm run dev` is written for Windows** — its `set NODE_OPTIONS=... && ...`
+  prefix is `cmd` syntax. On bash it silently no-ops (bash `set` treats it as a
+  positional parameter) and the dev server still starts, but `NODE_OPTIONS` is
+  never actually applied. Worth fixing properly with `cross-env` if the larger
+  header size matters.
+- **Scrollbars are overlay-style here**, as they are in headless Chromium. The
+  §34 double-scrollbar class of bug is invisible without forcing classic
+  scrollbars — `e2e/services-step.spec.ts` injects a `::-webkit-scrollbar` style
+  to do exactly that.
+- The `*.ps1` scripts under `scripts/` and the `test:*:windows` npm scripts
+  cannot run here.
+- A `next dev` server may still be listening on **:3000** from the §35 session.
 
 ## This session's work
 
@@ -627,6 +659,192 @@ Verified at 100/110/125% zoom with classic scrollbars forced, across Services, C
 
 Validation: 10/10 Playwright specs, 424 unit tests, typecheck, focused ESLint (one pre-existing `no-img-element` warning) and `npx next build` all pass.
 
+### 35) Keyboard-first pass — PARTLY COMMITTED, NOT pushed, one item unverified
+
+**Read `docs/keyboard/README.md` before touching any of this.** It is the
+reference for the keymap, the chords that must never be bound, the Go menu's key
+contract, and how to add a command.
+
+The user is moving all their machines to Omarchy and becoming a keyboard-first
+user. Brief: someone fluent in Omarchy keyboard use should find this app a
+native-feeling keyboard experience, while mouse-first users notice nothing.
+
+#### State when this session ended
+
+Eight commits landed locally on `feature/services-step-redesign`, none pushed:
+
+```
+468895b Harden the keyboard provider against a render loop
+9760c12 Make four overlays and controls reachable by keyboard
+529be26 Make the offer-builder stepper keyboard-navigable
+e2940ba Document the keyboard layer
+6674091 Add the list row-cursor style
+141202d Add the keyboard command layer: Go menu, chords, help sheet
+f9d9f61 Make keyboard focus visible across the staff app
+6626037 Keep the local computer inventory out of Git
+```
+
+**There is also a substantial uncommitted batch** — it is coherent and passing,
+it just never got committed:
+
+| File | What |
+|---|---|
+| `src/components/keyboard/KeyboardListRegion.tsx` (new) | The j/k row cursor for server-rendered tables |
+| `src/app/(app)/offers/page.tsx`, `contacts/page.tsx`, `clients/page.tsx` | Wire that region in (`data-keyboard-row` + wrapper + an `openHrefs` map) |
+| `src/lib/keyboard/{commands,registry}.ts` | `documentationOnly` flag — see the Enter warning below |
+| `src/lib/keyboard/commands.test.ts` | Two tests pinning the Enter invariant |
+| `src/components/keyboard/{CommandMenu,KeyboardProvider}.tsx` | Menu focus fix + the `data-keyboard-ready` signal |
+| `e2e/keyboard.spec.ts` (new) | 17 browser specs for the keyboard layer |
+| `e2e/keyboard-overlays.spec.ts` (new) | Specs for the §35 overlay fixes; **never run — verify before trusting** |
+| `e2e/support.ts` | `gotoReady()` and `menuOptions()` helpers |
+
+#### Verification status — read this before you commit anything
+
+- `npm run typecheck` ✅ · `npx eslint` on all changed files ✅ (no errors) ·
+  `npx vitest run` ✅ **550 tests / 71 files** · `npx next build` ✅.
+- Browser suite reached **16/17** on `e2e/keyboard.spec.ts`. The single failure
+  was the "descends into a submenu and Backspace pops back out" spec, which
+  exposed a genuine bug (below). **The fix is applied but was interrupted before
+  it could be re-run — re-running that spec is the first thing to do.**
+
+```bash
+npm run dev                                   # a dev server may still be on :3000
+npx playwright test e2e/keyboard.spec.ts      # expect 17/17
+npx playwright test e2e/keyboard-overlays.spec.ts   # never run yet
+npx playwright test e2e/services-step.spec.ts       # §33/§34 regression check, not re-run
+```
+
+The specs skip themselves when nothing is listening on `:3000`, so a green run
+with no server means nothing. Each spec logs in fresh, so a full run takes about
+six minutes against a dev server.
+
+#### ⚠ Two bugs the browser tests caught that unit tests could not
+
+**1. Never dispatch `Enter` from the document.** Enter was briefly a global
+binding in the `list` scope. Because the dispatcher must `preventDefault` a
+chord it matches, that swallowed **every** Enter press while any keyboard list
+was on the page — every focused link and button, including the skip link. The
+cursor sat at -1 so nothing opened either; the keystroke just vanished. No unit
+test would have caught it: the matching logic was working exactly as designed.
+
+Enter and `o` are now owned by the focused row, handled in
+`KeyboardListRegion`'s own `onKeyDown` and only when the event target *is* a
+row. Commands can be marked `documentationOnly: true` to appear in the help
+sheet without ever being registered as a binding. A unit test asserts that no
+active binding in any scope combination binds `enter`.
+
+**Generalise this before adding shortcuts:** a key that means something to
+whichever element has focus — Enter, Space, arrows inside a widget — must be
+handled by that element, never by the global dispatcher.
+
+**2. The command menu went keyboard-dead after a mouse click.** Clicking a row
+moved focus to the `<dialog>`, and the menu's key handler sits on a div *inside*
+that dialog, so it stopped receiving events. Fixed two ways: rows
+`preventDefault` on mousedown so focus never leaves the filter input, and an
+effect re-focuses the input whenever the menu level changes. **This is the fix
+that has not been re-verified in a browser.**
+
+#### Design notes — why it looks like this
+
+Driven by reading Omarchy's actual source on the user's machine
+(`/usr/share/omarchy/**`), not by guessing:
+
+- `omarchy-menu` matches on **substring + hand-written aliases, not fuzzy
+  subsequence**. Typing `thm` finds nothing; `the` finds Theme. We match that in
+  `src/lib/keyboard/menuSearch.ts`, with subsequence kept only as a last-resort
+  tier so the pane is never empty. **If a term does not find something, add an
+  alias — do not loosen the matcher.**
+- Its menu filters on the first keystroke (no "focus the search box" step), pops
+  a level on Backspace **only when the filter is empty**, and treats Escape as
+  two-stage (clear, then close). The Go menu copies this exactly.
+- Search is scoped to the current subtree and splits into "here" and "deeper"
+  with parent paths. This is the best idea in the design; keep it.
+- `SUPER+K` runs `omarchy-menu-keybindings`, which **dispatches the binding you
+  pick**. Our `?` sheet is likewise executable, not a dead cheat-sheet.
+- Hyprland binds digits/punctuation by physical `code:` and letters by keysym.
+  We mirror that: mnemonics match `event.key`, digits and brackets fall back to
+  `event.code` (AZERTY's number row emits `& é " '`; German `[` is behind AltGr).
+
+**Architecture.** One registry (`src/lib/keyboard/commands.ts`) drives the
+keymap, the menu and the help sheet, so they cannot drift. Everything under
+`src/lib/keyboard/` is pure TypeScript — no React, no DOM globals at module
+scope — so the node-environment vitest suite covers it directly
+(`vitest.config.mts` only globs `src/**/*.test.ts`). **Keep it that way**; the
+React layer should stay thin enough that its logic is not worth testing.
+
+**Keymap.** `Ctrl/Cmd+K` Go menu · `?` help · `/` focus page search · `g` leader
+for eleven destinations · list `j`/`k`/`Enter`/`o`/`g g`/`Shift+G` · builder
+digits `1`-`8` and `[`/`]`. Discounts, Team, Media and Tags are **menu-only on
+purpose** — an unmemorable chord is worse than none; they carry aliases instead.
+
+**Never bind** (tests fail on the first three): `Ctrl`+digit (Chrome tabs),
+`Ctrl+Shift+K` (Firefox console), `Ctrl+Alt+<key>` (**AltGr on EU layouts**),
+bare `Space`, `Ctrl+F`.
+
+**Two invariants that are easy to break:**
+1. The **queued prefix is `preventDefault`ed as well as the completed chord**.
+   Without it Firefox quick-find swallows the second key of every `g` sequence.
+2. `preventDefault` fires only once a binding matches. Anything unhandled must
+   reach the browser untouched.
+
+**Accessibility.** The help sheet carries a persisted "turn off single-key
+shortcuts" toggle (speech and switch input can emit stray characters; GitHub
+ships the same). Also added: a skip-to-content link — the sidebar was ~18 tab
+stops before any content on every page load — plus `aria-current="step"` on the
+builder stepper.
+
+#### Pre-existing bugs fixed along the way
+
+All found by an audit of the app, none introduced by this work:
+
+- Focus was invisible on ~60 controls built from local class constants that
+  omitted a ring. Routed through the `ui-action-*` tokens.
+- `outline-brandnavy` / `ring-brandnavy` are **absent from the `[data-theme]`
+  remap block** in `globals.css`, unlike `bg-`/`text-`/`border-brandnavy`, so
+  they keep the literal `#1b263b` and can vanish on dark surfaces. Swapped to
+  `--theme-accent`. This is a different manifestation of the §33 bug.
+- Four things were unusable without a mouse: the contacts assignment picker
+  (openable, never closable), the options-template dropdown (closed only on
+  `onMouseLeave`), the full-screen proposal preview (its exit button promised
+  "Esc" in a tooltip but **no keydown listener existed in the file**), and the
+  brand logo dropzone (a bare `div` with `onClick`).
+- `tags/TagsCatalog` fired its "discard unsaved changes?" `confirm()` **twice**
+  on Escape — a duplicate document listener on top of the `<dialog>`'s own.
+
+#### ⚠ Known cosmetic change for mouse users — the user has not seen this yet
+
+Routing the local button constants through the shared tokens in `f9d9f61` means
+`ghost` buttons keep their border but go from a white background to transparent,
+so on striped rows they now pick up the row tint; and those controls now take
+their colour from the brand theme rather than fixed slate. It is consistent with
+the rest of the app, but it is a real visual change on `/contacts`, `/tags`,
+`/services` and `/pipeline`. **Get the user's eyes on it.** Reverting just
+`f9d9f61` backs it out without touching the keyboard layer.
+
+#### Next, in rough priority order
+
+1. Re-run `e2e/keyboard.spec.ts` (expect 17/17), then run
+   `e2e/keyboard-overlays.spec.ts` and `e2e/services-step.spec.ts`.
+2. Commit the uncommitted batch. Suggested split: (a) `KeyboardListRegion` + the
+   three pages, (b) the Enter fix + `documentationOnly` + its tests, (c) the
+   menu focus fix + `data-keyboard-ready`, (d) the e2e specs, (e) this handoff.
+3. **`/` is declared but has no handler registered anywhere, so it is currently
+   inert.** `useSearchFocusShortcut` exists for it in
+   `src/components/keyboard/useListKeyboard.ts`; wire it to the search inputs on
+   `/contacts` (`ContactsFilters.tsx`) and `/clients`. Several list pages have no
+   search box at all — decide whether `/` should do nothing there or focus the
+   first filter control.
+4. Wire `KeyboardListRegion` into the remaining lists: `/agreements`,
+   `/services`, `/tags`, `/discounts`, `/media`, `/pipeline`. Each needs
+   `data-keyboard-row={id}` on the row, the table wrapped, and an `openHrefs`
+   map. `IssuedAgreementsTable` also has a per-row checkbox — make sure Space
+   still reaches it.
+5. `useListKeyboardNavigation` in `useListKeyboard.ts` is the prop-driven
+   sibling of `KeyboardListRegion` and currently **has no callers**. Either use
+   it for a client-component list or delete it; two ways to do one job will rot.
+6. Still pointer-only: the sidebar resize handle (§34 flagged it too) and moving
+   a CRM pipeline card between stages (drag-and-drop only).
+
 ## Product Type refactor plan
 
 ### Data model
@@ -862,13 +1080,23 @@ Zoho on Vercel: register a **separate** OAuth app for prod (not shared with loca
 
 ## Suggested first commands for the next agent
 
-```powershell
-git status --short                        # verify the local review commit left a clean tree
-git log -5 --oneline                      # latest review commit and prior feature work
-npm run typecheck                         # should be clean
-npm test                                  # 63 files / 415 tests as of §31
+```bash
+git status --short     # expect a dirty tree: the §35 batch is uncommitted
+git log -8 --oneline   # the eight local keyboard commits
+npm run typecheck      # clean
+npm test               # 71 files / 550 tests as of §35
+npx next build         # passes
+
+# Browser specs need a dev server; they silently skip without one.
+npm run dev
+npx playwright test e2e/keyboard.spec.ts   # was 16/17; the fix for the 17th is applied but unverified
 ```
 
-Then read this file together with `.local/COMPUTERS.md`. §31 is the latest work, preserved locally and not pushed. The user's push policy remains "never push without explicit user instruction".
+Then read this file together with `.local/COMPUTERS.md` (note: that file did not
+exist on the user's new Omarchy machine and was recreated from scratch on
+2026-09-08 — entries for their other computers still need re-adding).
+
+§35 is the latest work. The user's push policy remains "never push without
+explicit user instruction", and nothing from §35 has been pushed.
 
 If the user asks you to move CRM PipelineItem into the work-item model, read section 6 first, then the "Future design: unified work items / next-action system" CRM extension list — the offer-side helpers (`src/lib/quotes/lifecycle.ts`) are the pattern to follow.
