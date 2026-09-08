@@ -1016,6 +1016,23 @@ builder scope registering.
   applied change re-runs the pricing pipeline over the whole tree. Fine at
   current size; memoize if the preview starts to feel heavy.
 
+**Dark-mode contrast follow-up.** The staff-preview banner rendered dark-on-dark
+in dark proposal mode (measured 1.44:1). Root cause was app-wide, not
+banner-specific: `globals.css` darkens `.bg-amber-50` / `.bg-emerald-50` /
+`.bg-rose-50` under `[data-theme="dark"]` and the `system` prefers-dark block,
+but only lightened the matching `-600`/`-700` text. Every tinted panel using
+`-800`/`-900` ink went dark-on-dark — about 38 places. The new rules lighten
+that ink *scoped to inside the darkened surface*, deliberately not as a blanket
+`.text-amber-800` override, because badges built on the `-100` tints are never
+darkened and must keep their dark ink.
+
+While measuring this I found `effectiveColors` in `e2e/support.ts` was silently
+wrong: Tailwind v4 serializes colours as `lab()`, and the parser took the first
+three numbers as if they were RGB. Every contrast assertion in the suite was
+measuring nonsense for any non-`rgb()` colour. It now round-trips through a
+canvas to get real sRGB. Existing contrast tests still pass with the corrected
+maths.
+
 **Not pushed.** Local commits only, per the push policy.
 
 ## Product Type refactor plan

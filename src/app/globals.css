@@ -743,6 +743,25 @@ body {
   background-color: #4a1625;
 }
 
+/* Tinted status panels: the rules above darken the surface, so the ink on it
+   must lighten with it or the panel renders dark-on-dark. Scoped to inside the
+   darkened surface on purpose - amber/emerald/rose badges built on the -100
+   tints are not darkened and must keep their dark ink. */
+[data-theme="dark"] .bg-amber-50,
+[data-theme="dark"] .bg-amber-50 :is(.text-amber-700, .text-amber-800, .text-amber-900) {
+  color: #fde68a;
+}
+
+[data-theme="dark"] .bg-emerald-50,
+[data-theme="dark"] .bg-emerald-50 :is(.text-emerald-700, .text-emerald-800, .text-emerald-900) {
+  color: #a7f3d0;
+}
+
+[data-theme="dark"] .bg-rose-50,
+[data-theme="dark"] .bg-rose-50 :is(.text-rose-700, .text-rose-800, .text-rose-900) {
+  color: #fecdd3;
+}
+
 [data-theme="dark"][data-appearance="grok"] input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]),
 [data-theme="dark"][data-appearance="grok"] select {
   background-color: #dcdee2;
@@ -862,6 +881,25 @@ body {
 
   [data-theme="system"] .bg-rose-50 {
     background-color: #4a1625;
+  }
+
+  /* Tinted status panels: the rules above darken the surface, so the ink on it
+     must lighten with it or the panel renders dark-on-dark. Scoped to inside the
+     darkened surface on purpose - amber/emerald/rose badges built on the -100
+     tints are not darkened and must keep their dark ink. */
+  [data-theme="system"] .bg-amber-50,
+  [data-theme="system"] .bg-amber-50 :is(.text-amber-700, .text-amber-800, .text-amber-900) {
+    color: #fde68a;
+  }
+
+  [data-theme="system"] .bg-emerald-50,
+  [data-theme="system"] .bg-emerald-50 :is(.text-emerald-700, .text-emerald-800, .text-emerald-900) {
+    color: #a7f3d0;
+  }
+
+  [data-theme="system"] .bg-rose-50,
+  [data-theme="system"] .bg-rose-50 :is(.text-rose-700, .text-rose-800, .text-rose-900) {
+    color: #fecdd3;
   }
 
   [data-theme="system"][data-appearance="grok"] input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]),
