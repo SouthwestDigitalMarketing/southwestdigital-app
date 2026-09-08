@@ -99,6 +99,37 @@ test.describe("Offer builder — live preview tab", () => {
     expect(storedAfter).toBe(storedBefore);
   });
 
+  // End-to-end smoke test that the preview tracks character-by-character input.
+  //
+  // It does NOT isolate the debounce ceiling: verified by mutation, this test
+  // still passes with the ceiling disabled, because a dev-mode React render per
+  // keystroke already stretches the gaps past the debounce interval. The ceiling
+  // itself is proven deterministically in proposalSyncSchedule.test.ts.
+  test("keeps updating while the user is still typing", async ({ page, context }) => {
+    const [preview] = await Promise.all([
+      context.waitForEvent("page"),
+      page.getByRole("button", { name: PREVIEW_BUTTON }).click(),
+    ]);
+    await preview.waitForLoadState("domcontentloaded");
+
+    const editor = await openCompanyEditor(page);
+    const field = editor.getByLabel("Business name");
+    await field.fill("");
+
+    // 25 characters at 60ms/key = ~1.5s of continuous typing, every gap well
+    // under the 150ms debounce interval.
+    const marker = "Zyx";
+    const typing = field.pressSequentially(`${marker} Continuous Typing Co`, { delay: 60 });
+
+    // Must appear BEFORE typing finishes.
+    await expect(preview.getByText(new RegExp(marker)).first()).toBeVisible({ timeout: 3_000 });
+
+    await typing;
+    await expect(preview.getByText(/Zyx Continuous Typing Co/).first()).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+
   test("reuses one preview tab across repeat clicks", async ({ page, context }) => {
     const [preview] = await Promise.all([
       context.waitForEvent("page"),

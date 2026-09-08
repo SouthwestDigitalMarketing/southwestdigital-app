@@ -19,6 +19,28 @@ export const PROPOSAL_BUILDER_SYNC_DEBOUNCE_MS = 150;
 export const PROPOSAL_BUILDER_SYNC_MAX_WAIT_MS = 400;
 
 /**
+ * How long to wait before applying, given a burst that started at
+ * `firstPendingAt`.
+ *
+ * Plain trailing debounce until the ceiling is in sight, then whatever is left
+ * of it — so a burst can never delay an update past `maxWaitMs`, however fast
+ * the announcements arrive. Extracted so the ceiling is testable without a DOM.
+ */
+export function nextProposalSyncDelay({
+  now,
+  firstPendingAt,
+  debounceMs = PROPOSAL_BUILDER_SYNC_DEBOUNCE_MS,
+  maxWaitMs = PROPOSAL_BUILDER_SYNC_MAX_WAIT_MS,
+}: {
+  now: number;
+  firstPendingAt: number;
+  debounceMs?: number;
+  maxWaitMs?: number;
+}) {
+  return Math.min(debounceMs, Math.max(0, firstPendingAt + maxWaitMs - now));
+}
+
+/**
  * Mirror another tab's builder edits into this surface.
  *
  * Re-reads `storageKey` from localStorage whenever builder state is announced,
@@ -84,7 +106,7 @@ export function useProposalBuilderStateSync({
       const now = Date.now();
       firstPendingAt ??= now;
       // Never let continuous announcements push the flush past the ceiling.
-      const wait = Math.min(debounceMs, Math.max(0, firstPendingAt + maxWaitMs - now));
+      const wait = nextProposalSyncDelay({ now, firstPendingAt, debounceMs, maxWaitMs });
       window.clearTimeout(timeoutId);
       timeoutId = window.setTimeout(applyLatestStoredValue, wait);
     });
