@@ -611,6 +611,22 @@ Do not do (2) without looking at each remaining call site first.
 
 Validation: 64 files / 424 unit tests, 7/7 Playwright specs, typecheck, focused ESLint, and `npx next build` all pass.
 
+### 34) Double scrollbars in the app shell — DONE, committed and pushed
+
+The user reported two vertical scrollbars plus a horizontal one on the Services step. Both were real and both were app-wide, not specific to that step.
+
+**Why it took a screenshot to find.** Headless Chromium uses *overlay* scrollbars, which take no layout space and hide this class of bug completely — the first several diagnostic passes found nothing. The reporter's screenshot (`references/Screenshot 2026-09-07 190142.png`) showed arrow buttons on both bars, i.e. classic Windows scrollbars. Pixel analysis of its right edge found two 15px bars with thumbs at x1893–1901 and x1908–1916, which confirmed the document had a scrollbar of its own. **When chasing a layout bug that only the user can see, force classic scrollbars** — `e2e/services-step.spec.ts` now does this via an injected `::-webkit-scrollbar` style so CI can see what the user sees.
+
+**Horizontal bar** (`66a9cc6`) — `.app-shell-main` sets `scrollbar-gutter: stable`, so its content box is always narrower than `100vw`. `.proposal-builder-header` is sized `width: 100vw` (a full-bleed hack that keeps the stepper centered on the page, per §15), so it overhung its container by exactly that gutter, leaving 8px of scrollable overflow on every builder step. `/offers`, which renders no builder header, measured 0px — that comparison is what identified the header. Fixed with `overflow-x: clip` on `.app-shell-main`, which removes the scrollbar without touching the header's geometry: the measured header box is identical at `-7..1433` before and after, so the stepper did not move. `clip` keeps the element a vertical scrollport, so the coverage sidebar's `position: sticky` still pins at its `2xl:top-8` offset.
+
+**Second vertical bar** (`e71c7a6`) — `.app-shell-root` was sized `h-dvh`. `100dvh` is the full viewport height and ignores space consumed by a horizontal scrollbar or fractional device-pixel rounding, so the shell could be marginally taller than the space available and the document grew its own scrollbar beside the content one. Changed to `fixed inset-0`. The shell already owned its scrolling (`overflow-hidden` plus an inner `overflow-y-auto`), so nothing on `(app)` routes depended on the document scrolling.
+
+Verified at 100/110/125% zoom with classic scrollbars forced, across Services, Complexity and the offers list: the document no longer scrolls and exactly one scrollbar paints. Desktop and mobile layouts screenshotted unchanged.
+
+**⚠ Still open.** The sidebar resize handle (`AppShell.tsx`, the `absolute right-0 top-0 ... w-2 translate-x-1/2` div) hangs 4px past its scroll container, making the nav horizontally scrollable. It is invisible today because that container hides its own scrollbars (`[scrollbar-width:none]`), so it is cosmetic — but the obvious fix (dropping `translate-x-1/2`) would move the grab area under the nav's scrollbar track, so it needs a deliberate decision rather than a drive-by edit.
+
+Validation: 10/10 Playwright specs, 424 unit tests, typecheck, focused ESLint (one pre-existing `no-img-element` warning) and `npx next build` all pass.
+
 ## Product Type refactor plan
 
 ### Data model
