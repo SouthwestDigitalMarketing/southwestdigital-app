@@ -1,5 +1,6 @@
 "use client";
 
+import { KeyboardListRegion } from "@/components/keyboard/KeyboardListRegion";
 import Link from "next/link";
 import { Archive, Ban, Eye, FileSignature, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
@@ -184,6 +185,7 @@ export function IssuedAgreementsTable({ agreements }: { agreements: IssuedAgreem
           </div>
         ) : (
           <div className="overflow-x-auto">
+            <KeyboardListRegion openHrefs={Object.fromEntries(agreements.flatMap((agreement) => agreement.quotes[0] ? [[agreement.id, `/offers/${agreement.quotes[0].id}`]] : []))}>
             <table className="w-full min-w-[760px] text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50 text-left">
@@ -212,7 +214,7 @@ export function IssuedAgreementsTable({ agreements }: { agreements: IssuedAgreem
                   const offer = agreement.quotes[0];
 
                   return (
-                    <tr key={agreement.id} className="hover:bg-slate-50">
+                    <tr key={agreement.id} data-keyboard-row={agreement.id} className="hover:bg-slate-50">
                       <td className="px-5 py-4">
                         <input
                           type="checkbox"
@@ -299,6 +301,7 @@ export function IssuedAgreementsTable({ agreements }: { agreements: IssuedAgreem
                 })}
               </tbody>
             </table>
+            </KeyboardListRegion>
           </div>
         )}
       </div>

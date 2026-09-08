@@ -1,5 +1,7 @@
+import { SearchInput } from "@/components/keyboard/SearchInput";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { KeyboardListRegion } from "@/components/keyboard/KeyboardListRegion";
 import { requireStaffBrand } from "@/lib/brands/staff";
 import { parsePage, parseStatusFilter } from "@/lib/contacts/tags";
 import { CreateClientDialog } from "./CreateClientDialog";
@@ -50,6 +52,12 @@ export default async function ClientsPage({ searchParams }: { searchParams: Sear
 
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  // What Enter opens on the keyboard-focused row — the same destination as the
+  // row's existing View link, so keyboard and pointer never diverge.
+  const clientOpenHrefs = Object.fromEntries(
+    clients.map((client) => [client.id, `/clients/${client.id}`]),
+  );
+
   return (
     <div className="p-8">
       <h1 className="sr-only">Clients</h1>
@@ -75,7 +83,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Sear
       <form className="mt-6 rounded-xl border border-slate-200 bg-white p-4" method="get">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filters</p>
         <div className="mt-3 flex flex-wrap gap-3">
-          <input
+          <SearchInput
             name="q"
             defaultValue={q}
             placeholder="Search name or code"
@@ -106,6 +114,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Sear
         {clients.length === 0 ? (
           <div className="px-6 py-12 text-center text-sm text-slate-400">No clients yet.</div>
         ) : (
+          <KeyboardListRegion openHrefs={clientOpenHrefs}>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-left">
@@ -126,7 +135,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Sear
             </thead>
             <tbody className="divide-y divide-slate-100">
               {clients.map((client) => (
-                <tr key={client.id} className="hover:bg-slate-50">
+                <tr key={client.id} data-keyboard-row={client.id} className="hover:bg-slate-50">
                   <td className="px-5 py-3 font-medium text-slate-900">{client.name || "—"}</td>
                   <td className="px-5 py-3 font-mono text-xs text-slate-500">{client.code}</td>
                   <td className="px-5 py-3 text-slate-600">{client._count.contacts}</td>
@@ -153,6 +162,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Sear
               ))}
             </tbody>
           </table>
+          </KeyboardListRegion>
         )}
       </div>
 

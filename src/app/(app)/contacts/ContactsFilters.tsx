@@ -1,5 +1,6 @@
 "use client";
 
+import { SearchInput } from "@/components/keyboard/SearchInput";
 import { useRouter } from "next/navigation";
 import { TAG_KIND_LABELS, type ContactTagKindName } from "@/lib/contacts/tags";
 
@@ -71,7 +72,7 @@ export function ContactsFilters({
           push({ q: String(data.get("q") ?? "").trim() });
         }}
       >
-        <input
+        <SearchInput
           name="q"
           defaultValue={q}
           placeholder="Search name, email, company, role, or phone"

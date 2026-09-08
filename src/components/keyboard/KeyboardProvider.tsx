@@ -29,7 +29,7 @@ import {
   type CommandScope,
   type FlatCommand,
 } from "@/lib/keyboard/registry";
-import { EMPTY_SEQUENCE_STATE, feedSequence, type SequenceState } from "@/lib/keyboard/sequences";
+import { EMPTY_SEQUENCE_STATE, feedSequence, SEQUENCE_TIMEOUT_MS, type SequenceState } from "@/lib/keyboard/sequences";
 import { chordAllowedWhileTyping, isTypingContext } from "@/lib/keyboard/typingContext";
 import { CommandMenu } from "./CommandMenu";
 import { useLatestRef } from "./useLatestRef";
@@ -51,6 +51,7 @@ type KeyboardContextValue = {
   closeMenu: () => void;
   openHelp: () => void;
   closeHelp: () => void;
+  isCommandAvailable: (command: FlatCommand | Command) => boolean;
   runCommand: (command: FlatCommand | Command) => void;
 };
 
@@ -106,6 +107,7 @@ export function KeyboardProvider({
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [registeredActions, setRegisteredActions] = useState<ReadonlySet<string>>(new Set());
   const [pending, setPending] = useState<Chord[]>([]);
   const [scopeCounts, setScopeCounts] = useState<Record<string, number>>({});
 
@@ -135,6 +137,7 @@ export function KeyboardProvider({
   const registerAction = useCallback((id: string, handler: ActionHandler) => {
     const existing = actionHandlers.current.get(id) ?? [];
     actionHandlers.current.set(id, [...existing, handler]);
+    setRegisteredActions(new Set(actionHandlers.current.keys()));
     return () => {
       const handlers = actionHandlers.current.get(id) ?? [];
       const index = handlers.lastIndexOf(handler);
@@ -142,6 +145,7 @@ export function KeyboardProvider({
         const next = [...handlers.slice(0, index), ...handlers.slice(index + 1)];
         if (next.length) actionHandlers.current.set(id, next);
         else actionHandlers.current.delete(id);
+        setRegisteredActions(new Set(actionHandlers.current.keys()));
       }
     };
   }, []);
@@ -192,17 +196,29 @@ export function KeyboardProvider({
       if (handler) {
         setMenuOpen(false);
         setHelpOpen(false);
-        handler();
+        // Let the dialog unmount and restore focus before focusing page content.
+        if (document.querySelector("dialog[open]")) requestAnimationFrame(handler);
+        else handler();
       }
     },
     [router],
   );
 
+  const isCommandAvailable = useCallback((command: FlatCommand | Command) => {
+    if (!activeScopes.has(command.scope ?? "global")) return false;
+    if (command.href) return true;
+    return Boolean(command.action && (
+      ["menu.open", "help.open", "prefs.toggleSingleKeyShortcuts"].includes(command.action) ||
+      registeredActions.has(command.action)
+    ));
+  }, [activeScopes, registeredActions]);
+
   const bindings = useMemo(() => activeBindings(commands, activeScopes), [commands, activeScopes]);
 
   const runCommandRef = useLatestRef(runCommand);
   const bindingsRef = useLatestRef(bindings);
-  const commandsRef = useLatestRef(commands);
+  const commandById = useMemo(() => new Map(commands.map((command) => [command.id, command])), [commands]);
+  const commandsRef = useLatestRef(commandById);
   const isMacRef = useLatestRef(isMac);
   const singleKeyRef = useLatestRef(singleKeyShortcutsEnabled);
   // While an overlay owns the keyboard, global bindings stand down: the overlay
@@ -216,23 +232,32 @@ export function KeyboardProvider({
       if (event.isComposing || event.keyCode === 229) return;
       if (event.defaultPrevented) return;
       if (overlayOpenRef.current) return;
+      // Native dialogs and popovers own their keys, including non-text controls.
+      if (document.querySelector("dialog:modal, [popover]:popover-open")) return;
 
       const typing = isTypingContext(
         event.target as unknown as Parameters<typeof isTypingContext>[0],
       );
       const candidates = chordCandidates(event, isMacRef.current);
 
+      const availableBindings = bindingsRef.current.filter((binding) => {
+        const command = commandsRef.current.get(binding.id);
+        return command && (!command.action ||
+          ["menu.open", "help.open", "prefs.toggleSingleKeyShortcuts"].includes(command.action) ||
+          actionHandlers.current.has(command.action));
+      });
+
       for (const chord of candidates) {
         if (typing && !chordAllowedWhileTyping(chord)) continue;
         // The accessibility opt-out: only modifier chords survive.
         if (!singleKeyRef.current && !chordAllowedWhileTyping(chord)) continue;
 
-        const result = feedSequence(bindingsRef.current, sequenceState.current, chord, Date.now());
+        const result = feedSequence(availableBindings, sequenceState.current, chord, Date.now());
 
         if (result.type === "match") {
-          const command = commandsRef.current.find((item) => item.id === result.id);
+          const command = commandsRef.current.get(result.id);
           sequenceState.current = result.state;
-          setPending([]);
+          setPending((current) => current.length ? [] : current);
           if (command) {
             // Only swallow a key once we know we are acting on it. Anything we
             // do not handle must reach the browser untouched.
@@ -254,7 +279,7 @@ export function KeyboardProvider({
 
       if (sequenceState.current.pending.length > 0) {
         sequenceState.current = EMPTY_SEQUENCE_STATE;
-        setPending([]);
+        setPending((current) => current.length ? [] : current);
       }
     }
 
@@ -262,12 +287,39 @@ export function KeyboardProvider({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [bindingsRef, commandsRef, isMacRef, overlayOpenRef, runCommandRef, singleKeyRef]);
 
+  /**
+   * Mark the document once the global listener is attached.
+   *
+   * Until hydration completes there is no key handling at all, and nothing on
+   * screen says so. This gives automated tests a signal to wait for instead of
+   * racing hydration, and gives anyone debugging a "my shortcut did nothing"
+   * report a way to tell "not mounted yet" from "bound but wrong".
+   */
+  useEffect(() => {
+    document.documentElement.dataset.keyboardReady = "true";
+    document.documentElement.dataset.keyboardScopes = [...activeScopes].join(" ");
+    return () => {
+      delete document.documentElement.dataset.keyboardReady;
+      delete document.documentElement.dataset.keyboardScopes;
+    };
+  }, [activeScopes]);
+
+  // The visible hint must expire along with the matcher's prefix.
+  useEffect(() => {
+    if (pending.length === 0) return;
+    const timeout = window.setTimeout(() => {
+      sequenceState.current = EMPTY_SEQUENCE_STATE;
+      setPending((current) => current.length ? [] : current);
+    }, SEQUENCE_TIMEOUT_MS);
+    return () => window.clearTimeout(timeout);
+  }, [pending]);
+
   // Drop a half-typed sequence when focus leaves the document, so returning to
   // the tab does not resume a prefix the user has long forgotten.
   useEffect(() => {
     function reset() {
       sequenceState.current = EMPTY_SEQUENCE_STATE;
-      setPending([]);
+      setPending((current) => current.length ? [] : current);
     }
     window.addEventListener("blur", reset);
     return () => window.removeEventListener("blur", reset);
@@ -288,6 +340,7 @@ export function KeyboardProvider({
       openHelp,
       closeHelp,
       runCommand,
+      isCommandAvailable,
     }),
     [
       commands,
@@ -302,6 +355,7 @@ export function KeyboardProvider({
       openHelp,
       closeHelp,
       runCommand,
+      isCommandAvailable,
     ],
   );
 

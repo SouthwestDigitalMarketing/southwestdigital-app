@@ -35,7 +35,10 @@ type Row = { command: FlatCommand; section: "here" | "deeper" };
  * Omarchy has the same constraint and resolves it the same way.
  */
 export function CommandMenu() {
-  const { commands, isMac, closeMenu, runCommand } = useKeyboard();
+  const { commands: allCommands, isMac, closeMenu, runCommand, isCommandAvailable } = useKeyboard();
+  const commands = useMemo(() => allCommands.filter((command) => isGroup(command)
+    ? subtreeCommands(allCommands, command.id).some(isCommandAvailable)
+    : isCommandAvailable(command)), [allCommands, isCommandAvailable]);
   const [query, setQuery] = useState("");
   const [parentId, setParentId] = useState<string | null>(null);
   const [requestedCursor, setCursor] = useState(0);
@@ -73,6 +76,18 @@ export function CommandMenu() {
     const active = listRef.current?.querySelector<HTMLElement>('[data-active="true"]');
     active?.scrollIntoView({ block: "nearest" });
   }, [cursor, rows]);
+
+  /**
+   * The filter input owns focus for the whole life of the menu.
+   *
+   * Descending with the mouse otherwise moves focus to the <dialog>, and this
+   * component's key handler sits on a div *inside* that dialog — so it would
+   * stop receiving events and the keyboard would go dead after any click.
+   * Typing must also keep filtering, which only works while the input is focused.
+   */
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, [parentId]);
 
   const descend = useCallback((command: FlatCommand) => {
     setParentId(command.id);
@@ -112,14 +127,19 @@ export function CommandMenu() {
 
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+      if (event.altKey) return;
       // The door toggles: pressing the open chord again closes the menu. The
       // global listener stands down while an overlay is open, so this has to be
       // handled here.
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+      if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "k") {
         event.preventDefault();
         closeMenu();
         return;
       }
+
+      if ((event.ctrlKey || event.metaKey) && !(event.ctrlKey && event.key === "u")) return;
 
       switch (event.key) {
         case "ArrowDown":
@@ -139,10 +159,12 @@ export function CommandMenu() {
           move(-PAGE_JUMP);
           return;
         case "Home":
+          if (query !== "") return;
           event.preventDefault();
           setCursor(0);
           return;
         case "End":
+          if (query !== "") return;
           event.preventDefault();
           setCursor(Math.max(0, rows.length - 1));
           return;
@@ -294,6 +316,9 @@ function CommandRow({
       aria-selected={active}
       data-active={active}
       onClick={onSelect}
+      // Keep the caret in the filter input: the menu is a combobox, and a row
+      // is a value to pick, not somewhere to put focus.
+      onMouseDown={(event) => event.preventDefault()}
       onMouseMove={onHover}
       className="ui-command-menu-row"
     >

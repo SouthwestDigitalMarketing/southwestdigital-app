@@ -50,6 +50,39 @@ describe("the app keymap", () => {
     });
   });
 
+  it("never dispatches Enter from the document", () => {
+    // A global Enter binding must call preventDefault whenever its scope is
+    // live, which swallows Enter on every focused link and button on the page.
+    // Enter belongs to whichever element is focused; the row handles its own.
+    activeBindings(flat, new Set(["global", "list", "builder"])).forEach((binding) => {
+      binding.sequence.forEach((chord) => {
+        expect(chord.key, `${String(binding.id)} dispatches Enter globally`).not.toBe("enter");
+      });
+    });
+  });
+
+  it("keeps focused-widget arrows out of the global dispatcher", () => {
+    const bindings = activeBindings(flat, new Set(["global", "list", "builder"]));
+    for (const binding of bindings) {
+      expect(binding.sequence.some((chord) => ["up", "down"].includes(chord.key))).toBe(false);
+    }
+  });
+
+  it("dispatches builder steps through offer-aware handlers", () => {
+    for (const step of BUILDER_STEPS) {
+      const command = flat.find((item) => item.id === step.id);
+      expect(command?.action).toBe(step.id);
+      expect(command?.href).toBeUndefined();
+    }
+  });
+
+  it("still documents Enter and o in the help sheet", () => {
+    // Documentation-only commands must remain visible, or a working shortcut
+    // becomes undiscoverable.
+    const shown = helpGroups(flat).flatMap((group) => group.commands.map((c) => c.id));
+    expect(shown).toContain("list.open");
+  });
+
   it("keeps the command menu reachable from inside a text field", () => {
     const menu = flat.find((command) => command.id === "menu.open");
     expect(menu?.sequence).toHaveLength(1);

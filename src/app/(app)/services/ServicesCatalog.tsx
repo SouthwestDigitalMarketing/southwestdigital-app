@@ -1,5 +1,6 @@
 "use client";
 
+import { KeyboardListRegion } from "@/components/keyboard/KeyboardListRegion";
 import { Archive, ArchiveRestore, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronUp, Pencil, Trash2 } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
@@ -248,6 +249,7 @@ export function ServicesCatalog({
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Service list</p>
           </div>
           <div className="overflow-x-auto">
+            <KeyboardListRegion enabled={sortedServices.length > 0 && !pending && !editingId && !creating} onOpen={(id) => { setEditingId(id); setCreating(false); }}>
             <table className="w-full text-base">
             <thead>
               <tr className="border-b border-slate-100 text-left">
@@ -276,7 +278,7 @@ export function ServicesCatalog({
                     </td>
                   </tr>
                 ) : (
-                  <tr key={service.id} className={`${index % 2 === 0 ? "bg-white" : "bg-slate-50/50"} hover:bg-slate-50`}>
+                  <tr key={service.id} data-keyboard-row={service.id} className={`${index % 2 === 0 ? "bg-white" : "bg-slate-50/50"} hover:bg-slate-50`}>
                     <td className="px-5 py-4 font-bold text-slate-900">{service.name}</td>
                     <td className="px-5 py-4 text-slate-600">
                       {service.clientBenefit || service.internalDescription || <span className="text-slate-400">—</span>}
@@ -347,6 +349,7 @@ export function ServicesCatalog({
               )}
             </tbody>
             </table>
+            </KeyboardListRegion>
           </div>
         </div>
       )}
@@ -389,7 +392,7 @@ function ServiceForm({
       <div className="grid gap-3 md:grid-cols-2">
         <label className="grid gap-1 text-sm font-medium text-slate-600">
           Service title
-          <input name="name" required defaultValue={service?.name ?? ""} className={inputClass} />
+          <input autoFocus name="name" required defaultValue={service?.name ?? ""} className={inputClass} />
         </label>
         <label className="grid gap-1 text-sm font-medium text-slate-600">
           Code

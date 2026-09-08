@@ -28,6 +28,7 @@ import { DuplicateOfferButton } from "./DuplicateOfferButton";
 import { DuplicateOfferFocus } from "./DuplicateOfferFocus";
 import { SendOfferEmailButton } from "./SendOfferEmailButton";
 import { OfferEditButton } from "./OfferEditButton";
+import { KeyboardListRegion } from "@/components/keyboard/KeyboardListRegion";
 import styles from "./offers-table.module.css";
 
 type SortKey = "contact" | "status" | "mrr" | "lump" | "lastSent";
@@ -223,6 +224,29 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
     .filter((item): item is NonNullable<typeof item> => item !== null)
     .sort((a, b) => b.daysStale - a.daysStale);
 
+  // Open drafts for editing and published offers in authorized staff preview.
+  // A row shortcut must never bypass the viewed/signed offer edit warning.
+  const rowOpenHrefs = Object.fromEntries(
+    listed.map((quote) => {
+      const rowSnapshot =
+        quote.snapshotJson && typeof quote.snapshotJson === "object"
+          ? (quote.snapshotJson as { contactIds?: string[]; kind?: string })
+          : {};
+      return [
+        quote.id,
+        deriveLifecycleStage(quote) === "DRAFT"
+          ? resumeOfferHref({
+              id: quote.id,
+              kind: rowSnapshot.kind ?? quote.kind,
+              snapshot: rowSnapshot,
+            })
+          : quote.publicToken
+            ? `/proposal/${quote.publicToken}?staffPreview=1`
+            : `/offers/${quote.id}`,
+      ];
+    }),
+  );
+
   return (
     <div className="px-8 pb-8">
       <h1 className="sr-only">Offers</h1>
@@ -317,6 +341,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
             </p>
           </div>
         ) : (
+          <KeyboardListRegion openHrefs={rowOpenHrefs}>
           <table className={styles.table}>
             <thead>
               <tr className="bg-slate-50 text-left">
@@ -420,6 +445,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                 return (
                   <tr
                     id={`offer-row-${quote.id}`}
+                    data-keyboard-row={quote.id}
                     key={quote.id}
                     className={`hover:bg-slate-50 ${quote.id === highlightId ? "offer-row-highlight" : ""}`}
                   >
@@ -543,6 +569,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
               })}
             </tbody>
           </table>
+          </KeyboardListRegion>
         )}
         </div>
       </section>

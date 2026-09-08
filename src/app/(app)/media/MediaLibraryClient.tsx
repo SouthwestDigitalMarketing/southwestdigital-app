@@ -1,5 +1,6 @@
 "use client";
 
+import { KeyboardListRegion } from "@/components/keyboard/KeyboardListRegion";
 import { useMemo, useState, useTransition } from "react";
 import { Folder, FolderPlus, Pencil, Plus, Trash2, Video, X, Check } from "lucide-react";
 import {
@@ -231,6 +232,7 @@ export default function MediaLibraryClient({
           ) : null}
 
           <div className="space-y-3">
+            <KeyboardListRegion enabled={visibleItems.length > 0 && !isPending && !editingId && !showAddForm} onOpen={setEditingId}>
             {visibleItems.map((item) =>
               editingId === item.id ? (
                 <EditItemForm
@@ -252,6 +254,8 @@ export default function MediaLibraryClient({
                 />
               ),
             )}
+
+            </KeyboardListRegion>
 
             {showAddForm ? (
               <AddItemForm
@@ -315,7 +319,7 @@ function MediaItemRow({
   onDelete: () => void;
 }) {
   return (
-    <div className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3">
+    <div data-keyboard-row={item.id} className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3">
       {item.type === "image" ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={item.url} alt="" className="h-12 w-12 shrink-0 rounded-lg object-cover" />
@@ -470,6 +474,7 @@ function MediaFormFields({
       <div>
         <label className="block text-xs font-semibold text-slate-600">Name</label>
         <input
+          autoFocus
           name="name"
           type="text"
           required

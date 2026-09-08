@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { KeyboardListRegion } from "@/components/keyboard/KeyboardListRegion";
 import { requireStaffBrand } from "@/lib/brands/staff";
 import { formatPhone } from "@/lib/phone";
 import { ensureDefaultContactTags } from "@/lib/contacts/seed";
@@ -131,6 +132,12 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
 
+  // What Enter opens on the keyboard-focused row — the same destination as the
+  // row's existing Edit link, so keyboard and pointer never diverge.
+  const contactOpenHrefs = Object.fromEntries(
+    contacts.map((contact) => [contact.id, `/contacts/${contact.id}`]),
+  );
+
   return (
     <div className="p-8">
       <div>
@@ -193,6 +200,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
             No contacts match these filters.
           </div>
         ) : (
+          <KeyboardListRegion openHrefs={contactOpenHrefs}>
           <table className="w-full table-fixed text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-left">
@@ -215,7 +223,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
             </thead>
             <tbody className="divide-y divide-slate-100">
               {contacts.map((contact) => (
-                <tr key={contact.id} className="hover:bg-slate-50">
+                <tr key={contact.id} data-keyboard-row={contact.id} className="hover:bg-slate-50">
                   <td className="px-4 py-2">
                     <div
                       className={`truncate whitespace-nowrap font-medium ${
@@ -259,6 +267,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
               ))}
             </tbody>
           </table>
+          </KeyboardListRegion>
         )}
       </div>
 

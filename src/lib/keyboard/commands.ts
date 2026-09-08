@@ -134,7 +134,7 @@ export const APP_COMMANDS: Command[] = [
     children: BUILDER_STEPS.map((step) => ({
       id: step.id,
       title: step.title,
-      href: step.href,
+      action: step.id,
       keys: step.digit,
       scope: "builder" as const,
       group: "Builder step",
@@ -208,6 +208,7 @@ export const APP_COMMANDS: Command[] = [
     title: "Next row",
     action: "list.next",
     keys: "down",
+    documentationOnly: true,
     scope: "list",
     group: "Lists",
     hiddenFromMenu: true,
@@ -227,11 +228,15 @@ export const APP_COMMANDS: Command[] = [
     title: "Previous row",
     action: "list.previous",
     keys: "up",
+    documentationOnly: true,
     scope: "list",
     group: "Lists",
     hiddenFromMenu: true,
     hiddenFromHelp: true,
   },
+  // Enter and `o` are handled by the focused row itself, never dispatched from
+  // the document. A global Enter binding would preventDefault every Enter press
+  // while a list is on the page, breaking Enter on every other link and button.
   {
     id: "list.open",
     title: "Open focused row",
@@ -240,6 +245,7 @@ export const APP_COMMANDS: Command[] = [
     scope: "list",
     group: "Lists",
     hiddenFromMenu: true,
+    documentationOnly: true,
   },
   {
     id: "list.open.alias",
@@ -250,6 +256,7 @@ export const APP_COMMANDS: Command[] = [
     group: "Lists",
     hiddenFromMenu: true,
     hiddenFromHelp: true,
+    documentationOnly: true,
   },
   {
     id: "list.top",

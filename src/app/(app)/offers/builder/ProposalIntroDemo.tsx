@@ -64,8 +64,10 @@ export default function ProposalIntroDemo({
     const params = new URLSearchParams(searchParams.toString());
     params.delete("preview");
     const query = params.toString();
-    router.replace(query ? `/offers/intro?${query}` : "/offers/intro", { scroll: false });
-  }, [router, searchParams]);
+    // Preview is local presentation state. Avoid refetching the server page
+    // (and leaving its modal open while the database responds) just to close it.
+    window.history.replaceState(null, "", query ? `/offers/intro?${query}` : "/offers/intro");
+  }, [searchParams]);
 
   useEffect(() => {
     if (!isRoutedFullscreenPreview) return;

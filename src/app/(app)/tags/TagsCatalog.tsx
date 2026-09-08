@@ -1,5 +1,6 @@
 "use client";
 
+import { KeyboardListRegion } from "@/components/keyboard/KeyboardListRegion";
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/Modal";
@@ -228,6 +229,7 @@ export function TagsCatalog({
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tag list</p>
           </div>
           <div className="overflow-x-auto">
+            <KeyboardListRegion enabled={tags.length > 0 && !pending && !editingId} onOpen={setEditingId}>
             <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-left">
@@ -250,7 +252,7 @@ export function TagsCatalog({
             </thead>
             <tbody className="divide-y divide-slate-100">
               {tags.map((tag) => (
-                <tr key={tag.id}>
+                <tr key={tag.id} data-keyboard-row={editingId === tag.id ? undefined : tag.id}>
                   {editingId === tag.id ? (
                     <td colSpan={5} className="px-4 py-3">
                       <form
@@ -262,7 +264,7 @@ export function TagsCatalog({
                         }}
                       >
                         <input type="hidden" name="tagId" value={tag.id} />
-                        <input name="label" required defaultValue={tag.label} className={inputClass} />
+                        <input autoFocus name="label" required defaultValue={tag.label} className={inputClass} />
                         <KindSelect name="kind" defaultValue={tag.kind} />
                         <button type="submit" disabled={pending} className={ghost}>
                           Save
@@ -326,6 +328,7 @@ export function TagsCatalog({
               ))}
             </tbody>
             </table>
+            </KeyboardListRegion>
           </div>
         </div>
       )}

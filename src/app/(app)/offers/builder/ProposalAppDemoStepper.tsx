@@ -60,8 +60,7 @@ export default function ProposalAppDemoStepper({
   const query = searchParams.toString();
   const activeIndex = STEP_ITEMS.findIndex((step) => step.id === currentStep);
 
-  // Makes the builder-scoped keys live: the digits 1-8 (plain href commands in
-  // the keymap) plus the [ and ] motions handled below.
+  // Activate the builder commands; all paths preserve the current offer query.
   useKeyboardScope("builder");
 
   // The query string carries ?offer=, so dropping it would silently move the
@@ -79,6 +78,15 @@ export default function ProposalAppDemoStepper({
     },
     [hrefFor, router],
   );
+
+  useKeyboardAction("builder.step.contact", () => goToStep(0));
+  useKeyboardAction("builder.step.scale", () => goToStep(1));
+  useKeyboardAction("builder.step.complexity", () => goToStep(2));
+  useKeyboardAction("builder.step.services", () => goToStep(3));
+  useKeyboardAction("builder.step.adjustments", () => goToStep(4));
+  useKeyboardAction("builder.step.style", () => goToStep(5));
+  useKeyboardAction("builder.step.publish", () => goToStep(6));
+  useKeyboardAction("builder.step.email", () => goToStep(7));
 
   useKeyboardAction("builder.previousStep", () => goToStep(activeIndex - 1));
   useKeyboardAction("builder.nextStep", () => goToStep(activeIndex + 1));

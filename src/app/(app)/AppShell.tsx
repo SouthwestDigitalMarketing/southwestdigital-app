@@ -346,6 +346,25 @@ export function AppShell({
         role="separator"
         aria-label="Resize sidebar"
         aria-orientation="vertical"
+        tabIndex={0}
+        aria-valuemin={64}
+        aria-valuemax={320}
+        aria-valuenow={collapsed ? 64 : sidebarWidth}
+        aria-valuetext={collapsed ? "Collapsed" : `${Math.round(sidebarWidth)} pixels`}
+        title="Resize sidebar: Left/Right arrows, Home to collapse, End to expand"
+        onKeyDown={(event) => {
+          if (event.altKey || event.ctrlKey || event.metaKey) return;
+          const width = collapsed ? 64 : sidebarWidth;
+          let next: number;
+          if (event.key === "Home") next = 64;
+          else if (event.key === "End") next = 320;
+          else if (event.key === "ArrowLeft") next = Math.max(64, width - 16);
+          else if (event.key === "ArrowRight") next = Math.min(320, collapsed ? 112 : width + 16);
+          else return;
+          event.preventDefault();
+          setCollapsed(next <= 96);
+          setSidebarWidth(next <= 96 ? 64 : next);
+        }}
         onPointerDown={(event) => {
           event.currentTarget.setPointerCapture(event.pointerId);
           setResizingSidebar(true);
@@ -366,7 +385,7 @@ export function AppShell({
           setResizingSidebar(false);
         }}
         onPointerCancel={() => setResizingSidebar(false)}
-        className={`absolute right-0 top-0 z-10 h-full w-2 translate-x-1/2 cursor-ew-resize ${resizingSidebar ? "bg-slate-400/20" : "hover:bg-slate-400/10"}`}
+        className={`absolute right-0 top-0 z-10 h-full w-2 cursor-ew-resize focus-visible:outline-2 focus-visible:outline-[var(--theme-accent)] focus-visible:-outline-offset-2 ${resizingSidebar ? "bg-slate-400/20" : "hover:bg-slate-400/10"}`}
         style={{ touchAction: "none" }}
       />
 

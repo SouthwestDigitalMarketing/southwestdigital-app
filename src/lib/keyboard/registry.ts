@@ -44,6 +44,16 @@ export type Command = {
   hiddenFromHelp?: boolean;
   /** Keep out of the menu (pure motions like j/k, which make no sense there). */
   hiddenFromMenu?: boolean;
+  /**
+   * Document the key without registering it as a global binding.
+   *
+   * For keys a component must handle itself because they are only meaningful on
+   * a specific focused element. Enter is the motivating case: dispatching it
+   * globally means calling preventDefault on every Enter press while the scope
+   * is live, which silently breaks Enter on every focused link and button on the
+   * page.
+   */
+  documentationOnly?: boolean;
 };
 
 export type FlatCommand = Command & {
@@ -137,7 +147,10 @@ export function activeBindings(
   scopes: ReadonlySet<CommandScope>,
 ): SequenceBinding[] {
   return commands
-    .filter((command) => command.sequence && scopes.has(command.scope ?? "global"))
+    .filter(
+      (command) =>
+        command.sequence && !command.documentationOnly && scopes.has(command.scope ?? "global"),
+    )
     .map((command) => ({ id: command.id, sequence: command.sequence as Chord[] }));
 }
 

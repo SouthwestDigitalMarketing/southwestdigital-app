@@ -21,7 +21,7 @@ export function ShortcutHelp() {
     isMac,
     closeHelp,
     runCommand,
-    activeScopes,
+    isCommandAvailable,
     singleKeyShortcutsEnabled,
     setSingleKeyShortcutsEnabled,
   } = useKeyboard();
@@ -54,7 +54,7 @@ export function ShortcutHelp() {
               Keyboard shortcuts
             </h2>
             <p className="ui-shortcut-help-subtitle">
-              Press a row to run it. Everything here is also reachable from the command menu.
+              Press an available row to run it. Enter opens a row when that row has focus.
             </p>
           </div>
           <kbd className="ui-kbd">?</kbd>
@@ -90,7 +90,7 @@ export function ShortcutHelp() {
                       isMac={isMac}
                       /* A scoped binding only fires where it applies; saying so
                          prevents "I pressed j and nothing happened". */
-                      available={activeScopes.has(command.scope ?? "global")}
+                      available={isCommandAvailable(command)}
                       onRun={() => runCommand(command)}
                     />
                   ))}
@@ -135,7 +135,7 @@ function ShortcutRow({
   onRun: () => void;
 }) {
   const label = command.sequence ? formatSequence(command.sequence, isMac) : "";
-  const runnable = isRunnable(command) && available;
+  const runnable = isRunnable(command) && available && !command.documentationOnly;
 
   return (
     <li>
@@ -143,7 +143,7 @@ function ShortcutRow({
         type="button"
         onClick={onRun}
         disabled={!runnable}
-        title={available ? undefined : `Available in the ${command.scope} context`}
+        title={command.documentationOnly ? "Use this key on the focused row" : available ? undefined : "Unavailable on this page"}
         className="ui-shortcut-help-row"
       >
         <span className="ui-shortcut-help-row-title">{command.title}</span>

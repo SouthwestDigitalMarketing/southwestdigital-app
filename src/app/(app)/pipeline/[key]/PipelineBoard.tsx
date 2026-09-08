@@ -1,5 +1,6 @@
 "use client";
 
+import { KeyboardListRegion } from "@/components/keyboard/KeyboardListRegion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
@@ -101,9 +102,10 @@ export default function PipelineBoard({
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-slate-900">Pipeline stages</h2>
-          <p className="text-xs text-slate-500">Drag a card between stages, or click one to open its details.</p>
+          <p className="text-xs text-slate-500">Open a card to view details and move it to another stage, or drag it between stages.</p>
         </div>
         <div className="overflow-x-auto pb-2">
+          <KeyboardListRegion enabled={items.length > 0 && !selectedId && !pending} onOpen={(id) => { setSelectedId(id); setCallNote(""); setActionError(null); }}>
           <div className="grid min-w-max grid-flow-col auto-cols-[320px] gap-3">
             {stages.map((stage, index) => {
               const columnItems = items.filter((item) => item.stageId === stage.id);
@@ -134,6 +136,7 @@ export default function PipelineBoard({
                     {columnItems.map((item) => (
                       <button
                         key={item.id}
+                        data-keyboard-row={item.id}
                         type="button"
                         draggable
                         onDragStart={(event) => {
@@ -146,7 +149,7 @@ export default function PipelineBoard({
                           setCallNote("");
                           setActionError(null);
                         }}
-                        className={`cursor-pointer rounded-xl border px-3 py-2 text-left transition ${
+                        className={`ui-action-ghost cursor-pointer rounded-xl border px-3 py-2 text-left transition ${
                           selectedId === item.id
                             ? "border-slate-700 bg-white shadow-md"
                             : "border-slate-300 bg-white shadow-sm hover:border-slate-500 hover:shadow-md"
@@ -165,6 +168,7 @@ export default function PipelineBoard({
               );
             })}
           </div>
+          </KeyboardListRegion>
         </div>
       </section>
 

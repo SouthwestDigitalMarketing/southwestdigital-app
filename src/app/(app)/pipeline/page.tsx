@@ -1,3 +1,4 @@
+import { KeyboardListRegion } from "@/components/keyboard/KeyboardListRegion";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireStaffBrand } from "@/lib/brands/staff";
@@ -134,6 +135,7 @@ export default async function PipelineIndexPage({ searchParams }: { searchParams
             No pipelines yet. Create starter pipelines above or add one manually.
           </p>
         ) : (
+          <KeyboardListRegion openHrefs={Object.fromEntries(pipelines.map((pipeline) => [pipeline.id, `/pipeline/${encodeURIComponent(pipeline.key)}`]))}>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-left">
@@ -146,7 +148,7 @@ export default async function PipelineIndexPage({ searchParams }: { searchParams
             </thead>
             <tbody className="divide-y divide-slate-100">
               {pipelines.map((pipeline, index) => (
-                <tr key={pipeline.id} className={index % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                <tr key={pipeline.id} data-keyboard-row={pipeline.id} className={index % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
                   <td className="px-5 py-4 align-top">
                     <Link href={`/pipeline/${encodeURIComponent(pipeline.key)}`} className="font-semibold text-brandnavy hover:underline">
                       {pipeline.name}
@@ -165,6 +167,7 @@ export default async function PipelineIndexPage({ searchParams }: { searchParams
               ))}
             </tbody>
           </table>
+          </KeyboardListRegion>
         )}
       </div>
     </div>

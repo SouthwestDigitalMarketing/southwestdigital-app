@@ -1,5 +1,6 @@
 "use client";
 
+import { KeyboardListRegion } from "@/components/keyboard/KeyboardListRegion";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Archive, ArchiveRestore, Pencil, Plus, X, Check } from "lucide-react";
@@ -143,6 +144,7 @@ export function DiscountsCatalog({
         </div>
       ) : null}
 
+      <KeyboardListRegion enabled={visibleDiscounts.length > 0 && !pending && !editingId} onOpen={setEditingId}>
       {visibleDiscounts.map((discount) =>
         editingId === discount.id ? (
           <DiscountForm
@@ -167,6 +169,8 @@ export function DiscountsCatalog({
           />
         ),
       )}
+
+      </KeyboardListRegion>
 
       {editingId === "new" ? (
         <DiscountForm
@@ -208,7 +212,7 @@ function DiscountCard({
   const schedule = formatDiscountSchedule(discount);
 
   return (
-    <div className={`rounded-xl border bg-white px-5 py-3 ${discount.active ? "border-slate-200" : "border-slate-200 opacity-60"}`}>
+    <div data-keyboard-row={discount.id} className={`rounded-xl border bg-white px-5 py-3 ${discount.active ? "border-slate-200" : "border-slate-200 opacity-60"}`}>
       <div className="flex items-center justify-between gap-4">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-1">
           <p className="truncate text-base font-semibold text-slate-900">{discount.name}</p>
@@ -304,6 +308,7 @@ function DiscountForm({
       <label className={labelClass}>
         Internal name
         <input
+          autoFocus
           name="name"
           required
           defaultValue={discount?.name ?? ""}
