@@ -149,6 +149,50 @@ test.describe("Offer builder — Services step", () => {
     expect(scrolled).toBe(0);
   });
 
+  // The shell used h-dvh, which ignores space taken by a scrollbar or
+  // fractional device-pixel rounding, so the document could gain a scrollbar of
+  // its own beside the content one. Users with classic (space-taking)
+  // scrollbars saw two bars down the right-hand side.
+  test("shows exactly one vertical scrollbar, not two", async ({ page }) => {
+    // Force classic, space-taking scrollbars; headless defaults to overlay
+    // scrollbars, which hide this class of bug entirely.
+    await page.addStyleTag({
+      content: `* { scrollbar-width: auto !important; }
+        ::-webkit-scrollbar { width: 15px !important; height: 15px !important; display: block !important; }`,
+    });
+    await page.waitForTimeout(400);
+
+    const result = await page.evaluate(() => {
+      const beforeX = window.scrollX;
+      const beforeY = window.scrollY;
+      window.scrollTo(9999, 9999);
+      const maxX = window.scrollX;
+      const maxY = window.scrollY;
+      window.scrollTo(beforeX, beforeY);
+
+      const painted: string[] = [];
+      const candidates: HTMLElement[] = [
+        document.documentElement,
+        ...Array.from(document.querySelectorAll<HTMLElement>("*")),
+      ];
+      for (const el of candidates) {
+        const rect = el.getBoundingClientRect();
+        if (rect.width < 2 || rect.height < 2) continue;
+        const s = getComputedStyle(el);
+        if (s.display.startsWith("inline") && !s.display.includes("block")) continue;
+        const borderX = parseFloat(s.borderLeftWidth) + parseFloat(s.borderRightWidth);
+        if (el.offsetWidth - el.clientWidth - borderX > 2) {
+          painted.push(el.tagName.toLowerCase() + "." + String(el.className).split(/\s+/)[0]);
+        }
+      }
+      return { maxX, maxY, painted };
+    });
+
+    expect(result.maxY).toBe(0); // the document itself must never scroll
+    expect(result.maxX).toBe(0);
+    expect(result.painted).toHaveLength(1);
+  });
+
   test("keeps the coverage sidebar sticky while the content scrolls", async ({
     page,
   }) => {

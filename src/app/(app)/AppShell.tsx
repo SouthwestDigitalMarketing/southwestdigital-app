@@ -371,11 +371,18 @@ export function AppShell({
     </div>
   );
 
+  // The shell is pinned to the viewport (fixed inset-0) rather than sized with
+  // h-dvh. 100dvh is the full viewport height and ignores space taken by a
+  // horizontal scrollbar or fractional device-pixel rounding, so the shell could
+  // end up marginally taller than the space actually available and give the
+  // *document* its own scrollbar, on top of the one .app-shell-main already
+  // owns — two scrollbars down the right-hand side. Anchoring to inset-0 makes
+  // the shell exactly the viewport, so only the content area ever scrolls.
   return (
     <div
       data-theme={mode}
       data-appearance={appearance}
-      className="app-shell-root flex h-dvh overflow-hidden"
+      className="app-shell-root fixed inset-0 flex overflow-hidden"
       style={{
         backgroundColor: "var(--app-canvas)",
         "--theme-light": light,
