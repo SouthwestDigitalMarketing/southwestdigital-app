@@ -49,17 +49,16 @@ import ServiceOfferEditor from "./ServiceOfferEditor";
 import ProposalAddOnsDemo, { TierRangeControl } from "./ProposalAddOnsDemo";
 
 describe("service editor rendering", () => {
-  it("shows placement separately from frequency with the saved choice selected", () => {
+  it("keeps frequency and add-on pricing without a placement control", () => {
     const html = renderToStaticMarkup(createElement(ServiceOfferEditor, {
       name: "Reports", description: "Details", names: saved.packageNames,
       initial: { included: ["maintain"], optional: ["grow"], cadence: "monthly",
-        price: 65, visible: true, includedPlacement: "included" },
+        price: 65, visible: true },
       onApply: vi.fn(), onCancel: vi.fn(),
     }));
-    expect(html).toContain("Show in");
-    expect(html).toContain('value="included" selected=""');
-    expect(html).toContain("Main service list");
-    expect(html).toContain("Included with this package");
+    expect(html).not.toContain("Show in");
+    expect(html).not.toContain("Main service list");
+    expect(html).not.toContain("Automatic (existing layout)");
     expect(html).toContain('value="monthly" selected=""');
     expect(html).toContain("Add-on price");
   });

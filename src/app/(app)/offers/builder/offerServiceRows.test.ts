@@ -85,12 +85,12 @@ describe("buildOptions golden fixtures", () => {
 });
 
 
-describe("included service card placement", () => {
+describe("consolidated included services", () => {
   function configured(cadence: "monthly" | "one-time", placement: "main" | "included") {
     const saved = assessmentFrom("01-draft-draft.snapshot.json");
     const bonus = {
       id: "placement-test", name: "Placement test", description: "Details",
-      archived: false, billingCadence: cadence,
+      archived: false, billingCadence: cadence, includedPlacement: placement,
       defaultPackageIds: ["maintain", "improve", "grow"] as const,
     };
     const assessment: AssessmentState = {
@@ -99,28 +99,22 @@ describe("included service card placement", () => {
       bonusPackageSelections: {},
     };
     const config = readServiceConfiguration(assessment, { id: bonus.id, bonus: assessment.bonuses[0] });
-    const next = applyServiceConfiguration(assessment, bonus.id, { ...config, includedPlacement: placement });
+    const next = applyServiceConfiguration(assessment, bonus.id, config);
     return { before: buildOptions(assessment), after: buildOptions(next) };
   }
 
-  it.each(["monthly", "one-time"] as const)("moves %s inclusions without changing cadence or prices", (cadence) => {
+  it.each(["monthly", "one-time"] as const)("lists %s inclusions regardless of saved placement without changing billing", (cadence) => {
     for (const placement of ["main", "included"] as const) {
       const { before, after } = configured(cadence, placement);
       for (const tier of PACKAGE_IDS) {
         const card = pricingCardServices(after[tier]);
-        const main = [...card.orderedRecurring, ...card.mainOneTime];
-        expect(main.some((row) => row.serviceName === "Placement test")).toBe(placement === "main");
-        expect(card.displayedBonuses.some((row) => row.serviceName === "Placement test")).toBe(placement === "included");
-        expect(after[tier].monthlyPrice).toBe(before[tier].monthlyPrice);
-        for (const key of ["recurringRows", "oneTimeRows"] as const) {
-          expect(after[tier][key].map((row) => { const copy = { ...row }; delete copy.includedPlacement; return copy; }))
-            .toEqual(before[tier][key].map((row) => { const copy = { ...row }; delete copy.includedPlacement; return copy; }));
-        }
+        expect(card.includedRows.map((row) => row.serviceName)).toEqual(["Placement test"]);
+        expect(after[tier]).toEqual(before[tier]);
       }
     }
   });
 
-  it("does not promote explicitly main-list bookkeeping or support as a fallback bonus", () => {
+  it("includes bookkeeping and support saved with main-list placement", () => {
     const row = (id: string, serviceName: string) => ({ id, serviceName, price: 0, includedPlacement: "main" as const });
     const card = pricingCardServices({
       name: "Maintain", oneTimeRows: [], recurringRows: [
@@ -128,9 +122,7 @@ describe("included service card placement", () => {
         row("support", "Standard Client Support"),
       ],
     });
-    expect(card.bkRow).toBeDefined();
-    expect(card.supportRow).toBeDefined();
-    expect(card.displayedBonuses).toEqual([]);
+    expect(card.includedRows.map((row) => row.serviceName)).toEqual(["Monthly Bookkeeping", "Standard Client Support"]);
   });
 
   it("keeps explicitly placed support and bookkeeping out of the main section", () => {
@@ -138,29 +130,53 @@ describe("included service card placement", () => {
       id: serviceName, serviceName, price: 0, includedPlacement: "included" as const,
     }));
     const card = pricingCardServices({ name: "Maintain", oneTimeRows: [], recurringRows: rows });
-    expect(card.bkRow).toBeUndefined();
-    expect(card.supportRow).toBeUndefined();
-    expect(card.orderedRecurring).toEqual([]);
-    expect(card.displayedBonuses).toEqual(rows);
+    expect(card.includedRows).toEqual(rows);
   });
 
-  it("shows an inheritance statement when all banner services are inherited and no automatic highlight remains", () => {
+  it("retains the lower-tier summary without repeating services when there are no additions", () => {
     const { after } = configured("monthly", "included");
     const card = pricingCardServices(after.improve, after.maintain);
-    expect(card.hasInheritedBonuses).toBe(true);
-    expect(card.displayedBonuses).toEqual([]);
-    expect(card.orderedRecurring).toEqual([]);
+    expect(card.lowerTierName).toBe(after.maintain.name);
+    expect(card.includedRows).toEqual([]);
   });
 
-  it("only inherits services from the same section of the lower tier", () => {
+  it("identifies inherited services despite different saved placements", () => {
     const lower = { name: "Maintain", oneTimeRows: [], recurringRows: [
-      { id: "lower-report", serviceName: "Reports", price: 0, includedPlacement: "main" as "main" | "included" },
+      { id: "maintain-bonus-report", serviceName: "Reports", price: 0, includedPlacement: "main" as "main" | "included" },
     ] };
     const upper = { name: "Improve", oneTimeRows: [], recurringRows: [
-      { id: "upper-report", serviceName: "Reports", price: 0, includedPlacement: "included" as "main" | "included" },
+      { id: "improve-bonus-report", serviceName: "Reports", price: 0, includedPlacement: "included" as "main" | "included" },
     ] };
     const card = pricingCardServices(upper, lower);
-    expect(card.recurringLeadInName).toBeNull();
-    expect(card.displayedBonuses.map((row) => row.serviceName)).toEqual(["Reports"]);
+    expect(card.lowerTierName).toBe("Maintain");
+    expect(card.includedRows).toEqual([]);
+  });
+
+  it.each(["Improve", "Grow"])("shows the lower tier and only recurring additions for %s despite a support upgrade", (name) => {
+    const row = (serviceName: string) => ({ id: serviceName, serviceName, price: 0 });
+    const lowerName = name === "Improve" ? "Maintain" : "Improve";
+    const shared = row("Monthly reports");
+    const addition = row("Cash flow forecast");
+    const card = pricingCardServices({
+      name, oneTimeRows: [],
+      recurringRows: [shared, addition, row("Priority Client Support")],
+    }, {
+      name: lowerName, oneTimeRows: [],
+      recurringRows: [shared, row("Standard Client Support")],
+    });
+    expect(card.lowerTierName).toBe(lowerName);
+    expect(card.includedRows).toEqual([addition, row("Priority Client Support")]);
+  });
+
+  it("lists included one-time work while keeping paid setup, onboarding and cleanup out", () => {
+    const row = (id: string, serviceName: string, price = 0) => ({ id, serviceName, price });
+    const card = pricingCardServices({
+      name: "Maintain", recurringRows: [], oneTimeRows: [
+        row("setup", "Included setup"), row("paid", "Paid setup", 100),
+        row("onboarding", "Onboarding"),
+        { ...row("cleanup", "Catch-up"), cleanupPeriodKey: "2026" },
+      ],
+    });
+    expect(card.includedRows).toEqual([row("setup", "Included setup")]);
   });
 });

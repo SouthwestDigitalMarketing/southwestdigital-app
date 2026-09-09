@@ -184,7 +184,6 @@ type ServiceRow = {
   quantity: number;
   price: number;
   note?: string;
-  includedPlacement?: "main" | "included";
   cleanupPeriodKey?: string;
   platformTag?: "QBO" | "Stessa";
 };
@@ -399,7 +398,6 @@ export function buildOptions(
         quantity: 1,
         price: 0,
         note: bonus.description,
-        includedPlacement: bonus.includedPlacement,
       }));
 
     const oneTimeBonuses = eligibleBonuses
@@ -414,7 +412,6 @@ export function buildOptions(
         quantity: 1,
         price: 0,
         note: bonus.description,
-        includedPlacement: bonus.includedPlacement,
       }));
 
     return [id, {
@@ -1500,13 +1497,10 @@ export default function OfferProposalPreview({
                   const additionalSetup  = paidOneTime.filter((r) => !r.cleanupPeriodKey && !isOnboarding(r) && !packageAdditionalOptionRows.some((addOn) => addOn.id === r.id));
 
                   const lowerTierId: OptionId | null = id === "grow" ? "improve" : id === "improve" ? "maintain" : null;
-                  const {
-                    lowerTierName, recurringLeadInName, isNew, bkRow, supportRow,
-                    orderedRecurring, inheritsIncluded, hasInheritedBonuses, displayedBonuses, mainOneTime,
-                  } = pricingCardServices(option, lowerTierId ? options[lowerTierId] : undefined);
+                  const { lowerTierName, includedRows } = pricingCardServices(option, lowerTierId ? options[lowerTierId] : undefined);
 
                   return (
-                    <section key={id} className="grid grid-rows-subgrid row-span-7 overflow-hidden rounded-xl border bg-white shadow-sm transition-colors" style={{ borderColor: selected ? brandDark : "#e2e8f0" }}>
+                    <section key={id} className="grid grid-rows-subgrid row-span-6 overflow-hidden rounded-xl border bg-white shadow-sm transition-colors" style={{ borderColor: selected ? brandDark : "#e2e8f0" }}>
                       {/* Card header */}
                       <div className="p-5">
                         <div className="flex items-start justify-between gap-4">
@@ -1569,33 +1563,14 @@ export default function OfferProposalPreview({
                         <div className="px-5 py-4">
                           {requiredOnboard.length ? <div className="mt-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Required to get started</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{requiredOnboard.map((row) => <ServiceLine key={row.id} row={row} originalPrice={onboardingWaived && isOnboarding(row) ? originalOnboardingFee : undefined} waivedLabel={onboardingWaived && isOnboarding(row) ? "Waived" : undefined} />)}</ul></div> : null}
                           {optionalCleanup.length ? <div className="mt-5 border-t border-slate-200 pt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Optional catch-up</p><ul className="mt-4 space-y-7 text-sm text-slate-600">{optionalCleanup.map((row) => <ServiceLine key={row.id} row={row} selected={cleanupIsSelected(id, row.cleanupPeriodKey!)} onToggle={(checked) => setCleanupSelections((prev) => ({ ...prev, [cleanupKey(id, row.cleanupPeriodKey!)]: checked }))} showPriceWhenUnselected />)}</ul></div> : null}
-                          {(additionalSetup.length || mainOneTime.length) ? <div className="mt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Additional setup</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{[...additionalSetup, ...mainOneTime].map((row) => <ServiceLine key={row.id} row={row} />)}</ul></div> : null}
+                          {additionalSetup.length ? <div className="mt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Additional setup</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{additionalSetup.map((row) => <ServiceLine key={row.id} row={row} />)}</ul></div> : null}
                         </div>
                       </section>
 
                       {/* Recurring services */}
                       <section>
                         <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ backgroundColor: brandDark, color: brandDarkForeground }}>Recurring services</p>
-                        {bkRow && !recurringLeadInName ? <div className="px-5 pt-4"><p className="text-sm font-semibold text-slate-700">{bkRow.serviceName}</p><p className="mt-1 text-sm leading-6 text-slate-600">{getTooltip(bkRow)}</p></div> : null}
-                        {recurringLeadInName ? <p className="px-5 pt-4 text-sm font-semibold text-slate-700">Everything included with {recurringLeadInName}, plus:</p> : null}
-                        <ul className="space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600">
-                          {orderedRecurring.map((row) => (
-                            <li key={row.id} className={`flex justify-between gap-3 ${isNew(row.serviceName) ? "font-semibold text-emerald-700" : ""}`}>
-                              <span className="inline-flex items-start gap-1.5">
-                                <span className="group relative inline-flex shrink-0">
-                                  <button type="button" aria-label={`More information about ${row.serviceName}`} className={`ui-focus-ring rounded-full ${isNew(row.serviceName) ? "text-emerald-600" : "text-slate-400"} hover:text-brandnavy focus:text-brandnavy focus:outline-none`}><CircleHelp className="h-3.5 w-3.5" /></button>
-                                  <span role="tooltip" className="ui-tooltip pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-64 rounded-lg px-3 py-2 text-left text-xs font-normal leading-5 shadow-lg group-hover:block group-focus-within:block">{getTooltip(row)}</span>
-                                </span>
-                                <span>{row.serviceName}</span>
-                                {row.platformTag ? <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${isNew(row.serviceName) ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-brandnavy"}`}>{row.platformTag}</span> : null}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
                       </section>
-
-                      {/* Support row */}
-                      {supportRow ? <div className="border-t border-slate-200 px-5 py-4"><p className="text-sm font-semibold text-slate-700">{supportRow.serviceName}</p><p className="mt-1 text-sm leading-6 text-slate-600">{getTooltip(supportRow)}</p></div> : <div />}
 
                       {packageAdditionalOptionRows.length > 0 ? (
                         <section>
@@ -1618,28 +1593,27 @@ export default function OfferProposalPreview({
                             </ul>
                           </div>
                         </section>
-                      ) : null}
-
-                      {/* Bonuses */}
-                      {displayedBonuses.length > 0 || hasInheritedBonuses ? (
-                        <section>
-                          <p className="bg-emerald-100 px-5 py-3 text-xs font-bold uppercase tracking-[0.12em] text-emerald-900">Included with this package</p>
-                          {inheritsIncluded ? <p className="px-5 pt-4 text-sm font-semibold text-slate-700">Includes the package extras from {lowerTierName}{displayedBonuses.length > 0 ? ", plus:" : "."}</p> : null}
-                          <ul className="space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600">
-                            {displayedBonuses.map((row) => (
-                              <li key={row.id} className="flex justify-between gap-3 font-semibold text-emerald-700">
-                                <span className="inline-flex items-start gap-1.5">
-                                  <span className="group relative inline-flex shrink-0">
-                                    <button type="button" aria-label={`More information about ${row.serviceName}`} className="ui-focus-ring rounded-full text-emerald-600 hover:text-brandnavy focus:outline-none"><CircleHelp className="h-3.5 w-3.5" /></button>
-                                    <span role="tooltip" className="ui-tooltip pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-64 rounded-lg px-3 py-2 text-left text-xs font-normal leading-5 shadow-lg group-hover:block group-focus-within:block">{getTooltip(row)}</span>
-                                  </span>
-                                  <span>{row.serviceName}</span>
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        </section>
                       ) : <div />}
+
+                      {/* All included services */}
+                      <section>
+                        <p className="bg-emerald-100 px-5 py-3 text-xs font-bold uppercase tracking-[0.12em] text-emerald-900">Included with this package</p>
+                        {lowerTierName ? <p className="px-5 pt-4 text-sm font-semibold text-slate-700">Everything included with {lowerTierName}{includedRows.length > 0 ? ", plus:" : "."}</p> : null}
+                        <ul className="space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600">
+                          {includedRows.map((row) => (
+                            <li key={row.id} className="flex justify-between gap-3 font-semibold text-emerald-700">
+                              <span className="inline-flex items-start gap-1.5">
+                                <span className="group relative inline-flex shrink-0">
+                                  <button type="button" aria-label={`More information about ${row.serviceName}`} className="ui-focus-ring rounded-full text-emerald-600 hover:text-brandnavy focus:outline-none"><CircleHelp className="h-3.5 w-3.5" /></button>
+                                  <span role="tooltip" className="ui-tooltip pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-64 rounded-lg px-3 py-2 text-left text-xs font-normal leading-5 shadow-lg group-hover:block group-focus-within:block">{getTooltip(row)}</span>
+                                </span>
+                                <span>{row.serviceName}</span>
+                                {row.platformTag ? <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800">{row.platformTag}</span> : null}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
 
                       {/* Pricing summary */}
                       <div className="border-t border-slate-200 p-5">
