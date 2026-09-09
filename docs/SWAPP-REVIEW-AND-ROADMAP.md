@@ -286,9 +286,73 @@ Use stages: draft → review → approved scheduled action → evaluated result.
 
 The repository currently has neither a marketing-agent runtime nor a referral commission system. Design these after the durable jobs, business events, permissions, and attribution foundation is working.
 
+## Planned initiative: an automated bookkeeping delivery team
+
+**Owner decision, recorded 2026-09-08.** Southwest intends to build its own
+system for running a team of bookkeeping bots — automated workers that perform
+bookkeeping delivery, not merely assist with sales or marketing. It has two
+purposes from the outset:
+
+1. **Internal execution.** Deliver Bookkeeping Conroe's client work with far
+   less human time per client.
+2. **A product to sell.** Offered to other firms as an additional service line
+   alongside SWapp itself.
+
+### Start trigger
+
+Building begins when the business reaches roughly **$5,000 per month in cash
+flow** — a profitability measure, not top-line revenue. Until that point this is
+a recorded intention only; no design, schema, or implementation work is
+authorized, and no phase in the delivery plan above depends on it.
+
+Two parameters still need the owner's answer before the trigger can be evaluated
+rather than argued about:
+
+- **Whose cash flow** — the whole operating business across brands, or
+  Bookkeeping Conroe alone?
+- **Sustained over what period** — a single month at $5,000, or some number of
+  consecutive months? A one-month spike and a stable run rate are different
+  signals.
+
+### Scope is deliberately undefined
+
+The owner will specify what the bot team actually does. Nothing about the
+division of labour, the tools it touches, the ledger systems it integrates with,
+the degree of autonomy, or the pricing model has been decided. **Do not invent
+that design.** Record it here when it is given.
+
+### What is already known to constrain it
+
+These follow from decisions elsewhere in this document and in `AGENTS.md`, and
+they apply whenever the work does start:
+
+- **This is a different liability class from marketing automation.** A bot that
+  drafts a follow-up email produces a message someone can decline to send. A bot
+  that touches a client's books produces a financial record that a firm attests
+  to, that a tax authority may examine, and that the firm — not Southwest — is
+  professionally answerable for. Review gates, audit trails, and reversibility
+  matter more here, not less, than in the marketing automation section above.
+- **The agent governance rules in "AI coding and marketing operations" are the
+  floor, not the ceiling.** Service identity per bot, scoped tools, spend limits,
+  run history, an accountable owner, untrusted-input handling, credentials kept
+  out of model context, and a kill switch all carry over.
+- **Tenant isolation is a hard prerequisite.** Bots operating across multiple
+  firms' books make the open P0 on tenant guarantees a blocking dependency, not
+  a background risk.
+- **Sold to other firms, this needs its own commercial and legal terms** — data
+  processing, retention, professional responsibility, error correction, and what
+  Southwest warrants about output. These are separate from the SWapp
+  subscription terms.
+- **A third money flow.** Firm service payments and SWapp subscriptions are
+  already distinct ledgers. Selling automated delivery adds a third, and it must
+  not be conflated with either.
+- **This is not the deferred "replacement accounting ledger."** That deferral
+  stands: the bot team is expected to operate within existing ledger systems
+  rather than replace them, unless the owner later decides otherwise.
+
 ## Delivery plan and release gates
 
-These are dependency-ordered milestones, not a promised calendar. Security/database reconciliation is the largest early uncertainty. Estimate task durations after reproductions and a disposable database rehearsal; do not commit to a launch date based on agent coding speed alone.
+These are dependency-ordered milestones, not a promised calendar. The automated bookkeeping delivery team described above is deliberately absent from this table: it is triggered by a cash-flow threshold rather than by a preceding phase, and no phase here depends on it. Security/database reconciliation is the largest early uncertainty. Estimate task durations after reproductions and a disposable database rehearsal; do not commit to a launch date based on agent coding speed alone.
 
 | Phase | Deliverable | Exit gate |
 | --- | --- | --- |
@@ -321,7 +385,7 @@ Design-system groundwork and interviews can run alongside security work, but ext
 
 ### What to defer
 
-Defer a replacement accounting ledger, broad time tracking/payroll, a bespoke community platform, a full content suite, an open referral marketplace, multi-level rewards, and unrestricted autonomous outreach. Keep consulting/coaching functional because they already support the business, but prioritize the bookkeeping workflow in onboarding and messaging.
+Defer a replacement accounting ledger, broad time tracking/payroll, a bespoke community platform, a full content suite, an open referral marketplace, multi-level rewards, and unrestricted autonomous outreach. Defer the automated bookkeeping delivery team until its cash-flow trigger is met; recording the intention does not open the scope. Keep consulting/coaching functional because they already support the business, but prioritize the bookkeeping workflow in onboarding and messaging.
 
 Do not rewrite the application wholesale. Retain Brand/BrandMembership, the existing theme tokens, pricing tests, Stripe Connect foundation, and working catalog/proposal behavior. Refactor behind those capabilities with explicit contracts and regression evidence.
 

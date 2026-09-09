@@ -51,6 +51,26 @@ test niche rather than an assumed requirement.
 small paid cohort produces evidence on willingness to pay, support cost,
 activation and retention.
 
+### A planned third line: automated bookkeeping delivery
+
+Recorded 2026-09-08. Southwest intends to build its own system for running a
+**team of bookkeeping bots** — automated workers that perform delivery, not
+sales or marketing assistance. Dual purpose from the start: cut the human time
+per client in Bookkeeping Conroe's own delivery, and sell the capability to
+other firms as an additional service line.
+
+**It is gated on profitability, not on a phase.** Building begins when the
+business reaches roughly **$5,000 per month in cash flow**. Two parameters are
+still unanswered: whose cash flow (the whole operating business, or Bookkeeping
+Conroe alone), and sustained over how long (one month, or several consecutive).
+
+**The scope is deliberately undefined** — the owner will specify what the bots
+actually do. Do not invent that design or assume a shape for it. The
+constraints that already apply to it are in
+`docs/SWAPP-REVIEW-AND-ROADMAP.md`, "Planned initiative: an automated
+bookkeeping delivery team"; the important one is that a bot touching a client's
+books is a materially different liability class from a bot drafting an email.
+
 ## 3. Tenant model
 
 One tenant level: **`Brand`**. There is no organization or agency layer, and
@@ -141,6 +161,10 @@ brand offboarding and data-export job records, platform brand administration.
 |---|---|---|
 | **Firm service payment** | A bookkeeping client pays their bookkeeper through the firm's connected Stripe account | **Works** for at-signing charges. Destination-charge policy is enforced, and the accepted obligation is frozen and reconciled against amount, currency, destination, livemode and selection hash before an engagement is marked paid. |
 | **SWapp subscription** | A bookkeeper's Brand pays Southwest for software | **Does not exist.** `Brand.subscriptionStartedAt` / `subscriptionEndedAt` are lifecycle date fields consumed by the platform and offboarding repositories. There is no plan, entitlement, invoice, renewal, dunning or seat logic anywhere in `src/`. |
+
+A **third flow is planned but not built**: selling automated bookkeeping
+delivery to other firms (§2). When it exists it is a separate ledger again, and
+must not be folded into either of the two above.
 
 Two further facts that constrain any revenue model:
 
