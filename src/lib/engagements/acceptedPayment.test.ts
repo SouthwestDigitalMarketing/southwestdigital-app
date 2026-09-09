@@ -1,10 +1,23 @@
 import { describe, expect, it } from "vitest";
 import { buildHourlyCheckoutSummary } from "./hourlyCheckout";
+import { buildProposalCheckoutSummary } from "./proposalCheckout";
 import { buildAcceptedPayment, readAcceptedPayment, readAcceptedSelection, readStripePaymentExpectation } from "./acceptedPayment";
 
 const hourly = buildHourlyCheckoutSummary({ kind: "consulting", catalogItemId: "consult", catalogItemLabel: "Consulting", quantity: 2, unitPrice: 150, intakeFee: 50 });
 
 describe("accepted payment obligation", () => {
+  it("freezes only onboarding and discovery, not the estimated cleanup charge", () => {
+    const selection = buildProposalCheckoutSummary({
+      pricing: { maintain: { monthly: 300 }, improve: { monthly: 450 } },
+      assessment: { historicalCleanupPeriods: [{ year: 2026, startMonth: 1, endMonth: 3 }] },
+    }, { tier: "improve", hasTwelveMonthAgreement: true, selectedCleanupPeriodKeys: ["2026-1-3"], selectedAdditionalOptionIds: [] });
+    expect(selection.cleanupTotal).toBe(900);
+    const obligation = buildAcceptedPayment(selection, false);
+    expect(obligation).toMatchObject({ amountInCents: 56000, chargeKind: "onboarding_and_discovery" });
+    const saved = { proposalAcceptance: { selection, paymentObligation: obligation } };
+    expect(readAcceptedPayment(saved)).toEqual(obligation);
+    expect(readAcceptedSelection(saved).bookkeeping).toEqual(selection);
+  });
   it("freezes hourly totals and selection identity at signing", () => {
     expect(buildAcceptedPayment({ hourlyCheckout: hourly }, false)).toMatchObject({
       amountInCents: 35_000, currency: "usd", selectionHash: hourly.selectionHash, chargeKind: "hourly_consulting", isTestProposal: false,

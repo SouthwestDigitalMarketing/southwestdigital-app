@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "./route";
+import { buildProposalCheckoutSummary } from "@/lib/engagements/proposalCheckout";
+import { buildAcceptedPayment } from "@/lib/engagements/acceptedPayment";
 
 const mocks = vi.hoisted(() => ({
   access: vi.fn(), engagement: vi.fn(), update: vi.fn(), account: vi.fn(),
@@ -26,6 +28,21 @@ beforeEach(() => {
 });
 
 describe("proposal payment preparation", () => {
+  it("prepares only the frozen discovery payment even when the selection contains a cleanup estimate", async () => {
+    const selection = buildProposalCheckoutSummary({
+      pricing: { maintain: { monthly: 300 }, improve: { monthly: 450 } },
+      assessment: { historicalCleanupPeriods: [{ year: 2026, startMonth: 1, endMonth: 3 }] },
+    }, { tier: "improve", hasTwelveMonthAgreement: true, selectedCleanupPeriodKeys: ["2026-1-3"], selectedAdditionalOptionIds: [] });
+    const saved = row();
+    mocks.engagement.mockResolvedValue({ ...saved, onboardingData: {
+      proposalAcceptance: { paymentObligation: buildAcceptedPayment(selection, false), selection },
+      proposalBuilderState: { services: { ...selection, amountDueNow: 9999 } },
+    } });
+    expect((await call()).status).toBe(200);
+    expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({
+      amount: 56000, metadata: expect.objectContaining({ chargeKind: "onboarding_and_discovery" }),
+    }), expect.any(Object));
+  });
   it("creates from signed totals and saves destination evidence before returning a secret", async () => {
     mocks.engagement.mockResolvedValue(row({ amountDueNow: 1 }));
     expect((await call()).status).toBe(200);

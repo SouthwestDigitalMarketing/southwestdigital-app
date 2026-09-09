@@ -3,6 +3,7 @@ import {
   buildProposalCheckoutSummary,
   applyOnboardingWaiver,
   parseProposalCheckoutSelection,
+  parseStoredProposalCheckout,
   resolveAmountDueNow,
 } from "./proposalCheckout";
 
@@ -46,7 +47,7 @@ describe("proposal checkout", () => {
     expect(result.chargeKind).toBe("onboarding_and_first_month");
   });
 
-  it("charges selected cleanup plus onboarding and defers the monthly charge", () => {
+  it("charges onboarding and discovery while deferring the cleanup estimate and monthly charge", () => {
     const result = buildProposalCheckoutSummary(snapshot, {
       tier: "improve",
       hasTwelveMonthAgreement: true,
@@ -56,9 +57,14 @@ describe("proposal checkout", () => {
     expect(result.recurringMonthlyTotal).toBe(360);
     expect(result.cleanupTotal).toBe(900);
     expect(result.onboardingFee).toBe(560);
-    expect(result.amountDueNow).toBe(1460);
+    expect(result.amountDueNow).toBe(560);
+    expect(result.oneTimeTotal).toBe(560);
+    expect(result.cleanupMonths).toBe(3);
+    expect(result.cleanupMonthlyRate).toBe(300);
+    expect(result.paymentScheduleVersion).toBe(2);
     expect(result.selectedCleanupPeriodKeys).toEqual(["2026-1-3"]);
-    expect(result.chargeKind).toBe("onboarding_and_cleanup");
+    expect(result.chargeKind).toBe("onboarding_and_discovery");
+    expect(parseStoredProposalCheckout(JSON.parse(JSON.stringify(result)))).toEqual(result);
   });
 
   it("charges a selected one-time add-on now instead of adding it to MRR", () => {
@@ -112,5 +118,38 @@ describe("proposal checkout", () => {
       onboardingWaived: false,
       isTestProposal: true,
     })).toBe(1);
+  });
+
+  it("requires no upfront payment for waived discovery even though cleanup has a later estimate", () => {
+    const original = buildProposalCheckoutSummary(snapshot, {
+      tier: "improve", hasTwelveMonthAgreement: false,
+      selectedCleanupPeriodKeys: ["2026-1-3"], selectedAdditionalOptionIds: [],
+    });
+    const waived = applyOnboardingWaiver(original);
+    expect(waived.amountDueNow).toBe(0);
+    expect(waived.oneTimeTotal).toBe(0);
+    expect(waived.cleanupTotal).toBe(900);
+    expect(waived.chargeKind).toBe("onboarding_and_discovery");
+  });
+
+  it("keeps legacy signed cleanup amounts when reading stored checkout", () => {
+    const saved = {
+      tier: "improve", tierLabel: "Improve", hasTwelveMonthAgreement: true,
+      selectedCleanupPeriodKeys: ["2026-1-3"], selectedAdditionalOptionIds: [],
+      baseMonthlyTotal: 450, recurringMonthlyTotal: 360, cleanupTotal: 900,
+      onboardingFee: 560, oneTimeTotal: 1460, amountDueNow: 1460,
+      chargeKind: "onboarding_and_cleanup", selectionHash: "original-signed-hash",
+    };
+    expect(parseStoredProposalCheckout(saved)).toEqual(saved);
+  });
+
+  it("freezes included support descriptions with the selected package", () => {
+    const result = buildProposalCheckoutSummary({ ...snapshot, assessment: {
+      ...snapshot.assessment, bonuses: [
+        { id: "priority", name: "Priority Client Support", description: "Same-business-day responses.", defaultPackageIds: ["improve"] },
+        { id: "standard", name: "Standard Client Support", description: "1–2 business days.", defaultPackageIds: ["maintain"] },
+      ],
+    } }, { tier: "improve", hasTwelveMonthAgreement: false, selectedCleanupPeriodKeys: [], selectedAdditionalOptionIds: [] });
+    expect(result.includedServices).toEqual([{ name: "Priority Client Support", description: "Same-business-day responses." }]);
   });
 });

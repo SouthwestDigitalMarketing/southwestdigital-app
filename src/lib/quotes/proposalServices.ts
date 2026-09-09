@@ -79,6 +79,17 @@ export type ProposalServiceAddOn = {
   billingCadence: "monthly" | "one-time";
   packageIds: ServiceTier[];
 };
+
+export function proposalIncludedServices(assessmentValue: unknown, tier: ServiceTier) {
+  const assessment = record(assessmentValue);
+  return records(assessment.bonuses)
+    .filter((item) => item.archived !== true && serviceIsApplicable(assessment, item)
+      && includedServicePackages(assessment, item).includes(tier))
+    .map((item) => ({
+      name: typeof item.name === "string" ? item.name : String(item.id),
+      description: typeof item.description === "string" ? item.description : "",
+    }));
+}
 export function proposalServiceAddOns(
   assessmentValue: unknown,
 ): ProposalServiceAddOn[] {

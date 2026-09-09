@@ -1,6 +1,8 @@
 "use client";
 
 import { pricingCardServices } from "./pricingCardServices";
+import ProposalPaymentPlan from "./ProposalPaymentPlan";
+import { proposalPaymentSchedule } from "@/lib/quotes/paymentSchedule";
 
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -208,6 +210,11 @@ type CheckoutSummary = {
   oneTimeTotal: number;
   amountDueNow: number;
   chargeKind: string;
+  paymentScheduleVersion?: 2;
+  cleanupMonths?: number;
+  cleanupMonthlyRate?: number;
+  additionalOneTimeTotal?: number;
+  includedServices?: { name: string; description: string }[];
 };
 
 // ─── Static data ──────────────────────────────────────────────────────────────
@@ -693,12 +700,6 @@ export default function OfferProposalPreview({
   );
   const introVideoUrl = coverMedia.videoUrl;
   const introEmbedUrl = resolveVideoEmbedUrl(introVideoUrl);
-  const selectedOnboardingFeeForPayment = selectedOptionId
-    ? (options[selectedOptionId].oneTimeRows.find((row) => isOnboarding(row))?.price ?? null)
-    : null;
-  const selectedMonthlyChargeForPayment = selectedOptionId ? options[selectedOptionId].monthlyPrice : 0;
-  const requiresOnboardingPaymentForSelection = isTestProposal
-    || (checkoutSummary?.amountDueNow ?? ((selectedOnboardingFeeForPayment ?? 0) + selectedMonthlyChargeForPayment)) > 0;
 
   useEffect(() => {
     if (!introEmbedUrl || !isCloudflareStreamEmbed(introEmbedUrl)) return;
@@ -796,7 +797,7 @@ export default function OfferProposalPreview({
           setSignedSignerName(result.signerName ?? null);
           setSignedAt(result.signedAt ?? null);
           if (result.agreementManagerStatus === "CANCELLATION_REQUESTED" || result.agreementManagerStatus === "TERMINATED_AFTER_SIGNATURE" || result.agreementManagerStatus === "VOIDED_BEFORE_SIGNATURE") return;
-          if (result.onboardingFeeStatus === "PAID" || (result.onboardingFeeStatus === "WAIVED" && !requiresOnboardingPaymentForSelection)) {
+          if (result.onboardingFeeStatus === "PAID" || (result.onboardingFeeStatus === "WAIVED" && result.checkout?.amountDueNow === 0 && !isTestProposal)) {
             setPaymentStatus("succeeded");
             if (result.onboardingFeeStatus === "WAIVED") setPaymentWaived(true);
           } else {
@@ -818,7 +819,7 @@ export default function OfferProposalPreview({
       })
       .catch(() => {})
       .finally(() => setAgreementLoading(false));
-  }, [step, engagementId, requiresOnboardingPaymentForSelection, proposalToken]);
+  }, [step, engagementId, isTestProposal, proposalToken]);
 
   function checkAgreementScrolled(el: HTMLDivElement) {
     if (el.scrollTop + el.clientHeight >= el.scrollHeight - 20) setHasScrolledToEnd(true);
@@ -1062,17 +1063,28 @@ export default function OfferProposalPreview({
       )
     : 0;
   const selectedMonthlyCharge = selectedOptionId
-    ? options[selectedOptionId].monthlyPrice * recurringDiscountMultiplier + selectedAdditionalMonthlyTotal
+    ? Math.round((options[selectedOptionId].monthlyPrice * recurringDiscountMultiplier + selectedAdditionalMonthlyTotal) * 100) / 100
     : 0;
-  const hasCleanup = selectedCleanupTotal > 0;
-  const chargeFirstMonth = !hasCleanup && selectedMonthlyCharge > 0 ? selectedMonthlyCharge : 0;
+  const selectedCleanupMonths = cleanupPeriods.reduce((total, period) => total + (
+    selectedOptionId && cleanupIsSelected(selectedOptionId, `${period.year}-${period.startMonth}-${period.endMonth}`) ? periodMonthCount(period) : 0
+  ), 0);
+  const hasCleanup = selectedCleanupMonths > 0;
+  const currentSchedule = proposalPaymentSchedule({
+    cleanupMonths: selectedCleanupMonths, cleanupMonthlyRate: options.maintain.monthlyPrice,
+    onboardingFee: selectedOnboardingFee ?? 0, recurringMonthlyTotal: selectedMonthlyCharge,
+    additionalOneTimeTotal: selectedAdditionalOneTimeTotal,
+  });
+  const chargeFirstMonth = currentSchedule.firstMonthDueNow;
   const chargeOnboarding = selectedOnboardingFee ?? 0;
-  const calculatedChargeAmount = chargeOnboarding + selectedCleanupTotal + selectedAdditionalOneTimeTotal + chargeFirstMonth;
+  const calculatedChargeAmount = currentSchedule.amountDueNow;
   const chargeAmount = isTestProposal ? 1 : checkoutSummary?.amountDueNow ?? calculatedChargeAmount;
+  const stagedPayment = !checkoutSummary || checkoutSummary.paymentScheduleVersion === 2;
   const chargeIsFirstMonth = chargeFirstMonth > 0;
   const requiresOnboardingPayment = chargeAmount > 0;
   const chargeLabel = isTestProposal
     ? "$1 Test Payment"
+    : stagedPayment && hasCleanup
+      ? "Onboarding + Discovery"
     : selectedCleanupTotal > 0 && chargeOnboarding > 0
       ? "Cleanup + Onboarding"
       : selectedCleanupTotal > 0
@@ -1082,12 +1094,14 @@ export default function OfferProposalPreview({
     : chargeIsFirstMonth ? "First Month" : "Your Deposit";
   const chargeDescription = isTestProposal
     ? "This proposal is explicitly marked for testing. It exercises the real payment flow with a $1 total."
+    : stagedPayment && hasCleanup
+      ? "Covers onboarding and discovery, plus any selected one-time add-ons. Cleanup is estimated separately and requires your approval after discovery."
     : selectedCleanupTotal > 0
       ? "Covers the selected cleanup work and onboarding so work can begin."
       : chargeOnboarding > 0 && chargeFirstMonth > 0
-    ? "Covers onboarding and prepays your first month of ongoing bookkeeping so we can start immediately. Non-refundable once work begins."
+    ? "Covers onboarding and prepays your first month. We confirm your service start date after receiving the required access and records."
     : chargeIsFirstMonth
-      ? "Prepays your first month of ongoing bookkeeping so we can start immediately. Non-refundable once work begins."
+      ? "Prepays your first month. We confirm your service start date during onboarding."
       : "Covers onboarding, document collection, and discovery. Earned upon signing and non-refundable.";
   const clientSteps = [
     "Cover",
@@ -1123,9 +1137,29 @@ export default function OfferProposalPreview({
             .filter((row) => additionalOptionSelections[selectedOptionId][row.id])
             .map((row) => row.serviceName)
         : [],
+      paymentScheduleVersion: stagedPayment ? 2 : undefined,
+      cleanupMonths: selectedCleanupMonths,
+      cleanupMonthlyRate: options.maintain.monthlyPrice,
+      additionalOneTimeTotal: selectedAdditionalOneTimeTotal,
+      includedServices: selectedOptionId ? [
+        ...options[selectedOptionId].recurringRows,
+        ...options[selectedOptionId].oneTimeRows.filter((row) => row.price === 0 && !row.cleanupPeriodKey && !isOnboarding(row)),
+      ].map((row) => ({ name: row.serviceName, description: row.note ?? "" })) : [],
     },
   );
   const displayedAgreementText = engagementId ? agreementText : embeddedAgreementText;
+  const selectedPaymentPlan = stagedPayment && selectedOptionId ? (
+    <ProposalPaymentPlan
+      cleanupMonths={checkoutSummary?.cleanupMonths ?? selectedCleanupMonths}
+      cleanupMonthlyRate={checkoutSummary?.cleanupMonthlyRate ?? options.maintain.monthlyPrice}
+      onboardingFee={checkoutSummary?.onboardingFee ?? selectedOnboardingFee ?? 0}
+      recurringMonthlyTotal={checkoutSummary?.recurringMonthlyTotal ?? selectedMonthlyCharge}
+      additionalOneTimeTotal={checkoutSummary?.additionalOneTimeTotal ?? selectedAdditionalOneTimeTotal}
+      annual={checkoutSummary?.hasTwelveMonthAgreement ?? hasTwelveMonthAgreement}
+      amountDueNow={chargeAmount}
+      showStages
+    />
+  ) : null;
   const agreementIsOpen = agreementManagerStatus === "ACTIVE" || agreementManagerStatus === "ARCHIVED";
 
   const signedByBanner = signedSignerName ? (
@@ -1457,7 +1491,7 @@ export default function OfferProposalPreview({
               </div>
 
               {/* Package cards */}
-              <div className="grid items-stretch gap-5 [grid-template-rows:repeat(7,auto)] xl:grid-cols-3">
+              <div className="grid items-stretch gap-5 [grid-template-rows:repeat(6,auto)] xl:grid-cols-3">
                 {optionMeta.map(({ id, serviceLevel }) => {
                   const option = options[id];
                   const selected = selectedOptionId === id;
@@ -1476,21 +1510,22 @@ export default function OfferProposalPreview({
                       ? { ...row, price: getOnboardingFee(assessment, selectedCleanupMonths) }
                       : row,
                   );
-                  const displayedOneTimeRows = effectiveOneTimeRows.filter(
-                    (row) => !row.cleanupPeriodKey || cleanupIsSelected(id, row.cleanupPeriodKey),
-                  );
 
-                  const recurringTotal =
+                  const recurringTotal = Math.round((
                     option.monthlyPrice * recurringDiscountMultiplier +
                     packageAdditionalOptionRows.reduce(
                       (total, row) => total + (row.billEvery && additionalOptionSelections[id][row.id] ? row.price : 0),
                       0,
-                    );
+                    )) * 100) / 100;
 
                   const onboardingWaived = isOnboardingFeeWaived(assessment);
                   const originalOnboardingFee = getListedOnboardingFee(assessment, selectedCleanupMonths);
-                  const oneTimeTotal = sectionTotal(displayedOneTimeRows);
-                  const originalOneTimeTotal = onboardingWaived ? oneTimeTotal + originalOnboardingFee : oneTimeTotal;
+                  const onboardingFee = getOnboardingFee(assessment, selectedCleanupMonths);
+                  const additionalOneTimeTotal = sectionTotal(selectedOneTimeAdditionalRows);
+                  const schedule = proposalPaymentSchedule({
+                    cleanupMonths: selectedCleanupMonths, cleanupMonthlyRate: options.maintain.monthlyPrice,
+                    onboardingFee, recurringMonthlyTotal: recurringTotal, additionalOneTimeTotal,
+                  });
                   const paidOneTime      = effectiveOneTimeRows.filter((r) => r.price > 0);
                   const optionalCleanup  = paidOneTime.filter((r) => r.cleanupPeriodKey);
                   const requiredOnboard  = effectiveOneTimeRows.filter((r) => !r.cleanupPeriodKey && isOnboarding(r) && (r.price > 0 || onboardingWaived));
@@ -1498,6 +1533,8 @@ export default function OfferProposalPreview({
 
                   const lowerTierId: OptionId | null = id === "grow" ? "improve" : id === "improve" ? "maintain" : null;
                   const { lowerTierName, includedRows } = pricingCardServices(option, lowerTierId ? options[lowerTierId] : undefined);
+                  const supportRows = [...option.recurringRows, ...option.oneTimeRows.filter((row) => row.price === 0)]
+                    .filter((row) => row.serviceName.endsWith("Client Support"));
 
                   return (
                     <section key={id} className="grid grid-rows-subgrid row-span-6 overflow-hidden rounded-xl border bg-white shadow-sm transition-colors" style={{ borderColor: selected ? brandDark : "#e2e8f0" }}>
@@ -1527,10 +1564,7 @@ export default function OfferProposalPreview({
                             ) : null}
                             <div className="space-y-1 text-right text-sm">
                             <p>
-                              {onboardingWaived && originalOnboardingFee > 0 ? (
-                                <span className="mr-1.5 text-slate-400 line-through">{fmt(originalOneTimeTotal)}</span>
-                              ) : null}
-                              <span className="font-bold" style={{ color: inkColor }}>{fmt(oneTimeTotal)}</span> <span className="text-slate-500">One-Time</span>
+                              <span className="font-bold" style={{ color: inkColor }}>{fmt(isTestProposal ? 1 : schedule.amountDueNow)}</span> <span className="text-slate-500">due today</span>
                             </p>
                             {onboardingWaived ? (
                               <p className="text-xs font-semibold text-emerald-700">Onboarding fee waived</p>
@@ -1539,6 +1573,14 @@ export default function OfferProposalPreview({
                             </div>
                           </div>
                         </div>
+                        {supportRows.map((row) => (
+                          <div key={row.id} aria-label={`${option.name} support level`} className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                            <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">Your support level</p>
+                            <p className="mt-1 text-lg font-bold text-emerald-900">{row.serviceName}</p>
+                            {/* Only real copy earns this space; the tooltip fallback is filler. */}
+                            {row.note ? <p className="mt-2 text-sm leading-6 text-slate-700">{row.note}</p> : null}
+                          </div>
+                        ))}
                         <p className="mt-4 text-center text-xs font-bold uppercase tracking-[0.12em] text-slate-700">{serviceLevel} service level</p>
                         <button
                           type="button"
@@ -1561,8 +1603,8 @@ export default function OfferProposalPreview({
                       <section className="border-t border-slate-200">
                         <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ backgroundColor: subtleAccentBg, color: inkColor }}>One-time services</p>
                         <div className="px-5 py-4">
-                          {requiredOnboard.length ? <div className="mt-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Required to get started</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{requiredOnboard.map((row) => <ServiceLine key={row.id} row={row} originalPrice={onboardingWaived && isOnboarding(row) ? originalOnboardingFee : undefined} waivedLabel={onboardingWaived && isOnboarding(row) ? "Waived" : undefined} />)}</ul></div> : null}
-                          {optionalCleanup.length ? <div className="mt-5 border-t border-slate-200 pt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Optional catch-up</p><ul className="mt-4 space-y-7 text-sm text-slate-600">{optionalCleanup.map((row) => <ServiceLine key={row.id} row={row} selected={cleanupIsSelected(id, row.cleanupPeriodKey!)} onToggle={(checked) => setCleanupSelections((prev) => ({ ...prev, [cleanupKey(id, row.cleanupPeriodKey!)]: checked }))} showPriceWhenUnselected />)}</ul></div> : null}
+                          {requiredOnboard.length ? <div className="mt-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Required to get started</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{requiredOnboard.map((row) => <ServiceLine key={row.id} row={{ ...row, serviceName: schedule.hasCleanup ? "Onboarding + Discovery" : "Onboarding", note: schedule.hasCleanup ? "Account access, document collection, and discovery to confirm the cleanup scope and estimate. Cleanup work is approved separately afterward." : "Account access, document collection, and setup for ongoing bookkeeping." }} originalPrice={onboardingWaived && isOnboarding(row) ? originalOnboardingFee : undefined} waivedLabel={onboardingWaived && isOnboarding(row) ? "Waived" : undefined} />)}</ul></div> : null}
+                          {optionalCleanup.length ? <div className="mt-5 border-t border-slate-200 pt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Cleanup estimate</p><p className="mt-2 text-xs leading-5 text-slate-600">Select the periods to estimate. Cleanup is not charged today; final scope, price, and payment milestones are confirmed after discovery.</p><ul className="mt-4 space-y-7 text-sm text-slate-600">{optionalCleanup.map((row) => <ServiceLine key={row.id} row={row} selected={cleanupIsSelected(id, row.cleanupPeriodKey!)} onToggle={(checked) => setCleanupSelections((prev) => ({ ...prev, [cleanupKey(id, row.cleanupPeriodKey!)]: checked }))} showPriceWhenUnselected />)}</ul></div> : null}
                           {additionalSetup.length ? <div className="mt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Additional setup</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{additionalSetup.map((row) => <ServiceLine key={row.id} row={row} />)}</ul></div> : null}
                         </div>
                       </section>
@@ -1618,23 +1660,10 @@ export default function OfferProposalPreview({
                       {/* Pricing summary */}
                       <div className="border-t border-slate-200 p-5">
                         <p className="text-xs font-bold uppercase tracking-wide text-slate-700">Your pricing</p>
-                        <div className="mt-3 rounded-xl bg-slate-50 p-4">
-                          <div className="flex items-center justify-between gap-4 text-sm">
-                            <span className="text-slate-600">
-                              One-time total
-                              {onboardingWaived ? <span className="mt-0.5 block text-xs font-semibold text-emerald-700">Onboarding fee waived</span> : null}
-                            </span>
-                            <span className="text-right font-bold" style={{ color: inkColor }}>
-                              {onboardingWaived && originalOnboardingFee > 0 ? (
-                                <span className="mr-1.5 font-medium text-slate-400 line-through">{fmt(originalOneTimeTotal)}</span>
-                              ) : null}
-                              {fmt(oneTimeTotal)}
-                            </span>
-                          </div>
-                          <div className="mt-2 flex items-center justify-between gap-4 border-t border-slate-200 pt-2 text-sm">
-                            <span className="text-slate-600">Ongoing bookkeeping</span>
-                            <span className="font-bold" style={{ color: inkColor }}>{fmt(recurringTotal)}/mo</span>
-                          </div>
+                        <div className="mt-3">
+                          <ProposalPaymentPlan cleanupMonths={selectedCleanupMonths} cleanupMonthlyRate={options.maintain.monthlyPrice}
+                            onboardingFee={onboardingFee} recurringMonthlyTotal={recurringTotal} additionalOneTimeTotal={additionalOneTimeTotal}
+                            annual={hasTwelveMonthAgreement} amountDueNow={isTestProposal ? 1 : undefined} />
                         </div>
                         <button
                           type="button"
@@ -1677,6 +1706,7 @@ export default function OfferProposalPreview({
                     <ProposalUrgencyBanner offer={urgencyOffer} accentColor={actionColor} inkColor={inkColor} compact />
                   ) : null}
                   <div>
+                    {selectedPaymentPlan ? <div className="mb-6 rounded-xl border border-slate-200 p-5">{selectedPaymentPlan}</div> : null}
                     <h2 className="text-sm font-bold text-slate-900">{agreementTitle}</h2>
                     <p className="mt-1 text-sm font-semibold" style={{ color: inkColor }}>
                       {isSimulation
@@ -1850,6 +1880,7 @@ export default function OfferProposalPreview({
                             className="absolute right-3 top-3 z-20"
                           />
                         ) : null}
+                        {selectedPaymentPlan ?? <>
                         <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{chargeLabel}</p>
                         {selectedOptionId ? (
                           <p className="mt-1 text-sm text-slate-600">{options[selectedOptionId].name} package</p>
@@ -1861,6 +1892,7 @@ export default function OfferProposalPreview({
                           </span>
                         </div>
                         <p className="mt-2 text-xs text-slate-500">{chargeDescription}</p>
+                        </>}
                       </div>
                       <div className="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-4">
                         <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />
@@ -1989,6 +2021,7 @@ export default function OfferProposalPreview({
                         className="absolute right-3 top-3 z-20"
                       />
                     ) : null}
+                    {selectedPaymentPlan ?? <>
                     <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{chargeLabel}</p>
                     {selectedOptionId ? <p className="mt-1 text-sm text-slate-600">{options[selectedOptionId].name} package</p> : null}
                     <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-3">
@@ -1998,6 +2031,7 @@ export default function OfferProposalPreview({
                       </span>
                     </div>
                     <p className="mt-2 text-xs text-slate-500">{chargeDescription}</p>
+                    </>}
                   </div>
                   <div className="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />
@@ -2067,12 +2101,13 @@ export default function OfferProposalPreview({
                     {isSimulation
                       ? "Preview complete — nothing was signed, charged, or recorded."
                       : engagementId
-                      ? `Your agreement is signed and ${paymentWaived ? "your onboarding fee has been waived" : chargeIsFirstMonth ? "your first month is paid" : "your deposit is paid"}. We'll be in touch shortly to kick off onboarding.`
+                      ? `Your agreement is signed and ${paymentWaived ? "no initial payment is due" : stagedPayment && hasCleanup ? "your onboarding and discovery payment is complete" : chargeIsFirstMonth ? "your first month is paid" : "your initial payment is complete"}. We'll be in touch shortly to kick off onboarding.`
                       : "We have your selection and will be in touch to kick off onboarding. Reach out any time if you have questions."}
                   </p>
                 </>
               )}
               <p className="mt-4 text-sm font-semibold text-slate-700">{brand.name}</p>
+              {stagedPayment && hasCleanup ? <p className="mt-4 text-sm leading-6 text-slate-600">Next, provide access and records for discovery. We will confirm the cleanup scope, price, and payment milestones for your approval before starting cleanup.</p> : null}
             </div>
           )}
 

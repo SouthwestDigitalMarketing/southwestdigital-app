@@ -112,7 +112,7 @@ describe("shared service rules", () => {
       },
     );
     expect(checkout.cleanupTotal).toBe(600);
-    expect(checkout.amountDueNow).toBe(665);
+    expect(checkout.amountDueNow).toBe(65);
     expect(checkout.recurringMonthlyTotal).toBe(300);
   });
   it("rejects unavailable optional tiers even when the browser submits their IDs", () => {

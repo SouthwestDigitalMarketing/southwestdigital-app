@@ -1,3 +1,5 @@
+import { CLEANUP_APPROVAL_TEXT, CLEANUP_MONTHLY_START_TEXT, NO_CLEANUP_MONTHLY_START_TEXT } from "@/lib/quotes/paymentSchedule";
+
 const DIVIDER = "─".repeat(62);
 
 export const DEFAULT_AGREEMENT_TEMPLATE_KEY = "bookkeeping-services";
@@ -142,6 +144,11 @@ export type AgreementRenderInput = {
   agreementTerm?: "month-to-month" | "12-month" | null;
   selectedCleanupPeriods?: string[];
   selectedAdditionalOptionNames?: string[];
+  paymentScheduleVersion?: 2;
+  cleanupMonths?: number;
+  cleanupMonthlyRate?: number;
+  additionalOneTimeTotal?: number;
+  includedServices?: { name: string; description: string }[];
   date?: Date;
 };
 
@@ -163,33 +170,49 @@ export function renderAgreementTemplate(template: string, input: AgreementRender
   const packageName = input.selectedTierLabel
     ? `${input.selectedTierLabel} package`
     : "Selected bookkeeping package";
-  const engagementType = input.hasCleanup
+  const staged = input.paymentScheduleVersion === 2;
+  const engagementType = staged && input.hasCleanup
+    ? "Onboarding + Discovery; Estimated Cleanup and Monthly Bookkeeping"
+    : input.hasCleanup
     ? "Historical Cleanup + Monthly Bookkeeping"
     : "Monthly Bookkeeping";
   const scopeLines = [
     `${input.brandName} will provide the ${packageName} for ${input.clientName}.`,
-    input.hasCleanup
+    staged && input.hasCleanup
+      ? "This initial payment covers onboarding and discovery, plus any separately selected one-time add-ons. Historical cleanup is estimated only and is not authorized for performance or charged by this payment."
+      : input.hasCleanup
       ? "This engagement includes historical cleanup/catchup bookkeeping and ongoing monthly bookkeeping."
       : "This engagement includes ongoing monthly bookkeeping.",
     input.selectedCleanupPeriods?.length
       ? `Selected cleanup periods: ${input.selectedCleanupPeriods.join(", ")}.`
       : null,
     input.selectedAdditionalOptionNames?.length
-      ? `Selected additional monthly services: ${input.selectedAdditionalOptionNames.join(", ")}.`
+      ? `Selected additional services: ${input.selectedAdditionalOptionNames.join(", ")}.`
       : null,
     "The specific accounts, reporting schedule, and delivery details will be confirmed during onboarding without changing the package and prices stated below unless both parties approve a written change.",
+    staged && input.includedServices?.length
+      ? `Included package services:\n${input.includedServices.map((item) => `  • ${item.name}${item.description ? `: ${item.description}` : ""}`).join("\n")}` : null,
+    staged ? "Stage 1 — Onboarding: provide account access and required records. We confirm receipt and readiness before service work begins." : null,
+    staged && input.hasCleanup ? `Stage 2 — Discovery and cleanup approval: ${CLEANUP_APPROVAL_TEXT}` : null,
+    staged ? `${input.hasCleanup ? "Stage 3" : "Stage 2"} — Ongoing bookkeeping: ${input.hasCleanup ? CLEANUP_MONTHLY_START_TEXT : NO_CLEANUP_MONTHLY_START_TEXT}` : null,
   ].filter((line): line is string => Boolean(line));
   const scopeOfWork = scopeLines.join("\n\n");
   const feeLines = [
     `Ongoing Monthly Services: ${formatCurrency(input.recurringMonthlyTotal ?? 0)} per month`,
     `Agreement Term:           ${input.agreementTerm === "12-month" ? "12 months" : "Month-to-month"}`,
-    (input.cleanupTotal ?? 0) > 0
+    staged && input.hasCleanup
+      ? `Estimated Cleanup (not due today): ${input.cleanupMonths ?? 0} months × ${formatCurrency(input.cleanupMonthlyRate ?? 0)} = ${formatCurrency(input.cleanupTotal ?? 0)}`
+      : (input.cleanupTotal ?? 0) > 0
       ? `Selected Cleanup Work:  ${formatCurrency(input.cleanupTotal ?? 0)}`
       : null,
     (input.onboardingFee ?? 0) > 0
-      ? `Onboarding Fee:         ${formatCurrency(input.onboardingFee ?? 0)}`
-      : "Onboarding Fee:         Waived",
+      ? `${staged && input.hasCleanup ? "Onboarding + Discovery" : "Onboarding Fee"}:         ${formatCurrency(input.onboardingFee ?? 0)}`
+      : `${staged && input.hasCleanup ? "Onboarding + Discovery" : "Onboarding Fee"}:         Waived`,
+    staged && !input.hasCleanup ? `First Month (due today): ${formatCurrency(input.recurringMonthlyTotal ?? 0)}` : null,
+    staged && (input.additionalOneTimeTotal ?? 0) > 0 ? `Selected One-Time Add-ons (due today): ${formatCurrency(input.additionalOneTimeTotal ?? 0)}` : null,
     `Total Due Upon Signing: ${formatCurrency(input.amountDueNow ?? 0)}`,
+    staged && input.agreementTerm === "12-month"
+      ? `12-Month Service Total: ${formatCurrency(input.recurringMonthlyTotal ?? 0)} × 12 months = ${formatCurrency(Math.round((input.recurringMonthlyTotal ?? 0) * 1200) / 100)}. Paid monthly, not in full today; excludes onboarding, cleanup, and one-time add-ons. The 12-month term begins on the confirmed monthly service start date.` : null,
     "Recurring monthly services are billed according to the selected term. Any change to scope or pricing requires written agreement.",
   ].filter((line): line is string => Boolean(line));
   const feeStructure = feeLines.join("\n");
@@ -205,8 +228,13 @@ export function renderAgreementTemplate(template: string, input: AgreementRender
     "{{feeStructure}}": feeStructure,
   };
 
-  return AGREEMENT_TEMPLATE_TOKENS.reduce(
+  const rendered = AGREEMENT_TEMPLATE_TOKENS.reduce(
     (rendered, token) => rendered.replaceAll(token, values[token]),
     template,
   );
+  // Custom templates may omit the dynamic scope or fees. Always include the
+  // agreed schedule for new selections; signed agreement text is never rebuilt.
+  return staged && (!template.includes("{{scopeOfWork}}") || !template.includes("{{feeStructure}}"))
+    ? `${rendered}\n\nSELECTED SERVICES AND PAYMENT SCHEDULE\n${DIVIDER}\n${scopeOfWork}\n\n${feeStructure}`
+    : rendered;
 }

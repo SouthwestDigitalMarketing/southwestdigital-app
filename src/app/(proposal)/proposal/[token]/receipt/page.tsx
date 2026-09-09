@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { Download, ExternalLink } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { resolvePublicBrand } from "@/lib/brands/resolve";
-import { readAcceptedSelection } from "@/lib/engagements/acceptedPayment";
+import { readAcceptedPayment, readAcceptedSelection } from "@/lib/engagements/acceptedPayment";
 import AgreementTextView from "@/app/(app)/offers/builder/AgreementTextView";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -52,6 +52,7 @@ export default async function ProposalReceiptPage({ params }: { params: Promise<
   const acceptance = isRecord(onboardingData.proposalAcceptance) ? onboardingData.proposalAcceptance : {};
   const payment = isRecord(acceptance.payment) ? acceptance.payment : {};
   const paid = quote.engagement.onboardingFeeStatus === "PAID" || payment.status === "paid";
+  const noPaymentRequired = quote.engagement.onboardingFeeStatus === "WAIVED" && readAcceptedPayment(onboardingData)?.amountInCents === 0;
   const amountPaid = typeof payment.amount === "number"
     ? payment.amount
     : null;
@@ -76,7 +77,7 @@ export default async function ProposalReceiptPage({ params }: { params: Promise<
               <p className="mt-2 font-mono text-xs text-slate-500">Offer {quote.offerCode}</p>
             </div>
             <span className={`rounded-full px-3 py-1 text-sm font-semibold ${paid ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
-              {paid ? "Signed & paid" : "Signed · payment pending"}
+              {paid ? "Signed & paid" : noPaymentRequired ? "Signed · no initial payment due" : "Signed · payment pending"}
             </span>
           </div>
 
@@ -84,10 +85,20 @@ export default async function ProposalReceiptPage({ params }: { params: Promise<
             <div><dt className="text-xs font-bold uppercase tracking-wide text-slate-500">Service</dt><dd className="mt-1 break-words text-lg font-semibold">{hourly?.catalogItemLabel ?? checkout?.tierLabel ?? "Recorded in agreement"}</dd></div>
             <div><dt className="text-xs font-bold uppercase tracking-wide text-slate-500">Signed</dt><dd className="mt-1 text-lg font-semibold">{quote.engagement.signedAt.toLocaleString("en-US")}</dd></div>
             <div><dt className="text-xs font-bold uppercase tracking-wide text-slate-500">{hourly ? "Accepted scope" : "Ongoing services"}</dt><dd className="mt-1 text-lg font-semibold">{hourly ? `${hourly.quantity} hours · ${formatUsd(hourly.total)} total` : checkout ? `${formatUsd(checkout.recurringMonthlyTotal)}/month` : "See agreement"}</dd></div>
-            <div><dt className="text-xs font-bold uppercase tracking-wide text-slate-500">Paid now</dt><dd className="mt-1 text-lg font-semibold">{amountPaid === null ? paid ? "Amount not recorded" : "Pending" : formatUsd(amountPaid)}</dd></div>
+            <div><dt className="text-xs font-bold uppercase tracking-wide text-slate-500">Paid now</dt><dd className="mt-1 text-lg font-semibold">{amountPaid === null ? noPaymentRequired ? "No initial payment required" : paid ? "Amount not recorded" : "Pending" : formatUsd(amountPaid)}</dd></div>
             <div><dt className="text-xs font-bold uppercase tracking-wide text-slate-500">Signed by</dt><dd className="mt-1 font-semibold">{quote.engagement.signerName}{quote.engagement.signerTitle ? ` · ${quote.engagement.signerTitle}` : ""}</dd></div>
-            <div><dt className="text-xs font-bold uppercase tracking-wide text-slate-500">Payment confirmation</dt><dd className="mt-1 font-semibold">{paidAt && !Number.isNaN(paidAt.getTime()) ? paidAt.toLocaleString("en-US") : paid ? "Confirmed" : "Not yet confirmed"}</dd></div>
+            <div><dt className="text-xs font-bold uppercase tracking-wide text-slate-500">Payment confirmation</dt><dd className="mt-1 font-semibold">{paidAt && !Number.isNaN(paidAt.getTime()) ? paidAt.toLocaleString("en-US") : noPaymentRequired ? "Not required" : paid ? "Confirmed" : "Not yet confirmed"}</dd></div>
           </dl>
+
+          {checkout?.paymentScheduleVersion === 2 ? (
+            <div className="mt-6 space-y-3 rounded-xl border border-slate-200 p-5 text-sm">
+              <h2 className="font-bold">Your agreed payment schedule</h2>
+              <p>Initial payment: {formatUsd(checkout.amountDueNow)}.</p>
+              {(checkout.cleanupMonths ?? 0) > 0 ? <p>Cleanup estimate: {checkout.cleanupMonths} months × {formatUsd(checkout.cleanupMonthlyRate ?? 0)} = {formatUsd(checkout.cleanupTotal)}. This estimate was not part of the initial payment. Cleanup scope, price, and payment milestones require your approval after discovery.</p> : null}
+              {checkout.hasTwelveMonthAgreement ? <p>12-month service total: {formatUsd(checkout.recurringMonthlyTotal)} × 12 = {formatUsd(Math.round(checkout.recurringMonthlyTotal * 1200) / 100)}, paid monthly. Excludes onboarding, cleanup, and one-time add-ons.</p> : null}
+              <p>See the signed agreement below for the service stages and monthly billing start.</p>
+            </div>
+          ) : null}
 
           <div className="mt-6 flex flex-wrap gap-3">
             <Link href={`/api/proposal/${token}/signed-document`} className="ui-action-primary inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-bold">

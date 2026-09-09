@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { proposalServiceAddOns } from "@/lib/quotes/proposalServices";
+import { proposalIncludedServices, proposalServiceAddOns } from "@/lib/quotes/proposalServices";
+import { proposalPaymentSchedule } from "@/lib/quotes/paymentSchedule";
 
 const TIER_IDS = ["maintain", "improve", "grow"] as const;
 export type ProposalCheckoutTier = (typeof TIER_IDS)[number];
@@ -19,7 +20,13 @@ export type ProposalCheckoutSummary = ProposalCheckoutSelection & {
   onboardingFee: number;
   oneTimeTotal: number;
   amountDueNow: number;
-  chargeKind: "onboarding" | "first_month" | "cleanup" | "onboarding_and_first_month" | "onboarding_and_cleanup";
+  // Absent on older selections, whose accepted amounts must remain unchanged.
+  paymentScheduleVersion?: 2;
+  cleanupMonths?: number;
+  cleanupMonthlyRate?: number;
+  additionalOneTimeTotal?: number;
+  includedServices?: { name: string; description: string }[];
+  chargeKind: "onboarding" | "first_month" | "cleanup" | "onboarding_and_first_month" | "onboarding_and_cleanup" | "onboarding_and_discovery";
   selectionHash: string;
 };
 
@@ -64,6 +71,7 @@ export function parseStoredProposalCheckout(value: unknown): ProposalCheckoutSum
     "cleanup",
     "onboarding_and_first_month",
     "onboarding_and_cleanup",
+    "onboarding_and_discovery",
   ]);
   const chargeKind = typeof value.chargeKind === "string" && chargeKinds.has(value.chargeKind as ProposalCheckoutSummary["chargeKind"])
     ? value.chargeKind as ProposalCheckoutSummary["chargeKind"]
@@ -80,6 +88,10 @@ export function parseStoredProposalCheckout(value: unknown): ProposalCheckoutSum
   if (numericKeys.some((key) => typeof value[key] !== "number" || !Number.isFinite(value[key]) || value[key] < 0)) {
     return null;
   }
+  if (value.paymentScheduleVersion !== undefined && value.paymentScheduleVersion !== 2) return null;
+  if (value.paymentScheduleVersion === 2 && ["cleanupMonths", "cleanupMonthlyRate", "additionalOneTimeTotal"].some(
+    (key) => typeof value[key] !== "number" || !Number.isFinite(value[key]) || value[key] < 0,
+  )) return null;
   return {
     ...selection,
     tierLabel: typeof value.tierLabel === "string" ? value.tierLabel : selection.tier,
@@ -91,6 +103,15 @@ export function parseStoredProposalCheckout(value: unknown): ProposalCheckoutSum
     amountDueNow: value.amountDueNow as number,
     chargeKind,
     selectionHash: value.selectionHash,
+    ...(value.paymentScheduleVersion === 2 ? {
+      paymentScheduleVersion: 2 as const,
+      cleanupMonths: value.cleanupMonths as number,
+      cleanupMonthlyRate: value.cleanupMonthlyRate as number,
+      additionalOneTimeTotal: value.additionalOneTimeTotal as number,
+      includedServices: Array.isArray(value.includedServices) ? value.includedServices.filter(isRecord)
+        .filter((item) => typeof item.name === "string" && typeof item.description === "string")
+        .map((item) => ({ name: item.name as string, description: item.description as string })) : [],
+    } : {}),
   };
 }
 
@@ -157,7 +178,6 @@ export function buildProposalCheckoutSummary(
     return total + (period ? period.endMonth - period.startMonth + 1 : 0);
   }, 0);
   const maintainMonthly = money(finiteNumber(maintainPricing.monthly));
-  const cleanupTotal = money(maintainMonthly * selectedCleanupMonths);
 
   const waived = assessment.waiveOnboardingFee === true || assessment.onboardingFeeOverride === 0;
   const override = assessment.onboardingFeeOverride;
@@ -168,14 +188,12 @@ export function buildProposalCheckoutSummary(
           ? override
           : 500 + selectedCleanupMonths * 20,
       );
-  const oneTimeTotal = money(cleanupTotal + onboardingFee + additionalOneTimeTotal);
-  const amountDueNow = money(
-    cleanupTotal > 0
-      ? cleanupTotal + onboardingFee + additionalOneTimeTotal
-      : onboardingFee + additionalOneTimeTotal + recurringMonthlyTotal,
-  );
-  const chargeKind: ProposalCheckoutSummary["chargeKind"] = cleanupTotal > 0
-    ? onboardingFee > 0 ? "onboarding_and_cleanup" : "cleanup"
+  const { cleanupTotal, oneTimeTotal, amountDueNow } = proposalPaymentSchedule({
+    cleanupMonths: selectedCleanupMonths, cleanupMonthlyRate: maintainMonthly,
+    onboardingFee, additionalOneTimeTotal, recurringMonthlyTotal,
+  });
+  const chargeKind: ProposalCheckoutSummary["chargeKind"] = selectedCleanupMonths > 0
+    ? "onboarding_and_discovery"
     : onboardingFee > 0 ? "onboarding_and_first_month" : "first_month";
 
   const normalized = {
@@ -191,6 +209,11 @@ export function buildProposalCheckoutSummary(
     oneTimeTotal,
     amountDueNow,
     chargeKind,
+    paymentScheduleVersion: 2 as const,
+    cleanupMonths: selectedCleanupMonths,
+    cleanupMonthlyRate: maintainMonthly,
+    additionalOneTimeTotal: money(additionalOneTimeTotal),
+    includedServices: proposalIncludedServices(assessment, selection.tier),
   };
   const selectionHash = createHash("sha256").update(JSON.stringify(normalized)).digest("hex");
   return { ...normalized, selectionHash };
@@ -214,7 +237,9 @@ export function applyOnboardingWaiver(checkout: ProposalCheckoutSummary): Propos
     onboardingFee: 0,
     oneTimeTotal: money(checkout.oneTimeTotal - checkout.onboardingFee),
     amountDueNow: money(checkout.amountDueNow - checkout.onboardingFee),
-    chargeKind: (checkout.cleanupTotal > 0 ? "cleanup" : "first_month") as ProposalCheckoutSummary["chargeKind"],
+    chargeKind: (checkout.paymentScheduleVersion === 2 && (checkout.cleanupMonths ?? 0) > 0
+      ? "onboarding_and_discovery"
+      : checkout.cleanupTotal > 0 ? "cleanup" : "first_month") as ProposalCheckoutSummary["chargeKind"],
   };
   return {
     ...waived,

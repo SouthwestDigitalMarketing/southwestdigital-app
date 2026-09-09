@@ -1894,10 +1894,14 @@ export function getProposalPricingSnapshotCleanupCard(assessment: AssessmentStat
 
   if (totalOneTime <= 0) return undefined;
 
+  // This total is the one-time value of the deal, not the signing charge. The
+  // client pays onboarding/discovery at signing; cleanup is an estimate they
+  // approve after discovery. Label the rows so staff read the same split.
+  const staged = hasCatchUpPricing && cleanupMonths > 0;
   const detailRows: string[] = [];
-  if (hasCatchUpPricing && cleanupMonths > 0) {
+  if (staged) {
     detailRows.push(
-      `Historical cleanup: ${formatCurrency(maintainPricing.monthly)} x ${cleanupMonths} ${
+      `Cleanup estimate (not charged at signing): ${formatCurrency(maintainPricing.monthly)} x ${cleanupMonths} ${
         cleanupMonths === 1 ? "month" : "months"
       } = ${formatCurrency(maintainPricing.catchUpBase)}`,
     );
@@ -1906,7 +1910,9 @@ export function getProposalPricingSnapshotCleanupCard(assessment: AssessmentStat
     detailRows.push(`${formatCurrency(maintainPricing.assessmentOneTimeAdjustments)} required adjustments`);
   }
   if (onboardingFee > 0) {
-    detailRows.push(`Onboarding: ${formatCurrency(onboardingFee)}`);
+    detailRows.push(
+      `${staged ? "Onboarding + Discovery" : "Onboarding"} (due at signing): ${formatCurrency(onboardingFee)}`,
+    );
   }
 
   return {

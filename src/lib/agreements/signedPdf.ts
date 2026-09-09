@@ -36,6 +36,7 @@ function wrapText(text: string, font: PDFFont, size: number, maxWidth: number) {
     .replace(/[–—]/g, "-")
     .replace(/…/g, "...")
     .replace(/•/g, "*")
+    .replace(/×/g, "x")
     .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, "?");
   for (const paragraph of safeText.replace(/\r/g, "").split("\n")) {
     if (!paragraph.trim()) {

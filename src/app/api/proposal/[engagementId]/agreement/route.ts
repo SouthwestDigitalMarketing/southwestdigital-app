@@ -4,6 +4,7 @@ import { generateProposalAgreementText } from "@/lib/engagements/agreementGenera
 import { renderAgreementTemplate } from "@/lib/agreements/template";
 import { hasPublicProposalAccess, publicProposalNotFound } from "@/lib/engagements/publicProposalAccess";
 import { readAcceptedSelection } from "@/lib/engagements/acceptedPayment";
+import { parseStoredProposalCheckout } from "@/lib/engagements/proposalCheckout";
 
 export async function GET(
   request: Request,
@@ -58,7 +59,8 @@ export async function GET(
   const cleanupTotal = typeof services.cleanupTotal === "number" ? services.cleanupTotal : 0;
   const recurringMonthlyTotal = typeof services.recurringMonthlyTotal === "number" ? services.recurringMonthlyTotal : 0;
   const amountDueNow = typeof services.amountDueNow === "number" ? services.amountDueNow : 0;
-  const hasCleanup = cleanupTotal > 0;
+  const checkout = parseStoredProposalCheckout(services);
+  const hasCleanup = checkout?.paymentScheduleVersion === 2 ? (checkout.cleanupMonths ?? 0) > 0 : cleanupTotal > 0;
   const selectedCleanupPeriods = Array.isArray(services.selectedCleanupPeriodKeys)
     ? services.selectedCleanupPeriodKeys.filter((value): value is string => typeof value === "string")
     : [];
@@ -97,6 +99,11 @@ export async function GET(
     agreementTerm: services.hasTwelveMonthAgreement === true ? "12-month" as const : "month-to-month" as const,
     selectedCleanupPeriods,
     selectedAdditionalOptionNames,
+    paymentScheduleVersion: checkout?.paymentScheduleVersion,
+    cleanupMonths: checkout?.cleanupMonths,
+    cleanupMonthlyRate: checkout?.cleanupMonthlyRate,
+    additionalOneTimeTotal: checkout?.additionalOneTimeTotal,
+    includedServices: checkout?.includedServices,
   };
 
   let text = engagement.agreementText ?? "";
