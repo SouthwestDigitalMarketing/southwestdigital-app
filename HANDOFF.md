@@ -31,8 +31,19 @@ keys, and the Supabase URLs are all secrets. See
 
 ## Repository state
 
-- `main` and `origin/main` are level at `00b7d6c`. Nothing is unpushed.
-- **Every feature branch is merged.** `feat/saas-readiness`,
+> **More than one agent may be working in this directory at once.** Assume the
+> working tree is shared. Do not `git checkout`, `git stash`, `git reset` or
+> rebase to get a job done — those yank files out from under whoever else is
+> mid-edit. To land a branch without disturbing the tree, update the ref
+> directly (`git fetch . <branch>:main` fast-forwards `main` without a
+> checkout); to verify or build a commit in isolation, use `git worktree add`
+> with a symlinked `node_modules`. Leave uncommitted changes that are not yours
+> exactly where they are.
+
+- `main` is at `634b6e6`, **3 commits ahead of `origin/main`** (`00b7d6c`) and
+  unpushed. `docs/consolidate` points at the same commit; the working tree is
+  checked out on it.
+- **Every other branch is merged.** `feat/saas-readiness`,
   `feature/services-step-redesign`, `feature/live-preview-tab`,
   `chore/normalize-line-endings`, `chore/add-ci`, `feature/contacts`,
   `feature/reviews` and `feature/team` are all ancestors of `main` and can be
@@ -44,25 +55,30 @@ keys, and the Supabase URLs are all secrets. See
 
 ### Work in progress in the working tree
 
-Uncommitted changes to the offer builder's pricing-card service sections:
+An agreement and payment-schedule refactor, owned by another session:
 
 ```
- M src/app/(app)/offers/builder/OfferProposalPreview.tsx
- M src/app/(app)/offers/builder/ProposalAddOnsDemo.test.ts
- M src/app/(app)/offers/builder/ProposalAddOnsDemo.tsx
- M src/app/(app)/offers/builder/ServiceOfferEditor.tsx
- M src/app/(app)/offers/builder/offerServiceRows.test.ts
- M src/app/(app)/offers/builder/pricingCardServices.ts
- M src/app/(app)/offers/builder/proposalServiceConfiguration.ts
-?? e2e/pricing-card-sections.spec.ts
+ M src/app/api/proposal/[engagementId]/agreement/route.ts
+ M src/lib/agreements/template.ts
+ M src/lib/engagements/proposalCheckout.ts
+ M src/lib/quotes/proposalServices.ts
+?? src/lib/quotes/paymentSchedule.ts
 ```
 
-This follows `00b7d6c` ("Add explicit included service placement"). Preserve it;
-do not revert or stash it without asking.
+Preserve it. Do not revert, stash or commit it on someone else's behalf.
+
+**Two unit tests fail against this working tree** — `proposalCheckout.test.ts`
+("charges selected cleanup plus onboarding and defers the monthly charge") and
+`proposalServices.test.ts` ("charges one-time add-ons with cleanup without
+advancing the recurring bill"). Both test files are themselves unmodified, and
+both suites pass at `634b6e6` in a clean worktree, so the failures belong to the
+in-flight refactor rather than to any committed state. Expect them until that
+work lands.
 
 ## Health baseline
 
-Measured on `main` at `00b7d6c`, 2026-09-08:
+Measured on `main` at `634b6e6` in a clean worktree, 2026-09-08 — not in the
+shared working tree, which carries the in-flight refactor noted above:
 
 | Check | Result |
 |---|---|
