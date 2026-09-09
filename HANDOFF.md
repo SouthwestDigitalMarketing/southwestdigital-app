@@ -40,9 +40,10 @@ keys, and the Supabase URLs are all secrets. See
 > with a symlinked `node_modules`. Leave uncommitted changes that are not yours
 > exactly where they are.
 
-- `main` is at `634b6e6`, **3 commits ahead of `origin/main`** (`00b7d6c`) and
-  unpushed. `docs/consolidate` points at the same commit; the working tree is
-  checked out on it.
+- `main` and `origin/main` are level at `0fab999`. Nothing is unpushed.
+- `docs/consolidate` is pushed and points at the same commit. It has been
+  merged into `main` by fast-forward and can be deleted once nobody is working
+  from it.
 - **Every other branch is merged.** `feat/saas-readiness`,
   `feature/services-step-redesign`, `feature/live-preview-tab`,
   `chore/normalize-line-endings`, `chore/add-ci`, `feature/contacts`,
@@ -52,38 +53,21 @@ keys, and the Supabase URLs are all secrets. See
   churn is fixed at the root.
 - The bookkeeping-copy migration is committed but intentionally **not applied**
   to any database.
+- `.claude/` shows as untracked and is deliberately never committed.
 
 ### Work in progress in the working tree
 
-An agreement and payment-schedule refactor, owned by another session:
-
-```
- M src/app/api/proposal/[engagementId]/agreement/route.ts
- M src/lib/agreements/template.ts
- M src/lib/engagements/proposalCheckout.ts
- M src/lib/quotes/proposalServices.ts
-?? src/lib/quotes/paymentSchedule.ts
-```
-
-Preserve it. Do not revert, stash or commit it on someone else's behalf.
-
-**Two unit tests fail against this working tree** — `proposalCheckout.test.ts`
-("charges selected cleanup plus onboarding and defers the monthly charge") and
-`proposalServices.test.ts` ("charges one-time add-ons with cleanup without
-advancing the recurring bill"). Both test files are themselves unmodified, and
-both suites pass at `634b6e6` in a clean worktree, so the failures belong to the
-in-flight refactor rather than to any committed state. Expect them until that
-work lands.
+None. The agreement and payment-schedule refactor landed in `0fab999`, and the
+two unit tests that failed while it was in flight now pass.
 
 ## Health baseline
 
-Measured on `main` at `634b6e6` in a clean worktree, 2026-09-08 — not in the
-shared working tree, which carries the in-flight refactor noted above:
+Measured on `main` at `0fab999`, 2026-09-08:
 
 | Check | Result |
 |---|---|
 | `npm run typecheck` | passes |
-| `npm test` | 74 files, 583 tests, all passing (~1.4s) |
+| `npm test` | 75 files, 594 tests, all passing (~1.4s) |
 | `npm run lint` | 0 errors, 8 warnings (`<img>` LCP advisories + one unused disable directive) |
 | CI | `.github/workflows/ci.yml` runs typecheck, lint and unit tests on every PR and push to `main` |
 
@@ -131,6 +115,19 @@ since been fixed and are dropped.
 - **Tenant isolation is uneven** — the newer `/contacts` code bypasses the RLS
   transaction context used by `src/lib/crm/repository.ts`. This is the largest
   open risk before any outside firm shares the database. See the roadmap's P0.
+
+- **The support-level block is matched by name.** The pricing card finds it with
+  `serviceName.endsWith("Client Support")`. Renaming a service to, say,
+  "Priority Support" makes the block silently disappear — brittle for one of the
+  main differentiators between tiers. An explicit flag on the service would be
+  sturdier.
+- **The support level renders twice** — in its own block and again in "Included
+  with this package". Left deliberately: for a tier whose only addition is
+  support, removing it empties the "plus:" list. Worth a decision against real
+  service data.
+- **"Recurring services" renders as an empty header** when a brand has no paid
+  recurring add-ons. Pre-existing from `2387f97`, whose e2e spec asserts the
+  section is empty.
 
 For the full prioritized list, read `docs/SWAPP-REVIEW-AND-ROADMAP.md` and the
 gate checklist in `docs/IMPLEMENTATION-STATUS.md`.
