@@ -18,6 +18,21 @@ Branch: `feat/saas-readiness`. Scope authorized September 5, 2026: implement the
 
 AI product features and marketing bots are excluded. Live calls, interviews, pilot recruitment and testimonial collection require real participants; document readiness and results without fabricating completion. Pricing, commissions and external provider configuration remain explicit configuration decisions rather than invented commercial commitments.
 
+## Branch status
+
+**`feat/saas-readiness` merged to `main` and the branch is gone.** As of
+2026-09-08 `main` is at `00b7d6c` and contains all of the work logged below.
+Verified on `main` that day: typecheck passes, `npm test` runs 583 tests across
+74 files with no failures, and `npm run lint` reports 0 errors and 8 `<img>`
+advisory warnings — so the "nine errors and ten warnings" baseline in the work
+log below is historical. CI now enforces all three on every PR.
+
+The unchecked gates below remain unchecked. Several had partial work land with
+the merge — notably immutable signed payment obligations and Stripe
+reconciliation (gate 3) and brand-administration permissions (gate 4) — but no
+gate other than the first has been verified end to end, and live provider,
+browser and database verification is still outstanding for all of them.
+
 ## Work log
 
 - Created the implementation branch from `abc476e`. The existing roadmap is preserved. Baseline: typecheck and 265 unit tests pass; full lint has nine errors and ten warnings. Browser connection and live database/provider state must be rechecked before runtime verification.

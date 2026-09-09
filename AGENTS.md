@@ -1,6 +1,46 @@
 # Southwest Digital App engineering rules
 
-This repository contains the multi-brand application operated by Southwest Digital Marketing.
+This repository contains the multi-brand application operated by Southwest Digital Marketing. The product is called **SWapp**.
+
+**This file is the single entry point.** Read it first; it routes you everywhere else.
+
+## Where everything lives
+
+Each document has one job and one update cadence. Do not merge them.
+
+| Read this | To learn | Changes |
+|---|---|---|
+| **`AGENTS.md`** (this file) | The rules you may not break, and where everything is | Rarely |
+| **`docs/SWAPP-BRIEF.md`** | What the product and business are, who it serves, how it makes money | When the product changes |
+| **`docs/SWAPP-REVIEW-AND-ROADMAP.md`** | Priorities, launch blockers, phase gates, success measures | Quarterly |
+| **`docs/IMPLEMENTATION-STATUS.md`** | Progress against those gates | As gates close |
+| **`HANDOFF.md`** | Branch state, work in progress, health baseline, first commands | Every session |
+
+Reference material, read when the task touches it:
+
+| Topic | Document |
+|---|---|
+| Architecture, auth, tenancy, data ownership, offboarding, theming | `docs/architecture/` |
+| Offer/product kinds and how to add one | `docs/architecture/product-kinds.md` |
+| Keyboard layer — **required** before touching anything keyboard-related | `docs/keyboard/README.md` |
+| Environment variables | `docs/deployment/environment-variables.md` |
+| Migration drift and safe Prisma commands | `docs/deployment/database-migration-state.md` |
+| Deployment, database roles, production identity, cutover | `docs/deployment/` |
+| Zoho mailbox setup | `docs/email-connections/zoho-setup.md` |
+| Offer builder and options templates | `docs/offers/` |
+| Unbuilt design intent (work items, proposal versioning) | `docs/design/` |
+| Session history through 2026-09-08, for provenance only | `docs/handoff-archive/` |
+
+`README.md` is the public-facing description of the repository. `CLAUDE.md`
+points here.
+
+## Push policy
+
+**Never push without explicit user instruction.** Commit locally at every phase
+boundary so work is preserved; leave the push to the user.
+
+No production deploy, destructive migration, outbound message, or payment
+transaction may be initiated from an agent session.
 
 ## Non-negotiable architecture rules
 

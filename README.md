@@ -19,6 +19,16 @@ See [the platform blueprint](docs/architecture/platform-blueprint.md), [authenti
 
 The guarded first-tenant process is documented in [initial brand seed](docs/migration/initial-brand-seed.md). Its disposable PostgreSQL rehearsal is available as `npm run test:initial-seed:windows`.
 
+## Documentation
+
+`AGENTS.md` is the single entry point: it carries the non-negotiable engineering rules and maps every other document. Start there.
+
+- `docs/SWAPP-BRIEF.md` — what the product and business are
+- `docs/SWAPP-REVIEW-AND-ROADMAP.md` — priorities, launch blockers, phase gates
+- `docs/IMPLEMENTATION-STATUS.md` — progress against those gates
+- `HANDOFF.md` — current branch state and work in progress
+- `docs/local-development.md` — setup, dev login, checks, scripts
+
 ## Status
 
-The repository is in its foundation phase. No production database, DNS, or authentication traffic has been cut over.
+Pre-launch. The offer-to-payment workflow — assessment, pricing, proposal, e-signature, and Stripe Connect payment to the firm's own connected account — is implemented and exercised by Bookkeeping Conroe. The platform is not yet open to independent customer firms: tenant isolation, subscription billing, first-run activation, and data export remain open. `docs/SWAPP-REVIEW-AND-ROADMAP.md` holds the gates.
