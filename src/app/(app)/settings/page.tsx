@@ -47,7 +47,7 @@ export default async function SettingsPage({
   const emailNotice = parseEmailNotice(query.email);
   if (!canAdministerBrand(context)) {
     return (
-      <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6 lg:p-8">
+      <div className="w-full space-y-6 p-4 sm:p-6 lg:p-8">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Your settings</h1>
           <p className="mt-2 text-sm text-muted-foreground">Manage your mailbox. Shared firm settings are managed by your brand administrator.</p>
@@ -103,7 +103,7 @@ export default async function SettingsPage({
           : "missing";
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6 lg:p-8">
+    <div className="w-full space-y-6 p-4 sm:p-6 lg:p-8">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
         <p className="mt-2 text-sm text-muted-foreground">Connections, appearance, and shared tools for {brand.name}.</p>
