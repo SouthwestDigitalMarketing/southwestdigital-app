@@ -43,6 +43,38 @@ describe("public proposal data boundary", () => {
     expect(() => toPublicBookkeepingProposal({ assessment: {}, pricing: {} })).toThrow();
   });
 
+  it("keeps the strikethrough toggle on the public assessment", () => {
+    const pricing = { maintain: { monthly: 500 }, improve: { monthly: 600 }, grow: { monthly: 750 } };
+    for (const showOriginalOneTimePrices of [true, false]) {
+      const result = toPublicBookkeepingProposal({
+        assessment: { waiveOnboardingFee: true, onboardingFeeOverride: 540, showOriginalOneTimePrices },
+        pricing,
+        contactInfo: {},
+      });
+      expect(result.assessment.showOriginalOneTimePrices).toBe(showOriginalOneTimePrices);
+    }
+  });
+
+  it("toggling the strikethrough flag off suppresses originalPrice while row.price is unchanged", () => {
+    const resolveOriginalPrice = (
+      assessment: { showOriginalOneTimePrices?: boolean },
+      row: { price: number },
+      isOnboardingRow: boolean,
+      originalOnboardingFee: number,
+    ) =>
+      assessment.showOriginalOneTimePrices !== false && isOnboardingRow && originalOnboardingFee > row.price
+        ? originalOnboardingFee
+        : undefined;
+    const row = { price: 0 };
+    const originalOnboardingFee = 540;
+    expect(resolveOriginalPrice({ showOriginalOneTimePrices: true }, row, true, originalOnboardingFee)).toBe(540);
+    expect(resolveOriginalPrice({}, row, true, originalOnboardingFee)).toBe(540);
+    expect(resolveOriginalPrice({ showOriginalOneTimePrices: false }, row, true, originalOnboardingFee)).toBeUndefined();
+    expect(row.price).toBe(0);
+    expect(resolveOriginalPrice({ showOriginalOneTimePrices: true }, row, false, originalOnboardingFee)).toBeUndefined();
+    expect(resolveOriginalPrice({ showOriginalOneTimePrices: true }, { price: 540 }, true, originalOnboardingFee)).toBeUndefined();
+  });
+
   it("rejects active content URLs", () => {
     expect(() => toPublicBookkeepingProposal({ assessment: { featuredImageUrl: "javascript:alert(1)" } })).toThrow();
   });

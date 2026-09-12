@@ -297,6 +297,7 @@ export type AssessmentState = {
   isTestProposal: boolean;
   waiveOnboardingFee: boolean;
   onboardingFeeOverride: number | null;
+  showOriginalOneTimePrices: boolean;
   annualSavingsPercent: number;
   packageNames: ProposalPackageNames;
   includeConditionalStessaMigration: boolean;
@@ -476,6 +477,7 @@ const INITIAL_ASSESSMENT: AssessmentState = {
   isTestProposal: false,
   waiveOnboardingFee: false,
   onboardingFeeOverride: null,
+  showOriginalOneTimePrices: true,
   annualSavingsPercent: 20,
   packageNames: { ...DEFAULT_PROPOSAL_PACKAGE_NAMES },
   includeConditionalStessaMigration: false,
@@ -3179,6 +3181,17 @@ export default function ProposalCreationWorkspaceDemo({
                                 className="h-4 w-4 rounded border-slate-300 text-brandnavy focus:ring-brandnavy"
                               />
                               <span><span className="block">Waive onboarding fee</span><span className="block text-base font-normal text-slate-500">Keeps the amount above and strikes it through on the proposal.</span></span>
+                            </label>
+                            <label className="mt-3 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-medium text-slate-700">
+                              <input
+                                type="checkbox"
+                                checked={assessment.showOriginalOneTimePrices !== false}
+                                onChange={(event) => {
+                                  updateAssessment("showOriginalOneTimePrices", event.target.checked);
+                                }}
+                                className="h-4 w-4 rounded border-slate-300 text-brandnavy focus:ring-brandnavy"
+                              />
+                              <span><span className="block">Show original price with strikethrough</span><span className="block text-base font-normal text-slate-500">Uncheck to hide the struck-through original on one-time services.</span></span>
                             </label>
                           </div>
                     </AssessmentCardSection>
