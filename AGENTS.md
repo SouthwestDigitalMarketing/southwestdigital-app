@@ -36,11 +36,40 @@ points here.
 
 ## Push policy
 
-**Never push without explicit user instruction.** Commit locally at every phase
-boundary so work is preserved; leave the push to the user.
+**Never push `main` without explicit user instruction.** Commit locally at every
+phase boundary so work is preserved; leave the push to the user.
+
+Agents working from the sandboxed worktree (below) may push their own
+`spark/<ticket>` branch and open a pull request. **Merging is the owner's job**:
+a merge to `main` deploys production. Agents never merge, never force-push, and
+never push `main`.
 
 No production deploy, destructive migration, outbound message, or payment
 transaction may be initiated from an agent session.
+
+## Machines and agent workspaces
+
+Development runs on **ripley** (Omarchy/Arch). Agent panes live in the `herdr`
+session `swapp`; the Next dev server runs in its `dev` tab so it outlives any
+SSH connection. The owner reaches all of this from **dalliance** (laptop) or
+**steelbreeze** (Omarchy, always-on agent host) over Tailscale SSH, with
+`localhost:3000` forwarded to the browser.
+
+| Path | What it is |
+|---|---|
+| `~/Projects/southwestdigital-app` | Main checkout. Holds `.env.local` with live Stripe, PayPal, Cloudflare, Google and Zoho secrets, plus the Supabase `DATABASE_URL`. |
+| `~/Projects/swapp-spark` | Git worktree used by the agent team. **Contains no `.env.local` by design.** |
+
+Rules that follow from that split:
+
+- Agents on models with training rights on prompts (the cheap contributor tiers)
+  run **only** in the worktree, never in the main checkout, and never read
+  `.env*`, `/mnt`, or the database.
+- `npm run typecheck`, `npm run lint` and `npm test` all pass in the worktree
+  without secrets. If a task needs secrets or the database, it is owner work,
+  not agent work.
+- `.local/` is Git-ignored, private, and must never be committed or quoted into
+  a commit message, PR, or public document.
 
 ## Non-negotiable architecture rules
 
