@@ -108,6 +108,28 @@ warns, and exits 2. If it does, say so rather than letting him paste nothing.
 
 The full rule, which applies to every project, is in `~/.claude/CLAUDE.md`.
 
+### Remote Omarchy shutdown over SSH
+
+For Dalliance, the local account is `thomas`; `ssh dalliance` defaults to
+Ripley's `tom` and is the wrong target. Use the explicit account and force a
+local terminal for the password prompt:
+
+```bash
+ssh -tt -o PreferredAuthentications=password -o PubkeyAuthentication=no \
+  thomas@dalliance 'omarchy system shutdown' </dev/tty
+```
+
+When handing this over through `~/go`, print the command first and clear the
+one-shot script **after** SSH returns. Overwriting `$0` before the command runs
+can truncate the script while Bash is still reading it, causing only the
+`Running:` line to appear and no SSH attempt at all.
+
+The remote command may print a `jq` error about
+`HYPRLAND_INSTANCE_SIGNATURE` because an SSH session has no Hyprland GUI;
+that warning is harmless if SSH returns status `0`. Confirm the result from
+Ripley with `tailscale ping dalliance` and `tailscale status`: successful
+shutdown is shown as ping timeouts and the peer marked `offline`.
+
 ## Machines and agent workspaces
 
 Development runs on **ripley** (Omarchy/Arch). Agent panes live in the `herdr`
