@@ -63,6 +63,26 @@ instruction; changing that file is an owner decision, not an agent one.
 No destructive migration, outbound client message, or payment transaction may be
 initiated from any agent session. That has not changed.
 
+## Handing commands to the owner
+
+Tom works **without a mouse** and cannot highlight and copy text out of an agent
+response. Whenever a reply asks him to run something in a terminal, put it on the
+clipboard in the same turn:
+
+```bash
+printf '%s' 'the exact command' | clip
+```
+
+`~/.local/bin/clip` wraps `wl-copy` and adds no trailing newline, so the paste
+waits at the prompt instead of executing. Say that it is on the clipboard. One
+command per copy — chain steps with `&&` rather than handing over a block he has
+to split by hand.
+
+Over SSH this copies to the *remote* machine's clipboard; `clip` detects that,
+warns, and exits 2. If it does, say so rather than letting him paste nothing.
+
+The full rule, which applies to every project, is in `~/.claude/CLAUDE.md`.
+
 ## Machines and agent workspaces
 
 Development runs on **ripley** (Omarchy/Arch). Agent panes live in the `herdr`
