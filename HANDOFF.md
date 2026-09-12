@@ -5,7 +5,7 @@ it. Historical session logs live in `docs/handoff-archive/`; durable design and
 reference material lives in `docs/`. If a note here would still be true in three
 months, it belongs in `docs/`, not in this file.
 
-Updated: 2026-09-08 (America/Chicago).
+Updated: 2026-09-12 (America/Chicago).
 
 ## Read first
 
@@ -40,15 +40,22 @@ keys, and the Supabase URLs are all secrets. See
 > with a symlinked `node_modules`. Leave uncommitted changes that are not yours
 > exactly where they are.
 
-- `main` and `origin/main` are level at `0fab999`. Nothing is unpushed.
-- `docs/consolidate` is pushed and points at the same commit. It has been
-  merged into `main` by fast-forward and can be deleted once nobody is working
-  from it.
+- `main` and `origin/main` are level at `3348553`. Nothing is unpushed on `main`.
+- **`fix/duplicate-offer-dialog` is pushed, and PR #17 is open and unmerged.**
+  One line in `DuplicateOfferButton.tsx`; see "Known gaps" below for what it
+  fixes. Merging is the owner's job — a merge to `main` deploys production.
+- `spark/support-level-note` (PR #15) and `spark/strikethrough-original-price`
+  (PR #16) are merged and can be deleted.
+- **`spark/duplicate-not-working` has no commits.** The spark team branched it,
+  diagnosed the bug into `.opencode/plans/duplicate-not-working.md`, and stopped
+  at the approval checkpoint. The fix was carried out in the main checkout
+  instead, so this branch can be deleted.
 - **Every other branch is merged.** `feat/saas-readiness`,
   `feature/services-step-redesign`, `feature/live-preview-tab`,
   `chore/normalize-line-endings`, `chore/add-ci`, `feature/contacts`,
-  `feature/reviews` and `feature/team` are all ancestors of `main` and can be
-  deleted. Older `origin/agent/*` branches are historical.
+  `feature/reviews`, `feature/team`, `spark/settings-width` and
+  `docs/consolidate` are all ancestors of `main` and can be deleted. Older
+  `origin/agent/*` branches are historical.
 - `.gitattributes` pins `* text=auto eol=lf`, so the recurring Windows CRLF
   churn is fixed at the root.
 - The bookkeeping-copy migration is committed but intentionally **not applied**
@@ -57,17 +64,18 @@ keys, and the Supabase URLs are all secrets. See
 
 ### Work in progress in the working tree
 
-None. The agreement and payment-schedule refactor landed in `0fab999`, and the
-two unit tests that failed while it was in flight now pass.
+None. The working tree is clean; the only outstanding work is PR #17 awaiting a
+merge decision.
 
 ## Health baseline
 
-Measured on `main` at `0fab999`, 2026-09-08:
+Measured on `fix/duplicate-offer-dialog` (one line ahead of `main` at `3348553`),
+2026-09-12:
 
 | Check | Result |
 |---|---|
 | `npm run typecheck` | passes |
-| `npm test` | 75 files, 594 tests, all passing (~1.4s) |
+| `npm test` | 75 files, 596 tests, all passing (~1.4s) |
 | `npm run lint` | 0 errors, 8 warnings (`<img>` LCP advisories + one unused disable directive) |
 | CI | `.github/workflows/ci.yml` runs typecheck, lint and unit tests on every PR and push to `main` |
 
@@ -77,8 +85,10 @@ a reachable DB. `npm run test:e2e` stays a local step.
 
 ## Development machine
 
-Work moved from Windows to **`dalliance`** — an HP Envy x360 running Omarchy
-4.0.2 (Arch, Hyprland/Wayland) — on 2026-09-07. On this machine:
+Development runs on **`ripley`** (Omarchy/Arch), reached from **`dalliance`**
+(laptop) or **`steelbreeze`** (always-on agent host) over Tailscale — see
+`AGENTS.md` for the machine split and the agent worktree rules. Agent panes live
+in the herdr session `swapp`. On any of these Linux machines:
 
 - **No `prisma generate` EPERM lock.** That workaround was Windows-only; you do
   not need to stop the dev server to regenerate the Prisma client.
@@ -91,7 +101,9 @@ Work moved from Windows to **`dalliance`** — an HP Envy x360 running Omarchy
   `::-webkit-scrollbar` style to force classic scrollbars.
 - The `*.ps1` scripts under `scripts/` and the `test:*:windows` npm scripts
   cannot run here.
-- A `next dev` server may already be listening on **:3000**.
+- A `next dev` server may already be listening on **:3000** — but as of
+  2026-09-12 nothing was, and the herdr `swapp` session had no `dev` tab. Check
+  before assuming, and start one if you need it.
 
 ## Known gaps worth naming
 
@@ -115,6 +127,16 @@ since been fixed and are dropped.
 - **Tenant isolation is uneven** — the newer `/contacts` code bypasses the RLS
   transaction context used by `src/lib/crm/repository.ts`. This is the largest
   open risk before any outside firm shares the database. See the roadmap's P0.
+- **Four tracked scripts carry hardcoded local Postgres passwords** —
+  `scripts/migrate-local-to-supabase.cjs:13` and the three `test-*.ps1` scripts.
+  Local/dev credentials, not cloud, but committed and readable by any model that
+  opens them. A ticket exists at `.opencode/tickets/hardcoded-db-passwords.md` in
+  the `swapp-spark` worktree and has never been run.
+- **No DOM test harness.** All 596 unit tests are pure Node; there is no
+  jsdom or testing-library, so component and overlay behaviour can only be covered
+  by Playwright, which needs secrets and a database and is therefore not in CI.
+  The duplicate-dialog bug fixed in PR #17 was exactly this class of defect and
+  landed without an automated regression test for that reason.
 
 - **The support-level block is matched by name.** The pricing card finds it with
   `serviceName.endsWith("Client Support")`. Renaming a service to, say,
@@ -128,6 +150,11 @@ since been fixed and are dropped.
 - **"Recurring services" renders as an empty header** when a brand has no paid
   recurring add-ons. Pre-existing from `2387f97`, whose e2e spec asserts the
   section is empty.
+- **Duplicate in the offers table — fixed, pending merge (PR #17).** The row "…"
+  popover hid the duplicate dialog by putting `display:none` on an ancestor of a
+  top-layer `<dialog>`, so the contact picker never appeared and no offer was
+  written. Any other dialog rendered as a child of that popover has the same
+  problem; `Modal` uses no portal, so the pattern is worth watching for.
 
 For the full prioritized list, read `docs/SWAPP-REVIEW-AND-ROADMAP.md` and the
 gate checklist in `docs/IMPLEMENTATION-STATUS.md`.
