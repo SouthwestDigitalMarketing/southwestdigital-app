@@ -36,16 +36,32 @@ points here.
 
 ## Push policy
 
-**Never push `main` without explicit user instruction.** Commit locally at every
-phase boundary so work is preserved; leave the push to the user.
+**Changed 2026-09-12 by the owner.** The previous rule reserved every push to
+`main` and every merge for the owner. It no longer does.
 
-Agents working from the sandboxed worktree (below) may push their own
-`spark/<ticket>` branch and open a pull request. **Merging is the owner's job**:
-a merge to `main` deploys production. Agents never merge, never force-push, and
-never push `main`.
+The **lead agent** (the Claude session in the main checkout) may push branches,
+push `main`, open pull requests, and merge them. Still required, because a merge
+to `main` deploys production:
 
-No production deploy, destructive migration, outbound message, or payment
-transaction may be initiated from an agent session.
+- Commit locally at every phase boundary, so work is preserved even if a push is
+  refused or interrupted.
+- Run `npm run typecheck`, `npm run lint` and `npm test` before a merge, and say
+  in the PR what they returned — including a pre-existing failure count, so a
+  baseline failure is never mistaken for a new one.
+- Say plainly, after the fact, that `main` was pushed or a PR was merged, and
+  what deployed.
+- Never force-push, and never rewrite published history.
+
+**Sub-agents on the contributor tiers** (the opencode spark team) keep the
+narrower grant: their own `spark/<ticket>` branch, and a pull request. They do
+not merge and do not push `main`. Their models carry training rights on prompts,
+they cannot run the test suite against a database, and no reviewer sees the
+change before it would deploy — so the merge decision stays with the lead or the
+owner. Their `.opencode/opencode.json` enforces this as capability, not
+instruction; changing that file is an owner decision, not an agent one.
+
+No destructive migration, outbound client message, or payment transaction may be
+initiated from any agent session. That has not changed.
 
 ## Machines and agent workspaces
 

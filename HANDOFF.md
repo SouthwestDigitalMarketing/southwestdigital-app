@@ -20,9 +20,13 @@ Two things it does not say:
 
 ## Push policy
 
-**Never push without explicit user instruction.** Commit locally at every phase
-boundary so work is preserved; leave the push to the user. If a phase is
-finished and unpushed, say so under "Repository state" below.
+**Changed 2026-09-12 by the owner — see `AGENTS.md` for the full rule.** The lead
+agent may now push `main`, open pull requests and merge them. Still commit
+locally at every phase boundary, still run the checks before a merge, still say
+afterwards what was pushed or merged and what deployed. The contributor-tier
+spark team keeps the narrower grant: `spark/<ticket>` and a PR, no merge.
+
+If a phase is finished and unpushed, say so under "Repository state" below.
 
 Never commit `.env.local` or any secret. `AUTH_SECRET`, `ZOHO_MAIL_CLIENT_ID`,
 `ZOHO_MAIL_CLIENT_SECRET`, `INTEGRATION_ENCRYPTION_KEY`, the Stripe and PayPal
