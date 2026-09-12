@@ -45,10 +45,10 @@ keys, and the Supabase URLs are all secrets. See
 > with a symlinked `node_modules`. Leave uncommitted changes that are not yours
 > exactly where they are.
 
-- `main` and `origin/main` are level at `3348553`. Nothing is unpushed on `main`.
-- **`fix/duplicate-offer-dialog` is pushed, and PR #17 is open and unmerged.**
-  One line in `DuplicateOfferButton.tsx`; see "Known gaps" below for what it
-  fixes. Merging is the owner's job — a merge to `main` deploys production.
+- `main` and `origin/main` are level at `43e5633`. Nothing is unpushed.
+- **PR #17 is merged and deployed.** Merge commit `21b2470`; the GitHub
+  Production deployment for it reported `success` at 15:24 UTC on 2026-09-12.
+  `fix/duplicate-offer-dialog` can be deleted.
 - `spark/support-level-note` (PR #15) and `spark/strikethrough-original-price`
   (PR #16) are merged and can be deleted.
 - **`spark/duplicate-not-working` has no commits.** The spark team branched it,
@@ -74,8 +74,7 @@ merge decision.
 
 ## Health baseline
 
-Measured on `fix/duplicate-offer-dialog` (one line ahead of `main` at `3348553`),
-2026-09-12:
+Measured on `main` at `43e5633`, 2026-09-12:
 
 | Check | Result |
 |---|---|
@@ -87,6 +86,30 @@ Measured on `fix/duplicate-offer-dialog` (one line ahead of `main` at `3348553`)
 Playwright is deliberately **not** in CI: those specs drive a real dev server
 against a real Supabase database and sign in as staff, so they need secrets and
 a reachable DB. `npm run test:e2e` stays a local step.
+
+## Parked, needs the owner — not agent work
+
+Neither of these is in this repository, and neither can be done from code. They
+are recorded here because nothing else an agent reads will surface them.
+
+1. **The `firm_singleton` database row in `bookkeepingconroe-web`.** The business
+   address was corrected across that repo and deployed on 2026-09-12
+   (`96 Beachwalk Boulevard, Office E, Conroe, TX 77304`), but the admin contract
+   builder reads the database row *before* the corrected constant, so a stale row
+   silently overrides the fix. `scripts/createFirmProfile.cjs` is
+   `ON CONFLICT DO NOTHING`, so re-seeding does nothing — it needs an edit at
+   `/admin/firm-profile` or an explicit `UPDATE`.
+2. **Off-repo listings** — Google Business Profile above all, plus Yelp, BBB, the
+   Conroe/Montgomery County Chamber, the QuickBooks ProAdvisor directory, Apple
+   Maps and Bing Places. Each holds its own copy of the address and phone.
+
+Both are written up in `docs/nap-consistency.md` in `bookkeepingconroe-web`, with
+a banner at the top of that repo's `HANDOFF.md`. Tom deferred them on 2026-09-12
+while a client proposal was in flight; raise them when that proposal is out.
+
+Also unstarted there: the content half of the Sep 2026 SEO review (location /
+service-area pages, service-page depth), which that review ranked *above* most of
+the address work for lead impact.
 
 ## Development machine
 
@@ -155,11 +178,12 @@ since been fixed and are dropped.
 - **"Recurring services" renders as an empty header** when a brand has no paid
   recurring add-ons. Pre-existing from `2387f97`, whose e2e spec asserts the
   section is empty.
-- **Duplicate in the offers table — fixed, pending merge (PR #17).** The row "…"
-  popover hid the duplicate dialog by putting `display:none` on an ancestor of a
-  top-layer `<dialog>`, so the contact picker never appeared and no offer was
-  written. Any other dialog rendered as a child of that popover has the same
-  problem; `Modal` uses no portal, so the pattern is worth watching for.
+- **Duplicate in the offers table — fixed and deployed (PR #17, `21b2470`).** The
+  row "…" popover hid the duplicate dialog by putting `display:none` on an
+  ancestor of a top-layer `<dialog>`, so the contact picker never appeared and no
+  offer was written. **Any other dialog rendered as a child of that popover has
+  the same problem** — `Modal` uses no portal, so watch for the pattern. The fix
+  shipped with no automated regression test, for the reason in the gap above.
 
 For the full prioritized list, read `docs/SWAPP-REVIEW-AND-ROADMAP.md` and the
 gate checklist in `docs/IMPLEMENTATION-STATUS.md`.
