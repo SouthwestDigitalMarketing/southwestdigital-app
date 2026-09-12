@@ -71,17 +71,36 @@ initiated from any agent session.
 ## Handing commands to the owner
 
 Tom works **without a mouse** and cannot highlight and copy text out of an agent
-response. Whenever a reply asks him to run something in a terminal, put it on the
-clipboard in the same turn:
+response. Whenever a reply asks him to run something in a terminal, write it to
+`~/go`, make it executable, and tell him to type `~/go`. Always show the command
+in the reply too.
 
 ```bash
-printf '%s' 'the exact command' | clip
+printf '%s\n' '#!/usr/bin/env bash' \
+  "printf '%s\n' 'Running: npm test'" \
+  'npm test' > ~/go && chmod +x ~/go
+```
+
+**Every executable handoff must print the exact command immediately before it
+runs.** Showing it only in the agent reply is not enough: Tom must be able to see
+in the target terminal what he just executed. This applies both to `~/go` and to
+anything copied to the clipboard for execution in another terminal.
+
+Also put the command on the clipboard as a second route when possible. The
+clipboard payload must be a self-reporting one-liner, not the bare command:
+
+```bash
+printf '%s' "printf '%s\\n' 'Running: npm test' && npm test" | clip
 ```
 
 `~/.local/bin/clip` wraps `wl-copy` and adds no trailing newline, so the paste
 waits at the prompt instead of executing. Say that it is on the clipboard. One
-command per copy — chain steps with `&&` rather than handing over a block he has
-to split by hand.
+job per handoff — chain related steps with `&&` rather than handing over a block
+he has to split by hand.
+
+Never stage a destructive command without saying plainly what it does. When
+nothing is staged, leave `~/go` as a harmless `echo`; a one-shot command should
+reset `~/go` before it performs its real work so stale execution is safe.
 
 Over SSH this copies to the *remote* machine's clipboard; `clip` detects that,
 warns, and exits 2. If it does, say so rather than letting him paste nothing.
