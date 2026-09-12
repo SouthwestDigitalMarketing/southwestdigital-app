@@ -70,7 +70,12 @@ export function DuplicateOfferButton({
         aria-label="Duplicate offer"
         title="Duplicate offer"
         disabled={pending}
-        onClick={() => {
+        onClick={(event) => {
+          // The row "…" menu is a popover that hides itself on any button click
+          // inside it (OfferStatusButtons). This dialog renders in that subtree,
+          // so letting the click bubble puts a display:none ancestor over a
+          // top-layer dialog and nothing appears.
+          event.stopPropagation();
           setOpen(true);
           setQuery("");
           setTestProposal(false);
