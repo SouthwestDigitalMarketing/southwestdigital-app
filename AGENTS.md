@@ -100,7 +100,8 @@ he has to split by hand.
 
 Never stage a destructive command without saying plainly what it does. When
 nothing is staged, leave `~/go` as a harmless `echo`; a one-shot command should
-reset `~/go` before it performs its real work so stale execution is safe.
+reset `~/go` after its real work returns (using an exit trap if appropriate), so
+stale execution is safe without truncating the script before it runs.
 
 Over SSH this copies to the *remote* machine's clipboard; `clip` detects that,
 warns, and exits 2. If it does, say so rather than letting him paste nothing.
