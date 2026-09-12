@@ -36,32 +36,37 @@ points here.
 
 ## Push policy
 
-**Changed 2026-09-12 by the owner.** The previous rule reserved every push to
-`main` and every merge for the owner. It no longer does.
+**Settled 2026-09-12.** Agents take work as far as a reviewable pull request.
+The owner merges.
 
-The **lead agent** (the Claude session in the main checkout) may push branches,
-push `main`, open pull requests, and merge them. Still required, because a merge
-to `main` deploys production:
+The **lead agent** (the Claude session in the main checkout) may:
 
-- Commit locally at every phase boundary, so work is preserved even if a push is
-  refused or interrupted.
-- Run `npm run typecheck`, `npm run lint` and `npm test` before a merge, and say
-  in the PR what they returned — including a pre-existing failure count, so a
-  baseline failure is never mistaken for a new one.
-- Say plainly, after the fact, that `main` was pushed or a PR was merged, and
-  what deployed.
-- Never force-push, and never rewrite published history.
+- commit locally, at every phase boundary, so work survives an interruption;
+- push any branch, including straight to `main` for documentation-only commits;
+- open pull requests.
+
+The lead agent **does not merge**, and does not push code to `main` outside a
+pull request. A merge deploys production for an application that bills clients,
+and it is the one step in the chain that is expensive to undo. Pushing a branch
+and opening a PR deploy nothing, so there is no reason to gate them.
+
+Before asking for a merge, the lead agent must have run `npm run typecheck`,
+`npm run lint` and `npm test`, and must say in the PR what they returned —
+including the pre-existing failure count, so a baseline failure is never
+mistaken for a new one. It must also say what is **not** covered: this repo has
+no DOM test harness, so component and overlay behaviour reaches production
+unverified unless a Playwright spec covers it.
 
 **Sub-agents on the contributor tiers** (the opencode spark team) keep the
-narrower grant: their own `spark/<ticket>` branch, and a pull request. They do
-not merge and do not push `main`. Their models carry training rights on prompts,
-they cannot run the test suite against a database, and no reviewer sees the
-change before it would deploy — so the merge decision stays with the lead or the
-owner. Their `.opencode/opencode.json` enforces this as capability, not
-instruction; changing that file is an owner decision, not an agent one.
+narrower grant: their own `spark/<ticket>` branch and a pull request, nothing
+else. Their models carry training rights on prompts and cannot run the suite
+against a database. Their `.opencode/opencode.json` enforces this as capability
+rather than instruction; changing that file is an owner decision.
+
+Nobody force-pushes, and nobody rewrites published history.
 
 No destructive migration, outbound client message, or payment transaction may be
-initiated from any agent session. That has not changed.
+initiated from any agent session.
 
 ## Handing commands to the owner
 
