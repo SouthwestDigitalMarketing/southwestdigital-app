@@ -1575,8 +1575,7 @@ export default function OfferProposalPreview({
                         </div>
                         {supportRows.map((row) => (
                           <div key={row.id} aria-label={`${option.name} support level`} className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                            <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">Your support level</p>
-                            <p className="mt-1 text-lg font-bold text-emerald-900">{row.serviceName}</p>
+                            <p className="text-base font-semibold text-emerald-900">{row.serviceName}</p>
                             {/* Only real copy earns this space; the tooltip fallback is filler. */}
                             {row.note ? <p className="mt-2 text-sm leading-6 text-slate-700">{row.note}</p> : null}
                           </div>
