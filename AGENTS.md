@@ -130,6 +130,18 @@ that warning is harmless if SSH returns status `0`. Confirm the result from
 Ripley with `tailscale ping dalliance` and `tailscale status`: successful
 shutdown is shown as ping timeouts and the peer marked `offline`.
 
+### Pixel video-transfer troubleshooting
+
+Do not interrupt a valuable in-progress phone transfer merely to benchmark a
+different connection. In the September 2026 Pixel 9 incident, the observed
+`5.1 MB/s` while resuming with `rsync --append-verify` was largely the speed of
+re-reading and verifying the existing partial prefix; it was not a clean test
+of resumed write speed. Leave the current transfer alone unless the owner asks
+to stop it. Test optimizations next time with a separate small copy (or a fresh
+transfer), compare MTP/GVFS against ADB, and record the negotiated USB mode,
+cable, source method, destination filesystem, and measured rate before changing
+the production workflow.
+
 ## Machines and agent workspaces
 
 Development runs on **ripley** (Omarchy/Arch). Agent panes live in the `herdr`
