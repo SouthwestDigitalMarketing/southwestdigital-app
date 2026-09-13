@@ -322,6 +322,7 @@ export function HourlyPublicView(props: HourlyPublicViewProps) {
                 </p>
                 <DepositPaymentForm
                   clientSecret={payState.clientSecret}
+                  isTestProposal={props.isTestProposal}
                   onPaid={confirmStripePayment}
                 />
               </div>

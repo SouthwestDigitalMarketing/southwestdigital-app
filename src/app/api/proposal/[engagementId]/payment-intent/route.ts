@@ -13,7 +13,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ eng
   if (!await hasPublicProposalAccess(request, engagementId)) return publicProposalNotFound();
   const engagement = await prisma.engagement.findUnique({
     where: { id: engagementId },
-    select: { brandId: true, onboardingFeeStatus: true, onboardingData: true, agreementManagerStatus: true, signedAt: true, updatedAt: true, billingContactEmail: true },
+    select: { brandId: true, onboardingFeeStatus: true, onboardingData: true, agreementManagerStatus: true, signedAt: true, updatedAt: true, billingContactEmail: true, isTestProposal: true },
   });
   if (!engagement) return publicProposalNotFound();
   if (["VOIDED", "VOIDED_BEFORE_SIGNATURE", "CANCELLATION_REQUESTED", "TERMINATED_AFTER_SIGNATURE"].includes(engagement.agreementManagerStatus)) {
@@ -45,7 +45,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ eng
   const services = asRecord(builderState.services);
   const savedExpectation = readStripePaymentExpectation(onboardingData);
   const priorIntentId = typeof services.stripePaymentIntentId === "string" ? services.stripePaymentIntentId : null;
-  const stripe = getStripeClient();
+  const stripe = getStripeClient(accepted.isTestProposal || engagement.isTestProposal ? "test" : "live");
   try {
     const existing = priorIntentId ? await stripe.paymentIntents.retrieve(priorIntentId) : null;
     if (existing?.status === "succeeded") {

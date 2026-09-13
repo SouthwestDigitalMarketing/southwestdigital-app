@@ -5,11 +5,11 @@ import { buildAcceptedPayment } from "@/lib/engagements/acceptedPayment";
 
 const mocks = vi.hoisted(() => ({
   access: vi.fn(), engagement: vi.fn(), update: vi.fn(), account: vi.fn(),
-  retrieve: vi.fn(), create: vi.fn(), cancel: vi.fn(), reconcile: vi.fn(), matches: vi.fn(),
+  retrieve: vi.fn(), create: vi.fn(), cancel: vi.fn(), reconcile: vi.fn(), matches: vi.fn(), stripeClient: vi.fn(),
 }));
 vi.mock("@/lib/engagements/publicProposalAccess", () => ({ hasPublicProposalAccess: mocks.access, publicProposalNotFound: () => Response.json({}, { status: 404 }) }));
 vi.mock("@/lib/prisma", () => ({ prisma: { engagement: { findUnique: mocks.engagement, updateMany: mocks.update } } }));
-vi.mock("@/lib/stripe", () => ({ getStripeClient: () => ({ paymentIntents: { retrieve: mocks.retrieve, create: mocks.create, cancel: mocks.cancel } }) }));
+vi.mock("@/lib/stripe", () => ({ getStripeClient: mocks.stripeClient }));
 vi.mock("@/lib/stripe/connect", () => ({ getChargeableConnectedAccountId: mocks.account }));
 vi.mock("@/lib/stripe/reconcileProposalPayment", () => ({
   reconcileProposalPayment: mocks.reconcile, matchesProposalPayment: mocks.matches,
@@ -25,6 +25,7 @@ beforeEach(() => {
   mocks.account.mockResolvedValue("acct_firm");
   mocks.update.mockResolvedValue({ count: 1 });
   mocks.create.mockResolvedValue({ id: "pi_new", client_secret: "test-secret", livemode: false });
+  mocks.stripeClient.mockReturnValue({ paymentIntents: { retrieve: mocks.retrieve, create: mocks.create, cancel: mocks.cancel } });
 });
 
 describe("proposal payment preparation", () => {
@@ -65,6 +66,21 @@ describe("proposal payment preparation", () => {
     mocks.account.mockResolvedValue(null);
     expect((await call()).status).toBe(409);
     expect(mocks.create).not.toHaveBeenCalled();
+  });
+  it("uses test Stripe mode for an explicitly marked test proposal", async () => {
+    const selection = buildProposalCheckoutSummary({
+      isTestProposal: true,
+      pricing: { maintain: { monthly: 0 } },
+      assessment: { isTestProposal: true },
+    }, { tier: "maintain", hasTwelveMonthAgreement: false, selectedCleanupPeriodKeys: [], selectedAdditionalOptionIds: [] });
+    const saved = row();
+    mocks.engagement.mockResolvedValue({ ...saved, isTestProposal: true, onboardingData: {
+      proposalAcceptance: { paymentObligation: buildAcceptedPayment(selection, true), selection },
+      proposalBuilderState: { services: selection },
+    } });
+    expect((await call()).status).toBe(200);
+    expect(mocks.stripeClient).toHaveBeenCalledWith("test");
+    expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ amount: 100 }), expect.any(Object));
   });
   it("does not cancel or replace another engagement's intent", async () => {
     mocks.engagement.mockResolvedValue(row({ stripePaymentIntentId: "pi_prior" }));
