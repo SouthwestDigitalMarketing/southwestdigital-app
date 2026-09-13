@@ -364,6 +364,13 @@ function inboxFolderId(folders) {
   return inbox?.folderId ? String(inbox.folderId) : null;
 }
 
+function requestedFolderId(folders, requested) {
+  const name = String(requested || "inbox").trim().toLowerCase();
+  const folder = folders.find((entry) => String(entry.folderType || "").toLowerCase() === name)
+    || folders.find((entry) => String(entry.folderName || "").toLowerCase() === name);
+  return folder?.folderId ? String(folder.folderId) : null;
+}
+
 function messageDate(value) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return null;
@@ -391,7 +398,11 @@ async function recent(args) {
   const limit = Math.min(200, Math.max(1, Number(args.limit || 20)));
   let folderId = null;
   try {
-    folderId = inboxFolderId(await fetchFolders(mailbox, accessToken));
+    const folders = await fetchFolders(mailbox, accessToken);
+    folderId = args.folder === "inbox"
+      ? inboxFolderId(folders)
+      : requestedFolderId(folders, args.folder);
+    if (!folderId) throw new ZohoMailAgentError(`Zoho has no ${args.folder} folder.`);
   } catch (error) {
     console.error(`Folder lookup skipped: ${error instanceof Error ? error.message : String(error)}`);
   }
@@ -562,7 +573,7 @@ function usage() {
 
 Commands:
   auth
-  recent [--limit N] [--unread] [--json]
+  recent [--folder inbox|sent|drafts] [--limit N] [--unread] [--json]
   show <message-id> [--json]
   draft-reply <message-id> (--body-file PATH | --body TEXT)
 
@@ -580,6 +591,7 @@ function parseCommandArgs(args) {
       return previous !== "--limit" && previous !== "--body-file" && previous !== "--body";
     }),
     limit: option(args, "--limit"),
+    folder: (option(args, "--folder") || "inbox").toLowerCase(),
     unread: args.includes("--unread"),
     json: args.includes("--json"),
   };
