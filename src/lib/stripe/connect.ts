@@ -23,7 +23,7 @@ function isConnectSignupError(error: unknown) {
 function isMissingConnectedAccountError(error: unknown) {
   const value = error as { code?: unknown; message?: unknown } | null;
   const message = typeof value?.message === "string" ? value.message : String(error);
-  return value?.code === "resource_missing" && /account|destination/i.test(message);
+  return value?.code === "resource_missing" || /account link for an account that was created in test mode/i.test(message);
 }
 
 export async function getBrandStripeConnect(brandId: string) {
