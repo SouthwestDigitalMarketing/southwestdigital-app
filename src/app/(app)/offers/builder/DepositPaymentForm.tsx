@@ -5,10 +5,8 @@ import type { FormEvent } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 
-const livePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
-const testPublishableKey = process.env.NEXT_PUBLIC_STRIPE_TEST_PUBLISHABLE_KEY ?? livePublishableKey;
-const liveStripePromise = livePublishableKey ? loadStripe(livePublishableKey) : null;
-const testStripePromise = testPublishableKey ? loadStripe(testPublishableKey) : null;
+const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+const stripePromise = publishableKey ? loadStripe(publishableKey) : null;
 
 function CheckoutForm({ onPaid }: { onPaid: (status: "succeeded" | "processing") => Promise<void> | void }) {
   const stripe = useStripe();
@@ -55,14 +53,11 @@ function CheckoutForm({ onPaid }: { onPaid: (status: "succeeded" | "processing")
 
 export default function DepositPaymentForm({
   clientSecret,
-  isTestProposal = false,
   onPaid,
 }: {
   clientSecret: string;
-  isTestProposal?: boolean;
   onPaid: (status: "succeeded" | "processing") => Promise<void> | void;
 }) {
-  const stripePromise = isTestProposal ? testStripePromise : liveStripePromise;
   if (!stripePromise) {
     return (
       <p className="text-sm text-red-600">

@@ -1848,7 +1848,6 @@ export default function OfferProposalPreview({
                       {paymentClientSecret ? (
                         <DepositPaymentForm
                           clientSecret={paymentClientSecret}
-                          isTestProposal={isTestProposal}
                           onPaid={async (status) => {
                             await confirmStripePayment(status);
                             setStep(3);
@@ -1994,7 +1993,6 @@ export default function OfferProposalPreview({
                   ) : paymentClientSecret ? (
                     <DepositPaymentForm
                       clientSecret={paymentClientSecret}
-                      isTestProposal={isTestProposal}
                       onPaid={confirmStripePayment}
                     />
                   ) : signError ? (

@@ -29,8 +29,8 @@ export function StripeConnectForm({
       {notice === "connect-signup" ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           Stripe Connect is not enabled on the platform account yet. In Stripe, open{" "}
-          <a className="font-semibold underline" href="https://dashboard.stripe.com/test/connect" target="_blank" rel="noreferrer">
-            Test mode Connect
+          <a className="font-semibold underline" href="https://dashboard.stripe.com/connect" target="_blank" rel="noreferrer">
+            Stripe Connect
           </a>
           , complete signup, then click Connect this brand again.
         </p>
