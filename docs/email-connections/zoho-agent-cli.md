@@ -1,18 +1,20 @@
 # Terminal Zoho Mail agent
 
-This repository includes a local, read-and-draft-only Zoho Mail CLI. It is
-separate from SWapp's web-app connection and never exposes a send command.
+This repository includes a local, read-and-draft-only Zoho Mail CLI. It uses
+the existing SWapp Zoho OAuth client by default and never exposes a send
+command. A separate client can still be supplied with the optional
+`ZOHO_MAIL_AGENT_CLIENT_ID` and `ZOHO_MAIL_AGENT_CLIENT_SECRET` variables.
 
 ## One-time Zoho setup
 
-Create a separate **Server-based Application** in the Zoho API Console. Add
-this exact local callback URI:
+Open the existing `swapp` **Server-based Application** in the Zoho API Console
+and add this exact additional redirect URI:
 
 ```
 http://127.0.0.1:8765/callback
 ```
 
-Request these scopes:
+The CLI requests these scopes during consent:
 
 ```
 ZohoMail.accounts.READ
@@ -26,15 +28,19 @@ uses it for sending. The CLI is intentionally limited to draft creation and
 does not implement a send, update, archive, mark-read, move, label, or delete
 operation.
 
-Put the new client credentials in `.env.local` without committing them:
+The existing SWapp credentials in `.env.local` are used automatically. If you
+want a separate terminal client instead, put its credentials in `.env.local`
+without committing them:
 
 ```
 ZOHO_MAIL_AGENT_CLIENT_ID=1000....
 ZOHO_MAIL_AGENT_CLIENT_SECRET=....
 ```
 
-The existing `ZOHO_MAIL_CLIENT_ID` and `ZOHO_MAIL_CLIENT_SECRET` are for the
-SWapp web app and are not used by this CLI.
+The existing refresh token was authorized only for sending, so authorization
+must be repeated once after adding the callback URI. This grants the terminal
+credential the read scope; it does not change or delete the existing SWapp
+connection record.
 
 ## Authorize and use
 

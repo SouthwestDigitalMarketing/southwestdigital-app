@@ -66,11 +66,11 @@ function regionConfig(region) {
 }
 
 function credentials() {
-  const clientId = process.env.ZOHO_MAIL_AGENT_CLIENT_ID?.trim();
-  const clientSecret = process.env.ZOHO_MAIL_AGENT_CLIENT_SECRET?.trim();
+  const clientId = (process.env.ZOHO_MAIL_AGENT_CLIENT_ID || process.env.ZOHO_MAIL_CLIENT_ID)?.trim();
+  const clientSecret = (process.env.ZOHO_MAIL_AGENT_CLIENT_SECRET || process.env.ZOHO_MAIL_CLIENT_SECRET)?.trim();
   if (!clientId || !clientSecret) {
     throw new ZohoMailAgentError(
-      "Set ZOHO_MAIL_AGENT_CLIENT_ID and ZOHO_MAIL_AGENT_CLIENT_SECRET in .env.local first.",
+      "Set ZOHO_MAIL_CLIENT_ID and ZOHO_MAIL_CLIENT_SECRET in .env.local first.",
     );
   }
   return { clientId, clientSecret };
