@@ -244,6 +244,7 @@ export default async function PublicProposalPage({
       live
       catalogOffer={catalogOffer}
       engagementId={isPreviewSimulation ? null : engagementId}
+      alreadySigned={isPreviewSimulation ? false : Boolean(engagement?.signedAt)}
       isTestProposal={engagement?.isTestProposal === true || snapshot.isTestProposal === true}
       isStaffPreview={isAuthorizedStaffPreview}
       proposalToken={token}
