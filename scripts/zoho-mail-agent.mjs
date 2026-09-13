@@ -3,8 +3,8 @@
 import { createServer } from "node:http";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { readFileSync, existsSync } from "node:fs";
-import { hostname } from "node:os";
+import { closeSync, existsSync, openSync, readFileSync, unlinkSync } from "node:fs";
+import { hostname, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -32,6 +32,7 @@ const DEFAULT_REDIRECT_URI = `http://127.0.0.1:${DEFAULT_PORT}/callback`;
 const SECRET_SERVICE = "swapp-zoho-mail-agent";
 const SECRET_ACCOUNT = "default";
 const PASS_PATH = "swapp/zoho-mail-agent/refresh-token";
+const REFRESH_LOCK_PATH = join(tmpdir(), "swapp-zoho-mail-agent-refresh.lock");
 
 export class ZohoMailAgentError extends Error {}
 
@@ -217,6 +218,32 @@ export async function refreshMailbox(mailbox) {
   return token.accessToken;
 }
 
+async function withRefreshLock(callback) {
+  let lockFd;
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    try {
+      lockFd = openSync(REFRESH_LOCK_PATH, "wx");
+      break;
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+    }
+  }
+  if (lockFd === undefined) {
+    throw new ZohoMailAgentError("Another mail command is refreshing the Zoho token; retry in a moment.");
+  }
+  try {
+    return await callback();
+  } finally {
+    closeSync(lockFd);
+    try {
+      unlinkSync(REFRESH_LOCK_PATH);
+    } catch {
+      // The lock is only a coordination aid; a missing file is already unlocked.
+    }
+  }
+}
+
 async function apiRequest(mailbox, accessToken, pathname, options = {}) {
   const region = regionConfig(mailbox.region);
   const response = await fetch(`https://${region.mailApiHost}/api/${pathname}`, {
@@ -318,10 +345,12 @@ async function authorize() {
 }
 
 async function authenticatedMailbox() {
-  const mailbox = readStoredMailbox();
-  if (!mailbox) throw new ZohoMailAgentError("No terminal mailbox is authorized. Run: npm run mail:agent -- auth");
-  const accessToken = await refreshMailbox(mailbox);
-  return { mailbox, accessToken };
+  return withRefreshLock(async () => {
+    const mailbox = readStoredMailbox();
+    if (!mailbox) throw new ZohoMailAgentError("No terminal mailbox is authorized. Run: npm run mail:agent -- auth");
+    const accessToken = await refreshMailbox(mailbox);
+    return { mailbox: readStoredMailbox() || mailbox, accessToken };
+  });
 }
 
 async function fetchFolders(mailbox, accessToken) {
