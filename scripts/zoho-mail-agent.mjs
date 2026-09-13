@@ -536,7 +536,7 @@ export function buildDraftPayload({ mailbox, original, body }) {
 async function draftReply(args) {
   const messageId = args.positionals[0];
   if (!messageId) throw new ZohoMailAgentError("Usage: draft-reply <message-id> --body-file <path>");
-  const body = bodyFromArgs(args);
+  const body = bodyFromArgs(args.rawArgs);
   if (!body.trim()) throw new ZohoMailAgentError("Draft body cannot be empty.");
   const { mailbox, accessToken } = await authenticatedMailbox();
   const { text } = await originalMessage(mailbox, accessToken, messageId);
@@ -573,6 +573,7 @@ function parseCommandArgs(args) {
   const command = args[0];
   return {
     command,
+    rawArgs: args,
     positionals: args.slice(1).filter((value, index, all) => {
       if (value.startsWith("--")) return false;
       const previous = all[index - 1];
