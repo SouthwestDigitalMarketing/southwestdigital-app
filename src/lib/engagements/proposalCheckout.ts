@@ -126,6 +126,34 @@ export function buildProposalCheckoutSummary(
   const tierPricing: Record<string, unknown> = isRecord(selectedTierPricing) ? selectedTierPricing : {};
   const maintainPricing: Record<string, unknown> = isRecord(pricing.maintain) ? pricing.maintain : {};
   const baseMonthlyTotal = money(finiteNumber(tierPricing.monthly));
+  const isTestProposal = publishedSnapshot.isTestProposal === true || assessment.isTestProposal === true;
+
+  // Test proposals intentionally have no recurring price. They still exercise
+  // the full public selection/signing flow with a one-dollar charge.
+  if (isTestProposal) {
+    const normalized = {
+      tier: selection.tier,
+      hasTwelveMonthAgreement: selection.hasTwelveMonthAgreement,
+      selectedCleanupPeriodKeys: [],
+      selectedAdditionalOptionIds: [],
+      tierLabel: selection.tier[0].toUpperCase() + selection.tier.slice(1),
+      baseMonthlyTotal: 0,
+      recurringMonthlyTotal: 0,
+      cleanupTotal: 0,
+      onboardingFee: 0,
+      oneTimeTotal: 1,
+      amountDueNow: 1,
+      chargeKind: "onboarding" as const,
+      paymentScheduleVersion: 2 as const,
+      cleanupMonths: 0,
+      cleanupMonthlyRate: 0,
+      additionalOneTimeTotal: 0,
+      includedServices: proposalIncludedServices(assessment, selection.tier),
+    };
+    const selectionHash = createHash("sha256").update(JSON.stringify(normalized)).digest("hex");
+    return { ...normalized, selectionHash };
+  }
+
   if (baseMonthlyTotal <= 0) throw new Error("The selected package does not have valid published pricing.");
 
   const annualSavingsPercent = Math.min(100, Math.max(0, finiteNumber(assessment.annualSavingsPercent, 20)));
