@@ -54,16 +54,16 @@ on the stale line. Topic branch (`<slug>` / `feat/<slug>`).
 on laptop `main` while origin moved. That is how you get rebase-vs-merge.
 Do not recreate it.
 
-**Controllers** (Ummon, Johnny, Albedo) may push branches, open pull
+**Leads** (Ummon, Johnny, Albedo) may push branches, open pull
 requests, and merge pull requests. They do not commit onto local `main`.
 Docs-only may go to `main` as a PR or a docs-only push; **code** goes to
 `main` only via PR. A merge deploys production.
 
 **Crews** (Foreman and role panes) must not `git push`, must not open PRs,
-and must not merge. They commit on the topic branch locally. The controller
+and must not merge. They commit on the topic branch locally. The lead
 ships.
 
-Before a controller merges, they must have run `npm run typecheck`,
+Before a lead merges, they must have run `npm run typecheck`,
 `npm run lint` and `npm test`, and must say in the PR what they returned —
 including the pre-existing failure count, so a baseline failure is never
 mistaken for a new one. It must also say what is **not** covered: this repo has
