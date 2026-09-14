@@ -108,6 +108,72 @@ beforeEach(() => {
   vi.resetAllMocks();
 });
 
+async function openOffer(search: { staffPreview?: string } = {}) {
+  mocks.headersGet.mockReturnValue("firm.example.test");
+  return PublicProposalPage({
+    params: Promise.resolve({ token: "token" }),
+    searchParams: Promise.resolve(search),
+  });
+}
+
+describe("public proposal page lifecycle", () => {
+  beforeEach(() => {
+    mocks.auth.mockResolvedValue(null);
+    mocks.getBrandAccessDecision.mockResolvedValue({ allowed: false });
+  });
+
+  it("public offer page notFound for a suspended brand", async () => {
+    mocks.resolvePublicBrand.mockResolvedValue(null);
+    await expect(openOffer()).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(mocks.quoteFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("public offer page notFound for a disabled domain", async () => {
+    mocks.resolvePublicBrand.mockResolvedValue(null);
+    await expect(openOffer()).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(mocks.quoteFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("public offer page notFound for an expired unsigned quote", async () => {
+    mocks.resolvePublicBrand.mockResolvedValue(brand);
+    mocks.quoteFindFirst.mockResolvedValue({
+      ...quoteRow(sentinelBookkeepingSnapshot()),
+      expiresAt: new Date(0),
+      engagement: { brandId: "brand", signedAt: null },
+    });
+    await expect(openOffer()).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
+  it("public offer page redirects an expired signed quote to receipt", async () => {
+    mocks.resolvePublicBrand.mockResolvedValue(brand);
+    mocks.quoteFindFirst.mockResolvedValue({
+      ...quoteRow(sentinelBookkeepingSnapshot()),
+      expiresAt: new Date(0),
+      engagement: { brandId: "brand", signedAt: new Date() },
+    });
+    await expect(openOffer()).rejects.toThrow("NEXT_REDIRECT:/proposal/token/receipt");
+  });
+
+  it("public offer page notFound for a revoked token", async () => {
+    mocks.resolvePublicBrand.mockResolvedValue(brand);
+    mocks.quoteFindFirst.mockResolvedValue(null);
+    await expect(openOffer()).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
+  it("staff preview does not revive a revoked token or suspended brand", async () => {
+    mocks.auth.mockResolvedValue({
+      user: { id: "staff", status: "ACTIVE", platformRole: "MEMBER" },
+    });
+    mocks.getBrandAccessDecision.mockResolvedValue({ allowed: true });
+    mocks.resolvePublicBrand.mockResolvedValue(null);
+    await expect(openOffer({ staffPreview: "1" })).rejects.toThrow("NEXT_NOT_FOUND");
+
+    mocks.resolvePublicBrand.mockResolvedValue(brand);
+    mocks.quoteFindFirst.mockResolvedValue(null);
+    await expect(openOffer({ staffPreview: "1" })).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+});
+
 describe("public proposal page RSC payload", () => {
   it("bookkeeping public page RSC props omit sentinel internals", async () => {
     const el = await renderPage(sentinelBookkeepingSnapshot()) as { props: Record<string, unknown> };

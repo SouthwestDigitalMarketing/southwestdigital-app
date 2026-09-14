@@ -29,4 +29,18 @@ describe("resolveAppBrandByHostname", () => {
     mocks.findFirst.mockResolvedValue(null);
     await expect(resolveAppBrandByHostname("firm.example.test")).resolves.toBeNull();
   });
+
+  it("does not accept a disabled domain as an APP host", async () => {
+    mocks.findFirst.mockResolvedValue(null);
+    await expect(resolveAppBrandByHostname("firm.example.test")).resolves.toBeNull();
+    expect(mocks.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          purpose: DomainPurpose.APP,
+          status: DomainStatus.VERIFIED,
+        }),
+      }),
+    );
+    expect(mocks.findFirst.mock.calls[0][0].where.status).not.toBe(DomainStatus.DISABLED);
+  });
 });
