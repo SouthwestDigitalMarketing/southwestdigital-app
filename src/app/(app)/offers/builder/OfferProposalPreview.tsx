@@ -36,6 +36,7 @@ import {
 import { ProposalReviewsSection } from "./ProposalReviewsSection";
 import AgreementTextView from "./AgreementTextView";
 import DepositPaymentForm from "./DepositPaymentForm";
+import { waitForRecordedProposalPayment } from "@/lib/engagements/waitForRecordedProposalPayment";
 import {
   formatPersonName,
   resolvePrimaryContact,
@@ -911,12 +912,11 @@ function OfferProposalPreviewView({
       return;
     }
     if (!engagementId) throw new Error("This payment is not attached to a proposal.");
-    const response = await fetch(`/api/proposal/${engagementId}/confirm-payment`, { method: "POST", headers: proposalHeaders(proposalToken) });
-    const result = await response.json().catch(() => null) as { paid?: boolean; error?: string } | null;
-    if (!response.ok || result?.paid !== true) {
-      throw new Error(result?.error ?? "Your payment was submitted, but we could not verify it yet. Please retry confirmation.");
-    }
-    setPaymentStatus("succeeded");
+    const recorded = await waitForRecordedProposalPayment({
+      engagementId,
+      headers: proposalHeaders(proposalToken),
+    });
+    setPaymentStatus(recorded === "paid" ? "succeeded" : "processing");
   }
 
   async function selectOptionAndContinue(id: OptionId) {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getStripeClient } from "@/lib/stripe";
 import { reconcileProposalPayment } from "@/lib/stripe/reconcileProposalPayment";
+import { recordProcessedStripeEvent, stripeEventAlreadyProcessed } from "@/lib/stripe/processedStripeEvents";
 import { syncConnectedAccountStatus } from "@/lib/stripe/connect";
 
 export async function POST(request: Request) {
@@ -27,11 +28,16 @@ export async function POST(request: Request) {
     const brandId = paymentIntent.metadata?.brandId;
     if (engagementId || brandId) {
       if (!engagementId || !brandId) return NextResponse.json({ error: "Incomplete proposal payment metadata" }, { status: 409 });
+      if (!event.id) return NextResponse.json({ error: "Payment reconciliation pending" }, { status: 500 });
+      if (await stripeEventAlreadyProcessed(engagementId, brandId, event.id)) {
+        return NextResponse.json({ received: true });
+      }
       try {
         await reconcileProposalPayment(paymentIntent, engagementId, brandId);
+        await recordProcessedStripeEvent(engagementId, brandId, event.id);
       } catch {
         // Retain provider retries; never acknowledge an unapplied proposal
-        // payment as successfully reconciled.
+        // payment as successfully reconciled. Do not record event.id on throw.
         console.error("[stripe/webhook] Proposal payment requires reconciliation", { eventId: event.id, intentId: paymentIntent.id });
         return NextResponse.json({ error: "Payment reconciliation pending" }, { status: 500 });
       }

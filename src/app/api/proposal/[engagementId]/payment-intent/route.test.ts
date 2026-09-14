@@ -54,12 +54,13 @@ describe("proposal payment preparation", () => {
     expect((await call()).status).toBe(409);
     expect(mocks.create).not.toHaveBeenCalled();
   });
-  it("does not silently accept a previously successful intent", async () => {
+  it("does not apply a previously successful intent from payment-intent", async () => {
     mocks.engagement.mockResolvedValue(row({ stripePaymentIntentId: "pi_prior" }));
     mocks.retrieve.mockResolvedValue({ id: "pi_prior", status: "succeeded" });
-    expect((await call()).status).toBe(200);
-    expect(mocks.reconcile).toHaveBeenCalledWith(expect.objectContaining({ id: "pi_prior" }), "eng", "brand");
+    expect((await call()).status).toBe(409);
+    expect(mocks.reconcile).not.toHaveBeenCalled();
     expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.cancel).not.toHaveBeenCalled();
   });
   it("blocks missing Connect routing", async () => {
     mocks.account.mockResolvedValue(null);

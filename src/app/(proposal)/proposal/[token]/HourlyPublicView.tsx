@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import DepositPaymentForm from "@/app/(app)/offers/builder/DepositPaymentForm";
+import { waitForRecordedProposalPayment } from "@/lib/engagements/waitForRecordedProposalPayment";
 import type { PublicHourlyProposal } from "@/lib/quotes/publicProposal";
 
 export type HourlyPublicViewProps = PublicHourlyProposal;
@@ -33,6 +34,7 @@ export function HourlyPublicView(props: PublicHourlyProposal) {
     | { kind: "preview" }
     | { kind: "waived" }
     | { kind: "paid" }
+    | { kind: "pending" }
     | { kind: "error"; message: string }
   >({ kind: "idle" });
 
@@ -130,15 +132,11 @@ export function HourlyPublicView(props: PublicHourlyProposal) {
     if (status === "processing") return;
     if (!props.engagementId) return;
     try {
-      const response = await fetch(`/api/proposal/${props.engagementId}/confirm-payment`, {
-        method: "POST",
+      const recorded = await waitForRecordedProposalPayment({
+        engagementId: props.engagementId,
         headers: { "x-proposal-token": props.proposalToken },
       });
-      const data = (await response.json().catch(() => ({}))) as { paid?: boolean; error?: string };
-      if (!response.ok || data.paid !== true) {
-        throw new Error(data.error ?? "Payment could not be verified.");
-      }
-      setPayState({ kind: "paid" });
+      setPayState(recorded === "paid" ? { kind: "paid" } : { kind: "pending" });
     } catch (error) {
       setPayState({
         kind: "error",
@@ -294,6 +292,11 @@ export function HourlyPublicView(props: PublicHourlyProposal) {
             ) : null}
             {payState.kind === "paid" ? (
               <p className="mt-4 text-sm text-emerald-800">Payment complete.</p>
+            ) : null}
+            {payState.kind === "pending" ? (
+              <p className="mt-4 text-sm text-emerald-800">
+                Your payment was submitted. Confirmation can take a moment.
+              </p>
             ) : null}
             {payState.kind === "ready" ? (
               <div className="mt-4 rounded-lg border border-slate-200 bg-white p-4">
