@@ -74,15 +74,16 @@ const LivePreview = OfferProposalPreview as unknown as (props: {
 
 function renderLiveBookkeeping(publicProposal: ReturnType<typeof publicBookkeeping>) {
   return renderToStaticMarkup(
-    createElement(
-      BrandProvider,
-      { value: brandValue },
-      createElement(LivePreview, {
+    // BrandProvider's types require `children` on the props object; eslint wants the opposite.
+    // eslint-disable-next-line react/no-children-prop -- tsc vs react/no-children-prop
+    createElement(BrandProvider, {
+      value: brandValue,
+      children: createElement(LivePreview, {
         publicProposal,
         live: true,
         proposalToken: "token",
       }),
-    ),
+    }),
   );
 }
 
