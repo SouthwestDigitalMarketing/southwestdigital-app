@@ -120,6 +120,38 @@ describe("proposal checkout", () => {
     })).toBe(1);
   });
 
+  it("accepts zero recurring pricing for a test proposal", () => {
+    const result = buildProposalCheckoutSummary({
+      ...snapshot,
+      isTestProposal: true,
+      assessment: { ...snapshot.assessment, isTestProposal: true },
+      pricing: {
+        maintain: { monthly: 0 },
+        improve: { monthly: 0 },
+        grow: { monthly: 0 },
+      },
+    }, {
+      tier: "grow",
+      hasTwelveMonthAgreement: true,
+      selectedCleanupPeriodKeys: ["2026-1-3"],
+      selectedAdditionalOptionIds: ["reporting"],
+    });
+
+    expect(result).toMatchObject({
+      baseMonthlyTotal: 0,
+      recurringMonthlyTotal: 0,
+      cleanupTotal: 0,
+      onboardingFee: 0,
+      oneTimeTotal: 1,
+      amountDueNow: 1,
+      chargeKind: "onboarding",
+      cleanupMonths: 0,
+      additionalOneTimeTotal: 0,
+      selectedCleanupPeriodKeys: [],
+      selectedAdditionalOptionIds: [],
+    });
+  });
+
   it("requires no upfront payment for waived discovery even though cleanup has a later estimate", () => {
     const original = buildProposalCheckoutSummary(snapshot, {
       tier: "improve", hasTwelveMonthAgreement: false,

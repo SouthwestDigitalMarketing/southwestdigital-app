@@ -535,6 +535,7 @@ export default function OfferProposalPreview({
   agreementTemplate = null,
   isTestProposal = false,
   isStaffPreview = false,
+  alreadySigned: alreadySignedProp = false,
   editMode = false,
   onEdit,
   proposalToken = null,
@@ -552,6 +553,7 @@ export default function OfferProposalPreview({
   agreementTemplate?: AgreementTemplateOption | null;
   isTestProposal?: boolean;
   isStaffPreview?: boolean;
+  alreadySigned?: boolean;
   editMode?: boolean;
   onEdit?: (target: ProposalPreviewEditTarget) => void;
   proposalToken?: string | null;
@@ -576,6 +578,7 @@ export default function OfferProposalPreview({
   });
   const searchParams = useSearchParams();
   const isSimulation = isProposalPreviewSimulation({ live, embedded, isStaffPreview });
+  const startsSigned = live && !isSimulation && alreadySignedProp;
   // Preview surfaces are deliberately detached from engagement-backed APIs.
   // Even if an engagement id is accidentally supplied, preview interactions
   // must remain local and must not affect proposal or CRM lifecycle state.
@@ -649,7 +652,7 @@ export default function OfferProposalPreview({
   const [selectedOptionId, setSelectedOptionId] = useState<OptionId | null>(null);
   const [selectionSubmittingId, setSelectionSubmittingId] = useState<OptionId | null>(null);
   const [selectionError, setSelectionError] = useState<string | null>(null);
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(startsSigned ? 3 : 0);
   const [hasStartedIntroVideo, setHasStartedIntroVideo] = useState(false);
   const [isIntroVideoPlaying, setIsIntroVideoPlaying] = useState(false);
   const [introVideoError, setIntroVideoError] = useState<string | null>(null);
@@ -666,7 +669,7 @@ export default function OfferProposalPreview({
   const [consentChecked, setConsentChecked] = useState(false);
   const [readAndAgreedChecked, setReadAndAgreedChecked] = useState(false);
   const [hasScrolledToEnd, setHasScrolledToEnd] = useState(false);
-  const [alreadySigned, setAlreadySigned] = useState(false);
+  const [alreadySigned, setAlreadySigned] = useState(startsSigned);
   const [signedSignerName, setSignedSignerName] = useState<string | null>(null);
   const [signedAt, setSignedAt] = useState<string | null>(null);
   const [signSubmitting, setSignSubmitting] = useState(false);

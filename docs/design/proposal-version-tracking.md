@@ -15,6 +15,39 @@ the schema or `src/` (verified 2026-09-08), so the exact signed revision is
 still not pinned, and the receipt still renders from current published state
 rather than the signed revision. Items 1–4 are untouched.
 
+## Deferred legal-record hardening
+
+**Deferred 2026-09-14.** Do not stop the current revenue work for this. The
+recent live $1 proposal test proved that the agreement text, its SHA-256 hash,
+signature-consent fields, signer details, payment record, receipt, and signed
+PDF download are working. The remaining work below is intentionally parked so
+we can return to it after launch pressure eases.
+
+When this work resumes, complete all of the following:
+
+1. Pin the exact published `QuoteRevision` at signing time (for example with
+   `Engagement.signedQuoteRevisionId`) and make the receipt and signed PDF use
+   that revision forever.
+2. Generate the signed PDF at signing time and save the exact bytes to private,
+   durable object storage. Store its object key, SHA-256, byte count, and
+   generation/version metadata. Never silently replace the artifact.
+3. Write a dedicated signing audit event containing the engagement, quote and
+   revision, signer data, consent flags, timestamps, document hash, request
+   identifier, source IP and user agent. Add a payment audit event or link the
+   signing event to the reconciled payment record.
+4. Capture the real client IP in production by handling the trusted proxy header
+   (`CF-Connecting-IP`) before fallbacks, and record which header supplied it.
+5. Add an authorized staff retrieval/download path for the stored artifact, and
+   verify retention, backup, and restore access.
+6. Have counsel review the agreement and signing flow. The application can
+   preserve evidence; it cannot promise that a court will enforce a contract.
+
+Acceptance checks: repeated downloads return identical PDF bytes and hash; the
+database links the artifact to the exact signed revision; the dedicated audit
+event exists; production records the client IP rather than only the proxy; and
+the artifact remains downloadable after later offer edits and app/template
+changes.
+
 
 **Status:** design questions only — nothing built. Captured 2026-09-04 while wiring the hourly payment element. Come back to this before the app supports enough real-client proposals that version drift matters.
 
@@ -43,4 +76,3 @@ rather than the signed revision. Items 1–4 are untouched.
 6. Diff view for two revisions (nice-to-have for staff).
 
 The [[unified-work-items-next-action-system]] follow-up mechanism can reuse these signals: a republish is another type of activity, and the client's re-view of a republished proposal is another activity bump.
-

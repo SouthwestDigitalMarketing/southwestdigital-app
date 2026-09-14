@@ -9,7 +9,7 @@ export const STRIPE_CONNECT_KEY = "stripe-connect";
 export class StripeConnectNotEnabledError extends Error {
   constructor() {
     super(
-      "Stripe Connect is not enabled on the platform account yet. Open https://dashboard.stripe.com/test/connect, complete Connect signup in Test mode, then try again.",
+      "Stripe Connect is not enabled on the platform account yet. Open https://dashboard.stripe.com/connect, complete Connect signup, then try again.",
     );
     this.name = "StripeConnectNotEnabledError";
   }
@@ -18,6 +18,12 @@ export class StripeConnectNotEnabledError extends Error {
 function isConnectSignupError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   return /signed up for Connect/i.test(message);
+}
+
+function isMissingConnectedAccountError(error: unknown) {
+  const value = error as { code?: unknown; message?: unknown } | null;
+  const message = typeof value?.message === "string" ? value.message : String(error);
+  return value?.code === "resource_missing" || /account link for an account that was created in test mode/i.test(message);
 }
 
 export async function getBrandStripeConnect(brandId: string) {
@@ -132,6 +138,31 @@ export async function createBrandConnectOnboardingUrl(input: {
     return link.url;
   } catch (error) {
     if (isConnectSignupError(error)) throw new StripeConnectNotEnabledError();
+    // A test-mode account cannot be used with the production/live key. Create
+    // a matching live account so the owner can complete onboarding.
+    if (accountId && isMissingConnectedAccountError(error)) {
+      const account = await stripe.accounts.create({
+        type: "express",
+        country: "US",
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        },
+        business_profile: { name: input.brandName },
+        metadata: { brandId: input.brandId },
+      });
+      await upsertConnectIntegration(input.brandId, {
+        externalAccountId: account.id,
+        status: IntegrationStatus.PENDING,
+      });
+      const link = await stripe.accountLinks.create({
+        account: account.id,
+        refresh_url: `${input.origin}/settings?stripe=refresh`,
+        return_url: `${input.origin}/settings?stripe=return`,
+        type: "account_onboarding",
+      });
+      return link.url;
+    }
     throw error;
   }
 }

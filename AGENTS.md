@@ -72,19 +72,24 @@ initiated from any agent session.
 
 Tom works **without a mouse** and cannot highlight and copy text out of an agent
 response. Whenever a reply asks him to run something in a terminal, write it to
-`~/go`, make it executable, and tell him to type `~/go`. Always show the command
-in the reply too.
+your per-agent handoff file, make it executable, and tell him to type it. Always
+show the command in the reply too. Under Herdr the file is `~/<tabname>` (e.g.
+tab `lead` → `~/lead`); outside Herdr it is `~/go`. The full rule — claim-once
+naming, collision fallback, placeholder claim markers — lives in
+`~/.claude/CLAUDE.md` and applies to every project; this section is only a
+summary.
 
 ```bash
 printf '%s\n' '#!/usr/bin/env bash' \
   "printf '%s\n' 'Running: npm test'" \
-  'npm test' > ~/go && chmod +x ~/go
+  'npm test' > ~/lead && chmod +x ~/lead
 ```
 
 **Every executable handoff must print the exact command immediately before it
 runs.** Showing it only in the agent reply is not enough: Tom must be able to see
-in the target terminal what he just executed. This applies both to `~/go` and to
-anything copied to the clipboard for execution in another terminal.
+in the target terminal what he just executed. This applies both to handoff-file
+scripts and to anything copied to the clipboard for execution in another
+terminal.
 
 Also put the command on the clipboard as a second route when possible. The
 clipboard payload must be a self-reporting one-liner, not the bare command:
@@ -99,9 +104,11 @@ job per handoff — chain related steps with `&&` rather than handing over a blo
 he has to split by hand.
 
 Never stage a destructive command without saying plainly what it does. When
-nothing is staged, leave `~/go` as a harmless `echo`; a one-shot command should
-reset `~/go` after its real work returns (using an exit trap if appropriate), so
-stale execution is safe without truncating the script before it runs.
+nothing is staged, leave your handoff file as a harmless `echo` carrying your
+claim marker (e.g. `echo 'lead (w1:t8): nothing staged'`); a one-shot command
+should reset its handoff file after its real work returns (using an exit trap if
+appropriate), so stale execution is safe without truncating the script before it
+runs.
 
 Over SSH this copies to the *remote* machine's clipboard; `clip` detects that,
 warns, and exits 2. If it does, say so rather than letting him paste nothing.
@@ -119,8 +126,8 @@ ssh -tt -o PreferredAuthentications=password -o PubkeyAuthentication=no \
   thomas@dalliance 'omarchy system shutdown' </dev/tty
 ```
 
-When handing this over through `~/go`, print the command first and clear the
-one-shot script **after** SSH returns. Overwriting `$0` before the command runs
+When handing this over through your handoff file, print the command first and
+clear the one-shot script **after** SSH returns. Overwriting `$0` before the command runs
 can truncate the script while Bash is still reading it, causing only the
 `Running:` line to appear and no SSH attempt at all.
 

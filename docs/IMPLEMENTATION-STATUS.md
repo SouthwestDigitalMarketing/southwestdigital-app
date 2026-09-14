@@ -6,7 +6,13 @@ Branch: `feat/saas-readiness`. Scope authorized September 5, 2026: implement the
 
 - [x] Public proposal DTOs and authenticated OAuth relays (unit/route regressions; live provider verification still required)
 - [ ] Tenant schema, scoped repositories, runtime-role isolation and migration rehearsal
-- [ ] Immutable signing and reconciled payments, receipts and PDFs
+- [ ] Immutable signing and reconciled payments, receipts and PDFs — payment
+  reconciliation and the current signed-text/PDF/receipt path are partially
+  shipped and were live-verified with a $1 proposal on 2026-09-13. Deferred
+  legal-record hardening (exact revision pinning, immutable private PDF storage,
+  dedicated signing audit events, trusted client-IP capture, and retention/
+  restore verification) is recorded in
+  `docs/design/proposal-version-tracking.md`.
 - [ ] Role permissions, public-link lifecycle, integration/asset boundaries
 - [ ] Reliable sends, neutral reviews and truthful lifecycle metrics
 - [ ] Durable scoped drafts, Today, timeline and client onboarding
