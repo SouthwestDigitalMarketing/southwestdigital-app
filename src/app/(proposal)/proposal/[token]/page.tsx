@@ -3,7 +3,11 @@ import { headers } from "next/headers";
 import { BrandRole } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { toPublicBookkeepingProposal } from "@/lib/quotes/publicProposal";
+import {
+  catalogCopyFromRows,
+  toPublicBookkeepingProposal,
+  toPublicHourlyProposal,
+} from "@/lib/quotes/publicProposal";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
 import { resolvePublicBrand } from "@/lib/brands/resolve";
 import { getBrandAccessDecision } from "@/lib/brands/repository";
@@ -46,7 +50,7 @@ export default async function PublicProposalPage({
   const isPreviewSimulation = isProposalPreviewSimulation({
     isStaffPreview: isAuthorizedStaffPreview,
   });
-  const { quoteRevisions, quoteEngagement } = await getSchemaCapabilities();
+  const { quoteRevisions, quoteEngagement, proposalCatalog, catalogProductKind } = await getSchemaCapabilities();
   const quote = await prisma.quote.findFirst({
     where: { brandId: brand.id, publicToken: token, publishedAt: { not: null } },
     select: {
@@ -179,7 +183,6 @@ export default async function PublicProposalPage({
 
   const snapshotKind = typeof snapshot.kind === "string" ? snapshot.kind : "";
   if (isHourlyOfferKind(snapshotKind)) {
-    const contact = quoteContactSummaryFromSnapshot(snapshot);
     const kindMeta = OFFER_KINDS.find((k) => k.key === snapshotKind);
     // Prefer the checkout summary on the snapshot; fall back to the one stored
     // on the engagement's services blob.
@@ -207,40 +210,44 @@ export default async function PublicProposalPage({
     if (!hourlyCheckout) notFound();
     return (
       <HourlyPublicView
-        proposalToken={token}
-        engagementId={isPreviewSimulation ? null : engagementId}
-        isTestProposal={engagement?.isTestProposal === true || snapshot.isTestProposal === true}
-        isStaffPreview={isAuthorizedStaffPreview}
-        kindLabel={kindMeta?.name ?? snapshotKind}
-        clientName={
-          (isRecord(snapshot.contactInfo) && typeof (snapshot.contactInfo as Record<string, unknown>).companyName === "string")
-            ? ((snapshot.contactInfo as Record<string, unknown>).companyName as string)
-            : contact.name
-        }
-        brandName={brand.name}
-        brandAccent={brand.theme?.accentColor ?? null}
-        contact={{ name: contact.name, email: contact.email }}
-        offer={{
-          catalogItemLabel: hourlyCheckout.catalogItemLabel,
-          quantity: hourlyCheckout.quantity,
-          unitPrice: hourlyCheckout.unitPrice,
-          intakeFee: hourlyCheckout.intakeFee,
-          subtotal: hourlyCheckout.subtotal,
-          total: hourlyCheckout.total,
-          amountDueNow: hourlyCheckout.amountDueNow,
-        }}
-        agreementText={agreementText || "Agreement text unavailable. Please contact the sender."}
-        alreadySigned={isPreviewSimulation ? false : Boolean(engagement?.signedAt)}
+        {...toPublicHourlyProposal({
+          snapshot,
+          checkout: hourlyCheckout,
+          brand: { name: brand.name, accent: brand.theme?.accentColor ?? null },
+          agreementText: agreementText || "Agreement text unavailable. Please contact the sender.",
+          flags: {
+            proposalToken: token,
+            engagementId: isPreviewSimulation ? null : engagementId,
+            isTestProposal: engagement?.isTestProposal === true || snapshot.isTestProposal === true,
+            isStaffPreview: isAuthorizedStaffPreview,
+            alreadySigned: isPreviewSimulation ? false : Boolean(engagement?.signedAt),
+            kindLabel: kindMeta?.name ?? snapshotKind,
+          },
+        })}
       />
     );
   }
 
-  const publicProposal = toPublicBookkeepingProposal(snapshot);
+  const catalogRows = proposalCatalog
+    ? await prisma.catalogService.findMany({
+        where: {
+          brandId: brand.id,
+          active: true,
+          ...(catalogProductKind ? { productKind: "bookkeeping" } : {}),
+        },
+        select: {
+          offerKey: true,
+          code: true,
+          name: true,
+          clientBenefit: true,
+          internalDescription: true,
+        },
+      })
+    : [];
+  const publicProposal = toPublicBookkeepingProposal(snapshot, catalogCopyFromRows(catalogRows));
   return (
     <OfferProposalPreview
-      initialAssessment={publicProposal.assessment}
-      initialContactInfo={publicProposal.contactInfo}
-      publishedPricing={publicProposal.pricing}
+      publicProposal={publicProposal}
       live
       catalogOffer={catalogOffer}
       engagementId={isPreviewSimulation ? null : engagementId}

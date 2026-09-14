@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { toPublicBookkeepingProposal } from "./publicProposal";
+import {
+  catalogCopyFromRows,
+  toPublicBookkeepingProposal,
+  toPublicHourlyProposal,
+} from "./publicProposal";
 
 describe("public proposal data boundary", () => {
   it("keeps published prices and excludes internal data at every nesting level", () => {
@@ -77,5 +81,131 @@ describe("public proposal data boundary", () => {
 
   it("rejects active content URLs", () => {
     expect(() => toPublicBookkeepingProposal({ assessment: { featuredImageUrl: "javascript:alert(1)" } })).toThrow();
+  });
+
+  it("hourly DTO excludes invoicingEmail, phone, and snapshot internals", () => {
+    const privateValue = "PRIVATE_SENTINEL_DO_NOT_PUBLISH";
+    const result = toPublicHourlyProposal({
+      snapshot: {
+        kind: "consulting",
+        contactInfo: {
+          companyName: "Example LLC",
+          invoicingEmail: privateValue,
+          primaryContact: {
+            firstName: "Alex",
+            lastName: "Example",
+            email: "alex@example.test",
+            phone: privateValue,
+            crmContactId: privateValue,
+          },
+          owners: [{ id: "owner", phone: privateValue, crmContactId: privateValue }],
+        },
+        agreementTemplateId: privateValue,
+        agreementTemplateName: privateValue,
+        assessmentNotes: privateValue,
+        internal: privateValue,
+      },
+      checkout: {
+        catalogItemLabel: "Consulting hour",
+        quantity: 2,
+        unitPrice: 150,
+        intakeFee: 50,
+        subtotal: 300,
+        total: 350,
+        amountDueNow: 350,
+        stripePaymentIntentId: privateValue,
+        secret: privateValue,
+      },
+      brand: { name: "Southwest", accent: "#123456" },
+      agreementText: "Public agreement",
+      flags: {
+        proposalToken: "token",
+        engagementId: "eng",
+        isTestProposal: false,
+        isStaffPreview: false,
+        alreadySigned: false,
+        kindLabel: "Hourly consulting",
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain(privateValue);
+    expect(result.contact.email).toBe("alex@example.test");
+    expect(result.clientName).toBe("Example LLC");
+    expect(result.offer.catalogItemLabel).toBe("Consulting hour");
+    expect(result).not.toHaveProperty("invoicingEmail");
+  });
+
+  it("hourly DTO uses primary email, not invoicingEmail", () => {
+    const privateValue = "PRIVATE_SENTINEL_DO_NOT_PUBLISH";
+    const result = toPublicHourlyProposal({
+      snapshot: {
+        contactInfo: {
+          invoicingEmail: privateValue,
+          primaryContact: { firstName: "Alex", lastName: "Example", email: "alex@example.test" },
+        },
+      },
+      checkout: {
+        catalogItemLabel: "Coaching",
+        quantity: 1,
+        unitPrice: 200,
+        intakeFee: 0,
+        subtotal: 200,
+        total: 200,
+        amountDueNow: 200,
+      },
+      brand: { name: "Firm", accent: null },
+      agreementText: "Agreement",
+      flags: {
+        proposalToken: "t",
+        engagementId: null,
+        isTestProposal: true,
+        alreadySigned: false,
+        kindLabel: "Hourly coaching",
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain(privateValue);
+    expect(result.contact.email).toBe("alex@example.test");
+  });
+
+  it("replaces catalog internalDescription with clientBenefit on public options and bonuses", () => {
+    const privateValue = "PRIVATE_SENTINEL_DO_NOT_PUBLISH";
+    const catalogCopy = catalogCopyFromRows([
+      { offerKey: "reports", clientBenefit: "Monthly reporting for you", internalDescription: privateValue },
+      { offerKey: "portal", clientBenefit: "Client portal access", internalDescription: privateValue },
+    ]);
+    const result = toPublicBookkeepingProposal({
+      assessment: {
+        additionalOptions: [{
+          id: "reports", name: "Reports", description: privateValue,
+          monthlyPrice: 50, showInProposal: true, archived: false,
+        }],
+        bonuses: [{ id: "portal", name: "Portal", description: privateValue, archived: false }],
+      },
+      contactInfo: {},
+      pricing: { maintain: { monthly: 500 }, improve: { monthly: 600 }, grow: { monthly: 750 } },
+    }, catalogCopy);
+    expect(JSON.stringify(result)).not.toContain(privateValue);
+    expect(result.assessment.additionalOptions[0].description).toBe("Monthly reporting for you");
+    expect(result.assessment.bonuses[0].description).toBe("Client portal access");
+  });
+
+  it("blanks public description when catalog clientBenefit is empty and snapshot description equals internalDescription", () => {
+    const privateValue = "PRIVATE_SENTINEL_DO_NOT_PUBLISH";
+    const catalogCopy = catalogCopyFromRows([
+      { offerKey: "reports", clientBenefit: "", internalDescription: privateValue },
+    ]);
+    const result = toPublicBookkeepingProposal({
+      assessment: {
+        additionalOptions: [{
+          id: "reports", name: "Reports", description: privateValue,
+          monthlyPrice: 50, showInProposal: true, archived: false,
+        }],
+        bonuses: [{ id: "reports", name: "Reports", description: privateValue, archived: false }],
+      },
+      contactInfo: {},
+      pricing: { maintain: { monthly: 500 }, improve: { monthly: 600 }, grow: { monthly: 750 } },
+    }, catalogCopy);
+    expect(JSON.stringify(result)).not.toContain(privateValue);
+    expect(result.assessment.additionalOptions[0].description).toBe("");
+    expect(result.assessment.bonuses[0].description).toBe("");
   });
 });

@@ -2,29 +2,9 @@
 
 import { useMemo, useState } from "react";
 import DepositPaymentForm from "@/app/(app)/offers/builder/DepositPaymentForm";
+import type { PublicHourlyProposal } from "@/lib/quotes/publicProposal";
 
-export type HourlyPublicViewProps = {
-  proposalToken: string;
-  engagementId: string | null;
-  isTestProposal: boolean;
-  isStaffPreview?: boolean;
-  kindLabel: string;
-  clientName: string;
-  brandName: string;
-  brandAccent: string | null;
-  contact: { name: string; email: string };
-  offer: {
-    catalogItemLabel: string;
-    quantity: number;
-    unitPrice: number;
-    intakeFee: number;
-    subtotal: number;
-    total: number;
-    amountDueNow: number;
-  };
-  agreementText: string;
-  alreadySigned: boolean;
-};
+export type HourlyPublicViewProps = PublicHourlyProposal;
 
 const INPUT = "mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm";
 const LABEL = "block text-xs font-semibold text-slate-700";
@@ -33,7 +13,7 @@ function money(value: number) {
   return `$${value.toFixed(2)}`;
 }
 
-export function HourlyPublicView(props: HourlyPublicViewProps) {
+export function HourlyPublicView(props: PublicHourlyProposal) {
   const [signerName, setSignerName] = useState(props.contact.name);
   const [signerTitle, setSignerTitle] = useState("");
   const [email, setEmail] = useState(props.contact.email);

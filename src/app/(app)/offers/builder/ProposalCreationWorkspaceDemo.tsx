@@ -1115,7 +1115,9 @@ export const DEFAULT_ANNUAL_SAVINGS_PERCENT = 20;
 export const ONBOARDING_BASE_FEE = 500;
 export const ONBOARDING_FEE_PER_CLEANUP_MONTH = 20;
 
-export function getCleanupMonthCount(assessment: Pick<AssessmentState, "historicalCleanupPeriods">) {
+export function getCleanupMonthCount(assessment: {
+  historicalCleanupPeriods: Array<{ startMonth: number; endMonth: number }>;
+}) {
   return assessment.historicalCleanupPeriods.reduce(
     (total, period) => total + Math.max(0, period.endMonth - period.startMonth + 1),
     0,
@@ -1127,17 +1129,22 @@ export function getStandardOnboardingFee(cleanupMonths: number) {
 }
 
 export function getListedOnboardingFee(
-  assessment: Pick<AssessmentState, "onboardingFeeOverride" | "historicalCleanupPeriods">,
-  cleanupMonths = getCleanupMonthCount(assessment),
+  assessment: {
+    onboardingFeeOverride?: number | null;
+    historicalCleanupPeriods?: Array<{ startMonth: number; endMonth: number }>;
+  },
+  cleanupMonths = getCleanupMonthCount({
+    historicalCleanupPeriods: assessment.historicalCleanupPeriods ?? [],
+  }),
 ) {
-  if (assessment.onboardingFeeOverride !== null && assessment.onboardingFeeOverride > 0) {
+  if (typeof assessment.onboardingFeeOverride === "number" && assessment.onboardingFeeOverride > 0) {
     return assessment.onboardingFeeOverride;
   }
 
   return getStandardOnboardingFee(cleanupMonths);
 }
 
-export function getAnnualSavingsPercent(assessment: Pick<AssessmentState, "annualSavingsPercent">) {
+export function getAnnualSavingsPercent(assessment: { annualSavingsPercent?: number }) {
   const value = assessment.annualSavingsPercent;
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return DEFAULT_ANNUAL_SAVINGS_PERCENT;
@@ -1261,7 +1268,11 @@ function readStoredAssessment(
   }
 }
 
-export function hasCatchUpPricingInputs(assessment: AssessmentState) {
+export function hasCatchUpPricingInputs(assessment: {
+  booksOverTwoMonthsBehind?: boolean | null;
+  cleanupStartMonth?: string;
+  cleanupEndMonth?: string;
+}) {
   return (
     assessment.booksOverTwoMonthsBehind === true &&
     Boolean(assessment.cleanupStartMonth && assessment.cleanupEndMonth)

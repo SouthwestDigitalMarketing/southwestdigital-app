@@ -1,6 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
+import { slugifyTagKey } from "@/lib/contacts/tags";
 
 const tier = z.enum(["maintain", "improve", "grow"]);
 const text = z.string().max(100_000);
@@ -78,12 +79,49 @@ const publishedPricingSchema = z.object({ maintain: price, improve: price, grow:
 const person = z.object({ firstName: z.string().default(""), lastName: z.string().default(""), email: z.string().default("") });
 
 export type PublicProposalPricing = z.infer<typeof publishedPricingSchema>;
+export type PublicCatalogCopy = ReadonlyMap<string, { clientBenefit: string; internalDescription: string }>;
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-export function toPublicBookkeepingProposal(snapshotValue: unknown) {
+export function catalogCopyFromRows(
+  rows: Array<{
+    offerKey?: string | null;
+    code?: string | null;
+    name?: string | null;
+    clientBenefit?: string | null;
+    internalDescription?: string | null;
+  }>,
+): PublicCatalogCopy {
+  const map = new Map<string, { clientBenefit: string; internalDescription: string }>();
+  for (const item of rows) {
+    const key = item.offerKey || slugifyTagKey(item.code || item.name || "");
+    if (!key) continue;
+    map.set(key, {
+      clientBenefit: item.clientBenefit ?? "",
+      internalDescription: item.internalDescription ?? "",
+    });
+  }
+  return map;
+}
+
+function remapPublicDescription<T extends { id: string; description: string }>(
+  items: T[],
+  catalogCopy?: PublicCatalogCopy,
+): T[] {
+  if (!catalogCopy) return items;
+  return items.map((item) => {
+    const row = catalogCopy.get(item.id);
+    if (!row) return item;
+    return { ...item, description: row.clientBenefit };
+  });
+}
+
+export function toPublicBookkeepingProposal(
+  snapshotValue: unknown,
+  catalogCopy?: PublicCatalogCopy,
+) {
   const snapshot = record(snapshotValue);
   const contact = record(snapshot.contactInfo);
   const primary = record(contact.primaryContact);
@@ -92,13 +130,90 @@ export function toPublicBookkeepingProposal(snapshotValue: unknown) {
     ? owners.find((owner) => owner.id === primary.ownerId) ?? primary
     : primary;
   const publicPerson = person.parse(selectedPerson);
+  const assessment = publicAssessmentSchema.parse(snapshot.assessment);
   return {
-    assessment: publicAssessmentSchema.parse(snapshot.assessment),
+    assessment: {
+      ...assessment,
+      additionalOptions: remapPublicDescription(assessment.additionalOptions, catalogCopy),
+      bonuses: remapPublicDescription(assessment.bonuses, catalogCopy),
+    },
     pricing: publishedPricingSchema.parse(snapshot.pricing),
     contactInfo: {
       companyName: typeof contact.companyName === "string" ? contact.companyName : "",
-      owners: [],
-      primaryContact: { ...publicPerson, sameAsOwner: false, ownerId: "", phone: "", role: "" },
+      owners: [] as Array<never>,
+      primaryContact: { ...publicPerson, sameAsOwner: false as const, ownerId: "", phone: "", role: "" },
     },
   };
 }
+
+export type PublicBookkeepingProposal = ReturnType<typeof toPublicBookkeepingProposal>;
+
+const hourlyOfferSchema = z.object({
+  catalogItemLabel: z.string(),
+  quantity: z.number().finite().nonnegative(),
+  unitPrice: z.number().finite().nonnegative(),
+  intakeFee: z.number().finite().nonnegative(),
+  subtotal: z.number().finite().nonnegative(),
+  total: z.number().finite().nonnegative(),
+  amountDueNow: z.number().finite().nonnegative(),
+});
+
+function publicHourlyPerson(snapshotValue: unknown) {
+  const snapshot = record(snapshotValue);
+  const contact = record(snapshot.contactInfo);
+  const primary = record(contact.primaryContact);
+  const owners = Array.isArray(contact.owners) ? contact.owners.map(record) : [];
+  const selectedPerson = primary.sameAsOwner === true
+    ? owners.find((owner) => owner.id === primary.ownerId) ?? primary
+    : primary;
+  const publicPerson = person.parse(selectedPerson);
+  const companyName = typeof contact.companyName === "string" ? contact.companyName : "";
+  const name = [publicPerson.firstName, publicPerson.lastName].filter(Boolean).join(" ").trim();
+  return {
+    companyName,
+    name: name || companyName,
+    email: publicPerson.email,
+  };
+}
+
+export function toPublicHourlyProposal(input: {
+  snapshot: unknown;
+  checkout: unknown;
+  brand: { name: string; accent: string | null };
+  agreementText: string;
+  flags: {
+    proposalToken: string;
+    engagementId: string | null;
+    isTestProposal: boolean;
+    isStaffPreview?: boolean;
+    alreadySigned: boolean;
+    kindLabel: string;
+  };
+}) {
+  const personInfo = publicHourlyPerson(input.snapshot);
+  const offer = hourlyOfferSchema.parse(input.checkout);
+  return {
+    proposalToken: input.flags.proposalToken,
+    engagementId: input.flags.engagementId,
+    isTestProposal: input.flags.isTestProposal,
+    isStaffPreview: input.flags.isStaffPreview,
+    kindLabel: input.flags.kindLabel,
+    clientName: personInfo.companyName || personInfo.name,
+    brandName: input.brand.name,
+    brandAccent: input.brand.accent,
+    contact: { name: personInfo.name, email: personInfo.email },
+    offer: {
+      catalogItemLabel: offer.catalogItemLabel,
+      quantity: offer.quantity,
+      unitPrice: offer.unitPrice,
+      intakeFee: offer.intakeFee,
+      subtotal: offer.subtotal,
+      total: offer.total,
+      amountDueNow: offer.amountDueNow,
+    },
+    agreementText: input.agreementText,
+    alreadySigned: input.flags.alreadySigned,
+  };
+}
+
+export type PublicHourlyProposal = ReturnType<typeof toPublicHourlyProposal>;
