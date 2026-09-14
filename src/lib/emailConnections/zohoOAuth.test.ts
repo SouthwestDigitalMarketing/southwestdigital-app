@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
   buildZohoAuthorizationUrl,
@@ -6,6 +7,12 @@ import {
   verifyZohoOAuthState,
   ZOHO_MAIL_SCOPES,
 } from "./zohoOAuth";
+
+function signZohoPayload(payload: object) {
+  const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const signature = createHmac("sha256", process.env.AUTH_SECRET!).update(encoded).digest("base64url");
+  return `${encoded}.${signature}`;
+}
 
 beforeAll(() => {
   process.env.AUTH_SECRET = process.env.AUTH_SECRET || "test-only-secret-do-not-use-in-prod";
@@ -102,6 +109,21 @@ describe("OAuth state round-trip", () => {
 
   it("rejects signed insecure remote origins", () => {
     const state = createZohoOAuthState({ membershipId, brandId, region: "US", returnOrigin: "http://remote.example" });
+    expect(readZohoOAuthState(state)).toBeNull();
+  });
+
+  it.each([
+    "javascript:alert(1)",
+    "https://user:secret@firm.example.test",
+    "https://firm.example.test/path",
+  ])("rejects HMAC-valid javascript, userinfo, and path-in-origin return origins: %s", (returnOrigin) => {
+    const state = signZohoPayload({
+      membershipId,
+      brandId,
+      region: "US",
+      returnOrigin,
+      exp: Date.now() + 60_000,
+    });
     expect(readZohoOAuthState(state)).toBeNull();
   });
 });
