@@ -3,7 +3,10 @@ import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { Download, ExternalLink } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import { resolvePublicBrand } from "@/lib/brands/resolve";
+import {
+  findPublishedPublicQuote,
+  quoteAllowsPublicCapability,
+} from "@/lib/engagements/publicProposalAccess";
 import { readAcceptedPayment, readAcceptedSelection } from "@/lib/engagements/acceptedPayment";
 import AgreementTextView from "@/app/(app)/offers/builder/AgreementTextView";
 
@@ -18,8 +21,13 @@ function formatUsd(value: number) {
 export default async function ProposalReceiptPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const hostname = (await headers()).get("x-hostname");
-  const brand = await resolvePublicBrand(hostname);
-  if (!brand) notFound();
+  const found = await findPublishedPublicQuote({ hostname, token });
+  if (!found) notFound();
+  const { brand } = found;
+  if (!quoteAllowsPublicCapability(found.quote, "receipt")) {
+    if (quoteAllowsPublicCapability(found.quote, "read")) redirect(`/proposal/${token}`);
+    notFound();
+  }
 
   const quote = await prisma.quote.findFirst({
     where: { brandId: brand.id, publicToken: token, publishedAt: { not: null } },

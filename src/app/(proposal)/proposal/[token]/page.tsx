@@ -9,8 +9,11 @@ import {
   toPublicHourlyProposal,
 } from "@/lib/quotes/publicProposal";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
-import { resolvePublicBrand } from "@/lib/brands/resolve";
 import { getBrandAccessDecision } from "@/lib/brands/repository";
+import {
+  findPublishedPublicQuote,
+  quoteAllowsPublicCapability,
+} from "@/lib/engagements/publicProposalAccess";
 import OfferProposalPreview from "@/app/(app)/offers/builder/OfferProposalPreview";
 import { isLeadConvertedForDiscount, pickActiveCatalogOffer } from "@/lib/discounts/eligibility";
 import { ensureQuoteEngagement } from "@/lib/engagements/fromOffer";
@@ -34,8 +37,9 @@ export default async function PublicProposalPage({
   const { token } = await params;
   const { staffPreview } = await searchParams;
   const hostname = (await headers()).get("x-hostname");
-  const brand = await resolvePublicBrand(hostname);
-  if (!brand) notFound();
+  const found = await findPublishedPublicQuote({ hostname, token });
+  if (!found) notFound();
+  const { brand } = found;
   const session = staffPreview === "1" ? await auth() : null;
   const staffPreviewAccess = session?.user
     ? await getBrandAccessDecision({
@@ -50,6 +54,12 @@ export default async function PublicProposalPage({
   const isPreviewSimulation = isProposalPreviewSimulation({
     isStaffPreview: isAuthorizedStaffPreview,
   });
+  const canRead = quoteAllowsPublicCapability(found.quote, "read");
+  const canReceipt = quoteAllowsPublicCapability(found.quote, "receipt");
+  if (!canRead && !isAuthorizedStaffPreview) {
+    if (canReceipt) redirect(`/proposal/${encodeURIComponent(token)}/receipt`);
+    notFound();
+  }
   const { quoteRevisions, quoteEngagement, proposalCatalog, catalogProductKind } = await getSchemaCapabilities();
   const quote = await prisma.quote.findFirst({
     where: { brandId: brand.id, publicToken: token, publishedAt: { not: null } },
@@ -70,13 +80,7 @@ export default async function PublicProposalPage({
   });
   if (!quote) notFound();
   const viewedAt = new Date();
-  const unavailable = quote.status === "archived" || quote.status === "completed" ||
-    (quote.expiresAt !== null && quote.expiresAt.getTime() <= viewedAt.getTime());
-  if (unavailable && !isAuthorizedStaffPreview) {
-    if (quote.engagement?.signedAt) redirect(`/proposal/${encodeURIComponent(token)}/receipt`);
-    notFound();
-  }
-  if (quote && !quote.firstViewedAt && !isAuthorizedStaffPreview) {
+  if (canRead && quote && !quote.firstViewedAt && !isAuthorizedStaffPreview) {
     // Self-heal: a real client view is proof the URL made it out somehow,
     // so stamp firstSentAt (if not already) and flip status to "sent". This
     // keeps DB filters (Draft/Sent/Completed) consistent with the derived
@@ -176,10 +180,6 @@ export default async function PublicProposalPage({
       }),
     },
   );
-
-  if (!isPreviewSimulation && engagement?.signedAt && (quote?.status === "completed" || quote?.status === "archived")) {
-    redirect(`/proposal/${token}/receipt`);
-  }
 
   const snapshotKind = typeof snapshot.kind === "string" ? snapshot.kind : "";
   if (isHourlyOfferKind(snapshotKind)) {
