@@ -85,7 +85,11 @@ The platform-origin callback calls `readOptionalReturnOrigin`, which base64-deco
 
 This permits an unauthenticated redirect controlled by supplied state and forwarding of any supplied callback parameters. This is not a claim that an OAuth account was compromised. Use the existing signed-state reader before any relay, validate a canonical HTTPS origin against an active verified `BrandDomain`/approved platform origin, then perform membership/cookie binding at completion. Test forged state, expired state, disabled domains, malformed origins, and a valid cross-domain round trip.
 
-Evidence: `src/app/api/email-connections/zoho/callback/route.ts:27`, `:46`, `:97`; `src/lib/emailConnections/zohoOAuth.ts` already provides `readZohoOAuthState`. YouTube uses its signature-verifying reader before its relay; preserve that distinction.
+YouTube uses its signature-verifying reader before its relay; preserve that distinction.
+
+**Closed at HEAD (`1c4d869` + route/reader regressions).** `readOptionalReturnOrigin` is gone. The callback calls `readZohoOAuthState` (HMAC, expiry, canonical origin) and `isAuthorizedCallbackOrigin` (active brand + verified APP `BrandDomain` or `PLATFORM_BASE_URL`) before any 302 that forwards `code` / `state` / `error`. Failed HMAC redirects to the platform origin, not the supplied destination. Membership and cookie binding still run on the return host after relay. Live Zoho OAuth is not a session gate.
+
+Evidence (current): `src/app/api/email-connections/zoho/callback/route.ts` (HMAC/origin gate, then relay); `src/lib/emailConnections/zohoOAuth.ts` `readZohoOAuthState`; `src/lib/integrations/callbackOrigin.ts`; `src/app/api/email-connections/zoho/callback/route.test.ts`; `src/lib/emailConnections/zohoOAuth.test.ts`. YouTube remains HMAC-before-relay at `src/app/api/youtube/callback/route.ts`. Historical citations `:27`, `:46`, `:97` referred to the pre-fix file and now land on the gate, cookie delete, and token-exchange catch.
 
 ### P0 — Tenant guarantees are inconsistent across the active app
 
