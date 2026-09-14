@@ -74,14 +74,15 @@ const LivePreview = OfferProposalPreview as unknown as (props: {
 
 function renderLiveBookkeeping(publicProposal: ReturnType<typeof publicBookkeeping>) {
   return renderToStaticMarkup(
-    createElement(BrandProvider, {
-      value: brandValue,
-      children: createElement(LivePreview, {
+    createElement(
+      BrandProvider,
+      { value: brandValue },
+      createElement(LivePreview, {
         publicProposal,
         live: true,
         proposalToken: "token",
       }),
-    }),
+    ),
   );
 }
 
