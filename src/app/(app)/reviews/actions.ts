@@ -7,12 +7,15 @@ import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
 import { normalizePhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { sendSms } from "@/lib/quo";
+import {
+  REVIEW_DAILY_SMS_CAP,
+  REVIEW_NAME_MAX,
+  REVIEW_SMS_COOLDOWN_MS,
+  reviewAlreadyResponded,
+  reviewSmsCooldownActive,
+} from "@/lib/reviews/policy";
 import { getQuoSmsCredentials } from "@/lib/reviews/quoCredentials";
 import { resolvePublicReviewOrigin } from "@/lib/reviews/publicOrigin";
-
-const NAME_MAX = 80;
-const DAILY_SMS_CAP = 30;
-const SAME_PHONE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function startOfUtcDay(now = new Date()) {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
@@ -29,7 +32,7 @@ async function countBrandSmsToday(brandId: string) {
 
 async function assertDailySmsCap(brandId: string) {
   const sentToday = await countBrandSmsToday(brandId);
-  if (sentToday >= DAILY_SMS_CAP) {
+  if (sentToday >= REVIEW_DAILY_SMS_CAP) {
     throw new Error("This brand has reached the daily SMS review-request limit.");
   }
 }
@@ -47,12 +50,12 @@ export async function sendReviewRequest(formData: FormData) {
   const rawPhone = (formData.get("recipientPhone") as string | null)?.trim() ?? "";
 
   if (!recipientName || !rawPhone) throw new Error("Name and phone are required");
-  if (recipientName.length > NAME_MAX) throw new Error("Name must be 80 characters or fewer.");
+  if (recipientName.length > REVIEW_NAME_MAX) throw new Error("Name must be 80 characters or fewer.");
   if (!hasSmsConsent(formData)) throw new Error("Confirm you have permission to text this number.");
 
   const recipientPhone = normalizePhone(rawPhone);
 
-  const since24h = new Date(Date.now() - SAME_PHONE_WINDOW_MS);
+  const since24h = new Date(Date.now() - REVIEW_SMS_COOLDOWN_MS);
   const recentSamePhone = await prisma.reviewRequest.findFirst({
     where: { brandId: brand.id, recipientPhone, sentAt: { gte: since24h } },
     select: { id: true },
@@ -105,12 +108,22 @@ export async function sendReminder(requestId: string) {
       channel: true,
       recipientPhone: true,
       recipientName: true,
+      sentAt: true,
+      lastReminderAt: true,
+      clickedAt: true,
+      outcome: true,
     },
   });
 
   if (!request || request.brandId !== brand.id) throw new Error("Not found");
   if (request.channel !== ReviewChannel.SMS || !request.recipientPhone) {
     throw new Error("Reminders can only be sent by SMS to a saved phone number.");
+  }
+  if (reviewAlreadyResponded(request)) {
+    throw new Error("This recipient already responded.");
+  }
+  if (reviewSmsCooldownActive(request)) {
+    throw new Error("A reminder was already sent in the last 24 hours.");
   }
 
   await assertDailySmsCap(brand.id);

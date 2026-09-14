@@ -190,6 +190,10 @@ describe("sendReminder", () => {
     channel: "SMS",
     recipientPhone: E164,
     recipientName: "Jane Smith",
+    sentAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
+    lastReminderAt: null as Date | null,
+    clickedAt: null as Date | null,
+    outcome: null as string | null,
   };
 
   it("updates lastReminderAt only after SMS succeeds", async () => {
@@ -243,6 +247,28 @@ describe("sendReminder", () => {
       membership: null,
     });
     await expect(sendReminder("req-1")).rejects.toThrow("No brand access");
+    expect(mocks.sendSms).not.toHaveBeenCalled();
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  it("does not send a reminder within 24 hours of the last SMS", async () => {
+    mocks.findUnique.mockResolvedValue({
+      ...row,
+      sentAt: new Date(Date.now() - 60 * 60 * 1000),
+    });
+    await expect(sendReminder("req-1")).rejects.toThrow(
+      "A reminder was already sent in the last 24 hours.",
+    );
+    expect(mocks.sendSms).not.toHaveBeenCalled();
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  it("does not send a reminder after the recipient responded", async () => {
+    mocks.findUnique.mockResolvedValue({
+      ...row,
+      clickedAt: new Date(),
+    });
+    await expect(sendReminder("req-1")).rejects.toThrow("This recipient already responded.");
     expect(mocks.sendSms).not.toHaveBeenCalled();
     expect(mocks.update).not.toHaveBeenCalled();
   });

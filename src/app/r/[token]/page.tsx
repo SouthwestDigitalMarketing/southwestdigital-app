@@ -1,6 +1,7 @@
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
-import { BrandStatus } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { ReviewOutcome } from "@prisma/client";
+import { findPublicReviewRequest } from "@/lib/reviews/publicAccess";
 import { resolveGoogleReviewUrl } from "@/lib/reviews/googleDestination";
 import { ReviewPage } from "./ReviewPage";
 
@@ -10,50 +11,23 @@ export default async function PublicReviewPage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
+  const hostname = (await headers()).get("x-hostname");
+  const found = await findPublicReviewRequest({ hostname, token });
+  if (!found) notFound();
 
-  const request = await prisma.reviewRequest.findUnique({
-    where: { token },
-    select: {
-      id: true,
-      token: true,
-      recipientName: true,
-      openedAt: true,
-      outcome: true,
-      brandId: true,
-    },
-  });
-
-  if (!request) notFound();
-
-  if (!request.openedAt && !request.outcome) {
-    await prisma.reviewRequest.update({
-      where: { id: request.id },
-      data: { openedAt: new Date() },
-    });
-  }
-
-  const brand = await prisma.brand.findFirst({
-    where: { id: request.brandId, status: BrandStatus.ACTIVE },
-    select: {
-      name: true,
-      theme: {
-        select: { lightColor: true, accentColor: true },
-      },
-    },
-  });
-
-  if (!brand) notFound();
-
-  const googleReviewUrl = await resolveGoogleReviewUrl(request.brandId);
+  const googleReviewUrl = await resolveGoogleReviewUrl(found.brand.id);
 
   return (
     <ReviewPage
       token={token}
-      recipientName={request.recipientName}
-      brandName={brand.name}
-      lightColor={brand.theme?.lightColor ?? "#17324d"}
-      accentColor={brand.theme?.accentColor ?? "#d79b3b"}
+      recipientName={found.request.recipientName}
+      brandName={found.brand.name}
+      lightColor={found.brand.theme?.lightColor ?? "#17324d"}
+      accentColor={found.brand.theme?.accentColor ?? "#d79b3b"}
       googleReviewUrl={googleReviewUrl}
+      alreadyOpened={Boolean(found.request.openedAt)}
+      alreadyClickedGoogle={Boolean(found.request.clickedAt)}
+      alreadyLeftFeedback={found.request.outcome === ReviewOutcome.FEEDBACK}
     />
   );
 }

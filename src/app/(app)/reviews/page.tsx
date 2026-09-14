@@ -3,36 +3,43 @@ import { requireAppBrand } from "@/lib/brands/staff";
 import { ReviewOutcome } from "@prisma/client";
 import { ReviewsHeader } from "./ReviewsHeader";
 import { formatPhone } from "@/lib/phone";
+import { canSendReviewReminder } from "@/lib/reviews/policy";
 import { SendReminderButton } from "./SendReminderButton";
 
 export default async function ReviewsPage() {
   const { brand } = await requireAppBrand();
 
-  const requests = await prisma.reviewRequest.findMany({
-    where: { brandId: brand.id },
-    orderBy: { sentAt: "desc" },
-    take: 100,
-    select: {
-      id: true,
-      token: true,
-      recipientName: true,
-      recipientPhone: true,
-      channel: true,
-      sentAt: true,
-      lastReminderAt: true,
-      openedAt: true,
-      clickedAt: true,
-      outcome: true,
-      feedbackRating: true,
-    },
-  });
-
-  const total = requests.length;
-  const opened = requests.filter((r) => r.openedAt).length;
-  const googleClicked = requests.filter(
-    (r) => r.clickedAt || r.outcome === ReviewOutcome.FIVE_STAR,
-  ).length;
-  const feedback = requests.filter((r) => r.outcome === ReviewOutcome.FEEDBACK).length;
+  const [requests, total, opened, googleClicked, feedback] = await Promise.all([
+    prisma.reviewRequest.findMany({
+      where: { brandId: brand.id },
+      orderBy: { sentAt: "desc" },
+      take: 100,
+      select: {
+        id: true,
+        token: true,
+        recipientName: true,
+        recipientPhone: true,
+        channel: true,
+        sentAt: true,
+        lastReminderAt: true,
+        openedAt: true,
+        clickedAt: true,
+        outcome: true,
+        feedbackRating: true,
+      },
+    }),
+    prisma.reviewRequest.count({ where: { brandId: brand.id } }),
+    prisma.reviewRequest.count({ where: { brandId: brand.id, openedAt: { not: null } } }),
+    prisma.reviewRequest.count({
+      where: {
+        brandId: brand.id,
+        OR: [{ clickedAt: { not: null } }, { outcome: ReviewOutcome.FIVE_STAR }],
+      },
+    }),
+    prisma.reviewRequest.count({
+      where: { brandId: brand.id, outcome: ReviewOutcome.FEEDBACK },
+    }),
+  ]);
 
   const openRate = total > 0 ? Math.round((opened / total) * 100) : 0;
   const googleClickedRate = total > 0 ? Math.round((googleClicked / total) * 100) : 0;
@@ -60,6 +67,11 @@ export default async function ReviewsPage() {
       <div className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white">
         <div className="border-b border-slate-100 px-5 py-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Request history</p>
+          {total > requests.length ? (
+            <p className="mt-1 text-xs text-slate-400">
+              Showing {requests.length} of {total.toLocaleString("en-US")}
+            </p>
+          ) : null}
         </div>
         {requests.length === 0 ? (
           <div className="px-6 py-12 text-center text-sm text-slate-400">
@@ -102,7 +114,7 @@ export default async function ReviewsPage() {
                     <StatusChip request={r} />
                   </td>
                   <td className="px-5 py-3 text-right">
-                    <SendReminderButton requestId={r.id} />
+                    {canSendReviewReminder(r) ? <SendReminderButton requestId={r.id} /> : null}
                   </td>
                 </tr>
               ))}
@@ -126,17 +138,10 @@ function StatusChip({
       </span>
     );
   }
-  if (request.clickedAt && !request.outcome) {
+  if (request.clickedAt || request.outcome === ReviewOutcome.FIVE_STAR) {
     return (
       <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
         Google clicked
-      </span>
-    );
-  }
-  if (request.outcome === ReviewOutcome.FIVE_STAR) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-        ★ 5 Stars
       </span>
     );
   }

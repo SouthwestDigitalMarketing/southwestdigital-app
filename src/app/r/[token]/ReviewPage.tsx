@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { recordFeedback, recordGoogleClick } from "./actions";
+import { useEffect, useState, useTransition } from "react";
+import { recordFeedback, recordGoogleClick, recordOpen } from "./actions";
 
 type Stage = "choice" | "feedback" | "opening-google" | "done-feedback";
 
@@ -12,6 +12,9 @@ export function ReviewPage({
   lightColor,
   accentColor,
   googleReviewUrl,
+  alreadyOpened,
+  alreadyClickedGoogle,
+  alreadyLeftFeedback,
 }: {
   token: string;
   recipientName: string | null;
@@ -19,14 +22,22 @@ export function ReviewPage({
   lightColor: string;
   accentColor: string;
   googleReviewUrl: string | null;
+  alreadyOpened: boolean;
+  alreadyClickedGoogle: boolean;
+  alreadyLeftFeedback: boolean;
 }) {
-  const [stage, setStage] = useState<Stage>("choice");
+  const [stage, setStage] = useState<Stage>(alreadyLeftFeedback ? "done-feedback" : "choice");
   const [rating, setRating] = useState(0);
   const [hovered, setHovered] = useState(0);
   const [feedbackText, setFeedbackText] = useState("");
   const [pending, startTransition] = useTransition();
 
   const firstName = recipientName?.split(" ")[0] ?? "there";
+
+  useEffect(() => {
+    if (alreadyOpened) return;
+    void recordOpen(token);
+  }, [alreadyOpened, token]);
 
   function handleGoogleReview() {
     if (!googleReviewUrl) return;
@@ -72,7 +83,7 @@ export function ReviewPage({
                   className="w-full rounded-full py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                   style={{ backgroundColor: accentColor }}
                 >
-                  Leave a Google review
+                  {alreadyClickedGoogle ? "Return to Google review" : "Leave a Google review"}
                 </button>
               ) : null}
               <button
