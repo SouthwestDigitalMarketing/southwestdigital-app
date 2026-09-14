@@ -32,3 +32,7 @@ The guarded first-tenant process is documented in [initial brand seed](docs/migr
 ## Status
 
 Pre-launch. The offer-to-payment workflow — assessment, pricing, proposal, e-signature, and Stripe Connect payment to the firm's own connected account — is implemented and exercised by Bookkeeping Conroe. The platform is not yet open to independent customer firms: tenant isolation, subscription billing, first-run activation, and data export remain open. `docs/SWAPP-REVIEW-AND-ROADMAP.md` holds the gates.
+
+<!-- GLOBAL-AGENT-GUIDANCE:START -->
+> **Global agent guidance:** Before starting work, read `~/.codex/AGENTS.md` (the synchronized global `AGENTS.md`) and ensure you are using the most up-to-date version. Project-specific instructions are supplemental.
+<!-- GLOBAL-AGENT-GUIDANCE:END -->
