@@ -742,7 +742,6 @@ function OfferProposalPreviewView({
   const [checkoutSummary, setCheckoutSummary] = useState<CheckoutSummary | null>(null);
   const [agreementText, setAgreementText] = useState("");
   const [agreementManagerStatus, setAgreementManagerStatus] = useState<"ACTIVE" | "VOIDED" | "VOIDED_BEFORE_SIGNATURE" | "CANCELLATION_REQUESTED" | "TERMINATED_AFTER_SIGNATURE" | "ARCHIVED">("ACTIVE");
-  const [cancellationReason, setCancellationReason] = useState<string | null>(null);
   const [cancellationName, setCancellationName] = useState("");
   const [cancellationEmail, setCancellationEmail] = useState("");
   const [cancellationSubmitting, setCancellationSubmitting] = useState(false);
@@ -848,10 +847,9 @@ function OfferProposalPreviewView({
     if (step !== 2 && step !== 3 || !engagementId) return;
     fetch(`/api/proposal/${engagementId}/agreement`, { headers: proposalHeaders(proposalToken) })
       .then((r) => r.json())
-      .then((result: { text?: string; signed?: boolean; signerName?: string | null; signedAt?: string | null; onboardingFeeStatus?: string | null; agreementManagerStatus?: typeof agreementManagerStatus; cancellationReason?: string | null; checkout?: CheckoutSummary }) => {
+      .then((result: { text?: string; signed?: boolean; signerName?: string | null; signedAt?: string | null; onboardingFeeStatus?: string | null; agreementManagerStatus?: typeof agreementManagerStatus; checkout?: CheckoutSummary }) => {
         setAgreementText(result.text ?? "");
         setAgreementManagerStatus(result.agreementManagerStatus ?? "ACTIVE");
-        setCancellationReason(result.cancellationReason ?? null);
         if (result.checkout && typeof result.checkout.amountDueNow === "number") {
           setCheckoutSummary(result.checkout);
           setSelectedOptionId(result.checkout.tier);
@@ -2017,12 +2015,6 @@ function OfferProposalPreviewView({
                   ? "The business has requested cancellation of this signed agreement. Review the request below and confirm if you agree."
                   : "This signed agreement has been terminated by mutual acknowledgment."}
               </div>
-              {agreementManagerStatus === "CANCELLATION_REQUESTED" && cancellationReason ? (
-                <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
-                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Reason for request</p>
-                  <p className="mt-1 leading-6">{cancellationReason}</p>
-                </div>
-              ) : null}
               {agreementManagerStatus === "CANCELLATION_REQUESTED" ? (
                 <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
                   <h2 className="text-base font-semibold text-slate-900">Confirm agreement cancellation</h2>

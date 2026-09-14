@@ -151,6 +151,36 @@ describe("catalog materialization", () => {
       "applicable",
     );
   });
+  it("does not copy internalDescription into published option or bonus description", async () => {
+    const privateValue = "PRIVATE_SENTINEL_DO_NOT_PUBLISH";
+    findMany.mockResolvedValue([
+      {
+        ...service,
+        clientBenefit: "",
+        internalDescription: privateValue,
+      },
+    ]);
+    const asOption = await materializeProposalCatalog("brand-test", {});
+    expect(JSON.stringify(asOption)).not.toContain(privateValue);
+    expect(asOption).toMatchObject({
+      additionalOptions: [expect.objectContaining({ id: "reports", description: "" })],
+    });
+
+    findMany.mockResolvedValue([
+      {
+        ...service,
+        defaultInclusion: "included",
+        offerSection: "included",
+        clientBenefit: "",
+        internalDescription: privateValue,
+      },
+    ]);
+    const asBonus = await materializeProposalCatalog("brand-test", saved);
+    expect(JSON.stringify(asBonus)).not.toContain(privateValue);
+    expect(asBonus).toMatchObject({
+      bonuses: [expect.objectContaining({ id: "reports", description: "" })],
+    });
+  });
   it("leaves legacy schema snapshots alone without querying unavailable tables", async () => {
     findMany.mockClear();
     capabilities.mockResolvedValue({ proposalCatalog: false });

@@ -30,7 +30,6 @@ export async function GET(
       onboardingFeeStatus: true,
       agreementManagerStatus: true,
       agreementCancellationRequestedAt: true,
-      agreementCancellationReason: true,
       isTestProposal: true,
     },
   });
@@ -127,8 +126,7 @@ export async function GET(
     onboardingFeeStatus: engagement.onboardingFeeStatus,
     agreementManagerStatus: engagement.agreementManagerStatus,
     cancellationRequestedAt: engagement.agreementCancellationRequestedAt?.toISOString() ?? null,
-    cancellationReason: engagement.agreementCancellationReason,
-    checkout: services,
+    checkout: parseStoredProposalCheckout(services),
     isTestProposal: engagement.isTestProposal,
   });
 }
