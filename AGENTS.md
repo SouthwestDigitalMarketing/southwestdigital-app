@@ -44,31 +44,26 @@ Do not copy crew workflow into SWapp.
 
 **Settled 2026-09-12, tightened 2026-09-14 after a dalliance/origin split.**
 
-Agents take work as far as a reviewable pull request. The owner merges.
-
 Do **not** commit onto local `main`. `git fetch origin` at session start, at
 the start of every job, and before every commit. If local `main` and
 `origin/main` have diverged, stop and integrate; do not stack another commit
-on the stale line. Topic branch (`<slug>` / `feat/<slug>`), push the branch,
-open a PR.
+on the stale line. Topic branch (`<slug>` / `feat/<slug>`).
 
 **What went wrong on 2026-09-14:** the Dalliance crew followed a stale
 "never push; commit local main" paragraph, never fetched, and piled commits
 on laptop `main` while origin moved. That is how you get rebase-vs-merge.
 Do not recreate it.
 
-The **lead agent** (the Claude session in the main checkout) may:
+**Controllers** (Ummon, Johnny, Albedo) may push branches, open pull
+requests, and merge pull requests. They do not commit onto local `main`.
+Docs-only may go to `main` as a PR or a docs-only push; **code** goes to
+`main` only via PR. A merge deploys production.
 
-- commit locally, at every phase boundary, so work survives an interruption;
-- push any branch, including straight to `main` for documentation-only commits;
-- open pull requests.
+**Crews** (Foreman and role panes) must not `git push`, must not open PRs,
+and must not merge. They commit on the topic branch locally. The controller
+ships.
 
-The lead agent **does not merge**, and does not push code to `main` outside a
-pull request. A merge deploys production for an application that bills clients,
-and it is the one step in the chain that is expensive to undo. Pushing a branch
-and opening a PR deploy nothing, so there is no reason to gate them.
-
-Before asking for a merge, the lead agent must have run `npm run typecheck`,
+Before a controller merges, they must have run `npm run typecheck`,
 `npm run lint` and `npm test`, and must say in the PR what they returned —
 including the pre-existing failure count, so a baseline failure is never
 mistaken for a new one. It must also say what is **not** covered: this repo has
