@@ -63,6 +63,7 @@ export function SendReviewDialog({ onSent }: { onSent: () => void }) {
                   id="review-recipient-name"
                   type="text"
                   required
+                  maxLength={80}
                   placeholder="Jane Smith"
                   className="mt-1.5 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
                 />
@@ -80,6 +81,19 @@ export function SendReviewDialog({ onSent }: { onSent: () => void }) {
                   className="mt-1.5 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
                 />
               </div>
+
+              <label className="flex items-start gap-2 text-sm text-slate-700">
+                <input
+                  name="smsConsent"
+                  type="checkbox"
+                  required
+                  value="on"
+                  className="mt-0.5"
+                />
+                <span>I have permission to text this number a review request.</span>
+              </label>
+
+              <p className="text-xs text-slate-500">Link will use this brand’s verified domain.</p>
 
               {error && (
                 <p className="rounded-md bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p>

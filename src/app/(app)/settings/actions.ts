@@ -3,8 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { IntegrationProvider, IntegrationStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdminBrandOrThrow } from "@/lib/brands/staff";
+import { normalizePhone } from "@/lib/phone";
+import { encryptSecret } from "@/lib/secrets/encryption";
+import { parseGoogleReviewUrl, GOOGLE_REVIEW_INTEGRATION_KEY } from "@/lib/reviews/googleDestination";
+import { QUO_INTEGRATION_KEY } from "@/lib/reviews/quoCredentials";
 import {
   StripeConnectNotEnabledError,
   createBrandConnectOnboardingUrl,
@@ -142,4 +147,122 @@ export async function refreshStripeConnectStatusAction() {
     await syncConnectedAccountStatus(integration.externalAccountId);
   }
   revalidatePath("/settings");
+}
+
+function normalizeFromNumber(raw: string) {
+  try {
+    return normalizePhone(raw);
+  } catch {
+    const compact = raw.replace(/[^\d+]/g, "");
+    if (/^\+\d{8,15}$/.test(compact)) return compact;
+    throw new Error("Enter the SMS from-number in E.164, like +15551234567.");
+  }
+}
+
+export async function saveQuoIntegrationAction(formData: FormData) {
+  const { brand } = await requireAdminBrandOrThrow();
+  const fromNumber = normalizeFromNumber(clean(formData.get("fromNumber")));
+  const phoneNumberId = clean(formData.get("phoneNumberId")) || null;
+  const apiKey = clean(formData.get("apiKey"));
+
+  const existing = await prisma.brandIntegration.findUnique({
+    where: { brandId_key: { brandId: brand.id, key: QUO_INTEGRATION_KEY } },
+    select: { secretCiphertext: true },
+  });
+
+  if (!apiKey && !existing?.secretCiphertext) {
+    throw new Error("Enter the Quo API key for this brand.");
+  }
+
+  const secretCiphertext = apiKey ? encryptSecret(apiKey) : undefined;
+
+  await prisma.brandIntegration.upsert({
+    where: { brandId_key: { brandId: brand.id, key: QUO_INTEGRATION_KEY } },
+    create: {
+      brandId: brand.id,
+      key: QUO_INTEGRATION_KEY,
+      provider: IntegrationProvider.QUO,
+      status: IntegrationStatus.ACTIVE,
+      displayName: "Quo SMS",
+      publicIdentifier: fromNumber,
+      externalPropertyId: phoneNumberId,
+      secretCiphertext: encryptSecret(apiKey),
+      secretKeyVersion: 1,
+      lastVerifiedAt: new Date(),
+      lastErrorAt: null,
+      lastErrorCode: null,
+    },
+    update: {
+      provider: IntegrationProvider.QUO,
+      status: IntegrationStatus.ACTIVE,
+      displayName: "Quo SMS",
+      publicIdentifier: fromNumber,
+      externalPropertyId: phoneNumberId,
+      ...(secretCiphertext
+        ? { secretCiphertext, secretKeyVersion: 1, lastVerifiedAt: new Date() }
+        : {}),
+      lastErrorAt: null,
+      lastErrorCode: null,
+    },
+  });
+
+  revalidatePath("/settings");
+  revalidatePath("/reviews");
+}
+
+export async function disconnectQuoIntegrationAction() {
+  const { brand } = await requireAdminBrandOrThrow();
+  await prisma.brandIntegration.updateMany({
+    where: { brandId: brand.id, key: QUO_INTEGRATION_KEY },
+    data: {
+      status: IntegrationStatus.DISCONNECTED,
+      secretCiphertext: null,
+      lastVerifiedAt: null,
+      lastErrorAt: null,
+      lastErrorCode: null,
+    },
+  });
+  revalidatePath("/settings");
+  revalidatePath("/reviews");
+}
+
+export async function saveGoogleReviewDestinationAction(formData: FormData) {
+  const { brand } = await requireAdminBrandOrThrow();
+  const raw = clean(formData.get("googleReviewUrl"));
+
+  if (!raw) {
+    await prisma.brandIntegration.updateMany({
+      where: { brandId: brand.id, key: GOOGLE_REVIEW_INTEGRATION_KEY },
+      data: {
+        status: IntegrationStatus.DISCONNECTED,
+        publicIdentifier: null,
+      },
+    });
+    revalidatePath("/settings");
+    revalidatePath("/reviews");
+    return;
+  }
+
+  const url = parseGoogleReviewUrl(raw);
+
+  await prisma.brandIntegration.upsert({
+    where: { brandId_key: { brandId: brand.id, key: GOOGLE_REVIEW_INTEGRATION_KEY } },
+    create: {
+      brandId: brand.id,
+      key: GOOGLE_REVIEW_INTEGRATION_KEY,
+      provider: IntegrationProvider.OTHER,
+      status: IntegrationStatus.ACTIVE,
+      displayName: "Google review",
+      publicIdentifier: url,
+    },
+    update: {
+      provider: IntegrationProvider.OTHER,
+      status: IntegrationStatus.ACTIVE,
+      displayName: "Google review",
+      publicIdentifier: url,
+    },
+  });
+
+  revalidatePath("/settings");
+  revalidatePath("/reviews");
 }

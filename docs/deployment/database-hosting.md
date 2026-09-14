@@ -17,9 +17,9 @@ A private schema in the existing project prevents naming collisions but is not a
 Production provides two distinct secrets:
 
 - `DATABASE_URL`: pooled runtime connection using a dedicated, least-privilege application role
-- `DIRECT_DATABASE_URL`: direct or session connection for reviewed `prisma migrate deploy` operations
+- `DIRECT_DATABASE_URL`: direct or session connection for reviewed schema changes. Do not run `prisma migrate deploy` or `prisma migrate dev`; see [database-migration-state.md](database-migration-state.md).
 
-Supabase documents the appropriate [runtime and migration connection modes](https://supabase.com/docs/guides/database/connecting-to-postgres). Never run `prisma migrate dev`, `prisma migrate reset`, `prisma db push`, the initial seed, or ad hoc SQL against production.
+Supabase documents the appropriate [runtime and migration connection modes](https://supabase.com/docs/guides/database/connecting-to-postgres). Never run `prisma migrate deploy`, `prisma migrate dev`, `prisma migrate reset`, `prisma db push`, the initial seed, or ad hoc SQL against production.
 
 Use the explicit [database role provisioning runbook](database-role-provisioning.md); the fixed disposable role script is test-only.
 

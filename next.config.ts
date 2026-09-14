@@ -14,6 +14,16 @@ const nextConfig: NextConfig = {
       { source: "/offers/calculator", destination: "/offers/adjustments", permanent: false },
     ];
   },
+  async headers() {
+    const proposalHeaders = [
+      { key: "Cache-Control", value: "private, no-store" },
+      { key: "Referrer-Policy", value: "no-referrer" },
+    ];
+    return [
+      { source: "/proposal/:path*", headers: proposalHeaders },
+      { source: "/api/proposal/:path*", headers: proposalHeaders },
+    ];
+  },
 };
 
 export default nextConfig;

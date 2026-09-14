@@ -8,6 +8,8 @@ import {
 } from "@/lib/engagements/proposalCheckout";
 import { resolveOnboardingWaiverForEngagement } from "@/lib/discounts/resolveOnboardingWaiver";
 import { hasPublicProposalAccess, publicProposalNotFound } from "@/lib/engagements/publicProposalAccess";
+import { catalogCopyFromRows, toPublicBookkeepingProposal } from "@/lib/quotes/publicProposal";
+import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -18,7 +20,7 @@ export async function POST(
   { params }: { params: Promise<{ engagementId: string }> },
 ) {
   const { engagementId } = await params;
-  if (!await hasPublicProposalAccess(request, engagementId)) return publicProposalNotFound();
+  if (!await hasPublicProposalAccess(request, engagementId, "select")) return publicProposalNotFound();
   const selection = parseProposalCheckoutSelection(await request.json().catch(() => null));
   if (!selection) return NextResponse.json({ error: "Invalid proposal selection" }, { status: 400 });
 
@@ -57,9 +59,33 @@ export async function POST(
 
   const quote = engagement.quotes[0];
   const publishedSnapshot = quote?.revisions[0]?.snapshotJson ?? quote?.publishedSnapshotJson;
+  const { proposalCatalog, catalogProductKind } = await getSchemaCapabilities();
+  const catalogRows = proposalCatalog
+    ? await prisma.catalogService.findMany({
+        where: {
+          brandId: engagement.brandId,
+          active: true,
+          ...(catalogProductKind ? { productKind: "bookkeeping" } : {}),
+        },
+        select: {
+          offerKey: true,
+          code: true,
+          name: true,
+          clientBenefit: true,
+          internalDescription: true,
+        },
+      })
+    : [];
   let checkout;
   try {
-    checkout = buildProposalCheckoutSummary(publishedSnapshot, selection);
+    const publicProposal = toPublicBookkeepingProposal(
+      publishedSnapshot,
+      catalogCopyFromRows(catalogRows),
+    );
+    checkout = buildProposalCheckoutSummary(
+      { assessment: publicProposal.assessment, pricing: publicProposal.pricing },
+      selection,
+    );
     if (await resolveOnboardingWaiverForEngagement(engagementId)) {
       checkout = applyOnboardingWaiver(checkout);
     }

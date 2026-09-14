@@ -36,6 +36,7 @@ import {
 import { ProposalReviewsSection } from "./ProposalReviewsSection";
 import AgreementTextView from "./AgreementTextView";
 import DepositPaymentForm from "./DepositPaymentForm";
+import { waitForRecordedProposalPayment } from "@/lib/engagements/waitForRecordedProposalPayment";
 import {
   formatPersonName,
   resolvePrimaryContact,
@@ -73,7 +74,7 @@ import {
   isProposalPreviewSimulation,
   resolveProposalInteractionEngagementId,
 } from "@/lib/quotes/previewSafety";
-import type { PublicProposalPricing } from "@/lib/quotes/publicProposal";
+import type { PublicBookkeepingProposal, PublicProposalPricing } from "@/lib/quotes/publicProposal";
 import { resolveProposalPackageName } from "./proposalPackageNames";
 import { includedServicePackages, proposalServiceAddOns, serviceIsApplicable } from "@/lib/quotes/proposalServices";
 
@@ -219,14 +220,26 @@ type CheckoutSummary = {
 
 // ─── Static data ──────────────────────────────────────────────────────────────
 
-function isOnboardingFeeWaived(assessment: AssessmentState) {
-  return assessment.waiveOnboardingFee || assessment.onboardingFeeOverride === 0;
+type PreviewAssessment = PublicBookkeepingProposal["assessment"] & {
+  isTestProposal?: boolean;
+};
+type PreviewContactInfo = PublicBookkeepingProposal["contactInfo"] | ContactInfoState;
+
+function isOnboardingFeeWaived(assessment: {
+  waiveOnboardingFee?: boolean;
+  onboardingFeeOverride?: number | null;
+}) {
+  return assessment.waiveOnboardingFee === true || assessment.onboardingFeeOverride === 0;
 }
 
-function getOnboardingFee(assessment: AssessmentState, cleanupMonths: number) {
+function getOnboardingFee(assessment: {
+  waiveOnboardingFee?: boolean;
+  isTestProposal?: boolean;
+  onboardingFeeOverride?: number | null;
+}, cleanupMonths: number) {
   if (assessment.waiveOnboardingFee) return 0;
   if (assessment.isTestProposal) return 1;
-  if (assessment.onboardingFeeOverride !== null) return Math.max(0, assessment.onboardingFeeOverride);
+  if (typeof assessment.onboardingFeeOverride === "number") return Math.max(0, assessment.onboardingFeeOverride);
   return getStandardOnboardingFee(cleanupMonths);
 }
 
@@ -354,20 +367,24 @@ function buildCleanupRows(periods: HistoricalCleanupPeriod[], maintainMonthly: n
 // proposal renders never change. This is the only place an assessment becomes
 // what the client actually sees.
 export function buildOptions(
-  assessment: AssessmentState,
+  assessment: PreviewAssessment | AssessmentState,
   publishedPricing?: PublicProposalPricing,
   isTestProposal = false,
+  livePublic = false,
 ): Record<OptionId, ProposalOption> {
-  const calculatedPricing = publishedPricing ?? getProposalPricingSnapshotData(assessment).packagePricing;
+  const calculatedPricing = publishedPricing ?? getProposalPricingSnapshotData(assessment as AssessmentState).packagePricing;
   const packagePricing = isTestProposal
     ? Object.fromEntries(
         optionMeta.map(({ id }) => [id, { ...calculatedPricing[id], monthly: 0 }]),
       ) as Record<OptionId, PublicProposalPricing[OptionId]>
     : calculatedPricing;
   const periods = hasCatchUpPricingInputs(assessment)
-    ? assessment.historicalCleanupPeriods.filter((p) => periodMonthCount(p) > 0)
+    ? (assessment.historicalCleanupPeriods ?? []).filter((p) => periodMonthCount(p) > 0)
     : [];
   const maintainMonthly = packagePricing.maintain.monthly;
+  const bonuses = livePublic
+    ? (assessment.bonuses ?? [])
+    : getProposalBonuses(assessment as AssessmentState);
 
   return Object.fromEntries(optionMeta.map(({ id }) => {
     const base = baseOptions[id];
@@ -387,7 +404,7 @@ export function buildOptions(
         : "Includes our review and assessment, document collection, and the work needed to begin. The fee is $500 plus $20 for each selected cleanup month.",
     };
 
-    const eligibleBonuses = getProposalBonuses(assessment)
+    const eligibleBonuses = bonuses
       .filter((bonus) => !bonus.archived)
       .filter((bonus) => serviceIsApplicable(assessment, bonus))
       .filter((bonus) => includedServicePackages(assessment, bonus).includes(id));
@@ -524,24 +541,7 @@ function PreviewEditButton({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function OfferProposalPreview({
-  initialAssessment,
-  initialContactInfo,
-  live = false,
-  embedded = false,
-  assessment: assessmentOverride,
-  catalogOffer = null,
-  engagementId: engagementIdProp = null,
-  agreementTemplate = null,
-  isTestProposal = false,
-  isStaffPreview = false,
-  alreadySigned: alreadySignedProp = false,
-  editMode = false,
-  onEdit,
-  proposalToken = null,
-  publishedPricing,
-  mirrorBuilderState = false,
-}: {
+type OfferProposalPreviewProps = {
   initialAssessment?: Partial<AssessmentState>;
   initialContactInfo?: Partial<ContactInfoState>;
   live?: boolean;
@@ -558,24 +558,82 @@ export default function OfferProposalPreview({
   onEdit?: (target: ProposalPreviewEditTarget) => void;
   proposalToken?: string | null;
   publishedPricing?: PublicProposalPricing;
+  publicProposal?: PublicBookkeepingProposal;
   /**
    * Render as a live mirror of the builder running in another tab: read the
    * builder's local state, follow its edits, and never write back.
    */
   mirrorBuilderState?: boolean;
-} = {}) {
-  const { brand } = useBrand();
+};
+
+export default function OfferProposalPreview(props: OfferProposalPreviewProps = {}) {
+  if (props.live && props.publicProposal) {
+    return (
+      <OfferProposalPreviewView
+        {...props}
+        assessment={props.publicProposal.assessment}
+        contactInfo={props.publicProposal.contactInfo}
+        publishedPricing={props.publicProposal.pricing}
+        livePublic
+      />
+    );
+  }
+  return <HydratedOfferProposalPreview {...props} />;
+}
+
+function HydratedOfferProposalPreview({
+  initialAssessment,
+  initialContactInfo,
+  live = false,
+  assessment: assessmentOverride,
+  publishedPricing,
+  mirrorBuilderState = false,
+  ...rest
+}: OfferProposalPreviewProps) {
   const { assessment: storedAssessment } = useProposalAssessmentDemoState({
     initialAssessment,
     persist: !live && !assessmentOverride,
     syncExternal: mirrorBuilderState,
   });
-  const assessment = assessmentOverride ?? storedAssessment;
   const { contactInfo } = useProposalContactInfoDemoState({
     initialContactInfo,
     persist: !live,
     syncExternal: mirrorBuilderState,
   });
+  return (
+    <OfferProposalPreviewView
+      {...rest}
+      live={live}
+      assessment={assessmentOverride ?? storedAssessment}
+      contactInfo={contactInfo}
+      publishedPricing={publishedPricing}
+      mirrorBuilderState={mirrorBuilderState}
+    />
+  );
+}
+
+function OfferProposalPreviewView({
+  live = false,
+  embedded = false,
+  assessment,
+  contactInfo,
+  catalogOffer = null,
+  engagementId: engagementIdProp = null,
+  agreementTemplate = null,
+  isTestProposal = false,
+  isStaffPreview = false,
+  alreadySigned: alreadySignedProp = false,
+  editMode = false,
+  onEdit,
+  proposalToken = null,
+  publishedPricing,
+  livePublic = false,
+}: Omit<OfferProposalPreviewProps, "assessment" | "initialAssessment" | "initialContactInfo" | "publicProposal"> & {
+  assessment: PreviewAssessment | AssessmentState;
+  contactInfo: PreviewContactInfo;
+  livePublic?: boolean;
+}) {
+  const { brand } = useBrand();
   const searchParams = useSearchParams();
   const isSimulation = isProposalPreviewSimulation({ live, embedded, isStaffPreview });
   const startsSigned = live && !isSimulation && alreadySignedProp;
@@ -648,7 +706,12 @@ export default function OfferProposalPreview({
   const accentHeaderBg = getProposalAccentHeaderBackground(proposalMode, accentColor);
   const urgencyOffer = catalogOffer?.active ? catalogOffer : getUrgencyOfferDisplay(DEFAULT_URGENCY_OFFER);
 
-  const options = buildOptions(assessment, publishedPricing, isTestProposal || assessment.isTestProposal);
+  const options = buildOptions(
+    assessment,
+    publishedPricing,
+    isTestProposal || assessment.isTestProposal === true,
+    livePublic,
+  );
   const [selectedOptionId, setSelectedOptionId] = useState<OptionId | null>(null);
   const [selectionSubmittingId, setSelectionSubmittingId] = useState<OptionId | null>(null);
   const [selectionError, setSelectionError] = useState<string | null>(null);
@@ -680,7 +743,6 @@ export default function OfferProposalPreview({
   const [checkoutSummary, setCheckoutSummary] = useState<CheckoutSummary | null>(null);
   const [agreementText, setAgreementText] = useState("");
   const [agreementManagerStatus, setAgreementManagerStatus] = useState<"ACTIVE" | "VOIDED" | "VOIDED_BEFORE_SIGNATURE" | "CANCELLATION_REQUESTED" | "TERMINATED_AFTER_SIGNATURE" | "ARCHIVED">("ACTIVE");
-  const [cancellationReason, setCancellationReason] = useState<string | null>(null);
   const [cancellationName, setCancellationName] = useState("");
   const [cancellationEmail, setCancellationEmail] = useState("");
   const [cancellationSubmitting, setCancellationSubmitting] = useState(false);
@@ -692,9 +754,9 @@ export default function OfferProposalPreview({
   const playRequestedRef = useRef(false);
   const coverMedia = resolveCoverMedia(
     {
-      featuredMediaId: assessment.featuredMediaId,
-      featuredVideoUrl: assessment.featuredVideoUrl,
-      featuredImageUrl: assessment.featuredImageUrl,
+      featuredMediaId: assessment.featuredMediaId ?? "",
+      featuredVideoUrl: assessment.featuredVideoUrl ?? "",
+      featuredImageUrl: assessment.featuredImageUrl ?? "",
     },
     {
       videoUrl: brand.theme?.proposalFeaturedVideoUrl ?? null,
@@ -786,10 +848,9 @@ export default function OfferProposalPreview({
     if (step !== 2 && step !== 3 || !engagementId) return;
     fetch(`/api/proposal/${engagementId}/agreement`, { headers: proposalHeaders(proposalToken) })
       .then((r) => r.json())
-      .then((result: { text?: string; signed?: boolean; signerName?: string | null; signedAt?: string | null; onboardingFeeStatus?: string | null; agreementManagerStatus?: typeof agreementManagerStatus; cancellationReason?: string | null; checkout?: CheckoutSummary }) => {
+      .then((result: { text?: string; signed?: boolean; signerName?: string | null; signedAt?: string | null; onboardingFeeStatus?: string | null; agreementManagerStatus?: typeof agreementManagerStatus; checkout?: CheckoutSummary }) => {
         setAgreementText(result.text ?? "");
         setAgreementManagerStatus(result.agreementManagerStatus ?? "ACTIVE");
-        setCancellationReason(result.cancellationReason ?? null);
         if (result.checkout && typeof result.checkout.amountDueNow === "number") {
           setCheckoutSummary(result.checkout);
           setSelectedOptionId(result.checkout.tier);
@@ -851,12 +912,11 @@ export default function OfferProposalPreview({
       return;
     }
     if (!engagementId) throw new Error("This payment is not attached to a proposal.");
-    const response = await fetch(`/api/proposal/${engagementId}/confirm-payment`, { method: "POST", headers: proposalHeaders(proposalToken) });
-    const result = await response.json().catch(() => null) as { paid?: boolean; error?: string } | null;
-    if (!response.ok || result?.paid !== true) {
-      throw new Error(result?.error ?? "Your payment was submitted, but we could not verify it yet. Please retry confirmation.");
-    }
-    setPaymentStatus("succeeded");
+    const recorded = await waitForRecordedProposalPayment({
+      engagementId,
+      headers: proposalHeaders(proposalToken),
+    });
+    setPaymentStatus(recorded === "paid" ? "succeeded" : "processing");
   }
 
   async function selectOptionAndContinue(id: OptionId) {
@@ -1005,7 +1065,7 @@ export default function OfferProposalPreview({
     : 1;
 
   const cleanupPeriods = hasCatchUpPricingInputs(assessment)
-    ? assessment.historicalCleanupPeriods
+    ? (assessment.historicalCleanupPeriods ?? [])
       .filter((p) => periodMonthCount(p) > 0)
       .sort((a, b) => (a.year * 12 + a.startMonth) - (b.year * 12 + b.startMonth))
     : [];
@@ -1015,8 +1075,12 @@ export default function OfferProposalPreview({
 
   const addOns = proposalServiceAddOns({
     ...assessment,
-    additionalOptions: getProposalAdditionalOptions(assessment),
-    bonuses: getProposalBonuses(assessment),
+    additionalOptions: livePublic
+      ? (assessment.additionalOptions ?? [])
+      : getProposalAdditionalOptions(assessment as AssessmentState),
+    bonuses: livePublic
+      ? (assessment.bonuses ?? [])
+      : getProposalBonuses(assessment as AssessmentState),
   });
   const additionalOptionRowsFor = (packageId: OptionId): ServiceRow[] =>
     addOns.filter((option) => option.packageIds.includes(packageId)).map((option) => ({
@@ -1522,7 +1586,10 @@ export default function OfferProposalPreview({
                     )) * 100) / 100;
 
                   const onboardingWaived = isOnboardingFeeWaived(assessment);
-                  const originalOnboardingFee = getListedOnboardingFee(assessment, selectedCleanupMonths);
+                  const originalOnboardingFee = getListedOnboardingFee({
+                    onboardingFeeOverride: assessment.onboardingFeeOverride ?? null,
+                    historicalCleanupPeriods: assessment.historicalCleanupPeriods ?? [],
+                  }, selectedCleanupMonths);
                   const onboardingFee = getOnboardingFee(assessment, selectedCleanupMonths);
                   const additionalOneTimeTotal = sectionTotal(selectedOneTimeAdditionalRows);
                   const schedule = proposalPaymentSchedule({
@@ -1948,12 +2015,6 @@ export default function OfferProposalPreview({
                   ? "The business has requested cancellation of this signed agreement. Review the request below and confirm if you agree."
                   : "This signed agreement has been terminated by mutual acknowledgment."}
               </div>
-              {agreementManagerStatus === "CANCELLATION_REQUESTED" && cancellationReason ? (
-                <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
-                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Reason for request</p>
-                  <p className="mt-1 leading-6">{cancellationReason}</p>
-                </div>
-              ) : null}
               {agreementManagerStatus === "CANCELLATION_REQUESTED" ? (
                 <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
                   <h2 className="text-base font-semibold text-slate-900">Confirm agreement cancellation</h2>

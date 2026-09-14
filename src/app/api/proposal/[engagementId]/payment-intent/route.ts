@@ -5,12 +5,12 @@ import { getStripeClient } from "@/lib/stripe";
 import { getChargeableConnectedAccountId } from "@/lib/stripe/connect";
 import { destinationPaymentIntentParams } from "@/lib/stripe/paymentIntentParams";
 import { asRecord, readAcceptedPayment, readStripePaymentExpectation } from "@/lib/engagements/acceptedPayment";
-import { matchesProposalPayment, PaymentReconciliationError, reconcileProposalPayment } from "@/lib/stripe/reconcileProposalPayment";
+import { matchesProposalPayment, PaymentReconciliationError } from "@/lib/stripe/reconcileProposalPayment";
 import { hasPublicProposalAccess, publicProposalNotFound } from "@/lib/engagements/publicProposalAccess";
 
 export async function POST(request: Request, { params }: { params: Promise<{ engagementId: string }> }) {
   const { engagementId } = await params;
-  if (!await hasPublicProposalAccess(request, engagementId)) return publicProposalNotFound();
+  if (!await hasPublicProposalAccess(request, engagementId, "pay")) return publicProposalNotFound();
   const engagement = await prisma.engagement.findUnique({
     where: { id: engagementId },
     select: { brandId: true, onboardingFeeStatus: true, onboardingData: true, agreementManagerStatus: true, signedAt: true, updatedAt: true, billingContactEmail: true },
@@ -48,10 +48,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ eng
   const stripe = getStripeClient();
   try {
     const existing = priorIntentId ? await stripe.paymentIntents.retrieve(priorIntentId) : null;
-    if (existing?.status === "succeeded") {
-      await reconcileProposalPayment(existing, engagementId, engagement.brandId);
-      return NextResponse.json({ alreadyResolved: true });
-    }
+    if (existing?.status === "succeeded") throw new PaymentReconciliationError();
     const connectedAccountId = await getChargeableConnectedAccountId(engagement.brandId);
     if (!connectedAccountId) return NextResponse.json({ error: "This firm cannot accept payments until its administrator completes Stripe Connect setup." }, { status: 409 });
 

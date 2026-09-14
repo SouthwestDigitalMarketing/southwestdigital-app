@@ -2,18 +2,20 @@
 
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Archive, ArchiveRestore, Ellipsis, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Ellipsis, Trash2, Unlink } from "lucide-react";
 import { Modal } from "@/components/Modal";
-import { deleteQuoteAction, setOfferStatusAction } from "./actions";
+import { deleteQuoteAction, revokeOfferPublicLinkAction, setOfferStatusAction } from "./actions";
 import type { OfferBucket } from "@/lib/quotes/status";
 
 export function OfferStatusButtons({
   offerId,
   bucket,
+  hasPublicLink = false,
   children,
 }: {
   offerId: string;
   bucket: OfferBucket;
+  hasPublicLink?: boolean;
   children: ReactNode;
 }) {
   const router = useRouter();
@@ -35,6 +37,15 @@ export function OfferStatusButtons({
     data.set("status", next);
     startTransition(async () => {
       await setOfferStatusAction(data);
+      router.refresh();
+    });
+  }
+
+  function revokePublicLink() {
+    const data = new FormData();
+    data.set("id", offerId);
+    startTransition(async () => {
+      await revokeOfferPublicLinkAction(data);
       router.refresh();
     });
   }
@@ -147,6 +158,19 @@ export function OfferStatusButtons({
         >
           <ArchiveRestore className="h-4 w-4" />
           Unarchive offer
+        </button>
+      ) : null}
+      {hasPublicLink ? (
+        <button
+          type="button"
+          disabled={pending}
+          onClick={revokePublicLink}
+          className={iconBtn}
+          aria-label="Revoke public link"
+          title="Revoke public link"
+        >
+          <Unlink className="h-4 w-4" />
+          Revoke public link
         </button>
       ) : null}
       <button

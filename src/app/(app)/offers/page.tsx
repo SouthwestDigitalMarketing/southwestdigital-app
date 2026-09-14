@@ -536,7 +536,11 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                           primaryLabel={sendPrimaryLabel}
                           followUpKind={followUpKind}
                         />
-                        <OfferStatusButtons offerId={quote.id} bucket={itemBucket}>
+                        <OfferStatusButtons
+                          offerId={quote.id}
+                          bucket={itemBucket}
+                          hasPublicLink={Boolean(quote.publicToken)}
+                        >
                           <div className="border-b border-slate-200 px-3 py-2 text-xs text-slate-500">
                             <p className="break-words">{quote.offerCode}</p>
                             <p>{OFFER_KINDS.find((k) => k.key === kind)?.name ?? kind} · {outcomeLabel(quote.status)}</p>

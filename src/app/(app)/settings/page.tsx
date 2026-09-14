@@ -16,6 +16,9 @@ import { BrandAppearanceForm } from "./BrandAppearanceForm";
 import { StripeConnectForm } from "./StripeConnectForm";
 import { YouTubeIntegrationForm } from "./YouTubeIntegrationForm";
 import { EmailConnectionsPanel } from "./EmailConnectionsPanel";
+import { ReviewIntegrationsForm } from "./ReviewIntegrationsForm";
+import { GOOGLE_REVIEW_INTEGRATION_KEY } from "@/lib/reviews/googleDestination";
+import { QUO_INTEGRATION_KEY } from "@/lib/reviews/quoCredentials";
 import { getMembershipEmailConnection, toPublicConnection } from "@/lib/emailConnections/repository";
 
 type EmailNotice = "connected" | "cancelled" | "error" | "missing-refresh-token" | "not-configured" | "access-denied";
@@ -86,6 +89,25 @@ export default async function SettingsPage({
     where: { brandId_key: { brandId: brand.id, key: "youtube" } },
     select: { status: true, externalAccountId: true, publicIdentifier: true },
   });
+  const [quo, googleReview] = await Promise.all([
+    prisma.brandIntegration.findUnique({
+      where: { brandId_key: { brandId: brand.id, key: QUO_INTEGRATION_KEY } },
+      select: {
+        status: true,
+        publicIdentifier: true,
+        externalAccountId: true,
+        externalPropertyId: true,
+        secretCiphertext: true,
+      },
+    }),
+    prisma.brandIntegration.findUnique({
+      where: { brandId_key: { brandId: brand.id, key: GOOGLE_REVIEW_INTEGRATION_KEY } },
+      select: { status: true, publicIdentifier: true },
+    }),
+  ]);
+  const quoConnected = quo?.status === IntegrationStatus.ACTIVE && Boolean(quo.secretCiphertext);
+  const googleReviewUrl =
+    googleReview?.status === IntegrationStatus.ACTIVE ? googleReview.publicIdentifier ?? "" : "";
   if ((query.stripe === "return" || query.stripe === "refresh") && connect?.externalAccountId) {
     await syncConnectedAccountStatus(connect.externalAccountId);
     connect = await prisma.brandIntegration.findUnique({
@@ -131,6 +153,14 @@ export default async function SettingsPage({
           channelId={youtube?.externalAccountId ?? null}
           notice={query.youtube}
           reason={query.reason ?? null}
+        />
+        <ReviewIntegrationsForm
+          quo={{
+            connected: quoConnected,
+            fromNumber: quo?.publicIdentifier || quo?.externalAccountId || "",
+            phoneNumberId: quo?.externalPropertyId ?? "",
+          }}
+          googleReviewUrl={googleReviewUrl}
         />
         <BrandAppearanceForm
           theme={{

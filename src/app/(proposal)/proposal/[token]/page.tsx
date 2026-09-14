@@ -3,10 +3,17 @@ import { headers } from "next/headers";
 import { BrandRole } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { toPublicBookkeepingProposal } from "@/lib/quotes/publicProposal";
+import {
+  catalogCopyFromRows,
+  toPublicBookkeepingProposal,
+  toPublicHourlyProposal,
+} from "@/lib/quotes/publicProposal";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
-import { resolvePublicBrand } from "@/lib/brands/resolve";
 import { getBrandAccessDecision } from "@/lib/brands/repository";
+import {
+  findPublishedPublicQuote,
+  quoteAllowsPublicCapability,
+} from "@/lib/engagements/publicProposalAccess";
 import OfferProposalPreview from "@/app/(app)/offers/builder/OfferProposalPreview";
 import { isLeadConvertedForDiscount, pickActiveCatalogOffer } from "@/lib/discounts/eligibility";
 import { ensureQuoteEngagement } from "@/lib/engagements/fromOffer";
@@ -30,8 +37,9 @@ export default async function PublicProposalPage({
   const { token } = await params;
   const { staffPreview } = await searchParams;
   const hostname = (await headers()).get("x-hostname");
-  const brand = await resolvePublicBrand(hostname);
-  if (!brand) notFound();
+  const found = await findPublishedPublicQuote({ hostname, token });
+  if (!found) notFound();
+  const { brand } = found;
   const session = staffPreview === "1" ? await auth() : null;
   const staffPreviewAccess = session?.user
     ? await getBrandAccessDecision({
@@ -46,7 +54,13 @@ export default async function PublicProposalPage({
   const isPreviewSimulation = isProposalPreviewSimulation({
     isStaffPreview: isAuthorizedStaffPreview,
   });
-  const { quoteRevisions, quoteEngagement } = await getSchemaCapabilities();
+  const canRead = quoteAllowsPublicCapability(found.quote, "read");
+  const canReceipt = quoteAllowsPublicCapability(found.quote, "receipt");
+  if (!canRead && !isAuthorizedStaffPreview) {
+    if (canReceipt) redirect(`/proposal/${encodeURIComponent(token)}/receipt`);
+    notFound();
+  }
+  const { quoteRevisions, quoteEngagement, proposalCatalog, catalogProductKind } = await getSchemaCapabilities();
   const quote = await prisma.quote.findFirst({
     where: { brandId: brand.id, publicToken: token, publishedAt: { not: null } },
     select: {
@@ -66,13 +80,7 @@ export default async function PublicProposalPage({
   });
   if (!quote) notFound();
   const viewedAt = new Date();
-  const unavailable = quote.status === "archived" || quote.status === "completed" ||
-    (quote.expiresAt !== null && quote.expiresAt.getTime() <= viewedAt.getTime());
-  if (unavailable && !isAuthorizedStaffPreview) {
-    if (quote.engagement?.signedAt) redirect(`/proposal/${encodeURIComponent(token)}/receipt`);
-    notFound();
-  }
-  if (quote && !quote.firstViewedAt && !isAuthorizedStaffPreview) {
+  if (canRead && quote && !quote.firstViewedAt && !isAuthorizedStaffPreview) {
     // Self-heal: a real client view is proof the URL made it out somehow,
     // so stamp firstSentAt (if not already) and flip status to "sent". This
     // keeps DB filters (Draft/Sent/Completed) consistent with the derived
@@ -173,13 +181,8 @@ export default async function PublicProposalPage({
     },
   );
 
-  if (!isPreviewSimulation && engagement?.signedAt && (quote?.status === "completed" || quote?.status === "archived")) {
-    redirect(`/proposal/${token}/receipt`);
-  }
-
   const snapshotKind = typeof snapshot.kind === "string" ? snapshot.kind : "";
   if (isHourlyOfferKind(snapshotKind)) {
-    const contact = quoteContactSummaryFromSnapshot(snapshot);
     const kindMeta = OFFER_KINDS.find((k) => k.key === snapshotKind);
     // Prefer the checkout summary on the snapshot; fall back to the one stored
     // on the engagement's services blob.
@@ -207,40 +210,44 @@ export default async function PublicProposalPage({
     if (!hourlyCheckout) notFound();
     return (
       <HourlyPublicView
-        proposalToken={token}
-        engagementId={isPreviewSimulation ? null : engagementId}
-        isTestProposal={engagement?.isTestProposal === true || snapshot.isTestProposal === true}
-        isStaffPreview={isAuthorizedStaffPreview}
-        kindLabel={kindMeta?.name ?? snapshotKind}
-        clientName={
-          (isRecord(snapshot.contactInfo) && typeof (snapshot.contactInfo as Record<string, unknown>).companyName === "string")
-            ? ((snapshot.contactInfo as Record<string, unknown>).companyName as string)
-            : contact.name
-        }
-        brandName={brand.name}
-        brandAccent={brand.theme?.accentColor ?? null}
-        contact={{ name: contact.name, email: contact.email }}
-        offer={{
-          catalogItemLabel: hourlyCheckout.catalogItemLabel,
-          quantity: hourlyCheckout.quantity,
-          unitPrice: hourlyCheckout.unitPrice,
-          intakeFee: hourlyCheckout.intakeFee,
-          subtotal: hourlyCheckout.subtotal,
-          total: hourlyCheckout.total,
-          amountDueNow: hourlyCheckout.amountDueNow,
-        }}
-        agreementText={agreementText || "Agreement text unavailable. Please contact the sender."}
-        alreadySigned={isPreviewSimulation ? false : Boolean(engagement?.signedAt)}
+        {...toPublicHourlyProposal({
+          snapshot,
+          checkout: hourlyCheckout,
+          brand: { name: brand.name, accent: brand.theme?.accentColor ?? null },
+          agreementText: agreementText || "Agreement text unavailable. Please contact the sender.",
+          flags: {
+            proposalToken: token,
+            engagementId: isPreviewSimulation ? null : engagementId,
+            isTestProposal: engagement?.isTestProposal === true || snapshot.isTestProposal === true,
+            isStaffPreview: isAuthorizedStaffPreview,
+            alreadySigned: isPreviewSimulation ? false : Boolean(engagement?.signedAt),
+            kindLabel: kindMeta?.name ?? snapshotKind,
+          },
+        })}
       />
     );
   }
 
-  const publicProposal = toPublicBookkeepingProposal(snapshot);
+  const catalogRows = proposalCatalog
+    ? await prisma.catalogService.findMany({
+        where: {
+          brandId: brand.id,
+          active: true,
+          ...(catalogProductKind ? { productKind: "bookkeeping" } : {}),
+        },
+        select: {
+          offerKey: true,
+          code: true,
+          name: true,
+          clientBenefit: true,
+          internalDescription: true,
+        },
+      })
+    : [];
+  const publicProposal = toPublicBookkeepingProposal(snapshot, catalogCopyFromRows(catalogRows));
   return (
     <OfferProposalPreview
-      initialAssessment={publicProposal.assessment}
-      initialContactInfo={publicProposal.contactInfo}
-      publishedPricing={publicProposal.pricing}
+      publicProposal={publicProposal}
       live
       catalogOffer={catalogOffer}
       engagementId={isPreviewSimulation ? null : engagementId}

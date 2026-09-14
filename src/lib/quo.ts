@@ -1,3 +1,9 @@
+export type SmsCredentials = {
+  apiKey: string;
+  from: string;
+  phoneNumberId?: string;
+};
+
 function normalizePhone(input: string): string {
   const digits = input.replace(/\D/g, "");
   if (digits.length === 10) return `+1${digits}`;
@@ -5,11 +11,11 @@ function normalizePhone(input: string): string {
   throw new Error(`Cannot normalize phone number: ${input}`);
 }
 
-export async function sendSms(to: string, content: string): Promise<void> {
-  const apiKey = process.env.QUO_API_KEY;
-  const from = process.env.QUO_FROM_NUMBER;
-  const phoneNumberId = process.env.QUO_PHONE_NUMBER_ID;
-  if (!apiKey || !from) throw new Error("Quo API not configured (QUO_API_KEY and QUO_FROM_NUMBER required)");
+export async function sendSms(to: string, content: string, credentials: SmsCredentials): Promise<void> {
+  const apiKey = credentials.apiKey.trim();
+  const from = credentials.from.trim();
+  const phoneNumberId = credentials.phoneNumberId?.trim();
+  if (!apiKey || !from) throw new Error("SMS is not configured for this brand.");
 
   const normalized = normalizePhone(to);
 

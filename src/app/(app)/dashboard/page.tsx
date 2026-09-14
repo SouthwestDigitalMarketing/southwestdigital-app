@@ -199,17 +199,23 @@ async function getReviewStats(brandId: string, selectedPeriod: DashboardPeriod) 
       brandId,
       sentAt: { gte: selectedPeriod.start, lt: selectedPeriod.endExclusive },
     },
-    select: { openedAt: true, outcome: true },
+    select: { openedAt: true, clickedAt: true, outcome: true },
   });
 
   const sent = requests.length;
   const opened = requests.filter((request) => request.openedAt).length;
-  const fiveStars = requests.filter((request) => request.outcome === ReviewOutcome.FIVE_STAR).length;
+  const googleClicked = requests.filter(
+    (request) => request.clickedAt || request.outcome === ReviewOutcome.FIVE_STAR,
+  ).length;
+  const feedbackReceived = requests.filter(
+    (request) => request.outcome === ReviewOutcome.FEEDBACK,
+  ).length;
 
   return {
     sent,
     openRate: sent > 0 ? Math.round((opened / sent) * 100) : 0,
-    fiveStarRate: sent > 0 ? Math.round((fiveStars / sent) * 100) : 0,
+    googleClickedRate: sent > 0 ? Math.round((googleClicked / sent) * 100) : 0,
+    feedbackReceived,
   };
 }
 
@@ -414,12 +420,18 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           goalEditor={<GoalEditor brandId={brand.id} field="reviewOpenRateGoal" goal={reviewOpenRateGoal} />}
         />
         <StatCard
-          label="5-star rate"
-          value={`${currentReviews.fiveStarRate}%`}
-          goal={{ pct: goalPct(currentReviews.fiveStarRate, reviewFiveStarRateGoal), subtitle: `of ${reviewFiveStarRateGoal}% 5-star goal` }}
-          comparison={percentChange(currentReviews.fiveStarRate, previousReviews.fiveStarRate)}
+          label="Google clicked"
+          value={`${currentReviews.googleClickedRate}%`}
+          goal={{ pct: goalPct(currentReviews.googleClickedRate, reviewFiveStarRateGoal), subtitle: `of ${reviewFiveStarRateGoal}% Google-clicked goal` }}
+          comparison={percentChange(currentReviews.googleClickedRate, previousReviews.googleClickedRate)}
           icon={<Star size={14} />}
           goalEditor={<GoalEditor brandId={brand.id} field="reviewFiveStarRateGoal" goal={reviewFiveStarRateGoal} />}
+        />
+        <StatCard
+          label="Feedback received"
+          value={currentReviews.feedbackReceived.toLocaleString("en-US")}
+          comparison={percentChange(currentReviews.feedbackReceived, previousReviews.feedbackReceived)}
+          icon={<FileText size={14} />}
         />
       </DashboardSection>
 

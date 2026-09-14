@@ -85,7 +85,11 @@ The platform-origin callback calls `readOptionalReturnOrigin`, which base64-deco
 
 This permits an unauthenticated redirect controlled by supplied state and forwarding of any supplied callback parameters. This is not a claim that an OAuth account was compromised. Use the existing signed-state reader before any relay, validate a canonical HTTPS origin against an active verified `BrandDomain`/approved platform origin, then perform membership/cookie binding at completion. Test forged state, expired state, disabled domains, malformed origins, and a valid cross-domain round trip.
 
-Evidence: `src/app/api/email-connections/zoho/callback/route.ts:27`, `:46`, `:97`; `src/lib/emailConnections/zohoOAuth.ts` already provides `readZohoOAuthState`. YouTube uses its signature-verifying reader before its relay; preserve that distinction.
+YouTube uses its signature-verifying reader before its relay; preserve that distinction.
+
+**Closed at HEAD (`1c4d869` + route/reader regressions).** `readOptionalReturnOrigin` is gone. The callback calls `readZohoOAuthState` (HMAC, expiry, canonical origin) and `isAuthorizedCallbackOrigin` (active brand + verified APP `BrandDomain` or `PLATFORM_BASE_URL`) before any 302 that forwards `code` / `state` / `error`. Failed HMAC redirects to the platform origin, not the supplied destination. Membership and cookie binding still run on the return host after relay. Live Zoho OAuth is not a session gate.
+
+Evidence (current): `src/app/api/email-connections/zoho/callback/route.ts` (HMAC/origin gate, then relay); `src/lib/emailConnections/zohoOAuth.ts` `readZohoOAuthState`; `src/lib/integrations/callbackOrigin.ts`; `src/app/api/email-connections/zoho/callback/route.test.ts`; `src/lib/emailConnections/zohoOAuth.test.ts`. YouTube remains HMAC-before-relay at `src/app/api/youtube/callback/route.ts`. Historical citations `:27`, `:46`, `:97` referred to the pre-fix file and now land on the gate, cookie delete, and token-exchange catch.
 
 ### P0 — Tenant guarantees are inconsistent across the active app
 
@@ -109,7 +113,9 @@ Create one server payment-reconciliation path used by all three entry points. Co
 
 The handoff says the live webhook is not configured. Treat that as an unverified deployment item requiring dashboard confirmation and test evidence.
 
-Evidence: `src/app/api/proposal/[engagementId]/confirm-payment/route.ts:37`; `src/app/api/proposal/[engagementId]/payment-intent/route.ts`; `src/app/api/stripe/webhook/route.ts`; `src/lib/engagements/fromOffer.ts:111`.
+**Closed at HEAD (`6357a0a` + webhook-only apply + JSON event-id dedup).** All three Stripe entry points already shared `reconcileProposalPayment`: amount, `amount_received`, currency, intent id, livemode, Connect destination, and metadata are compared to the frozen `paymentObligation` and the saved attempt expectation. Same-reference retries do not overwrite evidence. The remaining succeeded-intent apply shortcuts on `confirm-payment` and `payment-intent` are gone; the webhook is the only Stripe paid-state writer. Processed `event.id` values are recorded in existing `proposalAcceptance` JSON (no Prisma migrate, no unique constraint). Public confirm-payment is a paid-status read. Route tests cover duplicate webhook delivery, amount mismatch, missing `brandId`, and the gone shortcuts. Refunds, disputes, and a durable webhook-event table are not in this close. Live webhook dashboard configuration is still unverified; this session did not register or rewrite production webhooks.
+
+Evidence (current): `src/lib/stripe/reconcileProposalPayment.ts`; `src/lib/stripe/processedStripeEvents.ts`; `src/app/api/stripe/webhook/route.ts`; `src/app/api/proposal/[engagementId]/confirm-payment/route.ts`; `src/app/api/proposal/[engagementId]/payment-intent/route.ts`; matching `*.test.ts`. Historical citations `confirm-payment/route.ts:37` and `fromOffer.ts:111` referred to the pre-`6357a0a` files and now land on later lines.
 
 ### P1 — Signed terms and mutable proposal state can diverge
 
@@ -364,7 +370,7 @@ These are dependency-ordered milestones, not a promised calendar. The automated 
 | 5. Prove customer outcomes | Weekly implementation calls, activation/retention/support metrics, consented case studies, separate audience attribution | Repeat use and documented outcomes across a cohort; sustainable support and gross margin; reasons for churn understood |
 | 6. Expand distribution and automation | Direct software referral program, then consented client referrals; narrowly scoped marketing agents | Reconciled partner statements, reliable conversion/payout records, controlled cross-brand sharing, automation quality/cost/suppression evidence |
 
-Design-system groundwork and interviews can run alongside security work, but external paid rollout waits for the safety and workflow gates. Keep version control changes small and reviewable, preserve existing user work, and never push without explicit instruction.
+Design-system groundwork and interviews can run alongside security work, but external paid rollout waits for the safety and workflow gates. Keep version control changes small and reviewable, and preserve existing user work. Push policy lives in `AGENTS.md`.
 
 ### First implementation backlog
 

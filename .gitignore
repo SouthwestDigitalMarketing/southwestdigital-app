@@ -47,3 +47,5 @@ next-env.d.ts
 
 # local Claude permissions
 /.claude/settings.local.json
+# user-owned Claude local files if they reappear
+.claude/

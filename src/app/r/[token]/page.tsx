@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
+import { BrandStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { resolveGoogleReviewUrl } from "@/lib/reviews/googleDestination";
 import { ReviewPage } from "./ReviewPage";
 
 export default async function PublicReviewPage({
@@ -23,7 +25,6 @@ export default async function PublicReviewPage({
 
   if (!request) notFound();
 
-  // Record first open
   if (!request.openedAt && !request.outcome) {
     await prisma.reviewRequest.update({
       where: { id: request.id },
@@ -31,8 +32,8 @@ export default async function PublicReviewPage({
     });
   }
 
-  const brand = await prisma.brand.findUnique({
-    where: { id: request.brandId },
+  const brand = await prisma.brand.findFirst({
+    where: { id: request.brandId, status: BrandStatus.ACTIVE },
     select: {
       name: true,
       theme: {
@@ -43,8 +44,7 @@ export default async function PublicReviewPage({
 
   if (!brand) notFound();
 
-  const googleReviewUrl =
-    process.env.GOOGLE_REVIEW_URL ?? "https://g.page/r/CXbK2xevuLjeEAI/review";
+  const googleReviewUrl = await resolveGoogleReviewUrl(request.brandId);
 
   return (
     <ReviewPage

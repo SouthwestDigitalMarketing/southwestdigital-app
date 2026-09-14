@@ -4,6 +4,6 @@ import { hasPublicProposalAccess, publicProposalNotFound } from "@/lib/engagemen
 // tenant. Keep a controlled response for older open browser tabs.
 export async function POST(request: Request, { params }: { params: Promise<{ engagementId: string }> }) {
   const { engagementId } = await params;
-  if (!await hasPublicProposalAccess(request, engagementId)) return publicProposalNotFound();
+  if (!await hasPublicProposalAccess(request, engagementId, "pay")) return publicProposalNotFound();
   return Response.json({ error: "PayPal is currently unavailable. Reload the proposal to pay securely by card." }, { status: 409 });
 }

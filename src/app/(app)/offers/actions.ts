@@ -399,14 +399,22 @@ export async function setOfferStatusAction(formData: FormData) {
 
   const quote = await prisma.quote.findFirst({
     where: { id, brandId: brand.id },
-    select: { id: true, sentAt: true, firstSentAt: true },
+    select: {
+      id: true,
+      sentAt: true,
+      firstSentAt: true,
+      publicToken: true,
+      engagement: { select: { signedAt: true } },
+    },
   });
   if (!quote) throw new Error("Not found");
 
+  const revokePublicLink = status === "archived" && !quote.engagement?.signedAt;
   await prisma.quote.update({
     where: { id: quote.id },
     data: {
       status,
+      ...(revokePublicLink ? { publicToken: null } : {}),
       ...(status === "sent"
         ? {
             sentAt: new Date(),
@@ -419,4 +427,30 @@ export async function setOfferStatusAction(formData: FormData) {
 
   revalidatePath("/offers");
   revalidatePath(`/offers/${id}`);
+  if (revokePublicLink && quote.publicToken) {
+    revalidatePath(`/proposal/${quote.publicToken}`);
+  }
+}
+
+export async function revokeOfferPublicLinkAction(formData: FormData) {
+  const { brand } = await requireQuoteStaffOrThrow();
+  const id = (formData.get("id") as string | null)?.trim() ?? "";
+  if (!id) throw new Error("Offer ID required");
+
+  const quote = await prisma.quote.findFirst({
+    where: { id, brandId: brand.id },
+    select: { id: true, publicToken: true },
+  });
+  if (!quote) throw new Error("Not found");
+
+  await prisma.quote.update({
+    where: { id: quote.id },
+    data: { publicToken: null },
+  });
+
+  revalidatePath("/offers");
+  revalidatePath(`/offers/${id}`);
+  if (quote.publicToken) {
+    revalidatePath(`/proposal/${quote.publicToken}`);
+  }
 }

@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { recordFiveStar, recordFeedback } from "./actions";
+import { recordFeedback, recordGoogleClick } from "./actions";
 
-type Stage = "choice" | "feedback" | "done-stars" | "done-feedback";
+type Stage = "choice" | "feedback" | "opening-google" | "done-feedback";
 
 export function ReviewPage({
   token,
@@ -18,7 +18,7 @@ export function ReviewPage({
   brandName: string;
   lightColor: string;
   accentColor: string;
-  googleReviewUrl: string;
+  googleReviewUrl: string | null;
 }) {
   const [stage, setStage] = useState<Stage>("choice");
   const [rating, setRating] = useState(0);
@@ -28,10 +28,11 @@ export function ReviewPage({
 
   const firstName = recipientName?.split(" ")[0] ?? "there";
 
-  function handleFiveStar() {
+  function handleGoogleReview() {
+    if (!googleReviewUrl) return;
     startTransition(async () => {
-      await recordFiveStar(token);
-      setStage("done-stars");
+      await recordGoogleClick(token);
+      setStage("opening-google");
       window.location.href = googleReviewUrl;
     });
   }
@@ -61,23 +62,25 @@ export function ReviewPage({
               Hi {firstName}! 👋
             </p>
             <p className="mt-2 text-sm text-slate-500">
-              How was your experience with {brandName}?
+              How was your experience with {brandName}? Please leave an honest review.
             </p>
             <div className="mt-8 flex flex-col gap-3">
-              <button
-                onClick={handleFiveStar}
-                disabled={pending}
-                className="w-full rounded-full py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-                style={{ backgroundColor: accentColor }}
-              >
-                ★ Leave a 5-star review
-              </button>
+              {googleReviewUrl ? (
+                <button
+                  onClick={handleGoogleReview}
+                  disabled={pending}
+                  className="w-full rounded-full py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                  style={{ backgroundColor: accentColor }}
+                >
+                  Leave a Google review
+                </button>
+              ) : null}
               <button
                 onClick={() => setStage("feedback")}
                 disabled={pending}
                 className="w-full rounded-full border border-slate-200 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
               >
-                Share feedback
+                Share private feedback
               </button>
             </div>
           </div>
@@ -88,9 +91,9 @@ export function ReviewPage({
             onSubmit={handleFeedbackSubmit}
             className="mt-4 rounded-2xl border border-slate-200 bg-white p-8 shadow-sm"
           >
-            <p className="text-center text-lg font-semibold text-slate-900">Share your feedback</p>
+            <p className="text-center text-lg font-semibold text-slate-900">Share private feedback</p>
             <p className="mt-1 text-center text-sm text-slate-500">
-              Your feedback helps us improve.
+              This stays with {brandName}. It is not posted as a public review.
             </p>
 
             <div className="mt-6 flex justify-center gap-2">
@@ -103,6 +106,7 @@ export function ReviewPage({
                   onMouseLeave={() => setHovered(0)}
                   className="text-3xl transition-transform hover:scale-110"
                   style={{ color: (hovered || rating) >= star ? accentColor : "#cbd5e1" }}
+                  aria-label={`Private rating ${star} of 5`}
                 >
                   ★
                 </button>
@@ -114,6 +118,7 @@ export function ReviewPage({
               onChange={(e) => setFeedbackText(e.target.value)}
               placeholder="Tell us more (optional)…"
               rows={4}
+              maxLength={2000}
               className="mt-4 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
             />
 
@@ -128,11 +133,10 @@ export function ReviewPage({
           </form>
         )}
 
-        {stage === "done-stars" && (
+        {stage === "opening-google" && (
           <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-8 shadow-sm text-center">
-            <p className="text-4xl">⭐</p>
-            <p className="mt-3 text-lg font-semibold text-slate-900">Thank you!</p>
-            <p className="mt-1 text-sm text-slate-500">Redirecting you to Google…</p>
+            <p className="mt-3 text-lg font-semibold text-slate-900">Opening Google…</p>
+            <p className="mt-1 text-sm text-slate-500">You can write your public review there.</p>
           </div>
         )}
 

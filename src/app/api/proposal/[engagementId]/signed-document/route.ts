@@ -1,9 +1,13 @@
 import { createHash } from "node:crypto";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { resolvePublicBrand } from "@/lib/brands/resolve";
 import { createSignedProposalPdf } from "@/lib/agreements/signedPdf";
 import { readAcceptedSelection } from "@/lib/engagements/acceptedPayment";
+import {
+  findPublishedPublicQuote,
+  publicProposalNotFound,
+  quoteAllowsPublicCapability,
+} from "@/lib/engagements/publicProposalAccess";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -15,8 +19,11 @@ export async function GET(
 ) {
   const { engagementId: publicToken } = await params;
   const hostname = (await headers()).get("x-hostname");
-  const brand = await resolvePublicBrand(hostname);
-  if (!brand) return Response.json({ error: "Not found" }, { status: 404 });
+  const found = await findPublishedPublicQuote({ hostname, token: publicToken });
+  if (!found || !quoteAllowsPublicCapability(found.quote, "receipt")) {
+    return publicProposalNotFound();
+  }
+  const { brand } = found;
 
   const quote = await prisma.quote.findFirst({
     where: { brandId: brand.id, publicToken, publishedAt: { not: null } },

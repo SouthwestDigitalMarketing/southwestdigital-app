@@ -1,6 +1,6 @@
 # SaaS readiness implementation
 
-Branch: `feat/saas-readiness`. Scope authorized September 5, 2026: implement the review recommendations, excluding AI features, including phone/tablet responsiveness across screens, dialogs and flows. No pushes or production deployments are authorized.
+Authorized September 5, 2026 as `feat/saas-readiness` (now merged). Scope: implement the review recommendations, excluding AI features, including phone/tablet responsiveness across screens, dialogs and flows. No pushes or production deployments are authorized.
 
 ## Completion gates
 
@@ -26,12 +26,8 @@ AI product features and marketing bots are excluded. Live calls, interviews, pil
 
 ## Branch status
 
-**`feat/saas-readiness` merged to `main` and the branch is gone.** As of
-2026-09-08 `main` is at `00b7d6c` and contains all of the work logged below.
-Verified on `main` that day: typecheck passes, `npm test` runs 583 tests across
-74 files with no failures, and `npm run lint` reports 0 errors and 8 `<img>`
-advisory warnings — so the "nine errors and ten warnings" baseline in the work
-log below is historical. CI now enforces all three on every PR.
+**`feat/saas-readiness` merged to `main`.** As of 2026-09-14 `main` is at `e3a28a1`.
+Verified on 2026-09-08 at `00b7d6c`: typecheck passed, `npm test` ran 583 tests across 74 files with no failures, and `npm run lint` reported 0 errors and 8 `<img>` advisory warnings — so the "nine errors and ten warnings" baseline in the work log below is historical. Later health numbers live in `HANDOFF.md`. CI now enforces all three on every PR.
 
 The unchecked gates below remain unchecked. Several had partial work land with
 the merge — notably immutable signed payment obligations and Stripe
@@ -46,3 +42,7 @@ browser and database verification is still outstanding for all of them.
 - Settings responsiveness: responsive page spacing, stacked phone logo/color/theme controls, wrapping upload actions, labeled file controls. This is code-level work only, not all-screen visual sign-off.
 - Verification: typecheck passed; 302 unit tests passed before four additional Zoho route regression tests (those four also passed). Full lint still has the nine baseline errors/ten warnings; no new lint errors are intentionally accepted. Browser/live-provider verification remains outstanding.
 - Dependency audit: seven high-severity affected package entries, from two root advisories: Nodemailer raw-message file/URL access (`GHSA-p6gq-j5cr-w38f`, no fix reported) and deepmerge-ts recursive graph stack exhaustion (`GHSA-ggr8-5vv4-36mx`, Prisma config dependency). Do not use `npm audit fix --force`: it proposes incompatible downgrades. Current auth uses a fixed Nodemailer provider payload, not caller-supplied raw messages; Prisma configuration is developer-controlled. These are mitigations to verify, not a clean security audit or permission to ignore advisories.
+- 2026-09-14 public-proposal P0 follow-through: remaining published-proposal gaps closed on the read path (hourly DTO, live hydration without staff `INITIAL_*` defaults, catalog `internalDescription` kept off new materialize and public option/bonus copy, agreement GET allowlist without `cancellationReason` or raw services, HTML/RSC/API sentinel tests). Stored snapshots are unchanged. No gate retick.
+- 2026-09-14 Zoho callback P0 follow-through: unauthenticated relay was already gone (`1c4d869`); added route/reader coverage for forged, expired, disabled, malformed, and two-hop round trip. No live Zoho OAuth. No schema change. No gate retick.
+- 2026-09-14 payment-reconciliation P0 follow-through: shared helper was already in `6357a0a`; removed succeeded-intent apply shortcuts so only the signed webhook writes Stripe paid state; JSON `event.id` dedup on `proposalAcceptance` (no migrate); route tests for duplicate webhook, amount mismatch, missing brandId, and shortcut gone. Mock Stripe only. No production webhooks. No gate retick.
+- 2026-09-14 public-link lifecycle P1 follow-through: remaining gaps closed — one helper on public proposal pages and `/api/proposal/*`, five capabilities (`read` / `select` / `sign` / `pay` / `receipt`), revoke by nulling `publicToken`, `expiresAt` written on publish from catalog deadline or snapshot urgency, named tests for suspended brand, disabled domain, expired quote, and revoked token. No migrate. No gate retick (role permissions and asset boundaries remain).

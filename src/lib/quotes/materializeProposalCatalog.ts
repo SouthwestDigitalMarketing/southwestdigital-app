@@ -78,7 +78,7 @@ export async function materializeProposalCatalog(
           offerKey: effectiveOfferKey,
           name: item.name,
           code: null,
-          description: item.clientBenefit ?? item.internalDescription ?? "",
+          description: item.clientBenefit ?? "",
           defaultInclusion:
             item.defaultInclusion === "optional" ? "optional" : "included",
           defaultPrice:
@@ -182,7 +182,7 @@ export async function materializeProposalCatalog(
       offerKey: item.offerKey ?? slugifyTagKey(item.code ?? item.name),
       name: item.name,
       code: item.code,
-      description: item.clientBenefit ?? item.internalDescription ?? "",
+      description: item.clientBenefit ?? "",
       defaultInclusion:
         item.defaultInclusion === "optional"
           ? ("optional" as const)

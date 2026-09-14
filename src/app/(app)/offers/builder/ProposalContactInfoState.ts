@@ -139,7 +139,17 @@ function readStoredContactInfo(
   }
 }
 
-export function resolvePrimaryContact(contactInfo: ContactInfoState) {
+export function resolvePrimaryContact(contactInfo: {
+  owners: Array<{ id: string; firstName: string; lastName: string; email: string; phone: string }>;
+  primaryContact: {
+    sameAsOwner: boolean;
+    ownerId: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+  };
+}) {
   const selectedPrimaryOwner =
     contactInfo.owners.find((owner) => owner.id === contactInfo.primaryContact.ownerId) ?? null;
 
