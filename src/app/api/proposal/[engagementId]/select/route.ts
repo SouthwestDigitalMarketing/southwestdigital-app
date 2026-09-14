@@ -20,7 +20,7 @@ export async function POST(
   { params }: { params: Promise<{ engagementId: string }> },
 ) {
   const { engagementId } = await params;
-  if (!await hasPublicProposalAccess(request, engagementId)) return publicProposalNotFound();
+  if (!await hasPublicProposalAccess(request, engagementId, "select")) return publicProposalNotFound();
   const selection = parseProposalCheckoutSelection(await request.json().catch(() => null));
   if (!selection) return NextResponse.json({ error: "Invalid proposal selection" }, { status: 400 });
 

@@ -3,6 +3,6 @@ import { hasPublicProposalAccess, publicProposalNotFound } from "@/lib/engagemen
 // Do not capture orders created under the retired shared-merchant flow.
 export async function POST(request: Request, { params }: { params: Promise<{ engagementId: string }> }) {
   const { engagementId } = await params;
-  if (!await hasPublicProposalAccess(request, engagementId)) return publicProposalNotFound();
+  if (!await hasPublicProposalAccess(request, engagementId, "pay")) return publicProposalNotFound();
   return Response.json({ error: "This PayPal checkout cannot be completed. Contact your bookkeeper to review the order before trying another payment." }, { status: 409 });
 }

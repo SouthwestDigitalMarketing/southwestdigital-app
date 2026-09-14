@@ -7,7 +7,7 @@ export async function POST(
   { params }: { params: Promise<{ engagementId: string }> },
 ) {
   const { engagementId } = await params;
-  if (!await hasPublicProposalAccess(request, engagementId, "reconcile")) return publicProposalNotFound();
+  if (!await hasPublicProposalAccess(request, engagementId, "receipt")) return publicProposalNotFound();
   const engagement = await prisma.engagement.findUnique({
     where: { id: engagementId },
     select: { onboardingFeeStatus: true },

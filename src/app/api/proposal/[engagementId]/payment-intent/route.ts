@@ -10,7 +10,7 @@ import { hasPublicProposalAccess, publicProposalNotFound } from "@/lib/engagemen
 
 export async function POST(request: Request, { params }: { params: Promise<{ engagementId: string }> }) {
   const { engagementId } = await params;
-  if (!await hasPublicProposalAccess(request, engagementId)) return publicProposalNotFound();
+  if (!await hasPublicProposalAccess(request, engagementId, "pay")) return publicProposalNotFound();
   const engagement = await prisma.engagement.findUnique({
     where: { id: engagementId },
     select: { brandId: true, onboardingFeeStatus: true, onboardingData: true, agreementManagerStatus: true, signedAt: true, updatedAt: true, billingContactEmail: true },
