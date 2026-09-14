@@ -145,6 +145,12 @@ since been fixed and are dropped.
   solved: `src/lib/stripe/reconcileProposalPayment.ts` validates intent id,
   amount, currency, connected destination, livemode and selection hash against
   the frozen obligation in `src/lib/engagements/acceptedPayment.ts`.
+- **Deferred legal-record hardening (2026-09-14).** The live $1 test confirmed
+  the signed text, hash, payment, receipt, and PDF download. Still needed:
+  immutable private PDF storage, a dedicated signing audit event, trusted
+  client-IP capture, exact revision pinning, and retention/restore checks. Do
+  not make this a launch blocker; the detailed return plan is in
+  `docs/design/proposal-version-tracking.md`.
 - **PayPal routes to the platform account**, not the brand's. Keep it disabled
   for any tenant other than Southwest.
 - **`/api/stripe/webhook` has no configured endpoint or secret** in the Stripe
