@@ -27,5 +27,9 @@ export async function resolvePublicReviewOrigin(brandId: string): Promise<string
 
   const local = domain.hostname === "localhost" || domain.hostname === "127.0.0.1";
   const useHttp = local && process.env.NODE_ENV !== "production";
-  return `${useHttp ? "http" : "https"}://${domain.hostname}`;
+  if (useHttp) {
+    const port = process.env.PORT?.trim() || "3000";
+    return `http://${domain.hostname}:${port}`;
+  }
+  return `https://${domain.hostname}`;
 }

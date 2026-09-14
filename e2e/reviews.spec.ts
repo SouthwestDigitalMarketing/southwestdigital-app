@@ -41,20 +41,45 @@ test.describe("review requests", () => {
     await expect(page.getByRole("dialog")).toHaveCount(0);
   });
 
-  test("public review page renders brand and choice UI for a seeded token", async ({ page }) => {
+  test("public review page asks for a star rating then private reasons under 5", async ({ page }) => {
     const fixture = await seedPublicReviewRequest();
     try {
       const response = await page.goto(`/r/${fixture.token}`, { waitUntil: "domcontentloaded" });
       expect(response?.status()).toBe(200);
       await expect(page.getByText(fixture.brandName, { exact: true }).first()).toBeVisible();
-      await expect(page.getByText(/how was your experience/i)).toBeVisible();
-      await expect(page.getByText(/5-star/i)).toHaveCount(0);
-      await expect(page.getByRole("button", { name: "Leave a Google review" })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Share private feedback" })).toBeVisible();
-
-      await page.getByRole("button", { name: "Share private feedback" }).click();
-      await expect(page.getByText("Share private feedback")).toBeVisible();
+      await expect(page.getByText(/how would you rate/i)).toBeVisible();
       await expect(page.getByRole("button", { name: "Leave a Google review" })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Share private feedback" })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Rate 5 out of 5" })).toBeVisible();
+
+      await page.getByRole("button", { name: "Rate 4 out of 5" }).click();
+      await expect(page.getByText(/thank you for your feedback/i)).toBeVisible();
+      await expect(page.getByRole("button", { name: "Communication" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Something else" })).toBeVisible();
+
+      await page.getByRole("button", { name: "Something else" }).click();
+      await expect(page.getByPlaceholder(/tell us more/i)).toBeVisible();
+    } finally {
+      await deleteReviewRequest(fixture.id, {
+        brandId: fixture.brandId,
+        googleRestore: fixture.googleRestore,
+      });
+    }
+  });
+
+  test("five stars on the public page opens the brand Google review URL", async ({ page }) => {
+    const fixture = await seedPublicReviewRequest();
+    try {
+      await page.route(/google\./, async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: "text/html",
+          body: "<html><body>google-review-destination</body></html>",
+        });
+      });
+      await page.goto(`/r/${fixture.token}`, { waitUntil: "domcontentloaded" });
+      await page.getByRole("button", { name: "Rate 5 out of 5" }).click();
+      await expect(page).toHaveURL(/google\./, { timeout: 15_000 });
     } finally {
       await deleteReviewRequest(fixture.id, {
         brandId: fixture.brandId,

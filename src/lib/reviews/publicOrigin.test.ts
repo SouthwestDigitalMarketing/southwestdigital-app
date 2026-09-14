@@ -68,9 +68,11 @@ describe("resolvePublicReviewOrigin", () => {
   it("uses http only for localhost in non-production", async () => {
     vi.stubEnv("NODE_ENV", "development");
     mocks.findFirst.mockResolvedValue({ hostname: "localhost" });
-    await expect(resolvePublicReviewOrigin(BRAND_ID)).resolves.toBe("http://localhost");
+    await expect(resolvePublicReviewOrigin(BRAND_ID)).resolves.toBe("http://localhost:3000");
     mocks.findFirst.mockResolvedValue({ hostname: "127.0.0.1" });
-    await expect(resolvePublicReviewOrigin(BRAND_ID)).resolves.toBe("http://127.0.0.1");
+    await expect(resolvePublicReviewOrigin(BRAND_ID)).resolves.toBe("http://127.0.0.1:3000");
+    vi.stubEnv("PORT", "3471");
+    await expect(resolvePublicReviewOrigin(BRAND_ID)).resolves.toBe("http://127.0.0.1:3471");
   });
 
   it("keeps https for localhost in production", async () => {

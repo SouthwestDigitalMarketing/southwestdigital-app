@@ -1,15 +1,18 @@
 "use client";
 
 import { useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { sendReminder } from "./actions";
 
 export function SendReminderButton({ requestId }: { requestId: string }) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
 
   function handleClick() {
     startTransition(async () => {
       try {
         await sendReminder(requestId);
+        router.refresh();
       } catch (err) {
         alert(err instanceof Error ? err.message : "Failed to send reminder");
       }

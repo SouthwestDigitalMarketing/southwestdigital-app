@@ -5,80 +5,70 @@ it. Historical session logs live in `docs/handoff-archive/`; durable design and
 reference material lives in `docs/`. If a note here would still be true in three
 months, it belongs in `docs/`, not in this file.
 
-Updated: 2026-09-14 (America/Chicago). Machine: **dalliance**.
+Updated: 2026-09-14 (America/Chicago). Machine: **ripley**.
 
 ## Read first
 
-`AGENTS.md` is the map. Do not push unless the owner said so. Do not run
-`prisma migrate deploy` / `migrate dev` / `db push`.
+`AGENTS.md` is the map. Crews do not push, PR, or merge. Do not run
+`prisma migrate deploy` / `migrate dev` / `db push`. Do not send outbound SMS
+unless the owner named the recipient in this session.
 
 ## Repository state
 
-- Branch: `feat/review-requests-and-p0s`. **Do not checkout another branch.**
-- `origin/main` `e5f6d7d` is an ancestor of HEAD.
-- This job (P1 public-link lifecycle) is committed locally, **not pushed**.
-  Reviewer then Tester. Do not start Tester from Worker.
+- Branch: `feat/review-requests-hardening`.
+- `origin/main` is `c400bb4` (PR #21, leads ship-policy wording).
+- Working tree should be clean.
 
-Local commits for this job (oldest first):
+Local commits (oldest first):
 
 | SHA | Message |
 |---|---|
-| `8870559` | `fix(proposals): split public link capabilities into read/select/sign/pay/receipt` |
-| `7c2386f` | `fix(proposals): gate public proposal pages and APIs with one lifecycle policy` |
-| `0b75b3f` | `fix(proposals): revoke public tokens and persist quote expiry on publish` |
-| `8645f0b` | `test(proposals): public links deny suspended, disabled, expired, and revoked` |
-| (this docs commit) | `docs: public proposal link lifecycle (capabilities, revoke, expiry write)` |
+| `912ef44` | `fix(reviews): host-scope public tokens and stop lying about metrics` |
+| `54fff48` | `fix(reviews): star rating first, 5 to Google, else private reasons` |
 
-Working tree should be clean after that docs commit.
+## What this branch does
 
-### What shipped in this job
+Public `/r/[token]` is host-scoped like proposals. Open tracking is a client
+action, not GET. Staff totals count the whole brand. Reminders have a 24h
+cooldown and skip people who already responded.
 
-Public proposal HTML pages and `/api/proposal/[engagementId]/*` go through
-`findPublishedPublicQuote` + `quoteAllowsPublicCapability` with required
-`read | select | sign | pay | receipt`. Receipt survives expiry/archive/completed
-until the token is nulled or the host brand/domain is inactive. Staff “Revoke
-public link” sets `publicToken: null`. Unsigned archive does the same. Publish
-writes `Quote.expiresAt` from catalog deadline or snapshot urgency, else null.
+The public page asks for 1–5 stars. Five opens the brand Google review URL.
+One through four thanks them and asks why (Communication, Turnaround time,
+Pricing, Quality of work, Something else with a text box).
 
-### Work in progress in the working tree
+## Live SMS already sent this session
 
-None once the docs commit is in. Unpushed topic-branch commits only.
+Owner-authorized send to himself this session. The SMS link is production
+`app.bookkeepingconroe.com` (`main`), not this branch. Do not send another SMS.
 
-## Health baseline
+Brand Quo + Google review destination were saved onto Bookkeeping Conroe from
+local env during that send.
 
-Measured on this branch, 2026-09-14, dalliance:
+## Health
+
+Measured on this branch, 2026-09-14, ripley:
 
 | Check | Result |
 |---|---|
-| `npx vitest run` (plan file set) | 14 files, 110 tests, all passing |
-| `npm test` | 97 files, 768 tests, all passing (~2.8s) |
-| `npm run typecheck` | **1 pre-existing error** in `src/app/(proposal)/proposal/[token]/publicProposalHtml.test.ts` (`BrandProvider` `createElement` props require `children`). Not introduced by this job. |
-| Playwright / live payment | not run |
+| `npm run typecheck` | pass |
+| `npm test` | 99 files / 784 tests at `912ef44`; later commit adds review tests |
+| Playwright `e2e/reviews.spec.ts` | 4 passed after `54fff48` |
+| Live SMS | one send, owner-authorized, arrived |
 
-## Left for later (not this brief)
+## Left for the crew
 
-- Hash proposal tokens at rest (needs a column).
-- `revokedAt` / receipt after revoke.
-- Default TTL when there is no urgency/catalog deadline.
-- Dev `DEV_BRAND_SLUG` hostname fallback.
-- `Quote.brand` Prisma relation (P0 tenant, migrate).
-- Review-request and agreement-cancellation public links.
+Reviewer then Tester on this branch. Report gaps. Worker only if Reviewer
+finds a real bug. Do not push. Ummon ships when Tom says.
 
-## Parked, needs the owner — not agent work
+Known leftover, not this job unless Reviewer says it blocks:
 
-1. **The `firm_singleton` database row in `bookkeepingconroe-web`.** Address was
-   corrected in that repo; the admin contract builder still reads a stale DB row.
-2. **Off-repo listings** — Google Business Profile and the other NAP copies.
-   See `docs/nap-consistency.md` in `bookkeepingconroe-web`.
+- Send dialog does not attach `contactId` even when a matching Contact exists.
+- Production still shows the old two-button public page until this merges.
 
-## First commands for the next agent
+## First commands
 
 ```bash
 git status --short
-git log -8 --oneline
+git log -5 --oneline
 git fetch origin
 ```
-
-Reviewer: diff this job against `inbox/p1-public-link-lifecycle.md` and
-`reports/p1-public-link-lifecycle/plan.md`. Tester: named vitest cases, not
-Playwright-against-DB, no live payment.
