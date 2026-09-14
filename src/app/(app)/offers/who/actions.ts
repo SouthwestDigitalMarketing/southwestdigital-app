@@ -14,7 +14,11 @@ import { materializeAgreementTemplate } from "@/lib/agreements/materialize";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
 import { ensureQuoteEngagement } from "@/lib/engagements/fromOffer";
 import { lockQuoteMutation } from "@/lib/quotes/mutationLock";
-import { quoteClientDetailsFromSnapshot } from "@/lib/quotes/clientInfo";
+import { quoteClientDetailsFromSnapshot, quoteContactSummaryFromSnapshot } from "@/lib/quotes/clientInfo";
+import {
+  catalogDiscountWhereForQuote,
+  expiresAtForQuotePublish,
+} from "@/lib/quotes/quoteExpiresAt";
 import { applyTagPipelineAutomation } from "@/lib/contacts/automation";
 
 export type OfferAudienceContact = {
@@ -409,6 +413,16 @@ export async function publishOfferChangesAction(
   const publicToken = existing.publicToken ?? randomBytes(32).toString("base64url");
   const { quoteRevisions, quoteEngagement } = await getSchemaCapabilities();
   const publishedAt = new Date();
+  const primaryContactId = quoteContactSummaryFromSnapshot(snapshot).contactId;
+  const discounts = await prisma.brandDiscount.findMany({
+    where: catalogDiscountWhereForQuote({
+      brandId: brand.id,
+      quoteId: existing.id,
+      contactId: primaryContactId,
+    }),
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+  });
+  const expiresAt = expiresAtForQuotePublish({ publishedAt, discounts, snapshot });
 
   if (!quoteRevisions) {
     await prisma.$transaction(async (tx) => {
@@ -429,6 +443,7 @@ export async function publishOfferChangesAction(
           publishedSnapshotJson: snapshot,
           publicToken,
           publishedAt,
+          expiresAt,
           lastActivityAt: publishedAt,
         },
       });
@@ -488,6 +503,7 @@ export async function publishOfferChangesAction(
         publishedSnapshotJson: snapshot,
         publicToken,
         publishedAt,
+        expiresAt,
         lastActivityAt: publishedAt,
       },
     });

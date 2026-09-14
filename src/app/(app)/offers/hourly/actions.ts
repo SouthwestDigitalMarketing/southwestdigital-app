@@ -14,6 +14,11 @@ import {
   type HourlyOfferKind,
 } from "@/lib/engagements/hourlyCheckout";
 import { isHourlyOfferKind } from "@/lib/quotes/kinds";
+import { quoteContactSummaryFromSnapshot } from "@/lib/quotes/clientInfo";
+import {
+  catalogDiscountWhereForQuote,
+  expiresAtForQuotePublish,
+} from "@/lib/quotes/quoteExpiresAt";
 
 function asJsonObject(value: unknown): Prisma.InputJsonObject {
   const parsed: unknown = JSON.parse(JSON.stringify(value));
@@ -127,6 +132,16 @@ export async function publishHourlyOfferAction(offerId: string, snapshot: Hourly
   const publicToken = existing.publicToken ?? randomBytes(32).toString("base64url");
   const publishedAt = new Date();
   const { quoteRevisions, quoteEngagement } = await getSchemaCapabilities();
+  const primaryContactId = quoteContactSummaryFromSnapshot(merged).contactId;
+  const discounts = await prisma.brandDiscount.findMany({
+    where: catalogDiscountWhereForQuote({
+      brandId: brand.id,
+      quoteId: existing.id,
+      contactId: primaryContactId,
+    }),
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+  });
+  const expiresAt = expiresAtForQuotePublish({ publishedAt, discounts, snapshot: finalSnapshot });
 
   await prisma.$transaction(async (tx) => {
     await lockQuoteMutation(tx, brand.id, existing.id, "publish");
@@ -137,6 +152,7 @@ export async function publishHourlyOfferAction(offerId: string, snapshot: Hourly
         publishedSnapshotJson: finalSnapshot,
         publicToken,
         publishedAt,
+        expiresAt,
         lastActivityAt: publishedAt,
         totalOneTime: new Prisma.Decimal(summary.total),
         totalRecurring: new Prisma.Decimal(0),
