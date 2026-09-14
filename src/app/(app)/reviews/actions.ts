@@ -6,6 +6,7 @@ import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
 import { sendSms } from "@/lib/quo";
 import { ReviewChannel } from "@prisma/client";
 import { normalizePhone } from "@/lib/phone";
+import { resolvePublicReviewOrigin } from "@/lib/reviews/publicOrigin";
 
 export async function sendReviewRequest(formData: FormData) {
   const { brand, membership } = await requireStaffBrandOrThrow();
@@ -17,6 +18,7 @@ export async function sendReviewRequest(formData: FormData) {
   if (!recipientName || !rawPhone) throw new Error("Name and phone are required");
 
   const recipientPhone = normalizePhone(rawPhone);
+  const origin = await resolvePublicReviewOrigin(brand.id);
 
   const request = await prisma.reviewRequest.create({
     data: {
@@ -29,8 +31,7 @@ export async function sendReviewRequest(formData: FormData) {
     select: { token: true },
   });
 
-  const baseUrl = (process.env.AUTH_URL ?? "http://localhost:3000").replace(/\/$/, "");
-  const link = `${baseUrl}/r/${request.token}`;
+  const link = `${origin}/r/${request.token}`;
   const firstName = recipientName.split(" ")[0];
 
   await sendSms(
@@ -55,8 +56,8 @@ export async function sendReminder(requestId: string) {
 
   if (!request || request.brandId !== brand.id) throw new Error("Not found");
 
-  const baseUrl = (process.env.AUTH_URL ?? "http://localhost:3000").replace(/\/$/, "");
-  const link = `${baseUrl}/r/${request.token}`;
+  const origin = await resolvePublicReviewOrigin(brand.id);
+  const link = `${origin}/r/${request.token}`;
   const firstName = (request.recipientName ?? "").split(" ")[0] || "there";
 
   if (request.channel === ReviewChannel.SMS && request.recipientPhone) {

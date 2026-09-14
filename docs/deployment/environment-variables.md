@@ -27,9 +27,9 @@ Zoho on Vercel: register a **separate** OAuth app for prod (not shared with loca
 
 ## A note on review-request links
 
-`src/app/(app)/reviews/actions.ts` still builds public review links from
-`AUTH_URL`, with a localhost fallback. Because `AUTH_URL` must stay unset, those
-links currently fall back to localhost in every supported configuration. This is
-a known open defect — see `docs/SWAPP-REVIEW-AND-ROADMAP.md`, P1 "Review
-requests are not ready for another firm". Resolve public URLs from verified
-brand configuration instead.
+Public review SMS links are built by `resolvePublicReviewOrigin` in
+`src/lib/reviews/publicOrigin.ts`: a verified `BrandDomain` with `purpose: APP`
+for the sending brand, preferring the primary hostname. `AUTH_URL` and
+`NEXTAUTH_URL` stay unset. `PLATFORM_BASE_URL` is the operator origin and is
+never used as the recipient host. Send fails closed if the brand has no
+verified app domain.
