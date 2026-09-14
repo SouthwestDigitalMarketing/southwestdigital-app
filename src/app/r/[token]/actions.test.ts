@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { recordFeedback, recordGoogleClick, recordOpen } from "./actions";
+import { recordFeedback, recordFiveStar, recordOpen } from "./actions";
 
 const mocks = vi.hoisted(() => ({
   updateMany: vi.fn(),
@@ -47,23 +47,25 @@ describe("recordOpen", () => {
   });
 });
 
-describe("recordGoogleClick", () => {
-  it("sets clickedAt and never writes FIVE_STAR", async () => {
-    await recordGoogleClick("tok-1");
+describe("recordFiveStar", () => {
+  it("stamps FIVE_STAR, rating 5, and clickedAt", async () => {
+    await recordFiveStar("tok-1");
     expect(mocks.updateMany).toHaveBeenCalledTimes(1);
     const arg = mocks.updateMany.mock.calls[0][0] as {
       where: unknown;
       data: Record<string, unknown>;
     };
-    expect(arg.where).toEqual({ id: "req-1", brandId: "brand-1", clickedAt: null });
+    expect(arg.where).toEqual({ id: "req-1", brandId: "brand-1", outcome: null });
+    expect(arg.data).toMatchObject({
+      outcome: "FIVE_STAR",
+      feedbackRating: 5,
+    });
     expect(arg.data.clickedAt).toBeInstanceOf(Date);
-    expect(arg.data).not.toHaveProperty("outcome");
-    expect(JSON.stringify(arg)).not.toContain("FIVE_STAR");
   });
 
   it("does not write when the request is not on this host", async () => {
     mocks.find.mockResolvedValue(null);
-    await recordGoogleClick("tok-1");
+    await recordFiveStar("tok-1");
     expect(mocks.updateMany).not.toHaveBeenCalled();
   });
 });
@@ -83,8 +85,10 @@ describe("recordFeedback", () => {
     expect(data).not.toHaveProperty("clickedAt");
   });
 
-  it.each([0, 6, 3.5, Number.NaN])("rejects rating %s", async (rating) => {
-    await expect(recordFeedback("tok-1", rating, "ok")).rejects.toThrow("Choose a rating from 1 to 5.");
+  it.each([0, 5, 6, 3.5, Number.NaN])("rejects rating %s", async (rating) => {
+    await expect(recordFeedback("tok-1", rating, "ok")).rejects.toThrow(
+      "Choose a rating from 1 to 4 for private feedback.",
+    );
     expect(mocks.updateMany).not.toHaveBeenCalled();
   });
 
@@ -97,7 +101,7 @@ describe("recordFeedback", () => {
 
   it("rejects feedback when the host brand does not own the token", async () => {
     mocks.find.mockResolvedValue(null);
-    await expect(recordFeedback("tok-1", 5, "ok")).rejects.toThrow(
+    await expect(recordFeedback("tok-1", 4, "ok")).rejects.toThrow(
       "This review request is not available.",
     );
     expect(mocks.updateMany).not.toHaveBeenCalled();

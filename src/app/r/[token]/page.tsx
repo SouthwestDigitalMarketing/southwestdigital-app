@@ -26,7 +26,6 @@ export default async function PublicReviewPage({
       accentColor={found.brand.theme?.accentColor ?? "#d79b3b"}
       googleReviewUrl={googleReviewUrl}
       alreadyOpened={Boolean(found.request.openedAt)}
-      alreadyClickedGoogle={Boolean(found.request.clickedAt)}
       alreadyLeftFeedback={found.request.outcome === ReviewOutcome.FEEDBACK}
     />
   );

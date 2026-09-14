@@ -20,18 +20,22 @@ export async function recordOpen(token: string) {
   });
 }
 
-export async function recordGoogleClick(token: string) {
+export async function recordFiveStar(token: string) {
   const found = await publicReviewForToken(token);
   if (!found) return;
   await prisma.reviewRequest.updateMany({
-    where: { id: found.request.id, brandId: found.brand.id, clickedAt: null },
-    data: { clickedAt: new Date() },
+    where: { id: found.request.id, brandId: found.brand.id, outcome: null },
+    data: {
+      clickedAt: new Date(),
+      outcome: ReviewOutcome.FIVE_STAR,
+      feedbackRating: 5,
+    },
   });
 }
 
 export async function recordFeedback(token: string, rating: number, text: string) {
-  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-    throw new Error("Choose a rating from 1 to 5.");
+  if (!Number.isInteger(rating) || rating < 1 || rating > 4) {
+    throw new Error("Choose a rating from 1 to 4 for private feedback.");
   }
   const feedbackText = text.trim();
   if (feedbackText.length > REVIEW_FEEDBACK_TEXT_MAX) {
