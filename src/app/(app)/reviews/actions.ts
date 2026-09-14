@@ -7,6 +7,7 @@ import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
 import { normalizePhone } from "@/lib/phone";
 import { prisma } from "@/lib/prisma";
 import { sendSms } from "@/lib/quo";
+import { getQuoSmsCredentials } from "@/lib/reviews/quoCredentials";
 import { resolvePublicReviewOrigin } from "@/lib/reviews/publicOrigin";
 
 const NAME_MAX = 80;
@@ -63,6 +64,7 @@ export async function sendReviewRequest(formData: FormData) {
   await assertDailySmsCap(brand.id);
 
   const origin = await resolvePublicReviewOrigin(brand.id);
+  const credentials = await getQuoSmsCredentials(brand.id);
   const token = randomBytes(16).toString("hex");
   const link = `${origin}/r/${token}`;
   const firstName = recipientName.split(" ")[0];
@@ -70,6 +72,7 @@ export async function sendReviewRequest(formData: FormData) {
   await sendSms(
     recipientPhone,
     `Hi ${firstName}! We appreciate your business with ${brand.name}. Would you mind sharing a quick review? It only takes 30 seconds: ${link}`,
+    credentials,
   );
 
   try {
@@ -113,12 +116,14 @@ export async function sendReminder(requestId: string) {
   await assertDailySmsCap(brand.id);
 
   const origin = await resolvePublicReviewOrigin(brand.id);
+  const credentials = await getQuoSmsCredentials(brand.id);
   const link = `${origin}/r/${request.token}`;
   const firstName = (request.recipientName ?? "").split(" ")[0] || "there";
 
   await sendSms(
     normalizePhone(request.recipientPhone),
     `Hi ${firstName}! Just a quick reminder — we'd love a review from you! It only takes 30 seconds: ${link}`,
+    credentials,
   );
 
   await prisma.reviewRequest.update({

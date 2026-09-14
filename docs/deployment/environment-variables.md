@@ -32,4 +32,6 @@ Public review SMS links are built by `resolvePublicReviewOrigin` in
 for the sending brand, preferring the primary hostname. `AUTH_URL` and
 `NEXTAUTH_URL` stay unset. `PLATFORM_BASE_URL` is the operator origin and is
 never used as the recipient host. Send fails closed if the brand has no
-verified app domain.
+verified app domain. SMS from-number / API key and the Google review URL are
+brand-scoped `BrandIntegration` rows (`quo` and `google-review`), not `QUO_*`
+or `GOOGLE_REVIEW_URL`.

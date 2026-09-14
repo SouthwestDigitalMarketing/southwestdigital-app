@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { PrismaClient, ReviewChannel } from "@prisma/client";
+import { IntegrationProvider, IntegrationStatus, PrismaClient, ReviewChannel } from "@prisma/client";
 
 function loadDatabaseUrl() {
   if (process.env.DATABASE_URL) return;
@@ -26,6 +26,14 @@ loadDatabaseUrl();
 const prisma = new PrismaClient();
 
 export const E2E_REVIEW_PHONE = "+15555550100";
+export const E2E_GOOGLE_REVIEW_URL = "https://maps.google.com/?q=e2e-review-destination";
+const GOOGLE_KEY = "google-review";
+
+type GoogleRestore = {
+  id: string;
+  publicIdentifier: string | null;
+  status: IntegrationStatus;
+} | null;
 
 export async function seedPublicReviewRequest() {
   const brand = await prisma.brand.findFirst({
@@ -33,6 +41,27 @@ export async function seedPublicReviewRequest() {
     select: { id: true, name: true },
   });
   if (!brand) throw new Error("Brand slug bc is required for review e2e fixtures.");
+
+  const previousGoogle = await prisma.brandIntegration.findUnique({
+    where: { brandId_key: { brandId: brand.id, key: GOOGLE_KEY } },
+    select: { id: true, publicIdentifier: true, status: true },
+  });
+
+  await prisma.brandIntegration.upsert({
+    where: { brandId_key: { brandId: brand.id, key: GOOGLE_KEY } },
+    create: {
+      brandId: brand.id,
+      key: GOOGLE_KEY,
+      provider: IntegrationProvider.OTHER,
+      status: IntegrationStatus.ACTIVE,
+      displayName: "Google review (e2e)",
+      publicIdentifier: E2E_GOOGLE_REVIEW_URL,
+    },
+    update: {
+      status: IntegrationStatus.ACTIVE,
+      publicIdentifier: E2E_GOOGLE_REVIEW_URL,
+    },
+  });
 
   const token = `e2e-review-${randomBytes(8).toString("hex")}`;
   const row = await prisma.reviewRequest.create({
@@ -45,11 +74,28 @@ export async function seedPublicReviewRequest() {
     },
     select: { id: true, token: true },
   });
-  return { ...row, brandName: brand.name };
+  return { ...row, brandName: brand.name, brandId: brand.id, googleRestore: previousGoogle as GoogleRestore };
 }
 
-export async function deleteReviewRequest(id: string) {
+export async function deleteReviewRequest(
+  id: string,
+  restore?: { brandId: string; googleRestore: GoogleRestore },
+) {
   await prisma.reviewRequest.deleteMany({ where: { id } });
+  if (!restore) return;
+  if (!restore.googleRestore) {
+    await prisma.brandIntegration.deleteMany({
+      where: { brandId: restore.brandId, key: GOOGLE_KEY, publicIdentifier: E2E_GOOGLE_REVIEW_URL },
+    });
+    return;
+  }
+  await prisma.brandIntegration.update({
+    where: { id: restore.googleRestore.id },
+    data: {
+      publicIdentifier: restore.googleRestore.publicIdentifier,
+      status: restore.googleRestore.status,
+    },
+  });
 }
 
 export async function disconnectReviewFixture() {

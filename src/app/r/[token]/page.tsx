@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { BrandStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { resolveGoogleReviewUrl } from "@/lib/reviews/googleDestination";
 import { ReviewPage } from "./ReviewPage";
 
 export default async function PublicReviewPage({
@@ -43,7 +44,7 @@ export default async function PublicReviewPage({
 
   if (!brand) notFound();
 
-  const googleReviewUrl = process.env.GOOGLE_REVIEW_URL?.trim() || null;
+  const googleReviewUrl = await resolveGoogleReviewUrl(request.brandId);
 
   return (
     <ReviewPage

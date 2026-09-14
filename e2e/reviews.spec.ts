@@ -56,7 +56,10 @@ test.describe("review requests", () => {
       await expect(page.getByText("Share private feedback")).toBeVisible();
       await expect(page.getByRole("button", { name: "Leave a Google review" })).toHaveCount(0);
     } finally {
-      await deleteReviewRequest(fixture.id);
+      await deleteReviewRequest(fixture.id, {
+        brandId: fixture.brandId,
+        googleRestore: fixture.googleRestore,
+      });
     }
   });
 

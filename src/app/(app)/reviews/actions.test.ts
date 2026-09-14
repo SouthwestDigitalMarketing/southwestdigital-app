@@ -10,10 +10,12 @@ const mocks = vi.hoisted(() => ({
   update: vi.fn(),
   staff: vi.fn(),
   origin: vi.fn(),
+  quo: vi.fn(),
   revalidate: vi.fn(),
 }));
 
 vi.mock("@/lib/quo", () => ({ sendSms: mocks.sendSms }));
+vi.mock("@/lib/reviews/quoCredentials", () => ({ getQuoSmsCredentials: mocks.quo }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     reviewRequest: {
@@ -32,6 +34,7 @@ vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidate }));
 const ORIGIN = "https://app.example.test";
 const PHONE = "5551234567";
 const E164 = "+15551234567";
+const CREDS = { apiKey: "brand-api-key", from: "+15550001111", phoneNumberId: "pn-1" };
 
 function form(overrides: Record<string, string | null> = {}) {
   const data = new FormData();
@@ -59,6 +62,7 @@ beforeEach(() => {
     membership: { id: "mem-1" },
   });
   mocks.origin.mockResolvedValue(ORIGIN);
+  mocks.quo.mockResolvedValue(CREDS);
   mocks.sendSms.mockResolvedValue(undefined);
   mocks.create.mockResolvedValue({ id: "req-1" });
   mocks.findFirst.mockResolvedValue(null);
@@ -85,8 +89,9 @@ describe("sendReviewRequest", () => {
     await sendReviewRequest(form());
 
     expect(mocks.sendSms).toHaveBeenCalledTimes(1);
-    const [to, content] = mocks.sendSms.mock.calls[0] as [string, string];
+    const [to, content, credentials] = mocks.sendSms.mock.calls[0] as [string, string, typeof CREDS];
     expect(to).toBe(E164);
+    expect(credentials).toEqual(CREDS);
     expect(content).not.toContain("localhost");
     expect(content).not.toContain("admin.southwestdigital.io");
     expect(content).not.toContain("http://localhost:3000");
@@ -169,6 +174,13 @@ describe("sendReviewRequest", () => {
     expect(mocks.sendSms).not.toHaveBeenCalled();
     expect(mocks.create).not.toHaveBeenCalled();
   });
+
+  it("does not send when SMS is not configured for the brand", async () => {
+    mocks.quo.mockRejectedValue(new Error("SMS is not configured for this brand."));
+    await expect(sendReviewRequest(form())).rejects.toThrow("SMS is not configured for this brand.");
+    expect(mocks.sendSms).not.toHaveBeenCalled();
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
 });
 
 describe("sendReminder", () => {
@@ -193,8 +205,9 @@ describe("sendReminder", () => {
 
     await sendReminder("req-1");
 
-    const content = mocks.sendSms.mock.calls[0][1] as string;
+    const [, content, credentials] = mocks.sendSms.mock.calls[0] as [string, string, typeof CREDS];
     expect(content).toContain(`${ORIGIN}/r/existing-token`);
+    expect(credentials).toEqual(CREDS);
     expect(mocks.update).toHaveBeenCalledWith({
       where: { id: "req-1" },
       data: { lastReminderAt: expect.any(Date) },
@@ -212,6 +225,14 @@ describe("sendReminder", () => {
   it("throws for a non-SMS channel and does not send or update", async () => {
     mocks.findUnique.mockResolvedValue({ ...row, channel: "EMAIL" });
     await expect(sendReminder("req-1")).rejects.toThrow("Reminders can only be sent by SMS");
+    expect(mocks.sendSms).not.toHaveBeenCalled();
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  it("does not send a reminder when SMS is not configured", async () => {
+    mocks.findUnique.mockResolvedValue(row);
+    mocks.quo.mockRejectedValue(new Error("SMS is not configured for this brand."));
+    await expect(sendReminder("req-1")).rejects.toThrow("SMS is not configured for this brand.");
     expect(mocks.sendSms).not.toHaveBeenCalled();
     expect(mocks.update).not.toHaveBeenCalled();
   });
