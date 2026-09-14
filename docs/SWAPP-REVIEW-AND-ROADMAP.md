@@ -364,7 +364,7 @@ These are dependency-ordered milestones, not a promised calendar. The automated 
 | 5. Prove customer outcomes | Weekly implementation calls, activation/retention/support metrics, consented case studies, separate audience attribution | Repeat use and documented outcomes across a cohort; sustainable support and gross margin; reasons for churn understood |
 | 6. Expand distribution and automation | Direct software referral program, then consented client referrals; narrowly scoped marketing agents | Reconciled partner statements, reliable conversion/payout records, controlled cross-brand sharing, automation quality/cost/suppression evidence |
 
-Design-system groundwork and interviews can run alongside security work, but external paid rollout waits for the safety and workflow gates. Keep version control changes small and reviewable, preserve existing user work, and never push without explicit instruction.
+Design-system groundwork and interviews can run alongside security work, but external paid rollout waits for the safety and workflow gates. Keep version control changes small and reviewable, and preserve existing user work. Push policy lives in `AGENTS.md`.
 
 ### First implementation backlog
 

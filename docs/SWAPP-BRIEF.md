@@ -224,10 +224,7 @@ automation. Phase 4 is the earliest point at which SaaS revenue becomes real.
 
 ## 7. Constraints on any plan
 
-- **Never push without explicit user instruction.** Commit locally; leave push
-  to the user.
-- No production deploys, migrations, outbound messages or payment transactions
-  are authorized from an agent session.
+- Session engineering rules — never push without explicit user instruction; no production deploy, destructive migration, outbound message, or payment from an agent session — live only in `AGENTS.md`. Follow them.
 - AI product features and marketing bots are explicitly **excluded** from the
   current implementation scope.
 - Do not send authenticated portal activity, client identities or proposal

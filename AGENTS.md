@@ -15,6 +15,7 @@ Each document has one job and one update cadence. Do not merge them.
 | **`docs/SWAPP-REVIEW-AND-ROADMAP.md`** | Priorities, launch blockers, phase gates, success measures | Quarterly |
 | **`docs/IMPLEMENTATION-STATUS.md`** | Progress against those gates | As gates close |
 | **`HANDOFF.md`** | Branch state, work in progress, health baseline, first commands | Every session |
+| `docs/local-development.md` | Local setup, dev login, checks, scripts | When setup or scripts change |
 
 Reference material, read when the task touches it:
 
@@ -30,9 +31,14 @@ Reference material, read when the task touches it:
 | Offer builder and options templates | `docs/offers/` |
 | Unbuilt design intent (work items, proposal versioning) | `docs/design/` |
 | Session history through 2026-09-08, for provenance only | `docs/handoff-archive/` |
+| First-tenant seed and legacy source-system audit | `docs/migration/` |
 
 `README.md` is the public-facing description of the repository. `CLAUDE.md`
 points here.
+
+Global agent working agreements live outside this repo in
+`~/Projects/agent-guidance/AGENTS.md` (installed as `~/.codex/AGENTS.md`).
+Do not copy crew workflow into SWapp.
 
 ## Push policy
 

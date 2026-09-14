@@ -1,6 +1,6 @@
 # SaaS readiness implementation
 
-Branch: `feat/saas-readiness`. Scope authorized September 5, 2026: implement the review recommendations, excluding AI features, including phone/tablet responsiveness across screens, dialogs and flows. No pushes or production deployments are authorized.
+Authorized September 5, 2026 as `feat/saas-readiness` (now merged). Scope: implement the review recommendations, excluding AI features, including phone/tablet responsiveness across screens, dialogs and flows. No pushes or production deployments are authorized.
 
 ## Completion gates
 
@@ -26,12 +26,8 @@ AI product features and marketing bots are excluded. Live calls, interviews, pil
 
 ## Branch status
 
-**`feat/saas-readiness` merged to `main` and the branch is gone.** As of
-2026-09-08 `main` is at `00b7d6c` and contains all of the work logged below.
-Verified on `main` that day: typecheck passes, `npm test` runs 583 tests across
-74 files with no failures, and `npm run lint` reports 0 errors and 8 `<img>`
-advisory warnings — so the "nine errors and ten warnings" baseline in the work
-log below is historical. CI now enforces all three on every PR.
+**`feat/saas-readiness` merged to `main`.** As of 2026-09-14 `main` is at `e3a28a1`.
+Verified on 2026-09-08 at `00b7d6c`: typecheck passed, `npm test` ran 583 tests across 74 files with no failures, and `npm run lint` reported 0 errors and 8 `<img>` advisory warnings — so the "nine errors and ten warnings" baseline in the work log below is historical. Later health numbers live in `HANDOFF.md`. CI now enforces all three on every PR.
 
 The unchecked gates below remain unchecked. Several had partial work land with
 the merge — notably immutable signed payment obligations and Stripe
