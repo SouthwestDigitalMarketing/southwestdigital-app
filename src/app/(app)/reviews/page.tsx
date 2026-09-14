@@ -21,6 +21,7 @@ export default async function ReviewsPage() {
       sentAt: true,
       lastReminderAt: true,
       openedAt: true,
+      clickedAt: true,
       outcome: true,
       feedbackRating: true,
     },
@@ -28,21 +29,25 @@ export default async function ReviewsPage() {
 
   const total = requests.length;
   const opened = requests.filter((r) => r.openedAt).length;
-  const fiveStars = requests.filter((r) => r.outcome === ReviewOutcome.FIVE_STAR).length;
+  const googleClicked = requests.filter(
+    (r) => r.clickedAt || r.outcome === ReviewOutcome.FIVE_STAR,
+  ).length;
+  const feedback = requests.filter((r) => r.outcome === ReviewOutcome.FEEDBACK).length;
 
   const openRate = total > 0 ? Math.round((opened / total) * 100) : 0;
-  const starRate = total > 0 ? Math.round((fiveStars / total) * 100) : 0;
+  const googleClickedRate = total > 0 ? Math.round((googleClicked / total) * 100) : 0;
 
   return (
     <div className="p-8">
       <ReviewsHeader />
 
       {/* Stats */}
-      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
           { label: "Total sent", value: total },
           { label: "Open rate", value: `${openRate}%` },
-          { label: "5-star rate", value: `${starRate}%` },
+          { label: "Google clicked", value: `${googleClickedRate}%` },
+          { label: "Feedback received", value: feedback },
         ].map(({ label, value }) => (
           <div key={label} className="rounded-xl border border-slate-200 bg-white p-5">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
@@ -112,19 +117,26 @@ export default async function ReviewsPage() {
 function StatusChip({
   request,
 }: {
-  request: { outcome: ReviewOutcome | null; openedAt: Date | null };
+  request: { outcome: ReviewOutcome | null; openedAt: Date | null; clickedAt: Date | null };
 }) {
-  if (request.outcome === ReviewOutcome.FIVE_STAR) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-        ★ 5 Stars
-      </span>
-    );
-  }
   if (request.outcome === ReviewOutcome.FEEDBACK) {
     return (
       <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
         Feedback
+      </span>
+    );
+  }
+  if (request.clickedAt && !request.outcome) {
+    return (
+      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+        Google clicked
+      </span>
+    );
+  }
+  if (request.outcome === ReviewOutcome.FIVE_STAR) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+        ★ 5 Stars
       </span>
     );
   }

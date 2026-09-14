@@ -48,7 +48,13 @@ test.describe("review requests", () => {
       expect(response?.status()).toBe(200);
       await expect(page.getByText(fixture.brandName, { exact: true }).first()).toBeVisible();
       await expect(page.getByText(/how was your experience/i)).toBeVisible();
-      await expect(page.getByRole("button")).toHaveCount(2);
+      await expect(page.getByText(/5-star/i)).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Leave a Google review" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Share private feedback" })).toBeVisible();
+
+      await page.getByRole("button", { name: "Share private feedback" }).click();
+      await expect(page.getByText("Share private feedback")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Leave a Google review" })).toHaveCount(0);
     } finally {
       await deleteReviewRequest(fixture.id);
     }
