@@ -42,8 +42,20 @@ Do not copy crew workflow into SWapp.
 
 ## Push policy
 
-**Settled 2026-09-12.** Agents take work as far as a reviewable pull request.
-The owner merges.
+**Settled 2026-09-12, tightened 2026-09-14 after a dalliance/origin split.**
+
+Agents take work as far as a reviewable pull request. The owner merges.
+
+Do **not** commit onto local `main`. `git fetch origin` at session start, at
+the start of every job, and before every commit. If local `main` and
+`origin/main` have diverged, stop and integrate; do not stack another commit
+on the stale line. Topic branch (`<slug>` / `feat/<slug>`), push the branch,
+open a PR.
+
+**What went wrong on 2026-09-14:** the Dalliance crew followed a stale
+"never push; commit local main" paragraph, never fetched, and piled commits
+on laptop `main` while origin moved. That is how you get rebase-vs-merge.
+Do not recreate it.
 
 The **lead agent** (the Claude session in the main checkout) may:
 
@@ -178,6 +190,9 @@ Rules that follow from that split:
   not agent work.
 - `.local/` is Git-ignored, private, and must never be committed or quoted into
   a commit message, PR, or public document.
+
+Before asking for a merge: `npm run typecheck`, `npm run lint`, `npm test`,
+and say in the PR what they returned (including pre-existing failures).
 
 ## Non-negotiable architecture rules
 
