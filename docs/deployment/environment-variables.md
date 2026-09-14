@@ -16,6 +16,7 @@ Required for full functionality:
 | `AUTH_RESEND_KEY` | Was used by cancellation notice; now unused after Zoho wiring. Still used by login magic link Resend path? Verify. | prod (verify) |
 | ~~`AUTH_URL`~~ / ~~`NEXTAUTH_URL`~~ | **Must stay unset.** `src/auth.ts:14` throws at import if either is present — this deployment serves multiple trusted hostnames. Use `PLATFORM_BASE_URL` instead. | never |
 | `STRIPE_SECRET_KEY` | Stripe API | `.env.local` and prod |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret for `POST /api/stripe/webhook`. Server-only. Missing signature or secret → 400 “Webhook not configured”. | `.env.local` and prod |
 | `PLATFORM_BASE_URL` | Platform origin. Locks OAuth callback origins (Zoho, YouTube), decides secure auth cookies, and identifies the platform hostname. Must be HTTPS outside local development or `src/auth.ts` throws. | **prod required** |
 | `INTEGRATION_ENCRYPTION_KEY` | Dedicated encryption key for stored OAuth tokens. Falls back to `AUTH_SECRET`. Rotating invalidates all stored tokens. | prod recommended |
 | `ZOHO_MAIL_CLIENT_ID` | Zoho OAuth app | `.env.local` and prod |

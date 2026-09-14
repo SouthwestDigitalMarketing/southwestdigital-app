@@ -113,7 +113,9 @@ Create one server payment-reconciliation path used by all three entry points. Co
 
 The handoff says the live webhook is not configured. Treat that as an unverified deployment item requiring dashboard confirmation and test evidence.
 
-Evidence: `src/app/api/proposal/[engagementId]/confirm-payment/route.ts:37`; `src/app/api/proposal/[engagementId]/payment-intent/route.ts`; `src/app/api/stripe/webhook/route.ts`; `src/lib/engagements/fromOffer.ts:111`.
+**Closed at HEAD (`6357a0a` + webhook-only apply + JSON event-id dedup).** All three Stripe entry points already shared `reconcileProposalPayment`: amount, `amount_received`, currency, intent id, livemode, Connect destination, and metadata are compared to the frozen `paymentObligation` and the saved attempt expectation. Same-reference retries do not overwrite evidence. The remaining succeeded-intent apply shortcuts on `confirm-payment` and `payment-intent` are gone; the webhook is the only Stripe paid-state writer. Processed `event.id` values are recorded in existing `proposalAcceptance` JSON (no Prisma migrate, no unique constraint). Public confirm-payment is a paid-status read. Route tests cover duplicate webhook delivery, amount mismatch, missing `brandId`, and the gone shortcuts. Refunds, disputes, and a durable webhook-event table are not in this close. Live webhook dashboard configuration is still unverified; this session did not register or rewrite production webhooks.
+
+Evidence (current): `src/lib/stripe/reconcileProposalPayment.ts`; `src/lib/stripe/processedStripeEvents.ts`; `src/app/api/stripe/webhook/route.ts`; `src/app/api/proposal/[engagementId]/confirm-payment/route.ts`; `src/app/api/proposal/[engagementId]/payment-intent/route.ts`; matching `*.test.ts`. Historical citations `confirm-payment/route.ts:37` and `fromOffer.ts:111` referred to the pre-`6357a0a` files and now land on later lines.
 
 ### P1 — Signed terms and mutable proposal state can diverge
 
