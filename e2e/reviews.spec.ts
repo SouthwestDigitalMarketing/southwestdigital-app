@@ -69,7 +69,7 @@ test.describe("review requests", () => {
         page.getByRole("button", { name: "Quality of work concerns" }),
       ).toBeVisible();
       await expect(page.getByRole("button", { name: "Something else" })).toBeVisible();
-      await expect(page.getByPlaceholder(/add more detail/i)).toBeVisible();
+      await expect(page.getByPlaceholder(/add more detail/i)).toHaveCount(0);
       const submit = page.getByRole("button", { name: "Submit" });
       await expect(submit).toBeDisabled();
 
@@ -86,8 +86,19 @@ test.describe("review requests", () => {
       await expect(submit).toBeEnabled();
 
       await page.getByRole("button", { name: "Something else" }).click();
-      await expect(page.getByPlaceholder(/tell us more/i)).toBeVisible();
+      const detail = page.getByPlaceholder(/tell us more/i);
+      await expect(detail).toBeVisible();
       await expect(submit).toBeDisabled();
+
+      await detail.fill("Parking was difficult to find.");
+      await expect(submit).toBeEnabled();
+
+      await page.getByRole("button", { name: "Something else" }).click();
+      await expect(detail).toHaveCount(0);
+      await expect(submit).toBeEnabled();
+
+      await page.getByRole("button", { name: "Something else" }).click();
+      await expect(detail).toHaveValue("Parking was difficult to find.");
     } finally {
       await deleteReviewRequest(fixture.id, {
         brandId: fixture.brandId,
