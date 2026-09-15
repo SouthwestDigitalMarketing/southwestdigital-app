@@ -11,13 +11,16 @@ export type PrivateFeedbackReasonId = (typeof PRIVATE_FEEDBACK_REASONS)[number][
 export const OTHER_FEEDBACK_REASON_ID = "other" satisfies PrivateFeedbackReasonId;
 
 export function formatPrivateFeedbackText(
-  reasonId: string,
+  reasonIds: string[],
   extra: string,
 ): string | null {
-  const reason = PRIVATE_FEEDBACK_REASONS.find((item) => item.id === reasonId);
-  if (!reason) return extra.trim() || null;
+  const labels: string[] = [];
+  for (const id of reasonIds) {
+    const label = PRIVATE_FEEDBACK_REASONS.find((item) => item.id === id)?.label;
+    if (label) labels.push(label);
+  }
   const detail = extra.trim();
-  if (reason.id === OTHER_FEEDBACK_REASON_ID) return detail || reason.label;
-  if (!detail) return reason.label;
-  return `${reason.label}: ${detail}`;
+  if (labels.length === 0) return detail || null;
+  const reasonText = labels.join(", ");
+  return detail ? `${reasonText}: ${detail}` : reasonText;
 }

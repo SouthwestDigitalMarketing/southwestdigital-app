@@ -36,13 +36,17 @@ export function ReviewPage({
   const [stage, setStage] = useState<Stage>(alreadyLeftFeedback ? "done-feedback" : "rate");
   const [rating, setRating] = useState(0);
   const [hovered, setHovered] = useState(0);
-  const [reasonId, setReasonId] = useState<string | null>(null);
+  const [reasonIds, setReasonIds] = useState<string[]>([]);
   const [extraText, setExtraText] = useState("");
   const [pending, startTransition] = useTransition();
 
   const firstName = recipientName?.split(" ")[0] ?? "there";
-  const otherSelected = reasonId === OTHER_FEEDBACK_REASON_ID;
-  const canSubmitReasons = Boolean(reasonId) && (!otherSelected || extraText.trim().length > 0);
+  const otherSelected = reasonIds.includes(OTHER_FEEDBACK_REASON_ID);
+  const canSubmitReasons = reasonIds.length > 0 && (!otherSelected || extraText.trim().length > 0);
+
+  function toggleReason(id: string) {
+    setReasonIds((prev) => (prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id]));
+  }
 
   useEffect(() => {
     if (alreadyOpened) return;
@@ -71,7 +75,7 @@ export function ReviewPage({
     e.preventDefault();
     if (!canSubmitReasons || rating < 1 || rating > 4) return;
     startTransition(async () => {
-      await recordFeedback(token, rating, formatPrivateFeedbackText(reasonId ?? "", extraText) ?? "");
+      await recordFeedback(token, rating, formatPrivateFeedbackText(reasonIds, extraText) ?? "");
       setStage("done-feedback");
     });
   }
@@ -122,18 +126,18 @@ export function ReviewPage({
           >
             <p className="text-center text-lg font-semibold text-slate-900">Thank you for your feedback</p>
             <p className="mt-1 text-center text-sm text-slate-500">
-              What kept this from being 5 stars? This stays with {brandName}.
+              What kept this from being 5 stars? This stays with {brandName}. Select all that apply.
             </p>
 
             <div className="mt-6 flex flex-col gap-2">
               {PRIVATE_FEEDBACK_REASONS.map((reason) => {
-                const selected = reasonId === reason.id;
+                const selected = reasonIds.includes(reason.id);
                 return (
                   <button
                     key={reason.id}
                     type="button"
                     disabled={pending}
-                    onClick={() => setReasonId(reason.id)}
+                    onClick={() => toggleReason(reason.id)}
                     className={`rounded-full border px-4 py-2.5 text-sm font-medium transition ${
                       selected
                         ? "border-slate-900 bg-slate-900 text-white"
@@ -147,16 +151,14 @@ export function ReviewPage({
               })}
             </div>
 
-            {otherSelected ? (
-              <textarea
-                value={extraText}
-                onChange={(e) => setExtraText(e.target.value)}
-                placeholder="Tell us more…"
-                rows={4}
-                maxLength={2000}
-                className="mt-4 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
-              />
-            ) : null}
+            <textarea
+              value={extraText}
+              onChange={(e) => setExtraText(e.target.value)}
+              placeholder={otherSelected ? "Tell us more…" : "Add more detail (optional)"}
+              rows={4}
+              maxLength={2000}
+              className="mt-4 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
+            />
 
             <button
               type="submit"
