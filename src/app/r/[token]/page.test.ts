@@ -67,7 +67,7 @@ describe("public review page logo", () => {
     expect(el.props.logoUrl).not.toBe(THEME.logoMarkUrl);
     expect(el.props.logoAlt).toBe("Example Co logo");
     expect(el.props.brandName).toBe("Example Co");
-    expect(el.props.lightColor).toBe("#17324d");
+    expect(el.props.accentColor).toBe("#d79b3b");
   });
 
   it("passes a null logo URL when the wordmark is missing", async () => {

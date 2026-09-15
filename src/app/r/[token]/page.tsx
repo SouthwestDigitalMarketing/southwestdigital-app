@@ -53,7 +53,6 @@ export default async function PublicReviewPage({
       brandName={found.brand.name}
       logoUrl={publicReviewPageLogoUrl(found.brand.theme)}
       logoAlt={publicReviewPageLogoAlt(found.brand.theme, found.brand.name)}
-      lightColor={colors.lightColor}
       accentColor={colors.accentColor}
       googleReviewUrl={googleReviewUrl}
       alreadyOpened={Boolean(found.request.openedAt)}
