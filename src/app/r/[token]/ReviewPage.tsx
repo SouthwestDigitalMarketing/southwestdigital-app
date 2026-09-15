@@ -163,7 +163,7 @@ export function ReviewPage({
             <button
               type="submit"
               disabled={!canSubmitReasons || pending}
-              className="mt-4 w-full rounded-full py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              className="mt-4 w-full rounded-full py-3 text-sm font-semibold text-slate-950 transition-opacity hover:opacity-90 disabled:opacity-50"
               style={{ backgroundColor: accentColor }}
             >
               {pending ? "Submitting…" : "Submit"}
