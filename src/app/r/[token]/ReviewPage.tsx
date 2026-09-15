@@ -16,7 +16,6 @@ export function ReviewPage({
   brandName,
   logoUrl,
   logoAlt,
-  lightColor,
   accentColor,
   googleReviewUrl,
   alreadyOpened,
@@ -27,7 +26,6 @@ export function ReviewPage({
   brandName: string;
   logoUrl: string | null;
   logoAlt: string;
-  lightColor: string;
   accentColor: string;
   googleReviewUrl: string | null;
   alreadyOpened: boolean;
@@ -126,7 +124,7 @@ export function ReviewPage({
           >
             <p className="text-center text-lg font-semibold text-slate-900">Thank you for your feedback</p>
             <p className="mt-1 text-center text-sm text-slate-500">
-              What kept this from being 5 stars? This stays with {brandName}. Select all that apply.
+              What kept this from being 5 stars?
             </p>
 
             <div className="mt-6 flex flex-col gap-2">
@@ -164,7 +162,7 @@ export function ReviewPage({
               type="submit"
               disabled={!canSubmitReasons || pending}
               className="mt-4 w-full rounded-full py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-              style={{ backgroundColor: lightColor }}
+              style={{ backgroundColor: accentColor }}
             >
               {pending ? "Submitting…" : "Submit"}
             </button>

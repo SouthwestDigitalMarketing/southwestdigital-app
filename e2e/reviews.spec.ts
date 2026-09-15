@@ -60,6 +60,8 @@ test.describe("review requests", () => {
 
       await page.getByRole("button", { name: "Rate 4 out of 5" }).click();
       await expect(page.getByText(/thank you for your feedback/i)).toBeVisible();
+      await expect(page.getByText("What kept this from being 5 stars?", { exact: true })).toBeVisible();
+      await expect(page.getByText(/this stays with/i)).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Poor communication" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Slow turnaround time" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Pricing concerns" })).toBeVisible();
@@ -68,6 +70,8 @@ test.describe("review requests", () => {
       ).toBeVisible();
       await expect(page.getByRole("button", { name: "Something else" })).toBeVisible();
       await expect(page.getByPlaceholder(/add more detail/i)).toBeVisible();
+      const submit = page.getByRole("button", { name: "Submit" });
+      await expect(submit).toBeDisabled();
 
       await page.getByRole("button", { name: "Poor communication" }).click();
       await page.getByRole("button", { name: "Pricing concerns" }).click();
@@ -79,9 +83,11 @@ test.describe("review requests", () => {
         "aria-pressed",
         "true",
       );
+      await expect(submit).toBeEnabled();
 
       await page.getByRole("button", { name: "Something else" }).click();
       await expect(page.getByPlaceholder(/tell us more/i)).toBeVisible();
+      await expect(submit).toBeDisabled();
     } finally {
       await deleteReviewRequest(fixture.id, {
         brandId: fixture.brandId,
