@@ -14,6 +14,8 @@ export function ReviewPage({
   token,
   recipientName,
   brandName,
+  logoUrl,
+  logoAlt,
   lightColor,
   accentColor,
   googleReviewUrl,
@@ -23,6 +25,8 @@ export function ReviewPage({
   token: string;
   recipientName: string | null;
   brandName: string;
+  logoUrl: string | null;
+  logoAlt: string;
   lightColor: string;
   accentColor: string;
   googleReviewUrl: string | null;
@@ -75,12 +79,17 @@ export function ReviewPage({
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-4 py-16">
       <div className="w-full max-w-sm">
-        <p
-          className="text-center text-xs font-bold uppercase tracking-widest"
-          style={{ color: lightColor }}
-        >
-          {brandName}
-        </p>
+        {logoUrl ? (
+          <div className="mx-auto h-16 w-full max-w-64 rounded-lg bg-white px-3 py-2">
+            {/* Brand administrators control this URL; alt text remains explicit. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={logoUrl} alt={logoAlt} className="brand-asset-fit" />
+          </div>
+        ) : (
+          <p className="text-center text-xs font-bold uppercase tracking-widest text-slate-900">
+            {brandName}
+          </p>
+        )}
 
         {stage === "rate" && (
           <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-8 shadow-sm text-center">

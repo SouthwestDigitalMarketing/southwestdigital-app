@@ -46,7 +46,13 @@ test.describe("review requests", () => {
     try {
       const response = await page.goto(`/r/${fixture.token}`, { waitUntil: "domcontentloaded" });
       expect(response?.status()).toBe(200);
-      await expect(page.getByText(fixture.brandName, { exact: true }).first()).toBeVisible();
+      const wordmark = page.locator("img.brand-asset-fit");
+      if ((await wordmark.count()) > 0) {
+        await expect(wordmark).toBeVisible();
+        await expect(page.getByText(fixture.brandName, { exact: true })).toHaveCount(0);
+      } else {
+        await expect(page.getByText(fixture.brandName, { exact: true }).first()).toBeVisible();
+      }
       await expect(page.getByText(/how would you rate/i)).toBeVisible();
       await expect(page.getByRole("button", { name: "Leave a Google review" })).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Share private feedback" })).toHaveCount(0);
@@ -80,6 +86,27 @@ test.describe("review requests", () => {
       await page.goto(`/r/${fixture.token}`, { waitUntil: "domcontentloaded" });
       await page.getByRole("button", { name: "Rate 5 out of 5" }).click();
       await expect(page).toHaveURL(/google\./, { timeout: 15_000 });
+    } finally {
+      await deleteReviewRequest(fixture.id, {
+        brandId: fixture.brandId,
+        googleRestore: fixture.googleRestore,
+      });
+    }
+  });
+
+  test("public review page exposes OG title and composed og:image", async ({ page }) => {
+    const fixture = await seedPublicReviewRequest();
+    try {
+      await page.goto(`/r/${fixture.token}`, { waitUntil: "domcontentloaded" });
+      const ogTitle = page.locator('meta[property="og:title"]');
+      await expect(ogTitle).toHaveAttribute("content", `Review ${fixture.brandName}`);
+      const ogImage = page.locator('meta[property="og:image"]');
+      await expect(ogImage).toHaveAttribute("content", /opengraph-image/i);
+      const imageUrl = await ogImage.getAttribute("content");
+      expect(imageUrl).toBeTruthy();
+      const imageResponse = await page.request.get(imageUrl!);
+      expect(imageResponse.status()).toBe(200);
+      expect(imageResponse.headers()["content-type"]).toMatch(/image\/png/i);
     } finally {
       await deleteReviewRequest(fixture.id, {
         brandId: fixture.brandId,
