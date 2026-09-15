@@ -2,31 +2,37 @@ import { describe, expect, it } from "vitest";
 import { formatPrivateFeedbackText, PRIVATE_FEEDBACK_REASONS } from "./feedbackReasons";
 
 describe("PRIVATE_FEEDBACK_REASONS", () => {
-  it("includes Something else as the last option", () => {
-    expect(PRIVATE_FEEDBACK_REASONS.at(-1)).toMatchObject({ id: "other", label: "Something else" });
+  it("uses the exact problem labels in registry order", () => {
+    expect(PRIVATE_FEEDBACK_REASONS).toEqual([
+      { id: "communication", label: "Poor communication" },
+      { id: "turnaround", label: "Slow turnaround time" },
+      { id: "pricing", label: "Pricing concerns" },
+      { id: "quality", label: "Quality of work concerns" },
+      { id: "other", label: "Something else" },
+    ]);
   });
 });
 
 describe("formatPrivateFeedbackText", () => {
   it("stores a single named reason without extra text", () => {
-    expect(formatPrivateFeedbackText(["pricing"], "  ")).toBe("Pricing");
+    expect(formatPrivateFeedbackText(["pricing"], "  ")).toBe("Pricing concerns");
   });
 
   it("appends extra detail to a named reason", () => {
     expect(formatPrivateFeedbackText(["communication"], " slow replies ")).toBe(
-      "Communication: slow replies",
+      "Poor communication: slow replies",
     );
   });
 
   it("joins multiple selected reasons", () => {
     expect(formatPrivateFeedbackText(["communication", "pricing"], "")).toBe(
-      "Communication, Pricing",
+      "Poor communication, Pricing concerns",
     );
   });
 
   it("joins multiple reasons with extra detail", () => {
     expect(formatPrivateFeedbackText(["communication", "other"], " parking ")).toBe(
-      "Communication, Something else: parking",
+      "Poor communication, Something else: parking",
     );
   });
 

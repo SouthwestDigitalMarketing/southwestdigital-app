@@ -60,17 +60,22 @@ test.describe("review requests", () => {
 
       await page.getByRole("button", { name: "Rate 4 out of 5" }).click();
       await expect(page.getByText(/thank you for your feedback/i)).toBeVisible();
-      await expect(page.getByRole("button", { name: "Communication" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Poor communication" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Slow turnaround time" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Pricing concerns" })).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "Quality of work concerns" }),
+      ).toBeVisible();
       await expect(page.getByRole("button", { name: "Something else" })).toBeVisible();
       await expect(page.getByPlaceholder(/add more detail/i)).toBeVisible();
 
-      await page.getByRole("button", { name: "Communication" }).click();
-      await page.getByRole("button", { name: "Pricing" }).click();
-      await expect(page.getByRole("button", { name: "Communication" })).toHaveAttribute(
+      await page.getByRole("button", { name: "Poor communication" }).click();
+      await page.getByRole("button", { name: "Pricing concerns" }).click();
+      await expect(page.getByRole("button", { name: "Poor communication" })).toHaveAttribute(
         "aria-pressed",
         "true",
       );
-      await expect(page.getByRole("button", { name: "Pricing" })).toHaveAttribute(
+      await expect(page.getByRole("button", { name: "Pricing concerns" })).toHaveAttribute(
         "aria-pressed",
         "true",
       );
