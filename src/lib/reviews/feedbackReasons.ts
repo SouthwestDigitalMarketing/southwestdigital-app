@@ -1,8 +1,8 @@
 export const PRIVATE_FEEDBACK_REASONS = [
-  { id: "communication", label: "Communication" },
-  { id: "turnaround", label: "Turnaround time" },
-  { id: "pricing", label: "Pricing" },
-  { id: "quality", label: "Quality of work" },
+  { id: "communication", label: "Poor communication" },
+  { id: "turnaround", label: "Slow turnaround time" },
+  { id: "pricing", label: "Pricing concerns" },
+  { id: "quality", label: "Quality of work concerns" },
   { id: "other", label: "Something else" },
 ] as const;
 
