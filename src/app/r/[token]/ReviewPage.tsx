@@ -122,8 +122,8 @@ export function ReviewPage({
             onSubmit={handleFeedbackSubmit}
             className="mt-4 rounded-2xl border border-slate-200 bg-white p-8 shadow-sm"
           >
-            <p className="text-center text-lg font-semibold text-slate-900">Thank you for your feedback</p>
-            <p className="mt-1 text-center text-sm text-slate-500">
+            <p className="text-center text-lg font-semibold text-slate-900">Thank you for your feedback ❤️</p>
+            <p className="mt-1 text-center text-lg text-slate-500">
               What kept this from being 5 stars?
             </p>
 
@@ -149,14 +149,16 @@ export function ReviewPage({
               })}
             </div>
 
-            <textarea
-              value={extraText}
-              onChange={(e) => setExtraText(e.target.value)}
-              placeholder={otherSelected ? "Tell us more…" : "Add more detail (optional)"}
-              rows={4}
-              maxLength={2000}
-              className="mt-4 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
-            />
+            {otherSelected && (
+              <textarea
+                value={extraText}
+                onChange={(e) => setExtraText(e.target.value)}
+                placeholder="Tell us more…"
+                rows={4}
+                maxLength={2000}
+                className="mt-4 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
+              />
+            )}
 
             <button
               type="submit"
