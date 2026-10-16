@@ -8,7 +8,7 @@ that is not obvious from the diffs.
 **Do not treat anything here as current state.** Every section below describes a
 checkpoint at the time it was written. Some claims were already wrong when this
 file was created — notably §35/§36/§37 say "not pushed", but all three are
-merged into `main`. For current state read `README.md`; for priorities read
+merged into `main`. For current state read `HANDOFF.md`; for priorities read
 `docs/SWAPP-REVIEW-AND-ROADMAP.md`.
 
 Corrections applied at archive time, for anyone reading the sections below:

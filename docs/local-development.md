@@ -1,7 +1,7 @@
 # Local development
 
-Setup and day-to-day commands. Engineering rules live in the global agent
-guidance; current branch state lives in `README.md`.
+Setup and day-to-day commands. Rules live in the global agent guidance (`~/.codex/AGENTS.md`); current branch state
+lives in `HANDOFF.md`.
 
 ## Setup
 
