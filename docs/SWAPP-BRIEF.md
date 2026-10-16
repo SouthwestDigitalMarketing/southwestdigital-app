@@ -3,7 +3,7 @@
 Orientation for anyone — human or agent — arriving at this repository without
 context. It answers *what this is and how it makes money*. It does not carry
 priorities (see `docs/SWAPP-REVIEW-AND-ROADMAP.md`), current branch state (see
-`HANDOFF.md`), or engineering rules (see `AGENTS.md`).
+`HANDOFF.md`), or engineering rules (see the global agent guidance (`~/.codex/AGENTS.md`)).
 
 Verified against `main` on 2026-09-08.
 
@@ -224,7 +224,7 @@ automation. Phase 4 is the earliest point at which SaaS revenue becomes real.
 
 ## 7. Constraints on any plan
 
-- Session engineering rules — never push without explicit user instruction; no production deploy, destructive migration, outbound message, or payment from an agent session — live only in `AGENTS.md`. Follow them.
+- Session engineering rules — never push without explicit user instruction; no production deploy, destructive migration, outbound message, or payment from an agent session — live only in the global agent guidance (`~/.codex/AGENTS.md`). Follow them.
 - AI product features and marketing bots are explicitly **excluded** from the
   current implementation scope.
 - Do not send authenticated portal activity, client identities or proposal

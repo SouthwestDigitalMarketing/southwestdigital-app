@@ -95,7 +95,7 @@ Evidence (current): `src/app/api/email-connections/zoho/callback/route.ts` (HMAC
 
 `src/lib/crm/repository.ts` uses `withBrandDataTransaction` and transaction-local PostgreSQL tenant context. The newer `/contacts` implementation uses direct Prisma queries without that context. With the documented forced RLS and a restricted runtime role, such contact queries should see no rows or fail writes. If those queries succeed in deployment, the actual policy/role configuration needs investigation; this review does not establish which condition is present.
 
-The schema also falls short of `AGENTS.md`: for example, `Engagement` and `Quote` have required `brandId` but no declared `Brand` relation; `PipelineItem`, `PipelineStage`, and `QuoteLineItem` lack their own `brandId`. A simple schema scan found 23 models with required `brandId` but no declared direct `Brand` relation. Some historical migrations declare constraints independently, so the scan is evidence of schema inconsistency, not proof that 23 live database foreign keys are missing.
+The schema also falls short of the global agent guidance (`~/.codex/AGENTS.md`): for example, `Engagement` and `Quote` have required `brandId` but no declared `Brand` relation; `PipelineItem`, `PipelineStage`, and `QuoteLineItem` lack their own `brandId`. A simple schema scan found 23 models with required `brandId` but no declared direct `Brand` relation. Some historical migrations declare constraints independently, so the scan is evidence of schema inconsistency, not proof that 23 live database foreign keys are missing.
 
 Inventory every business-data table and relationship. Reconcile schema, actual constraints, grants, RLS, and application repositories. Require brand-leading indexes and composite relationships where they prevent cross-brand links. Introduce narrow server-authorized contexts for public links, jobs, and platform operations before extending RLS; blanket policies would break bootstrap/authentication paths.
 
@@ -329,7 +329,7 @@ that design.** Record it here when it is given.
 
 ### What is already known to constrain it
 
-These follow from decisions elsewhere in this document and in `AGENTS.md`, and
+These follow from decisions elsewhere in this document and in the global agent guidance (`~/.codex/AGENTS.md`), and
 they apply whenever the work does start:
 
 - **This is a different liability class from marketing automation.** A bot that
@@ -370,7 +370,7 @@ These are dependency-ordered milestones, not a promised calendar. The automated 
 | 5. Prove customer outcomes | Weekly implementation calls, activation/retention/support metrics, consented case studies, separate audience attribution | Repeat use and documented outcomes across a cohort; sustainable support and gross margin; reasons for churn understood |
 | 6. Expand distribution and automation | Direct software referral program, then consented client referrals; narrowly scoped marketing agents | Reconciled partner statements, reliable conversion/payout records, controlled cross-brand sharing, automation quality/cost/suppression evidence |
 
-Design-system groundwork and interviews can run alongside security work, but external paid rollout waits for the safety and workflow gates. Keep version control changes small and reviewable, and preserve existing user work. Push policy lives in `AGENTS.md`.
+Design-system groundwork and interviews can run alongside security work, but external paid rollout waits for the safety and workflow gates. Keep version control changes small and reviewable, and preserve existing user work. Push policy lives in the global agent guidance (`~/.codex/AGENTS.md`).
 
 ### First implementation backlog
 

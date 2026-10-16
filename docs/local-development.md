@@ -1,6 +1,6 @@
 # Local development
 
-Setup and day-to-day commands. Rules live in `AGENTS.md`; current branch state
+Setup and day-to-day commands. Rules live in the global agent guidance (`~/.codex/AGENTS.md`); current branch state
 lives in `HANDOFF.md`.
 
 ## Setup

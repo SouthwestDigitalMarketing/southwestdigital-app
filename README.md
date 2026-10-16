@@ -21,7 +21,9 @@ The guarded first-tenant process is documented in [initial brand seed](docs/migr
 
 ## Documentation
 
-`AGENTS.md` is the single entry point: it carries the non-negotiable engineering rules and maps every other document. Start there.
+Engineering rules live in the global agent guidance (`~/.codex/AGENTS.md`), which is
+synchronized across machines and is not stored in this repository. The documents
+below map the rest.
 
 - `docs/SWAPP-BRIEF.md` — what the product and business are
 - `docs/SWAPP-REVIEW-AND-ROADMAP.md` — priorities, launch blockers, phase gates

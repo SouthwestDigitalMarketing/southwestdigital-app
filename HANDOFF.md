@@ -1,74 +1,103 @@
-# Coding-agent handoff
+# SWapp handoff
 
-**Current state only.** Rewrite this file each session rather than appending to
-it. Historical session logs live in `docs/handoff-archive/`; durable design and
-reference material lives in `docs/`. If a note here would still be true in three
-months, it belongs in `docs/`, not in this file.
+**Current state only.** Rewrite this file each session rather than appending.
+Historical session logs live in `docs/handoff-archive/`; durable design and
+reference material lives in `docs/`. If a note here would still be true in
+three months, it belongs in `docs/`, not here.
 
-Updated: 2026-09-14 (America/Chicago). Machine: **ripley**.
+Checked on **dalliance**, 2026-10-16 (America/Chicago), by Kassad.
+`README.md` describes the project; this file hands off the work.
 
 ## Read first
 
-`AGENTS.md` is the map. Crews do not push, PR, or merge. Do not run
-`prisma migrate deploy` / `migrate dev` / `db push`. Do not send outbound SMS
-unless the owner named the recipient in this session.
+Never push without explicit user instruction. Do not run
+`prisma migrate deploy`, `prisma migrate dev`, or `prisma db push` — see
+`docs/deployment/database-migration-state.md`. Do not send outbound SMS unless
+the owner named the recipient in this session. Crews do not push, PR, or merge.
 
 ## Repository state
 
-- Branch: `feat/review-requests-hardening`.
-- `origin/main` is `c400bb4` (PR #21, leads ship-policy wording).
-- Working tree should be clean.
+- Branch: `docs/restore-handoff-and-fix-agents-refs`.
+- `origin/main` is `ab34b8b` (`removed AGENTS.md, superceded by
+  tmacdonald7/agents/agents.md`). `main` was level with it, 0 ahead / 0 behind.
+- Working tree was **not** clean on arrival: nine uncommitted Markdown files
+  sat on local `main`, with `HANDOFF.md` staged for deletion. They are now
+  commit `5f6222f` on this branch, committed unmodified so the work is
+  recoverable, then corrected in the commit after it. No source or schema file
+  was involved.
 
-Local commits (oldest first):
+### What this branch does
 
-| SHA | Message |
-|---|---|
-| `912ef44` | `fix(reviews): host-scope public tokens and stop lying about metrics` |
-| `54fff48` | `fix(reviews): star rating first, 5 to Google, else private reasons` |
+`ab34b8b` deleted in-repo `AGENTS.md` in favour of the global agent guidance,
+which left documentation pointing at a file that no longer exists. The
+uncommitted pass found on `main` repointed those references but also deleted
+`HANDOFF.md` and folded its content into `README.md`. This branch keeps the
+necessary half and corrects the rest:
 
-## What this branch does
+- `HANDOFF.md` restored as its own file (this one), with current state rather
+  than the stale text that was folded into `README.md`.
+- `README.md` returned to its project-only shape, with its single dead
+  `AGENTS.md` pointer replaced by the global guidance. Its `HANDOFF.md`
+  pointer was already correct and is kept.
+- Seven dead `AGENTS.md` references fixed across `docs/SWAPP-BRIEF.md` (2),
+  `docs/SWAPP-REVIEW-AND-ROADMAP.md` (3), `docs/local-development.md` (1), and
+  `docs/offers/services-ui-handoff.md` (1). None remain outside the
+  `~/.codex/AGENTS.md` global-guidance blocks.
+- `CLAUDE.md` points at `README.md`, this file, and the global guidance.
 
-Public `/r/[token]` is host-scoped like proposals. Open tracking is a client
-action, not GET. Staff totals count the whole brand. Reminders have a 24h
-cooldown and skip people who already responded.
+The stale text this replaces claimed branch `feat/review-requests-hardening`,
+`origin/main` `c400bb4`, and "working tree should be clean". None of the three
+was true on 2026-10-16.
 
-The public page asks for 1–5 stars. Five opens the brand Google review URL.
-One through four thanks them and asks why (Communication, Turnaround time,
-Pricing, Quality of work, Something else with a text box).
-
-## Live SMS already sent this session
-
-Owner-authorized send to himself this session. The SMS link is production
-`app.bookkeepingconroe.com` (`main`), not this branch. Do not send another SMS.
-
-Brand Quo + Google review destination were saved onto Bookkeeping Conroe from
-local env during that send.
+Docs only. No source, schema, dependency, or configuration change.
 
 ## Health
 
-Measured on this branch, 2026-09-14, ripley:
+**Not verified in this session.** No test, typecheck, lint, or build was run,
+and the database was not contacted. The numbers in
+`docs/IMPLEMENTATION-STATUS.md` (583 tests across 74 files, 0 lint errors, 8
+`<img>` advisories) are dated 2026-09-08 and are carried as history, not as a
+current claim. Re-run the checks before relying on them.
 
-| Check | Result |
-|---|---|
-| `npm run typecheck` | pass |
-| `npm test` | 99 files / 784 tests at `912ef44`; later commit adds review tests |
-| Playwright `e2e/reviews.spec.ts` | 4 passed after `54fff48` |
-| Live SMS | one send, owner-authorized, arrived |
+## Incoming work: sales pipelines
 
-## Left for the crew
+Tom reassigned the SWapp sales-pipeline work from Ummon to Kassad on
+2026-10-16 because the design context sits in the Sales session. Board notice
+`6bf1f2fd2e4c`; survey record `91c374c539a8`.
 
-Reviewer then Tester on this branch. Report gaps. Worker only if Reviewer
-finds a real bug. Do not push. Ummon ships when Tom says.
+Read-only survey findings, from files only:
 
-Known leftover, not this job unless Reviewer says it blocks:
+- `Pipeline` / `PipelineStage` / `PipelineItem` already provide configurable
+  pipelines with ordered stages, `isTerminal` exits, and a per-stage
+  `valueMultiplier`. `PipelineItem` is unique per `(pipelineId, leadId)`, so
+  one lead can occupy several pipelines at once.
+- `ContactTagAutomation` maps a tag to a pipeline and optional stage, and
+  `applyTagPipelineAutomation` in `src/lib/contacts/automation.ts` acts on it
+  when a contact is tagged. An `INDUSTRY` tag yields `LeadKind.PROSPECT`; any
+  other kind yields `LeadKind.LEAD`.
+- `createStarterPipelinesAction` seeds four templates from
+  `src/app/(app)/pipeline/templates.ts`: `PROSPECTS`, `LEADS`,
+  `CLIENT_PHASE_1`, `CLIENT_PHASE_2`. The Prospects template already contains
+  `qbo-invite-requested` and `qbo-access-received`.
+- **Two lead models.** `MeetingLead` carries `LeadKind`,
+  `bookkeepingCategory`, contacts, and pipeline items — it is the CRM lead the
+  pipelines use. The separate `Lead` model carries `LeadStatus` and attribution
+  touches and is **not** in pipelines. The naming is misleading and matters to
+  anyone building on pipelines.
+- Quote page is `Quote.publicToken` → `/proposal/<token>`; signature and
+  deposit land on `Engagement` (`signedAt`, `signerIpAddress`,
+  `agreementTextHash`, `DiscoveryDepositStatus`).
+- **Missing** for the requested model: a satisfaction pipeline terminating in
+  a 5-star review (`ReviewRequest` exists as a model but no pipeline targets
+  it), an upsell pipeline, and any concept of a contact attempt that fails to
+  reach the decision maker (gatekeeper, no answer, voicemail). The last needs
+  a schema addition, which under the migration constraint above means reviewed
+  idempotent SQL and explicit per-change owner approval.
 
-- Send dialog does not attach `contactId` even when a matching Contact exists.
-- Production still shows the old two-button public page until this merges.
+## Open follow-ups
 
-## First commands
-
-```bash
-git status --short
-git log -5 --oneline
-git fetch origin
-```
+- Whether the four starter pipelines were ever actually created in the live
+  database is **unknown**; a read-only survey is staged but had not been run
+  when this was written.
+- `docs/IMPLEMENTATION-STATUS.md` and `README.md` both still describe branch
+  and health state from mid-September. Only this file was brought current.
