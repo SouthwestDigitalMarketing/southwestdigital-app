@@ -185,7 +185,7 @@ Exports are job records with future worker/storage/download behavior, not delive
 
 Rehearse schema reconciliation and backups/restores in a disposable environment; establish a reproducible migration baseline before restoring routine deploy migrations. Complete private exports including offers, signed records and payment references, scheduled transitions, retention and restore/deletion handling. Add CI, security/dependency checks, release rollback, structured error reporting, health checks, and operating ownership. Have final contracts, privacy/data processing terms, and referral terms reviewed for the actual business model and jurisdictions.
 
-Evidence: `docs/architecture/offboarding-and-exports.md`; `docs/architecture/data-ownership.md`; `src/lib/offboarding/repository.ts`; `src/app/terms-of-service/page.tsx`; `HANDOFF.md`.
+Evidence: `docs/architecture/offboarding-and-exports.md`; `docs/architecture/data-ownership.md`; `src/lib/offboarding/repository.ts`; `src/app/terms-of-service/page.tsx`; `README.md`.
 
 ## Experience and visual direction
 

@@ -1,7 +1,8 @@
 # SWapp
 
-**Read `AGENTS.md` first.** It is the single entry for engineering rules and
-the map of every other document in this repository.
+**Read `README.md` first.** It is the single entry point for this repository:
+product context, current status, session handoff state, and pointers to
+everything else.
 
 This file is a pointer so Claude Code has something to auto-read. Do not add
 setup, status, or a second map here.

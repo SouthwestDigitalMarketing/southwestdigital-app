@@ -21,7 +21,7 @@ User approved implementing the UI recommendations, with limited remaining Codex 
 
 ## Continuation constraints
 
-- Read AGENTS.md and HANDOFF.md together with private .local/COMPUTERS.md.
+- Read AGENTS.md and README.md together with private .local/COMPUTERS.md.
 - Existing checkout/service resolver is the authority for eligibility and pricing. Do not change tier scope on reads, publish an offer, or migrate database data for UI testing.
 - Browser discovery previously returned no connected browsers; do not claim live visual verification unless a connection becomes available.
 - No push requested for this new implementation; the earlier push request was fulfilled.

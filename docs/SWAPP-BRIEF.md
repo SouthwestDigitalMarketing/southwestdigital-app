@@ -3,7 +3,7 @@
 Orientation for anyone — human or agent — arriving at this repository without
 context. It answers *what this is and how it makes money*. It does not carry
 priorities (see `docs/SWAPP-REVIEW-AND-ROADMAP.md`), current branch state (see
-`HANDOFF.md`), or engineering rules (see `AGENTS.md`).
+`README.md`), or engineering rules (see `AGENTS.md`).
 
 Verified against `main` on 2026-09-08.
 
