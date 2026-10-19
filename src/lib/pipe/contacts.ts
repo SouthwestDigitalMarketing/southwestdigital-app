@@ -43,6 +43,39 @@ export function toE164(raw: string | null | undefined): string | null {
   return null;
 }
 
+const NAME_TITLES: ReadonlySet<string> = new Set(["mr", "mrs", "ms", "dr", "miss"]);
+
+function nameWords(name: string | null | undefined): string[] {
+  return (name ?? "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word && !NAME_TITLES.has(word));
+}
+
+function wordFits(word: string, others: string[]): boolean {
+  return others.some(
+    (other) =>
+      word === other ||
+      (word.length === 1 && other.startsWith(word)) ||
+      (other.length === 1 && word.startsWith(other)),
+  );
+}
+
+/**
+ * Names that plausibly belong to one person: equal, or one holds the other
+ * ("Dana" is "Dana Reyes", but "Lopez" is not "Rosa Lopez" — a shared
+ * surname). Titles and punctuation are ignored. The same rule pipe uses
+ * when it matches by phone, so one office line never merges two people.
+ */
+export function samePerson(a: string | null | undefined, b: string | null | undefined): boolean {
+  const left = nameWords(a);
+  const right = nameWords(b);
+  if (left.length === 0 || right.length === 0) return true;
+  const [shorter, longer] = left.length <= right.length ? [left, right] : [right, left];
+  if (shorter.length === 1) return wordFits(shorter[0], longer.slice(0, 1));
+  return shorter.every((word) => wordFits(word, longer));
+}
+
 export type PipeContactInput = {
   brand: string;
   name: string;
@@ -190,9 +223,11 @@ export async function listPipeContacts(args: {
 }
 
 /**
- * Create the contact unless this brand already has one with the same phone or
- * email, in which case that contact is returned and nothing is changed. The
- * same person under another brand is a separate contact, by design.
+ * Create the contact unless this brand already has the same person, in
+ * which case that contact is returned and nothing is changed. An email
+ * match is the same person. A phone match counts only when the names fit
+ * too, because an office line is shared by several people. The same person
+ * under another brand is a separate contact, by design.
  */
 export async function upsertPipeContact(args: {
   actorUserId: string;
@@ -203,18 +238,27 @@ export async function upsertPipeContact(args: {
   const context = createBrandDataContext({ brandId: brand.id, actorUserId: args.actorUserId });
   const phoneE164 = toE164(input.phone);
   return withBrandDataTransaction(context, async (transaction) => {
-    const matches = [
-      ...(phoneE164 ? [{ phoneE164 }] : []),
-      ...(input.email ? [{ email: { equals: input.email, mode: "insensitive" as const } }] : []),
-    ];
-    const existing = matches.length
+    const byEmail = input.email
       ? await transaction.contact.findFirst({
-          where: { brandId: brand.id, OR: matches },
+          where: {
+            brandId: brand.id,
+            email: { equals: input.email, mode: "insensitive" as const },
+          },
           select,
           orderBy: { createdAt: "asc" },
         })
       : null;
-    if (existing) return { created: false, contact: present(brand.slug, existing) };
+    if (byEmail) return { created: false, contact: present(brand.slug, byEmail) };
+    if (phoneE164) {
+      const byPhone = await transaction.contact.findFirst({
+        where: { brandId: brand.id, phoneE164 },
+        select,
+        orderBy: { createdAt: "asc" },
+      });
+      if (byPhone && samePerson(input.name, byPhone.name)) {
+        return { created: false, contact: present(brand.slug, byPhone) };
+      }
+    }
     const row = await transaction.contact.create({
       data: {
         brandId: brand.id,

@@ -30,6 +30,7 @@ import {
   authenticatePipeRequest,
   listPipeContacts,
   parsePipeContactInput,
+  samePerson,
   splitPipeName,
   toE164,
   upsertPipeContact,
@@ -131,6 +132,25 @@ describe("splitPipeName", () => {
   });
 });
 
+describe("samePerson", () => {
+  it("holds across titles, initials, and short spellings", () => {
+    expect(samePerson("Dana Reyes", "Dana Reyes")).toBe(true);
+    expect(samePerson("Dana", "Dana Reyes")).toBe(true);
+    expect(samePerson("D Lopez", "Dionisio Lopez")).toBe(true);
+    expect(samePerson("D Reyes", "Dana Reyes")).toBe(true);
+  });
+  it("tells two people apart on a shared surname or number", () => {
+    expect(samePerson("Rosa Lopez", "Mr. Lopez")).toBe(false);
+    expect(samePerson("Mr. Lopez", "Dionisio Lopez")).toBe(false); // lone surname
+    expect(samePerson("Lopez", "Rosa Lopez")).toBe(false);
+    expect(samePerson("Dana Reyes", "Marcus Webb")).toBe(false);
+  });
+  it("cannot tell with an empty name, so it says yes", () => {
+    expect(samePerson("", "Dana Reyes")).toBe(true);
+    expect(samePerson(null, undefined)).toBe(true);
+  });
+});
+
 describe("upsertPipeContact", () => {
   const input = { brand: "melbourne-cfo", name: "Dana Reyes", company: "Conroe Realty", email: "dana@example.com", phone: "936-555-1234" };
 
@@ -170,18 +190,53 @@ describe("upsertPipeContact", () => {
     expect(mocks.contactCreate).not.toHaveBeenCalled();
   });
 
-  it("matches only inside this brand, by phone or case-insensitive email", async () => {
+  it("matches only inside this brand, by email then by phone", async () => {
     mocks.contactFindFirst.mockResolvedValue(null);
     mocks.contactCreate.mockResolvedValue(row());
     await upsertPipeContact({ actorUserId: "user-1", input });
-    expect(mocks.contactFindFirst).toHaveBeenCalledWith(
+    expect(mocks.contactFindFirst).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({
         where: {
           brandId: "brand-1",
-          OR: [{ phoneE164: "+19365551234" }, { email: { equals: "dana@example.com", mode: "insensitive" } }],
+          email: { equals: "dana@example.com", mode: "insensitive" },
         },
       }),
     );
+    expect(mocks.contactFindFirst).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: { brandId: "brand-1", phoneE164: "+19365551234" },
+      }),
+    );
+  });
+
+  it("does not merge two people who share an office phone", async () => {
+    mocks.contactFindFirst
+      .mockResolvedValueOnce(null) // no email match
+      .mockResolvedValueOnce(row({ id: "c9", name: "Rosa Lopez" })); // same number
+    mocks.contactCreate.mockResolvedValue(row({ id: "c10", name: "Mr. Lopez" }));
+    const result = await upsertPipeContact({
+      actorUserId: "user-1",
+      input: { ...input, name: "Mr. Lopez", email: "dlopez@ariws.com" },
+    });
+    expect(result.created).toBe(true);
+    expect(result.contact.id).toBe("c10");
+    expect(mocks.contactCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ name: "Mr. Lopez" }),
+      }),
+    );
+  });
+
+  it("still matches one person under two spellings of their name", async () => {
+    mocks.contactFindFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(row({ id: "c9", name: "Dana" }));
+    const result = await upsertPipeContact({ actorUserId: "user-1", input });
+    expect(result.created).toBe(false);
+    expect(result.contact.id).toBe("c9");
+    expect(mocks.contactCreate).not.toHaveBeenCalled();
   });
 
   it("with no phone or email there is nothing to match on, so it creates", async () => {
