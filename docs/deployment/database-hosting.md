@@ -1,8 +1,53 @@
 # Database hosting decision
 
-Decision: production requires a separate Supabase project named for `southwestdigital-app`, owned by the Southwest Digital organization. The existing Bookkeeping Conroe Supabase project is a legacy migration source, not the platform database.
+> **Superseded in part, 2026-10-19.** On 2026-09-25 Thomas decided on **one shared
+> Supabase project for the whole ecosystem** (`pvolllgvujjvteijtnid`), owned by the
+> platform migration lineage, and said not to create a second database. The
+> decision below to give SWapp its own project was never carried out and is **not
+> the plan**. What is true today is in "State as of 2026-10-19". The isolation
+> reasoning, connection contract and preflight below still describe the target.
 
-Using the same Supabase organization and billing relationship is appropriate. Using the same PostgreSQL database is not.
+## State as of 2026-10-19
+
+Read-only inspection of the live project, no changes made:
+
+- One project holds everything. The `public` schema has 108 tables: SWapp's
+  multi-brand platform tables and the earlier Bookkeeping Conroe tables
+  (`TicketClient`, `log_items`, ...). Uncle Invoice has its own `uncleinvoice`
+  schema (22 tables) in the same project.
+- Migration history starts at `20260817205118_init` and runs to
+  `20261019150738_optional_workspace_email` (31 rows).
+- **The roles this document requires do not exist.** `swd_web_runtime` and
+  `swd_migrator` are not in `pg_roles`. The app, the migrations and Uncle Invoice
+  all connect as `postgres`, which owns all 130 tables in `public` and
+  `uncleinvoice` and has `CREATEROLE`, `CREATEDB` and `BYPASSRLS`. `DATABASE_URL`
+  (pooled, port 6543) and `DIRECT_DATABASE_URL` (port 5432) use that same
+  credential.
+- **Row-level security is not enabled at all.** For `Contact`, `Lead`,
+  `CustomerAccount` and `TicketClient`, `relrowsecurity` is false, and
+  `pg_policies` has no rows in `public`. The CRM RLS migration described in
+  [database tenant isolation](../architecture/database-tenant-isolation.md) has not
+  been applied to production, and the connecting role would bypass it anyway.
+  Brand isolation currently rests on application queries and composite foreign
+  keys alone.
+- Brand slugs in the live `Brand` table: `bc`, `contigo-accounting`,
+  `melbourne-cfo`, `southwest-digital-marketing`, `treb`.
+
+### Remediation order
+
+1. **Done 2026-10-19:** a `SELECT`-only role, `swd_readonly`, for operators and
+   agents, so nobody needs the owner credential to look at data. See
+   [readonly-role.md](readonly-role.md).
+2. Apply the RLS migration and create `swd_web_runtime` and `swd_migrator` per the
+   provisioning runbook, verify RLS enforces for the runtime role in a disposable
+   copy first, then move
+   the deployment's `DATABASE_URL` to the runtime role.
+3. Rotate the `postgres` password and keep it out of local `.env` files.
+4. Uncle Invoice needs its own runtime role scoped to its schema before it shares
+   the project with anything else.
+
+None of this has been done. Production changes follow the preflight below and
+need the owner's explicit go-ahead.
 
 ## Why the legacy project cannot be reused
 
