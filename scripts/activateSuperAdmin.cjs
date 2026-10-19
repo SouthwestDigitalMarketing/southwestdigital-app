@@ -11,7 +11,7 @@ const prisma = new PrismaClient();
 
 const EMAIL = "thomas@bookkeepingconroe.com";
 const NAME = "Thomas MacDonald";
-const BC_BRAND_SLUG = "bc";
+const BC_BRAND_SLUG = "bookkeeping-conroe";
 
 async function main() {
   // Ensure user exists and is ACTIVE OWNER

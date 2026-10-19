@@ -25,7 +25,7 @@ const BRAND_THEME_SELECT = {
   accentForegroundColor: true,
 } as const;
 
-const DEV_FALLBACK_SLUG = process.env.DEV_BRAND_SLUG ?? "bc";
+const DEV_FALLBACK_SLUG = process.env.DEV_BRAND_SLUG ?? "bookkeeping-conroe";
 
 const BRAND_SELECT = {
   id: true,

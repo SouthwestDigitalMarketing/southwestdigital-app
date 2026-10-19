@@ -1,5 +1,6 @@
 import "server-only";
 import { getAccessToken } from "./analytics";
+import { isBookkeepingConroe } from "@/lib/brands/slugs";
 
 export type SourceTagVideo = { title: string; videoId: string; thumbnailUrl: string };
 
@@ -9,7 +10,7 @@ export type SourceTagVideo = { title: string; videoId: string; thumbnailUrl: str
 function buildTagPattern(redirectDomain: string, brandSlug: string) {
   const escaped = redirectDomain.replace(/\./g, "\\.");
   const pathPattern =
-    brandSlug === "bc"
+    isBookkeepingConroe(brandSlug)
       ? `(?:s|b)([a-z])` // two-char prefixed: capture last char
       : `([a-z0-9])`;    // single char
   return new RegExp(`${escaped}/${pathPattern}(?![a-z0-9])`, "gi");

@@ -37,7 +37,7 @@ type GoogleRestore = {
 
 export async function seedPublicReviewRequest() {
   const brand = await prisma.brand.findFirst({
-    where: { slug: "bc" },
+    where: { slug: "bookkeeping-conroe" },
     select: { id: true, name: true },
   });
   if (!brand) throw new Error("Brand slug bc is required for review e2e fixtures.");

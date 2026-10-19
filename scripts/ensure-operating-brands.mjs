@@ -25,7 +25,7 @@ const brands = [
     },
   },
   {
-    slug: "bc",
+    slug: "bookkeeping-conroe",
     name: "Bookkeeping Conroe",
     appHostname: "app.bookkeepingconroe.com",
     ownerEmail: "thomas@bookkeepingconroe.com",
@@ -64,7 +64,7 @@ const brands = [
     },
   },
   {
-    slug: "treb",
+    slug: "real-estate-bookkeeper",
     name: "The Real Estate Bookkeeper",
     appHostname: "app.realestatebookkeeper.com",
     ownerEmail: "thomas@bookkeepingconroe.com",
@@ -84,7 +84,7 @@ const THOMAS_EMAILS = [
   "tmacdonald7@gmail.com",
 ];
 
-const THOMAS_OWNED_BRAND_SLUGS = ["bc", "treb"];
+const THOMAS_OWNED_BRAND_SLUGS = ["bookkeeping-conroe", "real-estate-bookkeeper"];
 
 async function ensureUser(email, name) {
   const existing = await prisma.user.findUnique({ where: { email } });
