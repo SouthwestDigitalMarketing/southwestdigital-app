@@ -101,3 +101,21 @@ Read-only survey findings, from files only:
   when this was written.
 - `docs/IMPLEMENTATION-STATUS.md` and `README.md` both still describe branch
   and health state from mid-September. Only this file was brought current.
+
+## Pipe sync routes: on branch, unapplied (2026-10-19)
+
+- Branch `feat/pipe-contacts-first-last-name` carries the complete-sync
+  build: `/api/pipe/contacts` now stores first/last names (split from the
+  full name when missing); new `/api/pipe/businesses` (accounts plus people
+  links with roles and can-decide) and `/api/pipe/deals` (leads keyed by
+  pipe number, stages in an auto-created `pipe-prospects` pipeline per
+  brand, next steps, money, invoice, who-said-yes, business link).
+- Two additive migrations, NOT applied anywhere:
+  `..._pipe_businesses_can_decide` (`CustomerContact.canDecide`) and
+  `..._pipe_deal_fields` (`MeetingLead` pipe working fields plus
+  `customerAccountId`, unique `(brandId, pipeId)`). Production apply needs
+  Tom's go; re-run the restricted-role scratch test against the new columns
+  first (grants are table-level, so no grant change is expected).
+- Verified this session: 56 pipe tests pass, `tsc --noEmit` clean, eslint
+  clean on `src/lib/pipe/` and `src/app/api/pipe/`. The DB-backed
+  integration test still needs a live scratch Postgres (none on this box).
