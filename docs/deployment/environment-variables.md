@@ -36,3 +36,16 @@ never used as the recipient host. Send fails closed if the brand has no
 verified app domain. SMS from-number / API key and the Google review URL are
 brand-scoped `BrandIntegration` rows (`quo` and `google-review`), not `QUO_*`
 or `GOOGLE_REVIEW_URL`.
+
+## Pipe contacts API
+
+`/api/pipe/contacts` lets the `pipe` terminal tool (LochsideLLC/sales) list and
+create contacts for a brand. It is off until both variables exist:
+
+- `PIPE_API_TOKEN_SHA256`: hex SHA-256 of the shared bearer token. Generate the
+  token, keep it only in `pipe`'s environment, and store just this hash here:
+  `printf '%s' "$TOKEN" | sha256sum`.
+- `PIPE_API_ACTOR_USER_ID`: the `User.id` the writes are attributed to.
+
+Every request runs in the brand-scoped transaction, so row-level security
+applies. Matching is per brand, by E.164 phone or case-insensitive email.
