@@ -87,6 +87,10 @@ export type PipeContactInput = {
   company?: string | null;
   email?: string | null;
   phone?: string | null;
+  /** datastore id for updates and deletes. */
+  id?: string | null;
+  /** true deletes the card instead of writing it. */
+  deleted?: boolean | null;
 };
 
 export type PipeContact = {
@@ -122,20 +126,24 @@ function clean(value: unknown, max: number): string | null {
 export function parsePipeContactInput(body: unknown): PipeContactInput {
   const raw = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
   const brand = clean(raw.brand, 80);
+  const id = clean(raw.id, 64);
+  const deleted = raw.deleted === true;
   const name = clean(raw.name, 200);
   if (!brand) throw new RangeError("brand is required");
-  if (!name) throw new RangeError("name is required");
+  if (!name && !deleted) throw new RangeError("name is required");
   const email = clean(raw.email, 254)?.toLowerCase() ?? null;
   if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new RangeError("email is not valid");
   const [splitFirst, splitLast] = splitPipeName(name);
   return {
     brand,
-    name,
+    name: name ?? "",
     firstName: clean(raw.firstName ?? raw.first_name, 100) ?? splitFirst,
     lastName: clean(raw.lastName ?? raw.last_name, 100) ?? splitLast,
     company: clean(raw.company, 200),
     email,
     phone: clean(raw.phone, 64),
+    id,
+    deleted,
   };
 }
 
@@ -229,35 +237,109 @@ export async function listPipeContacts(args: {
  * too, because an office line is shared by several people. The same person
  * under another brand is a separate contact, by design.
  */
+export type PipeContactUpsert =
+  | { created: true; contact: PipeContact }
+  | { created: false; updated: true; contact: PipeContact }
+  | { deleted: true }
+  | { skipped: { field: string; id: string; reason: string }[] };
+
+const live = { isActive: true } as const;
+
 export async function upsertPipeContact(args: {
   actorUserId: string;
   input: PipeContactInput;
-}): Promise<{ created: boolean; contact: PipeContact }> {
+}): Promise<PipeContactUpsert> {
   const { input } = args;
   const brand = await resolveBrand(input.brand);
   const context = createBrandDataContext({ brandId: brand.id, actorUserId: args.actorUserId });
   const phoneE164 = toE164(input.phone);
   return withBrandDataTransaction(context, async (transaction) => {
+    if (input.id) {
+      const byId = await transaction.contact.findFirst({
+        where: { brandId: brand.id, id: input.id },
+        select,
+      });
+      if (byId) {
+        if (input.deleted) {
+          await transaction.contact.update({
+            where: { id: byId.id },
+            data: { isActive: false },
+            select: { id: true },
+          });
+          return { deleted: true as const };
+        }
+        const row = await transaction.contact.update({
+          where: { id: byId.id },
+          data: {
+            name: input.name,
+            firstName: input.firstName ?? null,
+            lastName: input.lastName ?? null,
+            company: input.company ?? null,
+            email: input.email ?? null,
+            phoneNumber: input.phone ?? null,
+            phoneE164,
+            // An update is a living card: it lifts a soft delete.
+            isActive: true,
+          },
+          select,
+        });
+        return { created: false, updated: true, contact: present(brand.slug, row) };
+      }
+      if (input.deleted) {
+        return { skipped: [{ field: "id", id: input.id, reason: "unknown id" }] };
+      }
+    }
     const byEmail = input.email
       ? await transaction.contact.findFirst({
           where: {
             brandId: brand.id,
+            ...live,
             email: { equals: input.email, mode: "insensitive" as const },
           },
           select,
           orderBy: { createdAt: "asc" },
         })
       : null;
-    if (byEmail) return { created: false, contact: present(brand.slug, byEmail) };
-    if (phoneE164) {
+    if (byEmail && !input.deleted) {
+      const row = await transaction.contact.update({
+        where: { id: byEmail.id },
+        data: {
+          name: input.name,
+          firstName: input.firstName ?? null,
+          lastName: input.lastName ?? null,
+          company: input.company ?? null,
+          phoneNumber: input.phone ?? null,
+          phoneE164,
+        },
+        select,
+      });
+      return { created: false, updated: true, contact: present(brand.slug, row) };
+    }
+    if (phoneE164 && !input.deleted) {
       const byPhone = await transaction.contact.findFirst({
-        where: { brandId: brand.id, phoneE164 },
+        where: { brandId: brand.id, ...live, phoneE164 },
         select,
         orderBy: { createdAt: "asc" },
       });
       if (byPhone && samePerson(input.name, byPhone.name)) {
-        return { created: false, contact: present(brand.slug, byPhone) };
+        const row = await transaction.contact.update({
+          where: { id: byPhone.id },
+          data: {
+            name: input.name,
+            firstName: input.firstName ?? null,
+            lastName: input.lastName ?? null,
+            company: input.company ?? null,
+            email: input.email ?? null,
+            phoneNumber: input.phone ?? null,
+            phoneE164,
+          },
+          select,
+        });
+        return { created: false, updated: true, contact: present(brand.slug, row) };
       }
+    }
+    if (input.deleted) {
+      return { skipped: [{ field: "id", id: input.id ?? "", reason: "unknown id" }] };
     }
     const row = await transaction.contact.create({
       data: {
