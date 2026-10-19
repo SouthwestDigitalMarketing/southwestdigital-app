@@ -23,20 +23,24 @@ Read-only inspection of the live project, no changes made:
   `uncleinvoice` and has `CREATEROLE`, `CREATEDB` and `BYPASSRLS`. `DATABASE_URL`
   (pooled, port 6543) and `DIRECT_DATABASE_URL` (port 5432) use that same
   credential.
-- **Consequence:** the row-level security described in
-  [database tenant isolation](../architecture/database-tenant-isolation.md) is not
-  enforced in production, because the connecting role bypasses it. Brand
-  isolation currently rests on application queries and composite foreign keys
-  alone.
+- **Row-level security is not enabled at all.** For `Contact`, `Lead`,
+  `CustomerAccount` and `TicketClient`, `relrowsecurity` is false, and
+  `pg_policies` has no rows in `public`. The CRM RLS migration described in
+  [database tenant isolation](../architecture/database-tenant-isolation.md) has not
+  been applied to production, and the connecting role would bypass it anyway.
+  Brand isolation currently rests on application queries and composite foreign
+  keys alone.
 - Brand slugs in the live `Brand` table: `bc`, `contigo-accounting`,
   `melbourne-cfo`, `southwest-digital-marketing`, `treb`.
 
 ### Remediation order
 
-1. Create a `SELECT`-only role for read access by operators and agents, so nobody
-   needs the owner credential to look at data.
-2. Create `swd_web_runtime` and `swd_migrator` per the provisioning runbook,
-   verify RLS enforces for the runtime role in a disposable copy first, then move
+1. **Done 2026-10-19:** a `SELECT`-only role, `swd_readonly`, for operators and
+   agents, so nobody needs the owner credential to look at data. See
+   [readonly-role.md](readonly-role.md).
+2. Apply the RLS migration and create `swd_web_runtime` and `swd_migrator` per the
+   provisioning runbook, verify RLS enforces for the runtime role in a disposable
+   copy first, then move
    the deployment's `DATABASE_URL` to the runtime role.
 3. Rotate the `postgres` password and keep it out of local `.env` files.
 4. Uncle Invoice needs its own runtime role scoped to its schema before it shares
