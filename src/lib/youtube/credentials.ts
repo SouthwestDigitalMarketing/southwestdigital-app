@@ -3,11 +3,12 @@ import "server-only";
 import { IntegrationProvider, IntegrationStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { decryptSecret } from "@/lib/secrets/encryption";
+import { brandEnvKey } from "@/lib/brands/slugs";
 
 export const YOUTUBE_INTEGRATION_KEY = "youtube";
 
 export function youtubeRefreshTokenEnvKey(slug: string) {
-  return `YOUTUBE_REFRESH_TOKEN_${slug.toUpperCase().replace(/-/g, "_")}`;
+  return `YOUTUBE_REFRESH_TOKEN_${brandEnvKey(slug)}`;
 }
 
 export async function getYouTubeRefreshToken(brandId: string, slug: string) {

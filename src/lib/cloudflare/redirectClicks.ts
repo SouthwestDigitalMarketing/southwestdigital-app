@@ -1,5 +1,7 @@
 import "server-only";
 
+import { brandEnvKey, isBookkeepingConroe } from "@/lib/brands/slugs";
+
 const LETTERS = Array.from({ length: 26 }, (_, i) => String.fromCharCode(97 + i));
 
 // The possible tag values (a-z) — used to write zero rows for missing days
@@ -9,7 +11,7 @@ export const SOURCE_TAG_CHARS = LETTERS;
 // bc:   community = /s[a-z], services = /b[a-z]
 // default: /[a-z] (single char, used for TREB services on bookkeepingconroe.com)
 export function getBrandSourceTagPaths(brandSlug: string): string[] {
-  if (brandSlug === "bc") {
+  if (isBookkeepingConroe(brandSlug)) {
     return [...LETTERS.map((l) => `/s${l}`), ...LETTERS.map((l) => `/b${l}`)];
   }
   return LETTERS.map((l) => `/${l}`);
@@ -91,7 +93,7 @@ export async function fetchClicksForDays(
 }
 
 export function getCloudflareCredentials(brandSlug: string): { token: string; zoneId: string } {
-  const key = brandSlug.toUpperCase().replace(/-/g, "_");
+  const key = brandEnvKey(brandSlug);
   const token = process.env[`CLOUDFLARE_API_${key}`]?.trim();
   const zoneId = process.env[`CLOUDFLARE_ZONE_ID_${key}`]?.trim();
   if (!token) throw new Error(`CLOUDFLARE_API_${key} is not configured.`);
