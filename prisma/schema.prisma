@@ -1629,12 +1629,25 @@ model MeetingLead {
   company             String?
   email               String?
   clientId            String?
+  customerAccountId   String?
   kind                LeadKind                @default(LEAD)
   bookkeepingCategory LeadBookkeepingCategory @default(SMALL_BUSINESS)
   expectedServices    String?
   notes               String?
   isActive            Boolean                 @default(true)
+  // Identity and working fields for the pipe terminal tool. pipe's deal
+  // numbers never change, so pipeId is the stable cross-system key. Due
+  // dates stay text: they are calendar days, not instants.
+  pipeId              String?
+  nextAction          String?
+  nextDue             String?
+  amount              Decimal?                @db.Decimal(14, 2)
+  amountKind          String?
+  invoiceRef          String?
+  invoiceDate         String?
+  yesContactId        String?
   client              TicketClient?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  customerAccount     CustomerAccount?        @relation(fields: [customerAccountId], references: [id], onDelete: SetNull)
   meetings            TeamMeetingLead[]
   contacts            LeadContact[]
   pipelineItems       PipelineItem[]
@@ -1642,6 +1655,7 @@ model MeetingLead {
   updatedAt           DateTime                @updatedAt
 
   @@index([brandId, clientId, createdAt])
+  @@unique([brandId, pipeId])
 }
 
 model TeamMeetingLead {
@@ -2667,6 +2681,7 @@ model CustomerAccount {
   brand              Brand             @relation(fields: [brandId], references: [id], onDelete: Restrict)
   contacts           CustomerContact[]
   convertedLeads     Lead[]
+  meetingLeads       MeetingLead[]
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 
@@ -2683,6 +2698,7 @@ model CustomerContact {
   contactId         String
   relationship      String?
   isPrimary         Boolean         @default(false)
+  canDecide         Boolean         @default(false)
   brand             Brand           @relation(fields: [brandId], references: [id], onDelete: Restrict)
   customerAccount   CustomerAccount @relation(fields: [brandId, customerAccountId], references: [brandId, id], onDelete: Restrict)
   contact           Contact         @relation(fields: [brandId, contactId], references: [brandId, id], onDelete: Restrict)

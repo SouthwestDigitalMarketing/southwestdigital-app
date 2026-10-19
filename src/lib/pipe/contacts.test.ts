@@ -30,6 +30,7 @@ import {
   authenticatePipeRequest,
   listPipeContacts,
   parsePipeContactInput,
+  splitPipeName,
   toE164,
   upsertPipeContact,
 } from "./contacts";
@@ -42,6 +43,8 @@ const env = {
 const row = (over = {}) => ({
   id: "c1",
   name: "Dana Reyes",
+  firstName: "Dana",
+  lastName: "Reyes",
   company: "Conroe Realty",
   email: "dana@example.com",
   phoneNumber: "(936) 555-1234",
@@ -90,7 +93,24 @@ describe("toE164", () => {
 describe("parsePipeContactInput", () => {
   it("trims, lowercases the email and drops empty fields", () => {
     expect(parsePipeContactInput({ brand: " melbourne-cfo ", name: " Dana ", email: " Dana@Example.COM ", company: " " })).toEqual({
-      brand: "melbourne-cfo", name: "Dana", company: null, email: "dana@example.com", phone: null,
+      brand: "melbourne-cfo", name: "Dana", firstName: "Dana", lastName: null,
+      company: null, email: "dana@example.com", phone: null,
+    });
+  });
+  it("fills first and last names from the full name", () => {
+    expect(parsePipeContactInput({ brand: "b", name: "Dana Reyes" })).toMatchObject({
+      firstName: "Dana", lastName: "Reyes",
+    });
+    expect(parsePipeContactInput({ brand: "b", name: "Mr. Lopez" })).toMatchObject({
+      firstName: "Lopez", lastName: null,
+    });
+  });
+  it("keeps explicit names in either casing and prefers them over the split", () => {
+    expect(parsePipeContactInput({ brand: "b", name: "Dana Reyes", first_name: "Dana", last_name: "Reyes-Garcia" })).toMatchObject({
+      firstName: "Dana", lastName: "Reyes-Garcia",
+    });
+    expect(parsePipeContactInput({ brand: "b", name: "Dana Reyes", firstName: "Dana", lastName: "R" })).toMatchObject({
+      firstName: "Dana", lastName: "R",
     });
   });
   it("requires a brand and a name and a valid email", () => {
@@ -98,6 +118,16 @@ describe("parsePipeContactInput", () => {
     expect(() => parsePipeContactInput({ brand: "b" })).toThrow("name is required");
     expect(() => parsePipeContactInput({ brand: "b", name: "x", email: "nope" })).toThrow("email is not valid");
     expect(() => parsePipeContactInput(null)).toThrow(RangeError);
+  });
+});
+
+describe("splitPipeName", () => {
+  it("splits first and last the way pipe does", () => {
+    expect(splitPipeName("Dana Reyes")).toEqual(["Dana", "Reyes"]);
+    expect(splitPipeName("Dana")).toEqual(["Dana", null]);
+    expect(splitPipeName("Mr. Lopez")).toEqual(["Lopez", null]);
+    expect(splitPipeName("Mary Ann Reyes")).toEqual(["Mary", "Reyes"]);
+    expect(splitPipeName("")).toEqual([null, null]);
   });
 });
 
@@ -109,11 +139,26 @@ describe("upsertPipeContact", () => {
     mocks.contactCreate.mockResolvedValue(row());
     const result = await upsertPipeContact({ actorUserId: "user-1", input });
     expect(result.created).toBe(true);
-    expect(result.contact).toMatchObject({ id: "c1", brand: "melbourne-cfo", phoneE164: "+19365551234" });
+    expect(result.contact).toMatchObject({ id: "c1", brand: "melbourne-cfo", phoneE164: "+19365551234", firstName: "Dana", lastName: "Reyes" });
     expect(mocks.contextArgs).toEqual([{ brandId: "brand-1", actorUserId: "user-1" }]);
     expect(mocks.contactCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ brandId: "brand-1", name: "Dana Reyes", phoneE164: "+19365551234", phoneNumber: "936-555-1234" }),
+      }),
+    );
+  });
+
+  it("stores the parsed first and last names on create", async () => {
+    mocks.contactFindFirst.mockResolvedValue(null);
+    mocks.contactCreate.mockResolvedValue(row({ firstName: "Dana", lastName: "Reyes-Garcia" }));
+    const result = await upsertPipeContact({
+      actorUserId: "user-1",
+      input: { ...input, firstName: "Dana", lastName: "Reyes-Garcia" },
+    });
+    expect(result.contact).toMatchObject({ firstName: "Dana", lastName: "Reyes-Garcia" });
+    expect(mocks.contactCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ firstName: "Dana", lastName: "Reyes-Garcia" }),
       }),
     );
   });
@@ -161,7 +206,7 @@ describe("listPipeContacts", () => {
   it("lists active contacts of one brand and searches name, company, email and digits", async () => {
     mocks.contactFindMany.mockResolvedValue([row()]);
     const result = await listPipeContacts({ actorUserId: "u", brand: "melbourne-cfo", query: "936-555" });
-    expect(result[0]).toMatchObject({ name: "Dana Reyes", brand: "melbourne-cfo" });
+    expect(result[0]).toMatchObject({ name: "Dana Reyes", brand: "melbourne-cfo", firstName: "Dana", lastName: "Reyes" });
     const where = mocks.contactFindMany.mock.calls[0][0].where;
     expect(where.brandId).toBe("brand-1");
     expect(where.isActive).toBe(true);

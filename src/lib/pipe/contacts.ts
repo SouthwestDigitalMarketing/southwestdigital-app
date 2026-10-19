@@ -46,6 +46,11 @@ export function toE164(raw: string | null | undefined): string | null {
 export type PipeContactInput = {
   brand: string;
   name: string;
+  /** pipe sends snake_case; camelCase is accepted too. */
+  first_name?: string | null;
+  last_name?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
   company?: string | null;
   email?: string | null;
   phone?: string | null;
@@ -55,12 +60,23 @@ export type PipeContact = {
   id: string;
   brand: string;
   name: string;
+  firstName: string | null;
+  lastName: string | null;
   company: string | null;
   email: string | null;
   phone: string | null;
   phoneE164: string | null;
   updatedAt: string;
 };
+
+/** First and last name from a full name, the same split pipe uses. */
+export function splitPipeName(name: string | null | undefined): [string | null, string | null] {
+  const words = (name ?? "").split(/\s+/).filter(Boolean);
+  while (words.length > 1 && /^(mr|mrs|ms|dr|miss)\.?$/i.test(words[0])) words.shift();
+  if (words.length === 0) return [null, null];
+  if (words.length === 1) return [words[0], null];
+  return [words[0], words[words.length - 1]];
+}
 
 export class PipeBrandError extends Error {}
 
@@ -78,16 +94,19 @@ export function parsePipeContactInput(body: unknown): PipeContactInput {
   if (!name) throw new RangeError("name is required");
   const email = clean(raw.email, 254)?.toLowerCase() ?? null;
   if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new RangeError("email is not valid");
+  const [splitFirst, splitLast] = splitPipeName(name);
   return {
     brand,
     name,
+    firstName: clean(raw.firstName ?? raw.first_name, 100) ?? splitFirst,
+    lastName: clean(raw.lastName ?? raw.last_name, 100) ?? splitLast,
     company: clean(raw.company, 200),
     email,
     phone: clean(raw.phone, 64),
   };
 }
 
-async function resolveBrand(slug: string) {
+export async function resolveBrand(slug: string) {
   const brand = await prisma.brand.findUnique({
     where: { slug },
     select: { id: true, slug: true, status: true, deletedAt: true },
@@ -101,6 +120,8 @@ async function resolveBrand(slug: string) {
 type Row = {
   id: string;
   name: string;
+  firstName: string | null;
+  lastName: string | null;
   company: string | null;
   email: string | null;
   phoneNumber: string | null;
@@ -113,6 +134,8 @@ function present(slug: string, row: Row): PipeContact {
     id: row.id,
     brand: slug,
     name: row.name,
+    firstName: row.firstName,
+    lastName: row.lastName,
     company: row.company,
     email: row.email,
     phone: row.phoneNumber,
@@ -124,6 +147,8 @@ function present(slug: string, row: Row): PipeContact {
 const select = {
   id: true,
   name: true,
+  firstName: true,
+  lastName: true,
   company: true,
   email: true,
   phoneNumber: true,
@@ -194,6 +219,8 @@ export async function upsertPipeContact(args: {
       data: {
         brandId: brand.id,
         name: input.name,
+        firstName: input.firstName ?? null,
+        lastName: input.lastName ?? null,
         company: input.company ?? null,
         email: input.email ?? null,
         phoneNumber: input.phone ?? null,
