@@ -23,23 +23,24 @@ describe.skipIf(!enabled)("pipe contacts against a real database", () => {
     await prisma?.$disconnect();
   });
 
-  it("creates once, then returns the same contact for the same phone or email", async () => {
+  const cid = (result: unknown) => (result as { contact: { id: string } }).contact.id;
+
+  it("creates once, then updates the same contact for the same phone or email", async () => {
     const input = { brand: "brand-one", name: names[0], email: "integ.dana@example.com", phone: "(936) 555-0142" };
     const first = await lib.upsertPipeContact({ actorUserId: "user-1", input });
-    expect(first.created).toBe(true);
-    expect(first.contact.phoneE164).toBe("+19365550142");
-    const again = await lib.upsertPipeContact({ actorUserId: "user-1", input: { ...input, name: "Other Name", phone: "936.555.0142" } });
-    expect(again.created).toBe(false);
-    expect(again.contact.id).toBe(first.contact.id);
-    const byEmail = await lib.upsertPipeContact({ actorUserId: "user-1", input: { brand: "brand-one", name: "x", email: "INTEG.DANA@example.com" } });
-    expect(byEmail.contact.id).toBe(first.contact.id);
+    expect(first).toMatchObject({ created: true, contact: { phoneE164: "+19365550142" } });
+    const again = await lib.upsertPipeContact({ actorUserId: "user-1", input: { ...input, company: "New Co" } });
+    expect(again).toMatchObject({ created: false, updated: true });
+    expect(cid(again)).toBe(cid(first));
+    const byEmail = await lib.upsertPipeContact({ actorUserId: "user-1", input: { brand: "brand-one", name: names[0], company: "New Co", email: "INTEG.DANA@example.com" } });
+    expect(cid(byEmail)).toBe(cid(first));
   });
 
   it("keeps the same person under two brands as two contacts", async () => {
     const a = await lib.upsertPipeContact({ actorUserId: "u", input: { brand: "brand-one", name: names[1], email: "integ.marcus@example.com" } });
     const b = await lib.upsertPipeContact({ actorUserId: "u", input: { brand: "brand-two", name: names[1], email: "integ.marcus@example.com" } });
-    expect(b.created).toBe(true);
-    expect(b.contact.id).not.toBe(a.contact.id);
+    expect(b).toMatchObject({ created: true });
+    expect(cid(b)).not.toBe(cid(a));
   });
 
   it("lists only the brand's own contacts and searches them", async () => {

@@ -55,7 +55,8 @@ export async function POST(request: Request) {
   }
   try {
     const result = await upsertPipeContact({ actorUserId: checked.actorUserId, input });
-    return NextResponse.json(result, { status: result.created ? 201 : 200 });
+    const status = "created" in result && result.created ? 201 : 200;
+    return NextResponse.json(result, { status });
   } catch (error) {
     if (error instanceof PipeBrandError) return NextResponse.json({ error: error.message }, { status: 404 });
     throw error;

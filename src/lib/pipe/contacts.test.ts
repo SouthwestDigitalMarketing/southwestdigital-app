@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   contactFindFirst: vi.fn(),
   contactFindMany: vi.fn(),
   contactCreate: vi.fn(),
+  contactUpdate: vi.fn(),
   contextArgs: [] as unknown[],
 }));
 
@@ -21,6 +22,7 @@ vi.mock("@/lib/tenancy/context", () => ({
         findFirst: mocks.contactFindFirst,
         findMany: mocks.contactFindMany,
         create: mocks.contactCreate,
+        update: mocks.contactUpdate,
       },
     }),
 }));
@@ -55,7 +57,7 @@ const row = (over = {}) => ({
 });
 
 beforeEach(() => {
-  for (const mock of [mocks.brandFind, mocks.contactFindFirst, mocks.contactFindMany, mocks.contactCreate]) {
+  for (const mock of [mocks.brandFind, mocks.contactFindFirst, mocks.contactFindMany, mocks.contactCreate, mocks.contactUpdate]) {
     mock.mockReset();
   }
   mocks.contextArgs.length = 0;
@@ -95,7 +97,7 @@ describe("parsePipeContactInput", () => {
   it("trims, lowercases the email and drops empty fields", () => {
     expect(parsePipeContactInput({ brand: " melbourne-cfo ", name: " Dana ", email: " Dana@Example.COM ", company: " " })).toEqual({
       brand: "melbourne-cfo", name: "Dana", firstName: "Dana", lastName: null,
-      company: null, email: "dana@example.com", phone: null,
+      company: null, email: "dana@example.com", phone: null, id: null, deleted: false,
     });
   });
   it("fills first and last names from the full name", () => {
@@ -158,8 +160,7 @@ describe("upsertPipeContact", () => {
     mocks.contactFindFirst.mockResolvedValue(null);
     mocks.contactCreate.mockResolvedValue(row());
     const result = await upsertPipeContact({ actorUserId: "user-1", input });
-    expect(result.created).toBe(true);
-    expect(result.contact).toMatchObject({ id: "c1", brand: "melbourne-cfo", phoneE164: "+19365551234", firstName: "Dana", lastName: "Reyes" });
+    expect(result).toMatchObject({ created: true, contact: { id: "c1", brand: "melbourne-cfo", phoneE164: "+19365551234", firstName: "Dana", lastName: "Reyes" } });
     expect(mocks.contextArgs).toEqual([{ brandId: "brand-1", actorUserId: "user-1" }]);
     expect(mocks.contactCreate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -175,7 +176,7 @@ describe("upsertPipeContact", () => {
       actorUserId: "user-1",
       input: { ...input, firstName: "Dana", lastName: "Reyes-Garcia" },
     });
-    expect(result.contact).toMatchObject({ firstName: "Dana", lastName: "Reyes-Garcia" });
+    expect(result).toMatchObject({ contact: { firstName: "Dana", lastName: "Reyes-Garcia" } });
     expect(mocks.contactCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ firstName: "Dana", lastName: "Reyes-Garcia" }),
@@ -183,11 +184,61 @@ describe("upsertPipeContact", () => {
     );
   });
 
-  it("returns the existing contact and writes nothing", async () => {
-    mocks.contactFindFirst.mockResolvedValue(row());
+  it("updates the existing contact instead of duplicating it", async () => {
+    mocks.contactFindFirst.mockResolvedValue(row({ company: "Old Co" }));
+    mocks.contactUpdate.mockResolvedValue(row());
     const result = await upsertPipeContact({ actorUserId: "user-1", input });
-    expect(result.created).toBe(false);
+    expect(result).toMatchObject({ created: false, updated: true });
     expect(mocks.contactCreate).not.toHaveBeenCalled();
+    expect(mocks.contactUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "c1" },
+        data: expect.objectContaining({ name: "Dana Reyes", company: "Conroe Realty" }),
+      }),
+    );
+  });
+
+  it("updates by datastore id without touching anyone else", async () => {
+    mocks.contactFindFirst.mockResolvedValue(row({ id: "c9" }));
+    mocks.contactUpdate.mockResolvedValue(row({ id: "c9" }));
+    const result = await upsertPipeContact({
+      actorUserId: "user-1",
+      input: { ...input, id: "c9", phone: "+19365559999" },
+    });
+    expect(result).toMatchObject({ created: false, updated: true, contact: { id: "c9" } });
+    expect(mocks.contactUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "c9" },
+        data: expect.objectContaining({ phoneE164: "+19365559999" }),
+      }),
+    );
+  });
+
+  it("soft-deletes by datastore id and never matches the dead row again", async () => {
+    mocks.contactFindFirst.mockResolvedValue(row({ id: "c9" }));
+    const gone = await upsertPipeContact({
+      actorUserId: "user-1",
+      input: { brand: "melbourne-cfo", name: "", id: "c9", deleted: true },
+    });
+    expect(gone).toEqual({ deleted: true });
+    expect(mocks.contactUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "c9" },
+        data: expect.objectContaining({ isActive: false }),
+      }),
+    );
+    expect(mocks.contactCreate).not.toHaveBeenCalled();
+  });
+
+  it("reports an unknown delete instead of creating anyone", async () => {
+    mocks.contactFindFirst.mockResolvedValue(null);
+    const result = await upsertPipeContact({
+      actorUserId: "user-1",
+      input: { brand: "melbourne-cfo", name: "", id: "c0", deleted: true },
+    });
+    expect(result).toEqual({ skipped: [{ field: "id", id: "c0", reason: "unknown id" }] });
+    expect(mocks.contactCreate).not.toHaveBeenCalled();
+    expect(mocks.contactUpdate).not.toHaveBeenCalled();
   });
 
   it("matches only inside this brand, by email then by phone", async () => {
@@ -199,6 +250,7 @@ describe("upsertPipeContact", () => {
       expect.objectContaining({
         where: {
           brandId: "brand-1",
+          isActive: true,
           email: { equals: "dana@example.com", mode: "insensitive" },
         },
       }),
@@ -206,7 +258,7 @@ describe("upsertPipeContact", () => {
     expect(mocks.contactFindFirst).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        where: { brandId: "brand-1", phoneE164: "+19365551234" },
+        where: { brandId: "brand-1", isActive: true, phoneE164: "+19365551234" },
       }),
     );
   });
@@ -220,8 +272,7 @@ describe("upsertPipeContact", () => {
       actorUserId: "user-1",
       input: { ...input, name: "Mr. Lopez", email: "dlopez@ariws.com" },
     });
-    expect(result.created).toBe(true);
-    expect(result.contact.id).toBe("c10");
+    expect(result).toMatchObject({ created: true, contact: { id: "c10" } });
     expect(mocks.contactCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ name: "Mr. Lopez" }),
@@ -233,16 +284,16 @@ describe("upsertPipeContact", () => {
     mocks.contactFindFirst
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(row({ id: "c9", name: "Dana" }));
+    mocks.contactUpdate.mockResolvedValue(row({ id: "c9", name: "Dana Reyes" }));
     const result = await upsertPipeContact({ actorUserId: "user-1", input });
-    expect(result.created).toBe(false);
-    expect(result.contact.id).toBe("c9");
+    expect(result).toMatchObject({ created: false, updated: true, contact: { id: "c9" } });
     expect(mocks.contactCreate).not.toHaveBeenCalled();
   });
 
   it("with no phone or email there is nothing to match on, so it creates", async () => {
     mocks.contactCreate.mockResolvedValue(row({ email: null, phoneE164: null, phoneNumber: null }));
     const result = await upsertPipeContact({ actorUserId: "user-1", input: { brand: "melbourne-cfo", name: "Dana" } });
-    expect(result.created).toBe(true);
+    expect(result).toMatchObject({ created: true });
     expect(mocks.contactFindFirst).not.toHaveBeenCalled();
   });
 
