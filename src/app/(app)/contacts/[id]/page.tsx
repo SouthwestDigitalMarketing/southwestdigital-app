@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireStaffBrand } from "@/lib/brands/staff";
+import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { ensureDefaultContactTags } from "@/lib/contacts/seed";
 import { formatPhone } from "@/lib/phone";
 import { ContactEditor } from "./ContactEditor";
@@ -13,29 +14,31 @@ import { BrandAssignment, ClientAssignment } from "../AssignmentToggles";
 type PageProps = { params: Promise<{ id: string }> };
 
 export default async function ContactDetailPage({ params }: PageProps) {
-  const { brand, isPlatformOperator } = await requireStaffBrand();
+  const { brand, isPlatformOperator, dataContext } = await requireStaffBrand();
   await ensureDefaultContactTags(brand.id);
   const { id } = await params;
 
   const [rawContact, tags, clients, platformBrands] = await Promise.all([
-    prisma.contact.findFirst({
-      where: { id, brandId: brand.id },
-      include: {
-        tagLinks: { select: { tagId: true } },
-        clientLinks: { select: { clientId: true } },
-        brandLinks: { select: { relatedBrandId: true } },
-        leadLinks: {
-          select: {
-            lead: {
-              select: {
-                id: true,
-                name: true,
+    withBrandDataTransaction(dataContext, (transaction) =>
+      transaction.contact.findFirst({
+        where: { id, brandId: brand.id },
+        include: {
+          tagLinks: { select: { tagId: true } },
+          clientLinks: { select: { clientId: true } },
+          brandLinks: { select: { relatedBrandId: true } },
+          leadLinks: {
+            select: {
+              lead: {
+                select: {
+                  id: true,
+                  name: true,
+                },
               },
             },
           },
         },
-      },
-    }),
+      }),
+    ),
     prisma.contactTag.findMany({
       where: { brandId: brand.id, isActive: true },
       orderBy: [{ sortOrder: "asc" }, { label: "asc" }],

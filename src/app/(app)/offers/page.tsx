@@ -3,6 +3,7 @@ import { Copy, Eye, FlaskConical } from "lucide-react";
 import { BrandStatus, type Prisma } from "@prisma/client";
 import { requireQuoteStaff } from "@/lib/quotes/access";
 import { prisma } from "@/lib/prisma";
+import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { formatUsd } from "@/lib/quotes/format";
 import { isOfferKindKey, OFFER_KINDS, resumeOfferHref } from "@/lib/quotes/kinds";
 import { quoteContactSummaryFromSnapshot } from "@/lib/quotes/clientInfo";
@@ -101,7 +102,7 @@ function SortableHeader({
 }
 
 export default async function QuotesPage({ searchParams }: { searchParams: SearchParams }) {
-  const { brand, isPlatformOperator } = await requireQuoteStaff();
+  const { brand, isPlatformOperator, dataContext } = await requireQuoteStaff();
   const params = await searchParams;
   const contactId = typeof params.contact === "string" ? params.contact.trim() : "";
   const highlightId = typeof params.highlight === "string" ? params.highlight.trim() : "";
@@ -139,16 +140,16 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
         },
       },
     }),
-    prisma.contact.findMany({
+    withBrandDataTransaction(dataContext, (transaction) => transaction.contact.findMany({
       where: { brandId: brand.id, isActive: true },
       orderBy: [{ name: "asc" }, { id: "asc" }],
       select: { id: true, name: true, company: true, email: true },
-    }),
+    })),
     contactId
-      ? prisma.contact.findFirst({
+      ? withBrandDataTransaction(dataContext, (transaction) => transaction.contact.findFirst({
           where: { id: contactId, brandId: brand.id },
           select: { id: true, name: true, company: true, email: true },
-        })
+        }))
       : Promise.resolve(null),
     prisma.contactTag.findMany({
       where: { brandId: brand.id, isActive: true },

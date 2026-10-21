@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { randomBytes } from "node:crypto";
 import { BrandStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { requireQuoteStaffOrThrow } from "@/lib/quotes/access";
 import { contactSearchWhere } from "@/lib/contacts/query";
 import { parseEmailOrThrow } from "@/lib/email";
@@ -109,8 +110,8 @@ export async function searchOfferContactsAction(
   query: string,
   tagIds: string[] = [],
 ): Promise<OfferAudienceContact[]> {
-  const { brand } = await requireQuoteStaffOrThrow();
-  return prisma.contact.findMany({
+  const { brand, dataContext } = await requireQuoteStaffOrThrow();
+  return withBrandDataTransaction(dataContext, (transaction) => transaction.contact.findMany({
     where: contactSearchWhere({
       brandId: brand.id,
       q: query.trim(),
@@ -120,11 +121,11 @@ export async function searchOfferContactsAction(
     orderBy: [{ name: "asc" }, { id: "asc" }],
     take: 80,
     select: CONTACT_SELECT,
-  });
+  }));
 }
 
 export async function createOfferAudienceContactAction(formData: FormData): Promise<OfferAudienceContact> {
-  const { session, brand, isPlatformOperator } = await requireQuoteStaffOrThrow();
+  const { session, brand, isPlatformOperator, dataContext } = await requireQuoteStaffOrThrow();
   const firstName = clean(formData.get("firstName"));
   const lastName = clean(formData.get("lastName"));
   if (!firstName || !lastName) throw new Error("First and last name are required.");
@@ -140,10 +141,10 @@ export async function createOfferAudienceContactAction(formData: FormData): Prom
   const relatedBrandIds = ids(formData, "relatedBrandIds");
 
   if (email) {
-    const existing = await prisma.contact.findFirst({
+    const existing = await withBrandDataTransaction(dataContext, (transaction) => transaction.contact.findFirst({
       where: { brandId: brand.id, email },
       select: { id: true },
-    });
+    }));
     if (existing) throw new Error("A contact with this email already exists.");
   }
 
@@ -168,7 +169,7 @@ export async function createOfferAudienceContactAction(formData: FormData): Prom
       : Promise.resolve([]),
   ]);
 
-  const contact = await prisma.contact.create({
+  const contact = await withBrandDataTransaction(dataContext, (transaction) => transaction.contact.create({
     data: {
       brandId: brand.id,
       name,
@@ -195,7 +196,7 @@ export async function createOfferAudienceContactAction(formData: FormData): Prom
         : undefined,
     },
     select: CONTACT_SELECT,
-  });
+  }));
 
   for (const tag of tags) {
     await applyTagPipelineAutomation({
@@ -223,17 +224,17 @@ export async function syncOfferContactsAction(payload: {
     roleTitle: string;
   }>;
 }) {
-  const { brand } = await requireQuoteStaffOrThrow();
+  const { brand, dataContext } = await requireQuoteStaffOrThrow();
   const companyName = payload.companyName.trim();
 
   for (const person of payload.people) {
     const contactId = person.contactId.trim();
     if (!contactId) continue;
 
-    const existing = await prisma.contact.findFirst({
+    const existing = await withBrandDataTransaction(dataContext, (transaction) => transaction.contact.findFirst({
       where: { id: contactId, brandId: brand.id },
       select: { id: true },
-    });
+    }));
     if (!existing) continue;
 
     const firstName = person.firstName.trim();
@@ -242,7 +243,7 @@ export async function syncOfferContactsAction(payload: {
     const phone = person.phone.trim() ? parseSubmittedPhone(person.phone.trim()) : null;
     const roleTitle = person.roleTitle.trim();
 
-    await prisma.contact.update({
+    await withBrandDataTransaction(dataContext, (transaction) => transaction.contact.update({
       where: { id: contactId },
       data: {
         ...(firstName && lastName
@@ -253,7 +254,7 @@ export async function syncOfferContactsAction(payload: {
         ...(companyName ? { company: companyName } : {}),
         ...(roleTitle ? { roleTitle } : {}),
       },
-    });
+    }));
   }
 
   revalidatePath("/contacts");
@@ -271,15 +272,15 @@ function offerSlug(name: string) {
 }
 
 export async function startOfferDraftAction(kind: OfferKindKey, contactIds: string[]) {
-  const { brand } = await requireQuoteStaffOrThrow();
+  const { brand, dataContext } = await requireQuoteStaffOrThrow();
   if (!isOfferKindKey(kind)) throw new Error("Unknown offer type.");
   const ids = [...new Set(contactIds.map((id) => id.trim()).filter(Boolean))];
   if (ids.length === 0) throw new Error("Select at least one contact.");
 
-  const contacts = await prisma.contact.findMany({
+  const contacts = await withBrandDataTransaction(dataContext, (transaction) => transaction.contact.findMany({
     where: { brandId: brand.id, id: { in: ids } },
     select: { id: true, name: true, email: true, company: true },
-  });
+  }));
   if (contacts.length === 0) throw new Error("Contact not found.");
 
   const ordered = ids
