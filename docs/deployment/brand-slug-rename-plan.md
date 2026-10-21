@@ -335,4 +335,3 @@ production gates. Each stays a hard stop for this plan:
   changed.
 - No hostname, DNS, environment key, or secret is changed by this plan.
 - No M6 work starts until M5 reviewer ACCEPTs this plan.
-
