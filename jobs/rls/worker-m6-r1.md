@@ -94,4 +94,4 @@ Board record `488743eaaeb4` was created by `worker-rls` running `board now` with
 
 ## Next step
 
-Reviewer: inspect the full M6 range from base `3fd82b9c7aa86e43cc68b4b5cdcf1ff4b04d1f57` through the then-current final branch HEAD after this report-only correction commit. Review both the HANDOFF update and worker report, including the explicit incident-attribution correction. The exact final base..HEAD range will be reported in the completion reply after commit. Foreman must wait for M6 reviewer ACCEPT before marking ready-to-ship.
+Reviewer: inspect the full M6 range from base `3fd82b9c7aa86e43cc68b4b5cdcf1ff4b04d1f57` through the then-current final branch HEAD after the host-correction commit. That commit changed the HANDOFF host line and this report together; `hostname -f` returned `ripley`. The HANDOFF still explicitly says the older Repository state/Health sections are unchecked against this branch; they were not revalidated. Review both files, including the incident-attribution correction. The exact final base..HEAD range will be reported in the completion reply after commit. Foreman must wait for M6 reviewer ACCEPT before marking ready-to-ship.
