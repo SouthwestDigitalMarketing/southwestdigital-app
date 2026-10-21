@@ -51,6 +51,35 @@ was true on 2026-10-16.
 
 Docs only. No source, schema, dependency, or configuration change.
 
+## Leads six-step job (crew, branch `crew/leads-six-steps`)
+
+Added 2026-10-21 by crew Worker (`worker-leads`) for Ummon. Branch base is
+`d59fe59` (`origin/main`). Not pushed; crews do not push. Job brief:
+`~/.grok/team/swapp/jobs/leads/JOB.md` (ripley/dalliance crew dir, not in git).
+
+Goal: pipe's Bookkeeping Conroe Leads board has six steps (`reach`, `qb`,
+`book`, `call`, `quote`, `nurture`); SWapp should store, return, and show them
+and make SWapp-side moves visible to pipe. Source notices: `ddc3441d4fb9`,
+`2549d4158fa7`, `f2f5e81c323c`.
+
+- **M1 contract audit: done** (no code change). Findings are in
+  `~/.grok/team/swapp/jobs/leads/contract.md`. Headlines: unknown request
+  fields are **ignored, not rejected** (so a premature `lead_step` is dropped
+  silently); the code names no owning brand (caller sends the slug; no
+  Lochside brand exists, pipe uses `southwest-digital-marketing` and
+  `bookkeeping-conroe`); dedupe keys are contact id/email/phone+same-person,
+  business name, deal `(brandId, pipeId)`; `POST /deals` is a full replace of
+  working fields (omitted `stage` becomes `prospect`); and a stage move in
+  SWapp (`movePipelineItemAction`) updates only `PipelineItem.updatedAt`, while
+  the route reports `MeetingLead.updatedAt` — so M4 is a real gap, though
+  pipe's current pull diffs field values and does not read `updatedAt`.
+- Baseline on this branch before any change (2026-10-21): `npm run typecheck`
+  exit 0; `npm run lint` exit 0 (0 errors, 9 warnings); `npm test` 109 files
+  passed, 1 skipped; 871 tests passed, 5 skipped.
+- Next: M2 (`lead_step` on the deals route + additive migration, scratch
+  Postgres only). No migration is applied anywhere; production apply needs
+  Tom's go.
+
 ## Health
 
 **Not verified in this session.** No test, typecheck, lint, or build was run,
