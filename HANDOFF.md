@@ -17,7 +17,7 @@ the owner named the recipient in this session. Crews do not push, PR, or merge.
 
 ## Repository state
 
-- Branch: `crew/leads-six-steps`; M5 base `315267c4cd0366f4652227f6dd529cfba9eb0284`. The note and initial HANDOFF update are committed at `73a2429174b3b837ddd74ece90f8ac30423df2a2`; worker report and final handoff state are committed afterward.
+- Branch: `crew/leads-six-steps`; M6 base `c62bba91f2bd571fd8590a84638b5909a2dbe3f8`. M6 documentation and report are pending this commit. M1–M5 commits are local and unpushed.
 - M2 (`208cdeb`), M3 (`ed85a1c`), and M4 (`d966ff4`) are local and unpushed.
   M2 stores and returns validated `lead_step`; M3 adds the Leads board columns
   and mapped moves; M4 updates `MeetingLead.updatedAt` for every pipeline card
@@ -80,7 +80,7 @@ and make SWapp-side moves visible to pipe. Source notices: `ddc3441d4fb9`,
   `PipeDeal.updatedAt` reads `MeetingLead.updatedAt`. The M1 contract audit
   notes pipe's current pull fetches the full list and compares values rather
   than using `updatedAt`; this change makes the returned timestamp truthful.
-- **M5: design note drafted, review pending.**
+- **M5: ACCEPT** (`jobs/leads/review-m5-r1.md`, range `315267c4cd0366f4652227f6dd529cfba9eb0284..c62bba91f2bd571fd8590a84638b5909a2dbe3f8`).
   [`jobs/leads/nurture.md`](jobs/leads/nurture.md) records Tom's tentative
   first-cut inputs (convert the offer during days 0–7 after quote, with quote
   and contract expiring at day 7; then long-term nurture), and lists the
@@ -93,13 +93,12 @@ and make SWapp-side moves visible to pipe. Source notices: `ddc3441d4fb9`,
 - M5 docs check: `git diff --check` passed. Application checks were not rerun
   because this change contains documentation only; M4's verified results
   remain above.
-- Next: wait for M5 review ACCEPT before M6. M6 remains closed. M2/M3/M4/M5
-  are not pushed or deployed.
+- **M6: documentation handoff complete**, report: `jobs/leads/worker-m6-r1.md`. Proposed reply to Kassad is recorded there and was not sent. Nurture remains tentative; no final stages selected. The pipe-side change remains Kassad's action after `leadStep` is live.
+- M6 changes only documentation and the worker report. `git diff --check` passed. Typecheck, lint, and tests were skipped for this docs-only milestone. No production DB/env, external contact, board CLI, push, PR, merge, or deploy was used.
 
 ## Health
 
-**Verified 2026-10-21 on `crew/leads-six-steps`; M4 code head `d966ff4`, M5
-design note pending review.**
+**Verified 2026-10-21 on `crew/leads-six-steps`; M6 documentation pending commit.**
 `npm run typecheck` passed; `npm run lint` passed with 0 errors and 9 warnings;
 `npm test` passed with 111 files passed, 1 skipped, 882 tests passed, and 5
 skipped. M4 did not use a database. Production was not contacted. The numbers in
