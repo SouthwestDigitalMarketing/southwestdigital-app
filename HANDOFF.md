@@ -17,11 +17,13 @@ the owner named the recipient in this session. Crews do not push, PR, or merge.
 
 ## Repository state
 
-- Branch: `crew/leads-six-steps`; M3 base: `df769f0927f12f9a2521ce6f6ad85a9c1ba14cb5`;
-  M3 code head: `ed85a1cc5a420bf70594e3ff3fae5d8c5bd3f5b0`.
-- M2 (`208cdeb`) and M3 (`ed85a1c`) are local and unpushed. M2 stores and
-  returns validated `lead_step`; M3 adds the Leads board columns and mapped
-  moves. The additive M2 migration was checked on scratch Postgres only. No
+- Branch: `crew/leads-six-steps`; M4 base:
+  `db7efdad8c26f6b4611832d91f8ca3c8f2c2868a`; M4 code head:
+  `d966ff4b76d1df8ec8d43455c53ea867ca0be1a4`.
+- M2 (`208cdeb`), M3 (`ed85a1c`), and M4 (`d966ff4`) are local and unpushed.
+  M2 stores and returns validated `lead_step`; M3 adds the Leads board columns
+  and mapped moves; M4 updates `MeetingLead.updatedAt` for every pipeline card
+  move. The additive M2 migration was checked on scratch Postgres only. No
   production database or environment was read or changed.
 - This branch also contains the prior M1 commits `3613d9b` and `a14d2fa`.
 
@@ -66,22 +68,33 @@ and make SWapp-side moves visible to pipe. Source notices: `ddc3441d4fb9`,
 - M3 design choices: virtual step columns reuse existing pipe stages because
   several Leads steps map to the same stage; existing non-Leads stages remain
   visible; unset values are shown by stage and stay null until a card is moved.
-  Updating `MeetingLead` also lets Prisma's `@updatedAt` refresh its timestamp
-  for these six-step moves. M4 was not started: generic pipeline moves still
-  only update `PipelineItem`, and no M4-specific test was added.
+- **M4: implemented**, code commit `d966ff4` (base `db7efda`). The shared
+  `movePipelineItemAction` now updates `MeetingLead.updatedAt` and
+  `PipelineItem.stageId` in one transaction for every pipeline move. The
+  timestamp is strictly greater than its previous value, including when the
+  current clock time is equal or earlier. Leads moves also save `leadStep` in
+  that transaction. Tests cover timestamp advancement for general moves and
+  all six Leads steps.
+- Move-path audit: `movePipelineItemAction` is the user-driven stage-move path.
+  `contacts/automation.ts` and tag actions create/place items but do not move
+  existing ones. Pipe deal upserts update the associated `MeetingLead` row
+  along with stage/step, so Prisma `@updatedAt` already advances there.
+  `PipeDeal.updatedAt` reads `MeetingLead.updatedAt`. The M1 contract audit
+  notes pipe's current pull fetches the full list and compares values rather
+  than using `updatedAt`; this change makes the returned timestamp truthful.
 - Checks: `npm run typecheck` passed; `npm run lint` passed (0 errors, 9
-  warnings); `npm test` passed (111 files, 1 skipped; 881 tests, 5 skipped).
-  No database was needed for M3. No production database or environment was
+  warnings); `npm test` passed (111 files, 1 skipped; 882 tests, 5 skipped).
+  No database was needed for M4. No production database or environment was
   touched.
-- Next: wait for M3 review ACCEPT before M4. M5 remains design note only.
-  M2/M3 are not pushed or deployed.
+- Next: wait for M4 review ACCEPT before M5. M5 remains design note only.
+  M2/M3/M4 are not pushed or deployed.
 
 ## Health
 
-**Verified 2026-10-21 on `crew/leads-six-steps` at M3 code head `ed85a1c`.**
+**Verified 2026-10-21 on `crew/leads-six-steps` at M4 code head `d966ff4`.**
 `npm run typecheck` passed; `npm run lint` passed with 0 errors and 9 warnings;
-`npm test` passed with 111 files passed, 1 skipped, 881 tests passed, and 5
-skipped. M3 did not use a database. Production was not contacted. The numbers in
+`npm test` passed with 111 files passed, 1 skipped, 882 tests passed, and 5
+skipped. M4 did not use a database. Production was not contacted. The numbers in
 `docs/IMPLEMENTATION-STATUS.md` (583 tests across 74 files, 0 lint errors, 8
 `<img>` advisories) are dated 2026-09-08 and are carried as history, not as a
 current claim. Re-run the checks before relying on them.
