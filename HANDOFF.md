@@ -17,9 +17,9 @@ the owner named the recipient in this session. Crews do not push, PR, or merge.
 
 ## Repository state
 
-- Branch: `crew/leads-six-steps`; M4 base:
-  `db7efdad8c26f6b4611832d91f8ca3c8f2c2868a`; M4 code head:
-  `d966ff4b76d1df8ec8d43455c53ea867ca0be1a4`.
+- Branch: `crew/leads-six-steps`; M5 design base:
+  `315267c4cd0366f4652227f6dd529cfba9eb0284`. The M5 note and handoff
+  update are being committed on this branch.
 - M2 (`208cdeb`), M3 (`ed85a1c`), and M4 (`d966ff4`) are local and unpushed.
   M2 stores and returns validated `lead_step`; M3 adds the Leads board columns
   and mapped moves; M4 updates `MeetingLead.updatedAt` for every pipeline card
@@ -82,16 +82,26 @@ and make SWapp-side moves visible to pipe. Source notices: `ddc3441d4fb9`,
   `PipeDeal.updatedAt` reads `MeetingLead.updatedAt`. The M1 contract audit
   notes pipe's current pull fetches the full list and compares values rather
   than using `updatedAt`; this change makes the returned timestamp truthful.
+- **M5: design note drafted, review pending.**
+  [`jobs/leads/nurture.md`](jobs/leads/nurture.md) records Tom's tentative
+  first-cut inputs (convert the offer during days 0–7 after quote, with quote
+  and contract expiring at day 7; then long-term nurture), and lists the
+  unanswered decisions and triggers. It deliberately proposes no final stage
+  list and includes no application changes.
 - Checks: `npm run typecheck` passed; `npm run lint` passed (0 errors, 9
   warnings); `npm test` passed (111 files, 1 skipped; 882 tests, 5 skipped).
   No database was needed for M4. No production database or environment was
   touched.
-- Next: wait for M4 review ACCEPT before M5. M5 remains design note only.
-  M2/M3/M4 are not pushed or deployed.
+- M5 docs check: `git diff --check` passed. Application checks were not rerun
+  because this change contains documentation only; M4's verified results
+  remain above.
+- Next: wait for M5 review ACCEPT before M6. M6 remains closed. M2/M3/M4/M5
+  are not pushed or deployed.
 
 ## Health
 
-**Verified 2026-10-21 on `crew/leads-six-steps` at M4 code head `d966ff4`.**
+**Verified 2026-10-21 on `crew/leads-six-steps`; M4 code head `d966ff4`, M5
+design note pending review.**
 `npm run typecheck` passed; `npm run lint` passed with 0 errors and 9 warnings;
 `npm test` passed with 111 files passed, 1 skipped, 882 tests passed, and 5
 skipped. M4 did not use a database. Production was not contacted. The numbers in
