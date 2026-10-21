@@ -17,9 +17,7 @@ the owner named the recipient in this session. Crews do not push, PR, or merge.
 
 ## Repository state
 
-- Branch: `crew/leads-six-steps`; M5 design base:
-  `315267c4cd0366f4652227f6dd529cfba9eb0284`. The M5 note and handoff
-  update are being committed on this branch.
+- Branch: `crew/leads-six-steps`; M5 base `315267c4cd0366f4652227f6dd529cfba9eb0284`. The note and initial HANDOFF update are committed at `73a2429174b3b837ddd74ece90f8ac30423df2a2`; worker report and final handoff state are committed afterward.
 - M2 (`208cdeb`), M3 (`ed85a1c`), and M4 (`d966ff4`) are local and unpushed.
   M2 stores and returns validated `lead_step`; M3 adds the Leads board columns
   and mapped moves; M4 updates `MeetingLead.updatedAt` for every pipeline card
