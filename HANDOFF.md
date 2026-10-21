@@ -25,9 +25,9 @@ The sections below this one (Repository state, Health, and the rest) were
 written on other branches and have **not** been checked against this branch.
 
 Milestones: M1 sweep; M2 fixes (ACCEPTed); M3 scratch-Postgres rehearsal
-(ACCEPTed); M4 cutover runbook (completed, reviewer review pending); M5
-brand-slug rename runbook (not started; wait for M4 reviewer ACCEPT); M6 final
-handoff.
+(ACCEPTed); M4 cutover runbook (ACCEPTed); M5 brand-slug rename plan
+(documentation complete, reviewer review pending); M6 final handoff (wait for
+M5 reviewer ACCEPT).
 
 - **M1 sweep:** 36 direct `Contact` call sites outside
   `withBrandDataTransaction` plus 4 nested RLS reads; 16 paths could fail
@@ -54,6 +54,13 @@ handoff.
   open gates. It keeps cutover **NOT READY**. M4 report:
   `jobs/rls/worker-m4-r1.md`. Implementation range and documentation-only
   checks are recorded there.
+- **M5 brand-slug rename plan:** `docs/deployment/brand-slug-rename-plan.md`
+  documents the guarded SQL, preconditions, verification queries, ordering,
+  and rollback for `bc` → `bookkeeping-conroe` and `treb` →
+  `real-estate-bookkeeper`. It explicitly states the database rename has NOT
+  been done. No SQL or database connection was used. M5 report:
+  `jobs/rls/worker-m5-r1.md`. All five M4 gates and owners remain open; cutover
+  stays **NOT READY**.
 - **Open gates:** Ummon/app owner must supply and rehearse a repeatable full
   migration baseline/chain; define and rehearse DDL ownership for existing
   tables; and reconcile the pipe contacts mismatch separately without changing
@@ -61,7 +68,7 @@ handoff.
   backup/restore, secret configuration, preflight/rollback verification and
   cutover decision after those gates. Albedo owns owner credential rotation
   and secret cleanup after an approved cutover.
-- **Next:** reviewer inspects M4's exact range. Do not start M5 until M4 review
+- **Next:** reviewer inspects M5's exact range. Do not start M6 until M5 review
   ACCEPT. Production cutover, production DB/env access, push, PR, merge, deploy,
   and outbound contact remain outside this work.
 
