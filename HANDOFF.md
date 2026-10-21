@@ -17,7 +17,7 @@ the owner named the recipient in this session. Crews do not push, PR, or merge.
 
 ## Repository state
 
-- Branch: `crew/leads-six-steps`; M6 base `c62bba91f2bd571fd8590a84638b5909a2dbe3f8`. M6 documentation and report are pending this commit. M1–M5 commits are local and unpushed.
+- Branch: `crew/leads-six-steps`; M6 base `c62bba91f2bd571fd8590a84638b5909a2dbe3f8`. M6 HANDOFF and report commit: `fdb1e4ecac3a6f779b01957dcb356e2c823b2e3e`. M1–M6 commits are local and unpushed.
 - M2 (`208cdeb`), M3 (`ed85a1c`), and M4 (`d966ff4`) are local and unpushed.
   M2 stores and returns validated `lead_step`; M3 adds the Leads board columns
   and mapped moves; M4 updates `MeetingLead.updatedAt` for every pipeline card
@@ -98,7 +98,7 @@ and make SWapp-side moves visible to pipe. Source notices: `ddc3441d4fb9`,
 
 ## Health
 
-**Verified 2026-10-21 on `crew/leads-six-steps`; M6 documentation pending commit.**
+**Verified 2026-10-21 on `crew/leads-six-steps`; M6 handoff/report committed locally.**
 `npm run typecheck` passed; `npm run lint` passed with 0 errors and 9 warnings;
 `npm test` passed with 111 files passed, 1 skipped, 882 tests passed, and 5
 skipped. M4 did not use a database. Production was not contacted. The numbers in
