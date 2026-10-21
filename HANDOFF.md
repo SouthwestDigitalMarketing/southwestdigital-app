@@ -15,6 +15,32 @@ Never push without explicit user instruction. Do not run
 `docs/deployment/database-migration-state.md`. Do not send outbound SMS unless
 the owner named the recipient in this session. Crews do not push, PR, or merge.
 
+## RLS readiness job (branch `crew/rls-readiness`, base `d59fe59`)
+
+Crew job `rls` (Ummon's crew, worker `worker-rls`), started 2026-10-21. Goal: make
+the code and runbook ready for the restricted-role + RLS cutover. **The
+production cutover is Tom's call and is not part of this job.** No production
+database, env file, push, PR or deploy is involved. The sections below this one
+(Repository state, Health, and the rest) were written on other branches and have
+**not** been checked against this branch.
+
+Milestones: M1 sweep, M2 fix, M3 scratch-Postgres rehearsal, M4 runbook pass,
+M5 brand-slug rename runbook, M6 final handoff.
+
+- **M1 sweep: done, no code changed.** Report (outside the repo):
+  `~/.grok/team/swapp/jobs/rls/sweep.md`. Result: 36 call sites read or write
+  `Contact` through the global `prisma` client outside `withBrandDataTransaction`
+  (all in `src/app/(app)/{contacts,clients,discounts,offers}`), plus 4 nested
+  reads of RLS tables (`clients/[id]`, `discounts`, `contacts/[id]`,
+  `pipeline/[key]`). 16 of the 36 fail silently (empty list, duplicate check
+  passes). `src/lib/crm`, `src/lib/pipe` and `src/lib/contacts/automation.ts`
+  are already inside a brand context. Uncle Invoice uses only the
+  `uncleinvoice` schema (22 of 22 models) and cannot be broken by SWapp's RLS.
+- Checks run for M1: none (no code or schema change). Typecheck, lint and tests
+  start at M2.
+- Next: M2 fixes the sweep findings. Planned shape: return `dataContext` from
+  `requireStaffBrand*` in `src/lib/brands/staff.ts` and wrap each call.
+
 ## Repository state
 
 - Branch: `docs/restore-handoff-and-fix-agents-refs`.
