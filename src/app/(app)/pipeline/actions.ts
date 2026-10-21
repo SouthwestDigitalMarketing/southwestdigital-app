@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { PipelineType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
+import { PIPE_PROSPECTS_KEY } from "@/lib/pipe/deals";
+import { LEAD_STEP_STAGE, LEAD_STEPS, type LeadStep } from "@/lib/pipe/lead-steps";
 import { PIPELINE_TEMPLATES, type TemplateKey } from "./templates";
 
 function clean(value: FormDataEntryValue | null) {
@@ -149,7 +151,6 @@ export async function movePipelineItemAction(formData: FormData) {
 
   const itemId = clean(formData.get("itemId"));
   const stageId = clean(formData.get("stageId"));
-  const pipelineKey = clean(formData.get("pipelineKey"));
   if (!itemId || !stageId) throw new Error("itemId and stageId are required.");
 
   const item = await prisma.pipelineItem.findFirst({
@@ -158,23 +159,55 @@ export async function movePipelineItemAction(formData: FormData) {
       pipeline: { brandId: brand.id },
       lead: { brandId: brand.id },
     },
-    select: { id: true, pipelineId: true },
+    select: {
+      id: true,
+      pipelineId: true,
+      pipeline: { select: { key: true } },
+      lead: { select: { id: true, updatedAt: true } },
+    },
   });
   if (!item) throw new Error("Pipeline item not found for this brand.");
 
   const stage = await prisma.pipelineStage.findFirst({
     where: { id: stageId, pipelineId: item.pipelineId, isActive: true },
-    select: { id: true },
+    select: { id: true, key: true },
   });
   if (!stage) throw new Error("Target stage is not part of this pipeline.");
 
-  await prisma.pipelineItem.update({
-    where: { id: item.id },
-    data: { stageId: stage.id },
-    select: { id: true },
-  });
+  let leadStepUpdate: { leadStep: string | null } | null = null;
+  if (item.pipeline.key === PIPE_PROSPECTS_KEY) {
+    if (!formData.has("leadStep")) throw new Error("A Leads step is required for this pipeline move.");
+    const rawLeadStep = clean(formData.get("leadStep"));
+    const leadStep = rawLeadStep || null;
+    if (leadStep && !(LEAD_STEPS as readonly string[]).includes(leadStep)) {
+      throw new Error("Invalid Leads step.");
+    }
+    if (leadStep && LEAD_STEP_STAGE[leadStep as LeadStep] !== stage.key) {
+      throw new Error(`The ${leadStep} step must use the ${LEAD_STEP_STAGE[leadStep as LeadStep]} stage.`);
+    }
+    if (!leadStep && !["prospect", "won", "lost"].includes(stage.key)) {
+      throw new Error("Only Prospect, Won, or Lost can be used without a Leads step.");
+    }
+    leadStepUpdate = { leadStep };
+  }
 
-  revalidatePath(`/pipeline/${pipelineKey}`);
+  // Pipe reports MeetingLead.updatedAt. Keep it strictly increasing even if
+  // two moves happen within one clock tick or the app clock moves backward.
+  const movedAt = new Date(Math.max(Date.now(), item.lead.updatedAt.getTime() + 1));
+  await prisma.$transaction([
+    prisma.meetingLead.update({
+      where: { id: item.lead.id },
+      data: { updatedAt: movedAt, ...(leadStepUpdate ?? {}) },
+      select: { id: true },
+    }),
+    prisma.pipelineItem.update({
+      where: { id: item.id },
+      data: { stageId: stage.id },
+      select: { id: true },
+    }),
+  ]);
+
+  revalidatePath(`/pipeline/${item.pipeline.key}`);
   revalidatePath("/pipeline");
 }
 

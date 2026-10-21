@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireStaffBrand } from "@/lib/brands/staff";
 import { withBrandDataTransaction } from "@/lib/tenancy/context";
+import { PIPE_PROSPECTS_KEY } from "@/lib/pipe/deals";
+import { LEAD_STEP_LABEL, LEAD_STEP_STAGE, LEAD_STEPS, pipeLeadBoardColumnId, type LeadStep } from "@/lib/pipe/lead-steps";
 import { updateStageMultiplierAction } from "../actions";
 import PipelineBoard from "./PipelineBoard";
 
@@ -48,7 +50,7 @@ export default async function PipelineDetailPage({ params }: { params: Promise<{
           id: true,
           stageId: true,
           baseValueUsd: true,
-          stage: { select: { id: true, valueMultiplier: true } },
+          stage: { select: { id: true, key: true, valueMultiplier: true } },
           lead: {
             select: {
               id: true,
@@ -60,6 +62,7 @@ export default async function PipelineDetailPage({ params }: { params: Promise<{
               bookkeepingCategory: true,
               expectedServices: true,
               notes: true,
+              leadStep: true,
             },
           },
         },
@@ -93,14 +96,60 @@ export default async function PipelineDetailPage({ params }: { params: Promise<{
   }
 
   const stageMap = new Map(pipeline.stages.map((stage) => [stage.id, stage]));
+  const pipeLeadBoard = pipeline.key === PIPE_PROSPECTS_KEY;
+  const stagesByKey = new Map(pipeline.stages.map((stage) => [stage.key, stage]));
+  const boardStages = pipeLeadBoard
+    ? [
+        ...LEAD_STEPS.map((step) => {
+          const underlyingStage = stagesByKey.get(LEAD_STEP_STAGE[step]);
+          return {
+            id: `lead-step-${step}`,
+            targetStageId: underlyingStage?.id ?? "",
+            key: step,
+            name: LEAD_STEP_LABEL[step],
+            valueMultiplier: toNumber(underlyingStage?.valueMultiplier),
+            leadStep: step,
+            clearLeadStep: false,
+          };
+        }),
+        ...pipeline.stages
+          .filter((stage) => !["lead", "talking", "proposed"].includes(stage.key))
+          .map((stage) => ({
+            id: stage.id,
+            targetStageId: stage.id,
+            key: stage.key,
+            name: stage.name,
+            valueMultiplier: toNumber(stage.valueMultiplier),
+            leadStep: null,
+            clearLeadStep: true,
+          })),
+      ]
+    : pipeline.stages.map((stage) => ({
+        id: stage.id,
+        targetStageId: stage.id,
+        key: stage.key,
+        name: stage.name,
+        valueMultiplier: toNumber(stage.valueMultiplier),
+        leadStep: null,
+        clearLeadStep: false,
+      }));
   const cards = pipeline.items.map((item) => {
     const stage = stageMap.get(item.stageId);
     const multiplier = toNumber(stage?.valueMultiplier ?? item.stage.valueMultiplier);
     const baseValue = toNumber(item.baseValueUsd);
     const firstContact = contactsByLead.get(item.lead.id)?.[0];
+    const rawLeadStep = item.lead.leadStep;
+    const storedLeadStep = rawLeadStep && LEAD_STEPS.includes(rawLeadStep as LeadStep)
+      && LEAD_STEP_STAGE[rawLeadStep as LeadStep] === item.stage.key
+      ? rawLeadStep as LeadStep
+      : null;
+    const boardStageId = pipeLeadBoard
+      ? pipeLeadBoardColumnId(item.stageId, item.stage.key, storedLeadStep)
+      : item.stageId;
     return {
       id: item.id,
-      stageId: item.stageId,
+      stageId: boardStageId,
+      leadStep: storedLeadStep,
       leadName: item.lead.name,
       leadCompany: item.lead.company,
       leadEmail: item.lead.email,
@@ -155,7 +204,7 @@ export default async function PipelineDetailPage({ params }: { params: Promise<{
         </div>
       </div>
 
-      <details className="mt-5 rounded-xl border border-slate-200 bg-white p-5">
+      {!pipeLeadBoard ? <details className="mt-5 rounded-xl border border-slate-200 bg-white p-5">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-slate-900">Stage settings</h2>
           <span className={ghost}>Toggle</span>
@@ -192,16 +241,12 @@ export default async function PipelineDetailPage({ params }: { params: Promise<{
             </form>
           ))}
         </div>
-      </details>
+      </details> : null}
 
       <PipelineBoard
         pipelineKey={pipeline.key}
-        stages={pipeline.stages.map((stage) => ({
-          id: stage.id,
-          key: stage.key,
-          name: stage.name,
-          valueMultiplier: toNumber(stage.valueMultiplier),
-        }))}
+        isPipeLeadBoard={pipeLeadBoard}
+        stages={boardStages}
         items={cards}
       />
     </div>

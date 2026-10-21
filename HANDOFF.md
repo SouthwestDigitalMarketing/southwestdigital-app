@@ -5,7 +5,7 @@ Historical session logs live in `docs/handoff-archive/`; durable design and
 reference material lives in `docs/`. If a note here would still be true in
 three months, it belongs in `docs/`, not here.
 
-Checked on **ripley**, 2026-10-21 (America/Chicago), by Ummon.
+Checked on **ripley**, 2026-10-21 (America/Chicago), by Ummon — merging `origin/main` (PR #36 RLS) into `crew/leads-six-steps` ahead of the PR #37 merge. RLS sections below came with `main`; Leads sections are this branch's.
 `README.md` describes the project; this file hands off the work.
 
 ## Read first
@@ -90,44 +90,91 @@ reviewer ACCEPTs M6.
 
 ## Repository state
 
-- Branch: `docs/restore-handoff-and-fix-agents-refs`.
-- `origin/main` is `ab34b8b` (`removed AGENTS.md, superceded by
-  tmacdonald7/agents/agents.md`). `main` was level with it, 0 ahead / 0 behind.
-- Working tree was **not** clean on arrival: nine uncommitted Markdown files
-  sat on local `main`, with `HANDOFF.md` staged for deletion. They are now
-  commit `5f6222f` on this branch, committed unmodified so the work is
-  recoverable, then corrected in the commit after it. No source or schema file
-  was involved.
+- Branch: `crew/leads-six-steps`; M6 base `c62bba91f2bd571fd8590a84638b5909a2dbe3f8`. M6 HANDOFF and report commit: `fdb1e4ecac3a6f779b01957dcb356e2c823b2e3e`. M1–M6 commits are local and unpushed.
+- M2 (`208cdeb`), M3 (`ed85a1c`), and M4 (`d966ff4`) are local and unpushed.
+  M2 stores and returns validated `lead_step`; M3 adds the Leads board columns
+  and mapped moves; M4 updates `MeetingLead.updatedAt` for every pipeline card
+  move. The additive M2 migration was checked on scratch Postgres only. No
+  production database or environment was read or changed.
+- This branch also contains the prior M1 commits `3613d9b` and `a14d2fa`.
 
-### What this branch does
+## Leads six-step job (crew, branch `crew/leads-six-steps`)
 
-`ab34b8b` deleted in-repo `AGENTS.md` in favour of the global agent guidance,
-which left documentation pointing at a file that no longer exists. The
-uncommitted pass found on `main` repointed those references but also deleted
-`HANDOFF.md` and folded its content into `README.md`. This branch keeps the
-necessary half and corrects the rest:
+Added 2026-10-21 by crew Worker (`worker-leads`) for Ummon. Job brief:
+`~/.grok/team/swapp/jobs/leads/JOB.md` (ripley/dalliance crew dir, not in git).
 
-- `HANDOFF.md` restored as its own file (this one), with current state rather
-  than the stale text that was folded into `README.md`.
-- `README.md` returned to its project-only shape, with its single dead
-  `AGENTS.md` pointer replaced by the global guidance. Its `HANDOFF.md`
-  pointer was already correct and is kept.
-- Seven dead `AGENTS.md` references fixed across `docs/SWAPP-BRIEF.md` (2),
-  `docs/SWAPP-REVIEW-AND-ROADMAP.md` (3), `docs/local-development.md` (1), and
-  `docs/offers/services-ui-handoff.md` (1). None remain outside the
-  `~/.codex/AGENTS.md` global-guidance blocks.
-- `CLAUDE.md` points at `README.md`, this file, and the global guidance.
+Goal: pipe's Bookkeeping Conroe Leads board has six steps (`reach`, `qb`,
+`book`, `call`, `quote`, `nurture`); SWapp should store, return, and show them
+and make SWapp-side moves visible to pipe. Source notices: `ddc3441d4fb9`,
+`2549d4158fa7`, `f2f5e81c323c`.
 
-The stale text this replaces claimed branch `feat/review-requests-hardening`,
-`origin/main` `c400bb4`, and "working tree should be clean". None of the three
-was true on 2026-10-16.
-
-Docs only. No source, schema, dependency, or configuration change.
+- **M1 contract audit: done** (no code change). Findings are in
+  `~/.grok/team/swapp/jobs/leads/contract.md`. Headlines: unknown request
+  fields are **ignored, not rejected** (so a premature `lead_step` is dropped
+  silently); the code names no owning brand (caller sends the slug; no
+  Lochside brand exists; pipe's own brand list is the same five slugs as the
+  seed script); dedupe keys are contact id/email/phone+same-person,
+  business name, deal `(brandId, pipeId)`; `POST /deals` is a full replace of
+  working fields (omitted `stage` becomes `prospect`); and a stage move in
+  SWapp (`movePipelineItemAction`) updates only `PipelineItem.updatedAt`, while
+  the route reports `MeetingLead.updatedAt` — so M4 is a real gap, though
+  pipe's current pull diffs field values and does not read `updatedAt`.
+  Also: a pipe push is a full replace, so a later local pipe edit pushes its
+  older stage over a SWapp-side move; M3/M4 make moves visible, not winning.
+- **M2: done**, code commit `208cdeb` (base `d59fe59`). `lead_step` accepts
+  `reach|qb|book|call|quote|nurture|null`; values are checked against the
+  existing stage mapping, persisted in nullable `MeetingLead.leadStep`, and
+  returned as `deal.leadStep`. An absent value preserves the stored step while
+  its stage still matches; a stage move outside that stage clears it. Explicit
+  `null` clears it. See
+  `~/.grok/team/swapp/jobs/leads/worker-m2-r1.md` for commands and exact results.
+- **M3: implemented**, code commit `ed85a1c` (base `df769f0`). The
+  `pipe-prospects` board shows Reach decision maker / Get QB access / Book
+  review call / Conduct review call / Send Quote & Contract / Nurture as
+  columns. It keeps Prospect, Won, and Lost visible as additional columns.
+  Unset steps on lead/talking/proposed cards appear under their stage's first
+  matching step with a “Step unset” note; moving the card sets a step. A move
+  writes the mapped `PipelineItem.stageId` and `MeetingLead.leadStep` in one
+  transaction. Other pipelines keep their existing stages.
+- M3 design choices: virtual step columns reuse existing pipe stages because
+  several Leads steps map to the same stage; existing non-Leads stages remain
+  visible; unset values are shown by stage and stay null until a card is moved.
+- **M4: implemented**, code commit `d966ff4` (base `db7efda`). The shared
+  `movePipelineItemAction` now updates `MeetingLead.updatedAt` and
+  `PipelineItem.stageId` in one transaction for every pipeline move. The
+  timestamp is strictly greater than its previous value, including when the
+  current clock time is equal or earlier. Leads moves also save `leadStep` in
+  that transaction. Tests cover timestamp advancement for general moves and
+  all six Leads steps.
+- Move-path audit: `movePipelineItemAction` is the user-driven stage-move path.
+  `contacts/automation.ts` and tag actions create/place items but do not move
+  existing ones. Pipe deal upserts update the associated `MeetingLead` row
+  along with stage/step, so Prisma `@updatedAt` already advances there.
+  `PipeDeal.updatedAt` reads `MeetingLead.updatedAt`. The M1 contract audit
+  notes pipe's current pull fetches the full list and compares values rather
+  than using `updatedAt`; this change makes the returned timestamp truthful.
+- **M5: ACCEPT** (`jobs/leads/review-m5-r1.md`, range `315267c4cd0366f4652227f6dd529cfba9eb0284..c62bba91f2bd571fd8590a84638b5909a2dbe3f8`).
+  [`jobs/leads/nurture.md`](jobs/leads/nurture.md) records Tom's tentative
+  first-cut inputs (convert the offer during days 0–7 after quote, with quote
+  and contract expiring at day 7; then long-term nurture), and lists the
+  unanswered decisions and triggers. It deliberately proposes no final stage
+  list and includes no application changes.
+- Checks: `npm run typecheck` passed; `npm run lint` passed (0 errors, 9
+  warnings); `npm test` passed (111 files, 1 skipped; 882 tests, 5 skipped).
+  No database was needed for M4. No production database or environment was
+  touched.
+- M5 docs check: `git diff --check` passed. Application checks were not rerun
+  because this change contains documentation only; M4's verified results
+  remain above.
+- **M6: documentation handoff complete**, report: `jobs/leads/worker-m6-r1.md`. Proposed reply to Kassad is recorded there and was not sent. Nurture remains tentative; no final stages selected. The pipe-side change remains Kassad's action after `leadStep` is live.
+- M6 changes only documentation and the worker report. `git diff --check` passed. Typecheck, lint, and tests were skipped for this docs-only milestone. No production DB/env, external contact, board CLI, push, PR, merge, or deploy was used.
 
 ## Health
 
-**Not verified in this session.** No test, typecheck, lint, or build was run,
-and the database was not contacted. The numbers in
+**Verified 2026-10-21 on `crew/leads-six-steps`; M6 handoff/report committed locally.**
+`npm run typecheck` passed; `npm run lint` passed with 0 errors and 9 warnings;
+`npm test` passed with 111 files passed, 1 skipped, 882 tests passed, and 5
+skipped. M4 did not use a database. Production was not contacted. The numbers in
 `docs/IMPLEMENTATION-STATUS.md` (583 tests across 74 files, 0 lint errors, 8
 `<img>` advisories) are dated 2026-09-08 and are carried as history, not as a
 current claim. Re-run the checks before relying on them.

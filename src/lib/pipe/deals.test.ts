@@ -37,7 +37,7 @@ vi.mock("@/lib/tenancy/context", () => ({
 }));
 
 import { PipeBrandError } from "./contacts";
-import { listPipeDeals, parsePipeDealInput, upsertPipeDeal } from "./deals";
+import { LEAD_STEPS, listPipeDeals, parsePipeDealInput, upsertPipeDeal } from "./deals";
 
 const STAGES = [
   { id: "s1", key: "prospect" },
@@ -65,6 +65,7 @@ const item = (over = {}) => ({
     invoiceRef: null,
     invoiceDate: null,
     yesContactId: null,
+    leadStep: null,
     updatedAt: new Date("2026-10-19T12:00:00Z"),
     contacts: [{ contactId: "c1" }],
   },
@@ -107,6 +108,23 @@ describe("parsePipeDealInput", () => {
       amount: 950, amountKind: "offer", invoiceRef: "INV-1", yesContact: "c9",
     });
   });
+
+  it("accepts each lead step only with its matching pipe stage", () => {
+    const stageFor = { reach: "lead", qb: "talking", book: "talking", call: "talking", quote: "proposed", nurture: "proposed" } as const;
+    for (const leadStep of LEAD_STEPS) {
+      expect(parsePipeDealInput({ brand: "b", pipe_id: "7", name: "x", stage: stageFor[leadStep], lead_step: leadStep }).leadStep)
+        .toBe(leadStep);
+    }
+    expect(parsePipeDealInput({ brand: "b", pipe_id: "7", name: "x", stage: "lead", leadStep: null }).leadStep).toBeNull();
+    expect(parsePipeDealInput({ brand: "b", pipe_id: "7", name: "x" }).leadStep).toBeUndefined();
+    expect(() => parsePipeDealInput({ brand: "b", pipe_id: "7", name: "x", stage: "talking", lead_step: "reach" })).toThrow("belongs to stage lead");
+  });
+
+  it("rejects unknown and non-string lead steps", () => {
+    const base = { brand: "b", pipe_id: "7", name: "x", stage: "talking" };
+    expect(() => parsePipeDealInput({ ...base, lead_step: "review" })).toThrow("lead_step must be one of");
+    expect(() => parsePipeDealInput({ ...base, lead_step: 1 })).toThrow("lead_step must be one of");
+  });
 });
 
 describe("upsertPipeDeal", () => {
@@ -128,6 +146,7 @@ describe("upsertPipeDeal", () => {
     invoiceRef: null,
     invoiceDate: null,
     yesContact: null,
+    leadStep: undefined,
   };
 
   beforeEach(() => {
@@ -146,7 +165,7 @@ describe("upsertPipeDeal", () => {
     );
     expect(mocks.leadCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ brandId: "brand-1", pipeId: "7", kind: "PROSPECT", amount: 950 }),
+        data: expect.objectContaining({ brandId: "brand-1", pipeId: "7", kind: "PROSPECT", amount: 950, leadStep: null }),
       }),
     );
     expect(mocks.itemUpsert).toHaveBeenCalledWith(
@@ -175,7 +194,7 @@ describe("upsertPipeDeal", () => {
   });
 
   it("moves the stage and updates the working fields on later pushes", async () => {
-    mocks.leadFind.mockResolvedValue({ id: "l1" });
+    mocks.leadFind.mockResolvedValue({ id: "l1", leadStep: "reach" });
     mocks.leadUpdate.mockResolvedValue({ id: "l1" });
     mocks.itemFind.mockResolvedValue(item({ stage: { key: "proposed" } }));
     const result = await upsertPipeDeal({
@@ -190,6 +209,26 @@ describe("upsertPipeDeal", () => {
       expect.objectContaining({ update: expect.objectContaining({ stageId: "s4" }) }),
     );
     expect(result.deal.stage).toBe("proposed");
+  });
+
+  it("stores, returns, preserves, clears, and drops a step when its stage changes", async () => {
+    mocks.leadCreate.mockResolvedValue({ id: "l1", leadStep: "reach" });
+    mocks.itemFind.mockResolvedValue(item({ lead: { ...item().lead, leadStep: "reach" } }));
+    const created = await upsertPipeDeal({ actorUserId: "user-1", input: { ...input, leadStep: "reach" } });
+    expect(mocks.leadCreate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ leadStep: "reach" }) }));
+    expect(created.deal.leadStep).toBe("reach");
+
+    mocks.leadFind.mockResolvedValue({ id: "l1", leadStep: "qb" });
+    await upsertPipeDeal({ actorUserId: "user-1", input: { ...input, stage: "talking", leadStep: undefined } });
+    expect(mocks.leadUpdate).toHaveBeenLastCalledWith(expect.objectContaining({ data: expect.objectContaining({ leadStep: "qb" }) }));
+
+    mocks.leadFind.mockResolvedValue({ id: "l1", leadStep: "qb" });
+    await upsertPipeDeal({ actorUserId: "user-1", input: { ...input, stage: "proposed", leadStep: undefined } });
+    expect(mocks.leadUpdate).toHaveBeenLastCalledWith(expect.objectContaining({ data: expect.objectContaining({ leadStep: null }) }));
+
+    mocks.leadFind.mockResolvedValue({ id: "l1", leadStep: "qb" });
+    await upsertPipeDeal({ actorUserId: "user-1", input: { ...input, stage: "talking", leadStep: null } });
+    expect(mocks.leadUpdate).toHaveBeenLastCalledWith(expect.objectContaining({ data: expect.objectContaining({ leadStep: null }) }));
   });
 
   it("ignores unknown contact and business ids instead of creating anyone", async () => {
@@ -221,9 +260,9 @@ describe("upsertPipeDeal", () => {
 
 describe("listPipeDeals", () => {
   it("lists the brand's pipe pipeline items and searches names", async () => {
-    mocks.itemFindMany.mockResolvedValue([item()]);
+    mocks.itemFindMany.mockResolvedValue([item({ lead: { ...item().lead, leadStep: "reach" } })]);
     const result = await listPipeDeals({ actorUserId: "u", brand: "bookkeeping-conroe", query: "johnny" });
-    expect(result[0]).toMatchObject({ pipeId: "7", stage: "lead", contact: "c1" });
+    expect(result[0]).toMatchObject({ pipeId: "7", stage: "lead", contact: "c1", leadStep: "reach" });
     expect(mocks.itemFindMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ pipelineId: "p1" }) }),
     );

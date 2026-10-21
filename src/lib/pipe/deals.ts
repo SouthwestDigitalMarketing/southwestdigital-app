@@ -2,6 +2,9 @@ import "server-only";
 
 import { LeadKind, PipelineType, Prisma } from "@prisma/client";
 import { createBrandDataContext, withBrandDataTransaction } from "@/lib/tenancy/context";
+import { LEAD_STEPS, LEAD_STEP_STAGE, type LeadStep } from "./lead-steps";
+export { LEAD_STEPS, LEAD_STEP_LABEL, LEAD_STEP_STAGE } from "./lead-steps";
+export type { LeadStep } from "./lead-steps";
 import { PipeBrandError, resolveBrand } from "./contacts";
 
 /**
@@ -31,6 +34,16 @@ const STAGE_ORDER: { key: PipeStage; name: string; sortOrder: number }[] = [
 ];
 
 export const PIPE_KINDS = ["offer", "invoice"] as const;
+
+/**
+ * pipe's Leads board steps. Each rides on one pipe stage, so a step is only
+ * valid for that stage: reach=lead; qb/book/call=talking; quote/nurture=proposed.
+ */
+function asLeadStep(value: unknown): LeadStep | null {
+  return typeof value === "string" && (LEAD_STEPS as readonly string[]).includes(value)
+    ? (value as LeadStep)
+    : null;
+}
 
 export type PipeDealInput = {
   brand: string;
@@ -65,6 +78,9 @@ export type PipeDealInput = {
   /** SWapp contact id of who said yes, either casing. */
   yes_contact?: string | null;
   yesContact?: string | null;
+  /** pipe's Leads step, one of LEAD_STEPS or null to clear, either casing. */
+  lead_step?: string | null;
+  leadStep?: string | null;
 };
 
 export type ParsedPipeDeal = {
@@ -85,9 +101,16 @@ export type ParsedPipeDeal = {
   invoiceRef: string | null;
   invoiceDate: string | null;
   yesContact: string | null;
+  /**
+   * undefined: the request did not mention the step, so a stored step is left
+   * alone (unless the stage moved away from it). null: clear it.
+   */
+  leadStep: LeadStep | null | undefined;
 };
 
-export type PipeDeal = ParsedPipeDeal & {
+export type PipeDeal = Omit<ParsedPipeDeal, "leadStep"> & {
+  /** Always present in answers; null when the deal has no step. */
+  leadStep: LeadStep | null;
   id: string;
   updatedAt: string;
 };
@@ -96,6 +119,21 @@ function clean(value: unknown, max: number): string | null {
   if (typeof value !== "string") return null;
   const text = value.trim();
   return text ? text.slice(0, max) : null;
+}
+
+function parseLeadStep(raw: Record<string, unknown>, stage: PipeStage): LeadStep | null | undefined {
+  const key = "lead_step" in raw ? "lead_step" : "leadStep" in raw ? "leadStep" : null;
+  if (!key) return undefined;
+  const value = raw[key];
+  if (value === null) return null;
+  const step = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (!(LEAD_STEPS as readonly string[]).includes(step)) {
+    throw new RangeError(`lead_step must be one of: ${LEAD_STEPS.join(", ")}, or null`);
+  }
+  if (LEAD_STEP_STAGE[step as LeadStep] !== stage) {
+    throw new RangeError(`lead_step ${step} belongs to stage ${LEAD_STEP_STAGE[step as LeadStep]}, not ${stage}`);
+  }
+  return step as LeadStep;
 }
 
 function cleanMoney(value: unknown, field: string): number | null {
@@ -142,6 +180,7 @@ export function parsePipeDealInput(body: unknown): ParsedPipeDeal {
     invoiceRef: clean(input.invoice_ref ?? input.invoiceRef, 120),
     invoiceDate: clean(input.invoice_date ?? input.invoiceDate, 32),
     yesContact: clean(input.yes_contact ?? input.yesContact, 64),
+    leadStep: parseLeadStep(raw, stageRaw as PipeStage),
   };
 }
 
@@ -159,6 +198,7 @@ const leadSelect = {
   invoiceRef: true,
   invoiceDate: true,
   yesContactId: true,
+  leadStep: true,
   updatedAt: true,
   contacts: { select: { contactId: true }, orderBy: { createdAt: "asc" } },
 } as const;
@@ -192,8 +232,19 @@ function present(slug: string, item: ItemRow): PipeDeal {
     invoiceRef: lead.invoiceRef,
     invoiceDate: lead.invoiceDate,
     yesContact: lead.yesContactId,
+    leadStep: asLeadStep(lead.leadStep),
     updatedAt: lead.updatedAt.toISOString(),
   };
+}
+
+/**
+ * The step to store on an update. A step the request names (or clears) wins.
+ * Otherwise the stored step stays only while it still fits the stage, so a
+ * stage push without a step never leaves a step from another stage behind.
+ */
+function nextLeadStep(input: ParsedPipeDeal, stored: LeadStep | null): LeadStep | null {
+  if (input.leadStep !== undefined) return input.leadStep;
+  return stored && LEAD_STEP_STAGE[stored] === input.stage ? stored : null;
 }
 
 export type PipeDealUpsert = {
@@ -288,7 +339,7 @@ export async function upsertPipeDeal(args: {
 
     let lead = await transaction.meetingLead.findUnique({
       where: { brandId_pipeId: { brandId: brand.id, pipeId: input.pipeId } },
-      select: { id: true },
+      select: { id: true, leadStep: true },
     });
     let created = false;
     if (!lead) {
@@ -308,8 +359,9 @@ export async function upsertPipeDeal(args: {
           invoiceRef: input.invoiceRef,
           invoiceDate: input.invoiceDate,
           yesContactId,
+          leadStep: input.leadStep ?? null,
         },
-        select: { id: true },
+        select: { id: true, leadStep: true },
       });
       created = true;
     } else {
@@ -327,6 +379,7 @@ export async function upsertPipeDeal(args: {
           invoiceRef: input.invoiceRef,
           invoiceDate: input.invoiceDate,
           yesContactId,
+          leadStep: nextLeadStep(input, asLeadStep(lead.leadStep)),
         },
         select: { id: true },
       });

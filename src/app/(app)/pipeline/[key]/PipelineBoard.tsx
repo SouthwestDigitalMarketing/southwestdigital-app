@@ -10,14 +10,18 @@ import { addLeadNoteAction, movePipelineItemAction } from "../actions";
 
 type Stage = {
   id: string;
+  targetStageId: string;
   key: string;
   name: string;
   valueMultiplier: number;
+  leadStep: string | null;
+  clearLeadStep: boolean;
 };
 
 type Item = {
   id: string;
   stageId: string;
+  leadStep: string | null;
   leadName: string;
   leadCompany: string | null;
   leadEmail: string | null;
@@ -40,10 +44,12 @@ const chipButton =
 
 export default function PipelineBoard({
   pipelineKey,
+  isPipeLeadBoard,
   stages,
   items,
 }: {
   pipelineKey: string;
+  isPipeLeadBoard: boolean;
   stages: Stage[];
   items: Item[];
 }) {
@@ -60,15 +66,17 @@ export default function PipelineBoard({
     [items, selectedId],
   );
 
-  function moveItem(itemId: string, stageId: string) {
+  function moveItem(itemId: string, stage: Stage) {
     setActionError(null);
     setMovingItemId(itemId);
     startTransition(async () => {
       try {
         const data = new FormData();
         data.set("itemId", itemId);
-        data.set("stageId", stageId);
+        data.set("stageId", stage.targetStageId);
         data.set("pipelineKey", pipelineKey);
+        if (stage.leadStep) data.set("leadStep", stage.leadStep);
+        else if (stage.clearLeadStep) data.set("leadStep", "");
         await movePipelineItemAction(data);
         router.refresh();
       } catch (error) {
@@ -101,8 +109,12 @@ export default function PipelineBoard({
     <div className="mt-5 space-y-4">
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-base font-semibold text-slate-900">Pipeline stages</h2>
-          <p className="text-xs text-slate-500">Open a card to view details and move it to another stage, or drag it between stages.</p>
+          <h2 className="text-base font-semibold text-slate-900">{isPipeLeadBoard ? "Leads steps" : "Pipeline stages"}</h2>
+          <p className="text-xs text-slate-500">
+            {isPipeLeadBoard
+              ? "Move a card between Leads steps to save its step and mapped pipe stage. Prospect, Won, and Lost remain available."
+              : "Open a card to view details and move it to another stage, or drag it between stages."}
+          </p>
         </div>
         <div className="overflow-x-auto pb-2">
           <KeyboardListRegion enabled={items.length > 0 && !selectedId && !pending} onOpen={(id) => { setSelectedId(id); setCallNote(""); setActionError(null); }}>
@@ -117,13 +129,13 @@ export default function PipelineBoard({
                     event.preventDefault();
                     const itemId = event.dataTransfer.getData("text/pipeline-item-id");
                     setDraggingId(null);
-                    if (itemId) moveItem(itemId, stage.id);
+                    if (itemId) moveItem(itemId, stage);
                   }}
                   className="flex flex-col rounded-lg border border-slate-200 bg-slate-50"
                 >
                   <header className="border-b border-slate-200 px-3 pb-2 pt-3">
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                      Stage {index + 1}
+                      {isPipeLeadBoard ? "Column" : "Stage"} {index + 1}
                     </p>
                     <h3 className="text-sm font-semibold text-slate-900">{stage.name}</h3>
                   </header>
@@ -161,6 +173,9 @@ export default function PipelineBoard({
                           ${item.weightedValueUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                         </p>
                         <p className="text-[10px] uppercase tracking-wide text-slate-500">{item.leadStatus}</p>
+                        {isPipeLeadBoard && !item.leadStep && ["lead-step-reach", "lead-step-qb", "lead-step-quote"].includes(stage.id) ? (
+                          <p className="mt-1 text-[10px] font-medium text-amber-700">Step unset · shown by stage</p>
+                        ) : null}
                       </button>
                     ))}
                   </div>
@@ -255,7 +270,7 @@ export default function PipelineBoard({
                     key={stage.id}
                     type="button"
                     disabled={selected.stageId === stage.id || pending || movingItemId === selected.id}
-                    onClick={() => moveItem(selected.id, stage.id)}
+                    onClick={() => moveItem(selected.id, stage)}
                     className={chipButton}
                   >
                     {stage.name}
