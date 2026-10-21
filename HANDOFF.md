@@ -5,7 +5,7 @@ Historical session logs live in `docs/handoff-archive/`; durable design and
 reference material lives in `docs/`. If a note here would still be true in
 three months, it belongs in `docs/`, not here.
 
-Checked on **dalliance**, 2026-10-16 (America/Chicago), by Kassad.
+Checked on **2026-10-21** (America/Chicago), by Worker (`worker-leads`).
 `README.md` describes the project; this file hands off the work.
 
 ## Read first
@@ -17,44 +17,17 @@ the owner named the recipient in this session. Crews do not push, PR, or merge.
 
 ## Repository state
 
-- Branch: `docs/restore-handoff-and-fix-agents-refs`.
-- `origin/main` is `ab34b8b` (`removed AGENTS.md, superceded by
-  tmacdonald7/agents/agents.md`). `main` was level with it, 0 ahead / 0 behind.
-- Working tree was **not** clean on arrival: nine uncommitted Markdown files
-  sat on local `main`, with `HANDOFF.md` staged for deletion. They are now
-  commit `5f6222f` on this branch, committed unmodified so the work is
-  recoverable, then corrected in the commit after it. No source or schema file
-  was involved.
-
-### What this branch does
-
-`ab34b8b` deleted in-repo `AGENTS.md` in favour of the global agent guidance,
-which left documentation pointing at a file that no longer exists. The
-uncommitted pass found on `main` repointed those references but also deleted
-`HANDOFF.md` and folded its content into `README.md`. This branch keeps the
-necessary half and corrects the rest:
-
-- `HANDOFF.md` restored as its own file (this one), with current state rather
-  than the stale text that was folded into `README.md`.
-- `README.md` returned to its project-only shape, with its single dead
-  `AGENTS.md` pointer replaced by the global guidance. Its `HANDOFF.md`
-  pointer was already correct and is kept.
-- Seven dead `AGENTS.md` references fixed across `docs/SWAPP-BRIEF.md` (2),
-  `docs/SWAPP-REVIEW-AND-ROADMAP.md` (3), `docs/local-development.md` (1), and
-  `docs/offers/services-ui-handoff.md` (1). None remain outside the
-  `~/.codex/AGENTS.md` global-guidance blocks.
-- `CLAUDE.md` points at `README.md`, this file, and the global guidance.
-
-The stale text this replaces claimed branch `feat/review-requests-hardening`,
-`origin/main` `c400bb4`, and "working tree should be clean". None of the three
-was true on 2026-10-16.
-
-Docs only. No source, schema, dependency, or configuration change.
+- Branch: `crew/leads-six-steps`; M2 base: `d59fe59` (`origin/main` at job
+  start); M2 code head: `208cdeb` (`Pipe deals: persist validated Leads steps`).
+- The M2 commit is local and unpushed. It adds the optional validated
+  `lead_step` field, persists and returns it, and adds an idempotent nullable
+  `MeetingLead.leadStep` migration. No production database or environment was
+  read or changed.
+- This branch also contains the prior M1 commits `3613d9b` and `a14d2fa`.
 
 ## Leads six-step job (crew, branch `crew/leads-six-steps`)
 
-Added 2026-10-21 by crew Worker (`worker-leads`) for Ummon. Branch base is
-`d59fe59` (`origin/main`). Not pushed; crews do not push. Job brief:
+Added 2026-10-21 by crew Worker (`worker-leads`) for Ummon. Job brief:
 `~/.grok/team/swapp/jobs/leads/JOB.md` (ripley/dalliance crew dir, not in git).
 
 Goal: pipe's Bookkeeping Conroe Leads board has six steps (`reach`, `qb`,
@@ -75,19 +48,28 @@ and make SWapp-side moves visible to pipe. Source notices: `ddc3441d4fb9`,
   pipe's current pull diffs field values and does not read `updatedAt`.
   Also: a pipe push is a full replace, so a later local pipe edit pushes its
   older stage over a SWapp-side move; M3/M4 make moves visible, not winning.
-- Baseline on this branch before any change (2026-10-21): `npm run typecheck`
-  exit 0; `npm run lint` exit 0 (0 errors, 9 warnings); `npm test` 109 files
-  passed, 1 skipped; 871 tests passed, 5 skipped.
-- Next: M2 (`lead_step` on the deals route + additive migration, scratch
-  Postgres only). No migration is applied anywhere; production apply needs
-  Tom's go.
+- **M2: done**, code commit `208cdeb` (base `d59fe59`). `lead_step` accepts
+  `reach|qb|book|call|quote|nurture|null`; values are checked against the
+  existing stage mapping, persisted in nullable `MeetingLead.leadStep`, and
+  returned as `deal.leadStep`. An absent value preserves the stored step while
+  its stage still matches; a stage move outside that stage clears it. Explicit
+  `null` clears it. See
+  `~/.grok/team/swapp/jobs/leads/worker-m2-r1.md` for commands and exact results.
+- Checks: `npm run typecheck` passed; `npm run lint` passed (0 errors, 9
+  warnings); `npm test` passed (109 files, 1 skipped; 874 tests, 5 skipped).
+  The migration was applied twice to a disposable Postgres 16 scratch container;
+  both runs succeeded and the column is nullable `text`. The container was
+  stopped and removed. No production database or environment was touched.
+- Next: M3 (show and move the six steps in SWapp screens). M4 remains separate;
+  M5 is design note only. M2 has not been pushed or deployed.
 
 ## Health
 
-**Not verified in this session** (superseded for branch
-`crew/leads-six-steps` by the baseline in the section above, which is current
-as of 2026-10-21 on that branch only). No test, typecheck, lint, or build was run,
-and the database was not contacted. The numbers in
+**Verified 2026-10-21 on `crew/leads-six-steps` at M2 code head `208cdeb`.**
+`npm run typecheck` passed; `npm run lint` passed with 0 errors and 9 warnings;
+`npm test` passed with 109 files passed, 1 skipped, 874 tests passed, and 5
+skipped. The migration ran twice on scratch Postgres 16. Production was not
+contacted. The numbers in
 `docs/IMPLEMENTATION-STATUS.md` (583 tests across 74 files, 0 lint errors, 8
 `<img>` advisories) are dated 2026-09-08 and are carried as history, not as a
 current claim. Re-run the checks before relying on them.
