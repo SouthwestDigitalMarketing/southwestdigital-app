@@ -2,6 +2,9 @@ import "server-only";
 
 import { LeadKind, PipelineType, Prisma } from "@prisma/client";
 import { createBrandDataContext, withBrandDataTransaction } from "@/lib/tenancy/context";
+import { LEAD_STEPS, LEAD_STEP_STAGE, type LeadStep } from "./lead-steps";
+export { LEAD_STEPS, LEAD_STEP_LABEL, LEAD_STEP_STAGE } from "./lead-steps";
+export type { LeadStep } from "./lead-steps";
 import { PipeBrandError, resolveBrand } from "./contacts";
 
 /**
@@ -36,18 +39,6 @@ export const PIPE_KINDS = ["offer", "invoice"] as const;
  * pipe's Leads board steps. Each rides on one pipe stage, so a step is only
  * valid for that stage: reach=lead; qb/book/call=talking; quote/nurture=proposed.
  */
-export const LEAD_STEPS = ["reach", "qb", "book", "call", "quote", "nurture"] as const;
-export type LeadStep = (typeof LEAD_STEPS)[number];
-
-export const LEAD_STEP_STAGE: Record<LeadStep, PipeStage> = {
-  reach: "lead",
-  qb: "talking",
-  book: "talking",
-  call: "talking",
-  quote: "proposed",
-  nurture: "proposed",
-};
-
 function asLeadStep(value: unknown): LeadStep | null {
   return typeof value === "string" && (LEAD_STEPS as readonly string[]).includes(value)
     ? (value as LeadStep)
