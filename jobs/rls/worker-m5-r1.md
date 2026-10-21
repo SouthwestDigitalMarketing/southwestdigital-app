@@ -4,8 +4,10 @@ Date: 2026-10-21 (America/Chicago)
 Repo: `~/projects/worktrees/swapp-rls`
 Branch: `crew/rls-readiness`
 Base: `e8968ed1ee8138cd53c0522c771f30535a209893` (M4 report head; M4 ACCEPTed)
-M5 documentation head: `8cd852a31e4694e235f0d11fff732e665509c8ad`
-Exact M5 implementation range: `e8968ed1ee8138cd53c0522c771f30535a209893..8cd852a31e4694e235f0d11fff732e665509c8ad`
+M5 documentation head: `b5bc301055cea3ff112fcaecd6f755288aead1a6`
+Exact M5 documentation range: `e8968ed1ee8138cd53c0522c771f30535a209893..b5bc301055cea3ff112fcaecd6f755288aead1a6`
+Initial documentation commit: `8cd852a31e4694e235f0d11fff732e665509c8ad`
+Whitespace correction commit: `b5bc301055cea3ff112fcaecd6f755288aead1a6`
 
 ## Changes
 
@@ -50,15 +52,23 @@ cutover.
 - Initial `git fetch origin` and `git merge-base --is-ancestor origin/main
   HEAD` — passed before editing. `origin/main` was
   `d59fe59841d1631849e5458dcf5f57f682bc7d0f`; no divergence.
-- `git diff --check` — passed before the M5 documentation commit.
+- `git diff --check` on tracked changes passed before the initial commit; the
+  new untracked plan was not included in that command.
 - Read-only Python validation of the plan — passed: explicit “database rename
   has NOT been done”; exactly four SQL blocks; guarded forward and rollback
   statements for both slugs; all five gate references and owners; M4 `NOT
   READY`; and M6 waits for reviewer ACCEPT.
 - `git fetch origin` and `git merge-base --is-ancestor origin/main HEAD`
-  immediately before the documentation commit — passed; no divergence.
-- M5 implementation range contains only `HANDOFF.md` and
-  `docs/deployment/brand-slug-rename-plan.md`.
+  immediately before the initial documentation commit and before the
+  whitespace correction — passed; no divergence.
+- A committed-range `git diff --check` after the initial commit found one
+  extra blank line at the end of the plan. Removed it in
+  `b5bc301055cea3ff112fcaecd6f755288aead1a6`.
+- `git diff --check e8968ed1ee8138cd53c0522c771f30535a209893..b5bc301055cea3ff112fcaecd6f755288aead1a6` — passed after the correction.
+- The M5 range contains `HANDOFF.md`,
+  `docs/deployment/brand-slug-rename-plan.md`, and this worker report. The
+  report was initially committed as `070422cc1afc633ee7922807f5eaee5bcee58119`;
+  this final report revision records the later whitespace correction.
 - No SQL was run or parsed by a database. No database was contacted. No
   application tests, typecheck, or lint were run because this is
   documentation-only work.
@@ -84,6 +94,6 @@ report records the event; it does not attempt to change the board.
 ## Next step
 
 Reviewer: inspect exact M5 range
-`e8968ed1ee8138cd53c0522c771f30535a209893..8cd852a31e4694e235f0d11fff732e665509c8ad`.
+`e8968ed1ee8138cd53c0522c771f30535a209893..b5bc301055cea3ff112fcaecd6f755288aead1a6`.
 Do not start M6 until M5 reviewer ACCEPT. Do not run the SQL or connect to a
 database as part of review.
