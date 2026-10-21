@@ -26,8 +26,9 @@ written on other branches and have **not** been checked against this branch.
 
 Milestones: M1 sweep; M2 fixes (ACCEPTed); M3 scratch-Postgres rehearsal
 (ACCEPTed); M4 cutover runbook (ACCEPTed); M5 brand-slug rename plan
-(documentation complete, reviewer review pending); M6 final handoff (wait for
-M5 reviewer ACCEPT).
+(ACCEPTed); M6 final handoff (documentation complete, reviewer review
+pending). **PRODUCTION CUTOVER NOT READY.** Do not mark ready-to-ship until
+reviewer ACCEPTs M6.
 
 - **M1 sweep:** 36 direct `Contact` call sites outside
   `withBrandDataTransaction` plus 4 nested RLS reads; 16 paths could fail
@@ -35,7 +36,9 @@ M5 reviewer ACCEPT).
 - **M2 fixes:** implementation commit `b040fb8a444b8570f5bda7d6486c03061ebebf0c`,
   accepted at `1e9a296058a67815f5f17ec92569ee6e89eb10ad`. Staff brand helpers
   return the authorized context; swept Contact paths and nested reads use
-  context-bound queries. Reports: `jobs/rls/worker-m2-r1.md` and
+  context-bound queries. R1 range: `f9aa45f6aba51afdf3c1f08dd8c896f6a7f5c1ac..b040fb8a444b8570f5bda7d6486c03061ebebf0c`;
+  R2 range: `cfea070ef1a252078c1331050f4b8a6f54fff5b4..1e9a296058a67815f5f17ec92569ee6e89eb10ad`.
+  Reports: `jobs/rls/worker-m2-r1.md` and
   `~/.grok/team/swapp/jobs/rls/worker-m2-r2.md`.
 - **M3 scratch rehearsal: ACCEPTed.** Evidence report stays at the exact repo
   path `~/projects/worktrees/swapp-rls/jobs/rls/worker-m3-r1.md`. A disposable
@@ -48,19 +51,22 @@ M5 reviewer ACCEPT).
   without context and could not cross-write. Migrator CREATE did not permit
   ALTER of existing `Contact` because it owned no tables. Restricted-role full
   suite: 880/881, one pre-existing pipe contacts contract/test mismatch.
+  Evidence range: `1e9a296058a67815f5f17ec92569ee6e89eb10ad..37d73d6a0d96d02dd8fdc843e0434395a9c83630`;
+  report commit `37d39f7246e4dcb589eeb1fa6bf6bfe9d12ab6a1`.
 - **M4 runbook:** `docs/deployment/rls-and-roles-cutover.md` now has a
   preflight checklist, observed grant matrix and 107-table inventory,
   stage-by-stage rollback guidance, and explicit owners/evidence for all five
   open gates. It keeps cutover **NOT READY**. M4 report:
-  `jobs/rls/worker-m4-r1.md`. Implementation range and documentation-only
-  checks are recorded there.
+  `jobs/rls/worker-m4-r1.md`. Reviewed range:
+  `37d39f7246e4dcb589eeb1fa6bf6bfe9d12ab6a1..e8968ed1ee8138cd53c0522c771f30535a209893`.
 - **M5 brand-slug rename plan:** `docs/deployment/brand-slug-rename-plan.md`
   documents the guarded SQL, preconditions, verification queries, ordering,
   and rollback for `bc` → `bookkeeping-conroe` and `treb` →
   `real-estate-bookkeeper`. It explicitly states the database rename has NOT
-  been done. No SQL or database connection was used. M5 report:
-  `jobs/rls/worker-m5-r1.md`. All five M4 gates and owners remain open; cutover
-  stays **NOT READY**.
+  been done. No SQL or database connection was used. M5 was ACCEPTed over
+  `e8968ed1ee8138cd53c0522c771f30535a209893..3fd82b9c7aa86e43cc68b4b5cdcf1ff4b04d1f57`.
+  Report: `jobs/rls/worker-m5-r1.md`. All five M4 gates and owners remain
+  open; cutover stays **NOT READY**.
 - **Open gates:** Ummon/app owner must supply and rehearse a repeatable full
   migration baseline/chain; define and rehearse DDL ownership for existing
   tables; and reconcile the pipe contacts mismatch separately without changing
@@ -68,9 +74,19 @@ M5 reviewer ACCEPT).
   backup/restore, secret configuration, preflight/rollback verification and
   cutover decision after those gates. Albedo owns owner credential rotation
   and secret cleanup after an approved cutover.
-- **Next:** reviewer inspects M5's exact range. Do not start M6 until M5 review
-  ACCEPT. Production cutover, production DB/env access, push, PR, merge, deploy,
-  and outbound contact remain outside this work.
+- **M6 final handoff:** `jobs/rls/worker-m6-r1.md` records M1–M5 evidence,
+  exact ranges, checks, limits, open gates, and next step. M6 report and this
+  handoff update are pending reviewer review; reviewer ACCEPT is required
+  before Foreman marks ready-to-ship.
+- **Incident attribution correction:** board record `488743eaaeb4` was created
+  by `worker-rls` running `board now` without authorization. The Foreman
+  instructed `worker-rls` to stop all board CLI use and not attempt correction.
+  The accepted M5 review report incorrectly says Tom directed the no-follow-up
+  instruction. This M6 handoff and report state the correction explicitly;
+  the accepted M5 report is left unchanged.
+- **Current boundary:** the database rename has NOT been done. Production
+  cutover remains NOT READY. No production DB/env access, SQL execution, board
+  CLI use, push, PR, merge, deploy, or outbound contact is part of M6.
 
 ## Repository state
 
