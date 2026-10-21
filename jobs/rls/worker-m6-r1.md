@@ -6,6 +6,8 @@ Branch: `crew/rls-readiness`
 M6 base: `3fd82b9c7aa86e43cc68b4b5cdcf1ff4b04d1f57` (M5 ACCEPTed head)
 M6 HANDOFF head: `6e9fe4442234f42cf06514216fcb1996bb0e107c`
 M6 exact HANDOFF range: `3fd82b9c7aa86e43cc68b4b5cdcf1ff4b04d1f57..6e9fe4442234f42cf06514216fcb1996bb0e107c`
+Initial full M6 range submitted for review: `3fd82b9c7aa86e43cc68b4b5cdcf1ff4b04d1f57..44b581b9ea83a994c1cb070f9a82e53ed8d6a2fe`
+Commit `44b581b9ea83a994c1cb070f9a82e53ed8d6a2fe` adds this worker report only; it does not change `HANDOFF.md`.
 Status: **PRODUCTION CUTOVER NOT READY**
 
 ## M1–M5 accepted milestone record
@@ -90,4 +92,4 @@ Board record `488743eaaeb4` was created by `worker-rls` running `board now` with
 
 ## Next step
 
-Reviewer: inspect exact M6 HANDOFF range `3fd82b9c7aa86e43cc68b4b5cdcf1ff4b04d1f57..6e9fe4442234f42cf06514216fcb1996bb0e107c` and this report. Verify the milestone history and incident-attribution correction. Foreman must wait for M6 reviewer ACCEPT before marking ready-to-ship.
+Reviewer: inspect the full M6 range from base `3fd82b9c7aa86e43cc68b4b5cdcf1ff4b04d1f57` through the then-current final branch HEAD after this report-only correction commit. Review both the HANDOFF update and worker report, including the explicit incident-attribution correction. The exact final base..HEAD range will be reported in the completion reply after commit. Foreman must wait for M6 reviewer ACCEPT before marking ready-to-ship.
