@@ -1646,6 +1646,9 @@ model MeetingLead {
   invoiceRef          String?
   invoiceDate         String?
   yesContactId        String?
+  // pipe's Leads step (reach|qb|book|call|quote|nurture). Validated and kept
+  // consistent with the pipe stage in src/lib/pipe/deals.ts, not by the DB.
+  leadStep            String?
   client              TicketClient?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
   customerAccount     CustomerAccount?        @relation(fields: [customerAccountId], references: [id], onDelete: SetNull)
   meetings            TeamMeetingLead[]
