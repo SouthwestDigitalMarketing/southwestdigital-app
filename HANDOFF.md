@@ -49,6 +49,16 @@ M5 brand-slug rename runbook, M6 final handoff.
   scratch Postgres is available before using it, then test as
   `swd_web_runtime` (`NOBYPASSRLS`). No production DB/env, push, PR, merge, or
   deploy is in scope. Do not begin M3 as part of this milestone.
+- **M2 review r1: CHANGES; regression tests added.** Test file:
+  `src/app/(app)/rls-query-context.test.ts`. It covers contact import duplicate
+  detection, offer contact sync, the empty Discounts picker, Client's split
+  contact reads, and Pipeline's context-bound LeadContact/Contact reads. Each
+  assertion checks the authorized brand `brand-42` and actor `staff-7` reach
+  `withBrandDataTransaction`, and checks the query result behavior. Checks on
+  this follow-up: typecheck passed; lint passed with 0 errors / 9 warnings;
+  tests passed (110 files, 876 tests; 1 file and 5 tests skipped); diff check
+  passed. No database or env was accessed. M3 remains next, gated on reviewer
+  ACCEPT; it was not started.
 
 ## Repository state
 
