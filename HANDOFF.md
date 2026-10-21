@@ -17,71 +17,53 @@ the owner named the recipient in this session. Crews do not push, PR, or merge.
 
 ## RLS readiness job (branch `crew/rls-readiness`, base `d59fe59`)
 
-Crew job `rls` (Ummon's crew, worker `worker-rls`), started 2026-10-21. Goal: make
-the code and runbook ready for the restricted-role + RLS cutover. **The
-production cutover is Tom's call and is not part of this job.** No production
-database, env file, push, PR or deploy is involved. The sections below this one
-(Repository state, Health, and the rest) were written on other branches and have
-**not** been checked against this branch.
+Crew job `rls` (Ummon's crew, worker `worker-rls`), started 2026-10-21. Goal:
+prepare code and docs for a restricted-role + RLS cutover. **Cutover remains
+NOT READY and requires Tom's separate decision.** No production database or
+env was accessed. No push, PR, merge, deploy, or outbound contact occurred.
+The sections below this one (Repository state, Health, and the rest) were
+written on other branches and have **not** been checked against this branch.
 
-Milestones: M1 sweep, M2 fix, M3 scratch-Postgres rehearsal, M4 runbook pass,
-M5 brand-slug rename runbook, M6 final handoff.
+Milestones: M1 sweep; M2 fixes (ACCEPTed); M3 scratch-Postgres rehearsal
+(ACCEPTed); M4 cutover runbook (completed, reviewer review pending); M5
+brand-slug rename runbook (not started; wait for M4 reviewer ACCEPT); M6 final
+handoff.
 
-- **M1 sweep: done, no code changed.** Report (outside the repo):
-  `~/.grok/team/swapp/jobs/rls/sweep.md`. Result: 36 call sites read or write
-  `Contact` through the global `prisma` client outside `withBrandDataTransaction`
-  (all in `src/app/(app)/{contacts,clients,discounts,offers}`), plus 4 nested
-  reads of RLS tables (`clients/[id]`, `discounts`, `contacts/[id]`,
-  `pipeline/[key]`). 16 of the 36 fail silently (empty list, duplicate check
-  passes). `src/lib/crm`, `src/lib/pipe` and `src/lib/contacts/automation.ts`
-  are already inside a brand context. Uncle Invoice uses only the
-  `uncleinvoice` schema (22 of 22 models) and cannot be broken by SWapp's RLS.
-- Checks run for M1: none (no code or schema change).
-- **M2 fixes: done in `b040fb8a444b8570f5bda7d6486c03061ebebf0c`.** Exact
-  implementation range: `f9aa45f6aba51afdf3c1f08dd8c896f6a7f5c1ac..b040fb8a444b8570f5bda7d6486c03061ebebf0c`.
-  Report: `jobs/rls/worker-m2-r1.md`. Staff brand helpers now return the
-  authorized `dataContext`; swept Contact reads and writes use
-  `withBrandDataTransaction`; Client, Discounts, and Pipeline nested RLS reads
-  are separate context-bound queries. Checks: typecheck passed; lint passed
-  with 0 errors / 9 warnings; tests passed (109 files, 871 tests; 1 file and
-  5 tests skipped). No database was contacted.
-- **M3 scratch-Postgres rehearsal: run; review pending.** On 2026-10-21,
-  used a disposable `postgres:17.5` container named
-  `swapp-rls-m3-20261021`, bound only to `127.0.0.1:54329`, then stopped and
-  removed it after checks. The all-repo-migration replay stopped at
-  `20260827200000_add_catalog_service_real_estate_specific` because the repo
-  omits the consolidated baseline that creates `catalog_services`. Following
-  the cutover doc's scratch recipe, generated a 107-table baseline from the
-  current schema and applied it with `psql`, then manually applied the two RLS
-  SQL migrations in order. `swd_migrator` and `swd_web_runtime` were
-  `NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS`;
-  runtime received DML on 107 app tables, not `_prisma_migrations`, and could
-  not create in `public`. All 6 CRM tables had ENABLE/FORCE RLS. Runtime saw 0
-  CRM rows without context; a cross-brand Contact insert was denied. It owned
-  0 public tables and could not read `_prisma_migrations`, disable RLS, or set
-  role to the migrator.
-- Full suite with scratch `DATABASE_URL` as `swd_web_runtime` and
-  `PIPE_TEST_DATABASE_URL=1`: **1 failed, 880 passed** (881 tests; 110 files
-  passed, 1 failed). The failing existing pipe integration assertion searches
-  for a phone after an email upsert omits phone; that upsert clears the phone
-  fields. A previous run also exposed that the integration fixture persists
-  rows and is not repeatable without clearing its scratch data. Typecheck
-  passed; lint passed with 0 errors / 9 warnings; `git diff --check` passed.
-  Full evidence: `jobs/rls/worker-m3-r1.md`.
-- **Next: M3 reviewer review.** Resolve or disposition the integration failure
-  and the incomplete all-file replay. M4 is gated on M3 reviewer ACCEPT. Do not
-  start M4 before ACCEPT. No production DB/env was accessed; no push, PR,
-  merge, deploy, or outbound contact occurred.
-- **M2 review r1: CHANGES; regression tests added.** Test file:
-  `src/app/(app)/rls-query-context.test.ts`. It covers contact import duplicate
-  detection, offer contact sync, the empty Discounts picker, Client's split
-  contact reads, and Pipeline's context-bound LeadContact/Contact reads. Each
-  assertion checks the authorized brand `brand-42` and actor `staff-7` reach
-  `withBrandDataTransaction`, and checks the query result behavior. Checks on
-  this follow-up: typecheck passed; lint passed with 0 errors / 9 warnings;
-  tests passed (110 files, 876 tests; 1 file and 5 tests skipped); diff check
-  passed. No database or env was accessed. M3 remains next, gated on reviewer
-  ACCEPT; it was not started.
+- **M1 sweep:** 36 direct `Contact` call sites outside
+  `withBrandDataTransaction` plus 4 nested RLS reads; 16 paths could fail
+  silently. Source report: `~/.grok/team/swapp/jobs/rls/sweep.md`.
+- **M2 fixes:** implementation commit `b040fb8a444b8570f5bda7d6486c03061ebebf0c`,
+  accepted at `1e9a296058a67815f5f17ec92569ee6e89eb10ad`. Staff brand helpers
+  return the authorized context; swept Contact paths and nested reads use
+  context-bound queries. Reports: `jobs/rls/worker-m2-r1.md` and
+  `~/.grok/team/swapp/jobs/rls/worker-m2-r2.md`.
+- **M3 scratch rehearsal: ACCEPTed.** Evidence report stays at the exact repo
+  path `~/projects/worktrees/swapp-rls/jobs/rls/worker-m3-r1.md`. A disposable
+  `postgres:17.5` container bound only to `127.0.0.1:54329` was removed after
+  checks. The full 40-file replay stopped after 13 at
+  `20260827200000_add_catalog_service_real_estate_specific` because
+  `catalog_services` baseline is missing. Schema-derived baseline + two RLS
+  migrations verified all six protected tables. Runtime had DML on 107 app
+  tables, no `_prisma_migrations`, and `NOBYPASSRLS`; it saw no CRM rows
+  without context and could not cross-write. Migrator CREATE did not permit
+  ALTER of existing `Contact` because it owned no tables. Restricted-role full
+  suite: 880/881, one pre-existing pipe contacts contract/test mismatch.
+- **M4 runbook:** `docs/deployment/rls-and-roles-cutover.md` now has a
+  preflight checklist, observed grant matrix and 107-table inventory,
+  stage-by-stage rollback guidance, and explicit owners/evidence for all five
+  open gates. It keeps cutover **NOT READY**. M4 report:
+  `jobs/rls/worker-m4-r1.md`. Implementation range and documentation-only
+  checks are recorded there.
+- **Open gates:** Ummon/app owner must supply and rehearse a repeatable full
+  migration baseline/chain; define and rehearse DDL ownership for existing
+  tables; and reconcile the pipe contacts mismatch separately without changing
+  that API in this branch. Tom owns target fingerprint, production grants,
+  backup/restore, secret configuration, preflight/rollback verification and
+  cutover decision after those gates. Albedo owns owner credential rotation
+  and secret cleanup after an approved cutover.
+- **Next:** reviewer inspects M4's exact range. Do not start M5 until M4 review
+  ACCEPT. Production cutover, production DB/env access, push, PR, merge, deploy,
+  and outbound contact remain outside this work.
 
 ## Repository state
 
