@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { KeyboardListRegion } from "@/components/keyboard/KeyboardListRegion";
 import { requireStaffBrand } from "@/lib/brands/staff";
+import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { formatPhone } from "@/lib/phone";
 import { ensureDefaultContactTags } from "@/lib/contacts/seed";
 import { contactOrderBy, contactSearchWhere } from "@/lib/contacts/query";
@@ -52,7 +53,7 @@ function hrefFor(args: {
 }
 
 export default async function ContactsPage({ searchParams }: { searchParams: SearchParams }) {
-  const { brand, isPlatformOperator } = await requireStaffBrand();
+  const { brand, isPlatformOperator, dataContext } = await requireStaffBrand();
   await ensureDefaultContactTags(brand.id);
 
   const params = await searchParams;
@@ -86,29 +87,33 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
     relatedBrandId: relatedBrandId || undefined,
   });
 
-  const [total, contacts, clients, platformBrands] = await Promise.all([
-    prisma.contact.count({ where }),
-    prisma.contact.findMany({
-      where,
-      orderBy: contactOrderBy(sort),
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phoneE164: true,
-        company: true,
-        roleTitle: true,
-        isActive: true,
-        updatedAt: true,
-        tagLinks: {
+  const [[total, contacts], clients, platformBrands] = await Promise.all([
+    withBrandDataTransaction(dataContext, (transaction) =>
+      Promise.all([
+        transaction.contact.count({ where }),
+        transaction.contact.findMany({
+          where,
+          orderBy: contactOrderBy(sort),
+          skip: (page - 1) * PAGE_SIZE,
+          take: PAGE_SIZE,
           select: {
-            tag: { select: { id: true, key: true, label: true } },
+            id: true,
+            name: true,
+            email: true,
+            phoneE164: true,
+            company: true,
+            roleTitle: true,
+            isActive: true,
+            updatedAt: true,
+            tagLinks: {
+              select: {
+                tag: { select: { id: true, key: true, label: true } },
+              },
+            },
           },
-        },
-      },
-    }),
+        }),
+      ]),
+    ),
     prisma.ticketClient.findMany({
       where: { brandId: brand.id, isActive: true },
       orderBy: { name: "asc" },

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireStaffBrand } from "@/lib/brands/staff";
+import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { PIPE_PROSPECTS_KEY } from "@/lib/pipe/deals";
 import { LEAD_STEP_LABEL, LEAD_STEP_STAGE, LEAD_STEPS, pipeLeadBoardColumnId, type LeadStep } from "@/lib/pipe/lead-steps";
 import { updateStageMultiplierAction } from "../actions";
@@ -21,7 +22,7 @@ const inputClass =
   "w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-slate-500 focus:outline-none";
 
 export default async function PipelineDetailPage({ params }: { params: Promise<{ key: string }> }) {
-  const { brand } = await requireStaffBrand();
+  const { brand, dataContext } = await requireStaffBrand();
   const { key } = await params;
 
   const pipeline = await prisma.pipeline.findUnique({
@@ -62,12 +63,6 @@ export default async function PipelineDetailPage({ params }: { params: Promise<{
               expectedServices: true,
               notes: true,
               leadStep: true,
-              contacts: {
-                orderBy: { createdAt: "asc" },
-                select: {
-                  contact: { select: { id: true, name: true, phoneE164: true } },
-                },
-              },
             },
           },
         },
@@ -75,6 +70,30 @@ export default async function PipelineDetailPage({ params }: { params: Promise<{
     },
   });
   if (!pipeline) notFound();
+
+  const leadIds = [...new Set(pipeline.items.map((item) => item.lead.id))];
+  const pipelineContacts = leadIds.length
+    ? await withBrandDataTransaction(dataContext, async (transaction) => {
+        const links = await transaction.leadContact.findMany({
+          where: { brandId: brand.id, leadId: { in: leadIds } },
+          orderBy: { createdAt: "asc" },
+          select: { leadId: true, contactId: true },
+        });
+        const contactIds = [...new Set(links.map((link) => link.contactId))];
+        const contacts = contactIds.length
+          ? await transaction.contact.findMany({
+              where: { brandId: brand.id, id: { in: contactIds } },
+              select: { id: true, name: true, phoneE164: true },
+            })
+          : [];
+        return links.map((link) => ({ leadId: link.leadId, contact: contacts.find((contact) => contact.id === link.contactId) ?? null }));
+      })
+    : [];
+  const contactsByLead = new Map<string, (typeof pipelineContacts)[number]["contact"][]>();
+  for (const link of pipelineContacts) {
+    if (!link.contact) continue;
+    contactsByLead.set(link.leadId, [...(contactsByLead.get(link.leadId) ?? []), link.contact]);
+  }
 
   const stageMap = new Map(pipeline.stages.map((stage) => [stage.id, stage]));
   const pipeLeadBoard = pipeline.key === PIPE_PROSPECTS_KEY;
@@ -118,7 +137,7 @@ export default async function PipelineDetailPage({ params }: { params: Promise<{
     const stage = stageMap.get(item.stageId);
     const multiplier = toNumber(stage?.valueMultiplier ?? item.stage.valueMultiplier);
     const baseValue = toNumber(item.baseValueUsd);
-    const firstContact = item.lead.contacts[0]?.contact;
+    const firstContact = contactsByLead.get(item.lead.id)?.[0];
     const rawLeadStep = item.lead.leadStep;
     const storedLeadStep = rawLeadStep && LEAD_STEPS.includes(rawLeadStep as LeadStep)
       && LEAD_STEP_STAGE[rawLeadStep as LeadStep] === item.stage.key

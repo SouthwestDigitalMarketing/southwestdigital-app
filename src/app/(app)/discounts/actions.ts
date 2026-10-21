@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
+import { withBrandDataTransaction } from "@/lib/tenancy/context";
+import type { BrandDataContext } from "@/lib/tenancy/context";
 import { isDiscountDeadlineMode, isDiscountKind, parseDiscountActivationMode } from "@/lib/discounts/kinds";
 
 function clean(value: FormDataEntryValue | null) {
@@ -51,12 +53,18 @@ function parseDiscountInput(formData: FormData) {
   };
 }
 
-async function validateContactBelongsToBrand(contactId: string | null, brandId: string) {
+async function validateContactBelongsToBrand(
+  dataContext: BrandDataContext,
+  contactId: string | null,
+  brandId: string,
+) {
   if (!contactId) return;
-  const contact = await prisma.contact.findFirst({
-    where: { id: contactId, brandId },
-    select: { id: true },
-  });
+  const contact = await withBrandDataTransaction(dataContext, (transaction) =>
+    transaction.contact.findFirst({
+      where: { id: contactId, brandId },
+      select: { id: true },
+    }),
+  );
   if (!contact) throw new Error("That contact was not found for this brand.");
 }
 
@@ -74,10 +82,10 @@ async function syncDiscountOffers(discountId: string, brandId: string, offerIds:
 }
 
 export async function createBrandDiscountAction(formData: FormData) {
-  const { brand } = await requireStaffBrandOrThrow();
+  const { brand, dataContext } = await requireStaffBrandOrThrow();
   const data = parseDiscountInput(formData);
   const { offerIds, ...discountData } = data;
-  await validateContactBelongsToBrand(data.contactId, brand.id);
+  await validateContactBelongsToBrand(dataContext, data.contactId, brand.id);
   await validateOffersBelongToBrand(offerIds, brand.id);
   const maxOrder = await prisma.brandDiscount.aggregate({
     where: { brandId: brand.id },
@@ -99,10 +107,10 @@ export async function createBrandDiscountAction(formData: FormData) {
 }
 
 export async function updateBrandDiscountAction(id: string, formData: FormData) {
-  const { brand } = await requireStaffBrandOrThrow();
+  const { brand, dataContext } = await requireStaffBrandOrThrow();
   const data = parseDiscountInput(formData);
   const { offerIds, ...discountData } = data;
-  await validateContactBelongsToBrand(data.contactId, brand.id);
+  await validateContactBelongsToBrand(dataContext, data.contactId, brand.id);
   await validateOffersBelongToBrand(offerIds, brand.id);
   const existing = await prisma.brandDiscount.findFirst({
     where: { id, brandId: brand.id },

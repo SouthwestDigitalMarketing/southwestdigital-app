@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireStaffBrand } from "@/lib/brands/staff";
+import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { ClientEditor } from "./ClientEditor";
 import { LinkContactForm } from "./LinkContactForm";
 import { unlinkContactFromClientAction } from "../actions";
@@ -9,24 +10,17 @@ import { unlinkContactFromClientAction } from "../actions";
 type PageProps = { params: Promise<{ id: string }> };
 
 export default async function ClientDetailPage({ params }: PageProps) {
-  const { brand } = await requireStaffBrand();
+  const { brand, dataContext } = await requireStaffBrand();
   const { id } = await params;
 
   const [client, availableContacts] = await Promise.all([
     prisma.ticketClient.findFirst({
       where: { id, brandId: brand.id },
-      include: {
-        contacts: {
-          orderBy: { createdAt: "desc" },
-          select: {
-            contact: {
-              select: { id: true, name: true, email: true, roleTitle: true, company: true },
-            },
-          },
-        },
-      },
+      select: { id: true, name: true, code: true, businessLegalName: true, entityType: true,
+        authorizedCommunicationEmail: true, primaryContactPhone: true, isActive: true,
+        contacts: { orderBy: { createdAt: "desc" }, select: { contactId: true } } },
     }),
-    prisma.contact.findMany({
+    withBrandDataTransaction(dataContext, (transaction) => transaction.contact.findMany({
       where: {
         brandId: brand.id,
         isActive: true,
@@ -35,10 +29,18 @@ export default async function ClientDetailPage({ params }: PageProps) {
       orderBy: { name: "asc" },
       take: 200,
       select: { id: true, name: true, email: true, company: true },
-    }),
+    })),
   ]);
 
   if (!client) notFound();
+  const linkedContacts = client.contacts.length
+    ? await withBrandDataTransaction(dataContext, (transaction) => transaction.contact.findMany({
+        where: { brandId: brand.id, id: { in: client.contacts.map((link) => link.contactId) } },
+        select: { id: true, name: true, email: true, roleTitle: true, company: true },
+      }))
+    : [];
+  const contactsById = new Map(linkedContacts.map((contact) => [contact.id, contact]));
+  const clientContacts = client.contacts.map((link) => contactsById.get(link.contactId)).filter((contact) => contact != null);
 
   return (
     <div className="p-8">
@@ -59,11 +61,11 @@ export default async function ClientDetailPage({ params }: PageProps) {
             Link existing contacts to this client. Creating a person still happens on Contacts.
           </p>
 
-          {client.contacts.length === 0 ? (
+          {clientContacts.length === 0 ? (
             <p className="mt-4 text-sm text-slate-400">No people linked yet.</p>
           ) : (
             <ul className="mt-4 divide-y divide-slate-100">
-              {client.contacts.map(({ contact }) => (
+              {clientContacts.map((contact) => (
                 <li key={contact.id} className="flex items-center justify-between gap-3 py-3">
                   <div>
                     <Link
