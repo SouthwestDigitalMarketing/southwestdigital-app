@@ -5,7 +5,7 @@ Historical session logs live in `docs/handoff-archive/`; durable design and
 reference material lives in `docs/`. If a note here would still be true in
 three months, it belongs in `docs/`, not here.
 
-Checked on **dalliance**, 2026-10-21 (America/Chicago), by Ummon.
+Checked on **ripley**, 2026-10-21 (America/Chicago), by Ummon.
 `README.md` describes the project; this file hands off the work.
 
 ## Read first

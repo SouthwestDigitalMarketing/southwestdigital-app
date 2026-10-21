@@ -87,6 +87,8 @@ Board record `488743eaaeb4` was created by `worker-rls` running `board now` with
   SQL was run.
 - M6 start state: branch `crew/rls-readiness` at base `3fd82b9c7aa86e43cc68b4b5cdcf1ff4b04d1f57`; `origin/main` was `d59fe59841d1631849e5458dcf5f57f682bc7d0f` and was an ancestor (no divergence).
 - Documentation validation: `git diff --check` passed for the committed HANDOFF range. A read-only Python assertion initially failed because the report did not yet state the exact phrase that the database rename had NOT been done; that explicit sentence was added and all 14 content assertions then passed. No historical application test/check was rerun or relabeled as an M6 check.
+- Host correction: `hostname -f` returned `ripley`. Updated only the HANDOFF header from `Checked on dalliance` to `Checked on ripley`.
+- Preserved the HANDOFF sentence that the older Repository state, Health, and following sections were written on other branches and have not been checked against this branch. It remains accurate; those unrelated historical sections were not revalidated or rewritten for this correction.
 - No production DB, scratch DB, remote DB, or environment file was accessed in M6. No rename SQL was run. No board CLI was used in M6.
 - No source, schema, migration, or application behavior changed. No push, PR, merge, deploy, or external contact occurred.
 
