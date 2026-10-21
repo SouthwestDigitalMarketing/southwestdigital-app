@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { requireQuoteStaff } from "@/lib/quotes/access";
 import { formatPhone } from "@/lib/phone";
 import { parseContactIds } from "@/lib/quotes/kinds";
@@ -7,7 +8,7 @@ import { parseContactIds } from "@/lib/quotes/kinds";
 type SearchParams = Promise<{ contact?: string; contacts?: string; offer?: string }>;
 
 export default async function ReferralOfferPage({ searchParams }: { searchParams: SearchParams }) {
-  const { brand } = await requireQuoteStaff();
+  const { brand, dataContext } = await requireQuoteStaff();
   const params = await searchParams;
   const offerId = typeof params.offer === "string" ? params.offer.trim() : "";
   const saved = offerId
@@ -23,7 +24,7 @@ export default async function ReferralOfferPage({ searchParams }: { searchParams
   const contactIds = parseContactIds(params.contacts ?? params.contact ?? snapshot.contactIds);
 
   const contacts = contactIds.length
-    ? await prisma.contact.findMany({
+    ? await withBrandDataTransaction(dataContext, (transaction) => transaction.contact.findMany({
         where: { id: { in: contactIds }, brandId: brand.id },
         select: {
           id: true,
@@ -33,7 +34,7 @@ export default async function ReferralOfferPage({ searchParams }: { searchParams
           roleTitle: true,
           phoneE164: true,
         },
-      })
+      }))
     : [];
 
   const ordered = contactIds

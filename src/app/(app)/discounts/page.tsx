@@ -1,23 +1,25 @@
 import { prisma } from "@/lib/prisma";
 import { requireStaffBrand } from "@/lib/brands/staff";
+import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { DiscountsCatalog } from "./DiscountsCatalog";
 
 export default async function DiscountsPage() {
-  const { brand } = await requireStaffBrand();
+  const { brand, dataContext } = await requireStaffBrand();
   const [discounts, contacts, offers] = await Promise.all([
     prisma.brandDiscount.findMany({
       where: { brandId: brand.id },
       orderBy: [{ active: "desc" }, { sortOrder: "asc" }, { createdAt: "desc" }],
       include: {
-        contact: { select: { id: true, name: true, company: true } },
         offerAssignments: { select: { quote: { select: { id: true } } } },
       },
     }),
-    prisma.contact.findMany({
-      where: { brandId: brand.id, isActive: true },
-      orderBy: [{ name: "asc" }],
-      select: { id: true, name: true, company: true },
-    }),
+    withBrandDataTransaction(dataContext, (transaction) =>
+      transaction.contact.findMany({
+        where: { brandId: brand.id, isActive: true },
+        orderBy: [{ name: "asc" }],
+        select: { id: true, name: true, company: true },
+      }),
+    ),
     prisma.quote.findMany({
       where: { brandId: brand.id },
       orderBy: { createdAt: "desc" },
@@ -25,6 +27,28 @@ export default async function DiscountsPage() {
       select: { id: true, offerCode: true, client: { select: { name: true } } },
     }),
   ]);
+
+  // A discount's contact is read separately, inside the brand context, because
+  // Contact is behind row-level security and cannot be a nested read.
+  const pickerIds = new Set(contacts.map((contact) => contact.id));
+  const missingIds = [
+    ...new Set(
+      discounts
+        .map((discount) => discount.contactId)
+        .filter((id): id is string => Boolean(id) && !pickerIds.has(id as string)),
+    ),
+  ];
+  const archivedContacts = missingIds.length
+    ? await withBrandDataTransaction(dataContext, (transaction) =>
+        transaction.contact.findMany({
+          where: { brandId: brand.id, id: { in: missingIds } },
+          select: { id: true, name: true },
+        }),
+      )
+    : [];
+  const contactNames = new Map(
+    [...contacts, ...archivedContacts].map((contact) => [contact.id, contact.name] as const),
+  );
 
   return (
     <div className="p-8">
@@ -54,7 +78,7 @@ export default async function DiscountsPage() {
                 : null,
               active: discount.active,
               contactId: discount.contactId,
-              contactName: discount.contact?.name ?? null,
+              contactName: (discount.contactId && contactNames.get(discount.contactId)) || null,
               offerIds: discount.offerAssignments.map((assignment) => assignment.quote.id),
             }))}
             offers={offers.map((offer) => ({ id: offer.id, offerCode: offer.offerCode, clientName: offer.client.name }))}

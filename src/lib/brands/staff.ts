@@ -12,7 +12,7 @@ export function isPlatformOperator(role: PlatformRole | undefined) {
 const STAFF_ROLES: BrandRole[] = [BrandRole.OWNER, BrandRole.ADMIN, BrandRole.MEMBER];
 
 async function loadActiveAppBrand() {
-  const { session, activeBrand, accessibleBrands } = await requireActiveBrandContext();
+  const { session, activeBrand, accessibleBrands, dataContext } = await requireActiveBrandContext();
   const resolved = await resolveBrandById(activeBrand.id, session.user.id);
   if (!resolved || resolved.brand.status !== "ACTIVE") redirect("/select-brand");
 
@@ -25,6 +25,8 @@ async function loadActiveAppBrand() {
     brand: resolved.brand,
     membership: resolved.membership,
     accessibleBrands,
+    /** Pass to `withBrandDataTransaction` for every query on a row-level-security table (Contact, Lead, ...). */
+    dataContext,
     platformRole: session.user.platformRole,
     isPlatformOperator: operator,
   };

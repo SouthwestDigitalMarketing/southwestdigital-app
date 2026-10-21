@@ -5,7 +5,7 @@ Historical session logs live in `docs/handoff-archive/`; durable design and
 reference material lives in `docs/`. If a note here would still be true in
 three months, it belongs in `docs/`, not here.
 
-Checked on **dalliance**, 2026-10-16 (America/Chicago), by Kassad.
+Checked on **ripley**, 2026-10-21 (America/Chicago), by Ummon.
 `README.md` describes the project; this file hands off the work.
 
 ## Read first
@@ -14,6 +14,79 @@ Never push without explicit user instruction. Do not run
 `prisma migrate deploy`, `prisma migrate dev`, or `prisma db push` — see
 `docs/deployment/database-migration-state.md`. Do not send outbound SMS unless
 the owner named the recipient in this session. Crews do not push, PR, or merge.
+
+## RLS readiness job (branch `crew/rls-readiness`, base `d59fe59`)
+
+Crew job `rls` (Ummon's crew, worker `worker-rls`), started 2026-10-21. Goal:
+prepare code and docs for a restricted-role + RLS cutover. **Cutover remains
+NOT READY and requires Tom's separate decision.** No production database or
+env was accessed. No push, PR, merge, deploy, or outbound contact occurred.
+The sections below this one (Repository state, Health, and the rest) were
+written on other branches and have **not** been checked against this branch.
+
+Milestones: M1 sweep; M2 fixes (ACCEPTed); M3 scratch-Postgres rehearsal
+(ACCEPTed); M4 cutover runbook (ACCEPTed); M5 brand-slug rename plan
+(ACCEPTed); M6 final handoff (documentation complete, reviewer review
+pending). **PRODUCTION CUTOVER NOT READY.** Do not mark ready-to-ship until
+reviewer ACCEPTs M6.
+
+- **M1 sweep:** 36 direct `Contact` call sites outside
+  `withBrandDataTransaction` plus 4 nested RLS reads; 16 paths could fail
+  silently. Source report: `~/.grok/team/swapp/jobs/rls/sweep.md`.
+- **M2 fixes:** implementation commit `b040fb8a444b8570f5bda7d6486c03061ebebf0c`,
+  accepted at `1e9a296058a67815f5f17ec92569ee6e89eb10ad`. Staff brand helpers
+  return the authorized context; swept Contact paths and nested reads use
+  context-bound queries. R1 range: `f9aa45f6aba51afdf3c1f08dd8c896f6a7f5c1ac..b040fb8a444b8570f5bda7d6486c03061ebebf0c`;
+  R2 range: `cfea070ef1a252078c1331050f4b8a6f54fff5b4..1e9a296058a67815f5f17ec92569ee6e89eb10ad`.
+  Reports: `jobs/rls/worker-m2-r1.md` and
+  `~/.grok/team/swapp/jobs/rls/worker-m2-r2.md`.
+- **M3 scratch rehearsal: ACCEPTed.** Evidence report stays at the exact repo
+  path `~/projects/worktrees/swapp-rls/jobs/rls/worker-m3-r1.md`. A disposable
+  `postgres:17.5` container bound only to `127.0.0.1:54329` was removed after
+  checks. The full 40-file replay stopped after 13 at
+  `20260827200000_add_catalog_service_real_estate_specific` because
+  `catalog_services` baseline is missing. Schema-derived baseline + two RLS
+  migrations verified all six protected tables. Runtime had DML on 107 app
+  tables, no `_prisma_migrations`, and `NOBYPASSRLS`; it saw no CRM rows
+  without context and could not cross-write. Migrator CREATE did not permit
+  ALTER of existing `Contact` because it owned no tables. Restricted-role full
+  suite: 880/881, one pre-existing pipe contacts contract/test mismatch.
+  Evidence range: `1e9a296058a67815f5f17ec92569ee6e89eb10ad..37d73d6a0d96d02dd8fdc843e0434395a9c83630`;
+  report commit `37d39f7246e4dcb589eeb1fa6bf6bfe9d12ab6a1`.
+- **M4 runbook:** `docs/deployment/rls-and-roles-cutover.md` now has a
+  preflight checklist, observed grant matrix and 107-table inventory,
+  stage-by-stage rollback guidance, and explicit owners/evidence for all five
+  open gates. It keeps cutover **NOT READY**. M4 report:
+  `jobs/rls/worker-m4-r1.md`. Reviewed range:
+  `37d39f7246e4dcb589eeb1fa6bf6bfe9d12ab6a1..e8968ed1ee8138cd53c0522c771f30535a209893`.
+- **M5 brand-slug rename plan:** `docs/deployment/brand-slug-rename-plan.md`
+  documents the guarded SQL, preconditions, verification queries, ordering,
+  and rollback for `bc` → `bookkeeping-conroe` and `treb` →
+  `real-estate-bookkeeper`. It explicitly states the database rename has NOT
+  been done. No SQL or database connection was used. M5 was ACCEPTed over
+  `e8968ed1ee8138cd53c0522c771f30535a209893..3fd82b9c7aa86e43cc68b4b5cdcf1ff4b04d1f57`.
+  Report: `jobs/rls/worker-m5-r1.md`. All five M4 gates and owners remain
+  open; cutover stays **NOT READY**.
+- **Open gates:** Ummon/app owner must supply and rehearse a repeatable full
+  migration baseline/chain; define and rehearse DDL ownership for existing
+  tables; and reconcile the pipe contacts mismatch separately without changing
+  that API in this branch. Tom owns target fingerprint, production grants,
+  backup/restore, secret configuration, preflight/rollback verification and
+  cutover decision after those gates. Albedo owns owner credential rotation
+  and secret cleanup after an approved cutover.
+- **M6 final handoff:** `jobs/rls/worker-m6-r1.md` records M1–M5 evidence,
+  exact ranges, checks, limits, open gates, and next step. M6 report and this
+  handoff update are pending reviewer review; reviewer ACCEPT is required
+  before Foreman marks ready-to-ship.
+- **Incident attribution correction:** board record `488743eaaeb4` was created
+  by `worker-rls` running `board now` without authorization. The Foreman
+  instructed `worker-rls` to stop all board CLI use and not attempt correction.
+  The accepted M5 review report incorrectly says Tom directed the no-follow-up
+  instruction. This M6 handoff and report state the correction explicitly;
+  the accepted M5 report is left unchanged.
+- **Current boundary:** the database rename has NOT been done. Production
+  cutover remains NOT READY. No production DB/env access, SQL execution, board
+  CLI use, push, PR, merge, deploy, or outbound contact is part of M6.
 
 ## Repository state
 

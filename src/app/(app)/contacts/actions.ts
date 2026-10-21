@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
 import { BrandStatus, ContactTagKind } from "@prisma/client";
 import { applyTagPipelineAutomation } from "@/lib/contacts/automation";
@@ -54,7 +55,7 @@ function parseKind(raw: string): ContactTagKind {
 }
 
 export async function createContactAction(formData: FormData) {
-  const { session, brand, isPlatformOperator } = await requireStaffBrandOrThrow();
+  const { session, brand, isPlatformOperator, dataContext } = await requireStaffBrandOrThrow();
   const firstName = clean(formData.get("firstName"));
   const lastName = clean(formData.get("lastName"));
   if (!firstName || !lastName)
@@ -69,14 +70,6 @@ export async function createContactAction(formData: FormData) {
   const tagIds = ids(formData, "tagIds");
   const clientIds = ids(formData, "clientIds");
   const relatedBrandIds = ids(formData, "relatedBrandIds");
-
-  if (email) {
-    const existing = await prisma.contact.findFirst({
-      where: { brandId: brand.id, email },
-      select: { id: true },
-    });
-    if (existing) throw new Error("A contact with this email already exists.");
-  }
 
   const tags = tagIds.length
     ? await prisma.contactTag.findMany({
@@ -100,33 +93,42 @@ export async function createContactAction(formData: FormData) {
         })
       : [];
 
-  const contact = await prisma.contact.create({
-    data: {
-      brandId: brand.id,
-      name,
-      firstName,
-      lastName,
-      email,
-      company,
-      roleTitle,
-      notes,
-      phoneE164,
-      isActive: true,
-      tagLinks: tags.length
-        ? { create: tags.map((tag) => ({ tagId: tag.id })) }
-        : undefined,
-      clientLinks: clients.length
-        ? { create: clients.map((client) => ({ clientId: client.id })) }
-        : undefined,
-      brandLinks: relatedBrands.length
-        ? {
-            create: relatedBrands.map((related) => ({
-              relatedBrandId: related.id,
-            })),
-          }
-        : undefined,
-    },
-    select: { id: true },
+  const contact = await withBrandDataTransaction(dataContext, async (transaction) => {
+    if (email) {
+      const existing = await transaction.contact.findFirst({
+        where: { brandId: brand.id, email },
+        select: { id: true },
+      });
+      if (existing) throw new Error("A contact with this email already exists.");
+    }
+    return transaction.contact.create({
+      data: {
+        brandId: brand.id,
+        name,
+        firstName,
+        lastName,
+        email,
+        company,
+        roleTitle,
+        notes,
+        phoneE164,
+        isActive: true,
+        tagLinks: tags.length
+          ? { create: tags.map((tag) => ({ tagId: tag.id })) }
+          : undefined,
+        clientLinks: clients.length
+          ? { create: clients.map((client) => ({ clientId: client.id })) }
+          : undefined,
+        brandLinks: relatedBrands.length
+          ? {
+              create: relatedBrands.map((related) => ({
+                relatedBrandId: related.id,
+              })),
+            }
+          : undefined,
+      },
+      select: { id: true },
+    });
   });
 
   for (const tag of tags) {
@@ -142,41 +144,42 @@ export async function createContactAction(formData: FormData) {
 }
 
 export async function updateContactAction(formData: FormData) {
-  const { brand } = await requireStaffBrandOrThrow();
+  const { brand, dataContext } = await requireStaffBrandOrThrow();
   const contactId = clean(formData.get("contactId"));
   const firstName = clean(formData.get("firstName"));
   const lastName = clean(formData.get("lastName"));
   if (!contactId || !firstName || !lastName)
     throw new Error("First and last name are required.");
 
-  const existing = await prisma.contact.findFirst({
-    where: { id: contactId, brandId: brand.id },
-    select: { id: true },
-  });
-  if (!existing) throw new Error("Contact not found.");
-
   const email = parseEmail(formData.get("email"));
-  if (email) {
-    const duplicate = await prisma.contact.findFirst({
-      where: { brandId: brand.id, email, NOT: { id: contactId } },
+  const data = {
+    name: `${firstName} ${lastName}`.replace(/\s+/g, " ").trim(),
+    firstName,
+    lastName,
+    email,
+    company: clean(formData.get("company")) || null,
+    roleTitle: clean(formData.get("roleTitle")) || null,
+    notes: clean(formData.get("notes")) || null,
+    phoneE164: parsePhone(formData.get("phone")),
+    isActive: formData.get("isActive") === "1",
+  };
+
+  await withBrandDataTransaction(dataContext, async (transaction) => {
+    const existing = await transaction.contact.findFirst({
+      where: { id: contactId, brandId: brand.id },
       select: { id: true },
     });
-    if (duplicate) throw new Error("A contact with this email already exists.");
-  }
+    if (!existing) throw new Error("Contact not found.");
 
-  await prisma.contact.update({
-    where: { id: contactId },
-    data: {
-      name: `${firstName} ${lastName}`.replace(/\s+/g, " ").trim(),
-      firstName,
-      lastName,
-      email,
-      company: clean(formData.get("company")) || null,
-      roleTitle: clean(formData.get("roleTitle")) || null,
-      notes: clean(formData.get("notes")) || null,
-      phoneE164: parsePhone(formData.get("phone")),
-      isActive: formData.get("isActive") === "1",
-    },
+    if (email) {
+      const duplicate = await transaction.contact.findFirst({
+        where: { brandId: brand.id, email, NOT: { id: contactId } },
+        select: { id: true },
+      });
+      if (duplicate) throw new Error("A contact with this email already exists.");
+    }
+
+    await transaction.contact.update({ where: { id: contactId }, data });
   });
 
   revalidatePath("/contacts");
@@ -203,7 +206,7 @@ export async function importContactsAction(input: {
   rows: ImportContactRow[];
   tagId?: string | null;
 }): Promise<ImportContactsResult> {
-  const { session, brand } = await requireStaffBrandOrThrow();
+  const { session, brand, dataContext } = await requireStaffBrandOrThrow();
   const result: ImportContactsResult = { created: 0, skipped: 0, errors: [] };
 
   if (!Array.isArray(input.rows) || input.rows.length === 0) {
@@ -249,38 +252,44 @@ export async function importContactsAction(input: {
       const company = typeof raw.company === "string" ? raw.company.trim() || null : null;
       const notes = typeof raw.notes === "string" ? raw.notes.trim() || null : null;
 
-      if (email || phoneE164) {
-        const existing = await prisma.contact.findFirst({
-          where: {
+      // One short transaction per row: a 1,000-row import in a single brand
+      // transaction would run into its 30-second limit. The tag automation below
+      // opens its own transaction, so it must run after this one has committed.
+      const contact = await withBrandDataTransaction(dataContext, async (transaction) => {
+        if (email || phoneE164) {
+          const existing = await transaction.contact.findFirst({
+            where: {
+              brandId: brand.id,
+              OR: [
+                ...(email ? [{ email }] : []),
+                ...(phoneE164 ? [{ phoneE164 }] : []),
+              ],
+            },
+            select: { id: true },
+          });
+          if (existing) return null;
+        }
+
+        return transaction.contact.create({
+          data: {
             brandId: brand.id,
-            OR: [
-              ...(email ? [{ email }] : []),
-              ...(phoneE164 ? [{ phoneE164 }] : []),
-            ],
+            name,
+            firstName: firstName || name,
+            lastName: lastName || "",
+            email,
+            phoneE164,
+            company,
+            notes,
+            isActive: true,
+            tagLinks: tag ? { create: [{ tagId: tag.id }] } : undefined,
           },
           select: { id: true },
         });
-        if (existing) {
-          result.skipped += 1;
-          continue;
-        }
-      }
-
-      const contact = await prisma.contact.create({
-        data: {
-          brandId: brand.id,
-          name,
-          firstName: firstName || name,
-          lastName: lastName || "",
-          email,
-          phoneE164,
-          company,
-          notes,
-          isActive: true,
-          tagLinks: tag ? { create: [{ tagId: tag.id }] } : undefined,
-        },
-        select: { id: true },
       });
+      if (!contact) {
+        result.skipped += 1;
+        continue;
+      }
 
       if (tag) {
         await applyTagPipelineAutomation({
@@ -309,20 +318,22 @@ export async function importContactsAction(input: {
 }
 
 export async function archiveContactAction(formData: FormData) {
-  const { brand } = await requireStaffBrandOrThrow();
+  const { brand, dataContext } = await requireStaffBrandOrThrow();
   const contactId = clean(formData.get("contactId"));
   const archived = clean(formData.get("archived")) === "1";
   if (!contactId) throw new Error("Contact is required.");
 
-  const existing = await prisma.contact.findFirst({
-    where: { id: contactId, brandId: brand.id },
-    select: { id: true },
-  });
-  if (!existing) throw new Error("Contact not found.");
+  await withBrandDataTransaction(dataContext, async (transaction) => {
+    const existing = await transaction.contact.findFirst({
+      where: { id: contactId, brandId: brand.id },
+      select: { id: true },
+    });
+    if (!existing) throw new Error("Contact not found.");
 
-  await prisma.contact.update({
-    where: { id: contactId },
-    data: { isActive: !archived },
+    await transaction.contact.update({
+      where: { id: contactId },
+      data: { isActive: !archived },
+    });
   });
 
   revalidatePath("/contacts");
@@ -330,34 +341,38 @@ export async function archiveContactAction(formData: FormData) {
 }
 
 export async function deleteContactAction(formData: FormData) {
-  const { brand } = await requireStaffBrandOrThrow();
+  const { brand, dataContext } = await requireStaffBrandOrThrow();
   const contactId = clean(formData.get("contactId"));
   if (!contactId) throw new Error("Contact is required.");
 
-  const existing = await prisma.contact.findFirst({
-    where: { id: contactId, brandId: brand.id },
-    select: { id: true },
-  });
-  if (!existing) throw new Error("Contact not found.");
+  await withBrandDataTransaction(dataContext, async (transaction) => {
+    const existing = await transaction.contact.findFirst({
+      where: { id: contactId, brandId: brand.id },
+      select: { id: true },
+    });
+    if (!existing) throw new Error("Contact not found.");
 
-  await prisma.contact.delete({ where: { id: contactId } });
+    await transaction.contact.delete({ where: { id: contactId } });
+  });
 
   revalidatePath("/contacts");
   redirect("/contacts");
 }
 
 export async function setContactTagAction(formData: FormData) {
-  const { session, brand } = await requireStaffBrandOrThrow();
+  const { session, brand, dataContext } = await requireStaffBrandOrThrow();
   const contactId = clean(formData.get("contactId"));
   const tagId = clean(formData.get("tagId"));
   const assigned = clean(formData.get("assigned")) === "1";
   if (!contactId || !tagId) throw new Error("Contact and tag are required.");
 
   const [contact, tag] = await Promise.all([
-    prisma.contact.findFirst({
-      where: { id: contactId, brandId: brand.id },
-      select: { id: true },
-    }),
+    withBrandDataTransaction(dataContext, (transaction) =>
+      transaction.contact.findFirst({
+        where: { id: contactId, brandId: brand.id },
+        select: { id: true },
+      }),
+    ),
     prisma.contactTag.findFirst({
       where: { id: tagId, brandId: brand.id, isActive: true },
       select: { id: true },
@@ -386,7 +401,7 @@ export async function setContactTagAction(formData: FormData) {
 }
 
 export async function setContactClientAction(formData: FormData) {
-  const { brand } = await requireStaffBrandOrThrow();
+  const { brand, dataContext } = await requireStaffBrandOrThrow();
   const contactId = clean(formData.get("contactId"));
   const clientId = clean(formData.get("clientId"));
   const assigned = clean(formData.get("assigned")) === "1";
@@ -394,10 +409,12 @@ export async function setContactClientAction(formData: FormData) {
     throw new Error("Contact and client are required.");
 
   const [contact, client] = await Promise.all([
-    prisma.contact.findFirst({
-      where: { id: contactId, brandId: brand.id },
-      select: { id: true },
-    }),
+    withBrandDataTransaction(dataContext, (transaction) =>
+      transaction.contact.findFirst({
+        where: { id: contactId, brandId: brand.id },
+        select: { id: true },
+      }),
+    ),
     prisma.ticketClient.findFirst({
       where: { id: clientId, brandId: brand.id },
       select: { id: true },
@@ -422,7 +439,7 @@ export async function setContactClientAction(formData: FormData) {
 }
 
 export async function setContactBrandAction(formData: FormData) {
-  const { brand, isPlatformOperator } = await requireStaffBrandOrThrow();
+  const { brand, isPlatformOperator, dataContext } = await requireStaffBrandOrThrow();
   if (!isPlatformOperator) throw new Error("Unauthorized");
 
   const contactId = clean(formData.get("contactId"));
@@ -432,10 +449,12 @@ export async function setContactBrandAction(formData: FormData) {
     throw new Error("Contact and brand are required.");
 
   const [contact, relatedBrand] = await Promise.all([
-    prisma.contact.findFirst({
-      where: { id: contactId, brandId: brand.id },
-      select: { id: true },
-    }),
+    withBrandDataTransaction(dataContext, (transaction) =>
+      transaction.contact.findFirst({
+        where: { id: contactId, brandId: brand.id },
+        select: { id: true },
+      }),
+    ),
     prisma.brand.findFirst({
       where: { id: relatedBrandId, status: BrandStatus.ACTIVE },
       select: { id: true },
@@ -460,9 +479,21 @@ export async function setContactBrandAction(formData: FormData) {
 }
 
 export async function createContactTagAction(formData: FormData) {
-  const { session, brand } = await requireStaffBrandOrThrow();
+  const { session, brand, dataContext } = await requireStaffBrandOrThrow();
   const label = clean(formData.get("label"));
   if (!label) throw new Error("Tag name is required.");
+
+  // Look the contact up first so a bad contact id cannot leave a new tag behind.
+  const contactId = clean(formData.get("contactId"));
+  if (contactId) {
+    const contact = await withBrandDataTransaction(dataContext, (transaction) =>
+      transaction.contact.findFirst({
+        where: { id: contactId, brandId: brand.id },
+        select: { id: true },
+      }),
+    );
+    if (!contact) throw new Error("Contact not found.");
+  }
 
   const kind = parseKind(clean(formData.get("kind")));
   const key = slugifyTagKey(label);
@@ -495,13 +526,7 @@ export async function createContactTagAction(formData: FormData) {
     select: { id: true, label: true, kind: true },
   });
 
-  const contactId = clean(formData.get("contactId"));
   if (contactId) {
-    const contact = await prisma.contact.findFirst({
-      where: { id: contactId, brandId: brand.id },
-      select: { id: true },
-    });
-    if (!contact) throw new Error("Contact not found.");
     await prisma.contactTagLink.upsert({
       where: { contactId_tagId: { contactId, tagId: tag.id } },
       create: { contactId, tagId: tag.id },

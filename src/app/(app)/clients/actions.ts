@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
+import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { codeFromName, normalizeClientCode } from "@/lib/clients/code";
 import { parseSubmittedPhone } from "@/lib/phone";
 import { parseEmailOrThrow } from "@/lib/email";
@@ -86,14 +87,16 @@ export async function updateClientAction(formData: FormData) {
 }
 
 export async function linkContactToClientAction(formData: FormData) {
-  const { brand } = await requireStaffBrandOrThrow();
+  const { brand, dataContext } = await requireStaffBrandOrThrow();
   const clientId = clean(formData.get("clientId"));
   const contactId = clean(formData.get("contactId"));
   if (!clientId || !contactId) throw new Error("Select a contact to link.");
 
   const [client, contact] = await Promise.all([
     prisma.ticketClient.findFirst({ where: { id: clientId, brandId: brand.id }, select: { id: true } }),
-    prisma.contact.findFirst({ where: { id: contactId, brandId: brand.id }, select: { id: true } }),
+    withBrandDataTransaction(dataContext, (transaction) =>
+      transaction.contact.findFirst({ where: { id: contactId, brandId: brand.id }, select: { id: true } }),
+    ),
   ]);
   if (!client || !contact) throw new Error("Not found.");
 

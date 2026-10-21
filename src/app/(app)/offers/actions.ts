@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { randomBytes } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { requireQuoteStaffOrThrow } from "@/lib/quotes/access";
 import { contactInfoFromCrm } from "@/lib/quotes/fromContacts";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
@@ -87,7 +88,7 @@ function offerSlug(name: string) {
 }
 
 export async function reassignQuoteContactAction(formData: FormData) {
-  const { brand } = await requireQuoteStaffOrThrow();
+  const { brand, dataContext } = await requireQuoteStaffOrThrow();
   const quoteId = (formData.get("id") as string | null)?.trim() ?? "";
   const contactId = (formData.get("contactId") as string | null)?.trim() ?? "";
   if (!quoteId) throw new Error("Quote ID required");
@@ -106,7 +107,7 @@ export async function reassignQuoteContactAction(formData: FormData) {
         client: { select: { name: true, email: true, company: true } },
       },
     }),
-    prisma.contact.findFirst({
+    withBrandDataTransaction(dataContext, (transaction) => transaction.contact.findFirst({
       where: { id: contactId, brandId: brand.id },
       select: {
         id: true,
@@ -119,7 +120,7 @@ export async function reassignQuoteContactAction(formData: FormData) {
         company: true,
         roleTitle: true,
       },
-    }),
+    })),
   ]);
 
   if (!quote) throw new Error("Not found");
@@ -227,7 +228,7 @@ export async function reassignQuoteContactAction(formData: FormData) {
 }
 
 export async function duplicateQuoteAction(formData: FormData) {
-  const { brand } = await requireQuoteStaffOrThrow();
+  const { brand, dataContext } = await requireQuoteStaffOrThrow();
   const id = (formData.get("id") as string | null)?.trim() ?? "";
   const contactId = (formData.get("contactId") as string | null)?.trim() ?? "";
   const archived = formData.get("archived") === "1";
@@ -243,7 +244,7 @@ export async function duplicateQuoteAction(formData: FormData) {
       },
     }),
     contactId
-      ? prisma.contact.findFirst({
+      ? withBrandDataTransaction(dataContext, (transaction) => transaction.contact.findFirst({
           where: { id: contactId, brandId: brand.id },
           select: {
             id: true,
@@ -256,7 +257,7 @@ export async function duplicateQuoteAction(formData: FormData) {
             company: true,
             roleTitle: true,
           },
-        })
+        }))
       : Promise.resolve(null),
   ]);
   if (!quote) throw new Error("Not found");

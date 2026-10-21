@@ -8,7 +8,7 @@ vi.mock("@/lib/brands/resolve", () => ({ resolveBrandById: mocks.resolve }));
 vi.mock("next/navigation", () => ({ redirect: (path: string) => { throw new Error(`redirect:${path}`); } }));
 
 beforeEach(() => {
-  mocks.context.mockResolvedValue({ session: { user: { id: "user", platformRole: "NONE" } }, activeBrand: { id: "brand" }, accessibleBrands: [] });
+  mocks.context.mockResolvedValue({ session: { user: { id: "user", platformRole: "NONE" } }, activeBrand: { id: "brand" }, accessibleBrands: [], dataContext: { brandId: "brand", actorUserId: "user" } });
   mocks.resolve.mockResolvedValue({ brand: { id: "brand", status: "ACTIVE" }, membership: { role: "MEMBER", status: "ACTIVE" } });
 });
 
@@ -20,7 +20,10 @@ describe("brand administrator permissions", () => {
     expect(canAdministerBrand({ isPlatformOperator: false, membership: { role: BrandRole.ADMIN, status } })).toBe(false);
   });
   it("retains staff access while rejecting administrator mutations for a member", async () => {
-    await expect(requireStaffBrandOrThrow()).resolves.toMatchObject({ brand: { id: "brand" } });
+    await expect(requireStaffBrandOrThrow()).resolves.toMatchObject({
+      brand: { id: "brand" },
+      dataContext: { brandId: "brand", actorUserId: "user" },
+    });
     await expect(requireAdminBrandOrThrow()).rejects.toThrow("Unauthorized");
   });
   it("rejects a brand suspended after session selection", async () => {
