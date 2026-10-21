@@ -163,7 +163,7 @@ export async function movePipelineItemAction(formData: FormData) {
       id: true,
       pipelineId: true,
       pipeline: { select: { key: true } },
-      lead: { select: { id: true } },
+      lead: { select: { id: true, updatedAt: true } },
     },
   });
   if (!item) throw new Error("Pipeline item not found for this brand.");
@@ -174,6 +174,7 @@ export async function movePipelineItemAction(formData: FormData) {
   });
   if (!stage) throw new Error("Target stage is not part of this pipeline.");
 
+  let leadStepUpdate: { leadStep: string | null } | null = null;
   if (item.pipeline.key === PIPE_PROSPECTS_KEY) {
     if (!formData.has("leadStep")) throw new Error("A Leads step is required for this pipeline move.");
     const rawLeadStep = clean(formData.get("leadStep"));
@@ -187,26 +188,24 @@ export async function movePipelineItemAction(formData: FormData) {
     if (!leadStep && !["prospect", "won", "lost"].includes(stage.key)) {
       throw new Error("Only Prospect, Won, or Lost can be used without a Leads step.");
     }
+    leadStepUpdate = { leadStep };
+  }
 
-    await prisma.$transaction([
-      prisma.meetingLead.update({
-        where: { id: item.lead.id },
-        data: { leadStep },
-        select: { id: true },
-      }),
-      prisma.pipelineItem.update({
-        where: { id: item.id },
-        data: { stageId: stage.id },
-        select: { id: true },
-      }),
-    ]);
-  } else {
-    await prisma.pipelineItem.update({
+  // Pipe reports MeetingLead.updatedAt. Keep it strictly increasing even if
+  // two moves happen within one clock tick or the app clock moves backward.
+  const movedAt = new Date(Math.max(Date.now(), item.lead.updatedAt.getTime() + 1));
+  await prisma.$transaction([
+    prisma.meetingLead.update({
+      where: { id: item.lead.id },
+      data: { updatedAt: movedAt, ...(leadStepUpdate ?? {}) },
+      select: { id: true },
+    }),
+    prisma.pipelineItem.update({
       where: { id: item.id },
       data: { stageId: stage.id },
       select: { id: true },
-    });
-  }
+    }),
+  ]);
 
   revalidatePath(`/pipeline/${item.pipeline.key}`);
   revalidatePath("/pipeline");

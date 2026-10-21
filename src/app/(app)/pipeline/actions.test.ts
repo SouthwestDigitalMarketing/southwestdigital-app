@@ -47,7 +47,7 @@ beforeEach(() => {
     id: "item-1",
     pipelineId: "pipeline-1",
     pipeline: { key: "pipe-prospects" },
-    lead: { id: "lead-1" },
+    lead: { id: "lead-1", updatedAt: new Date("2026-10-20T10:00:00.000Z") },
   });
   mocks.stageFind.mockReset().mockImplementation(async ({ where }) => ({
     id: where.id,
@@ -64,7 +64,7 @@ describe("movePipelineItemAction on the pipe Leads board", () => {
     await movePipelineItemAction(form({ stageId: "stage-talking", leadStep: "book" }));
     expect(mocks.leadUpdate).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: "lead-1" },
-      data: { leadStep: "book" },
+      data: expect.objectContaining({ leadStep: "book", updatedAt: expect.any(Date) }),
     }));
     expect(mocks.itemUpdate).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: "item-1" },
@@ -75,6 +75,7 @@ describe("movePipelineItemAction on the pipe Leads board", () => {
   });
 
   it("uses the required stage mapping for all six Leads steps", async () => {
+    const previousUpdatedAt = new Date("2026-10-20T10:00:00.000Z");
     const moves = [
       ["reach", "stage-lead"],
       ["qb", "stage-talking"],
@@ -83,10 +84,17 @@ describe("movePipelineItemAction on the pipe Leads board", () => {
       ["quote", "stage-proposed"],
       ["nurture", "stage-proposed"],
     ] as const;
-    for (const [leadStep, stageId] of moves) {
-      await movePipelineItemAction(form({ leadStep, stageId }));
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-21T10:00:00.000Z"));
+    try {
+      for (const [leadStep, stageId] of moves) {
+        await movePipelineItemAction(form({ leadStep, stageId }));
+      }
+    } finally {
+      vi.useRealTimers();
     }
     expect(mocks.leadUpdate.mock.calls.map(([args]) => args.data.leadStep)).toEqual(moves.map(([step]) => step));
+    expect(mocks.leadUpdate.mock.calls.every(([args]) => args.data.updatedAt.getTime() > previousUpdatedAt.getTime())).toBe(true);
     expect(mocks.itemUpdate.mock.calls.map(([args]) => args.data.stageId)).toEqual(moves.map(([, stage]) => stage));
   });
 
@@ -99,8 +107,36 @@ describe("movePipelineItemAction on the pipe Leads board", () => {
 
   it("clears the step when a card moves to an existing non-Leads stage", async () => {
     await movePipelineItemAction(form({ stageId: "stage-won", leadStep: "" }));
-    expect(mocks.leadUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: { leadStep: null } }));
+    expect(mocks.leadUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ leadStep: null, updatedAt: expect.any(Date) }),
+    }));
     expect(mocks.itemUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: { stageId: "stage-won" } }));
+  });
+
+  it("bumps MeetingLead.updatedAt when a general pipeline stage moves", async () => {
+    const previousUpdatedAt = new Date("2026-10-20T10:00:00.000Z");
+    const expectedUpdatedAt = new Date(previousUpdatedAt.getTime() + 1);
+    mocks.itemFind.mockResolvedValue({
+      id: "item-1",
+      pipelineId: "pipeline-1",
+      pipeline: { key: "custom-pipeline" },
+      lead: { id: "lead-1", updatedAt: previousUpdatedAt },
+    });
+    vi.useFakeTimers();
+    vi.setSystemTime(previousUpdatedAt);
+    try {
+      await movePipelineItemAction(form({ stageId: "stage-talking", pipelineKey: "custom-pipeline" }));
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const update = mocks.leadUpdate.mock.calls[0]?.[0];
+    expect(update).toEqual(expect.objectContaining({
+      where: { id: "lead-1" },
+      data: { updatedAt: expectedUpdatedAt },
+    }));
+    expect(update.data.updatedAt.getTime()).toBeGreaterThan(previousUpdatedAt.getTime());
+    expect(mocks.itemUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: { stageId: "stage-talking" } }));
   });
 
   it("requires the step field for pipe pipeline moves", async () => {
