@@ -45,10 +45,33 @@ M5 brand-slug rename runbook, M6 final handoff.
   are separate context-bound queries. Checks: typecheck passed; lint passed
   with 0 errors / 9 warnings; tests passed (109 files, 871 tests; 1 file and
   5 tests skipped). No database was contacted.
-- **Next: M3 scratch-Postgres rehearsal.** It has not started. Confirm a local
-  scratch Postgres is available before using it, then test as
-  `swd_web_runtime` (`NOBYPASSRLS`). No production DB/env, push, PR, merge, or
-  deploy is in scope. Do not begin M3 as part of this milestone.
+- **M3 scratch-Postgres rehearsal: run; review pending.** On 2026-10-21,
+  used a disposable `postgres:17.5` container named
+  `swapp-rls-m3-20261021`, bound only to `127.0.0.1:54329`, then stopped and
+  removed it after checks. The all-repo-migration replay stopped at
+  `20260827200000_add_catalog_service_real_estate_specific` because the repo
+  omits the consolidated baseline that creates `catalog_services`. Following
+  the cutover doc's scratch recipe, generated a 107-table baseline from the
+  current schema and applied it with `psql`, then manually applied the two RLS
+  SQL migrations in order. `swd_migrator` and `swd_web_runtime` were
+  `NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS`;
+  runtime received DML on 107 app tables, not `_prisma_migrations`, and could
+  not create in `public`. All 6 CRM tables had ENABLE/FORCE RLS. Runtime saw 0
+  CRM rows without context; a cross-brand Contact insert was denied. It owned
+  0 public tables and could not read `_prisma_migrations`, disable RLS, or set
+  role to the migrator.
+- Full suite with scratch `DATABASE_URL` as `swd_web_runtime` and
+  `PIPE_TEST_DATABASE_URL=1`: **1 failed, 880 passed** (881 tests; 110 files
+  passed, 1 failed). The failing existing pipe integration assertion searches
+  for a phone after an email upsert omits phone; that upsert clears the phone
+  fields. A previous run also exposed that the integration fixture persists
+  rows and is not repeatable without clearing its scratch data. Typecheck
+  passed; lint passed with 0 errors / 9 warnings; `git diff --check` passed.
+  Full evidence: `jobs/rls/worker-m3-r1.md`.
+- **Next: M3 reviewer review.** Resolve or disposition the integration failure
+  and the incomplete all-file replay. M4 is gated on M3 reviewer ACCEPT. Do not
+  start M4 before ACCEPT. No production DB/env was accessed; no push, PR,
+  merge, deploy, or outbound contact occurred.
 - **M2 review r1: CHANGES; regression tests added.** Test file:
   `src/app/(app)/rls-query-context.test.ts`. It covers contact import duplicate
   detection, offer contact sync, the empty Discounts picker, Client's split
