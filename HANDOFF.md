@@ -66,13 +66,15 @@ and make SWapp-side moves visible to pipe. Source notices: `ddc3441d4fb9`,
   `~/.grok/team/swapp/jobs/leads/contract.md`. Headlines: unknown request
   fields are **ignored, not rejected** (so a premature `lead_step` is dropped
   silently); the code names no owning brand (caller sends the slug; no
-  Lochside brand exists, pipe uses `southwest-digital-marketing` and
-  `bookkeeping-conroe`); dedupe keys are contact id/email/phone+same-person,
+  Lochside brand exists; pipe's own brand list is the same five slugs as the
+  seed script); dedupe keys are contact id/email/phone+same-person,
   business name, deal `(brandId, pipeId)`; `POST /deals` is a full replace of
   working fields (omitted `stage` becomes `prospect`); and a stage move in
   SWapp (`movePipelineItemAction`) updates only `PipelineItem.updatedAt`, while
   the route reports `MeetingLead.updatedAt` — so M4 is a real gap, though
   pipe's current pull diffs field values and does not read `updatedAt`.
+  Also: a pipe push is a full replace, so a later local pipe edit pushes its
+  older stage over a SWapp-side move; M3/M4 make moves visible, not winning.
 - Baseline on this branch before any change (2026-10-21): `npm run typecheck`
   exit 0; `npm run lint` exit 0 (0 errors, 9 warnings); `npm test` 109 files
   passed, 1 skipped; 871 tests passed, 5 skipped.
@@ -82,7 +84,9 @@ and make SWapp-side moves visible to pipe. Source notices: `ddc3441d4fb9`,
 
 ## Health
 
-**Not verified in this session.** No test, typecheck, lint, or build was run,
+**Not verified in this session** (superseded for branch
+`crew/leads-six-steps` by the baseline in the section above, which is current
+as of 2026-10-21 on that branch only). No test, typecheck, lint, or build was run,
 and the database was not contacted. The numbers in
 `docs/IMPLEMENTATION-STATUS.md` (583 tests across 74 files, 0 lint errors, 8
 `<img>` advisories) are dated 2026-09-08 and are carried as history, not as a
