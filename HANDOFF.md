@@ -17,12 +17,12 @@ the owner named the recipient in this session. Crews do not push, PR, or merge.
 
 ## Repository state
 
-- Branch: `crew/leads-six-steps`; M2 base: `d59fe59` (`origin/main` at job
-  start); M2 code head: `208cdeb` (`Pipe deals: persist validated Leads steps`).
-- The M2 commit is local and unpushed. It adds the optional validated
-  `lead_step` field, persists and returns it, and adds an idempotent nullable
-  `MeetingLead.leadStep` migration. No production database or environment was
-  read or changed.
+- Branch: `crew/leads-six-steps`; M3 base: `df769f0927f12f9a2521ce6f6ad85a9c1ba14cb5`;
+  M3 code head: `ed85a1cc5a420bf70594e3ff3fae5d8c5bd3f5b0`.
+- M2 (`208cdeb`) and M3 (`ed85a1c`) are local and unpushed. M2 stores and
+  returns validated `lead_step`; M3 adds the Leads board columns and mapped
+  moves. The additive M2 migration was checked on scratch Postgres only. No
+  production database or environment was read or changed.
 - This branch also contains the prior M1 commits `3613d9b` and `a14d2fa`.
 
 ## Leads six-step job (crew, branch `crew/leads-six-steps`)
@@ -55,21 +55,33 @@ and make SWapp-side moves visible to pipe. Source notices: `ddc3441d4fb9`,
   its stage still matches; a stage move outside that stage clears it. Explicit
   `null` clears it. See
   `~/.grok/team/swapp/jobs/leads/worker-m2-r1.md` for commands and exact results.
+- **M3: implemented**, code commit `ed85a1c` (base `df769f0`). The
+  `pipe-prospects` board shows Reach decision maker / Get QB access / Book
+  review call / Conduct review call / Send Quote & Contract / Nurture as
+  columns. It keeps Prospect, Won, and Lost visible as additional columns.
+  Unset steps on lead/talking/proposed cards appear under their stage's first
+  matching step with a “Step unset” note; moving the card sets a step. A move
+  writes the mapped `PipelineItem.stageId` and `MeetingLead.leadStep` in one
+  transaction. Other pipelines keep their existing stages.
+- M3 design choices: virtual step columns reuse existing pipe stages because
+  several Leads steps map to the same stage; existing non-Leads stages remain
+  visible; unset values are shown by stage and stay null until a card is moved.
+  Updating `MeetingLead` also lets Prisma's `@updatedAt` refresh its timestamp
+  for these six-step moves. M4 was not started: generic pipeline moves still
+  only update `PipelineItem`, and no M4-specific test was added.
 - Checks: `npm run typecheck` passed; `npm run lint` passed (0 errors, 9
-  warnings); `npm test` passed (109 files, 1 skipped; 874 tests, 5 skipped).
-  The migration was applied twice to a disposable Postgres 16 scratch container;
-  both runs succeeded and the column is nullable `text`. The container was
-  stopped and removed. No production database or environment was touched.
-- Next: M3 (show and move the six steps in SWapp screens). M4 remains separate;
-  M5 is design note only. M2 has not been pushed or deployed.
+  warnings); `npm test` passed (111 files, 1 skipped; 881 tests, 5 skipped).
+  No database was needed for M3. No production database or environment was
+  touched.
+- Next: wait for M3 review ACCEPT before M4. M5 remains design note only.
+  M2/M3 are not pushed or deployed.
 
 ## Health
 
-**Verified 2026-10-21 on `crew/leads-six-steps` at M2 code head `208cdeb`.**
+**Verified 2026-10-21 on `crew/leads-six-steps` at M3 code head `ed85a1c`.**
 `npm run typecheck` passed; `npm run lint` passed with 0 errors and 9 warnings;
-`npm test` passed with 109 files passed, 1 skipped, 874 tests passed, and 5
-skipped. The migration ran twice on scratch Postgres 16. Production was not
-contacted. The numbers in
+`npm test` passed with 111 files passed, 1 skipped, 881 tests passed, and 5
+skipped. M3 did not use a database. Production was not contacted. The numbers in
 `docs/IMPLEMENTATION-STATUS.md` (583 tests across 74 files, 0 lint errors, 8
 `<img>` advisories) are dated 2026-09-08 and are carried as history, not as a
 current claim. Re-run the checks before relying on them.
