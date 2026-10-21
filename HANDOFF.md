@@ -5,7 +5,7 @@ Historical session logs live in `docs/handoff-archive/`; durable design and
 reference material lives in `docs/`. If a note here would still be true in
 three months, it belongs in `docs/`, not here.
 
-Checked on **dalliance**, 2026-10-16 (America/Chicago), by Kassad.
+Checked on **dalliance**, 2026-10-21 (America/Chicago), by Ummon.
 `README.md` describes the project; this file hands off the work.
 
 ## Read first
@@ -36,10 +36,19 @@ M5 brand-slug rename runbook, M6 final handoff.
   passes). `src/lib/crm`, `src/lib/pipe` and `src/lib/contacts/automation.ts`
   are already inside a brand context. Uncle Invoice uses only the
   `uncleinvoice` schema (22 of 22 models) and cannot be broken by SWapp's RLS.
-- Checks run for M1: none (no code or schema change). Typecheck, lint and tests
-  start at M2.
-- Next: M2 fixes the sweep findings. Planned shape: return `dataContext` from
-  `requireStaffBrand*` in `src/lib/brands/staff.ts` and wrap each call.
+- Checks run for M1: none (no code or schema change).
+- **M2 fixes: done in `b040fb8a444b8570f5bda7d6486c03061ebebf0c`.** Exact
+  implementation range: `f9aa45f6aba51afdf3c1f08dd8c896f6a7f5c1ac..b040fb8a444b8570f5bda7d6486c03061ebebf0c`.
+  Report: `jobs/rls/worker-m2-r1.md`. Staff brand helpers now return the
+  authorized `dataContext`; swept Contact reads and writes use
+  `withBrandDataTransaction`; Client, Discounts, and Pipeline nested RLS reads
+  are separate context-bound queries. Checks: typecheck passed; lint passed
+  with 0 errors / 9 warnings; tests passed (109 files, 871 tests; 1 file and
+  5 tests skipped). No database was contacted.
+- **Next: M3 scratch-Postgres rehearsal.** It has not started. Confirm a local
+  scratch Postgres is available before using it, then test as
+  `swd_web_runtime` (`NOBYPASSRLS`). No production DB/env, push, PR, merge, or
+  deploy is in scope. Do not begin M3 as part of this milestone.
 
 ## Repository state
 
