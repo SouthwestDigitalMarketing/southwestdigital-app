@@ -573,6 +573,7 @@ model Brand {
   auditEvents            AuditEvent[]
   customerAccounts       CustomerAccount[]
   leads                  Lead[]
+  pipeTasks              PipeTask[]
   customerContacts       CustomerContact[]
   leadContacts           LeadContact[]
   leadAttributionTouches LeadAttributionTouch[]
@@ -2844,4 +2845,60 @@ model EmailConnection {
 
   @@index([brandId])
   @@index([brandId, status, provider])
+}
+
+// ─── Front Desk tasks, synced from the `pipe` terminal tool ──────────────────
+//
+// A task lives under a "home" brand: its own brand when it is for a SWapp
+// brand, the Personal brand for personal tasks, and Lochside LLC for n/a.
+// taskBrand records what the person chose. pipeId is pipe's task number, the
+// stable cross-system key (one pipe database, so it is unique on its own and
+// a task can change brands without being duplicated). The stage follows the
+// task's tags; both are stored as pipe sends them. Not row-level-security
+// protected: reached only through the pipe API's bearer token.
+
+model PipeTask {
+  id           String         @id @default(cuid())
+  brandId      String
+  pipeId       String         @unique
+  title        String
+  instructions String?
+  stage        String         @default("todo")
+  taskBrand    String         @default("personal")
+  ownerKey     String?
+  ownerName    String?
+  ownerKind    String?
+  nextDue      String?
+  big3Rank     Int?
+  big3On       String?
+  closedAt     DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  brand        Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  tags         PipeTaskTag[]
+  notes        PipeTaskNote[]
+
+  @@index([brandId, stage])
+  @@index([ownerKey])
+}
+
+model PipeTaskTag {
+  id     String   @id @default(cuid())
+  taskId String
+  label  String
+  task   PipeTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, label])
+  @@index([label])
+}
+
+model PipeTaskNote {
+  id         String   @id @default(cuid())
+  taskId     String
+  pipeNoteId String
+  body       String
+  notedAt    DateTime
+  task       PipeTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, pipeNoteId])
 }
