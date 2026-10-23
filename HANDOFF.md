@@ -239,3 +239,11 @@ Read-only survey findings, from files only:
 - Verified this session: 56 pipe tests pass, `tsc --noEmit` clean, eslint
   clean on `src/lib/pipe/` and `src/app/api/pipe/`. The DB-backed
   integration test still needs a live scratch Postgres (none on this box).
+
+## Pipe tags and Reviews/Referrals config (Ummon, 2026-10-23)
+
+- Merged: PR #40 `POST/GET /api/pipe/tags` (`src/lib/pipe/tags.ts`; add runs `applyTagPipelineAutomation`, remove only drops the link). PR #41 data migration `prisma/migrations/20261023220000_reviews_referrals_pipelines/migration.sql`.
+- Checks: typecheck/lint/test pass on both; Netlify previews fail on #38-#41 alike. SQL never run against a database.
+- NOT applied to production. Apply by hand: `npx dotenv-cli -e .env.local -- npx prisma db execute --file <file> --schema prisma/schema.prisma`, after Tom sees the SQL. Brand slug is `bookkeeping-conroe` near its top.
+- Limit: one stage per tag (reviews -> Welcome); onsite/training must be moved to Check-in by hand. Tags sit on the contact, not the deal.
+- Unfinished: `dueAt` on PipelineItem (day 25 / day 3) deferred by Sol; backfill of pipe #6, #7, #4, #48 is Sol's request to Tom. Not confirmed whether #40 is live.
