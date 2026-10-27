@@ -4,46 +4,74 @@ import { useEffect, useRef, useState } from "react";
 
 const REVIEWS = [
   {
+    name: "Sara Manore",
+    detail: "Local Guide · 16 reviews",
+    ago: "recently",
+    image: null as string | null,
+    text: "Thomas is a gem! He got me out of a pickle on an audit! So grateful!!!!",
+  },
+  {
+    name: "Chris Saltzburg",
+    detail: "CPYB Yacht Sales & Brokerage · Local Guide · 109 reviews",
+    ago: "9 months ago",
+    image: null as string | null,
+    text: "I'm hesitant to write this review, because finding a qualified, trustworthy, and easy to work with bookkeeper is incredibly difficult. (& Selfishly, I don't want Conroe to get too busy!) However, you can streamline your search for quality Bookkeeping services by calling Conroe. Highly recommend.",
+  },
+  {
+    name: "Dagny Yznaga Gaerste",
+    detail: "Local Guide · 21 reviews",
+    ago: "a year ago",
+    image: "https://www.bookkeepingconroe.com/images/google-review-profile-pics/Dagny-Yznaga.png" as string | null,
+    text: "I met Tom through business and now he's become a friend. He has outstanding and up-to-date bookkeeping knowledge. He is a loyal and reliable professional who treats all his clients in the best possible way; with transparency, clarity and proper communication. I own a similar business and every time I get a Quickbooks client, I send them to Bookkeeping For My Business and they've never let me down. 100% recommended",
+  },
+  {
     name: "Chelsea Gronemeyer",
     detail: "1 review",
-    ago: "8 months ago",
-    image: "https://bookkeepingconroe.com/reviews/Chelsea-Gronemeyer.png",
-    text: "Tom is very knowledgeable about bookkeeping and he is always willing to help out with any questions or concerns I may have. I really feel like he puts his clients first and I wouldn't want to work with anyone else.",
+    ago: "a year ago",
+    image: "https://www.bookkeepingconroe.com/images/google-review-profile-pics/Chelsea-Gronemeyer.png" as string | null,
+    text: "Tom is very knowledgeable about bookkeeping and he is always willing to help out with any questions or concerns I may have. I really feel like he puts his clients first and I wouldn’t want to work with anyone else.",
   },
   {
     name: "Giorgio Villani",
-    detail: "5 reviews",
+    detail: "6 reviews",
     ago: "a year ago",
-    image: "https://bookkeepingconroe.com/reviews/giorgio-villani.png",
-    text: "Tom's consultation made it clear how proper bookkeeping is key to financial planning and strategic decisions. He explained how accurate records improve cash flow forecasting, budgeting, and tax prep. His clear communication helped me understand how to use financial data for smarter business actions. Highly recommended!",
+    image: "https://www.bookkeepingconroe.com/images/google-review-profile-pics/giorgio-villani.png" as string | null,
+    text: "Tom’s consultation made it clear how proper bookkeeping is key to financial planning and strategic decisions. He explained how accurate records improve cash flow forecasting, budgeting, and tax prep. His clear communication helped me understand how to use financial data for smarter business actions. Highly recommended!",
+  },
+  {
+    name: "Stephen MacDonald",
+    detail: "5 reviews · 2 photos",
+    ago: "a year ago",
+    image: null as string | null,
+    text: "Tom and I have had numerous discussions about my bookkeeping services and he has always been generous with his time and knowledge! I believe that he has his clients best interests in mind and I wouldn’t choose to work with anyone else.",
   },
   {
     name: "Geoff Lohnes",
     detail: "12 reviews",
     ago: "a year ago",
-    image: "https://bookkeepingconroe.com/reviews/geoff-lohnes.png",
-    text: "I've been working with Thomas lately, and I'm blown away by his vast knowledge of bookkeeping. Combined with his excellent communication skills, I'm so glad I used him. I'm sure I could not have done this on my own. He seems extremely trustworthy, and I'll be going back to him again next year.",
+    image: "https://www.bookkeepingconroe.com/images/google-review-profile-pics/geoff-lohnes.png" as string | null,
+    text: "I’ve been working with Thomas lately, and I’m blown away by his vast knowledge of bookkeeping. Combined with his excellent communication skills, I’m so glad I used him. I’m sure I could not have done this on my own. He seems extremely trustworthy, and I’ll be going back to him again next year.",
+  },
+  {
+    name: "Tom MacDonald",
+    detail: "3 reviews",
+    ago: "a year ago",
+    image: null as string | null,
+    text: "Being a Quickbook’s pro advisor Tom knows his way around in quickbooks… quickly identified potential problems on my financial statements…luckily they were easy fixes…he can be trusted to do quality work…he has my recommendation…",
   },
   {
     name: "Brandon Fallis",
     detail: "4 reviews · 2 photos",
     ago: "a year ago",
-    image: "https://bookkeepingconroe.com/reviews/brandon-fallis.png",
-    text: "Great company and great help with my bookkeeping. I met Tom at BlackRock Coffee and he immediately had a fix for my company books. Can't thank him enough!",
+    image: "https://www.bookkeepingconroe.com/images/google-review-profile-pics/brandon-fallis.png" as string | null,
+    text: "Great company and great help with my bookkeeping. I met Tom at BlackRock Coffee and he immediately had a fix for my company books. Can’t thank him enough!",
   },
   {
     name: "Becky Chatham",
-    detail: "Local Guide · 18 reviews",
+    detail: "Local Guide · 20 reviews",
     ago: "a year ago",
-    image: "https://bookkeepingconroe.com/reviews/becky-chatham.png",
-    text: "did a great job helping me with my Quick books. Straightened out my books.",
-  },
-  {
-    name: "Dagny Yznaga",
-    detail: "Local Guide",
-    ago: "recently",
-    image: "https://bookkeepingconroe.com/reviews/Dagny-Yznaga.png",
-    text: "I met Tom through business and now he's become a friend. He has outstanding and up-to-date bookkeeping knowledge. He is a loyal and reliable professional who treats all his clients in the best possible way; with transparency, clarity and proper communication. I own a similar business and every time I get a Quickbooks client, I send them to Bookkeeping Conroe and they've never let me down. 100% recommended.",
+    image: "https://www.bookkeepingconroe.com/images/google-review-profile-pics/becky-chatham.png" as string | null,
+    text: "did a great job helping me with my Quick books. Straightened out my books",
   },
 ];
 
@@ -88,16 +116,25 @@ function ReviewCard({
           className="h-4 w-4 object-contain"
         />
       </div>
-      <p className="mt-2 flex-1 text-xs leading-5 text-slate-600 line-clamp-3">{text}</p>
+      <p className="mt-2 flex-1 text-xs leading-5 text-slate-600 line-clamp-4">{text}</p>
       <div className="mt-2 flex items-center gap-2 border-t pt-2" style={{ borderColor: "#f1f5f9" }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={image}
-          alt={name}
-          width={28}
-          height={28}
-          className="h-7 w-7 shrink-0 rounded-full object-cover"
-        />
+        {image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={image}
+            alt={name}
+            width={28}
+            height={28}
+            className="h-7 w-7 shrink-0 rounded-full object-cover"
+          />
+        ) : (
+          <span
+            aria-hidden="true"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600"
+          >
+            {name.charAt(0)}
+          </span>
+        )}
         <div className="min-w-0">
           <p className="text-xs font-semibold text-slate-900">{name}</p>
           <p className="text-[0.65rem] text-slate-400">{detail} · {ago}</p>
@@ -150,7 +187,7 @@ export function ProposalReviewsSection({
       </p>
       <div
         ref={gridRef}
-        className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3"
+        className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 lg:[&>:last-child:nth-child(3n+1)]:col-start-2"
       >
         {REVIEWS.map((r, i) => (
           <ReviewCard key={r.name} {...r} visible={visible} index={i} />
