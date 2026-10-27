@@ -166,7 +166,11 @@ export function buildProposalCheckoutSummary(
       .filter((option) => option.packageIds.includes(selection.tier))
       .map((option) => [option.id, option]),
   );
-  const selectedAdditionalOptionIds = [...new Set(selection.selectedAdditionalOptionIds)]
+  // Required add-ons are charged whether or not the client's selection lists them.
+  const requiredAdditionalOptionIds = [...availableAdditionalOptions.values()]
+    .filter((option) => option.required)
+    .map((option) => option.id);
+  const selectedAdditionalOptionIds = [...new Set([...selection.selectedAdditionalOptionIds, ...requiredAdditionalOptionIds])]
     .filter((id) => availableAdditionalOptions.has(id));
   const additionalMonthlyTotal = selectedAdditionalOptionIds.reduce(
     (total, id) => {

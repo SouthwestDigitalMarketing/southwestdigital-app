@@ -212,6 +212,8 @@ export type ProposalAdditionalOption = {
   billingCadence?: ProposalBonusCadence;
   includedPlacement?: "main" | "included";
   packageIds?: PackageId[];
+  // Charged on every package without the client ticking a box (e.g. a required migration).
+  required?: boolean;
   realEstateSpecific?: boolean;
   applicable?: boolean;
   applicabilityReason?: string;
