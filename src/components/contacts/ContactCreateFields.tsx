@@ -69,6 +69,10 @@ export function ContactCreateFields({
           className={inputClass}
         />
       </label>
+      <label className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+        MRR (USD/mo)
+        <input name="mrrUsd" type="number" min="0" step="0.01" placeholder="e.g. 450" className={inputClass} />
+      </label>
       <label className="text-xs font-semibold uppercase tracking-wide text-slate-600 sm:col-span-2">
         Notes
         <textarea name="notes" rows={3} className={inputClass} />

@@ -5,7 +5,7 @@ import { ReviewOutcome } from "@prisma/client";
 import { getTrafficTrend, getTotalKeyEvents } from "@/lib/analytics/ga4";
 import { getChannelMetrics, getAverageWatchDuration } from "@/lib/youtube/analytics";
 import { getYouTubeRefreshToken } from "@/lib/youtube/credentials";
-import { PlayCircle, Clock, Globe, Target, FileText, Eye, Star } from "lucide-react";
+import { PlayCircle, Clock, Globe, Target, FileText, Eye, Star, DollarSign } from "lucide-react";
 import { StatCard } from "./StatCards";
 import { DashboardControls } from "./DashboardControls";
 import { GoalEditor } from "./GoalEditor";
@@ -237,6 +237,14 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const selectedPeriod = getDashboardPeriod(range, windowEnd);
   const previous = getPreviousDashboardPeriod(range, windowEnd, selectedPeriod);
 
+  const mrrAgg = await prisma.contact.aggregate({
+    where: { brandId: brand.id, isActive: true, mrrUsd: { not: null } },
+    _sum: { mrrUsd: true },
+    _count: true,
+  });
+  const mrrTotal = Number(mrrAgg._sum.mrrUsd ?? 0);
+  const mrrClientCount = mrrAgg._count;
+
   const theme = await prisma.brandTheme.findUnique({
     where: { brandId: brand.id },
     select: {
@@ -391,6 +399,14 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             <StatCard label="Key events" value={keyEventCount.toLocaleString("en-US")} goal={{ pct: goalPct(keyEventCount, keyEventsGoal), subtitle: `of ${keyEventsGoal.toLocaleString("en-US")} goal for this period` }} comparison={percentChange(keyEventCount, previousKeyEventCount)} icon={<Target size={14} />} attribution={websiteAttribution} />
           </>
         ) : <NotConfiguredCard title="Website" />}
+      </DashboardSection>
+
+      <DashboardSection title="Revenue">
+        <StatCard
+          label={`MRR · ${mrrClientCount.toLocaleString("en-US")} client${mrrClientCount === 1 ? "" : "s"} with MRR set`}
+          value={`$${mrrTotal.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/mo`}
+          icon={<DollarSign size={14} />}
+        />
       </DashboardSection>
 
       <DashboardSection title="YouTube">
