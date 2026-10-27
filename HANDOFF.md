@@ -247,3 +247,12 @@ Read-only survey findings, from files only:
 - NOT applied to production. Apply by hand: `npx dotenv-cli -e .env.local -- npx prisma db execute --file <file> --schema prisma/schema.prisma`, after Tom sees the SQL. Brand slug is `bookkeeping-conroe` near its top.
 - Limit: one stage per tag (reviews -> Welcome); onsite/training must be moved to Check-in by hand. Tags sit on the contact, not the deal.
 - Unfinished: `dueAt` on PipelineItem (day 25 / day 3) deferred by Sol; backfill of pipe #6, #7, #4, #48 is Sol's request to Tom. Not confirmed whether #40 is live.
+
+## Session 2026-10-27 (Kassad) — Mike Arnett quote, Vercel block, proposal UI
+
+- Vercel: team `lochside-llc` was on Hobby and soft-blocked (FAIR_USE_LIMITS_EXCEEDED / functionInvocation; whole site returned 402 DEPLOYMENT_DISABLED). Tom upgraded. Likely cause: long-open `pipe` boards polling the API (sales repo branch `fix/board-poll-rate`). Netlify deploy-preview check fails on every PR (not investigated); production is Vercel.
+- The app picks the portal by hostname: use `app.bookkeepingconroe.com`, not `swapp-chi.vercel.app` ("Portal not configured").
+- Merged: #45 (10 Google reviews on proposals, fixed photo URLs, required add-ons: `required: true` add-ons are pre-selected, shown under Required to get started, and enforced in `proposalCheckout.ts`), #46 (no price at card top), #47 (Service level section, no top Select button), #48 (gold section bars, Steady/Fast-Lane/White-Glove copy in `SERVICE_LEVEL_COPY`). Not viewed in a browser by me.
+- Quote `cmvqzmevb0003jj0e9d8suo8g` (Mike Arnett, draft, never sent) edited directly in the database: Maintain 450 / Improve 550 / Grow 675 (discretionaryMultiplier 0.465), onboarding override 495, required migration add-on 495, services seeded from the catalog, lower-tier add-on prices ~half of the US Promoline quote (guess), testimonial video copied from quote `cmtxrkuqk0005kx04apbc0zic`. Backups: scratchpad `quote_backup_*.json` (session-local). Assumed, unconfirmed: 2 credit cards, 0 contractors, Gusto.
+- Pricing facts: the engine (`buildPackagePricing`) priced Maintain at 965; Tom's verbal rule on the call was avg transactions x2, 450 minimum. Tom chose the engine, then set the floor to 450. Advanced receipt management minimum for the 100-499 band is 499 (hidden on this quote).
+- Open: new reviewers (Sara Manore, Chris Saltzburg, Stephen MacDonald, Tom MacDonald) have no photo files in `/images/google-review-profile-pics/`; editor has no UI for the `required` flag; `reached` deal stage returns 400 on sync.
