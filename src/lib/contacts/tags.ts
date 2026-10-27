@@ -1,11 +1,19 @@
 export const PAGE_SIZE = 50;
 
-export type ContactTagKindName = "CUSTOM" | "PRODUCT_LEAD" | "CLIENT_LEAD" | "INDUSTRY";
+export type ContactTagKindName =
+  | "CUSTOM"
+  | "SERVICES"
+  | "LEAD"
+  | "INDUSTRY"
+  | "STATUS"
+  | "REVIEWS_GIVEN";
 
 export const TAG_KIND_LABELS: Record<ContactTagKindName, string> = {
-  PRODUCT_LEAD: "Product lead",
-  CLIENT_LEAD: "Client lead",
+  SERVICES: "Services",
+  LEAD: "Lead",
   INDUSTRY: "Industry",
+  STATUS: "Status",
+  REVIEWS_GIVEN: "Review given",
   CUSTOM: "Custom",
 };
 

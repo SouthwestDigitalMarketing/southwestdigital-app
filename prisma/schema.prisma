@@ -249,9 +249,11 @@ enum LeadKind {
 
 enum ContactTagKind {
   CUSTOM
-  PRODUCT_LEAD
-  CLIENT_LEAD
+  SERVICES
+  LEAD
   INDUSTRY
+  STATUS
+  REVIEWS_GIVEN
 }
 
 enum LeadBookkeepingCategory {

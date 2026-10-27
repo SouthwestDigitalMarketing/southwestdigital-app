@@ -92,7 +92,7 @@ async function readServiceFields(formData: FormData, brandId: string) {
   if (tags.length !== tagIds.length) throw new Error("One or more tags are not available.");
 
   const industry = tags.find((tag) => tag.kind === "INDUSTRY");
-  const product = tags.find((tag) => tag.kind === "PRODUCT_LEAD");
+  const product = tags.find((tag) => tag.kind === "SERVICES");
 
   return {
     fields: {
@@ -265,7 +265,7 @@ export async function setCatalogServicesForTagAction(formData: FormData) {
     const tags = service.tags.map((link) => link.tag).filter((assigned) => assigned.id !== tagId);
     if (selectedServiceIds.has(service.id)) tags.push(tag);
     const industry = tags.find((assigned) => assigned.kind === "INDUSTRY");
-    const product = tags.find((assigned) => assigned.kind === "PRODUCT_LEAD");
+    const product = tags.find((assigned) => assigned.kind === "SERVICES");
     return {
       id: service.id,
       category: industry?.label ?? product?.label ?? tags[0]?.label ?? "general",
