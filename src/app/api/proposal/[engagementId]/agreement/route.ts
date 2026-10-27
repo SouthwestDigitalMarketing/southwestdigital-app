@@ -102,6 +102,11 @@ export async function GET(
     cleanupMonths: checkout?.cleanupMonths,
     cleanupMonthlyRate: checkout?.cleanupMonthlyRate,
     additionalOneTimeTotal: checkout?.additionalOneTimeTotal,
+    requiredOneTime: additionalOptions
+      .filter((option) => option.required === true && option.billingCadence === "one-time"
+        && typeof option.id === "string" && selectedAdditionalOptionIds.includes(option.id)
+        && typeof option.monthlyPrice === "number")
+      .map((option) => ({ name: String(option.name ?? option.id), price: Number(option.monthlyPrice) })),
     includedServices: checkout?.includedServices,
   };
 

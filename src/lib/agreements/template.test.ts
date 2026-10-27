@@ -12,6 +12,18 @@ describe("renderAgreementTemplate", () => {
     recurringMonthlyTotal: 360, amountDueNow: 560, agreementTerm: "12-month" as const,
     includedServices: [{ name: "Priority Client Support", description: "Same-business-day responses." }],
   };
+
+  it("lists a required one-time service by name, not as a selected add-on", () => {
+    const text = renderAgreementTemplate(DEFAULT_BOOKKEEPING_AGREEMENT_TEMPLATE, {
+      ...stagedInput,
+      hasCleanup: false, cleanupMonths: 0, cleanupTotal: 0, onboardingFee: 350,
+      recurringMonthlyTotal: 450, amountDueNow: 1440,
+      additionalOneTimeTotal: 640,
+      requiredOneTime: [{ name: "QuickBooks Desktop to Online Migration", price: 640 }],
+    });
+    expect(text).toContain("QuickBooks Desktop to Online Migration (due today): $640.00");
+    expect(text).not.toContain("Selected One-Time Add-ons");
+  });
   it("separates discovery due today from cleanup estimates and discloses the annual total and start trigger", () => {
     const text = renderAgreementTemplate(DEFAULT_BOOKKEEPING_AGREEMENT_TEMPLATE, stagedInput);
     expect(text).toContain("Onboarding + Discovery");

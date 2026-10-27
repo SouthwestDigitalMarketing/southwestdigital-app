@@ -148,6 +148,8 @@ export type AgreementRenderInput = {
   cleanupMonths?: number;
   cleanupMonthlyRate?: number;
   additionalOneTimeTotal?: number;
+  /** Required one-time services (already inside additionalOneTimeTotal), listed by name rather than as selected add-ons. */
+  requiredOneTime?: { name: string; price: number }[];
   includedServices?: { name: string; description: string }[];
   date?: Date;
 };
@@ -171,6 +173,8 @@ export function renderAgreementTemplate(template: string, input: AgreementRender
     ? `${input.selectedTierLabel} package`
     : "Selected bookkeeping package";
   const staged = input.paymentScheduleVersion === 2;
+  const requiredOneTimeTotal = (input.requiredOneTime ?? []).reduce((total, row) => total + row.price, 0);
+  const selectedOneTimeTotal = Math.max(0, Math.round(((input.additionalOneTimeTotal ?? 0) - requiredOneTimeTotal) * 100) / 100);
   const engagementType = staged && input.hasCleanup
     ? "Onboarding + Discovery; Estimated Cleanup and Monthly Bookkeeping"
     : input.hasCleanup
@@ -209,7 +213,8 @@ export function renderAgreementTemplate(template: string, input: AgreementRender
       ? `${staged && input.hasCleanup ? "Onboarding + Discovery" : "Onboarding Fee"}:         ${formatCurrency(input.onboardingFee ?? 0)}`
       : `${staged && input.hasCleanup ? "Onboarding + Discovery" : "Onboarding Fee"}:         Waived`,
     staged && !input.hasCleanup ? `First Month (due today): ${formatCurrency(input.recurringMonthlyTotal ?? 0)}` : null,
-    staged && (input.additionalOneTimeTotal ?? 0) > 0 ? `Selected One-Time Add-ons (due today): ${formatCurrency(input.additionalOneTimeTotal ?? 0)}` : null,
+    ...(staged ? (input.requiredOneTime ?? []).map((row) => `${row.name} (due today): ${formatCurrency(row.price)}`) : []),
+    staged && selectedOneTimeTotal > 0 ? `Selected One-Time Add-ons (due today): ${formatCurrency(selectedOneTimeTotal)}` : null,
     `Total Due Upon Signing: ${formatCurrency(input.amountDueNow ?? 0)}`,
     staged && input.agreementTerm === "12-month"
       ? `12-Month Service Total: ${formatCurrency(input.recurringMonthlyTotal ?? 0)} × 12 months = ${formatCurrency(Math.round((input.recurringMonthlyTotal ?? 0) * 1200) / 100)}. Paid monthly, not in full today; excludes onboarding, cleanup, and one-time add-ons. The 12-month term begins on the confirmed monthly service start date.` : null,
