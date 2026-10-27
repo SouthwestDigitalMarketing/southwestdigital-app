@@ -1623,8 +1623,9 @@ function OfferProposalPreviewView({
 
                   return (
                     <section key={id} className="grid grid-rows-subgrid row-span-6 overflow-hidden rounded-xl border bg-white shadow-sm transition-colors" style={{ borderColor: selected ? brandDark : "#e2e8f0" }}>
-                      {/* Card header */}
-                      <div className="p-5">
+                      {/* Card header + service level (one grid row so the cards stay aligned) */}
+                      <div>
+                        <div className="p-5">
                         <div className="flex items-start justify-between gap-4">
                           <div>
                             <div className="flex items-center gap-2">
@@ -1649,29 +1650,19 @@ function OfferProposalPreviewView({
                             ) : null}
                           </div>
                         </div>
-                        {supportRows.map((row) => (
-                          <div key={row.id} aria-label={`${option.name} support level`} className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                            <p className="text-base font-semibold text-emerald-900">{row.serviceName}</p>
-                            {/* Only real copy earns this space; the tooltip fallback is filler. */}
-                            {row.note ? <p className="mt-2 text-sm leading-6 text-slate-700">{row.note}</p> : null}
+                        </div>
+                        <section className="border-t border-slate-200">
+                          <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ backgroundColor: subtleAccentBg, color: inkColor }}>Service level</p>
+                          <div className="space-y-3 px-5 py-4">
+                            {supportRows.length > 0 ? supportRows.map((row) => (
+                              <div key={row.id} aria-label={`${option.name} support level`}>
+                                <p className="text-sm font-semibold text-slate-900">{row.serviceName}</p>
+                                {/* Only real copy earns this space; the tooltip fallback is filler. */}
+                                {row.note ? <p className="mt-1 text-sm leading-6 text-slate-600">{row.note}</p> : null}
+                              </div>
+                            )) : <p className="text-sm font-semibold text-slate-900">{serviceLevel}</p>}
                           </div>
-                        ))}
-                        <p className="mt-4 text-center text-xs font-bold uppercase tracking-[0.12em] text-slate-700">{serviceLevel} service level</p>
-                        <button
-                          type="button"
-                          disabled={paymentStatus === "succeeded" || selectionSubmittingId !== null}
-                          onClick={() => void selectOptionAndContinue(id)}
-                          aria-pressed={selected}
-                          className={
-                            paymentStatus === "succeeded" && !selected
-                              ? "mt-4 w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-base font-semibold text-slate-400 transition disabled:cursor-not-allowed"
-                              : "ui-action-primary mt-4 w-full rounded-lg border px-4 py-3 text-base font-bold transition disabled:cursor-not-allowed disabled:opacity-60"
-                          }
-                        >
-                          {paymentStatus === "succeeded"
-                            ? (selected ? "Selected & Paid" : "Not selected")
-                            : selectionSubmittingId === id ? "Saving selection…" : `Select ${option.name}`}
-                        </button>
+                        </section>
                       </div>
 
                       {/* One-time services */}
