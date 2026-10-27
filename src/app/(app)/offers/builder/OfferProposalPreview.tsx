@@ -16,6 +16,7 @@ import {
   Pencil,
   ShieldCheck,
   Sparkles,
+  Star,
   X,
 } from "lucide-react";
 import { Modal } from "@/components/Modal";
@@ -339,6 +340,9 @@ const SERVICE_LEVEL_COPY: Record<string, { title: string; meaning: string }> = {
   "Priority Client Support": { title: "Fast-Lane Support", meaning: "Skip the wait. We reply to your questions and requests the same business day." },
   "Concierge Client Support": { title: "White-Glove Concierge", meaning: "We're on call for you, 24/7, for bookkeeping questions and anything time-sensitive." },
 };
+
+// One, two or three stars next to the service level name, by package.
+const SERVICE_LEVEL_STARS: Record<OptionId, number> = { maintain: 1, improve: 2, grow: 3 };
 
 function isOnboarding(row: ServiceRow) {
   return row.serviceName === "Onboarding";
@@ -1229,6 +1233,11 @@ function OfferProposalPreviewView({
       cleanupMonths: selectedCleanupMonths,
       cleanupMonthlyRate: options.maintain.monthlyPrice,
       additionalOneTimeTotal: selectedAdditionalOneTimeTotal,
+      requiredOneTime: selectedOptionId
+        ? additionalOptionRowsFor(selectedOptionId)
+            .filter((row) => row.required && !row.billEvery)
+            .map((row) => ({ name: row.serviceName, price: row.price * row.quantity }))
+        : [],
       includedServices: selectedOptionId ? [
         ...options[selectedOptionId].recurringRows,
         ...options[selectedOptionId].oneTimeRows.filter((row) => row.price === 0 && !row.cleanupPeriodKey && !isOnboarding(row)),
@@ -1243,6 +1252,7 @@ function OfferProposalPreviewView({
       onboardingFee={checkoutSummary?.onboardingFee ?? selectedOnboardingFee ?? 0}
       recurringMonthlyTotal={checkoutSummary?.recurringMonthlyTotal ?? selectedMonthlyCharge}
       additionalOneTimeTotal={checkoutSummary?.additionalOneTimeTotal ?? selectedAdditionalOneTimeTotal}
+      requiredOneTime={additionalOptionRowsFor(selectedOptionId).filter((row) => row.required && !row.billEvery).map((row) => ({ name: row.serviceName, price: row.price * row.quantity }))}
       annual={checkoutSummary?.hasTwelveMonthAgreement ?? hasTwelveMonthAgreement}
       amountDueNow={chargeAmount}
       showStages
@@ -1664,7 +1674,12 @@ function OfferProposalPreviewView({
                           <div className="space-y-3 px-5 py-4">
                             {supportRows.length > 0 ? supportRows.map((row) => (
                               <div key={row.id} aria-label={`${option.name} support level`}>
-                                <p className="text-base font-semibold text-slate-900">{SERVICE_LEVEL_COPY[row.serviceName]?.title ?? row.serviceName}</p>
+                                <p className="flex items-center gap-2 text-base font-semibold text-slate-900">
+                                  <span role="img" aria-label={`${SERVICE_LEVEL_STARS[id]} of 3 stars`} className="inline-flex shrink-0 gap-0.5" style={{ color: "#f4b422" }}>
+                                    {Array.from({ length: SERVICE_LEVEL_STARS[id] }, (_, i) => <Star key={i} aria-hidden="true" className="h-4 w-4 fill-current" />)}
+                                  </span>
+                                  {SERVICE_LEVEL_COPY[row.serviceName]?.title ?? row.serviceName}
+                                </p>
                                 {/* Only real copy earns this space; the tooltip fallback is filler. */}
                                 {(SERVICE_LEVEL_COPY[row.serviceName]?.meaning ?? row.note) ? <p className="mt-1 text-sm leading-6 text-slate-600">{SERVICE_LEVEL_COPY[row.serviceName]?.meaning ?? row.note}</p> : null}
                               </div>
@@ -1737,6 +1752,7 @@ function OfferProposalPreviewView({
                         <div className="mt-3">
                           <ProposalPaymentPlan cleanupMonths={selectedCleanupMonths} cleanupMonthlyRate={options.maintain.monthlyPrice}
                             onboardingFee={onboardingFee} recurringMonthlyTotal={recurringTotal} additionalOneTimeTotal={additionalOneTimeTotal}
+                            requiredOneTime={requiredAddOnRows.filter((row) => !row.billEvery).map((row) => ({ name: row.serviceName, price: row.price * row.quantity }))}
                             annual={hasTwelveMonthAgreement} amountDueNow={isTestProposal ? 1 : undefined} />
                         </div>
                         <button
