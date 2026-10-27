@@ -47,6 +47,27 @@ describe("proposal checkout", () => {
     expect(result.chargeKind).toBe("onboarding_and_first_month");
   });
 
+  it("charges a required one-time add-on even when the client's selection leaves it out", () => {
+    const withRequired = {
+      ...snapshot,
+      assessment: {
+        ...snapshot.assessment,
+        additionalOptions: [
+          ...snapshot.assessment.additionalOptions,
+          { id: "migration", monthlyPrice: 1000, billingCadence: "one-time", required: true, showInProposal: true, archived: false },
+        ],
+      },
+    };
+    const result = buildProposalCheckoutSummary(withRequired, {
+      tier: "maintain",
+      hasTwelveMonthAgreement: false,
+      selectedCleanupPeriodKeys: [],
+      selectedAdditionalOptionIds: [],
+    });
+    expect(result.selectedAdditionalOptionIds).toEqual(["migration"]);
+    expect(result.amountDueNow).toBe(500 + 1000 + 300);
+  });
+
   it("charges onboarding and discovery while deferring the cleanup estimate and monthly charge", () => {
     const result = buildProposalCheckoutSummary(snapshot, {
       tier: "improve",

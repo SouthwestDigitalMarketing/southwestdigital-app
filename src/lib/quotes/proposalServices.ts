@@ -78,6 +78,7 @@ export type ProposalServiceAddOn = {
   monthlyPrice: number;
   billingCadence: "monthly" | "one-time";
   packageIds: ServiceTier[];
+  required?: boolean;
 };
 
 export function proposalIncludedServices(assessmentValue: unknown, tier: ServiceTier) {
@@ -127,6 +128,7 @@ export function proposalServiceAddOns(
             ? "monthly"
             : fallbackCadence,
       packageIds: packages,
+      ...(item.required === true ? { required: true } : {}),
     });
   };
   for (const option of records(assessment.additionalOptions)) {

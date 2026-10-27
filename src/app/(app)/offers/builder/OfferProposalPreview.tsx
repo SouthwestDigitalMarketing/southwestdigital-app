@@ -189,6 +189,7 @@ type ServiceRow = {
   note?: string;
   cleanupPeriodKey?: string;
   platformTag?: "QBO" | "Stessa";
+  required?: boolean;
 };
 
 type ProposalOption = {
@@ -723,7 +724,7 @@ function OfferProposalPreviewView({
   const [hasTwelveMonthAgreement, setHasTwelveMonthAgreement] = useState(false);
   const [comparisonOpen, setComparisonOpen] = useState(false);
   const [cleanupSelections, setCleanupSelections] = useState<Record<string, boolean>>({});
-  const [additionalOptionSelections, setAdditionalOptionSelections] = useState<Record<OptionId, Record<string, boolean>>>({ grow: {}, improve: {}, maintain: {} });
+  const [storedAdditionalOptionSelections, setAdditionalOptionSelections] = useState<Record<OptionId, Record<string, boolean>>>({ grow: {}, improve: {}, maintain: {} });
 
   // Signing / payment state
   const [signerName, setSignerName] = useState("");
@@ -1094,7 +1095,19 @@ function OfferProposalPreviewView({
       quantity: 1,
       price: option.monthlyPrice,
       note: option.description,
+      ...(option.required ? { required: true } : {}),
     }));
+
+  // Required add-ons count as selected on every package; the client cannot untick them.
+  const additionalOptionSelections = Object.fromEntries(
+    (["grow", "improve", "maintain"] as const).map((packageId) => [
+      packageId,
+      {
+        ...storedAdditionalOptionSelections[packageId],
+        ...Object.fromEntries(additionalOptionRowsFor(packageId).filter((row) => row.required).map((row) => [row.id, true])),
+      },
+    ]),
+  ) as Record<OptionId, Record<string, boolean>>;
 
   const recurringServiceNames = Array.from(new Set(optionMeta.flatMap(({ id }) => options[id].recurringRows.map((r) => r.serviceName))));
   const oneTimeServiceNames   = Array.from(new Set(optionMeta.flatMap(({ id }) => options[id].oneTimeRows.map((r) => r.serviceName))));
@@ -1598,6 +1611,8 @@ function OfferProposalPreviewView({
                   });
                   const paidOneTime      = effectiveOneTimeRows.filter((r) => r.price > 0);
                   const optionalCleanup  = paidOneTime.filter((r) => r.cleanupPeriodKey);
+                  const requiredAddOnRows = packageAdditionalOptionRows.filter((r) => r.required);
+                  const optionalAdditionalRows = packageAdditionalOptionRows.filter((r) => !r.required);
                   const requiredOnboard  = effectiveOneTimeRows.filter((r) => !r.cleanupPeriodKey && isOnboarding(r) && (r.price > 0 || onboardingWaived));
                   const additionalSetup  = paidOneTime.filter((r) => !r.cleanupPeriodKey && !isOnboarding(r) && !packageAdditionalOptionRows.some((addOn) => addOn.id === r.id));
 
@@ -1672,7 +1687,7 @@ function OfferProposalPreviewView({
                       <section className="border-t border-slate-200">
                         <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ backgroundColor: subtleAccentBg, color: inkColor }}>One-time services</p>
                         <div className="px-5 py-4">
-                          {requiredOnboard.length ? <div className="mt-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Required to get started</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{requiredOnboard.map((row) => <ServiceLine key={row.id} row={{ ...row, serviceName: schedule.hasCleanup ? "Onboarding + Discovery" : "Onboarding", note: schedule.hasCleanup ? "Account access, document collection, and discovery to confirm the cleanup scope and estimate. Cleanup work is approved separately afterward." : "Account access, document collection, and setup for ongoing bookkeeping." }} originalPrice={assessment.showOriginalOneTimePrices !== false && isOnboarding(row) && originalOnboardingFee > row.price ? originalOnboardingFee : undefined} waivedLabel={onboardingWaived && isOnboarding(row) ? "Waived" : undefined} />)}</ul></div> : null}
+                          {requiredOnboard.length || requiredAddOnRows.length ? <div className="mt-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Required to get started</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{requiredOnboard.map((row) => <ServiceLine key={row.id} row={{ ...row, serviceName: schedule.hasCleanup ? "Onboarding + Discovery" : "Onboarding", note: schedule.hasCleanup ? "Account access, document collection, and discovery to confirm the cleanup scope and estimate. Cleanup work is approved separately afterward." : "Account access, document collection, and setup for ongoing bookkeeping." }} originalPrice={assessment.showOriginalOneTimePrices !== false && isOnboarding(row) && originalOnboardingFee > row.price ? originalOnboardingFee : undefined} waivedLabel={onboardingWaived && isOnboarding(row) ? "Waived" : undefined} />)}{requiredAddOnRows.map((row) => <ServiceLine key={row.id} row={{ ...row, id: `${id}-${row.id}` }} priceSuffix={row.billEvery ? "/mo" : undefined} />)}</ul></div> : null}
                           {optionalCleanup.length ? <div className="mt-5 border-t border-slate-200 pt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Cleanup estimate</p><p className="mt-2 text-xs leading-5 text-slate-600">Select the periods to estimate. Cleanup is not charged today; final scope, price, and payment milestones are confirmed after discovery.</p><ul className="mt-4 space-y-7 text-sm text-slate-600">{optionalCleanup.map((row) => <ServiceLine key={row.id} row={row} selected={cleanupIsSelected(id, row.cleanupPeriodKey!)} onToggle={(checked) => setCleanupSelections((prev) => ({ ...prev, [cleanupKey(id, row.cleanupPeriodKey!)]: checked }))} showPriceWhenUnselected />)}</ul></div> : null}
                           {additionalSetup.length ? <div className="mt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Additional setup</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{additionalSetup.map((row) => <ServiceLine key={row.id} row={row} />)}</ul></div> : null}
                         </div>
@@ -1683,12 +1698,12 @@ function OfferProposalPreviewView({
                         <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ backgroundColor: brandDark, color: brandDarkForeground }}>Recurring services</p>
                       </section>
 
-                      {packageAdditionalOptionRows.length > 0 ? (
+                      {optionalAdditionalRows.length > 0 ? (
                         <section>
                           <p className="bg-accent-100 px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ color: inkColor }}>Optional add-ons</p>
                           <div className="px-5 py-4">
                             <ul className="space-y-2 text-sm text-slate-600">
-                              {packageAdditionalOptionRows.map((row) => (
+                              {optionalAdditionalRows.map((row) => (
                                 <ServiceLine
                                   key={row.id}
                                   row={{ ...row, id: `${id}-${row.id}` }}
