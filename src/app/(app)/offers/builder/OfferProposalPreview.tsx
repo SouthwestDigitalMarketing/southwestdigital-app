@@ -1647,15 +1647,6 @@ function OfferProposalPreviewView({
                                 onClick={() => onEdit("pricing")}
                               />
                             ) : null}
-                            <div className="space-y-1 text-right text-sm">
-                            <p>
-                              <span className="font-bold" style={{ color: inkColor }}>{fmt(isTestProposal ? 1 : schedule.amountDueNow)}</span> <span className="text-slate-500">due today</span>
-                            </p>
-                            {onboardingWaived ? (
-                              <p className="text-xs font-semibold text-emerald-700">Onboarding fee waived</p>
-                            ) : null}
-                            <p><span className={`font-bold ${hasTwelveMonthAgreement ? "rounded bg-accent-100 px-1.5 py-0.5" : ""}`} style={{ color: inkColor }}>{fmt(recurringTotal)}</span> <span className="text-slate-500">/mo</span></p>
-                            </div>
                           </div>
                         </div>
                         {supportRows.map((row) => (
