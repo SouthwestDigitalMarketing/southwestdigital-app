@@ -45,9 +45,11 @@ function revalidateTagPaths(contactId?: string) {
 
 function parseKind(raw: string): ContactTagKind {
   if (
-    raw === ContactTagKind.PRODUCT_LEAD ||
-    raw === ContactTagKind.CLIENT_LEAD ||
-    raw === ContactTagKind.INDUSTRY
+    raw === ContactTagKind.SERVICES ||
+    raw === ContactTagKind.LEAD ||
+    raw === ContactTagKind.INDUSTRY ||
+    raw === ContactTagKind.STATUS ||
+    raw === ContactTagKind.REVIEWS_GIVEN
   ) {
     return raw;
   }
