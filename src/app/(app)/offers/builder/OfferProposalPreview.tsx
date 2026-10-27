@@ -332,6 +332,14 @@ function isMonthlyBookkeepingRow(row: ServiceRow) {
     || row.serviceName === "Monthly Bookkeeping";
 }
 
+// What each support level means, in plain words. Keyed by the catalog's support service name;
+// a name not listed here falls back to the service's own name and description.
+const SERVICE_LEVEL_COPY: Record<string, { title: string; meaning: string }> = {
+  "Standard Client Support": { title: "Steady Support", meaning: "Ask us anything about your books. We reply within 1–2 business days." },
+  "Priority Client Support": { title: "Fast-Lane Support", meaning: "Skip the wait. We reply to your questions and requests the same business day." },
+  "Concierge Client Support": { title: "White-Glove Concierge", meaning: "We're on call for you, 24/7, for bookkeeping questions and anything time-sensitive." },
+};
+
 function isOnboarding(row: ServiceRow) {
   return row.serviceName === "Onboarding";
 }
@@ -664,6 +672,7 @@ function OfferProposalPreviewView({
     proposalMode === "dark" && theme.darkAccent ? theme.darkAccent : theme.accent ?? brandAccent;
   const brandDark = theme.light === null ? configuredBrandDark : lightColor;
   const brandDarkForeground = readableForegroundColor(brandDark);
+  const accentBarForeground = readableForegroundColor(accentColor);
   const actionColor = accentColor;
   const pageBg = theme.pageBg[proposalMode];
   const primaryActionVariables = primaryActionCssVariables(actionColor);
@@ -1652,13 +1661,13 @@ function OfferProposalPreviewView({
                         </div>
                         </div>
                         <section className="border-t border-slate-200">
-                          <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ backgroundColor: subtleAccentBg, color: inkColor }}>Service level</p>
+                          <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ backgroundColor: accentColor, color: accentBarForeground }}>Service level</p>
                           <div className="space-y-3 px-5 py-4">
                             {supportRows.length > 0 ? supportRows.map((row) => (
                               <div key={row.id} aria-label={`${option.name} support level`}>
-                                <p className="text-sm font-semibold text-slate-900">{row.serviceName}</p>
+                                <p className="text-base font-semibold text-slate-900">{SERVICE_LEVEL_COPY[row.serviceName]?.title ?? row.serviceName}</p>
                                 {/* Only real copy earns this space; the tooltip fallback is filler. */}
-                                {row.note ? <p className="mt-1 text-sm leading-6 text-slate-600">{row.note}</p> : null}
+                                {(SERVICE_LEVEL_COPY[row.serviceName]?.meaning ?? row.note) ? <p className="mt-1 text-sm leading-6 text-slate-600">{SERVICE_LEVEL_COPY[row.serviceName]?.meaning ?? row.note}</p> : null}
                               </div>
                             )) : <p className="text-sm font-semibold text-slate-900">{serviceLevel}</p>}
                           </div>
@@ -1667,7 +1676,7 @@ function OfferProposalPreviewView({
 
                       {/* One-time services */}
                       <section className="border-t border-slate-200">
-                        <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ backgroundColor: subtleAccentBg, color: inkColor }}>One-time services</p>
+                        <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ backgroundColor: accentColor, color: accentBarForeground }}>One-time services</p>
                         <div className="px-5 py-4">
                           {requiredOnboard.length || requiredAddOnRows.length ? <div className="mt-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Required to get started</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{requiredOnboard.map((row) => <ServiceLine key={row.id} row={{ ...row, serviceName: schedule.hasCleanup ? "Onboarding + Discovery" : "Onboarding", note: schedule.hasCleanup ? "Account access, document collection, and discovery to confirm the cleanup scope and estimate. Cleanup work is approved separately afterward." : "Account access, document collection, and setup for ongoing bookkeeping." }} originalPrice={assessment.showOriginalOneTimePrices !== false && isOnboarding(row) && originalOnboardingFee > row.price ? originalOnboardingFee : undefined} waivedLabel={onboardingWaived && isOnboarding(row) ? "Waived" : undefined} />)}{requiredAddOnRows.map((row) => <ServiceLine key={row.id} row={{ ...row, id: `${id}-${row.id}` }} priceSuffix={row.billEvery ? "/mo" : undefined} />)}</ul></div> : null}
                           {optionalCleanup.length ? <div className="mt-5 border-t border-slate-200 pt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Cleanup estimate</p><p className="mt-2 text-xs leading-5 text-slate-600">Select the periods to estimate. Cleanup is not charged today; final scope, price, and payment milestones are confirmed after discovery.</p><ul className="mt-4 space-y-7 text-sm text-slate-600">{optionalCleanup.map((row) => <ServiceLine key={row.id} row={row} selected={cleanupIsSelected(id, row.cleanupPeriodKey!)} onToggle={(checked) => setCleanupSelections((prev) => ({ ...prev, [cleanupKey(id, row.cleanupPeriodKey!)]: checked }))} showPriceWhenUnselected />)}</ul></div> : null}
@@ -1677,7 +1686,7 @@ function OfferProposalPreviewView({
 
                       {/* Recurring services */}
                       <section>
-                        <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ backgroundColor: brandDark, color: brandDarkForeground }}>Recurring services</p>
+                        <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ backgroundColor: accentColor, color: accentBarForeground }}>Recurring services</p>
                       </section>
 
                       {optionalAdditionalRows.length > 0 ? (
