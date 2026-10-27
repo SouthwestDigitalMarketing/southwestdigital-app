@@ -152,6 +152,7 @@ export default async function ContactDetailPage({ params }: PageProps) {
             phone: contact.phoneE164 ?? "",
             company: contact.company ?? "",
             roleTitle: contact.roleTitle ?? "",
+            mrrUsd: contact.mrrUsd?.toString() ?? "",
             notes: contact.notes ?? "",
             isActive: contact.isActive,
           }}

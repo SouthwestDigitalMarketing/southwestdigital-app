@@ -1415,6 +1415,7 @@ model Contact {
   company        String?
   notes          String?
   roleTitle      String?
+  mrrUsd         Decimal?             @db.Decimal(10, 2)
   isActive       Boolean              @default(true)
   brand          Brand                @relation("CrmBrandContacts", fields: [brandId], references: [id], onDelete: Cascade)
   clientLinks    ClientContact[]

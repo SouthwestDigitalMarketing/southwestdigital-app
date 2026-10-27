@@ -21,6 +21,7 @@ export function ContactEditor({
     phone: string;
     company: string;
     roleTitle: string;
+    mrrUsd: string;
     notes: string;
     isActive: boolean;
   };
@@ -79,6 +80,18 @@ export function ContactEditor({
         <label className="text-xs font-semibold uppercase tracking-wide text-slate-600">
           Role / title
           <input name="roleTitle" defaultValue={contact.roleTitle} className={inputClass} />
+        </label>
+        <label className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+          MRR (USD/mo)
+          <input
+            name="mrrUsd"
+            type="number"
+            min="0"
+            step="0.01"
+            defaultValue={contact.mrrUsd}
+            placeholder="e.g. 450"
+            className={inputClass}
+          />
         </label>
         <label className="text-xs font-semibold uppercase tracking-wide text-slate-600 sm:col-span-2">
           Notes

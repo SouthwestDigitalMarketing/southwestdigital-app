@@ -24,6 +24,14 @@ function parsePhone(value: FormDataEntryValue | null) {
   return parseSubmittedPhone(typeof value === "string" ? value : "");
 }
 
+function parseMrrUsd(value: FormDataEntryValue | null): number | null {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text) return null;
+  const parsed = Number(text);
+  if (!Number.isFinite(parsed) || parsed < 0) throw new Error("MRR must be a positive number.");
+  return Math.round(parsed * 100) / 100;
+}
+
 function ids(formData: FormData, key: string) {
   return formData
     .getAll(key)
@@ -114,6 +122,7 @@ export async function createContactAction(formData: FormData) {
         roleTitle,
         notes,
         phoneE164,
+        mrrUsd: parseMrrUsd(formData.get("mrrUsd")),
         isActive: true,
         tagLinks: tags.length
           ? { create: tags.map((tag) => ({ tagId: tag.id })) }
@@ -163,6 +172,7 @@ export async function updateContactAction(formData: FormData) {
     roleTitle: clean(formData.get("roleTitle")) || null,
     notes: clean(formData.get("notes")) || null,
     phoneE164: parsePhone(formData.get("phone")),
+    mrrUsd: parseMrrUsd(formData.get("mrrUsd")),
     isActive: formData.get("isActive") === "1",
   };
 
