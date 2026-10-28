@@ -1328,37 +1328,39 @@ function OfferProposalPreviewView({
           aria-label="Proposal navigation"
           data-theme="light"
           data-appearance="standard"
-          className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm"
+          className="rounded-2xl border border-slate-200 bg-white px-3 py-4 shadow-sm sm:px-5"
         >
-          <div className="grid grid-cols-[auto_1fr_auto] items-center gap-4">
-            {step === 0 ? <span className="w-[74px]" /> : (
+          {/* On a phone the side spacers are dropped, Back shows as an icon, and the connecting lines stretch to fit. */}
+          <div className="flex items-center gap-2 sm:grid sm:grid-cols-[auto_1fr_auto] sm:gap-4">
+            {step === 0 ? <span className="hidden w-[74px] sm:block" /> : (
               <button
                 type="button"
+                aria-label="Back"
                 onClick={() => setStep((s) => Math.max(0, s - 1))}
-                className="ui-action-secondary inline-flex items-center gap-2 rounded-lg border px-5 py-2.5 text-sm font-semibold transition"
+                className="ui-action-secondary inline-flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-semibold transition sm:px-5"
                 style={stepperSecondaryVariables}
               >
                 <ChevronLeft strokeWidth={3} className="h-4 w-4" />
-                Back
+                <span className="hidden sm:inline">Back</span>
               </button>
             )}
-            <ol className="flex items-start justify-center">
+            <ol className="flex min-w-0 flex-1 items-start sm:justify-center">
               {clientSteps.map((label, index) => (
-                <li key={label} className="flex items-start">
-                  {index > 0 && <span className="mt-4 h-0.5 w-5 sm:w-10" style={{ backgroundColor: index <= step ? brandDark : "#cbd5e1" }} />}
-                  <div className="w-16 text-center sm:w-20">
+                <li key={label} className={`flex items-start ${index > 0 ? "flex-1 sm:flex-none" : "shrink-0"}`}>
+                  {index > 0 && <span className="mt-4 h-0.5 min-w-1 flex-1 sm:w-10 sm:flex-none" style={{ backgroundColor: index <= step ? brandDark : "#cbd5e1" }} />}
+                  <div className="w-14 shrink-0 text-center sm:w-20">
                     <span
                       className={`mx-auto grid h-8 w-8 place-items-center rounded-full border text-sm font-bold ${index <= step ? "" : "border-slate-300 bg-white text-slate-500"}`}
                       style={index <= step ? { backgroundColor: lightSurfaceInk, borderColor: lightSurfaceInk, color: readableForegroundColor(lightSurfaceInk) } : undefined}
                     >
                       {index < step ? "✓" : index + 1}
                     </span>
-                    <span className="mt-1 block text-xs text-slate-500">{label}</span>
+                    <span className="mt-1 block text-[11px] text-slate-500 sm:text-xs">{label}</span>
                   </div>
                 </li>
               ))}
             </ol>
-            <span className="w-[74px]" />
+            <span className="hidden w-[74px] sm:block" />
           </div>
         </nav>
 
