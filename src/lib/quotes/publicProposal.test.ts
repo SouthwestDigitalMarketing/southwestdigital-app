@@ -55,6 +55,14 @@ describe("public proposal data boundary", () => {
     expect(result.assessment.additionalOptions[0].required).toBe(true);
   });
 
+  it("keeps the contract-follows-payment flag so the confirmation page can say a contract is coming", () => {
+    const result = toPublicBookkeepingProposal({
+      assessment: { contractFollowsPayment: true },
+      pricing: { maintain: { monthly: 450 }, improve: { monthly: 550 }, grow: { monthly: 675 } },
+    });
+    expect(result.assessment.contractFollowsPayment).toBe(true);
+  });
+
   it("does not recalculate missing published prices from internal assessment", () => {
     expect(() => toPublicBookkeepingProposal({ assessment: {}, pricing: {} })).toThrow();
   });

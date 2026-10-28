@@ -335,6 +335,8 @@ export type AssessmentState = {
   proposalMode: "light" | "dark";
   agreementTemplateId?: string;
   agreementTemplateName?: string;
+  // The signed page is a short acceptance; the full service agreement is sent after payment.
+  contractFollowsPayment?: boolean;
   agreementTemplateContent?: string;
   ongoingBookkeepingPlatform: BookkeepingPlatform;
   platformMigrationEnabled: boolean;

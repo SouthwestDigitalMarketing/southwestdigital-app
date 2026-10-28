@@ -71,6 +71,7 @@ const publicAssessmentSchema = z.object({
   heroMediaButton: button.optional(), heroContinueButton: button.optional(),
   proposalTheme: z.string().optional(), proposalMode: z.enum(["light", "dark"]).optional(),
   agreementTemplateName: text.optional(), agreementTemplateContent: text.optional(),
+  contractFollowsPayment: z.boolean().optional(),
   ongoingBookkeepingPlatform: z.enum(["qbo", "stessa"]).optional(),
   platformMigrationEnabled: z.boolean().optional(),
 });

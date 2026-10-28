@@ -648,6 +648,7 @@ function OfferProposalPreviewView({
 }) {
   const { brand } = useBrand();
   const searchParams = useSearchParams();
+  const contractFollowsPayment = (assessment as { contractFollowsPayment?: boolean }).contractFollowsPayment === true;
   const isSimulation = isProposalPreviewSimulation({ live, embedded, isStaffPreview });
   const startsSigned = live && !isSimulation && alreadySignedProp;
   // Preview surfaces are deliberately detached from engagement-backed APIs.
@@ -2172,8 +2173,11 @@ function OfferProposalPreviewView({
                 <>
                   <h1 className="mt-6 text-3xl font-bold">Your payment is processing</h1>
                   <p className="mt-3 text-slate-600">
-                    Your agreement is signed. Your bank transfer is on its way — ACH payments typically take a few business days to clear.
-                    We&apos;ll email a receipt to {email || "the email you provided"} once it&apos;s confirmed, and be in touch to kick off onboarding.
+                    {contractFollowsPayment ? "Your proposal is accepted." : "Your agreement is signed."} Your payment was submitted and is being confirmed.
+                    We&apos;ll email a receipt to {email || "the email you provided"} once it&apos;s confirmed.{" "}
+                    {contractFollowsPayment
+                      ? `Within 24 hours you'll receive your service agreement from ${brand.name} through QuickBooks. Please sign it as soon as you can — we start work once it's signed.`
+                      : "We'll be in touch to kick off onboarding."}
                   </p>
                 </>
               ) : (
@@ -2185,7 +2189,7 @@ function OfferProposalPreviewView({
                     {isSimulation
                       ? "Preview complete — nothing was signed, charged, or recorded."
                       : engagementId
-                      ? `Your agreement is signed and ${paymentWaived ? "no initial payment is due" : stagedPayment && hasCleanup ? "your onboarding and discovery payment is complete" : chargeIsFirstMonth ? "your first month is paid" : "your initial payment is complete"}. We'll be in touch shortly to kick off onboarding.`
+                      ? `${contractFollowsPayment ? "Your proposal is accepted" : "Your agreement is signed"} and ${paymentWaived ? "no initial payment is due" : stagedPayment && hasCleanup ? "your onboarding and discovery payment is complete" : chargeIsFirstMonth ? "your first month is paid" : "your initial payment is complete"}. ${contractFollowsPayment ? `Within 24 hours you'll receive your service agreement from ${brand.name} through QuickBooks. Please sign it as soon as you can — we start work once it's signed.` : "We'll be in touch shortly to kick off onboarding."}`
                       : "We have your selection and will be in touch to kick off onboarding. Reach out any time if you have questions."}
                   </p>
                 </>
