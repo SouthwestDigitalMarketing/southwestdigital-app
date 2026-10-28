@@ -25,6 +25,7 @@ const option = z.object({
   billingCadence: z.enum(["monthly", "one-time"]).optional(),
   includedPlacement: z.enum(["main", "included"]).optional(),
   packageIds: z.array(tier).optional(),
+  required: z.boolean().optional(),
 });
 const bonus = z.object({
   id: z.string(), name: text, description: text, archived: z.boolean(),

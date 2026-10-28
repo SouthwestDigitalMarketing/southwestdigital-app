@@ -45,6 +45,18 @@ const baseSlice: OptionsTemplateAssessmentSlice = {
 };
 
 describe("buildOptionsTemplateSnapshot", () => {
+  it("keeps the required flag on an add-on when a draft is saved", () => {
+    const slice = buildOptionsTemplateSnapshot({
+      ...baseSlice,
+      additionalOptions: [
+        { id: "migration", name: "Migration", description: "", monthlyPrice: 640, showInProposal: true, archived: false, billingCadence: "one-time", required: true },
+        { id: "optional-thing", name: "Optional", description: "", monthlyPrice: 10, showInProposal: true, archived: false },
+      ],
+    } as never);
+    expect(slice.additionalOptions.find((o) => o.id === "migration")?.required).toBe(true);
+    expect(slice.additionalOptions.find((o) => o.id === "optional-thing")?.required).toBeUndefined();
+  });
+
   it("round-trips a well-formed slice via parse", () => {
     const snapshot = buildOptionsTemplateSnapshot(baseSlice);
     expect(snapshot.version).toBe(OPTIONS_TEMPLATE_SNAPSHOT_VERSION);

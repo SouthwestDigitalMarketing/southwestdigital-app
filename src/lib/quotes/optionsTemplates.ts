@@ -12,6 +12,7 @@ export type OptionsTemplateAdditionalOption = {
   billingCadence?: "monthly" | "one-time";
   includedPlacement?: "main" | "included";
   packageIds?: OptionsTemplatePackageId[];
+  required?: boolean;
   realEstateSpecific?: boolean;
 };
 
@@ -81,6 +82,7 @@ function sanitizeAdditionalOption(raw: unknown): OptionsTemplateAdditionalOption
       ? record.billingCadence
       : undefined,
     packageIds: Array.isArray(record.packageIds) ? sanitizePackageIds(record.packageIds) : undefined,
+    required: record.required === true ? true : undefined,
     realEstateSpecific: record.realEstateSpecific === true ? true : undefined,
   };
 }
