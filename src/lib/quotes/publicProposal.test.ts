@@ -43,6 +43,18 @@ describe("public proposal data boundary", () => {
     expect(result.contactInfo.owners).toEqual([]);
   });
 
+  it("keeps the required flag on public add-ons so checkout can enforce it", () => {
+    const result = toPublicBookkeepingProposal({
+      assessment: {
+        additionalOptions: [
+          { id: "migration", name: "Migration", description: "", monthlyPrice: 640, showInProposal: true, archived: false, billingCadence: "one-time", required: true },
+        ],
+      },
+      pricing: { maintain: { monthly: 450 }, improve: { monthly: 550 }, grow: { monthly: 675 } },
+    });
+    expect(result.assessment.additionalOptions[0].required).toBe(true);
+  });
+
   it("does not recalculate missing published prices from internal assessment", () => {
     expect(() => toPublicBookkeepingProposal({ assessment: {}, pricing: {} })).toThrow();
   });

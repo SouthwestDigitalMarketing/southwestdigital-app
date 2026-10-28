@@ -83,7 +83,12 @@ export async function POST(
       catalogCopyFromRows(catalogRows),
     );
     checkout = buildProposalCheckoutSummary(
-      { assessment: publicProposal.assessment, pricing: publicProposal.pricing },
+      {
+        assessment: publicProposal.assessment,
+        pricing: publicProposal.pricing,
+        // The public view strips staff-only fields; the test flag still decides the $1 test checkout.
+        isTestProposal: isRecord(publishedSnapshot) && publishedSnapshot.isTestProposal === true,
+      },
       selection,
     );
     if (await resolveOnboardingWaiverForEngagement(engagementId)) {
