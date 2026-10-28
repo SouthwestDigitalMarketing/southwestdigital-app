@@ -1,4 +1,5 @@
 import { extraIsRealEstateSpecific } from "./catalog";
+import { serviceLevelTitle } from "./serviceLevels";
 
 // Shared by preview and checkout: eligibility must not depend on browser state.
 export const SERVICE_TIERS = ["maintain", "improve", "grow"] as const;
@@ -87,7 +88,7 @@ export function proposalIncludedServices(assessmentValue: unknown, tier: Service
     .filter((item) => item.archived !== true && serviceIsApplicable(assessment, item)
       && includedServicePackages(assessment, item).includes(tier))
     .map((item) => ({
-      name: typeof item.name === "string" ? item.name : String(item.id),
+      name: serviceLevelTitle(typeof item.name === "string" ? item.name : String(item.id)),
       description: typeof item.description === "string" ? item.description : "",
     }));
 }

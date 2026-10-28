@@ -35,6 +35,7 @@ import {
   type ProposalMode,
 } from "./proposalThemes";
 import { ProposalReviewsSection } from "./ProposalReviewsSection";
+import { SERVICE_LEVEL_COPY, serviceLevelTitle } from "@/lib/quotes/serviceLevels";
 import AgreementTextView from "./AgreementTextView";
 import DepositPaymentForm from "./DepositPaymentForm";
 import { waitForRecordedProposalPayment } from "@/lib/engagements/waitForRecordedProposalPayment";
@@ -332,14 +333,6 @@ function isMonthlyBookkeepingRow(row: ServiceRow) {
     || row.serviceName === "Monthly QuickBooks Bookkeeping"
     || row.serviceName === "Monthly Bookkeeping";
 }
-
-// What each support level means, in plain words. Keyed by the catalog's support service name;
-// a name not listed here falls back to the service's own name and description.
-const SERVICE_LEVEL_COPY: Record<string, { title: string; meaning: string }> = {
-  "Standard Client Support": { title: "Steady Support", meaning: "Ask us anything about your books. We reply within 1–2 business days." },
-  "Priority Client Support": { title: "Fast-Lane Support", meaning: "Skip the wait. We reply to your questions and requests the same business day." },
-  "Concierge Client Support": { title: "White-Glove Concierge", meaning: "We're on call for you, 24/7, for bookkeeping questions and anything time-sensitive." },
-};
 
 // One, two or three stars next to the service level name, by package.
 const SERVICE_LEVEL_STARS: Record<OptionId, number> = { maintain: 1, improve: 2, grow: 3 };
@@ -1242,7 +1235,7 @@ function OfferProposalPreviewView({
       includedServices: selectedOptionId ? [
         ...options[selectedOptionId].recurringRows,
         ...options[selectedOptionId].oneTimeRows.filter((row) => row.price === 0 && !row.cleanupPeriodKey && !isOnboarding(row)),
-      ].map((row) => ({ name: row.serviceName, description: row.note ?? "" })) : [],
+      ].map((row) => ({ name: serviceLevelTitle(row.serviceName), description: row.note ?? "" })) : [],
     },
   );
   const displayedAgreementText = engagementId ? agreementText : embeddedAgreementText;
@@ -1739,7 +1732,7 @@ function OfferProposalPreviewView({
                                   <button type="button" aria-label={`More information about ${row.serviceName}`} className="ui-focus-ring rounded-full text-emerald-600 hover:text-brandnavy focus:outline-none"><CircleHelp className="h-3.5 w-3.5" /></button>
                                   <span role="tooltip" className="ui-tooltip pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-64 rounded-lg px-3 py-2 text-left text-xs font-normal leading-5 shadow-lg group-hover:block group-focus-within:block">{getTooltip(row)}</span>
                                 </span>
-                                <span>{row.serviceName}</span>
+                                <span>{serviceLevelTitle(row.serviceName)}</span>
                                 {row.platformTag ? <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800">{row.platformTag}</span> : null}
                               </span>
                             </li>
