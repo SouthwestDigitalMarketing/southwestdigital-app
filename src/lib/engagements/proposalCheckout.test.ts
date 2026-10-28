@@ -203,6 +203,7 @@ describe("proposal checkout", () => {
         { id: "standard", name: "Standard Client Support", description: "1–2 business days.", defaultPackageIds: ["maintain"] },
       ],
     } }, { tier: "improve", hasTwelveMonthAgreement: false, selectedCleanupPeriodKeys: [], selectedAdditionalOptionIds: [] });
-    expect(result.includedServices).toEqual([{ name: "Priority Client Support", description: "Same-business-day responses." }]);
+    // The frozen record uses the name the client saw on the proposal.
+    expect(result.includedServices).toEqual([{ name: "Fast-Lane Support", description: "Same-business-day responses." }]);
   });
 });
