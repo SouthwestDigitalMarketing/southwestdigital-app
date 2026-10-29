@@ -2472,6 +2472,7 @@ model Quote {
   revisions             QuoteRevision[]
   engagement            Engagement?     @relation(fields: [engagementId], references: [id], onDelete: SetNull)
   discountAssignments   BrandDiscountQuote[]
+  viewEvents            ProposalViewEvent[]
 
   @@index([brandId, clientId, status])
   @@index([brandId, publishedAt])
@@ -2904,4 +2905,22 @@ model PipeTaskNote {
   task       PipeTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@unique([taskId, pipeNoteId])
+}
+
+// Client behavior on the live public proposal page. Never written for staff preview.
+model ProposalViewEvent {
+  id         String   @id @default(cuid())
+  quoteId    String
+  sessionId  String
+  type       String
+  step       Int?
+  packageId  String?
+  position   Int?
+  value      Int?
+  occurredAt DateTime @default(now())
+  quote      Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@index([quoteId, occurredAt])
+  @@index([quoteId, sessionId])
+  @@map("proposal_view_events")
 }
