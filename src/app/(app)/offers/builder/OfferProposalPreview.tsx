@@ -1850,6 +1850,7 @@ function OfferProposalPreviewView({
                     </label>
                     <input
                       id="signerName"
+                      data-clarity-mask="true"
                       type="text"
                       required
                       autoComplete="off"
@@ -1865,6 +1866,7 @@ function OfferProposalPreviewView({
                     </label>
                     <input
                       id="signerTitle"
+                      data-clarity-mask="true"
                       type="text"
                       value={signerTitle}
                       onChange={(e) => setSignerTitle(e.target.value)}
@@ -1876,6 +1878,7 @@ function OfferProposalPreviewView({
                     <label className="mb-1 block text-sm font-semibold text-slate-700" htmlFor="signerEmail">Email</label>
                     <input
                       id="signerEmail"
+                      data-clarity-mask="true"
                       type="email"
                       required
                       value={email}

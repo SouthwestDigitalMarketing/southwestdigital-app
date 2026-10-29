@@ -7,6 +7,38 @@ const ENDPOINT = "/api/proposal/track";
 const FLUSH_MS = 4000;
 const SCROLL_MILESTONES = [25, 50, 75, 100];
 const SESSION_KEY = "proposal-view-session";
+// Public Microsoft Clarity project id (not a secret). Env var overrides it.
+const CLARITY_PROJECT_ID = process.env.NEXT_PUBLIC_CLARITY_PROJECT_ID || "z5jfr38x6b";
+
+type ClarityFn = (...args: unknown[]) => void;
+
+function loadClarity(token: string) {
+  try {
+    const w = window as unknown as { clarity?: ClarityFn & { q?: unknown[] } };
+    if (!w.clarity) {
+      const stub = function (...args: unknown[]) {
+        (stub.q = stub.q || []).push(args);
+      } as ClarityFn & { q?: unknown[] };
+      w.clarity = stub;
+      const script = document.createElement("script");
+      script.async = true;
+      script.src = `https://www.clarity.ms/tag/${CLARITY_PROJECT_ID}`;
+      document.head.appendChild(script);
+    }
+    // Lets recordings and heatmaps be filtered to one client's proposal.
+    w.clarity("set", "proposal", token);
+  } catch {
+    // Clarity is optional; never break the proposal.
+  }
+}
+
+function clarityEvent(name: string) {
+  try {
+    (window as unknown as { clarity?: ClarityFn }).clarity?.("event", name);
+  } catch {
+    // ignore
+  }
+}
 
 function getSessionId(): string {
   try {
@@ -55,6 +87,7 @@ export function useProposalTracking({
   const track = useCallback(
     (event: ProposalViewEventInput) => {
       if (!active) return;
+      clarityEvent(event.packageId ? `${event.type}_${event.packageId}` : event.type);
       queue.current.push(event);
       if (queue.current.length >= 20) flush();
     },
@@ -65,6 +98,7 @@ export function useProposalTracking({
   useEffect(() => {
     if (!active) return;
     startedAt.current = Date.now();
+    if (token) loadClarity(token);
     track({ type: "view", step });
     const timer = window.setInterval(() => flush(), FLUSH_MS);
     const onHide = () => {
@@ -83,7 +117,7 @@ export function useProposalTracking({
     };
     // step is read only for the first event; later steps are tracked below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, flush, track]);
+  }, [active, flush, track, token]);
 
   // Each step: log it, then watch scroll depth and package cards for that step.
   const firstStep = useRef(true);
