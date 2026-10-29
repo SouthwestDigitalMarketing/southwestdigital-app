@@ -64,6 +64,7 @@ import {
   normalizeHeroButton,
 } from "./heroButtons";
 import { resolveCoverMedia } from "./coverMedia";
+import { useProposalTracking } from "./useProposalTracking";
 import { DEFAULT_URGENCY_OFFER, getUrgencyOfferDisplay } from "./urgencyOffer";
 import { ProposalUrgencyBanner, ProposalUrgencyNote } from "./ProposalUrgencyBanner";
 import {
@@ -723,6 +724,11 @@ function OfferProposalPreviewView({
   const [selectionSubmittingId, setSelectionSubmittingId] = useState<OptionId | null>(null);
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const [step, setStep] = useState(startsSigned ? 3 : 0);
+  const trackEvent = useProposalTracking({
+    enabled: live && livePublic && !isSimulation && !embedded,
+    token: proposalToken,
+    step,
+  });
   const [hasStartedIntroVideo, setHasStartedIntroVideo] = useState(false);
   const [isIntroVideoPlaying, setIsIntroVideoPlaying] = useState(false);
   const [introVideoError, setIntroVideoError] = useState<string | null>(null);
@@ -790,6 +796,7 @@ function OfferProposalPreviewView({
       setHasStartedIntroVideo(true);
       setIsIntroVideoPlaying(true);
       setIntroVideoError(null);
+      trackEvent({ type: "video_play", step: 0 });
     };
     const handlePauseOrEnded = () => setIsIntroVideoPlaying(false);
 
@@ -822,7 +829,7 @@ function OfferProposalPreviewView({
       streamPlayerRef.current?.removeEventListener("ended", handlePauseOrEnded);
       streamPlayerRef.current = null;
     };
-  }, [introEmbedUrl, streamSdkReady]);
+  }, [introEmbedUrl, streamSdkReady, trackEvent]);
 
   function toggleIntroVideo() {
     const player = streamPlayerRef.current;
@@ -928,6 +935,7 @@ function OfferProposalPreviewView({
 
   async function selectOptionAndContinue(id: OptionId) {
     setSelectionError(null);
+    trackEvent({ type: "package_select", step, packageId: id, position: optionMeta.findIndex((meta) => meta.id === id) });
 
     if (!engagementId) {
       setSelectedOptionId(id);
@@ -1636,7 +1644,7 @@ function OfferProposalPreviewView({
                     .filter((row) => row.serviceName.endsWith("Client Support"));
 
                   return (
-                    <section key={id} className="grid grid-rows-subgrid row-span-6 overflow-hidden rounded-xl border bg-white shadow-sm transition-colors" style={{ borderColor: selected ? brandDark : "#e2e8f0" }}>
+                    <section key={id} data-track-package={id} data-track-position={optionMeta.findIndex((meta) => meta.id === id)} className="grid grid-rows-subgrid row-span-6 overflow-hidden rounded-xl border bg-white shadow-sm transition-colors" style={{ borderColor: selected ? brandDark : "#e2e8f0" }}>
                       {/* Card header + service level (one grid row so the cards stay aligned) */}
                       <div>
                         <div className="p-5">
@@ -1842,6 +1850,7 @@ function OfferProposalPreviewView({
                     </label>
                     <input
                       id="signerName"
+                      data-clarity-mask="true"
                       type="text"
                       required
                       autoComplete="off"
@@ -1857,6 +1866,7 @@ function OfferProposalPreviewView({
                     </label>
                     <input
                       id="signerTitle"
+                      data-clarity-mask="true"
                       type="text"
                       value={signerTitle}
                       onChange={(e) => setSignerTitle(e.target.value)}
@@ -1868,6 +1878,7 @@ function OfferProposalPreviewView({
                     <label className="mb-1 block text-sm font-semibold text-slate-700" htmlFor="signerEmail">Email</label>
                     <input
                       id="signerEmail"
+                      data-clarity-mask="true"
                       type="email"
                       required
                       value={email}
