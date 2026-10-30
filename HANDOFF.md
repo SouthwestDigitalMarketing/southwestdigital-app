@@ -267,3 +267,27 @@ Read-only survey findings, from files only:
 - **Merged this session:** #45 reviews+required add-ons, #46 card header price, #47 service level section, #48-#50 colors, #51 stars+payment lines, #52 required flag survives save/public page + test checkout, #53 confirmation wording (`contractFollowsPayment`), #54 one name per support level (`serviceLevelTitle`), #55 step bar fits phones. All CI green.
 - **Mike Arnett quote `cmvqzmevb0003jj0e9d8suo8g`:** published (revision 1), NOT sent. Maintain 450 / Improve 550 / Grow 675, annual 15%, onboarding 350 + required migration 640, acceptance page then contract via QuickBooks within 24 hours, optional D&M 250, Personal 250 (typically 450), Sales Tax 295, Budget 295. Cover text reworded (not real estate). Copy-edited fields live in draft, published and revision rows.
 - **Open:** Tom to refund two $1 test charges (`pi_3UVKca2R5qsZ6eIF0llYGrlN`, `pi_3UVL462R5qsZ6eIF1xuhl6Rk`); phone check of Services/Agreement/Payment after #55; Donna drafts the email (Tom's text, fixed for "short acceptance then contract") only after Tom approves; a local dev copy at `~/projects/worktrees/swapp-dev` (branch `dev/local-iterate`, local-only hacks, not pushed) should be deleted.
+
+## Session 2026-10-29/30 (Ummon) — proposal behavior tracking + Microsoft Clarity
+
+Tom's goal: see what clients do on the live proposal's pricing step (most expensive package shows first; the cheapest is a long scroll away).
+
+**Shipped (PR #57, squash-merged to main as `1d9534c`):**
+- `ProposalViewEvent` model + migration `prisma/migrations/20261029200000_proposal_view_events/`.
+- Public write-only `POST /api/proposal/track` (`src/app/api/proposal/track/route.ts`): always 204, failures only logged. Input is filtered by `src/lib/quotes/viewEvents.ts` (tested).
+- `useProposalTracking` (`src/app/(app)/offers/builder/useProposalTracking.ts`), wired into `OfferProposalPreview.tsx`. Records view, step, scroll depth (25/50/75/100), package cards seen (`data-track-package` / `data-track-position` on each card), package select, intro video play, leave.
+- Loads Microsoft Clarity, project id `z5jfr38x6b` (public, not secret; `NEXT_PUBLIC_CLARITY_PROJECT_ID` overrides). Tags each visit with the proposal token, mirrors events as Clarity custom events (e.g. `package_seen_maintain`), masks signer name/title/email inputs.
+- Active only when `live && livePublic && !isSimulation && !embedded`. Staff preview, simulations and embedded renders record nothing.
+
+**Checks:** `tsc --noEmit` clean; eslint 0 errors (9 existing warnings); vitest 930 passed, 5 skipped. Vercel and `typecheck / lint / test` passed on the PR. Four Netlify checks (header rules, pages changed, redirect rules, deploy-preview) fail on every PR including #56; not caused by this work.
+
+**NOT done:**
+1. **Migration is not applied to production.** `npm run build` is `prisma generate && next build` and does not migrate. Until `prisma migrate deploy` runs against the production database, `/api/proposal/track` drops events quietly (the proposal still works). Needs Tom's yes first; it adds one table and touches no existing data.
+2. **Not verified live.** After deploy: open a real client proposal link in a normal (non-staff) window, scroll to the bottom of the pricing step, then check `https://clarity.microsoft.com/projects/view/z5jfr38x6b` (data can take about 2 hours). Also confirm rows land in `proposal_view_events` once the migration is applied.
+3. **Offers-page timeline view** (per proposal: opened, reached the cheapest package, chose one, signed) is not built. Read `proposal_view_events` by `quoteId`, grouped by `sessionId`. `Quote.firstViewedAt` already exists and is separate.
+4. Optional, not asked for: a notification when a client opens or stalls.
+
+**Notes:**
+- Clarity account is Tom's; sign-in is his. The proposal link domain was not confirmed (probably `bookkeepingconroe.com` or a subdomain); Clarity does not restrict by domain.
+- The token is sent to Clarity as a tag; it is already in the page URL Clarity records.
+- The main checkout `~/projects/southwestdigital-app` was on `fix/pipe-contact-updates-deletes` with an uncommitted `HANDOFF.md` edit that is not part of this work. Left untouched.
