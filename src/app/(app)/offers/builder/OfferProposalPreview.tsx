@@ -54,6 +54,7 @@ import {
   getStandardOnboardingFee,
   hasCatchUpPricingInputs,
   useProposalAssessmentDemoState,
+  bookkeepingPlatformLabel,
   type AssessmentState,
   type HistoricalCleanupPeriod,
 } from "./ProposalCreationWorkspaceDemo";
@@ -191,7 +192,7 @@ type ServiceRow = {
   price: number;
   note?: string;
   cleanupPeriodKey?: string;
-  platformTag?: "QBO" | "Stessa";
+  platformTag?: "QBO" | "Stessa" | "Sage";
   required?: boolean;
 };
 
@@ -321,10 +322,6 @@ function nextMonthAfterCleanup(periods: HistoricalCleanupPeriod[]) {
   return `${MONTH_NAMES[monthIndex]} ${year}`;
 }
 
-function platformLabel(platform: HistoricalCleanupPeriod["platform"] | AssessmentState["ongoingBookkeepingPlatform"]) {
-  return platform === "stessa" ? "Stessa" : "QuickBooks Online";
-}
-
 function getTooltip(row: ServiceRow) {
   return row.note ?? `Details about ${row.serviceName}.`;
 }
@@ -351,7 +348,7 @@ function buildCleanupRows(periods: HistoricalCleanupPeriod[], maintainMonthly: n
     .map((period) => {
       const isPrior = period.year < currentYear;
       const range    = periodRange(period);
-      const platform = platformLabel(period.platform ?? "qbo");
+      const platform = bookkeepingPlatformLabel(period.platform ?? "qbo");
       return {
         id: `${optionId}-cleanup-${period.year}-${period.startMonth}-${period.endMonth}`,
         serviceName: `${period.year} Catch-Up (${range})`,
@@ -453,7 +450,12 @@ export function buildOptions(
         isMonthlyBookkeepingRow(row)
           ? {
               ...row,
-              platformTag: assessment.ongoingBookkeepingPlatform === "stessa" ? "Stessa" as const : "QBO" as const,
+              platformTag:
+                assessment.ongoingBookkeepingPlatform === "stessa"
+                  ? ("Stessa" as const)
+                  : assessment.ongoingBookkeepingPlatform === "sage"
+                    ? ("Sage" as const)
+                    : ("QBO" as const),
             }
           : row,
       ),
