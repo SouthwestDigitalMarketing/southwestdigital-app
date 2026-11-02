@@ -51,7 +51,12 @@ export function proposalCatalogItemApplicability(
     item.requiredTargetPlatform &&
     item.requiredTargetPlatform !== context.ongoingBookkeepingPlatform
   ) {
-    const platform = item.requiredTargetPlatform === "qbo" ? "QuickBooks" : "Stessa";
+    const platform =
+      item.requiredTargetPlatform === "qbo"
+        ? "QuickBooks"
+        : item.requiredTargetPlatform === "sage"
+          ? "Sage"
+          : "Stessa";
     return { applicable: false, reason: `Requires ${platform} as the ongoing platform.` };
   }
 

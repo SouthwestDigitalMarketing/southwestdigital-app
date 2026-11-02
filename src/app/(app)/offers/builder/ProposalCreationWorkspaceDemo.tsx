@@ -86,7 +86,13 @@ export type HistoricalCleanupPeriod = {
   platform?: BookkeepingPlatform;
   purchasedOrSoldPropertiesCount?: number | "";
 };
-export type BookkeepingPlatform = "qbo" | "stessa";
+export type BookkeepingPlatform = "qbo" | "stessa" | "sage";
+
+export function bookkeepingPlatformLabel(platform: BookkeepingPlatform | undefined) {
+  if (platform === "stessa") return "Stessa";
+  if (platform === "sage") return "Sage";
+  return "QuickBooks Online";
+}
 type PaymentPlatform =
   | "paypal"
   | "cash-app"
@@ -2036,9 +2042,9 @@ export default function ProposalCreationWorkspaceDemo({
     ],
     "Historical Cleanup": [
       ["Cleanup periods", assessment.historicalCleanupPeriods.map((period) =>
-        `${MONTH_OPTIONS[period.startMonth - 1]}–${MONTH_OPTIONS[period.endMonth - 1]} ${period.year} · ${(period.platform ?? "qbo") === "qbo" ? "QuickBooks Online" : "Stessa"} · ${period.purchasedOrSoldPropertiesCount || 0} properties bought/sold`,
+        `${MONTH_OPTIONS[period.startMonth - 1]}–${MONTH_OPTIONS[period.endMonth - 1]} ${period.year} · ${bookkeepingPlatformLabel(period.platform)} · ${period.purchasedOrSoldPropertiesCount || 0} properties bought/sold`,
       ).join("\n")],
-      ["Ongoing platform", assessment.ongoingBookkeepingPlatform === "qbo" ? "QuickBooks Online" : "Stessa"],
+      ["Ongoing platform", bookkeepingPlatformLabel(assessment.ongoingBookkeepingPlatform)],
       ["Platform migration", assessment.platformMigrationEnabled ? `Enabled · ${assessment.platformMigrationEffectiveMonth || "Date not set"}` : "Not enabled"],
     ],
     "Connected Accounts": [
@@ -2973,6 +2979,7 @@ export default function ProposalCreationWorkspaceDemo({
                                   >
                                     <option value="qbo">QuickBooks Online</option>
                                     <option value="stessa">Stessa</option>
+                                    <option value="sage">Sage</option>
                                   </select>
                                 </FieldLabel>
                                 <FieldLabel label="Starting Month">
@@ -3047,6 +3054,7 @@ export default function ProposalCreationWorkspaceDemo({
                             >
                               <option value="qbo">QuickBooks Online</option>
                               <option value="stessa">Stessa</option>
+                              <option value="sage">Sage</option>
                             </select>
                           </FieldLabel>
                           <FieldLabel label="Platform Change">

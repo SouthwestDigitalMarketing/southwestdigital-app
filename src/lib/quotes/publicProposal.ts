@@ -72,7 +72,7 @@ const publicAssessmentSchema = z.object({
   proposalTheme: z.string().optional(), proposalMode: z.enum(["light", "dark"]).optional(),
   agreementTemplateName: text.optional(), agreementTemplateContent: text.optional(),
   contractFollowsPayment: z.boolean().optional(),
-  ongoingBookkeepingPlatform: z.enum(["qbo", "stessa"]).optional(),
+  ongoingBookkeepingPlatform: z.enum(["qbo", "stessa", "sage"]).optional(),
   platformMigrationEnabled: z.boolean().optional(),
 });
 
