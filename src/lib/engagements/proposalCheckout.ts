@@ -25,6 +25,8 @@ export type ProposalCheckoutSummary = ProposalCheckoutSelection & {
   cleanupMonths?: number;
   cleanupMonthlyRate?: number;
   additionalOneTimeTotal?: number;
+  /** Months of recurring service covered by today's payment: 1, or 12 on a prepaid annual term. */
+  prepaidMonths?: number;
   includedServices?: { name: string; description: string }[];
   chargeKind: "onboarding" | "first_month" | "cleanup" | "onboarding_and_first_month" | "onboarding_and_cleanup" | "onboarding_and_discovery";
   selectionHash: string;
@@ -108,6 +110,10 @@ export function parseStoredProposalCheckout(value: unknown): ProposalCheckoutSum
       cleanupMonths: value.cleanupMonths as number,
       cleanupMonthlyRate: value.cleanupMonthlyRate as number,
       additionalOneTimeTotal: value.additionalOneTimeTotal as number,
+      // Absent on checkouts stored before prepaid annual terms existed; those were billed monthly.
+      prepaidMonths: typeof value.prepaidMonths === "number" && Number.isFinite(value.prepaidMonths) && value.prepaidMonths > 0
+        ? value.prepaidMonths
+        : 1,
       includedServices: Array.isArray(value.includedServices) ? value.includedServices.filter(isRecord)
         .filter((item) => typeof item.name === "string" && typeof item.description === "string")
         .map((item) => ({ name: item.name as string, description: item.description as string })) : [],
@@ -157,9 +163,11 @@ export function buildProposalCheckoutSummary(
   if (baseMonthlyTotal <= 0) throw new Error("The selected package does not have valid published pricing.");
 
   const annualSavingsPercent = Math.min(100, Math.max(0, finiteNumber(assessment.annualSavingsPercent, 20)));
-  const discountedBaseMonthly = selection.hasTwelveMonthAgreement
-    ? baseMonthlyTotal * (1 - annualSavingsPercent / 100)
-    : baseMonthlyTotal;
+  // On a 12-month agreement the discount covers every recurring line, add-ons
+  // included, and the year is prepaid today.
+  const annualDiscountMultiplier = selection.hasTwelveMonthAgreement
+    ? 1 - annualSavingsPercent / 100
+    : 1;
 
   const availableAdditionalOptions = new Map(
     proposalServiceAddOns(assessment)
@@ -190,7 +198,7 @@ export function buildProposalCheckoutSummary(
     },
     0,
   );
-  const recurringMonthlyTotal = money(discountedBaseMonthly + additionalMonthlyTotal);
+  const recurringMonthlyTotal = money((baseMonthlyTotal + additionalMonthlyTotal) * annualDiscountMultiplier);
 
   const periods = Array.isArray(assessment.historicalCleanupPeriods)
     ? assessment.historicalCleanupPeriods.filter(isRecord)
@@ -220,9 +228,10 @@ export function buildProposalCheckoutSummary(
           ? override
           : 500 + selectedCleanupMonths * 20,
       );
-  const { cleanupTotal, oneTimeTotal, amountDueNow } = proposalPaymentSchedule({
+  const { cleanupTotal, oneTimeTotal, amountDueNow, prepaidMonths } = proposalPaymentSchedule({
     cleanupMonths: selectedCleanupMonths, cleanupMonthlyRate: maintainMonthly,
     onboardingFee, additionalOneTimeTotal, recurringMonthlyTotal,
+    annualPrepay: selection.hasTwelveMonthAgreement,
   });
   const chargeKind: ProposalCheckoutSummary["chargeKind"] = selectedCleanupMonths > 0
     ? "onboarding_and_discovery"
@@ -241,6 +250,7 @@ export function buildProposalCheckoutSummary(
     oneTimeTotal,
     amountDueNow,
     chargeKind,
+    prepaidMonths,
     paymentScheduleVersion: 2 as const,
     cleanupMonths: selectedCleanupMonths,
     cleanupMonthlyRate: maintainMonthly,

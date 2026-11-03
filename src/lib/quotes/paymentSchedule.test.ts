@@ -5,13 +5,26 @@ describe("proposal payment schedule", () => {
   const input = { cleanupMonths: 3, cleanupMonthlyRate: 300, onboardingFee: 560, recurringMonthlyTotal: 360, additionalOneTimeTotal: 65 };
   it("keeps cleanup estimates separate from initial charges", () => {
     expect(proposalPaymentSchedule(input)).toEqual({
-      hasCleanup: true, cleanupTotal: 900, oneTimeTotal: 625,
-      firstMonthDueNow: 0, amountDueNow: 625, annualTotal: 4320,
+      hasCleanup: true, prepaidMonths: 1, cleanupTotal: 900, oneTimeTotal: 625,
+      recurringDueNow: 0, firstMonthDueNow: 0, amountDueNow: 625, annualTotal: 4320,
     });
   });
-  it("includes the first month without charging the entire annual commitment", () => {
+  it("charges a single month on a month-to-month term", () => {
     expect(proposalPaymentSchedule({ ...input, cleanupMonths: 0, onboardingFee: 500 })).toMatchObject({
-      firstMonthDueNow: 360, amountDueNow: 925, cleanupTotal: 0, annualTotal: 4320,
+      prepaidMonths: 1, recurringDueNow: 360, amountDueNow: 925, cleanupTotal: 0, annualTotal: 4320,
+    });
+  });
+  it("prepays the full year on a 12-month term", () => {
+    expect(proposalPaymentSchedule({ ...input, cleanupMonths: 0, onboardingFee: 500, annualPrepay: true })).toMatchObject({
+      prepaidMonths: 12,
+      recurringDueNow: 4320,
+      // onboarding 500 + one-time 65 + twelve months 4320
+      amountDueNow: 4885,
+    });
+  });
+  it("charges no service up front on an annual term when cleanup comes first", () => {
+    expect(proposalPaymentSchedule({ ...input, annualPrepay: true })).toMatchObject({
+      hasCleanup: true, prepaidMonths: 12, recurringDueNow: 0, amountDueNow: 625,
     });
   });
   it("uses the rounded monthly bill for all twelve months", () => {

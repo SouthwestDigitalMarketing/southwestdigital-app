@@ -78,19 +78,24 @@ describe("shared service rules", () => {
       };
       const checkout = buildProposalCheckoutSummary(published, selection);
       expect(checkout.selectedAdditionalOptionIds).toEqual(["reporting"]);
+      // A 12-month term discounts every recurring line, the add-on included,
+      // and prepays the year: (300 + 65) x 0.8 = 292, or 300 x 0.8 = 240 when
+      // the add-on is one-time.
       expect(checkout.recurringMonthlyTotal).toBe(
-        billingCadence === "monthly" ? 305 : 240,
+        billingCadence === "monthly" ? 292 : 240,
       );
       expect(checkout.oneTimeTotal).toBe(
         billingCadence === "one-time" ? 65 : 0,
       );
-      expect(checkout.amountDueNow).toBe(305);
+      expect(checkout.amountDueNow).toBe(
+        billingCadence === "monthly" ? 292 * 12 : 240 * 12 + 65,
+      );
       const included = buildProposalCheckoutSummary(published, {
         ...selection,
         tier: "improve",
       });
       expect(included.selectedAdditionalOptionIds).toEqual([]);
-      expect(included.amountDueNow).toBe(360);
+      expect(included.amountDueNow).toBe(360 * 12);
     },
   );
   it("charges one-time add-ons with cleanup without advancing the recurring bill", () => {
