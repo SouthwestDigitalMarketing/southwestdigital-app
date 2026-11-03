@@ -234,3 +234,59 @@ describe("twelve-month prepaid terms", () => {
     expect(result.amountDueNow).toBe(500 + 375);
   });
 });
+
+describe("first-payment credit", () => {
+  const sel = (tier: "maintain" | "improve" | "grow") => ({
+    tier, hasTwelveMonthAgreement: false, selectedCleanupPeriodKeys: [], selectedAdditionalOptionIds: [],
+  });
+  const withCredit = (firstPaymentCredit: number, waiveOnboardingFee = true) => ({
+    ...snapshot,
+    assessment: { ...snapshot.assessment, waiveOnboardingFee, onboardingFeeOverride: 500, firstPaymentCredit },
+  });
+
+  it("deducts the credit from the amount charged and records it", () => {
+    const result = buildProposalCheckoutSummary(withCredit(800, false), sel("maintain"));
+    expect(result.amountDueBeforeCredit).toBe(800);
+    expect(result.creditApplied).toBe(800);
+    expect(result.amountDueNow).toBe(0);
+  });
+
+  it("reduces what a $1,100 first payment charges by the $800 credit", () => {
+    const result = buildProposalCheckoutSummary(
+      { ...snapshot, assessment: { ...snapshot.assessment, onboardingFeeOverride: 800, firstPaymentCredit: 800 } },
+      sel("maintain"),
+    );
+    expect(result.amountDueBeforeCredit).toBe(1100);
+    expect(result.amountDueNow).toBe(300);
+  });
+
+  it("never takes the total below zero and caps the recorded credit", () => {
+    const result = buildProposalCheckoutSummary(withCredit(5000), sel("maintain"));
+    expect(result.amountDueNow).toBe(0);
+    expect(result.creditApplied).toBe(result.amountDueBeforeCredit);
+  });
+
+  it("leaves a selection with no credit byte-identical to before", () => {
+    const plain = buildProposalCheckoutSummary(snapshot, sel("maintain"));
+    expect(plain).not.toHaveProperty("creditApplied");
+    const zero = buildProposalCheckoutSummary(withCredit(0, false), { ...sel("maintain") });
+    expect(zero).not.toHaveProperty("creditApplied");
+  });
+
+  it("re-caps the credit when a later waiver shrinks the amount due", () => {
+    const built = buildProposalCheckoutSummary(withCredit(600, false), sel("maintain"));
+    // maintain $300 + $500 onboarding = $800 before credit, $200 due
+    expect(built.amountDueNow).toBe(200);
+    const waived = applyOnboardingWaiver(built);
+    expect(waived.amountDueBeforeCredit).toBe(300);
+    expect(waived.creditApplied).toBe(300);
+    expect(waived.amountDueNow).toBe(0);
+  });
+
+  it("round-trips through stored checkout parsing", () => {
+    const built = buildProposalCheckoutSummary(withCredit(100, false), sel("maintain"));
+    const parsed = parseStoredProposalCheckout(JSON.parse(JSON.stringify(built)));
+    expect(parsed?.creditApplied).toBe(100);
+    expect(parsed?.amountDueNow).toBe(700);
+  });
+});

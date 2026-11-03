@@ -8,7 +8,7 @@ const fmt = (value: number) => value.toLocaleString("en-US", { style: "currency"
 
 export default function ProposalPaymentPlan({
   cleanupMonths, cleanupMonthlyRate, onboardingFee, recurringMonthlyTotal,
-  additionalOneTimeTotal, requiredOneTime = [], annual, amountDueNow, showStages = false,
+  additionalOneTimeTotal, requiredOneTime = [], annual, amountDueNow, creditApplied = 0, creditLabel = "Credit for your paid first day", showStages = false,
 }: {
   cleanupMonths: number;
   cleanupMonthlyRate: number;
@@ -19,9 +19,12 @@ export default function ProposalPaymentPlan({
   requiredOneTime?: Array<{ name: string; price: number }>;
   annual: boolean;
   amountDueNow?: number;
+  /** Dollars credited against today's payment; the line appears only when the schedule can apply some. */
+  creditApplied?: number;
+  creditLabel?: string;
   showStages?: boolean;
 }) {
-  const schedule = proposalPaymentSchedule({ cleanupMonths, cleanupMonthlyRate, onboardingFee, recurringMonthlyTotal, additionalOneTimeTotal, annualPrepay: annual });
+  const schedule = proposalPaymentSchedule({ cleanupMonths, cleanupMonthlyRate, onboardingFee, recurringMonthlyTotal, additionalOneTimeTotal, annualPrepay: annual, creditApplied });
   const requiredTotal = requiredOneTime.reduce((total, row) => total + row.price, 0);
   const selectedOneTimeTotal = Math.max(0, Math.round((additionalOneTimeTotal - requiredTotal) * 100) / 100);
   return (
@@ -33,6 +36,7 @@ export default function ProposalPaymentPlan({
           {!schedule.hasCleanup ? <div className="flex justify-between gap-3"><dt>{annual ? `${schedule.prepaidMonths} months of service` : "First month of service"}</dt><dd>{fmt(schedule.recurringDueNow)}</dd></div> : null}
           {requiredOneTime.map((row) => <div key={row.name} className="flex justify-between gap-3"><dt>{row.name}</dt><dd>{fmt(row.price)}</dd></div>)}
           {selectedOneTimeTotal > 0 ? <div className="flex justify-between gap-3"><dt>Selected one-time add-ons</dt><dd>{fmt(selectedOneTimeTotal)}</dd></div> : null}
+          {schedule.creditApplied > 0 ? <div className="flex justify-between gap-3"><dt>{creditLabel}</dt><dd>{`-${fmt(schedule.creditApplied)}`}</dd></div> : null}
           <div className="flex justify-between gap-3 border-t border-slate-200 pt-2 font-bold"><dt>Total due today</dt><dd>{fmt(amountDueNow ?? schedule.amountDueNow)}</dd></div>
         </dl>
       </div>

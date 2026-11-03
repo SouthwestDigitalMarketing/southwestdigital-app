@@ -95,6 +95,7 @@ export async function GET(
     recurringMonthlyTotal,
     cleanupTotal,
     amountDueNow,
+    creditApplied: checkout?.creditApplied,
     agreementTerm: services.hasTwelveMonthAgreement === true ? "12-month" as const : "month-to-month" as const,
     selectedCleanupPeriods,
     selectedAdditionalOptionNames,

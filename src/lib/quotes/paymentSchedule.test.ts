@@ -6,8 +6,12 @@ describe("proposal payment schedule", () => {
   it("keeps cleanup estimates separate from initial charges", () => {
     expect(proposalPaymentSchedule(input)).toEqual({
       hasCleanup: true, prepaidMonths: 1, cleanupTotal: 900, oneTimeTotal: 625,
-      recurringDueNow: 0, firstMonthDueNow: 0, amountDueNow: 625, annualTotal: 4320,
+      recurringDueNow: 0, firstMonthDueNow: 0, amountDueBeforeCredit: 625, creditApplied: 0, amountDueNow: 625, annualTotal: 4320,
     });
+  });
+  it("deducts a credit from today's payment and floors it at zero", () => {
+    expect(proposalPaymentSchedule({ ...input, creditApplied: 100 })).toMatchObject({ creditApplied: 100, amountDueNow: 525 });
+    expect(proposalPaymentSchedule({ ...input, creditApplied: 9999 })).toMatchObject({ creditApplied: 625, amountDueNow: 0 });
   });
   it("charges a single month on a month-to-month term", () => {
     expect(proposalPaymentSchedule({ ...input, cleanupMonths: 0, onboardingFee: 500 })).toMatchObject({

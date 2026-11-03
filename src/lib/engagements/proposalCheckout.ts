@@ -27,6 +27,9 @@ export type ProposalCheckoutSummary = ProposalCheckoutSelection & {
   additionalOneTimeTotal?: number;
   /** Months of recurring service covered by today's payment: 1, or 12 on a prepaid annual term. */
   prepaidMonths?: number;
+  /** Credit for money already paid, deducted from amountDueNow. Absent when there is none. */
+  creditApplied?: number;
+  amountDueBeforeCredit?: number;
   includedServices?: { name: string; description: string }[];
   chargeKind: "onboarding" | "first_month" | "cleanup" | "onboarding_and_first_month" | "onboarding_and_cleanup" | "onboarding_and_discovery";
   selectionHash: string;
@@ -105,6 +108,11 @@ export function parseStoredProposalCheckout(value: unknown): ProposalCheckoutSum
     amountDueNow: value.amountDueNow as number,
     chargeKind,
     selectionHash: value.selectionHash,
+    ...(typeof value.creditApplied === "number" && Number.isFinite(value.creditApplied) && value.creditApplied > 0
+      && typeof value.amountDueBeforeCredit === "number" && Number.isFinite(value.amountDueBeforeCredit) ? {
+      creditApplied: value.creditApplied,
+      amountDueBeforeCredit: value.amountDueBeforeCredit,
+    } : {}),
     ...(value.paymentScheduleVersion === 2 ? {
       paymentScheduleVersion: 2 as const,
       cleanupMonths: value.cleanupMonths as number,
@@ -228,10 +236,11 @@ export function buildProposalCheckoutSummary(
           ? override
           : 500 + selectedCleanupMonths * 20,
       );
-  const { cleanupTotal, oneTimeTotal, amountDueNow, prepaidMonths } = proposalPaymentSchedule({
+  const { cleanupTotal, oneTimeTotal, amountDueNow, amountDueBeforeCredit, creditApplied, prepaidMonths } = proposalPaymentSchedule({
     cleanupMonths: selectedCleanupMonths, cleanupMonthlyRate: maintainMonthly,
     onboardingFee, additionalOneTimeTotal, recurringMonthlyTotal,
     annualPrepay: selection.hasTwelveMonthAgreement,
+    creditApplied: money(finiteNumber(assessment.firstPaymentCredit)),
   });
   const chargeKind: ProposalCheckoutSummary["chargeKind"] = selectedCleanupMonths > 0
     ? "onboarding_and_discovery"
@@ -251,6 +260,8 @@ export function buildProposalCheckoutSummary(
     amountDueNow,
     chargeKind,
     prepaidMonths,
+    // Only present when a credit applies, so selections without one hash exactly as before.
+    ...(creditApplied > 0 ? { creditApplied, amountDueBeforeCredit } : {}),
     paymentScheduleVersion: 2 as const,
     cleanupMonths: selectedCleanupMonths,
     cleanupMonthlyRate: maintainMonthly,
@@ -274,11 +285,14 @@ export function resolveAmountDueNow(input: {
 
 export function applyOnboardingWaiver(checkout: ProposalCheckoutSummary): ProposalCheckoutSummary {
   if (checkout.onboardingFee <= 0) return checkout;
+  const beforeCredit = money((checkout.amountDueBeforeCredit ?? checkout.amountDueNow) - checkout.onboardingFee);
+  const creditApplied = Math.min(checkout.creditApplied ?? 0, beforeCredit);
   const waived = {
     ...checkout,
     onboardingFee: 0,
     oneTimeTotal: money(checkout.oneTimeTotal - checkout.onboardingFee),
-    amountDueNow: money(checkout.amountDueNow - checkout.onboardingFee),
+    amountDueNow: money(beforeCredit - creditApplied),
+    ...(checkout.creditApplied ? { creditApplied, amountDueBeforeCredit: beforeCredit } : {}),
     chargeKind: (checkout.paymentScheduleVersion === 2 && (checkout.cleanupMonths ?? 0) > 0
       ? "onboarding_and_discovery"
       : checkout.cleanupTotal > 0 ? "cleanup" : "first_month") as ProposalCheckoutSummary["chargeKind"],

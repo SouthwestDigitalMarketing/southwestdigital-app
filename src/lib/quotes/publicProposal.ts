@@ -51,6 +51,7 @@ const publicAssessmentSchema = z.object({
   })).default([]),
   waiveOnboardingFee: z.boolean().optional(),
   onboardingFeeOverride: money.nullable().optional(),
+  firstPaymentCredit: money.optional(),
   showOriginalOneTimePrices: z.boolean().optional(),
   annualSavingsPercent: z.number().min(0).max(100).optional(),
   packageNames: packageNames.optional(),

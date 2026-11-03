@@ -1077,6 +1077,7 @@ function OfferProposalPreviewView({
     }
   }
   const annualSavingsPercent = getAnnualSavingsPercent(assessment);
+  const firstPaymentCredit = Math.max(0, Number((assessment as { firstPaymentCredit?: number }).firstPaymentCredit) || 0);
   const recurringDiscountMultiplier = hasTwelveMonthAgreement
     ? 1 - annualSavingsPercent / 100
     : 1;
@@ -1170,6 +1171,7 @@ function OfferProposalPreviewView({
     onboardingFee: selectedOnboardingFee ?? 0, recurringMonthlyTotal: selectedMonthlyCharge,
     additionalOneTimeTotal: selectedAdditionalOneTimeTotal,
     annualPrepay: hasTwelveMonthAgreement,
+    creditApplied: firstPaymentCredit,
   });
   const chargeFirstMonth = currentSchedule.firstMonthDueNow;
   const chargeOnboarding = selectedOnboardingFee ?? 0;
@@ -1635,6 +1637,7 @@ function OfferProposalPreviewView({
                     cleanupMonths: selectedCleanupMonths, cleanupMonthlyRate: options.maintain.monthlyPrice,
                     onboardingFee, recurringMonthlyTotal: recurringTotal, additionalOneTimeTotal,
                     annualPrepay: hasTwelveMonthAgreement,
+                    creditApplied: firstPaymentCredit,
                   });
                   const paidOneTime      = effectiveOneTimeRows.filter((r) => r.price > 0);
                   const optionalCleanup  = paidOneTime.filter((r) => r.cleanupPeriodKey);
@@ -1762,7 +1765,8 @@ function OfferProposalPreviewView({
                           <ProposalPaymentPlan cleanupMonths={selectedCleanupMonths} cleanupMonthlyRate={options.maintain.monthlyPrice}
                             onboardingFee={onboardingFee} recurringMonthlyTotal={recurringTotal} additionalOneTimeTotal={additionalOneTimeTotal}
                             requiredOneTime={requiredAddOnRows.filter((row) => !row.billEvery).map((row) => ({ name: row.serviceName, price: row.price * row.quantity }))}
-                            annual={hasTwelveMonthAgreement} amountDueNow={isTestProposal ? 1 : undefined} />
+                            annual={hasTwelveMonthAgreement} amountDueNow={isTestProposal ? 1 : undefined}
+                            creditApplied={isTestProposal ? 0 : firstPaymentCredit} />
                         </div>
                         <button
                           type="button"
