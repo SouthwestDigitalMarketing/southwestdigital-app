@@ -1263,6 +1263,7 @@ function OfferProposalPreviewView({
       requiredOneTime={additionalOptionRowsFor(selectedOptionId).filter((row) => row.required && !row.billEvery).map((row) => ({ name: row.serviceName, price: row.price * row.quantity }))}
       annual={checkoutSummary?.hasTwelveMonthAgreement ?? hasTwelveMonthAgreement}
       amountDueNow={chargeAmount}
+      annualSavingsPercent={annualSavingsPercent}
       creditApplied={isTestProposal ? 0 : checkoutSummary?.creditApplied ?? (checkoutSummary ? 0 : firstPaymentCredit)}
       originalOnboardingFee={assessment.showOriginalOneTimePrices !== false && isOnboardingFeeWaived(assessment)
         ? getListedOnboardingFee({
@@ -1774,6 +1775,7 @@ function OfferProposalPreviewView({
                             onboardingFee={onboardingFee} recurringMonthlyTotal={recurringTotal} additionalOneTimeTotal={additionalOneTimeTotal}
                             requiredOneTime={requiredAddOnRows.filter((row) => !row.billEvery).map((row) => ({ name: row.serviceName, price: row.price * row.quantity }))}
                             annual={hasTwelveMonthAgreement} amountDueNow={isTestProposal ? 1 : undefined}
+                            annualSavingsPercent={annualSavingsPercent}
                             originalOnboardingFee={assessment.showOriginalOneTimePrices !== false && onboardingWaived ? originalOnboardingFee : undefined}
                             creditApplied={isTestProposal ? 0 : firstPaymentCredit} />
                         </div>
