@@ -122,7 +122,7 @@ const CLIENT_READY_ESSENTIAL_TEMPLATE: TemplateConfig = {
       offerKey: "standard-client-support",
       packages: ["maintain"],
       leadDescription:
-        "Bookkeeping questions are answered within 1–2 business days during normal business hours.",
+        "Bookkeeping questions are answered within 1–3 business days during normal business hours.",
       billingCadence: "monthly",
     },
     {
