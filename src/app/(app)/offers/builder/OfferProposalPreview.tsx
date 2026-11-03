@@ -35,7 +35,7 @@ import {
   type ProposalMode,
 } from "./proposalThemes";
 import { ProposalReviewsSection } from "./ProposalReviewsSection";
-import { SERVICE_LEVEL_COPY, serviceLevelTitle } from "@/lib/quotes/serviceLevels";
+import { SERVICE_LEVEL_COPY, serviceLevelTitle, splitServiceLevelMeaning } from "@/lib/quotes/serviceLevels";
 import AgreementTextView from "./AgreementTextView";
 import DepositPaymentForm from "./DepositPaymentForm";
 import { waitForRecordedProposalPayment } from "@/lib/engagements/waitForRecordedProposalPayment";
@@ -1702,7 +1702,11 @@ function OfferProposalPreviewView({
                                   {SERVICE_LEVEL_COPY[row.serviceName]?.title ?? row.serviceName}
                                 </p>
                                 {/* Only real copy earns this space; the tooltip fallback is filler. */}
-                                {(SERVICE_LEVEL_COPY[row.serviceName]?.meaning ?? row.note) ? <p className="mt-1 text-sm leading-6 text-slate-600">{SERVICE_LEVEL_COPY[row.serviceName]?.meaning ?? row.note}</p> : null}
+                                {(SERVICE_LEVEL_COPY[row.serviceName]?.meaning ?? row.note) ? <p className="mt-1 text-sm leading-6 text-slate-600">{(() => {
+                                  const copy = SERVICE_LEVEL_COPY[row.serviceName];
+                                  const parts = copy ? splitServiceLevelMeaning(copy.meaning, copy.emphasis) : null;
+                                  return parts ? <>{parts.before}<strong className="font-bold text-slate-800">{parts.emphasis}</strong>{parts.after}</> : (copy?.meaning ?? row.note);
+                                })()}</p> : null}
                               </div>
                             )) : <p className="text-sm font-semibold text-slate-900">{serviceLevel}</p>}
                           </div>
