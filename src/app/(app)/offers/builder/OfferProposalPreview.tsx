@@ -216,6 +216,7 @@ type CheckoutSummary = {
   oneTimeTotal: number;
   amountDueNow: number;
   chargeKind: string;
+  creditApplied?: number;
   paymentScheduleVersion?: 2;
   cleanupMonths?: number;
   cleanupMonthlyRate?: number;
@@ -1262,6 +1263,13 @@ function OfferProposalPreviewView({
       requiredOneTime={additionalOptionRowsFor(selectedOptionId).filter((row) => row.required && !row.billEvery).map((row) => ({ name: row.serviceName, price: row.price * row.quantity }))}
       annual={checkoutSummary?.hasTwelveMonthAgreement ?? hasTwelveMonthAgreement}
       amountDueNow={chargeAmount}
+      creditApplied={isTestProposal ? 0 : checkoutSummary?.creditApplied ?? (checkoutSummary ? 0 : firstPaymentCredit)}
+      originalOnboardingFee={assessment.showOriginalOneTimePrices !== false && isOnboardingFeeWaived(assessment)
+        ? getListedOnboardingFee({
+          onboardingFeeOverride: assessment.onboardingFeeOverride ?? null,
+          historicalCleanupPeriods: assessment.historicalCleanupPeriods ?? [],
+        }, selectedCleanupMonths)
+        : undefined}
       showStages
     />
   ) : null;
@@ -1766,6 +1774,7 @@ function OfferProposalPreviewView({
                             onboardingFee={onboardingFee} recurringMonthlyTotal={recurringTotal} additionalOneTimeTotal={additionalOneTimeTotal}
                             requiredOneTime={requiredAddOnRows.filter((row) => !row.billEvery).map((row) => ({ name: row.serviceName, price: row.price * row.quantity }))}
                             annual={hasTwelveMonthAgreement} amountDueNow={isTestProposal ? 1 : undefined}
+                            originalOnboardingFee={assessment.showOriginalOneTimePrices !== false && onboardingWaived ? originalOnboardingFee : undefined}
                             creditApplied={isTestProposal ? 0 : firstPaymentCredit} />
                         </div>
                         <button
