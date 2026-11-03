@@ -8,7 +8,7 @@ const fmt = (value: number) => value.toLocaleString("en-US", { style: "currency"
 
 export default function ProposalPaymentPlan({
   cleanupMonths, cleanupMonthlyRate, onboardingFee, recurringMonthlyTotal,
-  additionalOneTimeTotal, requiredOneTime = [], annual, amountDueNow, creditApplied = 0, creditLabel = "Credit for work already paid", originalOnboardingFee, showStages = false,
+  additionalOneTimeTotal, requiredOneTime = [], annual, amountDueNow, creditApplied = 0, creditLabel = "Credit for work already paid", originalOnboardingFee, annualSavingsPercent = 0, showStages = false,
 }: {
   cleanupMonths: number;
   cleanupMonthlyRate: number;
@@ -24,9 +24,16 @@ export default function ProposalPaymentPlan({
   creditLabel?: string;
   /** The fee before a waiver; shown struck through beside "Waived" when given. */
   originalOnboardingFee?: number;
+  /** The offer's 12-month saving, in percent. Annual mode only: shows the gross price and the saving. */
+  annualSavingsPercent?: number;
   showStages?: boolean;
 }) {
   const schedule = proposalPaymentSchedule({ cleanupMonths, cleanupMonthlyRate, onboardingFee, recurringMonthlyTotal, additionalOneTimeTotal, annualPrepay: annual, creditApplied });
+  // recurringMonthlyTotal is already discounted on an annual term; back out the undiscounted price.
+  const discountFactor = annual && annualSavingsPercent > 0 && annualSavingsPercent < 100 ? 1 - annualSavingsPercent / 100 : 1;
+  const grossMonthly = Math.round(recurringMonthlyTotal / discountFactor * 100) / 100;
+  const grossRecurringDueNow = Math.round(grossMonthly * schedule.prepaidMonths * 100) / 100;
+  const annualSavings = discountFactor < 1 ? Math.round((grossRecurringDueNow - schedule.recurringDueNow) * 100) / 100 : 0;
   const requiredTotal = requiredOneTime.reduce((total, row) => total + row.price, 0);
   const selectedOneTimeTotal = Math.max(0, Math.round((additionalOneTimeTotal - requiredTotal) * 100) / 100);
   return (
@@ -34,7 +41,8 @@ export default function ProposalPaymentPlan({
       <div className="rounded-xl bg-slate-50 p-4">
         <p className="text-xs font-bold uppercase tracking-wide">Due today</p>
         <dl className="mt-3 space-y-2">
-          {!schedule.hasCleanup ? <div className="flex justify-between gap-3"><dt>{annual ? `${schedule.prepaidMonths} months of service` : "First month of service"}</dt><dd>{fmt(schedule.recurringDueNow)}</dd></div> : null}
+          {!schedule.hasCleanup ? <div className="flex justify-between gap-3"><dt>{annual ? `${schedule.prepaidMonths} months of service` : "First month of service"}</dt><dd>{fmt(annualSavings > 0 ? grossRecurringDueNow : schedule.recurringDueNow)}</dd></div> : null}
+          {!schedule.hasCleanup && annualSavings > 0 ? <div className="flex justify-between gap-3 rounded bg-emerald-100 px-2 py-1 font-semibold text-emerald-800"><dt>{`12-month agreement savings (${annualSavingsPercent}%)`}</dt><dd>{`-${fmt(annualSavings)}`}</dd></div> : null}
           {onboardingFee > 0 ? (
             <div className="flex justify-between gap-3"><dt>{schedule.hasCleanup ? "Onboarding + Discovery" : "Onboarding"}</dt><dd>{fmt(onboardingFee)}</dd></div>
           ) : (
@@ -57,7 +65,7 @@ export default function ProposalPaymentPlan({
         </div>
       ) : null}
       <div>
-        <p className="font-semibold">Ongoing service: {fmt(recurringMonthlyTotal)}/month</p>
+        <p className="font-semibold">Ongoing service: {discountFactor < 1 ? <span className="mr-1 font-normal text-slate-400 line-through">{fmt(grossMonthly)}</span> : null}{fmt(recurringMonthlyTotal)}/month</p>
         {annual ? <p className="mt-1">{fmt(recurringMonthlyTotal)} × 12 months = <strong>{fmt(schedule.annualTotal)}</strong></p> : null}
         {annual ? <p className="mt-1 text-xs text-slate-600">12-month commitment, paid in full today. Excludes onboarding, cleanup, and one-time add-ons.</p> : null}
         <p className="mt-2 text-xs leading-5 text-slate-600">{
