@@ -30,7 +30,7 @@ describe("renderAgreementTemplate", () => {
     expect(text).toContain("3 months × $300.00 = $900.00");
     expect(text).toContain("Total Due Upon Signing: $560.00");
     expect(text).toContain("$360.00 × 12 months = $4,320.00");
-    expect(text).toContain("Paid monthly, not in full today");
+    expect(text).toContain("Paid in full today at the discounted annual rate");
     expect(text).toContain("written approval before cleanup begins");
     expect(text).toContain("after approved cleanup is complete");
     expect(text).toContain("Priority Client Support: Same-business-day responses.");
@@ -39,12 +39,22 @@ describe("renderAgreementTemplate", () => {
   it("describes the prepaid first month and next billing date when cleanup is unnecessary", () => {
     const text = renderAgreementTemplate(DEFAULT_BOOKKEEPING_AGREEMENT_TEMPLATE, {
       ...stagedInput, hasCleanup: false, cleanupMonths: 0, cleanupTotal: 0,
-      onboardingFee: 500, amountDueNow: 860,
+      onboardingFee: 500, amountDueNow: 860, agreementTerm: "month-to-month" as const,
     });
     expect(text).toContain("First Month (due today): $360.00");
     expect(text).toContain("Total Due Upon Signing: $860.00");
     expect(text).toContain("next monthly payment is due one month after that date");
     expect(text).not.toContain("Estimated Cleanup");
+  });
+  it("charges and describes the whole year when the term is twelve months", () => {
+    const text = renderAgreementTemplate(DEFAULT_BOOKKEEPING_AGREEMENT_TEMPLATE, {
+      ...stagedInput, hasCleanup: false, cleanupMonths: 0, cleanupTotal: 0,
+      onboardingFee: 500, amountDueNow: 4820,
+    });
+    expect(text).toContain("12 Months of Service (due today): $360.00 \u00d7 12 = $4,320.00");
+    expect(text).toContain("Total Due Upon Signing: $4,820.00");
+    expect(text).toContain("covers your first 12 months of service in full");
+    expect(text).not.toContain("First Month (due today)");
   });
   it("adds the selected schedule when a custom template omits dynamic fees", () => {
     const text = renderAgreementTemplate("Custom agreement for {{clientName}}", stagedInput);

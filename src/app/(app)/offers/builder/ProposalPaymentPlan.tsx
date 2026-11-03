@@ -1,4 +1,5 @@
 import {
+  ANNUAL_PREPAID_CLEANUP_START_TEXT, ANNUAL_PREPAID_START_TEXT,
   CLEANUP_APPROVAL_TEXT, CLEANUP_MONTHLY_START_TEXT, NO_CLEANUP_MONTHLY_START_TEXT,
   proposalPaymentSchedule,
 } from "@/lib/quotes/paymentSchedule";
@@ -20,7 +21,7 @@ export default function ProposalPaymentPlan({
   amountDueNow?: number;
   showStages?: boolean;
 }) {
-  const schedule = proposalPaymentSchedule({ cleanupMonths, cleanupMonthlyRate, onboardingFee, recurringMonthlyTotal, additionalOneTimeTotal });
+  const schedule = proposalPaymentSchedule({ cleanupMonths, cleanupMonthlyRate, onboardingFee, recurringMonthlyTotal, additionalOneTimeTotal, annualPrepay: annual });
   const requiredTotal = requiredOneTime.reduce((total, row) => total + row.price, 0);
   const selectedOneTimeTotal = Math.max(0, Math.round((additionalOneTimeTotal - requiredTotal) * 100) / 100);
   return (
@@ -29,7 +30,7 @@ export default function ProposalPaymentPlan({
         <p className="text-xs font-bold uppercase tracking-wide">Due today</p>
         <dl className="mt-3 space-y-2">
           <div className="flex justify-between gap-3"><dt>{schedule.hasCleanup ? "Onboarding + Discovery" : "Onboarding"}</dt><dd>{onboardingFee > 0 ? fmt(onboardingFee) : "Waived"}</dd></div>
-          {!schedule.hasCleanup ? <div className="flex justify-between gap-3"><dt>First month of service</dt><dd>{fmt(schedule.firstMonthDueNow)}</dd></div> : null}
+          {!schedule.hasCleanup ? <div className="flex justify-between gap-3"><dt>{annual ? `${schedule.prepaidMonths} months of service` : "First month of service"}</dt><dd>{fmt(schedule.recurringDueNow)}</dd></div> : null}
           {requiredOneTime.map((row) => <div key={row.name} className="flex justify-between gap-3"><dt>{row.name}</dt><dd>{fmt(row.price)}</dd></div>)}
           {selectedOneTimeTotal > 0 ? <div className="flex justify-between gap-3"><dt>Selected one-time add-ons</dt><dd>{fmt(selectedOneTimeTotal)}</dd></div> : null}
           <div className="flex justify-between gap-3 border-t border-slate-200 pt-2 font-bold"><dt>Total due today</dt><dd>{fmt(amountDueNow ?? schedule.amountDueNow)}</dd></div>
@@ -45,8 +46,12 @@ export default function ProposalPaymentPlan({
       <div>
         <p className="font-semibold">Ongoing service: {fmt(recurringMonthlyTotal)}/month</p>
         {annual ? <p className="mt-1">{fmt(recurringMonthlyTotal)} × 12 months = <strong>{fmt(schedule.annualTotal)}</strong></p> : null}
-        {annual ? <p className="mt-1 text-xs text-slate-600">12-month commitment, paid monthly. Excludes onboarding, cleanup, and one-time add-ons.</p> : null}
-        <p className="mt-2 text-xs leading-5 text-slate-600">{schedule.hasCleanup ? CLEANUP_MONTHLY_START_TEXT : NO_CLEANUP_MONTHLY_START_TEXT}</p>
+        {annual ? <p className="mt-1 text-xs text-slate-600">12-month commitment, paid in full today. Excludes onboarding, cleanup, and one-time add-ons.</p> : null}
+        <p className="mt-2 text-xs leading-5 text-slate-600">{
+          annual
+            ? (schedule.hasCleanup ? ANNUAL_PREPAID_CLEANUP_START_TEXT : ANNUAL_PREPAID_START_TEXT)
+            : (schedule.hasCleanup ? CLEANUP_MONTHLY_START_TEXT : NO_CLEANUP_MONTHLY_START_TEXT)
+        }</p>
       </div>
       {showStages ? (
         <div className="rounded-xl border border-slate-200 p-4">
@@ -54,7 +59,11 @@ export default function ProposalPaymentPlan({
           <ol className="mt-3 list-decimal space-y-3 pl-5 text-sm leading-6">
             <li><strong>Onboarding{schedule.hasCleanup ? " + Discovery" : ""}.</strong> After payment clears (or is waived), provide account access and required records. We confirm readiness and the service schedule.</li>
             {schedule.hasCleanup ? <li><strong>Cleanup approval and delivery.</strong> {CLEANUP_APPROVAL_TEXT}</li> : null}
-            <li><strong>Monthly bookkeeping.</strong> {schedule.hasCleanup ? CLEANUP_MONTHLY_START_TEXT : NO_CLEANUP_MONTHLY_START_TEXT}</li>
+            <li><strong>Monthly bookkeeping.</strong> {
+              annual
+                ? (schedule.hasCleanup ? ANNUAL_PREPAID_CLEANUP_START_TEXT : ANNUAL_PREPAID_START_TEXT)
+                : (schedule.hasCleanup ? CLEANUP_MONTHLY_START_TEXT : NO_CLEANUP_MONTHLY_START_TEXT)
+            }</li>
           </ol>
         </div>
       ) : null}

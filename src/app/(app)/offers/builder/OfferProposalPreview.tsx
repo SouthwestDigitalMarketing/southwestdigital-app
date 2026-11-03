@@ -1159,7 +1159,7 @@ function OfferProposalPreviewView({
       )
     : 0;
   const selectedMonthlyCharge = selectedOptionId
-    ? Math.round((options[selectedOptionId].monthlyPrice * recurringDiscountMultiplier + selectedAdditionalMonthlyTotal) * 100) / 100
+    ? Math.round(((options[selectedOptionId].monthlyPrice + selectedAdditionalMonthlyTotal) * recurringDiscountMultiplier) * 100) / 100
     : 0;
   const selectedCleanupMonths = cleanupPeriods.reduce((total, period) => total + (
     selectedOptionId && cleanupIsSelected(selectedOptionId, `${period.year}-${period.startMonth}-${period.endMonth}`) ? periodMonthCount(period) : 0
@@ -1169,6 +1169,7 @@ function OfferProposalPreviewView({
     cleanupMonths: selectedCleanupMonths, cleanupMonthlyRate: options.maintain.monthlyPrice,
     onboardingFee: selectedOnboardingFee ?? 0, recurringMonthlyTotal: selectedMonthlyCharge,
     additionalOneTimeTotal: selectedAdditionalOneTimeTotal,
+    annualPrepay: hasTwelveMonthAgreement,
   });
   const chargeFirstMonth = currentSchedule.firstMonthDueNow;
   const chargeOnboarding = selectedOnboardingFee ?? 0;
@@ -1615,12 +1616,13 @@ function OfferProposalPreviewView({
                       : row,
                   );
 
+                  // The annual discount covers every recurring line, add-ons included.
                   const recurringTotal = Math.round((
-                    option.monthlyPrice * recurringDiscountMultiplier +
-                    packageAdditionalOptionRows.reduce(
-                      (total, row) => total + (row.billEvery && additionalOptionSelections[id][row.id] ? row.price : 0),
-                      0,
-                    )) * 100) / 100;
+                    (option.monthlyPrice +
+                      packageAdditionalOptionRows.reduce(
+                        (total, row) => total + (row.billEvery && additionalOptionSelections[id][row.id] ? row.price : 0),
+                        0,
+                      )) * recurringDiscountMultiplier) * 100) / 100;
 
                   const onboardingWaived = isOnboardingFeeWaived(assessment);
                   const originalOnboardingFee = getListedOnboardingFee({
@@ -1632,6 +1634,7 @@ function OfferProposalPreviewView({
                   const schedule = proposalPaymentSchedule({
                     cleanupMonths: selectedCleanupMonths, cleanupMonthlyRate: options.maintain.monthlyPrice,
                     onboardingFee, recurringMonthlyTotal: recurringTotal, additionalOneTimeTotal,
+                    annualPrepay: hasTwelveMonthAgreement,
                   });
                   const paidOneTime      = effectiveOneTimeRows.filter((r) => r.price > 0);
                   const optionalCleanup  = paidOneTime.filter((r) => r.cleanupPeriodKey);

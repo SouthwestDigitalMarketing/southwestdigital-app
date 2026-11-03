@@ -207,3 +207,30 @@ describe("proposal checkout", () => {
     expect(result.includedServices).toEqual([{ name: "Fast-Lane Support", description: "Same-business-day responses." }]);
   });
 });
+
+describe("twelve-month prepaid terms", () => {
+  it("discounts add-ons as well as the base, and charges the whole year today", () => {
+    const result = buildProposalCheckoutSummary(snapshot, {
+      tier: "maintain",
+      hasTwelveMonthAgreement: true,
+      selectedCleanupPeriodKeys: [],
+      selectedAdditionalOptionIds: ["reporting"],
+    });
+    // (300 base + 75 add-on) less 20% = 300/month, prepaid for a year.
+    expect(result.recurringMonthlyTotal).toBe(300);
+    expect(result.prepaidMonths).toBe(12);
+    expect(result.amountDueNow).toBe(500 + 3600);
+  });
+
+  it("leaves a month-to-month term charging one month, with add-ons undiscounted", () => {
+    const result = buildProposalCheckoutSummary(snapshot, {
+      tier: "maintain",
+      hasTwelveMonthAgreement: false,
+      selectedCleanupPeriodKeys: [],
+      selectedAdditionalOptionIds: ["reporting"],
+    });
+    expect(result.recurringMonthlyTotal).toBe(375);
+    expect(result.prepaidMonths).toBe(1);
+    expect(result.amountDueNow).toBe(500 + 375);
+  });
+});
