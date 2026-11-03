@@ -305,6 +305,8 @@ export type AssessmentState = {
   isTestProposal: boolean;
   waiveOnboardingFee: boolean;
   onboardingFeeOverride: number | null;
+  /** Dollars already paid, credited against today's payment on the public proposal. */
+  firstPaymentCredit: number;
   showOriginalOneTimePrices: boolean;
   annualSavingsPercent: number;
   packageNames: ProposalPackageNames;
@@ -487,6 +489,7 @@ const INITIAL_ASSESSMENT: AssessmentState = {
   isTestProposal: false,
   waiveOnboardingFee: false,
   onboardingFeeOverride: null,
+  firstPaymentCredit: 0,
   showOriginalOneTimePrices: true,
   annualSavingsPercent: 20,
   packageNames: { ...DEFAULT_PROPOSAL_PACKAGE_NAMES },
@@ -3205,6 +3208,20 @@ export default function ProposalCreationWorkspaceDemo({
                               />
                               <span><span className="block">Waive onboarding fee</span><span className="block text-base font-normal text-slate-500">Keeps the amount above and strikes it through on the proposal.</span></span>
                             </label>
+                            <FieldLabel label="Credit for amount already paid">
+                              <input
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                placeholder="0"
+                                value={assessment.firstPaymentCredit || ""}
+                                onChange={(event) => {
+                                  updateAssessment("firstPaymentCredit", Math.max(0, Number(event.target.value) || 0));
+                                }}
+                                className={INPUT_CLASS_NAME}
+                              />
+                            </FieldLabel>
+                            <p className="mt-2 text-base text-slate-500">Shown as its own line under Due today and deducted from the amount charged. Never takes the total below $0.</p>
                             <label className="mt-3 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-medium text-slate-700">
                               <input
                                 type="checkbox"

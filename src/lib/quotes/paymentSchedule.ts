@@ -18,12 +18,16 @@ export function proposalPaymentSchedule(input: {
   additionalOneTimeTotal: number;
   /** A 12-month agreement; today's payment prepays the year of recurring service. */
   annualPrepay?: boolean;
+  /** Dollars already paid (e.g. a paid first day) credited against today's payment; never takes it below 0. */
+  creditApplied?: number;
 }) {
   const money = (value: number) => Math.round(Math.max(0, value) * 100) / 100;
   const hasCleanup = input.cleanupMonths > 0;
   const prepaidMonths = input.annualPrepay ? ANNUAL_PREPAID_MONTHS : 1;
   const recurringDueNow = hasCleanup ? 0 : money(input.recurringMonthlyTotal * prepaidMonths);
   const oneTimeTotal = money(input.onboardingFee + input.additionalOneTimeTotal);
+  const amountDueBeforeCredit = money(oneTimeTotal + recurringDueNow);
+  const creditApplied = Math.min(money(input.creditApplied ?? 0), amountDueBeforeCredit);
   return {
     hasCleanup,
     prepaidMonths,
@@ -33,7 +37,9 @@ export function proposalPaymentSchedule(input: {
     recurringDueNow,
     /** Kept for callers that label a single month; equals recurringDueNow on monthly terms. */
     firstMonthDueNow: recurringDueNow,
-    amountDueNow: money(oneTimeTotal + recurringDueNow),
+    amountDueBeforeCredit,
+    creditApplied,
+    amountDueNow: money(amountDueBeforeCredit - creditApplied),
     annualTotal: money(money(input.recurringMonthlyTotal) * ANNUAL_PREPAID_MONTHS),
   };
 }
