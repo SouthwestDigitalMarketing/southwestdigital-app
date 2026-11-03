@@ -2921,6 +2921,17 @@ export default function ProposalCreationWorkspaceDemo({
                           </label>
                         </div>
                       </FieldLabel>
+                      <FieldLabel label="Ongoing Bookkeeping Platform">
+                        <select
+                          value={assessment.ongoingBookkeepingPlatform}
+                          onChange={(event) => updateAssessment("ongoingBookkeepingPlatform", event.target.value as BookkeepingPlatform)}
+                          className={INPUT_CLASS_NAME}
+                        >
+                          <option value="qbo">QuickBooks Online</option>
+                          <option value="stessa">Stessa</option>
+                          <option value="sage">Sage</option>
+                        </select>
+                      </FieldLabel>
                     </div>
                   </AssessmentCardSection>
                 ) : null}
@@ -3046,17 +3057,6 @@ export default function ProposalCreationWorkspaceDemo({
                               </div>
                             ))}
                           </div>
-                          <FieldLabel label="Ongoing Bookkeeping Platform">
-                            <select
-                              value={assessment.ongoingBookkeepingPlatform}
-                              onChange={(event) => updateAssessment("ongoingBookkeepingPlatform", event.target.value as BookkeepingPlatform)}
-                              className={INPUT_CLASS_NAME}
-                            >
-                              <option value="qbo">QuickBooks Online</option>
-                              <option value="stessa">Stessa</option>
-                              <option value="sage">Sage</option>
-                            </select>
-                          </FieldLabel>
                           <FieldLabel label="Platform Change">
                             <label className="flex h-[50px] items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-base font-medium text-slate-700 shadow-sm">
                               <input
