@@ -227,7 +227,7 @@ export function renderAgreementTemplate(template: string, input: AgreementRender
       : null,
     ...(staged ? (input.requiredOneTime ?? []).map((row) => `${row.name} (due today): ${formatCurrency(row.price)}`) : []),
     staged && selectedOneTimeTotal > 0 ? `Selected One-Time Add-ons (due today): ${formatCurrency(selectedOneTimeTotal)}` : null,
-    (input.creditApplied ?? 0) > 0 ? `Credit for amount already paid: -${formatCurrency(input.creditApplied ?? 0)}` : null,
+    (input.creditApplied ?? 0) > 0 ? `Credit for work already paid: -${formatCurrency(input.creditApplied ?? 0)}` : null,
     `Total Due Upon Signing: ${formatCurrency(input.amountDueNow ?? 0)}`,
     staged && input.agreementTerm === "12-month"
       ? `12-Month Service Total: ${formatCurrency(input.recurringMonthlyTotal ?? 0)} × 12 months = ${formatCurrency(Math.round((input.recurringMonthlyTotal ?? 0) * 1200) / 100)}. Paid in full today at the discounted annual rate; excludes onboarding, cleanup, and one-time add-ons. The 12-month term begins on the confirmed service start date.` : null,

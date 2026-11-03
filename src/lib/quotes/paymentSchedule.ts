@@ -18,7 +18,7 @@ export function proposalPaymentSchedule(input: {
   additionalOneTimeTotal: number;
   /** A 12-month agreement; today's payment prepays the year of recurring service. */
   annualPrepay?: boolean;
-  /** Dollars already paid (e.g. a paid first day) credited against today's payment; never takes it below 0. */
+  /** Dollars already paid (work already paid for) credited against today's payment; never takes it below 0. */
   creditApplied?: number;
 }) {
   const money = (value: number) => Math.round(Math.max(0, value) * 100) / 100;
