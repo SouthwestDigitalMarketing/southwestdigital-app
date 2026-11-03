@@ -291,3 +291,15 @@ Tom's goal: see what clients do on the live proposal's pricing step (most expens
 - Clarity account is Tom's; sign-in is his. The proposal link domain was not confirmed (probably `bookkeepingconroe.com` or a subdomain); Clarity does not restrict by domain.
 - The token is sent to Clarity as a tag; it is already in the page URL Clarity records.
 - The main checkout `~/projects/southwestdigital-app` was on `fix/pipe-contact-updates-deletes` with an uncommitted `HANDOFF.md` edit that is not part of this work. Left untouched.
+
+## Offer builder session, 2026-11-03 (Ummon, for Kassad's SJ Equity offer)
+
+Shipped to main: #63 platform select for every book set type, #64/#65 first-payment credit (`assessment.firstPaymentCredit`, label "Credit for work already paid", deducted in `proposalPaymentSchedule` and the checkout summary), #66 Due today layout (first month first, waived fee struck through, green rows), #67 then #70 Steady Support copy (now 2–3 business days; times bold via `splitServiceLevelMeaning`), #69 annual savings lines (annual mode only, uses `annualSavingsPercent`).
+
+Quirks:
+- `serviceLevels.ts` and `ProposalPaymentPlan` are read at render time, so already-published offers change on next load. No re-publish needed for copy/layout; the credit needs a re-publish (checkout reads the published snapshot).
+- The DB catalogue row `standard-client-support` still says 1–2 business days; not what the proposal shows. Not changed.
+- Netlify checks (Header rules, Pages changed, Redirect rules, deploy-preview) fail on every PR; ignore. The gate is `typecheck / lint / test` plus Vercel.
+- `gh pr merge` can return a 502 while not merging. Check `gh pr view N --json state,mergeCommit` BEFORE deleting the branch; deleting it closes the PR (this cost PR #68, redone as #69).
+- Not checked in a browser: Due today box, annual lines, bold times, a real Stripe test charge with a credit.
+- Open: Kassad's board note 1b073c65b9e9 (duplicate test-deal rows, remote SWapp state unverified).
