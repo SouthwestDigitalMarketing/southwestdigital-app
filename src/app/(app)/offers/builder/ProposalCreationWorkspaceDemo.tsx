@@ -3208,7 +3208,7 @@ export default function ProposalCreationWorkspaceDemo({
                               />
                               <span><span className="block">Waive onboarding fee</span><span className="block text-base font-normal text-slate-500">Keeps the amount above and strikes it through on the proposal.</span></span>
                             </label>
-                            <FieldLabel label="Credit for amount already paid">
+                            <FieldLabel label="Credit for work already paid">
                               <input
                                 type="number"
                                 min={0}

@@ -8,7 +8,7 @@ const fmt = (value: number) => value.toLocaleString("en-US", { style: "currency"
 
 export default function ProposalPaymentPlan({
   cleanupMonths, cleanupMonthlyRate, onboardingFee, recurringMonthlyTotal,
-  additionalOneTimeTotal, requiredOneTime = [], annual, amountDueNow, creditApplied = 0, creditLabel = "Credit for your paid first day", showStages = false,
+  additionalOneTimeTotal, requiredOneTime = [], annual, amountDueNow, creditApplied = 0, creditLabel = "Credit for work already paid", showStages = false,
 }: {
   cleanupMonths: number;
   cleanupMonthlyRate: number;
