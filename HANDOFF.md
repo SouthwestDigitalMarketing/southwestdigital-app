@@ -303,3 +303,9 @@ Quirks:
 - `gh pr merge` can return a 502 while not merging. Check `gh pr view N --json state,mergeCommit` BEFORE deleting the branch; deleting it closes the PR (this cost PR #68, redone as #69).
 - Not checked in a browser: Due today box, annual lines, bold times, a real Stripe test charge with a credit.
 - Open: Kassad's board note 1b073c65b9e9 (duplicate test-deal rows, remote SWapp state unverified).
+
+## Agreement wording fix, 2026-11-03 (PR #72, 81e9f54)
+- Stored `checkout.includedServices` freezes the catalogue description at selection time (deliberate; test "freezes included support descriptions"). Support-level wording therefore went stale (1–2 days) in agreements after PR #70. Fix: agreement route re-resolves via `serviceLevelDescription()` in `src/lib/quotes/serviceLevels.ts`. Do NOT change `proposalIncludedServices` (breaks the freeze test).
+- Saved `agreementText` is only built when empty and cleared only on tier select; a code fix alone never refreshes a saved agreement. Check `agreementText`/`signedAt` before promising a copy fix reaches a sent client. SJ Equity (`cmw0upoyy0002jv07b3qr2g4u`): unsigned, text empty, so it rebuilds on next load. Read via `.env` DB, not confirmed prod.
+- Catalogue row `standard-client-support` (migration 20260830123500) still says 1–2 days; fixtures unchanged. Not browser-verified.
+- Mistake: overwrote an existing test file with `cat >`; always append or check `ls` first.
