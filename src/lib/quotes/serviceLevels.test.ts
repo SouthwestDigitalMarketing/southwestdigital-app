@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { serviceLevelTitle } from "./serviceLevels";
+import { serviceLevelDescription, serviceLevelTitle } from "./serviceLevels";
 import { proposalIncludedServices } from "./proposalServices";
 
 describe("service level names", () => {
@@ -16,5 +16,15 @@ describe("service level names", () => {
       ],
     }, "maintain");
     expect(included.map((item) => item.name)).toEqual(["Monthly Bookkeeping", "Steady Support"]);
+  });
+});
+
+describe("serviceLevelDescription", () => {
+  it("resolves by catalog name or display title to the current wording", () => {
+    expect(serviceLevelDescription("Standard Client Support", "old")).toContain("2–3 business days");
+    expect(serviceLevelDescription("Steady Support", "Responses within 1–2 business days")).toContain("2–3 business days");
+  });
+  it("keeps the stored text for other services", () => {
+    expect(serviceLevelDescription("Bookkeeping", "kept")).toBe("kept");
   });
 });
