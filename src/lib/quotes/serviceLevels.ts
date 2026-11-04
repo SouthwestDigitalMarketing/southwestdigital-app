@@ -17,3 +17,9 @@ export function splitServiceLevelMeaning(meaning: string, emphasis: string) {
 export function serviceLevelTitle(serviceName: string) {
   return SERVICE_LEVEL_COPY[serviceName]?.title ?? serviceName;
 }
+
+// Current wording for a support level, looked up by catalog name or display title; else the stored text.
+export function serviceLevelDescription(serviceName: string, fallback: string) {
+  const entry = SERVICE_LEVEL_COPY[serviceName] ?? Object.values(SERVICE_LEVEL_COPY).find((copy) => copy.title === serviceName);
+  return entry?.meaning ?? fallback;
+}

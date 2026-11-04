@@ -5,6 +5,7 @@ import { renderAgreementTemplate } from "@/lib/agreements/template";
 import { hasPublicProposalAccess, publicProposalNotFound } from "@/lib/engagements/publicProposalAccess";
 import { readAcceptedSelection } from "@/lib/engagements/acceptedPayment";
 import { parseStoredProposalCheckout } from "@/lib/engagements/proposalCheckout";
+import { serviceLevelDescription } from "@/lib/quotes/serviceLevels";
 
 export async function GET(
   request: Request,
@@ -108,7 +109,11 @@ export async function GET(
         && typeof option.id === "string" && selectedAdditionalOptionIds.includes(option.id)
         && typeof option.monthlyPrice === "number")
       .map((option) => ({ name: String(option.name ?? option.id), price: Number(option.monthlyPrice) })),
-    includedServices: checkout?.includedServices,
+    // Stored at selection time; re-resolve so support-level wording is current.
+    includedServices: checkout?.includedServices?.map((item) => ({
+      ...item,
+      description: serviceLevelDescription(item.name, item.description),
+    })),
   };
 
   let text = engagement.agreementText ?? "";
