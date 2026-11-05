@@ -2586,6 +2586,24 @@ model BrandFeature {
   @@index([brandId, enabled])
 }
 
+// One row per open QuickBooks invoice, mirrored by scripts/sync-ar-snapshot.mjs.
+// The MRR display reads this to flag past-due clients. Never written by the app.
+model CustomerArSnapshot {
+  id           String   @id @default(cuid())
+  brandId      String
+  qbCompany    String
+  customerName String
+  invoiceRef   String?
+  dueDate      DateTime?
+  openBalance  Decimal  @db.Decimal(12, 2)
+  syncedAt     DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([brandId, qbCompany, customerName, invoiceRef])
+  @@index([brandId, customerName])
+}
+
 model BrandIntegration {
   id                 String                @id @default(cuid())
   brandId            String
