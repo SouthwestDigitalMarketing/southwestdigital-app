@@ -7,8 +7,9 @@ import { getChannelMetrics, getAverageWatchDuration } from "@/lib/youtube/analyt
 import { getYouTubeRefreshToken } from "@/lib/youtube/credentials";
 import { PlayCircle, Clock, Globe, Target, FileText, Eye, Star, DollarSign, Send } from "lucide-react";
 import { StatCard } from "./StatCards";
+import { MrrStatCard } from "./MrrStatCard";
 import { DashboardControls } from "./DashboardControls";
-import { hasYouTubeActivity } from "./utils";
+import { hasYouTubeActivity, summarizeMrr } from "./utils";
 
 export const dynamic = "force-dynamic";
 
@@ -237,13 +238,18 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const selectedPeriod = getDashboardPeriod(range, windowEnd);
   const previous = getPreviousDashboardPeriod(range, windowEnd, selectedPeriod);
 
-  const mrrAgg = await prisma.contact.aggregate({
+  const mrrRows = await prisma.contact.findMany({
     where: { brandId: brand.id, isActive: true, mrrUsd: { not: null } },
-    _sum: { mrrUsd: true },
-    _count: true,
+    select: { id: true, name: true, company: true, mrrUsd: true },
+    orderBy: [{ mrrUsd: "desc" }, { name: "asc" }],
   });
-  const mrrTotal = Number(mrrAgg._sum.mrrUsd ?? 0);
-  const mrrClientCount = mrrAgg._count;
+  const mrrClients = mrrRows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    company: row.company,
+    mrr: Number(row.mrrUsd),
+  }));
+  const mrr = summarizeMrr(mrrClients.map((client) => client.mrr));
 
   const theme = await prisma.brandTheme.findUnique({
     where: { brandId: brand.id },
@@ -393,11 +399,10 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       </div>
 
       <DashboardSection title="Revenue" icon={<DollarSign size={14} />}>
-        <StatCard
-          label={`MRR · ${mrrClientCount.toLocaleString("en-US")} client${mrrClientCount === 1 ? "" : "s"} with MRR set`}
-          value={`$${mrrTotal.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/mo`}
-          icon={<DollarSign size={14} />}
-          className="sm:col-span-2 lg:col-span-1"
+        <MrrStatCard
+          label={`MRR · ${mrr.count.toLocaleString("en-US")} client${mrr.count === 1 ? "" : "s"} with MRR set`}
+          value={`$${mrr.total.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/mo`}
+          clients={mrrClients}
         />
       </DashboardSection>
 
