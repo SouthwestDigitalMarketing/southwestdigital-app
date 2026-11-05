@@ -5,10 +5,11 @@ import { ReviewOutcome } from "@prisma/client";
 import { getTrafficTrend, getTotalKeyEvents } from "@/lib/analytics/ga4";
 import { getChannelMetrics, getAverageWatchDuration } from "@/lib/youtube/analytics";
 import { getYouTubeRefreshToken } from "@/lib/youtube/credentials";
-import { PlayCircle, Clock, Globe, Target, FileText, Eye, Star, DollarSign } from "lucide-react";
+import { PlayCircle, Clock, Globe, Target, FileText, Eye, Star, DollarSign, Send } from "lucide-react";
 import { StatCard } from "./StatCards";
 import { DashboardControls } from "./DashboardControls";
 import { GoalEditor } from "./GoalEditor";
+import { hasYouTubeActivity } from "./utils";
 
 export const dynamic = "force-dynamic";
 
@@ -392,34 +393,37 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         />
       </div>
 
-      <DashboardSection title="Website">
-        {ga4PropertyId ? (
-          <>
-            <StatCard label="Active visitors" value={totalWebsiteVisitors.toLocaleString("en-US")} goal={{ pct: goalPct(totalWebsiteVisitors, visitorsGoal), subtitle: `of ${visitorsGoal.toLocaleString("en-US")} visitors goal for this period` }} comparison={percentChange(totalWebsiteVisitors, previousWebsiteVisitors)} icon={<Globe size={14} />} attribution={websiteAttribution} />
-            <StatCard label="Key events" value={keyEventCount.toLocaleString("en-US")} goal={{ pct: goalPct(keyEventCount, keyEventsGoal), subtitle: `of ${keyEventsGoal.toLocaleString("en-US")} goal for this period` }} comparison={percentChange(keyEventCount, previousKeyEventCount)} icon={<Target size={14} />} attribution={websiteAttribution} />
-          </>
-        ) : <NotConfiguredCard title="Website" />}
-      </DashboardSection>
-
-      <DashboardSection title="Revenue">
+      <DashboardSection title="Revenue" icon={<DollarSign size={14} />}>
         <StatCard
           label={`MRR · ${mrrClientCount.toLocaleString("en-US")} client${mrrClientCount === 1 ? "" : "s"} with MRR set`}
           value={`$${mrrTotal.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/mo`}
           icon={<DollarSign size={14} />}
-          className="col-span-2 lg:col-span-1"
+          className="sm:col-span-2 lg:col-span-1"
         />
       </DashboardSection>
 
-      <DashboardSection title="YouTube">
-        {ytChannelId ? (
-          <>
-            <StatCard label="Channel views" value={totalYtViews.toLocaleString("en-US")} goal={{ pct: goalPct(totalYtViews, viewsGoal), subtitle: `of ${viewsGoal.toLocaleString("en-US")} goal for this period` }} comparison={percentChange(totalYtViews, previousYtViews)} icon={<PlayCircle size={14} />} attribution={ytAttribution} />
-            <StatCard label="Avg watch time" value={fmtDuration(avgWatchDuration)} goal={{ pct: goalPct(avgWatchDuration, avgWatchDurationGoal), subtitle: `of ${fmtDuration(avgWatchDurationGoal)} goal` }} comparison={percentChange(avgWatchDuration, previousAvgWatchDuration)} icon={<Clock size={14} />} attribution={ytAttribution} />
-          </>
-        ) : <NotConfiguredCard title="YouTube" />}
+      <DashboardSection title="Offers" icon={<Send size={14} />}>
+        <StatCard label="Awaiting reply" value={currentOffers.awaiting.toLocaleString("en-US")} comparison={percentChange(currentOffers.awaiting, previousOffers.awaiting)} icon={<FileText size={14} />} />
+        <StatCard
+          label="Sent"
+          value={currentOffers.sent.toLocaleString("en-US")}
+          goal={{ pct: goalPct(currentOffers.sent, offersSentGoal), subtitle: `of ${offersSentGoal.toLocaleString("en-US")} sent goal for this period` }}
+          comparison={percentChange(currentOffers.sent, previousOffers.sent)}
+          icon={<FileText size={14} />}
+          goalEditor={<GoalEditor brandId={brand.id} field="monthlyOffersSentGoal" goal={monthlyOffersSentGoal} />}
+        />
+        <StatCard
+          label="Accepted"
+          value={currentOffers.accepted.toLocaleString("en-US")}
+          goal={{ pct: goalPct(currentOffers.accepted, offersAcceptedGoal), subtitle: `of ${offersAcceptedGoal.toLocaleString("en-US")} accepted goal for this period` }}
+          comparison={percentChange(currentOffers.accepted, previousOffers.accepted)}
+          icon={<FileText size={14} />}
+          goalEditor={<GoalEditor brandId={brand.id} field="monthlyOffersAcceptedGoal" goal={monthlyOffersAcceptedGoal} />}
+        />
+        <StatCard label="Rejected" value={currentOffers.rejected.toLocaleString("en-US")} comparison={percentChange(currentOffers.rejected, previousOffers.rejected)} icon={<FileText size={14} />} />
       </DashboardSection>
 
-      <DashboardSection title="Reviews">
+      <DashboardSection title="Reviews" icon={<Star size={14} />}>
         <StatCard
           label="Review requests sent"
           value={currentReviews.sent.toLocaleString("en-US")}
@@ -452,25 +456,28 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         />
       </DashboardSection>
 
-      <DashboardSection title="Offers">
-        <StatCard
-          label="Sent"
-          value={currentOffers.sent.toLocaleString("en-US")}
-          goal={{ pct: goalPct(currentOffers.sent, offersSentGoal), subtitle: `of ${offersSentGoal.toLocaleString("en-US")} sent goal for this period` }}
-          comparison={percentChange(currentOffers.sent, previousOffers.sent)}
-          icon={<FileText size={14} />}
-          goalEditor={<GoalEditor brandId={brand.id} field="monthlyOffersSentGoal" goal={monthlyOffersSentGoal} />}
-        />
-        <StatCard
-          label="Accepted"
-          value={currentOffers.accepted.toLocaleString("en-US")}
-          goal={{ pct: goalPct(currentOffers.accepted, offersAcceptedGoal), subtitle: `of ${offersAcceptedGoal.toLocaleString("en-US")} accepted goal for this period` }}
-          comparison={percentChange(currentOffers.accepted, previousOffers.accepted)}
-          icon={<FileText size={14} />}
-          goalEditor={<GoalEditor brandId={brand.id} field="monthlyOffersAcceptedGoal" goal={monthlyOffersAcceptedGoal} />}
-        />
-        <StatCard label="Rejected" value={currentOffers.rejected.toLocaleString("en-US")} comparison={percentChange(currentOffers.rejected, previousOffers.rejected)} icon={<FileText size={14} />} />
-        <StatCard label="Awaiting reply" value={currentOffers.awaiting.toLocaleString("en-US")} comparison={percentChange(currentOffers.awaiting, previousOffers.awaiting)} icon={<FileText size={14} />} />
+      <DashboardSection title="Website" icon={<Globe size={14} />}>
+        {ga4PropertyId ? (
+          <>
+            <StatCard label="Active visitors" value={totalWebsiteVisitors.toLocaleString("en-US")} goal={{ pct: goalPct(totalWebsiteVisitors, visitorsGoal), subtitle: `of ${visitorsGoal.toLocaleString("en-US")} visitors goal for this period` }} comparison={percentChange(totalWebsiteVisitors, previousWebsiteVisitors)} icon={<Globe size={14} />} attribution={websiteAttribution} />
+            <StatCard label="Key events" value={keyEventCount.toLocaleString("en-US")} goal={{ pct: goalPct(keyEventCount, keyEventsGoal), subtitle: `of ${keyEventsGoal.toLocaleString("en-US")} goal for this period` }} comparison={percentChange(keyEventCount, previousKeyEventCount)} icon={<Target size={14} />} attribution={websiteAttribution} />
+          </>
+        ) : <NotConfiguredCard title="Website" />}
+      </DashboardSection>
+
+      <DashboardSection title="YouTube" icon={<PlayCircle size={14} />}>
+        {ytChannelId ? (
+          hasYouTubeActivity(totalYtViews, avgWatchDuration) ? (
+            <>
+              <StatCard label="Channel views" value={totalYtViews.toLocaleString("en-US")} goal={{ pct: goalPct(totalYtViews, viewsGoal), subtitle: `of ${viewsGoal.toLocaleString("en-US")} goal for this period` }} comparison={percentChange(totalYtViews, previousYtViews)} icon={<PlayCircle size={14} />} attribution={ytAttribution} />
+              <StatCard label="Avg watch time" value={fmtDuration(avgWatchDuration)} goal={{ pct: goalPct(avgWatchDuration, avgWatchDurationGoal), subtitle: `of ${fmtDuration(avgWatchDurationGoal)} goal` }} comparison={percentChange(avgWatchDuration, previousAvgWatchDuration)} icon={<Clock size={14} />} attribution={ytAttribution} />
+            </>
+          ) : (
+            <p className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500 sm:col-span-2 lg:col-span-4">
+              No YouTube activity this period.
+            </p>
+          )
+        ) : <NotConfiguredCard title="YouTube" />}
       </DashboardSection>
     </div>
   );
@@ -478,26 +485,20 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
 function DashboardSection({
   title,
+  icon,
   children,
 }: {
   title: string;
+  icon: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <section className="mt-5 sm:mt-6 sm:flex sm:items-stretch sm:gap-3">
-      <div className="mb-2 sm:mb-0 sm:relative sm:w-14 sm:shrink-0">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500 sm:hidden">
-          {title}
-        </h2>
-        <h2
-          className="absolute left-1/2 top-1/2 hidden whitespace-nowrap rounded-md bg-slate-50 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-500 sm:block"
-          style={{ transform: "translate(-50%, -50%) rotate(-60deg)" }}
-          aria-hidden="true"
-        >
-          {title}
-        </h2>
+    <section className="mt-5 sm:mt-6">
+      <div className="mb-2 flex items-center gap-1.5 text-slate-500 sm:mb-3">
+        <span className="shrink-0">{icon}</span>
+        <h2 className="text-xs font-semibold uppercase tracking-wide">{title}</h2>
       </div>
-      <div className="grid min-w-0 flex-1 grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">{children}</div>
+      <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-5 lg:grid-cols-4">{children}</div>
     </section>
   );
 }

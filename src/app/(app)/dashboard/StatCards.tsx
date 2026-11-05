@@ -44,7 +44,7 @@ export function StatCard({
   return (
     <div className={`relative flex flex-col rounded-xl border border-slate-200 bg-white p-3 sm:p-6 ${className ?? ""}`}>
       {goalEditor}
-      <div className="flex items-start justify-between gap-2 sm:gap-4">
+      <div className="flex items-center justify-between gap-2 sm:items-start sm:gap-4">
         <div className="min-w-0">
           <div className="flex min-w-0 items-start gap-1.5 text-slate-400">
             <span className="mt-0.5 shrink-0">{icon}</span>
@@ -70,7 +70,7 @@ export function StatCard({
             >
               {value}
             </p>
-            {comparison !== undefined && (
+            {comparison !== undefined && comparison !== 0 && (
               <span className={`text-sm font-semibold tabular-nums ${comparisonColor(comparison)}`}>
                 {comparison === null ? "New" : `${comparison > 0 ? "+" : ""}${comparison}%`}
               </span>
@@ -86,7 +86,7 @@ export function StatCard({
             >
               {pct}%
             </span>
-            <p className="text-xs text-slate-400">of goal</p>
+            <p className="hidden text-xs text-slate-400 sm:block">of goal</p>
           </div>
         )}
       </div>
