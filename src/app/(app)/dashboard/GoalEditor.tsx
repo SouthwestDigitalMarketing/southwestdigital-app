@@ -32,7 +32,7 @@ export function GoalEditor({
 
   if (editing) {
     return (
-      <div className="absolute right-4 top-4 z-10 flex items-center gap-1">
+      <div className="absolute right-4 top-4 z-10 hidden items-center gap-1 sm:flex">
         <input
           ref={inputRef}
           type="number"
@@ -66,7 +66,7 @@ export function GoalEditor({
         setDraft(String(goal));
         setEditing(true);
       }}
-      className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 transition-colors hover:border-slate-300 hover:text-slate-600 sm:right-4 sm:top-4 sm:h-7 sm:w-7"
+      className="absolute right-3 top-3 hidden h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 transition-colors hover:border-slate-300 hover:text-slate-600 sm:flex sm:right-4 sm:top-4 sm:h-7 sm:w-7"
       aria-label="Edit goal"
     >
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
