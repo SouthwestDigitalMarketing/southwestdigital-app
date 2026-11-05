@@ -382,9 +382,9 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const previousReviews = reviewStats[1];
 
   return (
-    <div className="p-8">
+    <div className="px-4 py-5 sm:p-8">
       <h1 className="sr-only">Dashboard</h1>
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-4">
         <h2 className="text-lg font-semibold text-slate-900">Performance overview</h2>
         <DashboardControls
           options={[...DASHBOARD_RANGES]}
@@ -406,6 +406,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           label={`MRR · ${mrrClientCount.toLocaleString("en-US")} client${mrrClientCount === 1 ? "" : "s"} with MRR set`}
           value={`$${mrrTotal.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/mo`}
           icon={<DollarSign size={14} />}
+          className="col-span-2 lg:col-span-1"
         />
       </DashboardSection>
 
@@ -483,23 +484,27 @@ function DashboardSection({
   children: ReactNode;
 }) {
   return (
-    <section className="mt-6 flex items-stretch gap-3">
-      <div className="relative w-14 shrink-0">
+    <section className="mt-5 sm:mt-6 sm:flex sm:items-stretch sm:gap-3">
+      <div className="mb-2 sm:mb-0 sm:relative sm:w-14 sm:shrink-0">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500 sm:hidden">
+          {title}
+        </h2>
         <h2
-          className="absolute left-1/2 top-1/2 whitespace-nowrap rounded-md bg-slate-50 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-500"
+          className="absolute left-1/2 top-1/2 hidden whitespace-nowrap rounded-md bg-slate-50 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-500 sm:block"
           style={{ transform: "translate(-50%, -50%) rotate(-60deg)" }}
+          aria-hidden="true"
         >
           {title}
         </h2>
       </div>
-      <div className="grid min-w-0 flex-1 grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">{children}</div>
+      <div className="grid min-w-0 flex-1 grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">{children}</div>
     </section>
   );
 }
 
 function NotConfiguredCard({ title }: { title: string }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-6">
+    <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</p>
       <p className="mt-3 text-sm text-slate-400">Not configured</p>
     </div>
