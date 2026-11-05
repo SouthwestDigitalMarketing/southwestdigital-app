@@ -12,6 +12,7 @@ import {
 } from "@/lib/stripe/connect";
 import { requestOrigin } from "@/lib/stripe/requestOrigin";
 import { ToolLinksForm } from "./ToolLinksForm";
+import { DashboardGoalsForm } from "./DashboardGoalsForm";
 import { BrandAppearanceForm } from "./BrandAppearanceForm";
 import { StripeConnectForm } from "./StripeConnectForm";
 import { YouTubeIntegrationForm } from "./YouTubeIntegrationForm";
@@ -161,6 +162,16 @@ export default async function SettingsPage({
             phoneNumberId: quo?.externalPropertyId ?? "",
           }}
           googleReviewUrl={googleReviewUrl}
+        />
+        <DashboardGoalsForm
+          brandId={brand.id}
+          goals={{
+            monthlyReviewRequestsGoal: brand.theme?.monthlyReviewRequestsGoal ?? 20,
+            reviewOpenRateGoal: brand.theme?.reviewOpenRateGoal ?? 50,
+            reviewFiveStarRateGoal: brand.theme?.reviewFiveStarRateGoal ?? 70,
+            monthlyOffersSentGoal: brand.theme?.monthlyOffersSentGoal ?? 10,
+            monthlyOffersAcceptedGoal: brand.theme?.monthlyOffersAcceptedGoal ?? 3,
+          }}
         />
         <BrandAppearanceForm
           theme={{

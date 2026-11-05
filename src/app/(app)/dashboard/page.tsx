@@ -8,7 +8,6 @@ import { getYouTubeRefreshToken } from "@/lib/youtube/credentials";
 import { PlayCircle, Clock, Globe, Target, FileText, Eye, Star, DollarSign, Send } from "lucide-react";
 import { StatCard } from "./StatCards";
 import { DashboardControls } from "./DashboardControls";
-import { GoalEditor } from "./GoalEditor";
 import { hasYouTubeActivity } from "./utils";
 
 export const dynamic = "force-dynamic";
@@ -410,7 +409,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           goal={{ pct: goalPct(currentOffers.sent, offersSentGoal), subtitle: `of ${offersSentGoal.toLocaleString("en-US")} sent goal for this period` }}
           comparison={percentChange(currentOffers.sent, previousOffers.sent)}
           icon={<FileText size={14} />}
-          goalEditor={<GoalEditor brandId={brand.id} field="monthlyOffersSentGoal" goal={monthlyOffersSentGoal} />}
         />
         <StatCard
           label="Accepted"
@@ -418,7 +416,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           goal={{ pct: goalPct(currentOffers.accepted, offersAcceptedGoal), subtitle: `of ${offersAcceptedGoal.toLocaleString("en-US")} accepted goal for this period` }}
           comparison={percentChange(currentOffers.accepted, previousOffers.accepted)}
           icon={<FileText size={14} />}
-          goalEditor={<GoalEditor brandId={brand.id} field="monthlyOffersAcceptedGoal" goal={monthlyOffersAcceptedGoal} />}
         />
         <StatCard label="Rejected" value={currentOffers.rejected.toLocaleString("en-US")} comparison={percentChange(currentOffers.rejected, previousOffers.rejected)} icon={<FileText size={14} />} />
       </DashboardSection>
@@ -430,7 +427,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           goal={{ pct: goalPct(currentReviews.sent, reviewRequestsGoal), subtitle: `of ${reviewRequestsGoal.toLocaleString("en-US")} goal for this period` }}
           comparison={percentChange(currentReviews.sent, previousReviews.sent)}
           icon={<FileText size={14} />}
-          goalEditor={<GoalEditor brandId={brand.id} field="monthlyReviewRequestsGoal" goal={monthlyReviewRequestsGoal} />}
         />
         <StatCard
           label="Open rate"
@@ -438,7 +434,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           goal={{ pct: goalPct(currentReviews.openRate, reviewOpenRateGoal), subtitle: `of ${reviewOpenRateGoal}% open-rate goal` }}
           comparison={percentChange(currentReviews.openRate, previousReviews.openRate)}
           icon={<Eye size={14} />}
-          goalEditor={<GoalEditor brandId={brand.id} field="reviewOpenRateGoal" goal={reviewOpenRateGoal} />}
         />
         <StatCard
           label="Google clicked"
@@ -446,7 +441,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           goal={{ pct: goalPct(currentReviews.googleClickedRate, reviewFiveStarRateGoal), subtitle: `of ${reviewFiveStarRateGoal}% Google-clicked goal` }}
           comparison={percentChange(currentReviews.googleClickedRate, previousReviews.googleClickedRate)}
           icon={<Star size={14} />}
-          goalEditor={<GoalEditor brandId={brand.id} field="reviewFiveStarRateGoal" goal={reviewFiveStarRateGoal} />}
         />
         <StatCard
           label="Feedback received"

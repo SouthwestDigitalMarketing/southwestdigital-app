@@ -25,7 +25,6 @@ export function StatCard({
   comparison,
   icon,
   attribution,
-  goalEditor,
   className,
 }: {
   label: string;
@@ -35,7 +34,6 @@ export function StatCard({
   comparison?: number | null;
   icon?: ReactNode;
   attribution?: Attribution;
-  goalEditor?: ReactNode;
   className?: string;
 }) {
   const pct = goal ? Math.max(0, Math.min(100, Number.isFinite(goal.pct) ? goal.pct : 0)) : 0;
@@ -43,7 +41,6 @@ export function StatCard({
 
   return (
     <div className={`relative flex flex-col rounded-xl border border-slate-200 bg-white p-3 sm:p-6 ${className ?? ""}`}>
-      {goalEditor}
       <div className="flex items-center justify-between gap-2 sm:items-start sm:gap-4">
         <div className="min-w-0">
           <div className="flex min-w-0 items-start gap-1.5 text-slate-400">
@@ -79,7 +76,7 @@ export function StatCard({
           {goal && <p className="mt-0.5 hidden text-xs text-slate-500 sm:block">{goal.subtitle}</p>}
         </div>
         {goal && (
-          <div className={`shrink-0 text-right ${goalEditor ? "pt-6" : ""}`}>
+          <div className="shrink-0 text-right">
             <span
               className="text-lg font-bold tabular-nums sm:text-2xl"
               style={{ color: "var(--text-primary)" }}
