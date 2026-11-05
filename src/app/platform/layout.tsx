@@ -22,16 +22,16 @@ export default async function PlatformLayout({ children }: { children: ReactNode
           <div className="flex items-center gap-3 text-sm text-slate-300 md:order-last md:ml-auto">
             <span className="hidden md:inline">{session.user.email}</span>
             <form action={signOutOfPortal}>
-              <button type="submit" className="cursor-pointer rounded-full border border-white/20 px-4 py-2 text-white">
+              <button type="submit" className="cursor-pointer rounded-full border border-white/50 px-4 py-2 text-white hover:bg-white/10">
                 Sign out
               </button>
             </form>
           </div>
-          <nav className="order-last flex w-full gap-2 text-sm font-semibold text-slate-200 md:order-none md:w-auto md:items-center">
-            <Link href="/platform/brands" className="flex-1 rounded-full bg-white/5 px-4 py-2.5 text-center hover:bg-white/10 md:flex-none md:bg-transparent md:py-2">
+          <nav className="order-last flex w-full gap-2 text-sm font-semibold md:order-none md:w-auto md:items-center">
+            <Link href="/platform/brands" className="flex-1 rounded-full bg-slate-100 px-4 py-2.5 text-center text-slate-950 hover:bg-white md:flex-none md:py-2">
               Brands
             </Link>
-            <Link href="/portal" className="flex-1 rounded-full bg-white/5 px-4 py-2.5 text-center hover:bg-white/10 md:flex-none md:bg-transparent md:py-2">
+            <Link href="/portal" className="flex-1 rounded-full bg-slate-100 px-4 py-2.5 text-center text-slate-950 hover:bg-white md:flex-none md:py-2">
               Client portal
             </Link>
           </nav>
