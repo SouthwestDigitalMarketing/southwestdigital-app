@@ -1,0 +1,8 @@
+[Unit]
+Description=SWapp QuickBooks A/R snapshot
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/tom/projects/southwestdigital-app-mobile-ux
+Environment=PATH=/home/tom/.local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/node scripts/sync-ar-snapshot.mjs

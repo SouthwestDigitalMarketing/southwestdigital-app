@@ -1,0 +1,9 @@
+[Unit]
+Description=SWapp QuickBooks A/R snapshot daily
+
+[Timer]
+OnCalendar=06:17
+Persistent=true
+
+[Install]
+WantedBy=default.target
