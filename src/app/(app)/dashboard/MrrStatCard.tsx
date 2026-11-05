@@ -19,10 +19,14 @@ export function MrrStatCard({
   label,
   value,
   clients,
+  pastDueById,
+  syncedAsOf,
 }: {
   label: string;
   value: string;
   clients: MrrClient[];
+  pastDueById: Record<string, number>;
+  syncedAsOf: string | null;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -66,30 +70,45 @@ export function MrrStatCard({
           </Link>
           {clients.length > 0 ? (
             <ul className="mt-1 divide-y divide-slate-100">
-              {clients.map((client) => (
-                <li key={client.id}>
-                  <Link
-                    href={`/contacts/${client.id}`}
-                    className="flex items-center justify-between gap-3 px-1 py-2.5"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium text-slate-800">
-                        {client.name}
+              {clients.map((client) => {
+                const pastDue = pastDueById[client.id] ?? 0;
+                return (
+                  <li key={client.id}>
+                    <Link
+                      href={`/contacts/${client.id}`}
+                      className="flex items-center justify-between gap-3 px-1 py-2.5"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium text-slate-800">
+                          {client.name}
+                        </span>
+                        {client.company ? (
+                          <span className="block truncate text-xs text-slate-400">{client.company}</span>
+                        ) : null}
+                        {pastDue > 0 ? (
+                          <span className="block text-xs font-semibold text-rose-600">
+                            {fmtMoney(pastDue)} past due
+                          </span>
+                        ) : null}
                       </span>
-                      {client.company ? (
-                        <span className="block truncate text-xs text-slate-400">{client.company}</span>
-                      ) : null}
-                    </span>
-                    <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">
-                      {fmtMoney(client.mrr)}/mo
-                    </span>
-                  </Link>
-                </li>
-              ))}
+                      <span
+                        className={`shrink-0 text-sm font-semibold tabular-nums ${pastDue > 0 ? "text-rose-700" : "text-slate-900"}`}
+                      >
+                        {fmtMoney(client.mrr)}/mo
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           ) : (
             <p className="px-1 py-2 text-sm text-slate-500">No clients carry monthly revenue yet.</p>
           )}
+          {syncedAsOf ? (
+            <p className="px-1 pt-1 text-[11px] text-slate-400">
+              Collections as of {new Date(syncedAsOf).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+            </p>
+          ) : null}
         </div>
       ) : null}
     </div>

@@ -10,6 +10,7 @@ import { StatCard } from "./StatCards";
 import { MrrStatCard } from "./MrrStatCard";
 import { DashboardControls } from "./DashboardControls";
 import { hasYouTubeActivity, summarizeMrr } from "./utils";
+import { getPastDueByContact } from "@/lib/ar/pastDue";
 
 export const dynamic = "force-dynamic";
 
@@ -250,6 +251,12 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     mrr: Number(row.mrrUsd),
   }));
   const mrr = summarizeMrr(mrrClients.map((client) => client.mrr));
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const { byId: mrrPastDue, syncedAsOf: arSyncedAsOf } = await getPastDueByContact(
+    brand.id,
+    mrrClients,
+    todayKey,
+  );
 
   const theme = await prisma.brandTheme.findUnique({
     where: { brandId: brand.id },
@@ -403,6 +410,10 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           label={`MRR · ${mrr.count.toLocaleString("en-US")} client${mrr.count === 1 ? "" : "s"} with MRR set`}
           value={`$${mrr.total.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/mo`}
           clients={mrrClients}
+          pastDueById={Object.fromEntries(
+            Object.entries(mrrPastDue).map(([id, entry]) => [id, entry.pastDue]),
+          )}
+          syncedAsOf={arSyncedAsOf}
         />
       </DashboardSection>
 
