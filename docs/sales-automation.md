@@ -70,3 +70,12 @@ and queues the All Thing job; it does not create a contact, create an
 opportunity, or move a stage. Identity resolution and source collectors are
 still needed. The writer script exists but is not scheduled or enabled until
 the `sales-leads` hub and shared All Thing write contract are settled.
+
+`scripts/collect-quo-call-evidence.mjs` is the first read-only source adapter.
+On Ripley it reads completed calls from the existing Sales Quo sync cache,
+matches the configured brand phone line, then requires exactly one contact
+phone and one active linked SWapp lead. It does not infer a stage from a call.
+Run it with `--days=7` to see counts without writing; `--apply` records only
+the unambiguous calls and creates their paired All Thing jobs. Calls with no
+match or several possible matches remain for manual identity review. The
+adapter is not scheduled while the All Thing writer is disabled.

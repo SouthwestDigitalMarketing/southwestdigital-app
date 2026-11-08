@@ -34,6 +34,13 @@ exist yet; it refuses to write without it. No All Thing page was changed.
 The endpoint does not yet create leads or advance stages. The writer has not
 been run against the All Thing, and no timer has been installed.
 
+`scripts/collect-quo-call-evidence.mjs` now reads the existing Quo call cache
+read-only and resolves a completed call only when its brand line, contact
+phone, and active linked SWapp lead are unique. The `--days=7` dry run on
+2026-11-08 scanned 13 completed calls: 1 matched, 5 ambiguous, 7 unmatched,
+0 invalid. No `--apply` run or timer was installed, so these calls created
+no evidence events or All Thing jobs. The adapter does not move stages.
+
 Checks on this branch: Prisma schema validation and client generation passed;
 `npm run typecheck`, `npm run lint -- --quiet`, `git diff --check`, and `npm test`
 passed after adjusting the existing stage-move transaction tests. Vitest:
