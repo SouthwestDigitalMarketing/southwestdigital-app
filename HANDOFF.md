@@ -170,9 +170,16 @@ backfilled in place. Sales deal uploads were disabled; pulls now match by the
 SWapp record ID first and accept SWapp changes as authoritative. Sales code is
 in `/home/tom/projects/sales-swapp-pipeline-cutover` on
 `feat/swapp-pipeline-cutover`; no client data or SQLite records were changed.
-SWapp `npm run typecheck` passed after the app changes. `npm run lint` exited 0
-with 9 warnings (no errors). The test suite was not run in this follow-up.
-Signed-in phone review has not yet been done.
+SWapp `npm run typecheck` and lint pass; lint has 9 warnings and 0 errors. The
+local test suite was not run. First PR CI ran 126 files: 124 passed, 1 failed,
+1 skipped; 981 tests passed, 1 failed, 5 skipped. The failure was the existing
+lead-step assertion still expecting six columns and old labels; it has been
+updated for the current nine steps, pending the rerun. The production build
+passes locally with Webpack and a temporary local `PLATFORM_BASE_URL`. Netlify
+Deploy Preview currently fails because its build environment sets `AUTH_URL`,
+while `src/auth.ts` requires `AUTH_URL` and `NEXTAUTH_URL` to stay unset. This
+deployment setting has not been changed. Signed-in phone review has not yet
+been done.
 
 The checked-out repo was clean at `origin/main` commit
 `9a9188c6243558b5ae7d568b7803a5257e08cb62` before this follow-up. Current
