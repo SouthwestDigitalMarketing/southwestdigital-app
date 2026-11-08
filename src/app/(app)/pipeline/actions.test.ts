@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   itemUpdate: vi.fn(),
   leadUpdate: vi.fn(),
   transaction: vi.fn(),
+  recordEvidence: vi.fn(),
   revalidate: vi.fn(),
 }));
 
@@ -20,6 +21,7 @@ vi.mock("@/lib/prisma", () => ({
 vi.mock("@/lib/brands/staff", () => ({ requireStaffBrandOrThrow: async () => ({ brand: { id: "brand-1" } }) }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidate }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
+vi.mock("@/lib/automation/evidence", () => ({ recordSalesEvidence: mocks.recordEvidence }));
 
 import { movePipelineItemAction } from "./actions";
 
@@ -47,15 +49,21 @@ beforeEach(() => {
     id: "item-1",
     pipelineId: "pipeline-1",
     pipeline: { key: "pipe-prospects" },
-    lead: { id: "lead-1", updatedAt: new Date("2026-10-20T10:00:00.000Z") },
+    stage: { name: "Lead" },
+    lead: { id: "lead-1", name: "Example Lead", updatedAt: new Date("2026-10-20T10:00:00.000Z") },
   });
   mocks.stageFind.mockReset().mockImplementation(async ({ where }) => ({
     id: where.id,
     key: ({ "stage-lead": "lead", "stage-talking": "talking", "stage-proposed": "proposed", "stage-won": "won", "stage-prospect": "prospect" } as Record<string, string>)[where.id],
+    name: where.id,
   }));
   mocks.itemUpdate.mockReset().mockResolvedValue({ id: "item-1" });
   mocks.leadUpdate.mockReset().mockResolvedValue({ id: "lead-1" });
-  mocks.transaction.mockReset().mockImplementation((operations: Promise<unknown>[]) => Promise.all(operations));
+  mocks.recordEvidence.mockReset().mockResolvedValue("event-1");
+  mocks.transaction.mockReset().mockImplementation((work: (tx: unknown) => Promise<unknown>) => work({
+    meetingLead: { update: mocks.leadUpdate },
+    pipelineItem: { update: mocks.itemUpdate },
+  }));
   mocks.revalidate.mockReset();
 });
 
@@ -71,6 +79,9 @@ describe("movePipelineItemAction on the pipe Leads board", () => {
       data: { stageId: "stage-talking" },
     }));
     expect(mocks.transaction).toHaveBeenCalledTimes(1);
+    expect(mocks.recordEvidence).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      brandId: "brand-1", leadId: "lead-1", eventType: "opportunity.stage_changed",
+    }));
     expect(mocks.revalidate).toHaveBeenCalledWith("/pipeline/pipe-prospects");
   });
 
@@ -120,7 +131,8 @@ describe("movePipelineItemAction on the pipe Leads board", () => {
       id: "item-1",
       pipelineId: "pipeline-1",
       pipeline: { key: "custom-pipeline" },
-      lead: { id: "lead-1", updatedAt: previousUpdatedAt },
+      stage: { name: "Lead" },
+      lead: { id: "lead-1", name: "Example Lead", updatedAt: previousUpdatedAt },
     });
     vi.useFakeTimers();
     vi.setSystemTime(previousUpdatedAt);

@@ -1784,6 +1784,39 @@ model PipelineItem {
   @@index([pipelineId, isActive])
 }
 
+// A source event is recorded once, even when a scheduled scan sees it again.
+// The paired job makes the All Thing update visible and retryable.
+model SalesEvidenceEvent {
+  id            String   @id @default(cuid())
+  brandId       String
+  leadId        String?
+  source        String
+  sourceEventId String
+  eventType     String
+  occurredAt    DateTime
+  summary       String
+  sourceRef     String?
+  createdAt     DateTime @default(now())
+  allThingJob   AllThingWriteJob?
+
+  @@unique([brandId, source, sourceEventId])
+  @@index([brandId, leadId, occurredAt])
+}
+
+model AllThingWriteJob {
+  id          String   @id @default(cuid())
+  eventId     String   @unique
+  status      String   @default("pending")
+  attempts    Int      @default(0)
+  lastError   String?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  event       SalesEvidenceEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+}
+
 // ─── Content & analytics ─────────────────────────────────────────────────────
 
 model ContentCalendarItem {
