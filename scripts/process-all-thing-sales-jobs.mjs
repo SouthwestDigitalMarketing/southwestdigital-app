@@ -98,7 +98,7 @@ A call occurred; its content has not been verified.
 
 ## Next action
 
-${next}.
+${next}
 
 ## Where things live
 
@@ -112,7 +112,7 @@ ${footer}
 `;
 }
 
-async function process(job) {
+async function processJob(job) {
   const event = job.event;
   if (!event.leadId) throw new Error("Event has no reviewed lead identity");
   const lead = await prisma.meetingLead.findUnique({ where: { id: event.leadId }, select: { id: true, brandId: true, name: true, company: true, pipeId: true, nextAction: true, pipelineItems: { where: { isActive: true }, select: { stage: { select: { key: true } } }, take: 1 } } });
@@ -125,12 +125,12 @@ async function process(job) {
   if (dirty) throw new Error(`All Thing paths already have edits: ${dirty}`);
   const baselineLintIssues = lintIssues();
   const originals = new Map(paths.map((path) => [path, existsSync(join(root, path)) ? read(path) : null]));
+  const marker = `<!-- swapp-event:${event.id} -->`;
   try {
   const existing = existsSync(join(root, leadPath));
   if (existing && !read(leadPath).includes(`swapp_deal_id: ${lead.id}`)) throw new Error("Existing lead page has another SWapp ID");
   mkdirSync(join(root, "leads", name), { recursive: true });
   if (!existing) write(leadPath, newLeadPage(name, lead));
-  const marker = `<!-- swapp-event:${event.id} -->`;
   const diary = existsSync(join(root, diaryPath)) ? read(diaryPath) : `---
 title: ${JSON.stringify(label + " (lead) - diary")}
 created: ${today()}
@@ -197,7 +197,7 @@ ${marker}
 try {
   const jobs = await prisma.allThingWriteJob.findMany({ where: { status: { in: ["pending", "failed"] } }, include: { event: true }, orderBy: { createdAt: "asc" }, take: 20 });
   for (const job of jobs) {
-    try { await process(job); console.log(`Completed All Thing job ${job.id}`); }
+    try { await processJob(job); console.log(`Completed All Thing job ${job.id}`); }
     catch (error) {
       const message = String(error instanceof Error ? error.message : error).slice(0, 1000);
       await prisma.allThingWriteJob.update({ where: { id: job.id }, data: { status: "failed", attempts: { increment: 1 }, lastError: message } });
