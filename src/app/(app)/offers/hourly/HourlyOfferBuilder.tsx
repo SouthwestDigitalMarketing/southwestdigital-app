@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { buildHourlyCheckoutSummary } from "@/lib/engagements/hourlyCheckout";
+import { buildHourlyCheckoutPresentation } from "@/lib/engagements/hourlyCheckoutPresentation";
 import type { HourlyCatalogItem } from "@/lib/quotes/hourlyCatalog";
 import { publishHourlyOfferAction, saveHourlyOfferDraftAction, type HourlyOfferSnapshot } from "./actions";
 
@@ -75,7 +75,7 @@ export function HourlyOfferBuilder({ initial }: { initial: HourlyOfferInitialSta
   const summary = useMemo(() => {
     if (!selectedCatalogItem || quantity <= 0) return null;
     try {
-      return buildHourlyCheckoutSummary({
+      return buildHourlyCheckoutPresentation({
         kind: initial.kind,
         catalogItemId: selectedCatalogItem.id,
         catalogItemLabel: selectedCatalogItem.name,

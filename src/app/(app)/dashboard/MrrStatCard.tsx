@@ -16,6 +16,7 @@ export type PipelineMrrPipeline = {
   id: string;
   key: string;
   name: string;
+  basis?: "monthly" | "one_time";
   stages: Array<{
     id: string;
     number: number;
@@ -191,9 +192,11 @@ export function PipelineMrrStatCard({
   pipelineKey,
   stages,
   goal,
+  basis = "monthly",
 }: {
   pipelineKey: string;
   goal: number | null;
+  basis?: "monthly" | "one_time";
   stages: Array<{
     id: string;
     number: number;
@@ -206,6 +209,8 @@ export function PipelineMrrStatCard({
   const allLeads = stages.flatMap((stage) => stage.items);
   const leadsWithMrr = allLeads.filter((lead) => lead.value > 0);
   const totalMrr = leadsWithMrr.reduce((sum, lead) => sum + lead.value, 0);
+  const unit = basis === "monthly" ? "/mo" : "";
+  const valueLabel = basis === "monthly" ? "MRR" : "value";
 
   return (
     <div className="relative flex flex-col rounded-xl border border-slate-200 bg-white p-3 sm:col-span-2 sm:p-6 lg:col-span-1">
@@ -213,18 +218,18 @@ export function PipelineMrrStatCard({
         type="button"
         onClick={() => setOpen((current) => !current)}
         aria-expanded={open}
-        aria-label={open ? "Hide lead MRR breakdown" : "Show lead MRR breakdown"}
+        aria-label={open ? `Hide lead ${valueLabel} breakdown` : `Show lead ${valueLabel} breakdown`}
         className="flex w-full items-center justify-between gap-2 text-left"
       >
         <span className="min-w-0">
           <span className="flex min-w-0 items-start gap-1.5 text-slate-400">
             <DollarSign size={14} className="mt-0.5 shrink-0" />
             <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">
-              Estimated monthly value · {leadsWithMrr.length.toLocaleString("en-US")} lead{leadsWithMrr.length === 1 ? "" : "s"}
+              {basis === "monthly" ? "Estimated monthly value" : "Estimated one-time value"} · {leadsWithMrr.length.toLocaleString("en-US")} lead{leadsWithMrr.length === 1 ? "" : "s"}
             </span>
           </span>
           <span className="mt-1 block text-2xl font-semibold tabular-nums sm:mt-2 sm:text-3xl" style={{ color: "var(--text-primary)" }}>
-            ${totalMrr.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/mo
+            ${totalMrr.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}{unit}
           </span>
         </span>
         <ChevronDown
@@ -291,10 +296,10 @@ export function PipelineMrrStatCard({
                     <span className="flex shrink-0 items-center gap-2">
                       <span className="text-sm font-semibold tabular-nums text-slate-800">
                         {stage.items.length === 0
-                          ? "$0/mo"
+                          ? `$0${unit}`
                           : stageMrr > 0
-                            ? `$${stageMrr.toLocaleString("en-US", { maximumFractionDigits: 0 })}/mo`
-                            : "MRR not set"}
+                            ? `$${stageMrr.toLocaleString("en-US", { maximumFractionDigits: 0 })}${unit}`
+                            : `${basis === "monthly" ? "MRR" : "Value"} not set`}
                       </span>
                       <ChevronDown size={16} className={`text-slate-400 transition-transform ${expanded ? "rotate-180" : ""}`} />
                     </span>
@@ -314,7 +319,7 @@ export function PipelineMrrStatCard({
                                 {lead.company ? <span className="block truncate text-xs text-slate-400">{lead.company}</span> : null}
                               </span>
                               <span className="ml-auto flex shrink-0 items-center gap-1 text-right text-sm font-semibold tabular-nums text-slate-700">
-                                {lead.value > 0 ? `$${lead.value.toLocaleString("en-US", { maximumFractionDigits: 0 })}/mo` : "MRR not set"}
+                                {lead.value > 0 ? `$${lead.value.toLocaleString("en-US", { maximumFractionDigits: 0 })}${unit}` : `${basis === "monthly" ? "MRR" : "Value"} not set`}
                                 <ChevronRight size={15} className="text-slate-400" />
                               </span>
                             </Link>
@@ -331,7 +336,7 @@ export function PipelineMrrStatCard({
           </ul>
         </div>
       ) : null}
-      <GoalProgressBar value={totalMrr} goal={goal} label="Lead MRR" />
+      {basis === "monthly" ? <GoalProgressBar value={totalMrr} goal={goal} label="Lead MRR" /> : null}
       {open ? (
         <Link
           href={`/pipeline/${encodeURIComponent(pipelineKey)}`}

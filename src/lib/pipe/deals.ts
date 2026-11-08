@@ -47,6 +47,8 @@ function asLeadStep(value: unknown): LeadStep | null {
 
 export type PipeDealInput = {
   brand: string;
+  /** Existing SWapp record id, used to preserve identity when an old pipe id drifted. */
+  remote_id?: string | null;
   /** pipe's deal number, the stable cross-system key. */
   pipeId: string;
   /** pipe's deal number under other casings. */
@@ -68,6 +70,8 @@ export type PipeDealInput = {
   nextDue?: string | null;
   value_monthly?: number | string | null;
   valueMonthly?: number | string | null;
+  value_amount?: number | string | null;
+  valueAmount?: number | string | null;
   amount?: number | string | null;
   kind?: string | null;
   amountKind?: string | null;
@@ -81,10 +85,19 @@ export type PipeDealInput = {
   /** pipe's Leads step, one of LEAD_STEPS or null to clear, either casing. */
   lead_step?: string | null;
   leadStep?: string | null;
+  offer_type?: string | null;
+  offerType?: string | null;
+  value_basis?: string | null;
+  valueBasis?: string | null;
+  first_payment_received_at?: string | null;
+  firstPaymentReceivedAt?: string | null;
+  service_agreement_signed_at?: string | null;
+  serviceAgreementSignedAt?: string | null;
 };
 
 export type ParsedPipeDeal = {
   brand: string;
+  remoteId?: string | null;
   pipeId: string;
   name: string;
   stage: PipeStage;
@@ -96,6 +109,7 @@ export type ParsedPipeDeal = {
   nextAction: string | null;
   nextDue: string | null;
   valueMonthly: number | null;
+  valueAmount?: number | null;
   amount: number | null;
   amountKind: string | null;
   invoiceRef: string | null;
@@ -106,11 +120,19 @@ export type ParsedPipeDeal = {
    * alone (unless the stage moved away from it). null: clear it.
    */
   leadStep: LeadStep | null | undefined;
+  offerType?: string | null;
+  valueBasis?: string | null;
+  firstPaymentReceivedAt?: Date | null;
+  serviceAgreementSignedAt?: Date | null;
 };
 
-export type PipeDeal = Omit<ParsedPipeDeal, "leadStep"> & {
+export type PipeDeal = Omit<ParsedPipeDeal, "leadStep" | "offerType" | "valueBasis" | "firstPaymentReceivedAt" | "serviceAgreementSignedAt"> & {
   /** Always present in answers; null when the deal has no step. */
   leadStep: LeadStep | null;
+  offerType: string | null;
+  valueBasis: string | null;
+  firstPaymentReceivedAt: string | null;
+  serviceAgreementSignedAt: string | null;
   id: string;
   updatedAt: string;
 };
@@ -143,6 +165,31 @@ function cleanMoney(value: unknown, field: string): number | null {
   return amount;
 }
 
+function optionalDate(raw: Record<string, unknown>, snake: string, camel: string, field: string): Date | null | undefined {
+  const key = Object.prototype.hasOwnProperty.call(raw, camel) ? camel : snake;
+  if (!Object.prototype.hasOwnProperty.call(raw, key)) return undefined;
+  const value = raw[key];
+  if (value === null || value === "") return null;
+  if (typeof value !== "string") throw new RangeError(`${field} must be a date or null`);
+  const parsed = new Date(value);
+  if (!Number.isFinite(parsed.getTime())) throw new RangeError(`${field} must be a valid date`);
+  return parsed;
+}
+
+function optionalChoice(raw: Record<string, unknown>, snake: string, camel: string, field: string, choices: readonly string[]): string | null | undefined {
+  const key = Object.prototype.hasOwnProperty.call(raw, camel) ? camel : snake;
+  if (!Object.prototype.hasOwnProperty.call(raw, key)) return undefined;
+  const value = raw[key];
+  if (value === null || value === "") return null;
+  if (typeof value !== "string" || !choices.includes(value)) {
+    throw new RangeError(`${field} must be one of: ${choices.join(", ")}, or null`);
+  }
+  return value;
+}
+
+const OFFER_TYPES = ["bookkeeping", "onsite", "training"] as const;
+const VALUE_BASES = ["monthly", "one_time", "unpriced"] as const;
+
 export function parsePipeDealInput(body: unknown): ParsedPipeDeal {
   const raw = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
   const input = raw as PipeDealInput;
@@ -164,6 +211,7 @@ export function parsePipeDealInput(body: unknown): ParsedPipeDeal {
   }
   return {
     brand,
+    remoteId: clean(input.remote_id ?? (raw.remoteId as string | undefined), 64),
     pipeId,
     name,
     stage: stageRaw as PipeStage,
@@ -175,12 +223,17 @@ export function parsePipeDealInput(body: unknown): ParsedPipeDeal {
     nextAction: clean(input.next_action ?? input.nextAction, 500),
     nextDue: clean(input.next_due ?? input.nextDue, 32),
     valueMonthly: cleanMoney(input.value_monthly ?? input.valueMonthly, "value_monthly"),
+    valueAmount: cleanMoney(input.value_amount ?? input.valueAmount, "value_amount"),
     amount: cleanMoney(input.amount, "amount"),
     amountKind: kind,
     invoiceRef: clean(input.invoice_ref ?? input.invoiceRef, 120),
     invoiceDate: clean(input.invoice_date ?? input.invoiceDate, 32),
     yesContact: clean(input.yes_contact ?? input.yesContact, 64),
     leadStep: parseLeadStep(raw, stageRaw as PipeStage),
+    offerType: optionalChoice(raw, "offer_type", "offerType", "offer_type", OFFER_TYPES),
+    valueBasis: optionalChoice(raw, "value_basis", "valueBasis", "value_basis", VALUE_BASES),
+    firstPaymentReceivedAt: optionalDate(raw, "first_payment_received_at", "firstPaymentReceivedAt", "first_payment_received_at"),
+    serviceAgreementSignedAt: optionalDate(raw, "service_agreement_signed_at", "serviceAgreementSignedAt", "service_agreement_signed_at"),
   };
 }
 
@@ -195,6 +248,10 @@ const leadSelect = {
   nextDue: true,
   amount: true,
   amountKind: true,
+  offerType: true,
+  valueBasis: true,
+  firstPaymentReceivedAt: true,
+  serviceAgreementSignedAt: true,
   invoiceRef: true,
   invoiceDate: true,
   yesContactId: true,
@@ -226,9 +283,14 @@ function present(slug: string, item: ItemRow): PipeDeal {
     business: lead.customerAccountId,
     nextAction: lead.nextAction,
     nextDue: lead.nextDue,
-    valueMonthly: Number(item.baseValueUsd),
+    valueMonthly: lead.valueBasis === "one_time" ? null : Number(item.baseValueUsd),
+    valueAmount: lead.valueBasis === "one_time" ? Number(item.baseValueUsd) : null,
     amount: lead.amount === null ? null : Number(lead.amount),
     amountKind: lead.amountKind,
+    offerType: lead.offerType,
+    valueBasis: lead.valueBasis,
+    firstPaymentReceivedAt: lead.firstPaymentReceivedAt?.toISOString() ?? null,
+    serviceAgreementSignedAt: lead.serviceAgreementSignedAt?.toISOString() ?? null,
     invoiceRef: lead.invoiceRef,
     invoiceDate: lead.invoiceDate,
     yesContact: lead.yesContactId,
@@ -337,7 +399,13 @@ export async function upsertPipeDeal(args: {
     const accountId = await known("business", input.business);
     const yesContactId = await known("yesContact", input.yesContact);
 
-    let lead = await transaction.meetingLead.findUnique({
+    let lead = input.remoteId
+      ? await transaction.meetingLead.findFirst({
+          where: { brandId: brand.id, id: input.remoteId },
+          select: { id: true, leadStep: true },
+        })
+      : null;
+    lead ??= await transaction.meetingLead.findUnique({
       where: { brandId_pipeId: { brandId: brand.id, pipeId: input.pipeId } },
       select: { id: true, leadStep: true },
     });
@@ -356,6 +424,10 @@ export async function upsertPipeDeal(args: {
           nextDue: input.nextDue,
           amount: input.amount,
           amountKind: input.amountKind,
+          offerType: input.offerType,
+          valueBasis: input.valueBasis,
+          firstPaymentReceivedAt: input.firstPaymentReceivedAt,
+          serviceAgreementSignedAt: input.serviceAgreementSignedAt,
           invoiceRef: input.invoiceRef,
           invoiceDate: input.invoiceDate,
           yesContactId,
@@ -376,6 +448,10 @@ export async function upsertPipeDeal(args: {
           nextDue: input.nextDue,
           amount: input.amount,
           amountKind: input.amountKind,
+          ...(input.offerType !== undefined ? { offerType: input.offerType } : {}),
+          ...(input.valueBasis !== undefined ? { valueBasis: input.valueBasis } : {}),
+          ...(input.firstPaymentReceivedAt !== undefined ? { firstPaymentReceivedAt: input.firstPaymentReceivedAt } : {}),
+          ...(input.serviceAgreementSignedAt !== undefined ? { serviceAgreementSignedAt: input.serviceAgreementSignedAt } : {}),
           invoiceRef: input.invoiceRef,
           invoiceDate: input.invoiceDate,
           yesContactId,
@@ -398,9 +474,17 @@ export async function upsertPipeDeal(args: {
         pipelineId: pipeline.id,
         stageId,
         leadId: lead.id,
-        baseValueUsd: input.valueMonthly ?? 0,
+        baseValueUsd: input.valueBasis === "one_time"
+          ? input.valueAmount ?? input.amount ?? 0
+          : input.valueMonthly ?? 0,
       },
-      update: { stageId, baseValueUsd: input.valueMonthly ?? 0, isActive: true },
+      update: {
+        stageId,
+        baseValueUsd: input.valueBasis === "one_time"
+          ? input.valueAmount ?? input.amount ?? 0
+          : input.valueMonthly ?? 0,
+        isActive: true,
+      },
       select: { id: true },
     });
     const item = await transaction.pipelineItem.findUniqueOrThrow({

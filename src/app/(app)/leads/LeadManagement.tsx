@@ -15,7 +15,12 @@ type Lead = {
   nextAction: string | null;
   nextDue: string | null;
   amount: number | null;
+  pipelineValue: number;
   amountKind: string | null;
+  offerType: string | null;
+  valueBasis: string | null;
+  firstPaymentReceivedAt: string | null;
+  serviceAgreementSignedAt: string | null;
   pipeId: string | null;
   isActive: boolean;
 };
@@ -64,35 +69,28 @@ export function LeadManagement({ lead }: { lead: Lead }) {
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <h2 className="text-lg font-semibold text-slate-900">Edit lead details</h2>
           <p className="mt-1 text-sm leading-5 text-slate-600">
-            {lead.pipeId
-              ? "Only local notes and expected services can be changed here. Edit synced fields in Sales."
-              : "Update this lead’s details. Pipeline stage changes stay on the pipeline board."}
+            {"Edit the working lead record here. Move its stage from the pipeline board."}
           </p>
           <form action={updateLeadAction} className="mt-4 grid gap-4">
             <input type="hidden" name="leadId" value={lead.id} />
-            {!lead.pipeId ? (
-              <>
-                <label className={label}>Name<input required name="name" defaultValue={lead.name} className={input} /></label>
-                <label className={label}>Company<input name="company" defaultValue={lead.company ?? ""} className={input} /></label>
-                <label className={label}>Email<input name="email" type="email" inputMode="email" defaultValue={lead.email ?? ""} className={input} /></label>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <label className={label}>Estimated amount<input name="amount" type="number" min="0" step="0.01" defaultValue={lead.amount ?? ""} className={input} /></label>
-                  <label className={label}>Amount type<input name="amountKind" defaultValue={lead.amountKind ?? ""} placeholder="One-time, monthly…" className={input} /></label>
-                </div>
-                <label className={label}>Next action<input name="nextAction" defaultValue={lead.nextAction ?? ""} className={input} /></label>
-                <label className={label}>Next due<input name="nextDue" type="date" defaultValue={lead.nextDue ?? ""} className={input} /></label>
-              </>
-            ) : (
-              <>
-                <input type="hidden" name="name" value={lead.name} />
-                <input type="hidden" name="company" value={lead.company ?? ""} />
-                <input type="hidden" name="email" value={lead.email ?? ""} />
-                <input type="hidden" name="amount" value={lead.amount ?? ""} />
-                <input type="hidden" name="amountKind" value={lead.amountKind ?? ""} />
-                <input type="hidden" name="nextAction" value={lead.nextAction ?? ""} />
-                <input type="hidden" name="nextDue" value={lead.nextDue ?? ""} />
-              </>
-            )}
+            <label className={label}>Name<input required name="name" defaultValue={lead.name} className={input} /></label>
+            <label className={label}>Company<input name="company" defaultValue={lead.company ?? ""} className={input} /></label>
+            <label className={label}>Email<input name="email" type="email" inputMode="email" defaultValue={lead.email ?? ""} className={input} /></label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className={label}>Document amount<input name="amount" type="number" min="0" step="0.01" defaultValue={lead.amount ?? ""} className={input} /></label>
+              <label className={label}>Document type<input name="amountKind" defaultValue={lead.amountKind ?? ""} placeholder="Offer or invoice" className={input} /></label>
+            </div>
+            <label className={label}>Next action<input name="nextAction" defaultValue={lead.nextAction ?? ""} className={input} /></label>
+            <label className={label}>Next due<input name="nextDue" type="date" defaultValue={lead.nextDue ?? ""} className={input} /></label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className={label}>Service type<select name="offerType" defaultValue={lead.offerType ?? ""} className={input}><option value="">Not set</option><option value="bookkeeping">Monthly bookkeeping</option><option value="onsite">On-site work</option><option value="training">Training / consult</option></select></label>
+              <label className={label}>Value basis<select name="valueBasis" defaultValue={lead.valueBasis ?? ""} className={input}><option value="">Not set</option><option value="monthly">Monthly</option><option value="one_time">One-time</option><option value="unpriced">Unpriced</option></select></label>
+            </div>
+            <label className={label}>Forecast amount<input name="pipelineValue" type="number" min="0" step="0.01" inputMode="decimal" defaultValue={lead.pipelineValue} className={input} /></label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className={label}>Initial payment received<input name="firstPaymentReceivedAt" type="date" defaultValue={lead.firstPaymentReceivedAt?.slice(0, 10) ?? ""} className={input} /></label>
+              <label className={label}>Service agreement signed<input name="serviceAgreementSignedAt" type="date" defaultValue={lead.serviceAgreementSignedAt?.slice(0, 10) ?? ""} className={input} /></label>
+            </div>
             <label className={label}>Expected services<textarea name="expectedServices" rows={3} defaultValue={lead.expectedServices ?? ""} className={`${input} min-h-24`} /></label>
             <label className={label}>Notes<textarea name="notes" rows={4} defaultValue={lead.notes ?? ""} className={`${input} min-h-28`} /></label>
             <button type="submit" className={`${button} ui-action-primary w-full sm:w-auto`}>Save changes</button>

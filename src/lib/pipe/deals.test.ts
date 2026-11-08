@@ -110,7 +110,11 @@ describe("parsePipeDealInput", () => {
   });
 
   it("accepts each lead step only with its matching pipe stage", () => {
-    const stageFor = { reach: "lead", qb: "talking", book: "talking", call: "talking", quote: "proposed", nurture: "proposed" } as const;
+    const stageFor: Record<(typeof LEAD_STEPS)[number], string> = {
+      reach: "lead", qb: "talking", book: "talking", call: "talking",
+      quote: "proposed", payment: "proposed", agreement: "proposed",
+      session: "talking", nurture: "proposed",
+    };
     for (const leadStep of LEAD_STEPS) {
       expect(parsePipeDealInput({ brand: "b", pipe_id: "7", name: "x", stage: stageFor[leadStep], lead_step: leadStep }).leadStep)
         .toBe(leadStep);

@@ -18,7 +18,7 @@ export function LeadCreateForm({
     <details className="mt-4 rounded-xl border border-slate-200 bg-white">
       <summary className="cursor-pointer list-none px-4 py-4 text-base font-semibold text-slate-900">
         Add an opportunity
-        <span className="ml-2 text-sm font-normal text-slate-500">Unpriced · saved in this brand</span>
+        <span className="ml-2 text-sm font-normal text-slate-500">Saved in this brand</span>
       </summary>
       <form action={createPipelineLeadAction} className="grid gap-3 border-t border-slate-100 p-4 sm:grid-cols-2">
         <input type="hidden" name="pipelineKey" value={pipelineKey} />
@@ -44,13 +44,31 @@ export function LeadCreateForm({
           Phone (optional)
           <input name="phone" type="tel" maxLength={64} autoComplete="tel" className={field} />
         </label>
+        <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+          Service type
+          <select name="offerType" defaultValue="bookkeeping" className={field}>
+            <option value="bookkeeping">Monthly bookkeeping</option>
+            <option value="onsite">On-site work</option>
+            <option value="training">Training / consult</option>
+          </select>
+        </label>
+        <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+          Value basis
+          <select name="valueBasis" defaultValue="unpriced" className={field}>
+            <option value="unpriced">Not priced yet</option>
+            <option value="monthly">Monthly</option>
+            <option value="one_time">One-time</option>
+          </select>
+        </label>
+        <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+          Estimated value (optional)
+          <input name="value" type="number" min="0" step="0.01" inputMode="decimal" className={field} />
+        </label>
         <label className="grid gap-1.5 text-sm font-medium text-slate-700 sm:col-span-2">
           Notes (optional)
           <textarea name="notes" maxLength={2000} rows={3} className={field} />
         </label>
-        <p className="text-sm text-slate-600 sm:col-span-2">
-          No value is added to MRR or forecasts. Set monthly or one-time value after the value fields are updated.
-        </p>
+        <p className="text-sm text-slate-600 sm:col-span-2">Monthly estimates feed Lead MRR. One-time estimates stay out of MRR.</p>
         <div className="sm:col-span-2">
           <button type="submit" className="ui-action-primary min-h-12 w-full rounded-full px-5 text-base font-semibold sm:w-auto">
             Add opportunity

@@ -157,9 +157,19 @@ export async function createPipelineLeadAction(formData: FormData) {
   const rawPhone = clean(formData.get("phone")).slice(0, 64);
   const phoneE164 = rawPhone ? parseSubmittedPhone(rawPhone) : null;
   const notes = clean(formData.get("notes")).slice(0, 2_000);
+  const offerType = clean(formData.get("offerType"));
+  const valueBasis = clean(formData.get("valueBasis"));
+  const rawValue = clean(formData.get("value"));
+  const valueAmount = rawValue ? Number(rawValue) : null;
 
   if (!pipelineKey || !stageId || !name) throw new Error("Pipeline, stage, and name are required.");
   if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error("Enter a valid email address.");
+  if (!["bookkeeping", "onsite", "training"].includes(offerType)) throw new Error("Choose a service type.");
+  if (!["monthly", "one_time", "unpriced"].includes(valueBasis)) throw new Error("Choose a value basis.");
+  if (valueAmount !== null && (!Number.isFinite(valueAmount) || valueAmount < 0 || valueAmount > 999999999999.99)) {
+    throw new Error("Enter a valid estimated value of 0 or more.");
+  }
+  if (valueAmount !== null && valueBasis === "unpriced") throw new Error("Choose monthly or one-time for a priced opportunity.");
 
   const [pipeline, stage] = await Promise.all([
     prisma.pipeline.findFirst({
@@ -181,6 +191,8 @@ export async function createPipelineLeadAction(formData: FormData) {
         company: company || null,
         email: email || null,
         notes: notes || null,
+        offerType,
+        valueBasis,
         kind: "LEAD",
       },
       select: { id: true },
@@ -190,7 +202,7 @@ export async function createPipelineLeadAction(formData: FormData) {
         pipelineId: pipeline.id,
         stageId: stage.id,
         leadId: lead.id,
-        baseValueUsd: 0,
+        baseValueUsd: valueBasis === "unpriced" ? 0 : valueAmount ?? 0,
       },
       select: { id: true },
     });

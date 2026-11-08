@@ -264,7 +264,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             stageId: true,
             baseValueUsd: true,
             stage: { select: { key: true } },
-            lead: { select: { id: true, name: true, company: true, leadStep: true } },
+            lead: { select: { id: true, name: true, company: true, leadStep: true, valueBasis: true } },
           },
         },
       },
@@ -300,7 +300,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     Promise.all([getReviewStats(brand.id, selectedPeriod), getReviewStats(brand.id, previous)]),
   ]);
   const pipelineOverview: PipelineMrrPipeline[] = pipelineRows.map((pipeline) => {
-    const itemsByFunnelNumber = new Map<number, PipelineMrrPipeline["stages"][number]["items"]>();
+    const monthlyByStage = new Map<number, PipelineMrrPipeline["stages"][number]["items"]>();
+    const oneTimeByStage = new Map<number, PipelineMrrPipeline["stages"][number]["items"]>();
     for (const item of pipeline.items) {
       // Won deals are clients or completed invoices, not sales leads. Keep them
       // out of Lead MRR so their amounts are not counted a second time.
@@ -315,11 +316,18 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         : null;
       const funnelNumber = validStep === "reach"
         ? 1
-        : validStep === "qb" || (!validStep && item.stage.key === "talking")
+        : validStep === "qb" || validStep === "book" || (!validStep && item.stage.key === "talking")
           ? 2
-          : 3;
-      itemsByFunnelNumber.set(funnelNumber, [
-        ...(itemsByFunnelNumber.get(funnelNumber) ?? []),
+          : validStep === "payment"
+            ? 4
+            : validStep === "agreement"
+              ? 5
+              : validStep === "session"
+                ? 4
+                : 3;
+      const stageMap = item.lead.valueBasis === "one_time" ? oneTimeByStage : monthlyByStage;
+      stageMap.set(funnelNumber, [
+        ...(stageMap.get(funnelNumber) ?? []),
         { id: item.lead.id, name: item.lead.name, company: item.lead.company, value: Number.isFinite(value) ? value : 0 },
       ]);
     }
@@ -331,15 +339,18 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       { number: 4, name: "Collect initial payment" },
       { number: 5, name: "Get service agreements signed" },
     ];
-    const stages = funnelStages.map(({ number, name }) => ({
-      id: `funnel-${number}`,
+    const makeStages = (byStage: typeof monthlyByStage, basis: "monthly" | "one_time") => funnelStages.map(({ number, name }) => ({
+      id: `${basis}-funnel-${number}`,
       number,
       name,
-      items: itemsByFunnelNumber.get(number) ?? [],
+      items: byStage.get(number) ?? [],
     }));
 
-    return { id: pipeline.id, key: pipeline.key, name: pipeline.name, stages };
-  });
+    return [
+      { id: pipeline.id, key: pipeline.key, name: pipeline.name, basis: "monthly" as const, stages: makeStages(monthlyByStage, "monthly") },
+      { id: `${pipeline.id}-one-time`, key: pipeline.key, name: pipeline.name, basis: "one_time" as const, stages: makeStages(oneTimeByStage, "one_time") },
+    ];
+  }).flat();
 
   const mrrClients = mrrRows.map((row) => ({
     id: row.id,
@@ -483,6 +494,12 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           pipelineKey={PIPE_PROSPECTS_KEY}
           stages={pipelineOverview[0]?.stages ?? []}
           goal={mrrGoals.leadMrrGoal}
+        />
+        <PipelineMrrStatCard
+          pipelineKey={PIPE_PROSPECTS_KEY}
+          stages={pipelineOverview[1]?.stages ?? []}
+          goal={null}
+          basis="one_time"
         />
       </DashboardSection>
 

@@ -44,6 +44,10 @@ export default async function LeadDetailPage({ params, searchParams }: PageProps
         notes: true,
         amount: true,
         amountKind: true,
+        offerType: true,
+        valueBasis: true,
+        firstPaymentReceivedAt: true,
+        serviceAgreementSignedAt: true,
         nextAction: true,
         nextDue: true,
         pipeId: true,
@@ -99,6 +103,11 @@ export default async function LeadDetailPage({ params, searchParams }: PageProps
         nextDue: lead.nextDue,
         amount: lead.amount == null ? null : Number(lead.amount),
         amountKind: lead.amountKind,
+        pipelineValue: Number(lead.pipelineItems[0]?.baseValueUsd ?? 0),
+        offerType: lead.offerType,
+        valueBasis: lead.valueBasis,
+        firstPaymentReceivedAt: lead.firstPaymentReceivedAt?.toISOString() ?? null,
+        serviceAgreementSignedAt: lead.serviceAgreementSignedAt?.toISOString() ?? null,
         pipeId: lead.pipeId,
         isActive: lead.isActive,
       }} />
@@ -107,11 +116,18 @@ export default async function LeadDetailPage({ params, searchParams }: PageProps
         <dl>
           <Detail label="Email">{lead.email ? <a className="break-all text-brandnavy hover:underline" href={`mailto:${lead.email}`}>{lead.email}</a> : null}</Detail>
           <Detail label="Status">{lead.kind === "PROSPECT" ? "Prospect" : "Lead"}</Detail>
-          <Detail label="Estimated value">
+          <Detail label="Offer / invoice amount">
             {lead.amount != null
               ? `${formatMoney(Number(lead.amount))}${lead.amountKind ? ` · ${lead.amountKind}` : ""}`
               : "Not set"}
           </Detail>
+          <Detail label="Forecast value">
+            {lead.pipelineItems.length ? `${formatMoney(Number(lead.pipelineItems[0].baseValueUsd))}${lead.valueBasis === "monthly" ? " / month" : lead.valueBasis === "one_time" ? " one-time" : ""}` : null}
+          </Detail>
+          <Detail label="Service type">{{ bookkeeping: "Monthly bookkeeping", onsite: "On-site work", training: "Training / consult" }[lead.offerType ?? ""] ?? lead.offerType}</Detail>
+          <Detail label="Value basis">{{ monthly: "Monthly", one_time: "One-time", unpriced: "Unpriced" }[lead.valueBasis ?? ""] ?? lead.valueBasis}</Detail>
+          <Detail label="Initial payment received">{lead.firstPaymentReceivedAt?.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}</Detail>
+          <Detail label="Service agreement signed">{lead.serviceAgreementSignedAt?.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}</Detail>
           <Detail label="Expected services">{lead.expectedServices}</Detail>
           <Detail label="Next action">{lead.nextAction}</Detail>
           <Detail label="Next due">{lead.nextDue}</Detail>

@@ -1649,6 +1649,12 @@ model MeetingLead {
   nextDue             String?
   amount              Decimal?                @db.Decimal(14, 2)
   amountKind          String?
+  // Commercial terms belong to the opportunity, not the person. `amountKind`
+  // above remains the source document kind (offer or invoice).
+  offerType                 String?
+  valueBasis                String?
+  firstPaymentReceivedAt    DateTime?
+  serviceAgreementSignedAt  DateTime?
   invoiceRef          String?
   invoiceDate         String?
   yesContactId        String?

@@ -36,10 +36,34 @@ export async function updateLeadAction(formData: FormData) {
   const nextDue = value(formData, "nextDue");
   const rawAmount = value(formData, "amount");
   const amount = rawAmount ? Number(rawAmount) : null;
+  const rawPipelineValue = value(formData, "pipelineValue");
+  const pipelineValue = rawPipelineValue ? Number(rawPipelineValue) : 0;
+  const offerType = value(formData, "offerType");
+  const valueBasis = value(formData, "valueBasis");
+  const rawPaymentDate = value(formData, "firstPaymentReceivedAt");
+  const rawAgreementDate = value(formData, "serviceAgreementSignedAt");
+  const firstPaymentReceivedAt = rawPaymentDate ? new Date(`${rawPaymentDate}T00:00:00.000Z`) : null;
+  const serviceAgreementSignedAt = rawAgreementDate ? new Date(`${rawAgreementDate}T00:00:00.000Z`) : null;
 
   if (!name) throw new Error("Lead name is required.");
   if (amount !== null && (!Number.isFinite(amount) || amount < 0 || amount > 999999999999.99)) {
     throw new Error("Enter a valid amount of 0 or more.");
+  }
+  if (!Number.isFinite(pipelineValue) || pipelineValue < 0 || pipelineValue > 999999999999.99) {
+    throw new Error("Enter a valid forecast amount of 0 or more.");
+  }
+  if (offerType && !["bookkeeping", "onsite", "training"].includes(offerType)) throw new Error("Choose a valid service type.");
+  if (valueBasis && !["monthly", "one_time", "unpriced"].includes(valueBasis)) throw new Error("Choose a valid value basis.");
+  if (pipelineValue > 0 && (!valueBasis || valueBasis === "unpriced")) {
+    throw new Error("Choose monthly or one-time before entering a forecast amount.");
+  }
+  for (const [raw, date, field] of [
+    [rawPaymentDate, firstPaymentReceivedAt, "initial payment date"],
+    [rawAgreementDate, serviceAgreementSignedAt, "agreement date"],
+  ] as const) {
+    if (raw && (!/^\d{4}-\d{2}-\d{2}$/.test(raw) || !Number.isFinite(date?.getTime()))) {
+      throw new Error(`Enter a valid ${field}.`);
+    }
   }
 
   const current = await withBrandDataTransaction(dataContext, (transaction) =>
@@ -50,25 +74,31 @@ export async function updateLeadAction(formData: FormData) {
   );
   if (!current) throw new Error("Lead not found for this brand.");
 
-  await withBrandDataTransaction(dataContext, (transaction) =>
-    transaction.meetingLead.update({
+  await withBrandDataTransaction(dataContext, async (transaction) => {
+    await transaction.meetingLead.update({
       where: { id: current.id },
-      data: current.pipeId
-        ? { expectedServices: expectedServices || null, notes: notes || null }
-        : {
-            name,
-            company: company || null,
-            email,
-            expectedServices: expectedServices || null,
-            notes: notes || null,
-            nextAction: nextAction || null,
-            nextDue: nextDue || null,
-            amount,
-            amountKind: amount === null ? null : value(formData, "amountKind") || null,
-          },
+      data: {
+        name,
+        company: company || null,
+        email,
+        expectedServices: expectedServices || null,
+        notes: notes || null,
+        nextAction: nextAction || null,
+        nextDue: nextDue || null,
+        amount,
+        amountKind: amount === null ? null : value(formData, "amountKind") || null,
+        offerType: offerType || null,
+        valueBasis: valueBasis || null,
+        firstPaymentReceivedAt,
+        serviceAgreementSignedAt,
+      },
       select: { id: true },
-    }),
-  );
+    });
+    await transaction.pipelineItem.updateMany({
+      where: { leadId: current.id, pipeline: { brandId: brand.id } },
+      data: { baseValueUsd: pipelineValue },
+    });
+  });
 
   refreshLeadViews(id);
   redirect(`/leads/${encodeURIComponent(id)}?updated=1`);
