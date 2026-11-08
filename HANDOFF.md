@@ -40,8 +40,12 @@ been run against the All Thing, and no timer has been installed.
 read-only and resolves a completed call only when its brand line, contact
 phone, and active linked SWapp lead are unique. The `--days=7` dry run on
 2026-11-08 scanned 13 completed calls: 1 matched, 5 ambiguous, 7 unmatched,
-0 invalid. No `--apply` run or timer was installed, so these calls created
-no evidence events or All Thing jobs. The adapter does not move stages.
+0 invalid. On the next turn `--apply --days=7` recorded only Quo call #549
+as event `cmw852hjd0000jja49ii0uw0e`, linked to Kevin
+(`cmvzrwakr0003ju08u500z3kb`). Its All Thing job
+`cmw852hql0002jja4oeagbt0x` is pending, attempts 0. A repeated apply
+reported 1 already recorded and created no duplicate. Kevin remains in
+stage `lead`; the adapter does not move stages. No timer is installed.
 
 Writer update: the All Thing now has a lead-file SOP and `hubs/leads.md`.
 The worker follows its two-page layout and matches an existing page by
@@ -54,8 +58,8 @@ that its write does not increase the count. This is not a clean lint pass.
 
 Checks for the writer update: `node --check` on both scripts,
 `git diff --check`, `npm run typecheck`, `npm run lint -- --quiet`, and
-`npm test` passed (982 passed, 5 skipped). No `--apply` run, All Thing
-write, timer, merge, or production deploy yet.
+`npm test` passed (982 passed, 5 skipped). No All Thing write, timer, merge,
+or production deploy yet.
 
 Checks on this branch: Prisma schema validation and client generation passed;
 `npm run typecheck`, `npm run lint -- --quiet`, `git diff --check`, and `npm test`
