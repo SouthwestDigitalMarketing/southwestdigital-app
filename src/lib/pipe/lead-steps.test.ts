@@ -7,13 +7,16 @@ import {
 } from "./lead-steps";
 
 describe("pipe Leads board columns", () => {
-  it("defines the six named columns with the existing pipe stage mapping", () => {
+  it("defines the named columns with the pipe stage mapping", () => {
     expect(LEAD_STEPS.map((step) => [step, LEAD_STEP_LABEL[step], LEAD_STEP_STAGE[step]])).toEqual([
-      ["reach", "Reach decision maker", "lead"],
-      ["qb", "Get QB access", "talking"],
+      ["reach", "Contact lead and request QBO invite", "lead"],
+      ["qb", "Review QBO", "talking"],
       ["book", "Book review call", "talking"],
       ["call", "Conduct review call", "talking"],
       ["quote", "Send Quote & Contract", "proposed"],
+      ["payment", "Collect initial payment", "proposed"],
+      ["agreement", "Get service agreements signed", "proposed"],
+      ["session", "Collect payment / book session", "talking"],
       ["nurture", "Nurture", "proposed"],
     ]);
   });

@@ -1,4 +1,4 @@
-export const LEAD_STEPS = ["reach", "qb", "book", "call", "quote", "nurture"] as const;
+export const LEAD_STEPS = ["reach", "qb", "book", "call", "quote", "payment", "agreement", "session", "nurture"] as const;
 export type LeadStep = (typeof LEAD_STEPS)[number];
 
 export const LEAD_STEP_STAGE: Record<LeadStep, "lead" | "talking" | "proposed"> = {
@@ -7,15 +7,21 @@ export const LEAD_STEP_STAGE: Record<LeadStep, "lead" | "talking" | "proposed"> 
   book: "talking",
   call: "talking",
   quote: "proposed",
+  payment: "proposed",
+  agreement: "proposed",
+  session: "talking",
   nurture: "proposed",
 };
 
 export const LEAD_STEP_LABEL: Record<LeadStep, string> = {
-  reach: "Reach decision maker",
-  qb: "Get QB access",
+  reach: "Contact lead and request QBO invite",
+  qb: "Review QBO",
   book: "Book review call",
   call: "Conduct review call",
   quote: "Send Quote & Contract",
+  payment: "Collect initial payment",
+  agreement: "Get service agreements signed",
+  session: "Collect payment / book session",
   nurture: "Nurture",
 };
 

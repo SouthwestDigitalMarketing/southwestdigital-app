@@ -1,17 +1,19 @@
 # SWapp handoff
 
-Checked on **ripley**, 2026-11-07 (America/Chicago), by Ummon.
+Checked on **ripley**, 2026-11-08 (America/Chicago), by Ummon.
 `README.md` describes the project; this file records the current branch and
 work. Prior handoff notes are archived at
 `docs/handoff-archive/2026-11-05-before-mobile-ux-preview.md`.
 
 ## Current state
 
-- Branch: `feat/mobile-ux-pass`, at `7dcee9c`. It is 15 commits ahead of
-  `origin/main`. Do not push without Tom's explicit instruction.
-- Existing uncommitted changes in `CLAUDE.md`, `next.config.ts`, and
-  `src/auth.ts` were present before this session and were left intact.
-  The latter two allow the phone preview on Ripley's Tailnet address.
+- Branch base: `origin/main` commit
+  `9a9188c6243558b5ae7d568b7803a5257e08cb62`. Current branch:
+  `feat/swapp-own-pipeline-cutover`. This branch contains the pipeline
+  source-of-truth cutover and current lead-detail/dashboard updates.
+- The phone-preview configuration in `next.config.ts` and `src/auth.ts` is
+  already part of the merged main branch; no pre-existing local code changes
+  were present at the start of this follow-up.
 - Local preview is running from this checkout and is bound only
   to Ripley's Tailnet address. Verified listening on `100.98.89.93:3001`; an
   unauthenticated `/dashboard` request redirects to `/login`. The phone needs
@@ -55,38 +57,35 @@ work. Prior handoff notes are archived at
   `MeetingLead.amount` and `amountKind` fields allow offer/invoice amounts, but
   do not classify a contract as recurring or one-off. The current pipeline
   dashboard does not show a combined pipeline summary beneath MRR.
-- Follow-up read-only comparison with the Sales SQLite source (`pipe where`:
-  data host Ripley, `~/.local/share/lochside-sales/sales.db`) found richer deal
-  fields than SWapp currently receives. SQLite stores `offer` (bookkeeping,
-  on-site, training), `value_monthly`, one-time `amount` plus `kind`, and
-  offer-specific `lead_step`. Sales logic treats bookkeeping as monthly service
-  and on-site/training as one-time hourly work; Leads steps differ by offer.
-  Referrals and Reviews are lifecycle views over won deals. The current Sales
-  sync payload sends monthly and one-time amount fields but omits `offer` and
-  `lead_step`; SWapp's `MeetingLead` schema has no offer field. This is why the
-  Postgres pipeline snapshot cannot yet reliably split recurring and one-time
-  forecasts or show the offer-specific lead stages. SQLite was queried
-  read-only; no source records were changed.
+- The current data source and cutover rules are in
+  `docs/pipeline-source-of-truth.md`. The pipeline schema migration
+  `prisma/migrations/20261108180000_pipeline_opportunity_terms/migration.sql`
+  was applied with `prisma db execute`. The four new columns were read back.
+  The same migration run classified 51 matching Bookkeeping Conroe leads:
+  47 monthly and 4 one-time. All 51 were matched by SWapp record ID, with no
+  stage mismatches. The 2 local-only records were left unchanged. Their current
+  values were preserved: 10 monthly leads with values total `$7,300`; 1
+  one-time lead with a value of `$750`. The earlier `$8,050` combined total is
+  now split by basis.
 - `npm run typecheck` and `git diff --check` pass. The dashboard endpoint responds with HTTP 307 to `/login` without a session. No test suite or signed-in phone visual check was run after the latest card change; Tom's screenshot showed the all-pipeline selector took too much space, so the selector was replaced with one Lead MRR dropdown.
-- Added monthly MRR and Lead MRR goal fields to Settings and progress bars at the bottom of the two existing cards. Bars use a red-to-green gradient and appear only after a goal is set. Migration: `prisma/migrations/20261107160000_dashboard_mrr_goals/migration.sql`. **Not applied.** `.env` points to the Supabase pooler (`aws-1-us-east-1.pooler.supabase.com`); deployment docs identify the shared production database and prohibit production changes while the migration gates remain open. For the local dev server only, Tom set both goals to `$10,000` for Bookkeeping Conroe via `DEV_DASHBOARD_*` environment variables; the dashboard should show both bars, and Settings shows the preview values as disabled/read-only with a local-only note. No Supabase write was made. Platform brand administration now selects only the theme fields it uses; it no longer selects all columns from `BrandTheme`.
+- Added monthly MRR and Lead MRR goal fields to Settings and progress bars at the bottom of the two existing cards. The migration `prisma/migrations/20261107160000_dashboard_mrr_goals/migration.sql` was applied to the configured Supabase database on 2026-11-08 using `prisma db execute`, following `docs/deployment/database-migration-state.md`. Read-back confirmed both columns exist and the Bookkeeping Conroe brand row has `monthlyMrrGoal=10000` and `leadMrrGoal=10000`. No other brand row was updated. Platform brand administration selects only the theme fields it uses.
 - The `/settings` side-menu item uses normal Next client navigation. The mobile drawer now closes after the pathname changes. A direct full-page load was tried and caused `net::ERR_CONNECTION_ABORTED` on the phone, so it was reverted. Ripley responds locally at port 3001; the signed-in phone route is not yet verified.
 
-## Next step
+## Preview
 
 Tom can refresh the MRR and pipeline dashboard on his phone at
 `http://100.98.89.93:3001/dashboard`. Tailscale must be connected and the user
 must be signed in. The user timer is enabled on Ripley and uses
 `/home/tom/projects/bookbot-invoice-history/bin/qb`; keep that worktree
-available while this preview setup is in use. Do not push without Tom's
-explicit instruction.
+available while this preview setup is in use.
 
-The dashboard has a separate Pipelines section below Revenue, with one Lead MRR card. Expanding it shows Pipe Prospects stage totals in monthly dollars; expanding a stage lists its leads and links to the brand-scoped `/leads/[id]` page. The card reads `PipelineItem.baseValueUsd`, populated by the legacy pipe sync from `value_monthly`; stage totals are unweighted. The previous all-pipeline carousel was removed after Tom's phone screenshot showed it pushed the stages too far down.
+The dashboard has a separate Pipelines section below Revenue, with monthly and one-time forecast cards. Expanding either shows Pipe Prospects stage totals in that card's value basis; expanding a stage lists leads and links to the brand-scoped `/leads/[id]` page. Totals are unweighted.
 
-Lead MRR displays five action stages: Ask lead to invite us to QBO, Review QBO, Present to decision maker, Collect initial payment, and Get service agreements signed. It excludes `won` and `lost` pipeline items so completed deals and client lifecycle follow-up do not inflate lead MRR; recurring clients with MRR set remain in the Revenue client list. Prospect maps to current `prospect`; QBO access maps to the `qb` lead step and its untagged `talking` fallback; other active pre-won lead steps map to presenting to the decision maker. The current SWapp/Sales data has no payment-received or full-service-agreement stage field, so stages 4 and 5 remain empty until that workflow is tracked in source data. The card labels its total as estimated monthly value; the count is active leads with a positive monthly estimate. No pipeline records or Sales API contracts were changed.
+Lead MRR displays five action stages: Ask lead to invite us to QBO, Review QBO, Present to decision maker, Collect initial payment, and Get service agreements signed. It excludes `won` and `lost` plus cold `prospect` stage items. One-time work is shown separately and never counted as MRR. Lead records now store explicit offer type, value basis, first-payment date, and agreement date.
 
 Both MRR cards place the Detail link below the progress bar when expanded. Revenue and pipeline detail pages use the shared `HistoryBackLink`, which returns through browser history to restore the page and scroll position; direct visits fall back to `/dashboard` or `/pipeline` respectively.
 
-This first pass shows lead MRR only. One-time and other pipeline types stay out of this card. Sales SQLite has offer type and cadence, but its sync omits those fields and SWapp `MeetingLead` has no offer classification; do not infer those categories from the current data. A later combined forecast needs an agreed Sales-to-SWapp data contract.
+The old Sales SQLite sync can still pull changes from SWapp into its local report copy. Deal uploads from SQLite to SWapp are disabled. SWapp matches these records by saved record ID before checking the older `pipeId`, so mismatched legacy deal numbers do not create duplicates.
 Earlier mobile pipeline concepts are saved at
 `public/mockups/pipeline-dashboard-recurring.png`,
 `public/mockups/pipeline-dashboard-one-time.png`, and
@@ -165,25 +164,28 @@ Goal bar gradient correction (2026-11-07): MRR and Lead MRR bars now keep the re
 
 YouTube dashboard fallback (2026-11-07): when the saved refresh token cannot be decrypted by this server, SWapp logs a warning rather than `console.error` (which raised the Next.js dev overlay) and shows YouTube data as unavailable instead of reporting no activity. No refresh token was changed and no database write or reconnect was attempted. `git diff --check` passes. No tests or typecheck were run.
 
-Pipeline source-of-truth transition (2026-11-08): Tom directed that SWapp
-become the working source for pipeline records, with Sales SQLite retained as a
-migration source and later made read-only after parity. Current fields,
-existing SWapp controls, missing value/payment/agreement data, and cutover gates
-are mapped in `docs/pipeline-source-of-truth.md`. Existing app controls include
-stage moves, next-action/due-date/value edits, and archive/restore. A new
-brand-scoped form creates an unpriced opportunity and links a matching Contact
-by email or phone (creating a Contact when needed). It does not add to MRR or
-forecast totals. Valued opportunity creation remains gated: `MeetingLead.amountKind`
-currently means `offer` or `invoice`, while the dashboard amount field does not
-carry an explicit monthly/one-time basis. Board action `e2a280b4269b` awaits
-Kassad's review of Sales workflows and the write boundary. No schema, Sales
-sync, SQLite records, or shared Supabase rows were changed. `npm run typecheck`
-and `git diff --check` pass. `npm run lint` exits 0 with 9 warnings. `npm test`
-passes 125 test files / 982 tests, with 1 test file and 5 tests skipped.
+Pipeline source-of-truth transition (2026-11-08): SWapp now owns working
+pipeline records. The additive schema was applied and 51 source records were
+backfilled in place. Sales deal uploads were disabled; pulls now match by the
+SWapp record ID first and accept SWapp changes as authoritative. Sales code is
+in `/home/tom/projects/sales-swapp-pipeline-cutover` on
+`feat/swapp-pipeline-cutover`; no client data or SQLite records were changed.
+SWapp `npm run typecheck`, lint, and PR CI pass; lint has 9 warnings and 0
+errors. The first PR CI run found one stale lead-step assertion; its expected
+steps were updated. The rerun passed all checks. The local production build
+passes with Webpack and a temporary local `PLATFORM_BASE_URL`. Netlify's first
+Deploy Preview failed because `AUTH_URL` was set while `src/auth.ts` requires
+it and `NEXTAUTH_URL` to stay unset for multi-hostname sign-in. I removed
+`AUTH_URL` from the site's deploy-preview and production contexts and confirmed
+it is unset in both. A new preview build is pending. Signed-in phone review has
+not yet been done. Sales `compileall` and `git diff --check` pass; no Sales
+test suite was run and its PR reports no CI checks.
 
-Merge preparation (2026-11-08): updated the A/R aging test expectation to
-include the four aging buckets. Typecheck, lint, and tests pass. The dashboard
-goal SQL migration `20261107160000_dashboard_mrr_goals` remains unapplied; the
-app detects missing columns and disables saved goal settings. No production
-database change was made. Local `next build` was not run; CI's required checks
-are typecheck, lint, and unit tests.
+The checked-out repo was clean at `origin/main` commit
+`9a9188c6243558b5ae7d568b7803a5257e08cb62` before this follow-up. Current
+topic branch: `feat/swapp-own-pipeline-cutover`. The dev server's current
+health must be checked before handoff. The Sales repo change is source code only;
+its SQLite database was read-only and had 51 canonical Bookkeeping Conroe
+records plus 52 duplicate rows pointing at those same deals. The full source
+inventory and migration gates are in
+`docs/pipeline-source-of-truth.md`.
