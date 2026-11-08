@@ -60,3 +60,13 @@ opportunity link, not name alone.
 pages link to the next procedure. Code enforces identity, evidence, and
 paired-write rules so the outcome does not depend on an agent remembering a
 long prompt.
+
+## Current implementation boundary (2026-11-08)
+
+The first branch records SWapp lead creation and stage moves and exposes
+`POST /api/pipe/evidence` for an authenticated collector to attach an
+observed event to an **existing active lead**. This endpoint records evidence
+and queues the All Thing job; it does not create a contact, create an
+opportunity, or move a stage. Identity resolution and source collectors are
+still needed. The writer script exists but is not scheduled or enabled until
+the `sales-leads` hub and shared All Thing write contract are settled.
