@@ -12,6 +12,7 @@ import {
 } from "@/lib/stripe/connect";
 import { requestOrigin } from "@/lib/stripe/requestOrigin";
 import { ToolLinksForm } from "./ToolLinksForm";
+import { DashboardGoalsForm } from "./DashboardGoalsForm";
 import { BrandAppearanceForm } from "./BrandAppearanceForm";
 import { StripeConnectForm } from "./StripeConnectForm";
 import { YouTubeIntegrationForm } from "./YouTubeIntegrationForm";
@@ -20,6 +21,7 @@ import { ReviewIntegrationsForm } from "./ReviewIntegrationsForm";
 import { GOOGLE_REVIEW_INTEGRATION_KEY } from "@/lib/reviews/googleDestination";
 import { QUO_INTEGRATION_KEY } from "@/lib/reviews/quoCredentials";
 import { getMembershipEmailConnection, toPublicConnection } from "@/lib/emailConnections/repository";
+import { getMrrGoals } from "@/lib/dashboard/mrr-goals";
 
 type EmailNotice = "connected" | "cancelled" | "error" | "missing-refresh-token" | "not-configured" | "access-denied";
 
@@ -81,6 +83,7 @@ export default async function SettingsPage({
     select: { key: true, label: true, url: true, sortOrder: true },
     orderBy: { sortOrder: "asc" },
   });
+  const mrrGoals = await getMrrGoals(brand.id);
   let connect = await prisma.brandIntegration.findUnique({
     where: { brandId_key: { brandId: brand.id, key: STRIPE_CONNECT_KEY } },
     select: { status: true, externalAccountId: true },
@@ -161,6 +164,20 @@ export default async function SettingsPage({
             phoneNumberId: quo?.externalPropertyId ?? "",
           }}
           googleReviewUrl={googleReviewUrl}
+        />
+        <DashboardGoalsForm
+          brandId={brand.id}
+          mrrGoalsAvailable={mrrGoals.available}
+          mrrGoalsPreview={mrrGoals.preview}
+          goals={{
+            monthlyMrrGoal: mrrGoals?.monthlyMrrGoal ?? null,
+            leadMrrGoal: mrrGoals?.leadMrrGoal ?? null,
+            monthlyReviewRequestsGoal: brand.theme?.monthlyReviewRequestsGoal ?? 20,
+            reviewOpenRateGoal: brand.theme?.reviewOpenRateGoal ?? 50,
+            reviewFiveStarRateGoal: brand.theme?.reviewFiveStarRateGoal ?? 70,
+            monthlyOffersSentGoal: brand.theme?.monthlyOffersSentGoal ?? 10,
+            monthlyOffersAcceptedGoal: brand.theme?.monthlyOffersAcceptedGoal ?? 3,
+          }}
         />
         <BrandAppearanceForm
           theme={{

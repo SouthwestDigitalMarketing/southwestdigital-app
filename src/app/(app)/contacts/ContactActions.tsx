@@ -13,15 +13,19 @@ const danger =
   "ui-action-danger rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide disabled:opacity-50";
 const primary =
   "ui-action-primary rounded-full px-2.5 py-1 text-center text-[11px] font-semibold uppercase tracking-wide";
+const accentPrimary =
+  "ui-action-accent rounded-full px-6 py-4 text-lg font-bold uppercase tracking-wide";
 
 export function ContactActions({
   contactId,
   isActive,
   compact = false,
+  variant = "all",
 }: {
   contactId: string;
   isActive: boolean;
   compact?: boolean;
+  variant?: "all" | "primary" | "secondary";
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -64,17 +68,29 @@ export function ContactActions({
     );
   }
 
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Link href={`/offers?contact=${contactId}`} className={`${primary} px-4 py-2 text-xs`}>
+  if (variant === "primary") {
+    return (
+      <Link href={`/offers?contact=${contactId}`} className={`${accentPrimary} min-h-14 w-full shadow-sm sm:min-h-12 sm:w-auto sm:py-3`}>
         Build Offer
       </Link>
-      <button type="button" disabled={pending} onClick={archive} className={`${ghost} px-4 py-2 text-xs`}>
-        {isActive ? "Archive" : "Restore"}
-      </button>
-      <button type="button" disabled={pending} onClick={remove} className={`${danger} px-4 py-2 text-xs`}>
-        Delete
-      </button>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {variant === "all" && (
+        <Link href={`/offers?contact=${contactId}`} className={`${primary} px-4 py-2 text-xs`}>
+          Build Offer
+        </Link>
+      )}
+      <>
+        <button type="button" disabled={pending} onClick={archive} className={`${ghost} px-4 py-2 text-xs`}>
+          {isActive ? "Archive" : "Restore"}
+        </button>
+        <button type="button" disabled={pending} onClick={remove} className={`${danger} px-4 py-2 text-xs`}>
+          Delete
+        </button>
+      </>
     </div>
   );
 }

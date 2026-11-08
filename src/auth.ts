@@ -23,7 +23,8 @@ function usesSecureAuthCookies(): boolean {
     if (platformUrl.protocol === "https:") return true;
     if (
       platformUrl.protocol === "http:" &&
-      (platformUrl.hostname === "localhost" || platformUrl.hostname === "127.0.0.1")
+      (platformUrl.hostname === "localhost" || platformUrl.hostname === "127.0.0.1" ||
+        (process.env.NODE_ENV === "development" && platformUrl.hostname === "100.98.89.93"))
     ) {
       return false;
     }

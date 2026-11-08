@@ -3,10 +3,14 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireStaffBrand } from "@/lib/brands/staff";
 import { createPipelineAction, createStarterPipelinesAction } from "./actions";
+import { restoreLeadAction } from "../leads/actions";
 
 type SearchParams = Promise<{
   created?: string;
   error?: string;
+  view?: string;
+  archived?: string;
+  restored?: string;
 }>;
 
 // Colour, hover and keyboard focus come from the shared action tokens; only
@@ -27,6 +31,7 @@ function errorMessage(code: string) {
 export default async function PipelineIndexPage({ searchParams }: { searchParams: SearchParams }) {
   const { brand } = await requireStaffBrand();
   const params = await searchParams;
+  const showArchivedLeads = params.view === "archived";
 
   const pipelines = await prisma.pipeline.findMany({
     where: { brandId: brand.id },
@@ -40,14 +45,24 @@ export default async function PipelineIndexPage({ searchParams }: { searchParams
       createdBy: {
         select: { user: { select: { name: true, email: true } } },
       },
-      _count: { select: { items: true } },
+      _count: { select: { items: { where: { isActive: true, lead: { isActive: true } } } } },
     },
   });
+  const archivedLeads = showArchivedLeads
+    ? await prisma.meetingLead.findMany({
+        where: { brandId: brand.id, isActive: false },
+        orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
+        select: { id: true, name: true, company: true, pipeId: true },
+      })
+    : [];
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <div className="mb-4 flex items-center justify-between gap-3">
         <h1 className="text-lg font-semibold text-slate-900">CRM Pipelines</h1>
+        <Link href={showArchivedLeads ? "/pipeline" : "/pipeline?view=archived"} className={ghost}>
+          {showArchivedLeads ? "Active pipelines" : "Archived leads"}
+        </Link>
       </div>
 
       {params.error ? (
@@ -61,6 +76,33 @@ export default async function PipelineIndexPage({ searchParams }: { searchParams
             ? "Starter pipelines synced (Prospects + Leads + Client Phases 1-2)."
             : "Pipeline created."}
         </p>
+      ) : null}
+      {params.archived === "1" ? <p role="status" className="mb-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">Lead archived in this brand. It was kept in the archive and removed from active views.</p> : null}
+      {params.restored === "1" ? <p role="status" className="mb-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">Lead restored to active views.</p> : null}
+
+      {showArchivedLeads ? (
+        <div className="mb-5 rounded-xl border border-slate-200 bg-white">
+          <div className="border-b border-slate-100 px-4 py-3 sm:px-5">
+            <h2 className="text-base font-semibold text-slate-900">Archived leads ({archivedLeads.length})</h2>
+            <p className="mt-1 text-sm text-slate-600">Archived leads stay in the database and can be restored. Sales-synced records stay in their source system.</p>
+          </div>
+          {archivedLeads.length ? (
+            <ul className="divide-y divide-slate-100">
+              {archivedLeads.map((lead) => (
+                <li key={lead.id} className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                  <Link href={`/leads/${encodeURIComponent(lead.id)}?archived=1`} className="min-w-0">
+                    <span className="block truncate font-semibold text-slate-900">{lead.name}</span>
+                    <span className="mt-0.5 block truncate text-sm text-slate-500">{lead.company || "No company listed"}{lead.pipeId ? ` · Sales deal ${lead.pipeId}` : ""}</span>
+                  </Link>
+                  <form action={restoreLeadAction}>
+                    <input type="hidden" name="leadId" value={lead.id} />
+                    <button type="submit" className={`${ghost} w-full sm:w-auto`}>Restore</button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          ) : <p className="px-4 py-8 text-sm text-slate-500 sm:px-5">No archived leads.</p>}
+        </div>
       ) : null}
 
       <div className="rounded-xl border border-slate-200 bg-white p-5">

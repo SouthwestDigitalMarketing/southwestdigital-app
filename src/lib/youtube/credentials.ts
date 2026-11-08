@@ -16,7 +16,15 @@ export async function getYouTubeRefreshToken(brandId: string, slug: string) {
     where: { brandId_key: { brandId, key: YOUTUBE_INTEGRATION_KEY } },
     select: { secretCiphertext: true },
   });
-  if (integration?.secretCiphertext) return decryptSecret(integration.secretCiphertext);
+  if (integration?.secretCiphertext) {
+    // An unreadable token (rotated or missing key) must not take down pages that only show YouTube stats.
+    try {
+      return decryptSecret(integration.secretCiphertext);
+    } catch {
+      console.warn("[youtube] Stored refresh token is unreadable with this server's encryption key; YouTube analytics are unavailable.");
+      return null;
+    }
+  }
   return process.env[youtubeRefreshTokenEnvKey(slug)]?.trim() || null;
 }
 

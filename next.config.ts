@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Phone preview over the tailnet; dev server only.
+  allowedDevOrigins: ["100.98.89.93"],
   async redirects() {
     return [
       { source: "/quotes", destination: "/offers", permanent: false },

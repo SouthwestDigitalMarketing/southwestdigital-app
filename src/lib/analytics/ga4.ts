@@ -57,7 +57,7 @@ function getCredentials(): { client_email: string; private_key: string } | null 
         return { client_email: json.client_email, private_key: json.private_key };
       }
     } catch {
-      console.error("[analytics] Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON_BASE64");
+      console.warn("[analytics] Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON_BASE64");
     }
   }
 
@@ -68,6 +68,10 @@ function getCredentials(): { client_email: string; private_key: string } | null 
   }
 
   return null;
+}
+
+export function hasGA4Credentials(): boolean {
+  return getCredentials() !== null;
 }
 
 let client: BetaAnalyticsDataClient | null = null;

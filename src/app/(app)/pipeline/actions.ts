@@ -8,6 +8,7 @@ import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
 import { PIPE_PROSPECTS_KEY } from "@/lib/pipe/deals";
 import { LEAD_STEP_STAGE, LEAD_STEPS, type LeadStep } from "@/lib/pipe/lead-steps";
 import { PIPELINE_TEMPLATES, type TemplateKey } from "./templates";
+import { parseSubmittedPhone } from "@/lib/phone";
 
 function clean(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
@@ -144,6 +145,89 @@ export async function createPipelineAction(formData: FormData) {
 
   revalidatePath("/pipeline");
   redirect("/pipeline?created=custom");
+}
+
+export async function createPipelineLeadAction(formData: FormData) {
+  const { brand } = await requireStaffBrandOrThrow();
+  const pipelineKey = clean(formData.get("pipelineKey"));
+  const stageId = clean(formData.get("stageId"));
+  const name = clean(formData.get("name")).slice(0, 200);
+  const company = clean(formData.get("company")).slice(0, 200);
+  const email = clean(formData.get("email")).toLowerCase().slice(0, 254);
+  const rawPhone = clean(formData.get("phone")).slice(0, 64);
+  const phoneE164 = rawPhone ? parseSubmittedPhone(rawPhone) : null;
+  const notes = clean(formData.get("notes")).slice(0, 2_000);
+
+  if (!pipelineKey || !stageId || !name) throw new Error("Pipeline, stage, and name are required.");
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error("Enter a valid email address.");
+
+  const [pipeline, stage] = await Promise.all([
+    prisma.pipeline.findFirst({
+      where: { brandId: brand.id, key: pipelineKey, isActive: true },
+      select: { id: true, key: true },
+    }),
+    prisma.pipelineStage.findFirst({
+      where: { id: stageId, isActive: true, pipeline: { brandId: brand.id, key: pipelineKey, isActive: true } },
+      select: { id: true },
+    }),
+  ]);
+  if (!pipeline || !stage) throw new Error("Pipeline stage not found for this brand.");
+
+  await prisma.$transaction(async (transaction) => {
+    const lead = await transaction.meetingLead.create({
+      data: {
+        brandId: brand.id,
+        name,
+        company: company || null,
+        email: email || null,
+        notes: notes || null,
+        kind: "LEAD",
+      },
+      select: { id: true },
+    });
+    await transaction.pipelineItem.create({
+      data: {
+        pipelineId: pipeline.id,
+        stageId: stage.id,
+        leadId: lead.id,
+        baseValueUsd: 0,
+      },
+      select: { id: true },
+    });
+
+    if (phoneE164 || email) {
+      const contact = await transaction.contact.findFirst({
+        where: {
+          brandId: brand.id,
+          isActive: true,
+          OR: [
+            ...(phoneE164 ? [{ phoneE164 }, { phoneNumber: phoneE164 }] : []),
+            ...(email ? [{ email }] : []),
+          ],
+        },
+        select: { id: true },
+      });
+      const linkedContact = contact ?? await transaction.contact.create({
+        data: {
+          brandId: brand.id,
+          name,
+          email: email || null,
+          phoneE164,
+          phoneNumber: rawPhone || null,
+          company: company || null,
+        },
+        select: { id: true },
+      });
+      await transaction.leadContact.create({
+        data: { brandId: brand.id, leadId: lead.id, contactId: linkedContact.id },
+        select: { id: true },
+      });
+    }
+  });
+
+  revalidatePath(`/pipeline/${encodeURIComponent(pipeline.key)}`);
+  revalidatePath("/pipeline");
+  redirect(`/pipeline/${encodeURIComponent(pipeline.key)}?created=lead`);
 }
 
 export async function movePipelineItemAction(formData: FormData) {

@@ -1,0 +1,9 @@
+[Unit]
+Description=SWapp QuickBooks invoice history snapshot
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/tom/projects/southwestdigital-app-mobile-ux
+Environment=PATH=/home/tom/.local/bin:/home/tom/.local/share/mise/installs/node/26.8.1/bin:/usr/bin:/bin
+Environment=QB_BIN=/home/tom/projects/bookbot-invoice-history/bin/qb
+ExecStart=/home/tom/.local/share/mise/installs/node/26.8.1/bin/node scripts/sync-ar-snapshot.mjs

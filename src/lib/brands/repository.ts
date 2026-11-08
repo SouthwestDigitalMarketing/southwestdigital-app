@@ -22,6 +22,7 @@ const brandSummarySelect = {
       logoUrl: true,
       logoAlt: true,
       lightColor: true,
+      darkColor: true,
       accentColor: true,
       backgroundColor: true,
       foregroundColor: true,
@@ -39,6 +40,7 @@ export type BrandSummary = {
     logoUrl: string | null;
     logoAlt: string | null;
     lightColor: string;
+    darkColor: string | null;
     accentColor: string;
     backgroundColor: string;
     foregroundColor: string;
