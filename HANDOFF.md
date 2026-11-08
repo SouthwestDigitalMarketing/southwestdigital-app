@@ -170,16 +170,29 @@ backfilled in place. Sales deal uploads were disabled; pulls now match by the
 SWapp record ID first and accept SWapp changes as authoritative. Sales code is
 in `/home/tom/projects/sales-swapp-pipeline-cutover` on
 `feat/swapp-pipeline-cutover`; no client data or SQLite records were changed.
-SWapp `npm run typecheck`, lint, and PR CI pass; lint has 9 warnings and 0
-errors. The first PR CI run found one stale lead-step assertion; its expected
-steps were updated. The rerun passed all checks. The local production build
-passes with Webpack and a temporary local `PLATFORM_BASE_URL`. Netlify's first
-Deploy Preview failed because `AUTH_URL` was set while `src/auth.ts` requires
-it and `NEXTAUTH_URL` to stay unset for multi-hostname sign-in. I removed
-`AUTH_URL` from the site's deploy-preview and production contexts and confirmed
-it is unset in both. A new preview build is pending. Signed-in phone review has
-not yet been done. Sales `compileall` and `git diff --check` pass; no Sales
-test suite was run and its PR reports no CI checks.
+SWapp typecheck, lint, and unit tests passed in PR CI run `42439060137`; lint
+has 9 warnings and 0 errors. The first run found one stale lead-step assertion,
+which was updated. The local production build also passed with Webpack and a
+temporary local `PLATFORM_BASE_URL`. Netlify initially failed because `AUTH_URL`
+was set while `src/auth.ts` requires it and `NEXTAUTH_URL` to stay unset for
+multi-hostname sign-in. I removed `AUTH_URL` from the site's deploy-preview and
+production contexts and confirmed it is unset in both. Netlify's preview and
+production deploys are now `ready` for commits `6e57e3d` and `eda363e`; Vercel
+production is successful. PR #75 merged as `eda363e`; post-merge CI run
+`42439198903` passed typecheck, lint, and unit tests.
+
+Sales PR #73 merged as `a59f9b1`. Sales `compileall` and `git diff --check`
+passed; no unit tests ran and no CI checks are configured. Ripley's active Sales
+CLI runs from local branch `ummon/sales-live-cutover`, which merges the updated
+Sales `origin/main` into the preserved local Quo branch so the legacy deal
+writer is disabled without discarding its four local commits or untracked
+`docs/`. This runtime branch is not pushed because it contains that unpublished
+Quo work. The minute `sales-sync.timer` runs `sales --local sync all` for Quo
+messages, calls, and contacts; it does not sync pipeline deals. The Sales PR's
+remote branch and temporary worktree were removed.
+
+Phone preview port `3001` is listening on `100.98.89.93` and redirects to
+`/login`; signed-in phone review has not been done.
 
 The checked-out repo was clean at `origin/main` commit
 `9a9188c6243558b5ae7d568b7803a5257e08cb62` before this follow-up. Current
