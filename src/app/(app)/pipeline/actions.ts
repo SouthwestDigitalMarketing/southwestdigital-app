@@ -9,6 +9,7 @@ import { PIPE_PROSPECTS_KEY } from "@/lib/pipe/deals";
 import { LEAD_STEP_STAGE, LEAD_STEPS, type LeadStep } from "@/lib/pipe/lead-steps";
 import { PIPELINE_TEMPLATES, type TemplateKey } from "./templates";
 import { parseSubmittedPhone } from "@/lib/phone";
+import { recordSalesEvidence } from "@/lib/automation/evidence";
 
 function clean(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
@@ -235,6 +236,16 @@ export async function createPipelineLeadAction(formData: FormData) {
         select: { id: true },
       });
     }
+    await recordSalesEvidence(transaction, {
+      brandId: brand.id,
+      leadId: lead.id,
+      source: "swapp",
+      sourceEventId: `${lead.id}:created`,
+      eventType: "opportunity.created",
+      occurredAt: new Date(),
+      summary: `${name} entered ${pipeline.key}.`,
+      sourceRef: `/leads/${lead.id}`,
+    });
   });
 
   revalidatePath(`/pipeline/${encodeURIComponent(pipeline.key)}`);
@@ -259,14 +270,15 @@ export async function movePipelineItemAction(formData: FormData) {
       id: true,
       pipelineId: true,
       pipeline: { select: { key: true } },
-      lead: { select: { id: true, updatedAt: true } },
+      stage: { select: { name: true } },
+      lead: { select: { id: true, name: true, updatedAt: true } },
     },
   });
   if (!item) throw new Error("Pipeline item not found for this brand.");
 
   const stage = await prisma.pipelineStage.findFirst({
     where: { id: stageId, pipelineId: item.pipelineId, isActive: true },
-    select: { id: true, key: true },
+    select: { id: true, key: true, name: true },
   });
   if (!stage) throw new Error("Target stage is not part of this pipeline.");
 
@@ -290,21 +302,32 @@ export async function movePipelineItemAction(formData: FormData) {
   // Pipe reports MeetingLead.updatedAt. Keep it strictly increasing even if
   // two moves happen within one clock tick or the app clock moves backward.
   const movedAt = new Date(Math.max(Date.now(), item.lead.updatedAt.getTime() + 1));
-  await prisma.$transaction([
-    prisma.meetingLead.update({
+  await prisma.$transaction(async (transaction) => {
+    await transaction.meetingLead.update({
       where: { id: item.lead.id },
       data: { updatedAt: movedAt, ...(leadStepUpdate ?? {}) },
       select: { id: true },
-    }),
-    prisma.pipelineItem.update({
+    });
+    await transaction.pipelineItem.update({
       where: { id: item.id },
       data: { stageId: stage.id },
       select: { id: true },
-    }),
-  ]);
+    });
+    await recordSalesEvidence(transaction, {
+      brandId: brand.id,
+      leadId: item.lead.id,
+      source: "swapp",
+      sourceEventId: `${item.id}:stage:${movedAt.getTime()}`,
+      eventType: "opportunity.stage_changed",
+      occurredAt: movedAt,
+      summary: `${item.lead.name} moved from ${item.stage.name} to ${stage.name} in ${item.pipeline.key}.`,
+      sourceRef: `/leads/${item.lead.id}`,
+    });
+  });
 
   revalidatePath(`/pipeline/${item.pipeline.key}`);
   revalidatePath("/pipeline");
+  revalidatePath("/dashboard");
 }
 
 export async function addLeadNoteAction(formData: FormData) {

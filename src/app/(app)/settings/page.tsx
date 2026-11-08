@@ -84,6 +84,9 @@ export default async function SettingsPage({
     orderBy: { sortOrder: "asc" },
   });
   const mrrGoals = await getMrrGoals(brand.id);
+  const allThingPending = await prisma.allThingWriteJob.count({
+    where: { status: { in: ["pending", "failed"] }, event: { brandId: brand.id } },
+  });
   let connect = await prisma.brandIntegration.findUnique({
     where: { brandId_key: { brandId: brand.id, key: STRIPE_CONNECT_KEY } },
     select: { status: true, externalAccountId: true },
@@ -134,6 +137,14 @@ export default async function SettingsPage({
         <p className="mt-2 text-sm text-muted-foreground">Connections, appearance, and shared tools for {brand.name}.</p>
       </div>
       <div className="grid gap-4">
+        <section className="rounded-2xl border border-border bg-card p-5">
+          <h2 className="text-lg font-semibold">All Thing updates</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {allThingPending === 0
+              ? "No sales updates are waiting to be written."
+              : `${allThingPending} sales ${allThingPending === 1 ? "update is" : "updates are"} waiting for the All Thing writer.`}
+          </p>
+        </section>
         <StripeConnectForm
           status={connectStatus}
           accountId={connect?.externalAccountId ?? null}
