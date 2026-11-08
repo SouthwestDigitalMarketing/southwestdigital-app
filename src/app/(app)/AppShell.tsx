@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -11,6 +11,7 @@ import {
   Users,
   Settings,
   Menu,
+  Moon,
   LogOut,
   Globe,
   PlayCircle,
@@ -28,6 +29,7 @@ import {
   BadgePercent,
   ChevronDown,
   ScrollText,
+  Sun,
   X,
 } from "lucide-react";
 import { selectBrand } from "@/app/select-brand/actions";
@@ -82,8 +84,8 @@ function NavItem({
   exact = false,
   isLight,
   navTextColor,
-  onNavigate,
   collapsed,
+  onNavigate,
 }: {
   href: string;
   icon: React.ElementType;
@@ -91,8 +93,8 @@ function NavItem({
   exact?: boolean;
   isLight: boolean;
   navTextColor: string;
-  onNavigate: () => void;
   collapsed: boolean;
+  onNavigate: () => void;
 }) {
   const pathname = usePathname();
   const active = exact ? pathname === href : pathname.startsWith(href);
@@ -100,9 +102,9 @@ function NavItem({
   return (
     <Link
       href={href}
+      onClick={onNavigate}
       title={collapsed ? label : undefined}
       aria-current={active ? "page" : undefined}
-      onClick={onNavigate}
       className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${collapsed ? "justify-center" : ""} ${
         active ? "ui-nav-active" : isLight ? "hover:bg-black/5" : "hover:bg-white/10"
       }`}
@@ -162,11 +164,24 @@ export function AppShell({
   activeBrandId: string;
 }) {
   const { brand } = useBrand();
+  const [deviceTheme, setDeviceTheme] = useState<"light" | "dark" | null>(null);
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(256);
   const [resizingSidebar, setResizingSidebar] = useState(false);
+  const deviceThemeKey = `swapp-device-theme:${activeBrandId}`;
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(deviceThemeKey);
+      // Read browser-only preference after hydration to avoid a server/client theme mismatch.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDeviceTheme(saved === "dark" || saved === "light" ? saved : null);
+    } catch {
+      setDeviceTheme(null);
+    }
+  }, [deviceThemeKey]);
 
   const themePreset = normalizeThemeChoice(brand.theme?.themePreset);
   const effective = resolveEffectiveThemeColors({
@@ -178,10 +193,20 @@ export function AppShell({
   });
   const light = effective.lightColor;
   const accent = effective.accentColor;
-  const mode = effective.mode;
+  const mode = deviceTheme ?? effective.mode;
   const isLight = mode === "light";
   const sidebarLogoType = brand.theme?.sidebarLogoType === "logo" ? "logo" : "mark";
   const appearance = themePreset === "grok" ? "grok" : "standard";
+
+  function toggleDeviceTheme() {
+    const next = mode === "dark" ? "light" : "dark";
+    setDeviceTheme(next);
+    try {
+      window.localStorage.setItem(deviceThemeKey, next);
+    } catch {
+      // Keep the current view usable when browser storage is unavailable.
+    }
+  }
 
   const sidebarLightLogo = sidebarLogoType === "logo" ? brand.theme?.logoUrl : brand.theme?.logoMarkUrl;
   const sidebarDarkLogo = sidebarLogoType === "logo" ? brand.theme?.logoDarkUrl : brand.theme?.logoMarkDarkUrl;
@@ -316,8 +341,8 @@ export function AppShell({
               exact={exact}
               isLight={isLight}
               navTextColor={navTextColor}
-              onNavigate={() => setOpen(false)}
               collapsed={collapsed}
+              onNavigate={() => setOpen(false)}
             />
             {dividerAfter ? (
               <div
@@ -485,6 +510,16 @@ export function AppShell({
             <Menu size={20} />
           </button>
           <span className="ml-3 min-w-0 truncate text-sm font-semibold text-slate-900">{brand.name}</span>
+          <button
+            type="button"
+            aria-label={mode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            aria-pressed={mode === "dark"}
+            title={mode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            onClick={toggleDeviceTheme}
+            className="ml-auto inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500"
+          >
+            {mode === "dark" ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
         </header>
 
         <main

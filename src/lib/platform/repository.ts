@@ -29,7 +29,16 @@ const brandAdministrationSelect = {
   subscriptionStartedAt: true,
   accessEndsAt: true,
   retentionEndsAt: true,
-  theme: true,
+  theme: {
+    select: {
+      logoUrl: true,
+      supportEmail: true,
+      lightColor: true,
+      accentColor: true,
+      backgroundColor: true,
+      foregroundColor: true,
+    },
+  },
   domains: {
     orderBy: [{ purpose: "asc" }, { isPrimary: "desc" }, { hostname: "asc" }],
   },

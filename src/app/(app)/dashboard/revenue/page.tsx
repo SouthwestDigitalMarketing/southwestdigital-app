@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAppBrand } from "@/lib/brands/staff";
 import { getPastDueByContact } from "@/lib/ar/pastDue";
 import { summarizeMrr } from "../utils";
+import { HistoryBackLink } from "@/components/HistoryBackLink";
 
 export const dynamic = "force-dynamic";
 
@@ -25,9 +26,7 @@ export default async function RevenuePage() {
   return (
     <div className="px-4 py-5 sm:p-8">
       <div className="mx-auto max-w-3xl">
-        <Link href="/dashboard" className="text-xs text-slate-400 hover:underline">
-          ← Dashboard
-        </Link>
+        <HistoryBackLink fallbackHref="/dashboard" className="text-xs text-slate-400 hover:underline" />
         <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">Revenue</h1>
         <p className="mt-1 text-sm text-slate-500">
           {fmtMoney(total)}/mo across {count.toLocaleString("en-US")} client{count === 1 ? "" : "s"}

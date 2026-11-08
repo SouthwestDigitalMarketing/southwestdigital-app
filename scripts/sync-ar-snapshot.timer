@@ -1,8 +1,11 @@
 [Unit]
-Description=SWapp QuickBooks A/R snapshot daily
+Description=SWapp QuickBooks invoice history snapshot four times daily
 
 [Timer]
-OnCalendar=06:17
+OnCalendar=*-*-* 05:00:00
+OnCalendar=*-*-* 10:00:00
+OnCalendar=*-*-* 15:00:00
+OnCalendar=*-*-* 20:00:00
 Persistent=true
 
 [Install]

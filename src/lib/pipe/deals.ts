@@ -433,16 +433,17 @@ export async function listPipeDeals(args: {
       where: {
         pipelineId: pipeline.id,
         isActive: true,
-        ...(q
-          ? {
-              lead: {
+        lead: {
+          isActive: true,
+          ...(q
+            ? {
                 OR: [
                   { name: { contains: q, mode: "insensitive" } },
                   { company: { contains: q, mode: "insensitive" } },
                 ],
-              },
-            }
-          : {}),
+              }
+            : {}),
+        },
       },
       select: {
         baseValueUsd: true,

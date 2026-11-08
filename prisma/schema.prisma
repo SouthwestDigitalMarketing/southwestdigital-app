@@ -686,6 +686,8 @@ model BrandTheme {
   backgroundColor            String   @default("#f7f8fa")
   foregroundColor            String   @default("#17202a")
   supportEmail               String?
+  monthlyMrrGoal             Int?
+  leadMrrGoal                Int?
   monthlyViewsGoal           Int?
   monthlyClicksGoal          Int?
   avgWatchDurationGoal       Int?
@@ -2586,21 +2588,30 @@ model BrandFeature {
   @@index([brandId, enabled])
 }
 
-// One row per open QuickBooks invoice, mirrored by scripts/sync-ar-snapshot.mjs.
-// The MRR display reads this to flag past-due clients. Never written by the app.
+// One row per QuickBooks invoice, mirrored by scripts/sync-ar-snapshot.mjs.
+// Invoice status and applied payments come from the read-only BookBot invoice feed.
 model CustomerArSnapshot {
   id           String   @id @default(cuid())
   brandId      String
   qbCompany    String
+  qboInvoiceId String?
+  qboCustomerId String?
   customerName String
   invoiceRef   String?
+  qboDocNumber String?
+  txnDate      DateTime?
   dueDate      DateTime?
+  totalAmount  Decimal? @db.Decimal(12, 2)
   openBalance  Decimal  @db.Decimal(12, 2)
+  status       String?
+  emailStatus  String?
+  paymentHistory Json?   @db.JsonB
   syncedAt     DateTime @default(now())
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   @@unique([brandId, qbCompany, customerName, invoiceRef])
+  @@unique([brandId, qbCompany, qboInvoiceId])
   @@index([brandId, customerName])
 }
 

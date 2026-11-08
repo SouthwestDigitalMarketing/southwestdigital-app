@@ -3,7 +3,9 @@
 import { useState, useTransition } from "react";
 import { updateDashboardGoal, type DashboardGoalField } from "../dashboard/actions";
 
-const GOAL_FIELDS: { field: DashboardGoalField; label: string; hint: string; max?: number }[] = [
+const GOAL_FIELDS: { field: DashboardGoalField; label: string; hint: string; max?: number; money?: boolean }[] = [
+  { field: "monthlyMrrGoal", label: "Monthly recurring revenue", hint: "Monthly revenue goal in dollars", money: true },
+  { field: "leadMrrGoal", label: "Lead MRR", hint: "Monthly recurring value in your pipeline, in dollars", money: true },
   { field: "monthlyOffersSentGoal", label: "Offers sent", hint: "Offers to send each month" },
   { field: "monthlyOffersAcceptedGoal", label: "Offers accepted", hint: "Offers to win each month" },
   { field: "monthlyReviewRequestsGoal", label: "Review requests", hint: "Requests to send each month" },
@@ -14,13 +16,17 @@ const GOAL_FIELDS: { field: DashboardGoalField; label: string; hint: string; max
 export function DashboardGoalsForm({
   brandId,
   goals,
+  mrrGoalsAvailable,
+  mrrGoalsPreview,
 }: {
   brandId: string;
-  goals: Record<DashboardGoalField, number>;
+  goals: Record<DashboardGoalField, number | null>;
+  mrrGoalsAvailable: boolean;
+  mrrGoalsPreview: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [drafts, setDrafts] = useState<Record<DashboardGoalField, string>>(() =>
-    Object.fromEntries(GOAL_FIELDS.map(({ field }) => [field, String(goals[field])])) as Record<
+    Object.fromEntries(GOAL_FIELDS.map(({ field }) => [field, goals[field] === null ? "" : String(goals[field])])) as Record<
       DashboardGoalField,
       string
     >,
@@ -31,14 +37,19 @@ export function DashboardGoalsForm({
   function save() {
     setError(null);
     setSaved(false);
-    const parsed = new Map<DashboardGoalField, number>();
-    for (const { field, max } of GOAL_FIELDS) {
-      const value = Math.round(Number(drafts[field]));
-      if (!Number.isFinite(value) || value <= 0) {
+    const parsed = new Map<DashboardGoalField, number | null>();
+    for (const { field, max, money } of GOAL_FIELDS) {
+      const raw = drafts[field].trim();
+      if (raw === "" && !money) {
+        setError("Enter a goal for each dashboard metric.");
+        return;
+      }
+      const value = raw === "" ? null : Math.round(Number(raw));
+      if (value !== null && (!Number.isFinite(value) || value <= 0)) {
         setError("Goals must be whole numbers greater than zero.");
         return;
       }
-      const next = max ? Math.min(max, value) : value;
+      const next = value !== null && max ? Math.min(max, value) : value;
       if (next !== goals[field]) parsed.set(field, next);
     }
     if (parsed.size === 0) {
@@ -61,17 +72,28 @@ export function DashboardGoalsForm({
     <section className="rounded-xl border border-slate-200 bg-white p-6">
       <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Dashboard goals</h2>
       <p className="mt-1 text-sm text-slate-500">Monthly targets behind the dashboard progress bars.</p>
+      {mrrGoalsPreview ? (
+        <p className="mt-2 text-sm text-amber-700">
+          MRR targets are set by the local development server for preview only. They are not saved to Supabase.
+        </p>
+      ) : !mrrGoalsAvailable ? (
+        <p className="mt-2 text-sm text-amber-700">
+          MRR targets are unavailable until the database update is approved and applied.
+        </p>
+      ) : null}
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {GOAL_FIELDS.map(({ field, label, hint, max }) => (
+        {GOAL_FIELDS.map(({ field, label, hint, max, money }) => (
           <label key={field} className="flex flex-col gap-1 text-sm font-medium text-slate-700">
             {label}
             <span className="text-xs font-normal text-slate-400">{hint}</span>
             <input
               type="number"
-              min={1}
+              min={money ? 0 : 1}
+              step={1}
               max={max}
+              placeholder={money ? "Set a target" : undefined}
               value={drafts[field]}
-              disabled={pending}
+              disabled={pending || (money === true && !mrrGoalsAvailable)}
               onChange={(event) => {
                 setSaved(false);
                 setDrafts((current) => ({ ...current, [field]: event.target.value }));

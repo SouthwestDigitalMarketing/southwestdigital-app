@@ -2,15 +2,20 @@ import type { ReactNode } from "react";
 import { prisma } from "@/lib/prisma";
 import { requireAppBrand } from "@/lib/brands/staff";
 import { ReviewOutcome } from "@prisma/client";
-import { getTrafficTrend, getTotalKeyEvents } from "@/lib/analytics/ga4";
+import { getTrafficTrend, getTotalKeyEvents, hasGA4Credentials } from "@/lib/analytics/ga4";
 import { getChannelMetrics, getAverageWatchDuration } from "@/lib/youtube/analytics";
 import { getYouTubeRefreshToken } from "@/lib/youtube/credentials";
-import { PlayCircle, Clock, Globe, Target, FileText, Eye, Star, DollarSign, Send } from "lucide-react";
+import { PlayCircle, Clock, Globe, Target, FileText, Eye, Star, DollarSign, Send, GitBranch } from "lucide-react";
 import { StatCard } from "./StatCards";
-import { MrrStatCard } from "./MrrStatCard";
+import { OffersStatCard } from "./OffersStatCard";
+import { MrrStatCard, PipelineMrrStatCard, type PipelineMrrPipeline } from "./MrrStatCard";
 import { DashboardControls } from "./DashboardControls";
 import { hasYouTubeActivity, summarizeMrr } from "./utils";
 import { getPastDueByContact } from "@/lib/ar/pastDue";
+import { getMrrGoals } from "@/lib/dashboard/mrr-goals";
+import { withBrandDataTransaction } from "@/lib/tenancy/context";
+import { PIPE_PROSPECTS_KEY } from "@/lib/pipe/deals";
+import { LEAD_STEP_STAGE, LEAD_STEPS, type LeadStep } from "@/lib/pipe/lead-steps";
 
 export const dynamic = "force-dynamic";
 
@@ -232,18 +237,110 @@ type PageProps = {
 };
 
 export default async function DashboardPage({ searchParams }: PageProps) {
-  const { brand } = await requireAppBrand();
+  const { brand, dataContext } = await requireAppBrand();
   const params = await searchParams;
   const range = getDashboardRange(params.range);
   const windowEnd = new Date();
   const selectedPeriod = getDashboardPeriod(range, windowEnd);
   const previous = getPreviousDashboardPeriod(range, windowEnd, selectedPeriod);
 
-  const mrrRows = await prisma.contact.findMany({
-    where: { brandId: brand.id, isActive: true, mrrUsd: { not: null } },
-    select: { id: true, name: true, company: true, mrrUsd: true },
-    orderBy: [{ mrrUsd: "desc" }, { name: "asc" }],
+  const [pipelineRows, mrrRows, [theme, mrrGoals], [currentOffers, previousOffers], [currentReviews, previousReviews]] = await Promise.all([
+    withBrandDataTransaction(dataContext, (transaction) => transaction.pipeline.findMany({
+      where: { brandId: brand.id, key: PIPE_PROSPECTS_KEY, isActive: true },
+      orderBy: [{ createdAt: "asc" }, { name: "asc" }],
+      select: {
+        id: true,
+        key: true,
+        name: true,
+        stages: {
+          where: { isActive: true },
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+          select: { id: true, key: true, name: true },
+        },
+        items: {
+          where: { isActive: true, lead: { isActive: true } },
+          select: {
+            id: true,
+            stageId: true,
+            baseValueUsd: true,
+            stage: { select: { key: true } },
+            lead: { select: { id: true, name: true, company: true, leadStep: true } },
+          },
+        },
+      },
+    })),
+    prisma.contact.findMany({
+      where: { brandId: brand.id, isActive: true, mrrUsd: { not: null } },
+      select: { id: true, name: true, company: true, mrrUsd: true },
+      orderBy: [{ mrrUsd: "desc" }, { name: "asc" }],
+    }),
+    Promise.all([
+      prisma.brandTheme.findUnique({
+        where: { brandId: brand.id },
+        select: {
+          ga4PropertyId: true,
+          ga4HostName: true,
+          lightColor: true,
+          youtubeChannelId: true,
+          youtubeHandle: true,
+          monthlyViewsGoal: true,
+          monthlyClicksGoal: true,
+          avgWatchDurationGoal: true,
+          monthlyKeyEventsGoal: true,
+          monthlyReviewRequestsGoal: true,
+          reviewOpenRateGoal: true,
+          reviewFiveStarRateGoal: true,
+          monthlyOffersSentGoal: true,
+          monthlyOffersAcceptedGoal: true,
+        },
+      }),
+      getMrrGoals(brand.id),
+    ]),
+    Promise.all([getOfferStats(brand.id, selectedPeriod), getOfferStats(brand.id, previous)]),
+    Promise.all([getReviewStats(brand.id, selectedPeriod), getReviewStats(brand.id, previous)]),
+  ]);
+  const pipelineOverview: PipelineMrrPipeline[] = pipelineRows.map((pipeline) => {
+    const itemsByFunnelNumber = new Map<number, PipelineMrrPipeline["stages"][number]["items"]>();
+    for (const item of pipeline.items) {
+      // Won deals are clients or completed invoices, not sales leads. Keep them
+      // out of Lead MRR so their amounts are not counted a second time.
+      // Cold prospects have not been qualified into a service funnel yet.
+      // Keep them out of Lead MRR until they become a sales lead.
+      if (item.stage.key === "prospect" || item.stage.key === "lost" || item.stage.key === "won") continue;
+      const value = Number(item.baseValueUsd.toString());
+      const rawStep = item.lead.leadStep;
+      const validStep = rawStep && LEAD_STEPS.includes(rawStep as LeadStep)
+        && LEAD_STEP_STAGE[rawStep as LeadStep] === item.stage.key
+        ? rawStep as LeadStep
+        : null;
+      const funnelNumber = validStep === "reach"
+        ? 1
+        : validStep === "qb" || (!validStep && item.stage.key === "talking")
+          ? 2
+          : 3;
+      itemsByFunnelNumber.set(funnelNumber, [
+        ...(itemsByFunnelNumber.get(funnelNumber) ?? []),
+        { id: item.lead.id, name: item.lead.name, company: item.lead.company, value: Number.isFinite(value) ? value : 0 },
+      ]);
+    }
+
+    const funnelStages = [
+      { number: 1, name: "Ask lead to invite us to QBO" },
+      { number: 2, name: "Review QBO" },
+      { number: 3, name: "Present to decision maker" },
+      { number: 4, name: "Collect initial payment" },
+      { number: 5, name: "Get service agreements signed" },
+    ];
+    const stages = funnelStages.map(({ number, name }) => ({
+      id: `funnel-${number}`,
+      number,
+      name,
+      items: itemsByFunnelNumber.get(number) ?? [],
+    }));
+
+    return { id: pipeline.id, key: pipeline.key, name: pipeline.name, stages };
   });
+
   const mrrClients = mrrRows.map((row) => ({
     id: row.id,
     name: row.name,
@@ -257,26 +354,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     mrrClients,
     todayKey,
   );
-
-  const theme = await prisma.brandTheme.findUnique({
-    where: { brandId: brand.id },
-    select: {
-      ga4PropertyId: true,
-      ga4HostName: true,
-      lightColor: true,
-      youtubeChannelId: true,
-      youtubeHandle: true,
-      monthlyViewsGoal: true,
-      monthlyClicksGoal: true,
-      avgWatchDurationGoal: true,
-      monthlyKeyEventsGoal: true,
-      monthlyReviewRequestsGoal: true,
-      reviewOpenRateGoal: true,
-      reviewFiveStarRateGoal: true,
-      monthlyOffersSentGoal: true,
-      monthlyOffersAcceptedGoal: true,
-    },
-  });
 
   const windowEndStr = dateString(addUtcDays(selectedPeriod.endExclusive, -1));
   const windowStartStr = dateString(selectedPeriod.start);
@@ -302,75 +379,71 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const offersAcceptedGoal = Math.max(1, Math.round(monthlyOffersAcceptedGoal * periodGoalMultiplier));
 
   // YouTube: total views + avg watch duration (parallel)
-  let totalYtViews = 0;
-  let avgWatchDuration = 0;
-  let previousYtViews = 0;
-  let previousAvgWatchDuration = 0;
   const ytChannelId = theme?.youtubeChannelId;
-  const ytRefreshToken = await getYouTubeRefreshToken(brand.id, brand.slug);
-  if (ytChannelId && ytRefreshToken) {
-    try {
-      const [metrics, duration, previousMetrics, previousDuration] = await Promise.all([
-        getChannelMetrics(ytChannelId, ytRefreshToken, windowStartStr, windowEndStr),
-        getAverageWatchDuration(ytChannelId, ytRefreshToken, windowStartStr, windowEndStr),
-        getChannelMetrics(
-          ytChannelId,
-          ytRefreshToken,
-          dateString(previous.start),
-          dateString(addUtcDays(previous.endExclusive, -1)),
-        ),
-        getAverageWatchDuration(
-          ytChannelId,
-          ytRefreshToken,
-          dateString(previous.start),
-          dateString(addUtcDays(previous.endExclusive, -1)),
-        ),
-      ]);
-      totalYtViews = metrics.views;
-      avgWatchDuration = duration;
-      previousYtViews = previousMetrics.views;
-      previousAvgWatchDuration = previousDuration;
-    } catch (err) {
-      console.warn(
-        "[dashboard] YouTube analytics skipped:",
-        err instanceof Error ? err.message : String(err),
-      );
-    }
-  }
-
-  // GA4: total active users + key events (parallel)
-  let totalWebsiteVisitors = 0;
-  let keyEventCount = 0;
-  let previousWebsiteVisitors = 0;
-  let previousKeyEventCount = 0;
   const ga4PropertyId = theme?.ga4PropertyId;
   const ga4HostName = theme?.ga4HostName;
-  if (ga4PropertyId) {
-    try {
-      const [trafficRows, keyEvents, previousTrafficRows, previousKeyEvents] = await Promise.all([
-        getTrafficTrend(ga4PropertyId, windowStartStr, windowEndStr, ga4HostName),
-        getTotalKeyEvents(ga4PropertyId, windowStartStr, windowEndStr, ga4HostName),
-        getTrafficTrend(
-          ga4PropertyId,
-          dateString(previous.start),
-          dateString(addUtcDays(previous.endExclusive, -1)),
-          ga4HostName,
-        ),
-        getTotalKeyEvents(
-          ga4PropertyId,
-          dateString(previous.start),
-          dateString(addUtcDays(previous.endExclusive, -1)),
-          ga4HostName,
-        ),
-      ]);
-      totalWebsiteVisitors = trafficRows.reduce((s, r) => s + r.activeUsers, 0);
-      keyEventCount = keyEvents;
-      previousWebsiteVisitors = previousTrafficRows.reduce((sum, row) => sum + row.activeUsers, 0);
-      previousKeyEventCount = previousKeyEvents;
-    } catch (err) {
-      console.error("[dashboard] GA4 error:", err);
-    }
-  }
+  const ga4CredentialsPresent = hasGA4Credentials();
+  const ga4Configured = Boolean(ga4PropertyId && ga4CredentialsPresent);
+  const ytRefreshTokenPromise = getYouTubeRefreshToken(brand.id, brand.slug);
+  const [youtube, website] = await Promise.all([
+    (async () => {
+      const ytRefreshToken = await ytRefreshTokenPromise;
+      if (!ytChannelId || !ytRefreshToken) {
+        return { unavailable: Boolean(ytChannelId), views: 0, duration: 0, previousViews: 0, previousDuration: 0 };
+      }
+      try {
+        const [metrics, duration, previousMetrics, previousDuration] = await Promise.all([
+          getChannelMetrics(ytChannelId, ytRefreshToken, windowStartStr, windowEndStr),
+          getAverageWatchDuration(ytChannelId, ytRefreshToken, windowStartStr, windowEndStr),
+          getChannelMetrics(ytChannelId, ytRefreshToken, dateString(previous.start), dateString(addUtcDays(previous.endExclusive, -1))),
+          getAverageWatchDuration(ytChannelId, ytRefreshToken, dateString(previous.start), dateString(addUtcDays(previous.endExclusive, -1))),
+        ]);
+        return {
+          unavailable: false,
+          views: metrics.views,
+          duration,
+          previousViews: previousMetrics.views,
+          previousDuration,
+        };
+      } catch (err) {
+        console.warn("[dashboard] YouTube analytics skipped:", err instanceof Error ? err.message : String(err));
+        return { unavailable: true, views: 0, duration: 0, previousViews: 0, previousDuration: 0 };
+      }
+    })(),
+    (async () => {
+      if (!ga4Configured || !ga4PropertyId) {
+        return { failed: false, visitors: 0, keyEvents: 0, previousVisitors: 0, previousKeyEvents: 0 };
+      }
+      try {
+        const [trafficRows, keyEvents, previousTrafficRows, previousKeyEvents] = await Promise.all([
+          getTrafficTrend(ga4PropertyId, windowStartStr, windowEndStr, ga4HostName),
+          getTotalKeyEvents(ga4PropertyId, windowStartStr, windowEndStr, ga4HostName),
+          getTrafficTrend(ga4PropertyId, dateString(previous.start), dateString(addUtcDays(previous.endExclusive, -1)), ga4HostName),
+          getTotalKeyEvents(ga4PropertyId, dateString(previous.start), dateString(addUtcDays(previous.endExclusive, -1)), ga4HostName),
+        ]);
+        return {
+          failed: false,
+          visitors: trafficRows.reduce((sum, row) => sum + row.activeUsers, 0),
+          keyEvents,
+          previousVisitors: previousTrafficRows.reduce((sum, row) => sum + row.activeUsers, 0),
+          previousKeyEvents,
+        };
+      } catch (err) {
+        console.warn("[dashboard] GA4 analytics unavailable:", err instanceof Error ? err.message : String(err));
+        return { failed: true, visitors: 0, keyEvents: 0, previousVisitors: 0, previousKeyEvents: 0 };
+      }
+    })(),
+  ]);
+  const totalYtViews = youtube.views;
+  const avgWatchDuration = youtube.duration;
+  const previousYtViews = youtube.previousViews;
+  const previousAvgWatchDuration = youtube.previousDuration;
+  const youtubeAnalyticsUnavailable = youtube.unavailable;
+  const totalWebsiteVisitors = website.visitors;
+  const keyEventCount = website.keyEvents;
+  const previousWebsiteVisitors = website.previousVisitors;
+  const previousKeyEventCount = website.previousKeyEvents;
+  const websiteAnalyticsFailed = website.failed;
 
   const ytHandle = theme?.youtubeHandle;
   const ytPath = ytHandle ? (ytHandle.startsWith("@") ? ytHandle : `@${ytHandle}`) : undefined;
@@ -381,18 +454,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const websiteAttribution = ga4HostName
     ? { label: ga4HostName, href: `https://${ga4HostName}` }
     : undefined;
-
-  const [offerStats, reviewStats] = await Promise.all([
-    Promise.all([getOfferStats(brand.id, selectedPeriod), getOfferStats(brand.id, previous)]),
-    Promise.all([
-      getReviewStats(brand.id, selectedPeriod),
-      getReviewStats(brand.id, previous),
-    ]),
-  ]);
-  const currentOffers = offerStats[0];
-  const previousOffers = offerStats[1];
-  const currentReviews = reviewStats[0];
-  const previousReviews = reviewStats[1];
 
   return (
     <div className="px-4 py-5 sm:p-8">
@@ -409,31 +470,29 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         <MrrStatCard
           label={`MRR · ${mrr.count.toLocaleString("en-US")} client${mrr.count === 1 ? "" : "s"} with MRR set`}
           value={`$${mrr.total.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/mo`}
+          current={mrr.total}
           clients={mrrClients}
-          pastDueById={Object.fromEntries(
-            Object.entries(mrrPastDue).map(([id, entry]) => [id, entry.pastDue]),
-          )}
+          pastDueById={mrrPastDue}
           syncedAsOf={arSyncedAsOf}
+          goal={mrrGoals.monthlyMrrGoal}
+        />
+      </DashboardSection>
+
+      <DashboardSection title="Pipelines" icon={<GitBranch size={14} />}>
+        <PipelineMrrStatCard
+          pipelineKey={PIPE_PROSPECTS_KEY}
+          stages={pipelineOverview[0]?.stages ?? []}
+          goal={mrrGoals.leadMrrGoal}
         />
       </DashboardSection>
 
       <DashboardSection title="Offers" icon={<Send size={14} />}>
-        <StatCard label="Awaiting reply" value={currentOffers.awaiting.toLocaleString("en-US")} comparison={percentChange(currentOffers.awaiting, previousOffers.awaiting)} icon={<FileText size={14} />} />
-        <StatCard
-          label="Sent"
-          value={currentOffers.sent.toLocaleString("en-US")}
-          goal={{ pct: goalPct(currentOffers.sent, offersSentGoal), subtitle: `of ${offersSentGoal.toLocaleString("en-US")} sent goal for this period` }}
-          comparison={percentChange(currentOffers.sent, previousOffers.sent)}
-          icon={<FileText size={14} />}
+        <OffersStatCard
+          current={currentOffers}
+          previous={previousOffers}
+          sentGoal={offersSentGoal}
+          acceptedGoal={offersAcceptedGoal}
         />
-        <StatCard
-          label="Accepted"
-          value={currentOffers.accepted.toLocaleString("en-US")}
-          goal={{ pct: goalPct(currentOffers.accepted, offersAcceptedGoal), subtitle: `of ${offersAcceptedGoal.toLocaleString("en-US")} accepted goal for this period` }}
-          comparison={percentChange(currentOffers.accepted, previousOffers.accepted)}
-          icon={<FileText size={14} />}
-        />
-        <StatCard label="Rejected" value={currentOffers.rejected.toLocaleString("en-US")} comparison={percentChange(currentOffers.rejected, previousOffers.rejected)} icon={<FileText size={14} />} />
       </DashboardSection>
 
       <DashboardSection title="Reviews" icon={<Star size={14} />}>
@@ -467,17 +526,24 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       </DashboardSection>
 
       <DashboardSection title="Website" icon={<Globe size={14} />}>
-        {ga4PropertyId ? (
+        {ga4Configured && !websiteAnalyticsFailed ? (
           <>
             <StatCard label="Active visitors" value={totalWebsiteVisitors.toLocaleString("en-US")} goal={{ pct: goalPct(totalWebsiteVisitors, visitorsGoal), subtitle: `of ${visitorsGoal.toLocaleString("en-US")} visitors goal for this period` }} comparison={percentChange(totalWebsiteVisitors, previousWebsiteVisitors)} icon={<Globe size={14} />} attribution={websiteAttribution} />
             <StatCard label="Key events" value={keyEventCount.toLocaleString("en-US")} goal={{ pct: goalPct(keyEventCount, keyEventsGoal), subtitle: `of ${keyEventsGoal.toLocaleString("en-US")} goal for this period` }} comparison={percentChange(keyEventCount, previousKeyEventCount)} icon={<Target size={14} />} attribution={websiteAttribution} />
           </>
-        ) : <NotConfiguredCard title="Website" />}
+        ) : (
+          <NotConfiguredCard
+            title="Website"
+            message={!ga4PropertyId || !ga4CredentialsPresent ? "Analytics credentials not configured" : "Analytics unavailable"}
+          />
+        )}
       </DashboardSection>
 
       <DashboardSection title="YouTube" icon={<PlayCircle size={14} />}>
         {ytChannelId ? (
-          hasYouTubeActivity(totalYtViews, avgWatchDuration) ? (
+          youtubeAnalyticsUnavailable ? (
+            <NotConfiguredCard title="YouTube" message="YouTube data is unavailable from this server." />
+          ) : hasYouTubeActivity(totalYtViews, avgWatchDuration) ? (
             <>
               <StatCard label="Channel views" value={totalYtViews.toLocaleString("en-US")} goal={{ pct: goalPct(totalYtViews, viewsGoal), subtitle: `of ${viewsGoal.toLocaleString("en-US")} goal for this period` }} comparison={percentChange(totalYtViews, previousYtViews)} icon={<PlayCircle size={14} />} attribution={ytAttribution} />
               <StatCard label="Avg watch time" value={fmtDuration(avgWatchDuration)} goal={{ pct: goalPct(avgWatchDuration, avgWatchDurationGoal), subtitle: `of ${fmtDuration(avgWatchDurationGoal)} goal` }} comparison={percentChange(avgWatchDuration, previousAvgWatchDuration)} icon={<Clock size={14} />} attribution={ytAttribution} />
@@ -513,11 +579,11 @@ function DashboardSection({
   );
 }
 
-function NotConfiguredCard({ title }: { title: string }) {
+function NotConfiguredCard({ title, message = "Not configured" }: { title: string; message?: string }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</p>
-      <p className="mt-3 text-sm text-slate-400">Not configured</p>
+      <p className="mt-3 text-sm text-slate-400">{message}</p>
     </div>
   );
 }

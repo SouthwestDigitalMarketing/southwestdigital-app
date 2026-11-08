@@ -1,11 +1,8 @@
-// Mirror QuickBooks A/R aging rows into CustomerArSnapshot.
-//
-// Reads `qb report ar-aging-detail --json` (the qb CLI owns QuickBooks OAuth,
-// refresh, and caching) and upserts one row per open invoice. Past-due means
-// the invoice's own terms say so: due date passed, balance still open.
-//
+// Mirror QuickBooks invoice history into CustomerArSnapshot.
+// Reads `qb invoices --json` (BookBot owns OAuth and the read-only QBO API),
+// then stores each invoice, its current balance, and its applied payments.
+// This script never changes QuickBooks.
 // Usage: dotenv -e .env -- node scripts/sync-ar-snapshot.mjs
-// Staged systemd unit: docs/sync-ar-snapshot.service (enable on say-so).
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import dotenv from "dotenv";
@@ -22,97 +19,117 @@ const COMPANY_BRANDS = {
 
 const QB_BIN = process.env.QB_BIN ?? "qb";
 
-function parseMoney(value) {
-  const parsed = Number(String(value ?? "").replace(/[^0-9.-]/g, ""));
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function parseDueDate(value) {
+function parseDate(value) {
   if (!value) return null;
   const date = new Date(`${value}T00:00:00Z`);
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-// ColData cells line up with Columns by position.
-function rowByName(row, columns) {
-  const out = {};
-  for (const [index, cell] of (row.ColData ?? []).entries()) {
-    if (columns[index]) out[columns[index]] = cell.value ?? null;
-  }
-  return out;
+function invoiceStatus(invoice) {
+  if (invoice.txnStatus?.toLowerCase() === "voided") return "VOIDED";
+  const total = Number(invoice.totalAmount) || 0;
+  const balance = Number(invoice.balance) || 0;
+  if (balance <= 0) return invoice.payments?.length ? "PAID" : "ZERO_BALANCE";
+  if (total > balance) return "PARTIAL";
+  return "OPEN";
 }
 
-function columnNames(report) {
-  return (report?.Columns?.Column ?? []).map((c) => c.ColTitle);
-}
-
-function collectRows(rows, out) {
-  for (const row of rows ?? []) {
-    if (row.ColData) out.push(row);
-    collectRows(row.Rows?.Row, out);
-  }
-  return out;
-}
-
-async function fetchAging(company) {
+async function fetchInvoices(company) {
   const { stdout } = await execFileAsync(
     QB_BIN,
-    ["report", "ar-aging-detail", "-c", company, "--json", "-p", "this-month"],
-    { maxBuffer: 32 * 1024 * 1024 },
+    ["invoices", "--company", company, "--json"],
+    { maxBuffer: 64 * 1024 * 1024 },
   );
-  return JSON.parse(stdout);
+  const payload = JSON.parse(stdout);
+  if (payload.source !== "live" || payload.companyName?.toLowerCase() !== "bookkeeping conroe") {
+    throw new Error(`Expected a live Bookkeeping Conroe invoice response; got ${payload.companyName ?? "unknown company"} (${payload.source ?? "unknown source"})`);
+  }
+  if (!Array.isArray(payload.invoices) || payload.count !== payload.invoices.length) {
+    throw new Error("QuickBooks invoice response is incomplete; existing snapshot was left untouched");
+  }
+  if (!payload.invoices.length) {
+    throw new Error("QuickBooks returned no invoice history; existing snapshot was left untouched");
+  }
+  return payload.invoices;
 }
 
 const prisma = new PrismaClient();
-
-let added = 0;
-let updated = 0;
 try {
   const runStart = new Date();
   for (const [company, brandSlug] of Object.entries(COMPANY_BRANDS)) {
     const brand = await prisma.brand.findUnique({ where: { slug: brandSlug }, select: { id: true } });
     if (!brand) throw new Error(`brand not found: ${brandSlug}`);
-    const payload = await fetchAging(company);
-    const columns = columnNames(payload.data);
-    const required = ["Num", "Client", "Due Date", "Open Balance"];
-    for (const name of required) {
-      if (!columns.includes(name)) throw new Error(`A/R columns changed, missing ${name}`);
+    const invoices = await fetchInvoices(company);
+    let created = 0;
+    let updated = 0;
+    const docNumberCounts = new Map();
+    for (const invoice of invoices) {
+      const name = String(invoice.customerName ?? "").trim();
+      const number = String(invoice.docNumber ?? "").trim();
+      if (!name || !number) continue;
+      const key = JSON.stringify([name, number]);
+      docNumberCounts.set(key, (docNumberCounts.get(key) ?? 0) + 1);
     }
-    const rows = collectRows(payload.data?.Rows?.Row, []);
-    let kept = 0;
-    for (const row of rows) {
-      const named = rowByName(row, columns);
-      const num = named["Num"];
-      const client = named["Client"];
-      const due = named["Due Date"];
-      const open = named["Open Balance"];
-      if (!client) continue;
-      const openBalance = parseMoney(open);
-      if (!(openBalance > 0)) continue;
-      const dueDate = parseDueDate(due);
-      const key = {
-        brandId: brand.id,
-        qbCompany: company,
-        customerName: String(client),
-        invoiceRef: num ? String(num) : null,
+
+    for (const invoice of invoices) {
+      const qboInvoiceId = String(invoice.id ?? "");
+      const customerName = String(invoice.customerName ?? "").trim();
+      if (!qboInvoiceId || !customerName) continue;
+      const qboDocNumber = String(invoice.docNumber ?? "").trim() || null;
+      const duplicateNumber = qboDocNumber && (docNumberCounts.get(JSON.stringify([customerName, qboDocNumber])) ?? 0) > 1;
+      const invoiceRef = qboDocNumber
+        ? duplicateNumber ? `${qboDocNumber}#${qboInvoiceId}` : qboDocNumber
+        : `QBO-${qboInvoiceId}`;
+      const data = {
+        qboCustomerId: String(invoice.customerId ?? "") || null,
+        customerName,
+        invoiceRef,
+        qboDocNumber,
+        txnDate: parseDate(invoice.txnDate),
+        dueDate: parseDate(invoice.dueDate),
+        totalAmount: (Number(invoice.totalAmount) || 0).toFixed(2),
+        openBalance: (Number(invoice.balance) || 0).toFixed(2),
+        status: invoiceStatus(invoice),
+        emailStatus: invoice.emailStatus ?? null,
+        paymentHistory: Array.isArray(invoice.payments) ? invoice.payments : [],
+        syncedAt: runStart,
       };
-      const existing = await prisma.customerArSnapshot.findUnique({ where: { brandId_qbCompany_customerName_invoiceRef: key } });
-      await prisma.customerArSnapshot.upsert({
-        where: { brandId_qbCompany_customerName_invoiceRef: key },
-        create: { ...key, dueDate, openBalance: openBalance.toFixed(2), syncedAt: runStart },
-        update: { dueDate, openBalance: openBalance.toFixed(2), syncedAt: runStart },
+      const existingByQboId = await prisma.customerArSnapshot.findUnique({
+        where: { brandId_qbCompany_qboInvoiceId: { brandId: brand.id, qbCompany: company, qboInvoiceId } },
+        select: { id: true },
       });
-      if (existing) updated += 1;
-      else added += 1;
-      kept += 1;
+      if (existingByQboId) {
+        await prisma.customerArSnapshot.update({ where: { id: existingByQboId.id }, data });
+        updated += 1;
+        continue;
+      }
+      const legacy = qboDocNumber
+        ? await prisma.customerArSnapshot.findUnique({
+            where: { brandId_qbCompany_customerName_invoiceRef: { brandId: brand.id, qbCompany: company, customerName, invoiceRef: qboDocNumber } },
+            select: { id: true, qboInvoiceId: true },
+          })
+        : null;
+      if (legacy && !legacy.qboInvoiceId) {
+        await prisma.customerArSnapshot.update({ where: { id: legacy.id }, data: { ...data, qboInvoiceId } });
+        updated += 1;
+        continue;
+      }
+      if (legacy && legacy.qboInvoiceId !== qboInvoiceId && !duplicateNumber) {
+        throw new Error(`Conflicting QuickBooks invoice link for ${qboDocNumber}; existing customer mapping was left untouched`);
+      }
+      await prisma.customerArSnapshot.create({
+        data: { brandId: brand.id, qbCompany: company, qboInvoiceId, ...data },
+      });
+      created += 1;
     }
+
     const stale = await prisma.customerArSnapshot.deleteMany({
       where: { brandId: brand.id, qbCompany: company, syncedAt: { lt: runStart } },
     });
-    console.log(`${company}: ${kept} open invoices (${added} added, ${updated} updated), ${stale.count} stale removed`);
+    console.log(`${company}: ${invoices.length} invoices (${created} added, ${updated} updated), ${stale.count} stale rows removed`);
   }
 } catch (error) {
-  console.error(`ar-snapshot failed: ${error instanceof Error ? error.message : String(error)}`);
+  console.error(`invoice-history-sync failed: ${error instanceof Error ? error.message : String(error)}`);
   process.exitCode = 1;
 } finally {
   await prisma.$disconnect();

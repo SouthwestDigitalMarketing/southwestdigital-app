@@ -81,6 +81,7 @@ function dueKey(value: Date): string {
 export type PastDueEntry = {
   pastDue: number;
   oldestDue: string | null;
+  aging: { days30: number; days60: number; days90: number; over90: number };
 };
 
 /**
@@ -98,9 +99,18 @@ export function buildPastDueMap(
     if (dueKey(row.dueDate) >= today) continue;
     const contactId = matchArCustomerToContact(row.customerName, contacts);
     if (!contactId) continue;
-    const entry = result.get(contactId) ?? { pastDue: 0, oldestDue: null };
+    const entry = result.get(contactId) ?? {
+      pastDue: 0,
+      oldestDue: null,
+      aging: { days30: 0, days60: 0, days90: 0, over90: 0 },
+    };
     entry.pastDue += row.openBalance;
     const due = dueKey(row.dueDate);
+    const ageDays = Math.floor((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${due}T00:00:00Z`)) / 86400000);
+    if (ageDays <= 30) entry.aging.days30 += row.openBalance;
+    else if (ageDays <= 60) entry.aging.days60 += row.openBalance;
+    else if (ageDays <= 90) entry.aging.days90 += row.openBalance;
+    else entry.aging.over90 += row.openBalance;
     if (!entry.oldestDue || due < entry.oldestDue) entry.oldestDue = due;
     result.set(contactId, entry);
   }

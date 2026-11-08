@@ -20,8 +20,8 @@ export async function getYouTubeRefreshToken(brandId: string, slug: string) {
     // An unreadable token (rotated or missing key) must not take down pages that only show YouTube stats.
     try {
       return decryptSecret(integration.secretCiphertext);
-    } catch (error) {
-      console.error("[youtube] Could not decrypt the stored refresh token:", error instanceof Error ? error.message : error);
+    } catch {
+      console.warn("[youtube] Stored refresh token is unreadable with this server's encryption key; YouTube analytics are unavailable.");
       return null;
     }
   }

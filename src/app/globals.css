@@ -224,11 +224,11 @@ body {
 
 /* Semantic action variants. Pages supply theme tokens; controls consume these
    classes and never choose their own foreground/background pairing. */
-:is(.ui-action-primary, .ui-action-secondary, .ui-action-danger, .ui-action-ghost) {
+:is(.ui-action-primary, .ui-action-accent, .ui-action-secondary, .ui-action-danger, .ui-action-ghost) {
   cursor: pointer;
 }
 
-:is(.ui-action-primary, .ui-action-secondary, .ui-action-danger, .ui-action-ghost):focus-visible {
+:is(.ui-action-primary, .ui-action-accent, .ui-action-secondary, .ui-action-danger, .ui-action-ghost):focus-visible {
   outline: 2px solid var(--theme-accent);
   outline-offset: 2px;
 }
@@ -252,7 +252,7 @@ body {
   outline-offset: -2px;
 }
 
-:is(.ui-action-primary, .ui-action-secondary, .ui-action-danger, .ui-action-ghost):disabled {
+:is(.ui-action-primary, .ui-action-accent, .ui-action-secondary, .ui-action-danger, .ui-action-ghost):disabled {
   cursor: not-allowed;
 }
 
@@ -260,6 +260,16 @@ body {
   background-color: var(--action-primary-background);
   border-color: var(--action-primary-border);
   color: var(--action-primary-foreground);
+}
+
+.ui-action-accent {
+  background-color: var(--theme-accent);
+  border-color: var(--theme-accent);
+  color: #172033;
+}
+
+.ui-action-accent:not(:disabled):hover {
+  filter: brightness(0.94);
 }
 
 :is(button, a).ui-action-primary:not([aria-current="page"]) {
@@ -1229,6 +1239,29 @@ body {
   outline-offset: -2px;
   background: var(--surface-control);
 }
+
+@keyframes lead-thermometer-shake {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-7deg); }
+  75% { transform: rotate(7deg); }
+}
+
+@keyframes lead-thermometer-spark {
+  0%, 100% { opacity: 0.55; transform: scale(0.8) rotate(-12deg); filter: drop-shadow(0 0 0 transparent); }
+  50% { opacity: 1; transform: scale(1.15) rotate(12deg); filter: drop-shadow(0 0 3px currentColor); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .lead-thermometer-hot {
+    animation: lead-thermometer-shake 900ms ease-in-out infinite;
+    transform-origin: 50% 80%;
+  }
+
+  .lead-thermometer-spark {
+    animation: lead-thermometer-spark 700ms ease-in-out infinite;
+  }
+}
+
 /* Table rows cannot take an outline reliably across browsers, so give the row a
    left marker as the primary cue and keep the outline as reinforcement. */
 tr.ui-row-cursor[data-keyboard-active="true"] > *:first-child {

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireStaffBrand } from "@/lib/brands/staff";
@@ -7,6 +6,8 @@ import { PIPE_PROSPECTS_KEY } from "@/lib/pipe/deals";
 import { LEAD_STEP_LABEL, LEAD_STEP_STAGE, LEAD_STEPS, pipeLeadBoardColumnId, type LeadStep } from "@/lib/pipe/lead-steps";
 import { updateStageMultiplierAction } from "../actions";
 import PipelineBoard from "./PipelineBoard";
+import { HistoryBackLink } from "@/components/HistoryBackLink";
+import { LeadCreateForm } from "../LeadCreateForm";
 
 function toNumber(value: unknown) {
   if (value == null) return 0;
@@ -21,9 +22,16 @@ const ghost =
 const inputClass =
   "w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-slate-500 focus:outline-none";
 
-export default async function PipelineDetailPage({ params }: { params: Promise<{ key: string }> }) {
+export default async function PipelineDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ key: string }>;
+  searchParams?: Promise<{ created?: string }>;
+}) {
   const { brand, dataContext } = await requireStaffBrand();
-  const { key } = await params;
+  const queryPromise: Promise<{ created?: string }> = searchParams ?? Promise.resolve({ created: undefined });
+  const [{ key }, query] = await Promise.all([params, queryPromise]);
 
   const pipeline = await prisma.pipeline.findUnique({
     where: { brandId_key: { brandId: brand.id, key } },
@@ -45,7 +53,7 @@ export default async function PipelineDetailPage({ params }: { params: Promise<{
         },
       },
       items: {
-        where: { isActive: true },
+        where: { isActive: true, lead: { isActive: true } },
         select: {
           id: true,
           stageId: true,
@@ -174,13 +182,22 @@ export default async function PipelineDetailPage({ params }: { params: Promise<{
     <div className="p-8">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <Link href="/pipeline" className="text-xs text-slate-500 hover:underline">
-            ← All CRM pipelines
-          </Link>
+          <HistoryBackLink fallbackHref="/pipeline" className="text-xs text-slate-500 hover:underline" />
           <h1 className="mt-1 text-lg font-semibold text-slate-900">{pipeline.name}</h1>
           {pipeline.description ? <p className="mt-1 text-sm text-slate-600">{pipeline.description}</p> : null}
         </div>
       </div>
+
+      {query.created === "lead" ? (
+        <p role="status" className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          Opportunity added to this pipeline. Its value is unset, so it does not change MRR or forecast totals.
+        </p>
+      ) : null}
+
+      <LeadCreateForm
+        pipelineKey={pipeline.key}
+        stages={pipeline.stages.map((stage) => ({ id: stage.id, name: stage.name }))}
+      />
 
       <div className="rounded-xl border border-slate-200 bg-white p-5">
         <h2 className="text-base font-semibold text-slate-900">Metrics</h2>

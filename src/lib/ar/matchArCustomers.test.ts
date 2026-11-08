@@ -54,7 +54,11 @@ describe("buildPastDueMap", () => {
       CONTACTS,
       "2026-11-05",
     );
-    expect(result.get("bnb")).toEqual({ pastDue: 150, oldestDue: "2026-07-01" });
+    expect(result.get("bnb")).toEqual({
+      pastDue: 150,
+      oldestDue: "2026-07-01",
+      aging: { days30: 0, days60: 0, days90: 0, over90: 150 },
+    });
     expect(result.has("contigo")).toBe(false);
   });
 });
