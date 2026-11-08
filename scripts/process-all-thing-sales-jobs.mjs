@@ -195,7 +195,9 @@ ${marker}
 }
 
 try {
-  const jobs = await prisma.allThingWriteJob.findMany({ where: { status: { in: ["pending", "failed"] } }, include: { event: true }, orderBy: { createdAt: "asc" }, take: 20 });
+  const conroe = await prisma.brand.findUnique({ where: { slug: "bookkeeping-conroe" }, select: { id: true } });
+  if (!conroe) throw new Error("Bookkeeping Conroe brand is missing");
+  const jobs = await prisma.allThingWriteJob.findMany({ where: { status: { in: ["pending", "failed"] }, event: { brandId: conroe.id } }, include: { event: true }, orderBy: { createdAt: "asc" }, take: 20 });
   for (const job of jobs) {
     try { await processJob(job); console.log(`Completed All Thing job ${job.id}`); }
     catch (error) {
