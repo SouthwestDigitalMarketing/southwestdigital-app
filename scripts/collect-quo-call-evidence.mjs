@@ -6,12 +6,13 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 const apply = process.argv.includes("--apply");
+const verbose = process.argv.includes("--verbose");
 const daysArg = process.argv.find((arg) => arg.startsWith("--days="));
 const days = daysArg ? Number(daysArg.slice(7)) : 1;
 if (!Number.isInteger(days) || days < 1 || days > 30) throw new Error("--days must be 1 through 30");
 const since = new Date(Date.now() - days * 86_400_000).toISOString();
 const dbPath = process.env.SALES_DB_PATH || join(homedir(), ".local/share/lochside-sales/sales.db");
-const sql = `SELECT provider_id, phone, phone_number_id, line_number, participants, direction, status, duration, created_at, completed_at
+const sql = `SELECT call_number, provider_id, phone, phone_number_id, line_number, participants, direction, status, duration, created_at, completed_at
   FROM calls WHERE provider = 'quo' AND status = 'completed' AND created_at >= '${since}'
   ORDER BY created_at ASC`;
 const calls = JSON.parse(execFileSync("sqlite3", ["-readonly", "-json", dbPath, sql], { encoding: "utf8" }) || "[]");
@@ -63,6 +64,7 @@ try {
       continue;
     }
     counts.matched++;
+    if (verbose) console.log(JSON.stringify({ callNumber: call.call_number, callId: call.provider_id, leadId: leadIds[0], leadName: contacts[0].name, brand: brand.brand.slug }));
     if (!apply) continue;
     const summary = `Completed ${call.direction === "incoming" ? "incoming" : call.direction === "outgoing" ? "outgoing" : ""} Quo call with ${contacts[0].name}${Number.isFinite(call.duration) && call.duration > 0 ? ` (${call.duration} seconds)` : ""}.`.replace(/\s+/g, " ");
     await prisma.$transaction(async (tx) => {
@@ -72,7 +74,7 @@ try {
         create: {
           brandId: brand.brandId, leadId: leadIds[0], source: "quo", sourceEventId: call.provider_id,
           eventType: "call_completed", occurredAt: safeDate(call.completed_at || call.created_at),
-          summary, sourceRef: `Quo call ${call.provider_id}`,
+          summary, sourceRef: `Quo call #${call.call_number} (${call.provider_id})`,
         },
         select: { id: true },
       });

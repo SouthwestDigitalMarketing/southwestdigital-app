@@ -22,8 +22,10 @@ source reference. `(brandId, source, sourceEventId)` is unique. Repeated scans
 reuse the event and its single All Thing job.
 
 The event and the All Thing job are written in the same PostgreSQL transaction
-as a SWapp change. The worker on ripley reads pending jobs and writes the
-appropriate All Thing page. It reads the page back before marking a job done.
+as a SWapp change. The worker on ripley reads pending jobs and follows
+`sops/sop-lead-file.md`: a lead page and newest-first diary under
+`leads/<lead>/`, plus one line in `hubs/leads.md`. It reads the diary back
+before marking a job done.
 Failed jobs retain their error and retry; they remain visible to staff. A
 scheduled reconciliation finds SWapp events whose All Thing job is absent or
 unfinished. PostgreSQL and the All Thing git tree cannot share a transaction.
@@ -68,8 +70,8 @@ The first branch records SWapp lead creation and stage moves and exposes
 observed event to an **existing active lead**. This endpoint records evidence
 and queues the All Thing job; it does not create a contact, create an
 opportunity, or move a stage. Identity resolution and source collectors are
-still needed. The writer script exists but is not scheduled or enabled until
-the `sales-leads` hub and shared All Thing write contract are settled.
+still needed. The writer script follows the lead-file SOP but is not
+scheduled or enabled until the shared All Thing write contract is agreed.
 
 `scripts/collect-quo-call-evidence.mjs` is the first read-only source adapter.
 On Ripley it reads completed calls from the existing Sales Quo sync cache,

@@ -1,100 +1,208 @@
 #!/usr/bin/env node
-// Run on Ripley under flock after the Sales leads hub is registered in the All Thing.
-// The database event is authoritative; a marker makes retries safe after a crash.
+// Ripley-only worker. Run under flock after the Sales lead-file contract is agreed.
 import { PrismaClient } from "@prisma/client";
-import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync, existsSync, realpathSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync, readFileSync, readdirSync, realpathSync, mkdirSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
 
 const root = process.env.ALL_THING_ROOT;
-if (hostname() !== "ripley" || !root || realpathSync(root) !== "/home/tom/vaults/all-thing") {
-  throw new Error("All Thing writer requires the canonical Ripley checkout");
-}
+if (hostname() !== "ripley" || !root || realpathSync(root) !== "/home/tom/vaults/all-thing") throw new Error("Canonical Ripley All Thing required");
 const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
 if (git("branch", "--show-current") !== "main") throw new Error("All Thing checkout must be on main");
-const hubPath = "hubs/sales-leads.md";
-if (!existsSync(join(root, hubPath))) throw new Error("Sales leads hub has not been registered");
-
+git("fetch", "origin");
+if (git("rev-parse", "HEAD") !== git("rev-parse", "origin/main")) throw new Error("All Thing main is behind origin/main");
+if (!existsSync(join(root, "hubs/leads.md")) || !existsSync(join(root, "sops/sop-lead-file.md"))) throw new Error("Lead hub and SOP are required");
 const prisma = new PrismaClient();
 const footer = "---\n*Changing this page? Read [[updating-the-all-thing]] first.*";
-const text = (value) => String(value ?? "").replace(/[\r\n]+/g, " ").trim();
-const slug = (value) => text(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48);
+const clean = (value) => String(value ?? "").replace(/[\r\n|]+/g, " ").trim();
+const slug = (value) => clean(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48);
 const today = () => new Date().toISOString().slice(0, 10);
-
-function requireClean(paths) {
-  const dirty = git("status", "--porcelain", "--", ...paths);
-  if (dirty) throw new Error(`All Thing paths are already being edited: ${dirty.split("\n").map(x => x.slice(3)).join(", ")}`);
+const bump = (page) => page.replace(/^(updated: )\d{4}-\d{2}-\d{2}/m, `$1${today()}`);
+const read = (path) => readFileSync(join(root, path), "utf8");
+const write = (path, value) => writeFileSync(join(root, path), value);
+function lintIssues() {
+  const result = spawnSync("python3", ["_meta/lint.py"], { cwd: root, encoding: "utf8" });
+  const count = Number(result.stdout.match(/(\d+) issue\(s\)\./)?.[1]);
+  if (!Number.isFinite(count)) throw new Error(`All Thing lint did not return an issue count: ${result.stderr.slice(0, 200)}`);
+  return count;
 }
 
-function insertUnder(content, heading, line) {
-  if (content.includes(line)) return content;
-  const position = content.indexOf(heading);
-  if (position < 0) throw new Error(`Missing heading ${heading}`);
-  const after = content.indexOf("\n", position) + 1;
-  return content.slice(0, after) + "\n" + line + content.slice(after);
+function findPage(lead) {
+  for (const dir of readdirSync(join(root, "leads"), { withFileTypes: true }).filter((d) => d.isDirectory())) {
+    const path = `leads/${dir.name}/${dir.name}.md`;
+    if (existsSync(join(root, path)) && read(path).includes(`swapp_deal_id: ${lead.id}`)) return dir.name;
+  }
+  const base = slug(lead.company || lead.name) || "unnamed-lead";
+  return existsSync(join(root, "leads", base)) ? `${base}-${lead.id.slice(0, 8)}` : base;
+}
+
+function updateHub(page, name, lead) {
+  const stage = clean(lead.pipelineItems[0]?.stage?.key || "lead");
+  const line = `| [[${name}]] | ${stage} | ${lead.pipeId ? `#${clean(lead.pipeId)}` : "—"} | ${today()} | ${clean(lead.nextAction || "Confirm next action")} |`;
+  const rows = page.split("\n");
+  const old = rows.findIndex((row) => row.startsWith(`| [[${name}]] |`));
+  if (old >= 0) rows[old] = line;
+  else {
+    const at = rows.findIndex((row) => /^\|---\|/.test(row));
+    if (at < 0) throw new Error("Leads hub table missing");
+    rows.splice(at + 1, 0, line);
+  }
+  return bump(rows.join("\n"));
+}
+
+function newLeadPage(name, lead) {
+  const label = clean(lead.company || lead.name), stage = clean(lead.pipelineItems[0]?.stage?.key || "lead");
+  const next = clean(lead.nextAction || "Confirm identity, need, and next action");
+  return `---
+title: ${JSON.stringify(label + " (lead)")}
+created: ${today()}
+updated: ${today()}
+type: entity
+tags: [prospect, conroe]
+sources: []
+confidence: low
+lead_stage: ${stage}
+deal_id: ${lead.pipeId || "null"}
+swapp_deal_id: ${lead.id}
+up: leads
+---
+
+# ${label} (lead)
+
+${label} is an active contact in [[leads]]. The need and offer are not confirmed. History: [[${name}-diary]]. Shape: [[sop-lead-file]].
+
+## At a glance
+
+| | |
+|---|---|
+| **Contact** | ${clean(lead.name)} |
+| **Stage** | ${stage} |
+| **Next** | ${next} |
+
+## Who they are
+
+Full identity and company are not confirmed.
+
+## What they need
+
+Not confirmed.
+
+## What we offered
+
+No offer verified.
+
+## What we know and do not know
+
+A call occurred; its content has not been verified.
+
+## Next action
+
+${next}.
+
+## Where things live
+
+Quo holds the call record. SWapp holds stage and next action.
+
+## See also
+
+[[leads]] · [[sop-lead-file]]
+
+${footer}
+`;
 }
 
 async function process(job) {
   const event = job.event;
-  if (!event.leadId) throw new Error("Event has no lead link; needs identity review");
-  const lead = await prisma.meetingLead.findUnique({ where: { id: event.leadId }, select: { id: true, name: true, company: true, brandId: true } });
-  const brand = await prisma.brand.findUnique({ where: { id: event.brandId }, select: { slug: true, name: true } });
-  if (!lead || !brand || lead.brandId !== event.brandId) throw new Error("Brand or lead link is missing");
-
-  const pageSlug = `lead-${slug(brand.slug)}-${slug(lead.name)}-${lead.id}`;
-  const pagePath = `entities/${pageSlug}.md`;
-  const paths = [pagePath, hubPath, "index.md", "log.md"];
-  requireClean(paths);
-  const absolute = join(root, pagePath);
+  if (!event.leadId) throw new Error("Event has no reviewed lead identity");
+  const lead = await prisma.meetingLead.findUnique({ where: { id: event.leadId }, select: { id: true, brandId: true, name: true, company: true, pipeId: true, nextAction: true, pipelineItems: { where: { isActive: true }, select: { stage: { select: { key: true } } }, take: 1 } } });
+  const brand = await prisma.brand.findUnique({ where: { id: event.brandId }, select: { slug: true } });
+  if (!lead || !brand || lead.brandId !== event.brandId || brand.slug !== "bookkeeping-conroe") throw new Error("Only a linked Bookkeeping Conroe lead is supported");
+  const name = findPage(lead), label = clean(lead.company || lead.name);
+  const leadPath = `leads/${name}/${name}.md`, diaryPath = `leads/${name}/${name}-diary.md`;
+  const paths = [leadPath, diaryPath, "hubs/leads.md", "index.md", "log.md"];
+  const dirty = git("status", "--porcelain", "--", ...paths);
+  if (dirty) throw new Error(`All Thing paths already have edits: ${dirty}`);
+  const baselineLintIssues = lintIssues();
+  const originals = new Map(paths.map((path) => [path, existsSync(join(root, path)) ? read(path) : null]));
+  try {
+  const existing = existsSync(join(root, leadPath));
+  if (existing && !read(leadPath).includes(`swapp_deal_id: ${lead.id}`)) throw new Error("Existing lead page has another SWapp ID");
+  mkdirSync(join(root, "leads", name), { recursive: true });
+  if (!existing) write(leadPath, newLeadPage(name, lead));
   const marker = `<!-- swapp-event:${event.id} -->`;
-  const date = event.occurredAt.toISOString().slice(0, 10);
-  const entry = `### ${date} — ${text(event.eventType)}\n\n${text(event.summary)}\n\nSource: SWapp ${text(event.sourceRef ?? `/leads/${lead.id}`)} · ${text(event.source)}:${text(event.sourceEventId)}\n${marker}\n`;
-  const existed = existsSync(absolute);
-  let page = existed ? readFileSync(absolute, "utf8") :
-    `---\ntitle: ${JSON.stringify(`${lead.name} (lead)`)}\ncreated: ${today()}\nupdated: ${today()}\ntype: entity\ntags: [sales, lead]\nsources: []\nup: sales-leads\n---\n\n# ${text(lead.name)}\n\nLead for [[${slug(brand.name)}]]. Parent: [[sales-leads]].\n\n## Current\n\n${text(event.summary)}\n\n## Diary\n\n${footer}\n`;
-  if (!page.includes(marker)) {
-    if (existed) {
-      if (!page.includes("## Diary\n")) throw new Error(`Existing lead page lacks Diary heading: ${pagePath}`);
-      page = page.replace(/^(updated: )\d{4}-\d{2}-\d{2}/m, `$1${today()}`);
-      page = page.replace(/(## Current\n\n)[\s\S]*?(\n## Diary\n)/, `$1${text(event.summary)}\n$2`);
-    }
-    page = page.replace("## Diary\n", `## Diary\n\n${entry}\n`);
-    writeFileSync(absolute, page);
-  }
-  if (!existed) {
-    const hub = join(root, hubPath), index = join(root, "index.md");
-    writeFileSync(hub, insertUnder(readFileSync(hub, "utf8"), "## Under this hub", `- [[${pageSlug}]] — ${text(lead.name)} (${text(brand.name)}).`));
-    writeFileSync(index, insertUnder(readFileSync(index, "utf8"), "## Entities", `- [[${pageSlug}]] — ${text(lead.name)} sales history.`));
-  }
-  const log = join(root, "log.md");
-  const logLine = `\n## [${today()}] update | SWapp sales event ${event.id}\n- ${text(event.eventType)} for ${text(lead.name)} (${text(brand.name)}).\n`;
-  if (!readFileSync(log, "utf8").includes(`SWapp sales event ${event.id}`)) writeFileSync(log, readFileSync(log, "utf8") + logLine);
+  const diary = existsSync(join(root, diaryPath)) ? read(diaryPath) : `---
+title: ${JSON.stringify(label + " (lead) - diary")}
+created: ${today()}
+updated: ${today()}
+type: entity
+tags: [prospect, conroe]
+sources: []
+confidence: low
+up: ${name}
+---
 
-  execFileSync("python3", ["_meta/lint.py"], { cwd: root, stdio: "pipe" });
+# ${label} (lead) - diary
+
+History, newest first. Lead page: [[${name}]]. Shape: [[sop-lead-file]].
+
+${footer}
+`;
+  if (!diary.includes(marker)) {
+    const frontmatterEnd = diary.indexOf("\n---\n", 4);
+    const firstEntry = diary.indexOf("\n## ", frontmatterEnd + 5);
+    const at = firstEntry >= 0 ? firstEntry : diary.lastIndexOf("\n---\n*Changing this page?");
+    if (at < 0) throw new Error("Lead diary entry point missing");
+    const entry = `## ${event.occurredAt.toISOString().slice(0, 10)}: ${clean(event.eventType).replace(/_/g, " ")}
+
+- ${clean(event.summary)}
+- Source: ${clean(event.sourceRef || `${event.source}:${event.sourceEventId}`)}.${event.source === "quo" ? " The call record confirms contact, not the conversation." : ""}
+${marker}
+
+`;
+    write(diaryPath, bump(diary.slice(0, at) + "\n" + entry + diary.slice(at)));
+  }
+  write("hubs/leads.md", updateHub(read("hubs/leads.md"), name, lead));
+  if (!existing) {
+    const index = read("index.md");
+    const section = index.match(/(## Leads\n)([\s\S]*?)(\n## [^\n]+\n)/);
+    if (!section) throw new Error("Index Leads section missing");
+    const lines = [...section[2].split("\n").filter((line) => line.startsWith("- [[")),
+      `- [[${name}]] — ${label} lead file.`, `- [[${name}-diary]] — ${label} lead history.`]
+      .sort((a, b) => a.localeCompare(b));
+    write("index.md", bump(index.replace(section[0], section[1] + "\n" + lines.join("\n") + "\n" + section[3])));
+  }
+  const log = read("log.md");
+  if (!log.includes(`SWapp sales event ${event.id}`)) write("log.md", log + `\n## [${today()}] update | SWapp sales event ${event.id}\n- ${clean(event.eventType)} for ${label}; [[${name}-diary]].\n`);
+  const finalLintIssues = lintIssues();
+  if (finalLintIssues > baselineLintIssues) throw new Error(`All Thing lint grew from ${baselineLintIssues} to ${finalLintIssues} issues`);
+  if (finalLintIssues > 0) console.warn(`All Thing lint still has ${finalLintIssues} existing issues`);
+  } catch (error) {
+    for (const [path, original] of originals) {
+      if (original === null) {
+        if (existsSync(join(root, path))) execFileSync("rm", ["--", join(root, path)]);
+      } else write(path, original);
+    }
+    throw error;
+  }
   if (git("status", "--porcelain", "--", ...paths)) {
     git("add", "--", ...paths);
     git("commit", "-m", `Record SWapp sales event ${event.id}`, "--", ...paths);
   }
   git("push", "origin", "main");
-  if (!readFileSync(absolute, "utf8").includes(marker)) throw new Error("All Thing read-back lacks event marker");
+  if (!read(diaryPath).includes(marker)) throw new Error("Diary read-back lacks marker");
   await prisma.allThingWriteJob.update({ where: { id: job.id }, data: { status: "done", completedAt: new Date(), lastError: null } });
 }
 
 try {
-  const jobs = await prisma.allThingWriteJob.findMany({
-    where: { status: { in: ["pending", "failed"] } },
-    include: { event: true },
-    orderBy: { createdAt: "asc" },
-    take: 20,
-  });
+  const jobs = await prisma.allThingWriteJob.findMany({ where: { status: { in: ["pending", "failed"] } }, include: { event: true }, orderBy: { createdAt: "asc" }, take: 20 });
   for (const job of jobs) {
     try { await process(job); console.log(`Completed All Thing job ${job.id}`); }
     catch (error) {
       const message = String(error instanceof Error ? error.message : error).slice(0, 1000);
       await prisma.allThingWriteJob.update({ where: { id: job.id }, data: { status: "failed", attempts: { increment: 1 }, lastError: message } });
       console.error(`Failed All Thing job ${job.id}: ${message}`);
-      break; // A shared checkout problem affects later jobs too.
+      break;
     }
   }
 } finally { await prisma.$disconnect(); }
