@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
 import { BrandStatus, ContactTagKind } from "@prisma/client";
-import { applyTagPipelineAutomation } from "@/lib/contacts/automation";
+import { applyTagPipelineAutomation, removeTagPipelineAutomation } from "@/lib/contacts/automation";
 import { slugifyTagKey } from "@/lib/contacts/tags";
 import { parseSubmittedPhone } from "@/lib/phone";
 import { parseEmailOrThrow } from "@/lib/email";
@@ -405,11 +405,17 @@ export async function setContactTagAction(formData: FormData) {
       tagId,
     });
   } else {
-    await prisma.contactTagLink.deleteMany({ where: { contactId, tagId } });
+    await removeTagPipelineAutomation({
+      brandId: brand.id,
+      actorUserId: session.user.id,
+      contactId,
+      tagId,
+    });
   }
 
   revalidatePath("/contacts");
   revalidatePath(`/contacts/${contactId}`);
+  revalidatePath("/pipeline");
 }
 
 export async function setContactClientAction(formData: FormData) {

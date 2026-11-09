@@ -78,7 +78,15 @@ export default async function LeadDetailPage({ params, searchParams }: PageProps
     return transaction.contact.findMany({
       where: { brandId: brand.id, id: { in: contactIds }, isActive: true },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, company: true },
+      select: {
+        id: true,
+        name: true,
+        company: true,
+        tagLinks: {
+          where: { tag: { isActive: true } },
+          select: { tag: { select: { id: true, label: true, kind: true } } },
+        },
+      },
     });
   });
 
@@ -173,6 +181,30 @@ export default async function LeadDetailPage({ params, searchParams }: PageProps
           </ul>
         </section>
       ) : null}
+
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <h2 className="text-base font-semibold text-slate-900">Tags</h2>
+        {linkedContacts.length > 0 ? (
+          <ul className="mt-2 space-y-3">
+            {linkedContacts.map((contact) => (
+              <li key={contact.id}>
+                <Link href={`/contacts/${encodeURIComponent(contact.id)}`} className="text-sm font-medium hover:text-brandnavy hover:underline">{contact.name}</Link>
+                {contact.tagLinks.length > 0 ? (
+                  <p className="mt-1 flex flex-wrap gap-1.5">
+                    {contact.tagLinks.map((link) => (
+                      <span key={link.tag.id} title={link.tag.kind} className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700">{link.tag.label}</span>
+                    ))}
+                  </p>
+                ) : (
+                  <p className="mt-1 text-xs text-slate-500">No tags applied.</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 text-sm text-slate-500">No linked contact, so no tags to show.</p>
+        )}
+      </section>
 
       {lead.notes ? (
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
