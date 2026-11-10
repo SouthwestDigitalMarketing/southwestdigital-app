@@ -7,7 +7,7 @@ for (const proposalMode of ["light", "dark"] as const) {
     expect(await serverIsUp(baseURL)).toBe(true);
     await signInAsStaff(page);
     await page.goto("/offer-preview", { waitUntil: "domcontentloaded" });
-    await expect(page.getByText("Staff preview — nothing here will be recorded.")).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Proposal navigation" })).toBeVisible();
     await page.evaluate((mode) => {
       const key = "proposal-app-demo-assessment-v14";
       const saved = JSON.parse(window.localStorage.getItem(key) ?? "{}");
