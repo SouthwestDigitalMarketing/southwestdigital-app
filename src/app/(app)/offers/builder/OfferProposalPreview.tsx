@@ -1339,6 +1339,8 @@ function OfferProposalPreviewView({
 
   // Due-today per package, filled in as the cards render; read by the mobile bottom bar.
   const mobileDueToday: Partial<Record<OptionId, number>> = {};
+  // Below xl the bottom bar carries the one Select button; the cards' own buttons are desktop-only then.
+  const showMobileSelectBar = !embedded && paymentStatus !== "succeeded";
 
   return (
     <main
@@ -1732,8 +1734,14 @@ function OfferProposalPreviewView({
                   const lowerTierId: OptionId | null = id === "grow" ? "improve" : id === "improve" ? "maintain" : null;
                   const { lowerTierName, includedRows } = pricingCardServices(option, lowerTierId ? options[lowerTierId] : undefined);
                   // Mobile shows one package at a time, so it lists everything; rows new at this tier stay highlighted.
-                  const allIncludedRows = pricingCardServices(option).includedRows;
                   const newAtThisTier = new Set(includedRows.map((row) => row.id));
+                  // Order: service level first, then what this tier adds, then what it carries over.
+                  const includedRank = (row: (typeof includedRows)[number]) =>
+                    row.serviceName.endsWith("Client Support") ? 0 : newAtThisTier.has(row.id) ? 1 : 2;
+                  const allIncludedRows = pricingCardServices(option).includedRows
+                    .map((row, index) => ({ row, index }))
+                    .sort((a, b) => includedRank(a.row) - includedRank(b.row) || a.index - b.index)
+                    .map(({ row }) => row);
                   const renderIncludedRow = (row: (typeof allIncludedRows)[number], emphasized: boolean) => (
                     <li key={row.id} className={`flex justify-between gap-3 ${emphasized ? "font-semibold text-emerald-700" : "text-slate-600"}`}>
                       <span className="inline-flex items-start gap-1.5">
@@ -1868,18 +1876,18 @@ function OfferProposalPreviewView({
                           type="button"
                           disabled={paymentStatus === "succeeded" || selectionSubmittingId !== null}
                           onClick={() => void selectOptionAndContinue(id)}
-                          className={
+                          className={`${
                             paymentStatus === "succeeded" && !selected
                               ? "mt-4 w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-base font-semibold text-slate-400 transition disabled:cursor-not-allowed"
                               : "ui-action-primary mt-4 w-full rounded-lg border px-4 py-3 text-base font-bold transition disabled:cursor-not-allowed disabled:opacity-60"
-                          }
+                          }${showMobileSelectBar ? " hidden xl:block" : ""}`}
                         >
                           {paymentStatus === "succeeded"
                             ? (selected ? "Selected & Paid" : "Not selected")
                             : selectionSubmittingId === id ? "Saving selection…" : `Select ${option.name}`}
                         </button>
                         {urgencyOffer.active ? (
-                          <p className="mt-2 text-center text-xs font-medium text-slate-500">{urgencyOffer.ctaHint}</p>
+                          <p className={`mt-2 text-center text-xs font-medium text-slate-500${showMobileSelectBar ? " hidden xl:block" : ""}`}>{urgencyOffer.ctaHint}</p>
                         ) : null}
                       </div>
                     </section>
@@ -1888,7 +1896,7 @@ function OfferProposalPreviewView({
               </div>
 
               {/* Mobile bottom bar: what's due today for the package in view, and its Select button */}
-              {!embedded && paymentStatus !== "succeeded" ? (
+              {showMobileSelectBar ? (
                 <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] backdrop-blur xl:hidden">
                   <div className="mx-auto flex max-w-xl items-center gap-3">
                     <div className="min-w-0 flex-1">
