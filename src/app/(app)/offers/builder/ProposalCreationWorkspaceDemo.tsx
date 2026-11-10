@@ -845,6 +845,11 @@ export const REAL_ESTATE_OPERATIONS: Array<{ value: RealEstateOperation; label: 
 ];
 
 const GROW_PRICE_MULTIPLIER_FROM_MAINTAIN = 1.5;
+// Grow is the 24/7 concierge tier: its monthly price is Maintain plus a flat
+// premium (Tom, 2026-11-10), not a multiple. One-time amounts keep the multiplier.
+// Published proposals keep the prices in their snapshot; this only affects
+// drafts and future publishes.
+export const GROW_MONTHLY_PREMIUM_OVER_MAINTAIN = 1000;
 
 const TRANSACTION_BANDS: Array<{ value: TransactionBand; label: string; score: number }> = [
   { value: "", label: "Select...", score: 0 },
@@ -1847,9 +1852,9 @@ export function getProposalPricingSnapshotData(assessment: AssessmentState) {
 
   packagePricing.grow = {
     ...packagePricing.grow,
-    monthly: roundUpToNearestIncrement(
-      maintainPricing.monthly * GROW_PRICE_MULTIPLIER_FROM_MAINTAIN,
-    ),
+    monthly: maintainPricing.monthly > 0
+      ? roundUpToNearestIncrement(maintainPricing.monthly + GROW_MONTHLY_PREMIUM_OVER_MAINTAIN)
+      : 0,
     catchUpBase: roundUpToNearestIncrement(
       maintainPricing.catchUpBase * GROW_PRICE_MULTIPLIER_FROM_MAINTAIN,
     ),

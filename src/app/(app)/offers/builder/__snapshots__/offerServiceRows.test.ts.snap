@@ -3,7 +3,7 @@
 exports[`buildOptions golden fixtures > renders 01-draft-draft.snapshot.json unchanged 1`] = `
 {
   "grow": {
-    "monthlyPrice": 825,
+    "monthlyPrice": 1550,
     "name": "Grow",
     "oneTime": [
       [
@@ -182,7 +182,7 @@ exports[`buildOptions golden fixtures > renders 01-draft-draft.snapshot.json unc
 exports[`buildOptions golden fixtures > renders 01-draft-published.snapshot.json unchanged 1`] = `
 {
   "grow": {
-    "monthlyPrice": 825,
+    "monthlyPrice": 1550,
     "name": "Grow",
     "oneTime": [
       [
@@ -361,7 +361,7 @@ exports[`buildOptions golden fixtures > renders 01-draft-published.snapshot.json
 exports[`buildOptions golden fixtures > renders 02-accepted-draft.snapshot.json unchanged 1`] = `
 {
   "grow": {
-    "monthlyPrice": 1005,
+    "monthlyPrice": 1670,
     "name": "Grow",
     "oneTime": [
       [
@@ -540,7 +540,7 @@ exports[`buildOptions golden fixtures > renders 02-accepted-draft.snapshot.json 
 exports[`buildOptions golden fixtures > renders 02-accepted-published.snapshot.json unchanged 1`] = `
 {
   "grow": {
-    "monthlyPrice": 1005,
+    "monthlyPrice": 1670,
     "name": "Grow",
     "oneTime": [
       [
@@ -719,7 +719,7 @@ exports[`buildOptions golden fixtures > renders 02-accepted-published.snapshot.j
 exports[`buildOptions golden fixtures > renders 03-archived-draft.snapshot.json unchanged 1`] = `
 {
   "grow": {
-    "monthlyPrice": 1005,
+    "monthlyPrice": 1670,
     "name": "Grow",
     "oneTime": [
       [
@@ -898,7 +898,7 @@ exports[`buildOptions golden fixtures > renders 03-archived-draft.snapshot.json 
 exports[`buildOptions golden fixtures > renders 03-archived-published.snapshot.json unchanged 1`] = `
 {
   "grow": {
-    "monthlyPrice": 1005,
+    "monthlyPrice": 1670,
     "name": "Grow",
     "oneTime": [
       [
