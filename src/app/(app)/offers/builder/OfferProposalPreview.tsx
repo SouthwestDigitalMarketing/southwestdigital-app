@@ -286,6 +286,76 @@ const baseOptions: Record<OptionId, ProposalOption> = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// Mobile package tabs: drive the swipeable package cards. Desktop shows all cards, so they hide at xl.
+function MobilePackageTabs({
+  compact = false,
+  className,
+  options,
+  activeId,
+  discountMultiplier,
+  activeBackground,
+  activeForeground,
+  inkColor,
+  onSelect,
+}: {
+  compact?: boolean;
+  className: string;
+  options: Record<OptionId, { name: string; monthlyPrice: number }>;
+  activeId: OptionId;
+  discountMultiplier: number;
+  activeBackground: string;
+  activeForeground: string;
+  inkColor: string;
+  onSelect: (id: OptionId) => void;
+}) {
+  if (compact) {
+    // Slim text row for the bottom bar: still tappable, deliberately quieter than the main tabs.
+    return (
+      <div role="tablist" aria-label="Packages" className={`grid grid-cols-3 xl:hidden ${className}`}>
+        {optionMeta.map(({ id }) => {
+          const active = activeId === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => onSelect(id)}
+              className={`border-b-2 py-1 text-xs transition ${active ? "font-bold" : "border-transparent font-medium text-slate-500"}`}
+              style={active ? { borderColor: activeBackground, color: inkColor } : undefined}
+            >
+              {options[id].name}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+  return (
+    <div role="tablist" aria-label="Packages" className={`grid grid-cols-3 gap-1 rounded-2xl bg-slate-100 p-1 xl:hidden ${className}`}>
+      {optionMeta.map(({ id }) => {
+        const option = options[id];
+        const monthly = Math.round(option.monthlyPrice * discountMultiplier * 100) / 100;
+        const active = activeId === id;
+        return (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onSelect(id)}
+            className={`rounded-xl px-2 py-2 text-center transition ${active ? "shadow-sm" : ""}`}
+            style={active ? { backgroundColor: activeBackground, color: activeForeground } : { color: inkColor }}
+          >
+            <span className="block text-sm font-bold">{option.name}</span>
+            <span className={`mt-0.5 block text-xs font-medium ${active ? "opacity-90" : "text-slate-500"}`}>{fmt(monthly)}/mo</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function fmt(value: number) {
   return value.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -727,6 +797,10 @@ function OfferProposalPreviewView({
   const [selectionSubmittingId, setSelectionSubmittingId] = useState<OptionId | null>(null);
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const [step, setStep] = useState(startsSigned ? 3 : 0);
+  // Mobile pricing: tabs above a swipeable row of package cards, kept in sync both ways.
+  const packageCarouselRef = useRef<HTMLDivElement | null>(null);
+  const packageCardRefs = useRef<Partial<Record<OptionId, HTMLElement | null>>>({});
+  const [activePackageId, setActivePackageId] = useState<OptionId>(optionMeta[0].id);
   const trackEvent = useProposalTracking({
     enabled: live && livePublic && !isSimulation && !embedded,
     token: proposalToken,
@@ -1083,6 +1157,40 @@ function OfferProposalPreviewView({
     ? 1 - annualSavingsPercent / 100
     : 1;
 
+  // Card section labels: a quiet label with a hairline on mobile, the filled band on desktop.
+  const sectionLabelClass = "flex items-center gap-3 px-5 pb-1 pt-5 text-xs font-bold uppercase tracking-[0.12em] text-slate-500 after:h-px after:flex-1 after:bg-slate-200 xl:block xl:bg-[var(--section-label-bg)] xl:py-3 xl:text-[color:var(--section-label-fg)] xl:after:hidden";
+  const sectionLabelStyle = (background: string, color: string) =>
+    ({ "--section-label-bg": background, "--section-label-fg": color }) as React.CSSProperties;
+
+  function showPackage(id: OptionId) {
+    const carousel = packageCarouselRef.current;
+    const card = packageCardRefs.current[id];
+    if (!carousel || !card) return;
+    setActivePackageId(id);
+    carousel.scrollTo({ left: card.offsetLeft, behavior: "smooth" });
+    // Deep inside a long card, bring the tops of the cards back into view too.
+    if (carousel.getBoundingClientRect().top < 0) {
+      carousel.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
+  function syncActivePackageFromSwipe() {
+    const carousel = packageCarouselRef.current;
+    if (!carousel) return;
+    let closest: OptionId = activePackageId;
+    let closestDistance = Number.POSITIVE_INFINITY;
+    for (const { id } of optionMeta) {
+      const card = packageCardRefs.current[id];
+      if (!card) continue;
+      const distance = Math.abs(card.offsetLeft - carousel.scrollLeft);
+      if (distance < closestDistance) {
+        closest = id;
+        closestDistance = distance;
+      }
+    }
+    if (closest !== activePackageId) setActivePackageId(closest);
+  }
+
   const cleanupPeriods = hasCatchUpPricingInputs(assessment)
     ? (assessment.historicalCleanupPeriods ?? [])
       .filter((p) => periodMonthCount(p) > 0)
@@ -1297,6 +1405,11 @@ function OfferProposalPreviewView({
       </div>
     </details>
   ) : null;
+
+  // Due-today per package, filled in as the cards render; read by the mobile bottom bar.
+  const mobileDueToday: Partial<Record<OptionId, number>> = {};
+  // Below xl the bottom bar carries the one Select button; the cards' own buttons are desktop-only then.
+  const showMobileSelectBar = !embedded && paymentStatus !== "succeeded";
 
   return (
     <main
@@ -1544,7 +1657,7 @@ function OfferProposalPreviewView({
 
           {/* Step 1 — Services */}
           {step === 1 && (
-            <div className="relative">
+            <div className={`relative ${embedded ? "" : "pb-36 xl:pb-0"}`}>
               {editMode && onEdit ? (
                 <PreviewEditButton
                   label="Edit package services and options"
@@ -1566,8 +1679,28 @@ function OfferProposalPreviewView({
                 </p>
               ) : null}
 
+              {/* Mobile billing tabs */}
+              <div role="tablist" aria-label="Billing" className="mb-3 grid grid-cols-2 rounded-2xl bg-slate-100 p-1 text-sm font-bold xl:hidden">
+                {([false, true] as const).map((annual) => {
+                  const active = hasTwelveMonthAgreement === annual;
+                  return (
+                    <button
+                      key={annual ? "annual" : "monthly"}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setHasTwelveMonthAgreement(annual)}
+                      className={`rounded-xl px-3 py-2.5 transition ${active ? "bg-white shadow-sm" : "text-slate-500"}`}
+                      style={active ? { color: inkColor } : undefined}
+                    >
+                      {annual ? (annualSavingsPercent > 0 ? `Annual · Save ${annualSavingsPercent}%` : "Annual") : "Month-to-month"}
+                    </button>
+                  );
+                })}
+              </div>
+
               {/* Annual toggle */}
-              <div className="relative mb-8 grid grid-cols-[minmax(0,1fr)_4rem_minmax(0,1fr)] items-center gap-2 text-base font-bold sm:gap-4 sm:text-lg">
+              <div className="relative mb-8 hidden grid-cols-[minmax(0,1fr)_4rem_minmax(0,1fr)] items-center gap-2 text-base font-bold sm:gap-4 sm:text-lg xl:grid">
                 {editMode && onEdit ? (
                   <PreviewEditButton
                     label="Edit annual pricing discount"
@@ -1591,8 +1724,15 @@ function OfferProposalPreviewView({
                 </button>
               </div>
 
-              {/* Package cards */}
-              <div className="grid items-stretch gap-5 [grid-template-rows:repeat(6,auto)] xl:grid-cols-3">
+              {/* Mobile package tabs above the cards; a slim copy also rides in the bottom bar */}
+              <MobilePackageTabs className="mb-4" options={options} activeId={activePackageId} discountMultiplier={recurringDiscountMultiplier}
+                activeBackground={brandDark} activeForeground={brandDarkForeground} inkColor={inkColor} onSelect={showPackage} />
+
+              {/* Package cards: a swipeable row on mobile, three columns on desktop */}
+              <div
+                ref={packageCarouselRef}
+                onScroll={syncActivePackageFromSwipe}
+                className="relative flex scroll-mt-4 snap-x snap-mandatory items-start gap-4 overflow-x-auto pb-2 [scrollbar-width:none] xl:grid xl:snap-none xl:items-stretch xl:gap-5 xl:overflow-visible xl:pb-0 xl:[grid-template-rows:repeat(6,auto)] xl:grid-cols-3">
                 {optionMeta.map(({ id, serviceLevel }) => {
                   const option = options[id];
                   const selected = selectedOptionId === id;
@@ -1633,6 +1773,7 @@ function OfferProposalPreviewView({
                     annualPrepay: hasTwelveMonthAgreement,
                     creditApplied: firstPaymentCredit,
                   });
+                  mobileDueToday[id] = isTestProposal ? 1 : schedule.amountDueNow;
                   const paidOneTime      = effectiveOneTimeRows.filter((r) => r.price > 0);
                   const optionalCleanup  = paidOneTime.filter((r) => r.cleanupPeriodKey);
                   const requiredAddOnRows = packageAdditionalOptionRows.filter((r) => r.required);
@@ -1642,11 +1783,32 @@ function OfferProposalPreviewView({
 
                   const lowerTierId: OptionId | null = id === "grow" ? "improve" : id === "improve" ? "maintain" : null;
                   const { lowerTierName, includedRows } = pricingCardServices(option, lowerTierId ? options[lowerTierId] : undefined);
+                  // Mobile shows one package at a time, so it lists everything; rows new at this tier stay highlighted.
+                  const newAtThisTier = new Set(includedRows.map((row) => row.id));
+                  // Order: service level first, then what this tier adds, then what it carries over.
+                  const includedRank = (row: (typeof includedRows)[number]) =>
+                    row.serviceName.endsWith("Client Support") ? 0 : newAtThisTier.has(row.id) ? 1 : 2;
+                  const allIncludedRows = pricingCardServices(option).includedRows
+                    .map((row, index) => ({ row, index }))
+                    .sort((a, b) => includedRank(a.row) - includedRank(b.row) || a.index - b.index)
+                    .map(({ row }) => row);
+                  const renderIncludedRow = (row: (typeof allIncludedRows)[number], emphasized: boolean) => (
+                    <li key={row.id} className={`flex justify-between gap-3 ${emphasized ? "font-semibold text-emerald-700" : "text-slate-600"}`}>
+                      <span className="inline-flex items-start gap-1.5">
+                        <span className="group relative inline-flex shrink-0">
+                          <button type="button" aria-label={`More information about ${row.serviceName}`} className={`ui-focus-ring rounded-full hover:text-brandnavy focus:outline-none ${emphasized ? "text-emerald-600" : "text-slate-400"}`}><CircleHelp className="h-3.5 w-3.5" /></button>
+                          <span role="tooltip" className="ui-tooltip pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-64 rounded-lg px-3 py-2 text-left text-xs font-normal leading-5 shadow-lg group-hover:block group-focus-within:block">{getTooltip(row)}</span>
+                        </span>
+                        <span>{serviceLevelTitle(row.serviceName)}</span>
+                        {row.platformTag ? <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800">{row.platformTag}</span> : null}
+                      </span>
+                    </li>
+                  );
                   const supportRows = [...option.recurringRows, ...option.oneTimeRows.filter((row) => row.price === 0)]
                     .filter((row) => row.serviceName.endsWith("Client Support"));
 
                   return (
-                    <section key={id} data-track-package={id} data-track-position={optionMeta.findIndex((meta) => meta.id === id)} className="grid grid-rows-subgrid row-span-6 overflow-hidden rounded-xl border bg-white shadow-sm transition-colors" style={{ borderColor: selected ? brandDark : "#e2e8f0" }}>
+                    <section key={id} ref={(el) => { packageCardRefs.current[id] = el; }} data-track-package={id} data-track-position={optionMeta.findIndex((meta) => meta.id === id)} className="w-full shrink-0 snap-start xl:grid xl:w-auto xl:grid-rows-subgrid xl:row-span-6 overflow-hidden rounded-xl border bg-white shadow-sm transition-colors" style={{ borderColor: selected ? brandDark : "#e2e8f0" }}>
                       {/* Card header + service level (one grid row so the cards stay aligned) */}
                       <div>
                         <div className="p-5">
@@ -1676,7 +1838,7 @@ function OfferProposalPreviewView({
                         </div>
                         </div>
                         <section className="border-t border-slate-200">
-                          <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ backgroundColor: subtleAccentBg, color: inkColor }}>Service level</p>
+                          <p className={sectionLabelClass} style={sectionLabelStyle(subtleAccentBg, inkColor)}>Service level</p>
                           <div className="space-y-3 px-5 py-4">
                             {supportRows.length > 0 ? supportRows.map((row) => (
                               <div key={row.id} aria-label={`${option.name} support level`}>
@@ -1700,7 +1862,7 @@ function OfferProposalPreviewView({
 
                       {/* One-time services */}
                       <section className="border-t border-slate-200">
-                        <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ backgroundColor: subtleAccentBg, color: inkColor }}>One-time services</p>
+                        <p className={sectionLabelClass} style={sectionLabelStyle(subtleAccentBg, inkColor)}>One-time services</p>
                         <div className="px-5 py-4">
                           {requiredOnboard.length || requiredAddOnRows.length ? <div className="mt-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Required to get started</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{requiredOnboard.map((row) => <ServiceLine key={row.id} row={{ ...row, serviceName: schedule.hasCleanup ? "Onboarding + Discovery" : "Onboarding", note: schedule.hasCleanup ? "Account access, document collection, and discovery to confirm the cleanup scope and estimate. Cleanup work is approved separately afterward." : "Account access, document collection, and setup for ongoing bookkeeping." }} originalPrice={assessment.showOriginalOneTimePrices !== false && isOnboarding(row) && originalOnboardingFee > row.price ? originalOnboardingFee : undefined} waivedLabel={onboardingWaived && isOnboarding(row) ? "Waived" : undefined} />)}{requiredAddOnRows.map((row) => <ServiceLine key={row.id} row={{ ...row, id: `${id}-${row.id}` }} priceSuffix={row.billEvery ? "/mo" : undefined} />)}</ul></div> : null}
                           {optionalCleanup.length ? <div className="mt-5 border-t border-slate-200 pt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Cleanup estimate</p><p className="mt-2 text-xs leading-5 text-slate-600">Select the periods to estimate. Cleanup is not charged today; final scope, price, and payment milestones are confirmed after discovery.</p><ul className="mt-4 space-y-7 text-sm text-slate-600">{optionalCleanup.map((row) => <ServiceLine key={row.id} row={row} selected={cleanupIsSelected(id, row.cleanupPeriodKey!)} onToggle={(checked) => setCleanupSelections((prev) => ({ ...prev, [cleanupKey(id, row.cleanupPeriodKey!)]: checked }))} showPriceWhenUnselected />)}</ul></div> : null}
@@ -1710,7 +1872,7 @@ function OfferProposalPreviewView({
 
                       {/* Recurring services */}
                       <section>
-                        <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ backgroundColor: brandDark, color: brandDarkForeground }}>Recurring services</p>
+                        <p className={sectionLabelClass} style={sectionLabelStyle(brandDark, brandDarkForeground)}>Recurring services</p>
                       </section>
 
                       {optionalAdditionalRows.length > 0 ? (
@@ -1739,20 +1901,12 @@ function OfferProposalPreviewView({
                       {/* All included services */}
                       <section>
                         <p className="bg-emerald-100 px-5 py-3 text-xs font-bold uppercase tracking-[0.12em] text-emerald-900">Included with this package</p>
-                        {lowerTierName ? <p className="px-5 pt-4 text-sm font-semibold text-slate-700">Everything included with {lowerTierName}{includedRows.length > 0 ? ", plus:" : "."}</p> : null}
-                        <ul className="space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600">
-                          {includedRows.map((row) => (
-                            <li key={row.id} className="flex justify-between gap-3 font-semibold text-emerald-700">
-                              <span className="inline-flex items-start gap-1.5">
-                                <span className="group relative inline-flex shrink-0">
-                                  <button type="button" aria-label={`More information about ${row.serviceName}`} className="ui-focus-ring rounded-full text-emerald-600 hover:text-brandnavy focus:outline-none"><CircleHelp className="h-3.5 w-3.5" /></button>
-                                  <span role="tooltip" className="ui-tooltip pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-64 rounded-lg px-3 py-2 text-left text-xs font-normal leading-5 shadow-lg group-hover:block group-focus-within:block">{getTooltip(row)}</span>
-                                </span>
-                                <span>{serviceLevelTitle(row.serviceName)}</span>
-                                {row.platformTag ? <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800">{row.platformTag}</span> : null}
-                              </span>
-                            </li>
-                          ))}
+                        {lowerTierName ? <p className="hidden px-5 pt-4 text-sm font-semibold text-slate-700 xl:block">Everything included with {lowerTierName}{includedRows.length > 0 ? ", plus:" : "."}</p> : null}
+                        <ul className="hidden space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600 xl:block">
+                          {includedRows.map((row) => renderIncludedRow(row, true))}
+                        </ul>
+                        <ul className="space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600 xl:hidden">
+                          {allIncludedRows.map((row) => renderIncludedRow(row, newAtThisTier.has(row.id)))}
                         </ul>
                       </section>
 
@@ -1772,24 +1926,46 @@ function OfferProposalPreviewView({
                           type="button"
                           disabled={paymentStatus === "succeeded" || selectionSubmittingId !== null}
                           onClick={() => void selectOptionAndContinue(id)}
-                          className={
+                          className={`${
                             paymentStatus === "succeeded" && !selected
                               ? "mt-4 w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-base font-semibold text-slate-400 transition disabled:cursor-not-allowed"
                               : "ui-action-primary mt-4 w-full rounded-lg border px-4 py-3 text-base font-bold transition disabled:cursor-not-allowed disabled:opacity-60"
-                          }
+                          }${showMobileSelectBar ? " hidden xl:block" : ""}`}
                         >
                           {paymentStatus === "succeeded"
                             ? (selected ? "Selected & Paid" : "Not selected")
                             : selectionSubmittingId === id ? "Saving selection…" : `Select ${option.name}`}
                         </button>
                         {urgencyOffer.active ? (
-                          <p className="mt-2 text-center text-xs font-medium text-slate-500">{urgencyOffer.ctaHint}</p>
+                          <p className={`mt-2 text-center text-xs font-medium text-slate-500${showMobileSelectBar ? " hidden xl:block" : ""}`}>{urgencyOffer.ctaHint}</p>
                         ) : null}
                       </div>
                     </section>
                   );
                 })}
               </div>
+
+              {/* Mobile bottom bar: what's due today for the package in view, and its Select button */}
+              {showMobileSelectBar ? (
+                <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 pb-3 pt-1.5 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] backdrop-blur xl:hidden">
+                  <MobilePackageTabs compact className="mx-auto mb-2 max-w-xl" options={options} activeId={activePackageId} discountMultiplier={recurringDiscountMultiplier}
+                    activeBackground={brandDark} activeForeground={brandDarkForeground} inkColor={inkColor} onSelect={showPackage} />
+                  <div className="mx-auto flex max-w-xl items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-semibold uppercase tracking-wide text-slate-500">Due today · {options[activePackageId].name}</p>
+                      <p className="text-xl font-bold" style={{ color: inkColor }}>{fmt(mobileDueToday[activePackageId] ?? 0)}</p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={selectionSubmittingId !== null}
+                      onClick={() => void selectOptionAndContinue(activePackageId)}
+                      className="ui-action-primary shrink-0 rounded-lg border px-5 py-3 text-base font-bold transition disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {selectionSubmittingId === activePackageId ? "Saving…" : `Select ${options[activePackageId].name}`}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           )}
 
