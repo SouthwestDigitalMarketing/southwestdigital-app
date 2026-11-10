@@ -254,6 +254,12 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ] as const;
 
+// Mobile package colors (tabs, checkout-bar underline and Select button). Improve uses the
+// brand's own dark color; Grow and Maintain are fixed gold and teal (Tom, 2026-11-10).
+type TierColor = { background: string; foreground: string };
+const GROW_TIER_COLOR = "#D4A017";
+const MAINTAIN_TIER_COLOR = "#0F766E";
+
 const optionMeta: Array<{ id: OptionId; icon: typeof Sparkles; accentClass: string; serviceLevel: string }> = [
   { id: "grow",     icon: Sparkles,    accentClass: "text-emerald-600", serviceLevel: "Concierge" },
   { id: "improve",  icon: LineChart,   accentClass: "text-indigo-600",  serviceLevel: "Priority"  },
@@ -293,8 +299,7 @@ function MobilePackageTabs({
   options,
   activeId,
   discountMultiplier,
-  activeBackground,
-  activeForeground,
+  tierColors,
   inkColor,
   onSelect,
 }: {
@@ -303,8 +308,7 @@ function MobilePackageTabs({
   options: Record<OptionId, { name: string; monthlyPrice: number }>;
   activeId: OptionId;
   discountMultiplier: number;
-  activeBackground: string;
-  activeForeground: string;
+  tierColors: Record<OptionId, TierColor>;
   inkColor: string;
   onSelect: (id: OptionId) => void;
 }) {
@@ -322,7 +326,7 @@ function MobilePackageTabs({
               aria-selected={active}
               onClick={() => onSelect(id)}
               className={`min-h-10 border-b-2 py-2 text-sm transition ${active ? "font-bold" : "border-transparent font-medium text-slate-500"}`}
-              style={active ? { borderColor: activeBackground, color: inkColor } : undefined}
+              style={active ? { borderColor: tierColors[id].background, color: inkColor } : undefined}
             >
               {options[id].name}
             </button>
@@ -345,9 +349,13 @@ function MobilePackageTabs({
             aria-selected={active}
             onClick={() => onSelect(id)}
             className={`rounded-xl px-2 py-2 text-center transition ${active ? "shadow-sm" : ""}`}
-            style={active ? { backgroundColor: activeBackground, color: activeForeground } : { color: inkColor }}
+            style={active ? { backgroundColor: tierColors[id].background, color: tierColors[id].foreground } : { color: inkColor }}
           >
-            <span className="block text-sm font-bold">{option.name}</span>
+            <span className="flex items-center justify-center gap-1.5 text-sm font-bold">
+              {/* Each package keeps its color even when not selected. */}
+              {active ? null : <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: tierColors[id].background }} />}
+              {option.name}
+            </span>
             <span className={`mt-0.5 block text-xs font-medium ${active ? "opacity-90" : "text-slate-500"}`}>{fmt(monthly)}/mo</span>
           </button>
         );
@@ -789,6 +797,11 @@ function OfferProposalPreviewView({
     proposalMode === "dark" && theme.darkAccent ? theme.darkAccent : theme.accent ?? brandAccent;
   const brandDark = theme.light === null ? configuredBrandDark : lightColor;
   const brandDarkForeground = readableForegroundColor(brandDark);
+  const tierColors: Record<OptionId, TierColor> = {
+    grow: { background: GROW_TIER_COLOR, foreground: readableForegroundColor(GROW_TIER_COLOR) },
+    improve: { background: brandDark, foreground: brandDarkForeground },
+    maintain: { background: MAINTAIN_TIER_COLOR, foreground: readableForegroundColor(MAINTAIN_TIER_COLOR) },
+  };
   const actionColor = accentColor;
   const pageBg = theme.pageBg[proposalMode];
   const primaryActionVariables = primaryActionCssVariables(actionColor);
@@ -1771,7 +1784,7 @@ function OfferProposalPreviewView({
 
               {/* Mobile package tabs above the cards; a slim copy also rides in the bottom bar */}
               <MobilePackageTabs className="mb-4" options={options} activeId={activePackageId} discountMultiplier={recurringDiscountMultiplier}
-                activeBackground={brandDark} activeForeground={brandDarkForeground} inkColor={inkColor} onSelect={showPackage} />
+                tierColors={tierColors} inkColor={inkColor} onSelect={showPackage} />
 
               {/* Package cards: a swipeable row on mobile, three columns on desktop */}
               <div
@@ -1994,7 +2007,7 @@ function OfferProposalPreviewView({
               {showMobileSelectBar ? (
                 <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-1.5 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] backdrop-blur xl:hidden">
                   <MobilePackageTabs compact className="mx-auto mb-2 max-w-xl" options={options} activeId={activePackageId} discountMultiplier={recurringDiscountMultiplier}
-                    activeBackground={brandDark} activeForeground={brandDarkForeground} inkColor={inkColor} onSelect={showPackage} />
+                    tierColors={tierColors} inkColor={inkColor} onSelect={showPackage} />
                   <div className="mx-auto flex max-w-xl items-center gap-3">
                     {/* Every package's label and amount share one grid cell, so the block is always as
                         wide as the widest and the button beside it never changes size. Never wraps. */}
@@ -2010,7 +2023,8 @@ function OfferProposalPreviewView({
                       type="button"
                       disabled={selectionSubmittingId !== null}
                       onClick={() => void selectOptionAndContinue(activePackageId)}
-                      className="ui-action-primary min-w-0 flex-1 truncate rounded-lg border px-3 py-3 text-base font-bold transition disabled:cursor-not-allowed disabled:opacity-60"
+                      className="min-w-0 flex-1 truncate rounded-lg border px-3 py-3 text-base font-bold transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+                      style={{ backgroundColor: tierColors[activePackageId].background, borderColor: tierColors[activePackageId].background, color: tierColors[activePackageId].foreground }}
                     >
                       {selectionSubmittingId === activePackageId ? "Saving…" : (
                         // Under 360px the package name would be cut off; the tabs and due-today label already name it.
