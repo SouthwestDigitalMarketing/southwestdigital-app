@@ -142,7 +142,7 @@ function ReviewCard({
         )}
         <div className="min-w-0">
           <p className="text-xs font-semibold text-slate-900">{name}</p>
-          <p className="text-xs text-slate-500">{detail} · {ago}</p>
+          <p className="text-[0.65rem] text-slate-400">{detail} · {ago}</p>
         </div>
       </div>
     </div>
