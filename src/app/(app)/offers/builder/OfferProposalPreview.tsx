@@ -7,7 +7,6 @@ import { proposalPaymentSchedule } from "@/lib/quotes/paymentSchedule";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
-  ArrowUp,
   BadgeCheck,
   Check,
   ChevronLeft,
@@ -733,7 +732,6 @@ function OfferProposalPreviewView({
   const packageCarouselRef = useRef<HTMLDivElement | null>(null);
   const packageCardRefs = useRef<Partial<Record<OptionId, HTMLElement | null>>>({});
   const [activePackageId, setActivePackageId] = useState<OptionId>(optionMeta[0].id);
-  const [showBackToPackages, setShowBackToPackages] = useState(false);
   const trackEvent = useProposalTracking({
     enabled: live && livePublic && !isSimulation && !embedded,
     token: proposalToken,
@@ -1090,19 +1088,10 @@ function OfferProposalPreviewView({
     ? 1 - annualSavingsPercent / 100
     : 1;
 
-  useEffect(() => {
-    const tabs = packageTabsRef.current;
-    if (step !== 1 || !tabs || typeof IntersectionObserver === "undefined") {
-      setShowBackToPackages(false);
-      return;
-    }
-    const observer = new IntersectionObserver(([entry]) => {
-      // Only after the tabs have scrolled up out of view, not before reaching them.
-      setShowBackToPackages(!entry.isIntersecting && entry.boundingClientRect.top < 0);
-    });
-    observer.observe(tabs);
-    return () => observer.disconnect();
-  }, [step]);
+  // Card section labels: a quiet label with a hairline on mobile, the filled band on desktop.
+  const sectionLabelClass = "flex items-center gap-3 px-5 pb-1 pt-5 text-xs font-bold uppercase tracking-[0.12em] text-slate-500 after:h-px after:flex-1 after:bg-slate-200 xl:block xl:bg-[var(--section-label-bg)] xl:py-3 xl:text-[color:var(--section-label-fg)] xl:after:hidden";
+  const sectionLabelStyle = (background: string, color: string) =>
+    ({ "--section-label-bg": background, "--section-label-fg": color }) as React.CSSProperties;
 
   function showPackage(id: OptionId) {
     const carousel = packageCarouselRef.current;
@@ -1347,6 +1336,9 @@ function OfferProposalPreviewView({
       </div>
     </details>
   ) : null;
+
+  // Due-today per package, filled in as the cards render; read by the mobile bottom bar.
+  const mobileDueToday: Partial<Record<OptionId, number>> = {};
 
   return (
     <main
@@ -1594,7 +1586,7 @@ function OfferProposalPreviewView({
 
           {/* Step 1 — Services */}
           {step === 1 && (
-            <div className="relative">
+            <div className={`relative ${embedded ? "" : "pb-28 xl:pb-0"}`}>
               {editMode && onEdit ? (
                 <PreviewEditButton
                   label="Edit package services and options"
@@ -1616,8 +1608,28 @@ function OfferProposalPreviewView({
                 </p>
               ) : null}
 
+              {/* Mobile billing tabs */}
+              <div role="tablist" aria-label="Billing" className="mb-3 grid grid-cols-2 rounded-2xl bg-slate-100 p-1 text-sm font-bold xl:hidden">
+                {([false, true] as const).map((annual) => {
+                  const active = hasTwelveMonthAgreement === annual;
+                  return (
+                    <button
+                      key={annual ? "annual" : "monthly"}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setHasTwelveMonthAgreement(annual)}
+                      className={`rounded-xl px-3 py-2.5 transition ${active ? "bg-white shadow-sm" : "text-slate-500"}`}
+                      style={active ? { color: inkColor } : undefined}
+                    >
+                      {annual ? (annualSavingsPercent > 0 ? `Annual · Save ${annualSavingsPercent}%` : "Annual") : "Month-to-month"}
+                    </button>
+                  );
+                })}
+              </div>
+
               {/* Annual toggle */}
-              <div className="relative mb-8 grid grid-cols-[minmax(0,1fr)_4rem_minmax(0,1fr)] items-center gap-2 text-base font-bold sm:gap-4 sm:text-lg">
+              <div className="relative mb-8 hidden grid-cols-[minmax(0,1fr)_4rem_minmax(0,1fr)] items-center gap-2 text-base font-bold sm:gap-4 sm:text-lg xl:grid">
                 {editMode && onEdit ? (
                   <PreviewEditButton
                     label="Edit annual pricing discount"
@@ -1642,7 +1654,7 @@ function OfferProposalPreviewView({
               </div>
 
               {/* Mobile package tabs: all three packages above the fold; they drive the swipeable cards below */}
-              <div ref={packageTabsRef} role="tablist" aria-label="Packages" className="mb-4 grid scroll-mt-4 grid-cols-3 gap-2 xl:hidden">
+              <div ref={packageTabsRef} role="tablist" aria-label="Packages" className="mb-4 grid scroll-mt-4 grid-cols-3 gap-1 rounded-2xl bg-slate-100 p-1 xl:hidden">
                 {optionMeta.map(({ id }) => {
                   const option = options[id];
                   const monthly = Math.round(option.monthlyPrice * recurringDiscountMultiplier * 100) / 100;
@@ -1654,27 +1666,15 @@ function OfferProposalPreviewView({
                       role="tab"
                       aria-selected={active}
                       onClick={() => showPackage(id)}
-                      className="rounded-xl border px-2 py-2.5 text-center shadow-sm transition"
-                      style={active ? { backgroundColor: brandDark, borderColor: brandDark, color: brandDarkForeground } : { backgroundColor: "#ffffff", borderColor: "#e2e8f0", color: inkColor }}
+                      className={`rounded-xl px-2 py-2 text-center transition ${active ? "shadow-sm" : ""}`}
+                      style={active ? { backgroundColor: brandDark, color: brandDarkForeground } : { color: inkColor }}
                     >
                       <span className="block text-sm font-bold">{option.name}</span>
-                      <span className={`mt-0.5 block text-xs font-semibold ${active ? "" : "text-slate-600"}`}>{fmt(monthly)}/mo</span>
+                      <span className={`mt-0.5 block text-xs font-medium ${active ? "opacity-90" : "text-slate-500"}`}>{fmt(monthly)}/mo</span>
                     </button>
                   );
                 })}
               </div>
-
-              {showBackToPackages ? (
-                <button
-                  type="button"
-                  onClick={() => packageTabsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
-                  className="fixed right-4 top-4 z-40 inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold shadow-lg xl:hidden"
-                  style={{ backgroundColor: brandDark, color: brandDarkForeground }}
-                >
-                  <ArrowUp className="h-4 w-4" aria-hidden="true" />
-                  All packages
-                </button>
-              ) : null}
 
               {/* Package cards: a swipeable row on mobile, three columns on desktop */}
               <div
@@ -1721,6 +1721,7 @@ function OfferProposalPreviewView({
                     annualPrepay: hasTwelveMonthAgreement,
                     creditApplied: firstPaymentCredit,
                   });
+                  mobileDueToday[id] = isTestProposal ? 1 : schedule.amountDueNow;
                   const paidOneTime      = effectiveOneTimeRows.filter((r) => r.price > 0);
                   const optionalCleanup  = paidOneTime.filter((r) => r.cleanupPeriodKey);
                   const requiredAddOnRows = packageAdditionalOptionRows.filter((r) => r.required);
@@ -1764,7 +1765,7 @@ function OfferProposalPreviewView({
                         </div>
                         </div>
                         <section className="border-t border-slate-200">
-                          <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ backgroundColor: subtleAccentBg, color: inkColor }}>Service level</p>
+                          <p className={sectionLabelClass} style={sectionLabelStyle(subtleAccentBg, inkColor)}>Service level</p>
                           <div className="space-y-3 px-5 py-4">
                             {supportRows.length > 0 ? supportRows.map((row) => (
                               <div key={row.id} aria-label={`${option.name} support level`}>
@@ -1788,7 +1789,7 @@ function OfferProposalPreviewView({
 
                       {/* One-time services */}
                       <section className="border-t border-slate-200">
-                        <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ backgroundColor: subtleAccentBg, color: inkColor }}>One-time services</p>
+                        <p className={sectionLabelClass} style={sectionLabelStyle(subtleAccentBg, inkColor)}>One-time services</p>
                         <div className="px-5 py-4">
                           {requiredOnboard.length || requiredAddOnRows.length ? <div className="mt-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Required to get started</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{requiredOnboard.map((row) => <ServiceLine key={row.id} row={{ ...row, serviceName: schedule.hasCleanup ? "Onboarding + Discovery" : "Onboarding", note: schedule.hasCleanup ? "Account access, document collection, and discovery to confirm the cleanup scope and estimate. Cleanup work is approved separately afterward." : "Account access, document collection, and setup for ongoing bookkeeping." }} originalPrice={assessment.showOriginalOneTimePrices !== false && isOnboarding(row) && originalOnboardingFee > row.price ? originalOnboardingFee : undefined} waivedLabel={onboardingWaived && isOnboarding(row) ? "Waived" : undefined} />)}{requiredAddOnRows.map((row) => <ServiceLine key={row.id} row={{ ...row, id: `${id}-${row.id}` }} priceSuffix={row.billEvery ? "/mo" : undefined} />)}</ul></div> : null}
                           {optionalCleanup.length ? <div className="mt-5 border-t border-slate-200 pt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Cleanup estimate</p><p className="mt-2 text-xs leading-5 text-slate-600">Select the periods to estimate. Cleanup is not charged today; final scope, price, and payment milestones are confirmed after discovery.</p><ul className="mt-4 space-y-7 text-sm text-slate-600">{optionalCleanup.map((row) => <ServiceLine key={row.id} row={row} selected={cleanupIsSelected(id, row.cleanupPeriodKey!)} onToggle={(checked) => setCleanupSelections((prev) => ({ ...prev, [cleanupKey(id, row.cleanupPeriodKey!)]: checked }))} showPriceWhenUnselected />)}</ul></div> : null}
@@ -1798,7 +1799,7 @@ function OfferProposalPreviewView({
 
                       {/* Recurring services */}
                       <section>
-                        <p className="px-5 py-3 text-xs font-bold uppercase tracking-[0.12em]" style={{ backgroundColor: brandDark, color: brandDarkForeground }}>Recurring services</p>
+                        <p className={sectionLabelClass} style={sectionLabelStyle(brandDark, brandDarkForeground)}>Recurring services</p>
                       </section>
 
                       {optionalAdditionalRows.length > 0 ? (
@@ -1878,6 +1879,26 @@ function OfferProposalPreviewView({
                   );
                 })}
               </div>
+
+              {/* Mobile bottom bar: what's due today for the package in view, and its Select button */}
+              {!embedded && paymentStatus !== "succeeded" ? (
+                <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] backdrop-blur xl:hidden">
+                  <div className="mx-auto flex max-w-xl items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-semibold uppercase tracking-wide text-slate-500">Due today · {options[activePackageId].name}</p>
+                      <p className="text-xl font-bold" style={{ color: inkColor }}>{fmt(mobileDueToday[activePackageId] ?? 0)}</p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={selectionSubmittingId !== null}
+                      onClick={() => void selectOptionAndContinue(activePackageId)}
+                      className="ui-action-primary shrink-0 rounded-lg border px-5 py-3 text-base font-bold transition disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {selectionSubmittingId === activePackageId ? "Saving…" : `Select ${options[activePackageId].name}`}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           )}
 
