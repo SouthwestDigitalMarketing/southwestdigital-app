@@ -64,7 +64,7 @@ import {
   HeroCtaContent,
   normalizeHeroButton,
 } from "./heroButtons";
-import { resolveCoverMedia } from "./coverMedia";
+import { resolveCoverMedia, resolveVideoPosterUrl } from "./coverMedia";
 import { useProposalTracking } from "./useProposalTracking";
 import { DEFAULT_URGENCY_OFFER, getUrgencyOfferDisplay } from "./urgencyOffer";
 import { ProposalUrgencyBanner, ProposalUrgencyNote } from "./ProposalUrgencyBanner";
@@ -352,6 +352,51 @@ function MobilePackageTabs({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+// Cover video with an instant still: the thumbnail paints on first render while the
+// player iframe loads behind it, then fades out once the iframe has loaded.
+function CoverVideoFrame({
+  embedUrl,
+  posterUrl,
+  iframeRef,
+}: {
+  embedUrl: string;
+  posterUrl: string | null;
+  iframeRef: React.RefObject<HTMLIFrameElement | null>;
+}) {
+  const [frameLoaded, setFrameLoaded] = useState(false);
+  const [posterFailed, setPosterFailed] = useState(false);
+  let origin: string | null = null;
+  try {
+    origin = new URL(embedUrl).origin;
+  } catch {
+    origin = null;
+  }
+  return (
+    <div className="relative aspect-video bg-slate-100">
+      {origin ? <link rel="preconnect" href={origin} /> : null}
+      <iframe
+        ref={iframeRef}
+        src={embedUrl}
+        onLoad={() => setFrameLoaded(true)}
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+        className="h-full w-full"
+      />
+      {posterUrl && !posterFailed ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={posterUrl}
+          alt=""
+          aria-hidden="true"
+          fetchPriority="high"
+          onError={() => setPosterFailed(true)}
+          className={`pointer-events-none absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ${frameLoaded ? "opacity-0" : "opacity-100"}`}
+        />
+      ) : null}
     </div>
   );
 }
@@ -1613,19 +1658,11 @@ function OfferProposalPreviewView({
                           className="absolute right-3 top-3 z-20"
                         />
                       ) : null}
-                      <div className="aspect-video">
-                        {isCloudflareStreamEmbed(embedUrl) && !streamSdkReady ? (
-                          <div className="grid h-full place-items-center bg-slate-100 text-sm font-medium text-slate-500">Loading video…</div>
-                        ) : (
-                          <iframe
-                            ref={streamIframeRef}
-                            src={embedUrl}
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowFullScreen
-                            className="h-full w-full"
-                          />
-                        )}
-                      </div>
+                      <CoverVideoFrame
+                        embedUrl={embedUrl}
+                        posterUrl={imageUrl || resolveVideoPosterUrl(embedUrl)}
+                        iframeRef={streamIframeRef}
+                      />
                     </div>
                   ) : imageUrl ? (
                     <div

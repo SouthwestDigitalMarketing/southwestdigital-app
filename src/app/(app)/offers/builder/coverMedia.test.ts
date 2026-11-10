@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveCoverMedia } from "./coverMedia";
+import { resolveCoverMedia, resolveVideoPosterUrl } from "./coverMedia";
 
 describe("resolveCoverMedia", () => {
   const brandDefaults = {
@@ -49,5 +49,25 @@ describe("resolveCoverMedia", () => {
       videoUrl: "https://youtube.com/watch?v=selected",
       imageUrl: "",
     });
+  });
+});
+
+describe("resolveVideoPosterUrl", () => {
+  it("uses the Cloudflare Stream thumbnail for a Stream embed", () => {
+    expect(resolveVideoPosterUrl("https://customer-abc.cloudflarestream.com/0123abcd/iframe")).toBe(
+      "https://customer-abc.cloudflarestream.com/0123abcd/thumbnails/thumbnail.jpg?height=720",
+    );
+  });
+
+  it("uses the YouTube thumbnail for a YouTube embed", () => {
+    expect(resolveVideoPosterUrl("https://www.youtube.com/embed/dQw4w9WgXcQ")).toBe(
+      "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+    );
+  });
+
+  it("returns null for platforms without a public thumbnail URL and for bad input", () => {
+    expect(resolveVideoPosterUrl("https://player.vimeo.com/video/123")).toBeNull();
+    expect(resolveVideoPosterUrl("not a url")).toBeNull();
+    expect(resolveVideoPosterUrl(null)).toBeNull();
   });
 });
