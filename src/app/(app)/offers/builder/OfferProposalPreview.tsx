@@ -1330,21 +1330,6 @@ function OfferProposalPreviewView({
 
       <section className={`relative z-10 mx-auto flex max-w-[1180px] flex-col gap-6 ${embedded ? "" : "min-h-[calc(100vh-3rem)]"}`}>
 
-        {isStaffPreview ? (
-          <div
-            data-theme="light"
-            data-appearance="standard"
-            className="rounded-2xl border-2 border-dashed border-amber-400 bg-amber-50 px-5 py-3 text-sm text-amber-900"
-          >
-            <p className="font-semibold">Staff preview — nothing here will be recorded.</p>
-            <p className="mt-1 text-amber-800">
-              This is an interactive simulation of the client experience. Package selections,
-              signatures, payments, and navigation stay in this browser preview and do not update
-              the proposal, Agreement Manager, or CRM.
-            </p>
-          </div>
-        ) : null}
-
         {/* Nav bar — always a white floating bar, even under dark themes */}
         <nav
           aria-label="Proposal navigation"
