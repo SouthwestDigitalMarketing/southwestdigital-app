@@ -2012,7 +2012,10 @@ function OfferProposalPreviewView({
                       onClick={() => void selectOptionAndContinue(activePackageId)}
                       className="ui-action-primary min-w-0 flex-1 truncate rounded-lg border px-3 py-3 text-base font-bold transition disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {selectionSubmittingId === activePackageId ? "Saving…" : `Select ${options[activePackageId].name}`}
+                      {selectionSubmittingId === activePackageId ? "Saving…" : (
+                        // Under 360px the package name would be cut off; the tabs and due-today label already name it.
+                        <>Select<span className="hidden min-[360px]:inline"> {options[activePackageId].name}</span></>
+                      )}
                     </button>
                   </div>
                 </div>
