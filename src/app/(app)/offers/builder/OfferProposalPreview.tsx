@@ -1857,7 +1857,11 @@ function OfferProposalPreviewView({
                           <button type="button" aria-label={`More information about ${row.serviceName}`} className={`ui-focus-ring rounded-full hover:text-brandnavy focus:outline-none ${emphasized ? "text-emerald-600" : "text-slate-400"}`}><CircleHelp className="h-3.5 w-3.5" /></button>
                           <span role="tooltip" className="ui-tooltip pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-64 rounded-lg px-3 py-2 text-left text-xs font-normal leading-5 shadow-lg group-hover:block group-focus-within:block">{getTooltip(row)}</span>
                         </span>
-                        <span>{serviceLevelTitle(row.serviceName)}</span>
+                        <span>
+                          {serviceLevelTitle(row.serviceName)}
+                          {/* Support levels carry their time promise inline, e.g. "White-Glove Concierge · 24/7". */}
+                          {SERVICE_LEVEL_COPY[row.serviceName] ? <> · <strong className="font-bold">{SERVICE_LEVEL_COPY[row.serviceName].emphasis}</strong></> : null}
+                        </span>
                         {row.platformTag ? <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800">{row.platformTag}</span> : null}
                       </span>
                     </li>
