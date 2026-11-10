@@ -288,6 +288,7 @@ const baseOptions: Record<OptionId, ProposalOption> = {
 
 // Mobile package tabs: drive the swipeable package cards. Desktop shows all cards, so they hide at xl.
 function MobilePackageTabs({
+  compact = false,
   className,
   options,
   activeId,
@@ -297,6 +298,7 @@ function MobilePackageTabs({
   inkColor,
   onSelect,
 }: {
+  compact?: boolean;
   className: string;
   options: Record<OptionId, { name: string; monthlyPrice: number }>;
   activeId: OptionId;
@@ -306,6 +308,29 @@ function MobilePackageTabs({
   inkColor: string;
   onSelect: (id: OptionId) => void;
 }) {
+  if (compact) {
+    // Slim text row for the bottom bar: still tappable, deliberately quieter than the main tabs.
+    return (
+      <div role="tablist" aria-label="Packages" className={`grid grid-cols-3 xl:hidden ${className}`}>
+        {optionMeta.map(({ id }) => {
+          const active = activeId === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => onSelect(id)}
+              className={`border-b-2 py-1 text-xs transition ${active ? "font-bold" : "border-transparent font-medium text-slate-500"}`}
+              style={active ? { borderColor: activeBackground, color: inkColor } : undefined}
+            >
+              {options[id].name}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
   return (
     <div role="tablist" aria-label="Packages" className={`grid grid-cols-3 gap-1 rounded-2xl bg-slate-100 p-1 xl:hidden ${className}`}>
       {optionMeta.map(({ id }) => {
@@ -1632,7 +1657,7 @@ function OfferProposalPreviewView({
 
           {/* Step 1 — Services */}
           {step === 1 && (
-            <div className={`relative ${embedded ? "" : "pb-44 xl:pb-0"}`}>
+            <div className={`relative ${embedded ? "" : "pb-36 xl:pb-0"}`}>
               {editMode && onEdit ? (
                 <PreviewEditButton
                   label="Edit package services and options"
@@ -1699,11 +1724,9 @@ function OfferProposalPreviewView({
                 </button>
               </div>
 
-              {/* Without the bottom bar (embedded preview), the package tabs sit above the cards */}
-              {showMobileSelectBar ? null : (
-                <MobilePackageTabs className="mb-4" options={options} activeId={activePackageId} discountMultiplier={recurringDiscountMultiplier}
-                  activeBackground={brandDark} activeForeground={brandDarkForeground} inkColor={inkColor} onSelect={showPackage} />
-              )}
+              {/* Mobile package tabs above the cards; a slim copy also rides in the bottom bar */}
+              <MobilePackageTabs className="mb-4" options={options} activeId={activePackageId} discountMultiplier={recurringDiscountMultiplier}
+                activeBackground={brandDark} activeForeground={brandDarkForeground} inkColor={inkColor} onSelect={showPackage} />
 
               {/* Package cards: a swipeable row on mobile, three columns on desktop */}
               <div
@@ -1924,8 +1947,8 @@ function OfferProposalPreviewView({
 
               {/* Mobile bottom bar: what's due today for the package in view, and its Select button */}
               {showMobileSelectBar ? (
-                <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] backdrop-blur xl:hidden">
-                  <MobilePackageTabs className="mx-auto mb-3 max-w-xl" options={options} activeId={activePackageId} discountMultiplier={recurringDiscountMultiplier}
+                <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 pb-3 pt-1.5 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] backdrop-blur xl:hidden">
+                  <MobilePackageTabs compact className="mx-auto mb-2 max-w-xl" options={options} activeId={activePackageId} discountMultiplier={recurringDiscountMultiplier}
                     activeBackground={brandDark} activeForeground={brandDarkForeground} inkColor={inkColor} onSelect={showPackage} />
                   <div className="mx-auto flex max-w-xl items-center gap-3">
                     <div className="min-w-0 flex-1">
