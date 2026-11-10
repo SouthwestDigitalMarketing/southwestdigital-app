@@ -7,6 +7,7 @@ import { proposalPaymentSchedule } from "@/lib/quotes/paymentSchedule";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
+  ArrowUp,
   BadgeCheck,
   Check,
   ChevronLeft,
@@ -727,6 +728,12 @@ function OfferProposalPreviewView({
   const [selectionSubmittingId, setSelectionSubmittingId] = useState<OptionId | null>(null);
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const [step, setStep] = useState(startsSigned ? 3 : 0);
+  // Mobile pricing: tabs above a swipeable row of package cards, kept in sync both ways.
+  const packageTabsRef = useRef<HTMLDivElement | null>(null);
+  const packageCarouselRef = useRef<HTMLDivElement | null>(null);
+  const packageCardRefs = useRef<Partial<Record<OptionId, HTMLElement | null>>>({});
+  const [activePackageId, setActivePackageId] = useState<OptionId>(optionMeta[0].id);
+  const [showBackToPackages, setShowBackToPackages] = useState(false);
   const trackEvent = useProposalTracking({
     enabled: live && livePublic && !isSimulation && !embedded,
     token: proposalToken,
@@ -1082,6 +1089,49 @@ function OfferProposalPreviewView({
   const recurringDiscountMultiplier = hasTwelveMonthAgreement
     ? 1 - annualSavingsPercent / 100
     : 1;
+
+  useEffect(() => {
+    const tabs = packageTabsRef.current;
+    if (step !== 1 || !tabs || typeof IntersectionObserver === "undefined") {
+      setShowBackToPackages(false);
+      return;
+    }
+    const observer = new IntersectionObserver(([entry]) => {
+      // Only after the tabs have scrolled up out of view, not before reaching them.
+      setShowBackToPackages(!entry.isIntersecting && entry.boundingClientRect.top < 0);
+    });
+    observer.observe(tabs);
+    return () => observer.disconnect();
+  }, [step]);
+
+  function showPackage(id: OptionId) {
+    const carousel = packageCarouselRef.current;
+    const card = packageCardRefs.current[id];
+    if (!carousel || !card) return;
+    setActivePackageId(id);
+    carousel.scrollTo({ left: card.offsetLeft, behavior: "smooth" });
+    // Deep inside a long card, bring the tops of the cards back into view too.
+    if (carousel.getBoundingClientRect().top < 0) {
+      packageTabsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
+  function syncActivePackageFromSwipe() {
+    const carousel = packageCarouselRef.current;
+    if (!carousel) return;
+    let closest: OptionId = activePackageId;
+    let closestDistance = Number.POSITIVE_INFINITY;
+    for (const { id } of optionMeta) {
+      const card = packageCardRefs.current[id];
+      if (!card) continue;
+      const distance = Math.abs(card.offsetLeft - carousel.scrollLeft);
+      if (distance < closestDistance) {
+        closest = id;
+        closestDistance = distance;
+      }
+    }
+    if (closest !== activePackageId) setActivePackageId(closest);
+  }
 
   const cleanupPeriods = hasCatchUpPricingInputs(assessment)
     ? (assessment.historicalCleanupPeriods ?? [])
@@ -1591,8 +1641,46 @@ function OfferProposalPreviewView({
                 </button>
               </div>
 
-              {/* Package cards */}
-              <div className="grid items-stretch gap-5 [grid-template-rows:repeat(6,auto)] xl:grid-cols-3">
+              {/* Mobile package tabs: all three packages above the fold; they drive the swipeable cards below */}
+              <div ref={packageTabsRef} role="tablist" aria-label="Packages" className="mb-4 grid scroll-mt-4 grid-cols-3 gap-2 xl:hidden">
+                {optionMeta.map(({ id }) => {
+                  const option = options[id];
+                  const monthly = Math.round(option.monthlyPrice * recurringDiscountMultiplier * 100) / 100;
+                  const active = activePackageId === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => showPackage(id)}
+                      className="rounded-xl border px-2 py-2.5 text-center shadow-sm transition"
+                      style={active ? { backgroundColor: brandDark, borderColor: brandDark, color: brandDarkForeground } : { backgroundColor: "#ffffff", borderColor: "#e2e8f0", color: inkColor }}
+                    >
+                      <span className="block text-sm font-bold">{option.name}</span>
+                      <span className={`mt-0.5 block text-xs font-semibold ${active ? "" : "text-slate-600"}`}>{fmt(monthly)}/mo</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {showBackToPackages ? (
+                <button
+                  type="button"
+                  onClick={() => packageTabsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                  className="fixed right-4 top-4 z-40 inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold shadow-lg xl:hidden"
+                  style={{ backgroundColor: brandDark, color: brandDarkForeground }}
+                >
+                  <ArrowUp className="h-4 w-4" aria-hidden="true" />
+                  All packages
+                </button>
+              ) : null}
+
+              {/* Package cards: a swipeable row on mobile, three columns on desktop */}
+              <div
+                ref={packageCarouselRef}
+                onScroll={syncActivePackageFromSwipe}
+                className="relative flex snap-x snap-mandatory items-start gap-4 overflow-x-auto pb-2 [scrollbar-width:none] xl:grid xl:snap-none xl:items-stretch xl:gap-5 xl:overflow-visible xl:pb-0 xl:[grid-template-rows:repeat(6,auto)] xl:grid-cols-3">
                 {optionMeta.map(({ id, serviceLevel }) => {
                   const option = options[id];
                   const selected = selectedOptionId === id;
@@ -1646,7 +1734,7 @@ function OfferProposalPreviewView({
                     .filter((row) => row.serviceName.endsWith("Client Support"));
 
                   return (
-                    <section key={id} data-track-package={id} data-track-position={optionMeta.findIndex((meta) => meta.id === id)} className="grid grid-rows-subgrid row-span-6 overflow-hidden rounded-xl border bg-white shadow-sm transition-colors" style={{ borderColor: selected ? brandDark : "#e2e8f0" }}>
+                    <section key={id} ref={(el) => { packageCardRefs.current[id] = el; }} data-track-package={id} data-track-position={optionMeta.findIndex((meta) => meta.id === id)} className="w-full shrink-0 snap-start xl:grid xl:w-auto xl:grid-rows-subgrid xl:row-span-6 overflow-hidden rounded-xl border bg-white shadow-sm transition-colors" style={{ borderColor: selected ? brandDark : "#e2e8f0" }}>
                       {/* Card header + service level (one grid row so the cards stay aligned) */}
                       <div>
                         <div className="p-5">
