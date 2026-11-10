@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sanitizeSessionId, sanitizeViewEvents } from "@/lib/quotes/viewEvents";
+import { hasInternalViewerCookie } from "@/lib/quotes/internalViewer";
 
 // Public, write-only. Records what a client does on the live proposal page.
 // It must never break the proposal, so every failure answers 204 and is only logged.
 export async function POST(request: Request) {
   try {
+    // Our own browsers are never recorded, even if the client-side guard is bypassed.
+    if (hasInternalViewerCookie(request.headers.get("cookie"))) return new NextResponse(null, { status: 204 });
     const body = (await request.json().catch(() => null)) as {
       token?: unknown;
       sessionId?: unknown;
