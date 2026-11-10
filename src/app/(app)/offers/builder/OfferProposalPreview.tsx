@@ -1694,7 +1694,7 @@ function OfferProposalPreviewView({
 
           {/* Step 1 — Services */}
           {step === 1 && (
-            <div className={`relative ${embedded ? "" : "pb-36 xl:pb-0"}`}>
+            <div className={`relative ${embedded ? "" : "pb-40 xl:pb-0"}`}>
               {editMode && onEdit ? (
                 <PreviewEditButton
                   label="Edit package services and options"
@@ -1982,9 +1982,9 @@ function OfferProposalPreviewView({
                 })}
               </div>
 
-              {/* Mobile bottom bar: what's due today for the package in view, and its Select button */}
+              {/* Mobile checkout bar: what's due today for the package in view, and its Select button */}
               {showMobileSelectBar ? (
-                <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 pb-3 pt-1.5 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] backdrop-blur xl:hidden">
+                <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-1.5 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] backdrop-blur xl:hidden">
                   <MobilePackageTabs compact className="mx-auto mb-2 max-w-xl" options={options} activeId={activePackageId} discountMultiplier={recurringDiscountMultiplier}
                     activeBackground={brandDark} activeForeground={brandDarkForeground} inkColor={inkColor} onSelect={showPackage} />
                   <div className="mx-auto flex max-w-xl items-center gap-3">
