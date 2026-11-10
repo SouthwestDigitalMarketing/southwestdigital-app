@@ -845,6 +845,8 @@ function OfferProposalPreviewView({
   // Mobile pricing: tabs above a swipeable row of package cards, kept in sync both ways.
   const packageCarouselRef = useRef<HTMLDivElement | null>(null);
   const packageCardRefs = useRef<Partial<Record<OptionId, HTMLElement | null>>>({});
+  // While a tab tap is sliding the cards, ignore the cards passed on the way.
+  const packageScrollTargetRef = useRef<{ id: OptionId; until: number } | null>(null);
   const [activePackageId, setActivePackageId] = useState<OptionId>(optionMeta[0].id);
   const trackEvent = useProposalTracking({
     enabled: live && livePublic && !isSimulation && !embedded,
@@ -1212,6 +1214,7 @@ function OfferProposalPreviewView({
     const card = packageCardRefs.current[id];
     if (!carousel || !card) return;
     setActivePackageId(id);
+    packageScrollTargetRef.current = { id, until: Date.now() + 1500 };
     carousel.scrollTo({ left: card.offsetLeft, behavior: "smooth" });
     // Deep inside a long card, bring the tops of the cards back into view too.
     if (carousel.getBoundingClientRect().top < 0) {
@@ -1232,6 +1235,11 @@ function OfferProposalPreviewView({
         closest = id;
         closestDistance = distance;
       }
+    }
+    const target = packageScrollTargetRef.current;
+    if (target) {
+      if (closest !== target.id && Date.now() < target.until) return;
+      packageScrollTargetRef.current = null;
     }
     if (closest !== activePackageId) setActivePackageId(closest);
   }
@@ -1988,10 +1996,15 @@ function OfferProposalPreviewView({
                   <MobilePackageTabs compact className="mx-auto mb-2 max-w-xl" options={options} activeId={activePackageId} discountMultiplier={recurringDiscountMultiplier}
                     activeBackground={brandDark} activeForeground={brandDarkForeground} inkColor={inkColor} onSelect={showPackage} />
                   <div className="mx-auto flex max-w-xl items-center gap-3">
-                    {/* The amount keeps its natural width and never wraps; the button takes the rest. */}
-                    <div className="shrink-0 whitespace-nowrap">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Due today · {options[activePackageId].name}</p>
-                      <p className="text-2xl font-bold leading-tight" style={{ color: inkColor }}>{fmt(mobileDueToday[activePackageId] ?? 0)}</p>
+                    {/* Every package's label and amount share one grid cell, so the block is always as
+                        wide as the widest and the button beside it never changes size. Never wraps. */}
+                    <div className="grid shrink-0 whitespace-nowrap">
+                      {optionMeta.map(({ id }) => (
+                        <div key={id} aria-hidden={id !== activePackageId} className={`[grid-area:1/1] ${id === activePackageId ? "" : "invisible"}`}>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Due today · {options[id].name}</p>
+                          <p className="text-2xl font-bold leading-tight" style={{ color: inkColor }}>{fmt(mobileDueToday[id] ?? 0)}</p>
+                        </div>
+                      ))}
                     </div>
                     <button
                       type="button"
