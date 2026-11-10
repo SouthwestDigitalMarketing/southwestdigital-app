@@ -1479,7 +1479,7 @@ function OfferProposalPreviewView({
     <main
       data-theme={proposalMode}
       data-appearance="standard"
-      className={`relative isolate overflow-hidden px-4 py-6 text-brandnavy [&_button:not(:disabled)]:cursor-pointer [&_button:disabled]:cursor-not-allowed sm:px-6 lg:px-10 ${
+      className={`proposal-type relative isolate overflow-hidden px-4 py-6 text-brandnavy [&_button:not(:disabled)]:cursor-pointer [&_button:disabled]:cursor-not-allowed sm:px-6 lg:px-10 ${
         embedded ? "min-h-[40rem]" : "min-h-screen"
       }`}
       style={{
