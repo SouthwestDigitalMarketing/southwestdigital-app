@@ -1575,7 +1575,7 @@ function OfferProposalPreviewView({
                     className="absolute right-0 top-1/2 z-20 -translate-y-1/2"
                   />
                 ) : null}
-                <span className={`justify-self-end text-right ${hasTwelveMonthAgreement ? "text-slate-400" : ""}`} style={hasTwelveMonthAgreement ? undefined : { color: inkColor }}>Month-to-month</span>
+                <button type="button" aria-pressed={!hasTwelveMonthAgreement} onClick={() => setHasTwelveMonthAgreement(false)} className={`justify-self-end rounded-lg border px-3 py-1.5 text-right transition ${hasTwelveMonthAgreement ? "border-transparent text-slate-400" : ""}`} style={hasTwelveMonthAgreement ? undefined : { color: inkColor, borderColor: inkColor }}>Month-to-month</button>
                 <button type="button" role="switch" aria-checked={hasTwelveMonthAgreement} onClick={() => setHasTwelveMonthAgreement((v) => !v)} className={`relative h-9 w-16 justify-self-center rounded-full transition ${hasTwelveMonthAgreement ? "" : "bg-slate-300"}`} style={hasTwelveMonthAgreement ? { backgroundColor: brandDark } : undefined}>
                   <span className={`absolute top-1 h-7 w-7 rounded-full bg-white shadow-sm transition ${hasTwelveMonthAgreement ? "left-8" : "left-1"}`} />
                   <span className="sr-only">
