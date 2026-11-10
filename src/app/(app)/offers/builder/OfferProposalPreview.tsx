@@ -1731,6 +1731,21 @@ function OfferProposalPreviewView({
 
                   const lowerTierId: OptionId | null = id === "grow" ? "improve" : id === "improve" ? "maintain" : null;
                   const { lowerTierName, includedRows } = pricingCardServices(option, lowerTierId ? options[lowerTierId] : undefined);
+                  // Mobile shows one package at a time, so it lists everything; rows new at this tier stay highlighted.
+                  const allIncludedRows = pricingCardServices(option).includedRows;
+                  const newAtThisTier = new Set(includedRows.map((row) => row.id));
+                  const renderIncludedRow = (row: (typeof allIncludedRows)[number], emphasized: boolean) => (
+                    <li key={row.id} className={`flex justify-between gap-3 ${emphasized ? "font-semibold text-emerald-700" : "text-slate-600"}`}>
+                      <span className="inline-flex items-start gap-1.5">
+                        <span className="group relative inline-flex shrink-0">
+                          <button type="button" aria-label={`More information about ${row.serviceName}`} className={`ui-focus-ring rounded-full hover:text-brandnavy focus:outline-none ${emphasized ? "text-emerald-600" : "text-slate-400"}`}><CircleHelp className="h-3.5 w-3.5" /></button>
+                          <span role="tooltip" className="ui-tooltip pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-64 rounded-lg px-3 py-2 text-left text-xs font-normal leading-5 shadow-lg group-hover:block group-focus-within:block">{getTooltip(row)}</span>
+                        </span>
+                        <span>{serviceLevelTitle(row.serviceName)}</span>
+                        {row.platformTag ? <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800">{row.platformTag}</span> : null}
+                      </span>
+                    </li>
+                  );
                   const supportRows = [...option.recurringRows, ...option.oneTimeRows.filter((row) => row.price === 0)]
                     .filter((row) => row.serviceName.endsWith("Client Support"));
 
@@ -1828,20 +1843,12 @@ function OfferProposalPreviewView({
                       {/* All included services */}
                       <section>
                         <p className="bg-emerald-100 px-5 py-3 text-xs font-bold uppercase tracking-[0.12em] text-emerald-900">Included with this package</p>
-                        {lowerTierName ? <p className="px-5 pt-4 text-sm font-semibold text-slate-700">Everything included with {lowerTierName}{includedRows.length > 0 ? ", plus:" : "."}</p> : null}
-                        <ul className="space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600">
-                          {includedRows.map((row) => (
-                            <li key={row.id} className="flex justify-between gap-3 font-semibold text-emerald-700">
-                              <span className="inline-flex items-start gap-1.5">
-                                <span className="group relative inline-flex shrink-0">
-                                  <button type="button" aria-label={`More information about ${row.serviceName}`} className="ui-focus-ring rounded-full text-emerald-600 hover:text-brandnavy focus:outline-none"><CircleHelp className="h-3.5 w-3.5" /></button>
-                                  <span role="tooltip" className="ui-tooltip pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-64 rounded-lg px-3 py-2 text-left text-xs font-normal leading-5 shadow-lg group-hover:block group-focus-within:block">{getTooltip(row)}</span>
-                                </span>
-                                <span>{serviceLevelTitle(row.serviceName)}</span>
-                                {row.platformTag ? <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800">{row.platformTag}</span> : null}
-                              </span>
-                            </li>
-                          ))}
+                        {lowerTierName ? <p className="hidden px-5 pt-4 text-sm font-semibold text-slate-700 xl:block">Everything included with {lowerTierName}{includedRows.length > 0 ? ", plus:" : "."}</p> : null}
+                        <ul className="hidden space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600 xl:block">
+                          {includedRows.map((row) => renderIncludedRow(row, true))}
+                        </ul>
+                        <ul className="space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600 xl:hidden">
+                          {allIncludedRows.map((row) => renderIncludedRow(row, newAtThisTier.has(row.id)))}
                         </ul>
                       </section>
 
