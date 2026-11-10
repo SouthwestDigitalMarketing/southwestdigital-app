@@ -321,7 +321,7 @@ function MobilePackageTabs({
               role="tab"
               aria-selected={active}
               onClick={() => onSelect(id)}
-              className={`border-b-2 py-1 text-xs transition ${active ? "font-bold" : "border-transparent font-medium text-slate-500"}`}
+              className={`min-h-10 border-b-2 py-2 text-sm transition ${active ? "font-bold" : "border-transparent font-medium text-slate-500"}`}
               style={active ? { borderColor: activeBackground, color: inkColor } : undefined}
             >
               {options[id].name}
