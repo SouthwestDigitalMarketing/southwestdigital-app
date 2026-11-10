@@ -286,6 +286,51 @@ const baseOptions: Record<OptionId, ProposalOption> = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// Mobile package tabs: drive the swipeable package cards. Desktop shows all cards, so they hide at xl.
+function MobilePackageTabs({
+  className,
+  options,
+  activeId,
+  discountMultiplier,
+  activeBackground,
+  activeForeground,
+  inkColor,
+  onSelect,
+}: {
+  className: string;
+  options: Record<OptionId, { name: string; monthlyPrice: number }>;
+  activeId: OptionId;
+  discountMultiplier: number;
+  activeBackground: string;
+  activeForeground: string;
+  inkColor: string;
+  onSelect: (id: OptionId) => void;
+}) {
+  return (
+    <div role="tablist" aria-label="Packages" className={`grid grid-cols-3 gap-1 rounded-2xl bg-slate-100 p-1 xl:hidden ${className}`}>
+      {optionMeta.map(({ id }) => {
+        const option = options[id];
+        const monthly = Math.round(option.monthlyPrice * discountMultiplier * 100) / 100;
+        const active = activeId === id;
+        return (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onSelect(id)}
+            className={`rounded-xl px-2 py-2 text-center transition ${active ? "shadow-sm" : ""}`}
+            style={active ? { backgroundColor: activeBackground, color: activeForeground } : { color: inkColor }}
+          >
+            <span className="block text-sm font-bold">{option.name}</span>
+            <span className={`mt-0.5 block text-xs font-medium ${active ? "opacity-90" : "text-slate-500"}`}>{fmt(monthly)}/mo</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function fmt(value: number) {
   return value.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -728,7 +773,6 @@ function OfferProposalPreviewView({
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const [step, setStep] = useState(startsSigned ? 3 : 0);
   // Mobile pricing: tabs above a swipeable row of package cards, kept in sync both ways.
-  const packageTabsRef = useRef<HTMLDivElement | null>(null);
   const packageCarouselRef = useRef<HTMLDivElement | null>(null);
   const packageCardRefs = useRef<Partial<Record<OptionId, HTMLElement | null>>>({});
   const [activePackageId, setActivePackageId] = useState<OptionId>(optionMeta[0].id);
@@ -1101,7 +1145,7 @@ function OfferProposalPreviewView({
     carousel.scrollTo({ left: card.offsetLeft, behavior: "smooth" });
     // Deep inside a long card, bring the tops of the cards back into view too.
     if (carousel.getBoundingClientRect().top < 0) {
-      packageTabsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      carousel.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }
 
@@ -1588,7 +1632,7 @@ function OfferProposalPreviewView({
 
           {/* Step 1 — Services */}
           {step === 1 && (
-            <div className={`relative ${embedded ? "" : "pb-28 xl:pb-0"}`}>
+            <div className={`relative ${embedded ? "" : "pb-44 xl:pb-0"}`}>
               {editMode && onEdit ? (
                 <PreviewEditButton
                   label="Edit package services and options"
@@ -1655,34 +1699,17 @@ function OfferProposalPreviewView({
                 </button>
               </div>
 
-              {/* Mobile package tabs: all three packages above the fold; they drive the swipeable cards below */}
-              <div ref={packageTabsRef} role="tablist" aria-label="Packages" className="mb-4 grid scroll-mt-4 grid-cols-3 gap-1 rounded-2xl bg-slate-100 p-1 xl:hidden">
-                {optionMeta.map(({ id }) => {
-                  const option = options[id];
-                  const monthly = Math.round(option.monthlyPrice * recurringDiscountMultiplier * 100) / 100;
-                  const active = activePackageId === id;
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      role="tab"
-                      aria-selected={active}
-                      onClick={() => showPackage(id)}
-                      className={`rounded-xl px-2 py-2 text-center transition ${active ? "shadow-sm" : ""}`}
-                      style={active ? { backgroundColor: brandDark, color: brandDarkForeground } : { color: inkColor }}
-                    >
-                      <span className="block text-sm font-bold">{option.name}</span>
-                      <span className={`mt-0.5 block text-xs font-medium ${active ? "opacity-90" : "text-slate-500"}`}>{fmt(monthly)}/mo</span>
-                    </button>
-                  );
-                })}
-              </div>
+              {/* Without the bottom bar (embedded preview), the package tabs sit above the cards */}
+              {showMobileSelectBar ? null : (
+                <MobilePackageTabs className="mb-4" options={options} activeId={activePackageId} discountMultiplier={recurringDiscountMultiplier}
+                  activeBackground={brandDark} activeForeground={brandDarkForeground} inkColor={inkColor} onSelect={showPackage} />
+              )}
 
               {/* Package cards: a swipeable row on mobile, three columns on desktop */}
               <div
                 ref={packageCarouselRef}
                 onScroll={syncActivePackageFromSwipe}
-                className="relative flex snap-x snap-mandatory items-start gap-4 overflow-x-auto pb-2 [scrollbar-width:none] xl:grid xl:snap-none xl:items-stretch xl:gap-5 xl:overflow-visible xl:pb-0 xl:[grid-template-rows:repeat(6,auto)] xl:grid-cols-3">
+                className="relative flex scroll-mt-4 snap-x snap-mandatory items-start gap-4 overflow-x-auto pb-2 [scrollbar-width:none] xl:grid xl:snap-none xl:items-stretch xl:gap-5 xl:overflow-visible xl:pb-0 xl:[grid-template-rows:repeat(6,auto)] xl:grid-cols-3">
                 {optionMeta.map(({ id, serviceLevel }) => {
                   const option = options[id];
                   const selected = selectedOptionId === id;
@@ -1898,6 +1925,8 @@ function OfferProposalPreviewView({
               {/* Mobile bottom bar: what's due today for the package in view, and its Select button */}
               {showMobileSelectBar ? (
                 <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] backdrop-blur xl:hidden">
+                  <MobilePackageTabs className="mx-auto mb-3 max-w-xl" options={options} activeId={activePackageId} discountMultiplier={recurringDiscountMultiplier}
+                    activeBackground={brandDark} activeForeground={brandDarkForeground} inkColor={inkColor} onSelect={showPackage} />
                   <div className="mx-auto flex max-w-xl items-center gap-3">
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-xs font-semibold uppercase tracking-wide text-slate-500">Due today · {options[activePackageId].name}</p>
