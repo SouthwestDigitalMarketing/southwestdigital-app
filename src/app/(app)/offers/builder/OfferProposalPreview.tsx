@@ -1217,10 +1217,8 @@ function OfferProposalPreviewView({
     ? 1 - annualSavingsPercent / 100
     : 1;
 
-  // Card section labels: a quiet label with a hairline on mobile, the filled band on desktop.
-  const sectionLabelClass = "flex items-center gap-3 px-5 pb-1 pt-5 text-xs font-bold uppercase tracking-[0.12em] text-slate-500 after:h-px after:flex-1 after:bg-slate-200 xl:block xl:bg-[var(--section-label-bg)] xl:py-3 xl:text-[color:var(--section-label-fg)] xl:after:hidden";
-  const sectionLabelStyle = (background: string, color: string) =>
-    ({ "--section-label-bg": background, "--section-label-fg": color }) as React.CSSProperties;
+  // Card section labels: a quiet label with a hairline.
+  const sectionLabelClass = "flex items-center gap-3 px-5 pb-1 pt-5 text-xs font-bold uppercase tracking-[0.12em] text-slate-500 after:h-px after:flex-1 after:bg-slate-200";
 
   function showPackage(id: OptionId) {
     const carousel = packageCarouselRef.current;
@@ -1737,49 +1735,33 @@ function OfferProposalPreviewView({
                 </p>
               ) : null}
 
-              {/* Mobile billing tabs */}
-              <div role="tablist" aria-label="Billing" className="mb-3 grid grid-cols-2 rounded-2xl bg-slate-100 p-1 text-sm font-bold xl:hidden">
-                {([false, true] as const).map((annual) => {
-                  const active = hasTwelveMonthAgreement === annual;
-                  return (
-                    <button
-                      key={annual ? "annual" : "monthly"}
-                      type="button"
-                      role="tab"
-                      aria-selected={active}
-                      onClick={() => setHasTwelveMonthAgreement(annual)}
-                      className={`rounded-xl px-3 py-2.5 transition ${active ? "bg-white shadow-sm" : "text-slate-500"}`}
-                      style={active ? { color: inkColor } : undefined}
-                    >
-                      {annual ? (annualSavingsPercent > 0 ? `Annual · Save ${annualSavingsPercent}%` : "Annual") : "Month-to-month"}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Annual toggle */}
-              <div className="relative mb-8 hidden grid-cols-[minmax(0,1fr)_4rem_minmax(0,1fr)] items-center gap-2 text-base font-bold sm:gap-4 sm:text-lg xl:grid">
+              {/* Billing: two tabs (all screen sizes) */}
+              <div className="relative mx-auto mb-3 max-w-xl xl:mb-8">
                 {editMode && onEdit ? (
                   <PreviewEditButton
                     label="Edit annual pricing discount"
                     onClick={() => onEdit("pricing")}
-                    className="absolute right-0 top-1/2 z-20 -translate-y-1/2"
+                    className="absolute -right-10 top-1/2 z-20 -translate-y-1/2"
                   />
                 ) : null}
-                <button type="button" aria-pressed={!hasTwelveMonthAgreement} onClick={() => setHasTwelveMonthAgreement(false)} className={`justify-self-end rounded-lg border px-3 py-1.5 text-right transition ${hasTwelveMonthAgreement ? "border-transparent text-slate-400" : ""}`} style={hasTwelveMonthAgreement ? undefined : { color: inkColor, borderColor: inkColor }}>Month-to-month</button>
-                <button type="button" role="switch" aria-checked={hasTwelveMonthAgreement} onClick={() => setHasTwelveMonthAgreement((v) => !v)} className={`relative h-9 w-16 justify-self-center rounded-full transition ${hasTwelveMonthAgreement ? "" : "bg-slate-300"}`} style={hasTwelveMonthAgreement ? { backgroundColor: brandDark } : undefined}>
-                  <span className={`absolute top-1 h-7 w-7 rounded-full bg-white shadow-sm transition ${hasTwelveMonthAgreement ? "left-8" : "left-1"}`} />
-                  <span className="sr-only">
-                    {annualSavingsPercent > 0
-                      ? `Save ${annualSavingsPercent}% with a 12-month agreement`
-                      : "Choose a 12-month agreement"}
-                  </span>
-                </button>
-                <button type="button" aria-pressed={hasTwelveMonthAgreement} onClick={() => setHasTwelveMonthAgreement(true)} className={`inline-flex items-center justify-self-start gap-1.5 rounded-lg border bg-emerald-100 px-3 py-1.5 text-emerald-900 transition hover:brightness-95 ${hasTwelveMonthAgreement ? "border-emerald-600" : "border-transparent"}`}>
-                  <Sparkles className="h-5 w-5" />
-                  {annualSavingsPercent > 0 ? `Annual · Save ${annualSavingsPercent}%` : "Annual"}
-                  <Sparkles className="h-4 w-4" />
-                </button>
+                <div role="tablist" aria-label="Billing" className="grid grid-cols-2 rounded-2xl bg-slate-100 p-1 text-sm font-bold xl:text-base">
+                  {([false, true] as const).map((annual) => {
+                    const active = hasTwelveMonthAgreement === annual;
+                    return (
+                      <button
+                        key={annual ? "annual" : "monthly"}
+                        type="button"
+                        role="tab"
+                        aria-selected={active}
+                        onClick={() => setHasTwelveMonthAgreement(annual)}
+                        className={`rounded-xl px-3 py-2.5 transition ${active ? "bg-white shadow-sm" : "text-slate-500"}`}
+                        style={active ? { color: inkColor } : undefined}
+                      >
+                        {annual ? (annualSavingsPercent > 0 ? `Annual · Save ${annualSavingsPercent}%` : "Annual") : "Month-to-month"}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Mobile package tabs above the cards; a slim copy also rides in the bottom bar */}
@@ -1870,7 +1852,7 @@ function OfferProposalPreviewView({
                     .filter((row) => row.serviceName.endsWith("Client Support"));
 
                   return (
-                    <section key={id} ref={(el) => { packageCardRefs.current[id] = el; }} data-track-package={id} data-track-position={optionMeta.findIndex((meta) => meta.id === id)} className="w-full shrink-0 snap-start xl:grid xl:w-auto xl:grid-rows-subgrid xl:row-span-6 overflow-hidden rounded-xl border bg-white shadow-sm transition-colors" style={{ borderColor: selected ? brandDark : "#e2e8f0" }}>
+                    <section key={id} ref={(el) => { packageCardRefs.current[id] = el; }} data-track-package={id} data-track-position={optionMeta.findIndex((meta) => meta.id === id)} className="w-full shrink-0 snap-start xl:grid xl:w-auto xl:grid-rows-subgrid xl:row-span-6 overflow-hidden rounded-xl border border-t-4 bg-white shadow-sm transition-colors" style={{ borderColor: selected ? brandDark : "#e2e8f0", borderTopColor: tierColors[id].background }}>
                       {/* Card header + service level (one grid row so the cards stay aligned) */}
                       <div>
                         <div className="p-5">
@@ -1900,7 +1882,7 @@ function OfferProposalPreviewView({
                         </div>
                         </div>
                         <section className="border-t border-slate-200">
-                          <p className={sectionLabelClass} style={sectionLabelStyle(subtleAccentBg, inkColor)}>Service level</p>
+                          <p className={sectionLabelClass}>Service level</p>
                           <div className="space-y-3 px-5 py-4">
                             {supportRows.length > 0 ? supportRows.map((row) => (
                               <div key={row.id} aria-label={`${option.name} support level`}>
@@ -1924,7 +1906,7 @@ function OfferProposalPreviewView({
 
                       {/* One-time services */}
                       <section className="border-t border-slate-200">
-                        <p className={sectionLabelClass} style={sectionLabelStyle(subtleAccentBg, inkColor)}>One-time services</p>
+                        <p className={sectionLabelClass}>One-time services</p>
                         <div className="px-5 py-4">
                           {requiredOnboard.length || requiredAddOnRows.length ? <div className="mt-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Required to get started</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{requiredOnboard.map((row) => <ServiceLine key={row.id} row={{ ...row, serviceName: schedule.hasCleanup ? "Onboarding + Discovery" : "Onboarding", note: schedule.hasCleanup ? "Account access, document collection, and discovery to confirm the cleanup scope and estimate. Cleanup work is approved separately afterward." : "Account access, document collection, and setup for ongoing bookkeeping." }} originalPrice={assessment.showOriginalOneTimePrices !== false && isOnboarding(row) && originalOnboardingFee > row.price ? originalOnboardingFee : undefined} waivedLabel={onboardingWaived && isOnboarding(row) ? "Waived" : undefined} />)}{requiredAddOnRows.map((row) => <ServiceLine key={row.id} row={{ ...row, id: `${id}-${row.id}` }} priceSuffix={row.billEvery ? "/mo" : undefined} />)}</ul></div> : null}
                           {optionalCleanup.length ? <div className="mt-5 border-t border-slate-200 pt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Cleanup estimate</p><p className="mt-2 text-xs leading-5 text-slate-600">Select the periods to estimate. Cleanup is not charged today; final scope, price, and payment milestones are confirmed after discovery.</p><ul className="mt-4 space-y-7 text-sm text-slate-600">{optionalCleanup.map((row) => <ServiceLine key={row.id} row={row} selected={cleanupIsSelected(id, row.cleanupPeriodKey!)} onToggle={(checked) => setCleanupSelections((prev) => ({ ...prev, [cleanupKey(id, row.cleanupPeriodKey!)]: checked }))} showPriceWhenUnselected />)}</ul></div> : null}
@@ -1934,7 +1916,7 @@ function OfferProposalPreviewView({
 
                       {/* Recurring services */}
                       <section>
-                        <p className={sectionLabelClass} style={sectionLabelStyle(brandDark, brandDarkForeground)}>Recurring services</p>
+                        <p className={sectionLabelClass}>Recurring services</p>
                       </section>
 
                       {optionalAdditionalRows.length > 0 ? (
@@ -1965,7 +1947,9 @@ function OfferProposalPreviewView({
                         <p className="bg-emerald-100 px-5 py-3 text-xs font-bold uppercase tracking-[0.12em] text-emerald-900">Included with this package</p>
                         {lowerTierName ? <p className="hidden px-5 pt-4 text-sm font-semibold text-slate-700 xl:block">Everything included with {lowerTierName}{includedRows.length > 0 ? ", plus:" : "."}</p> : null}
                         <ul className="hidden space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600 xl:block">
-                          {includedRows.map((row) => renderIncludedRow(row, true))}
+                          {[...includedRows]
+                            .sort((a, b) => Number(!a.serviceName.endsWith("Client Support")) - Number(!b.serviceName.endsWith("Client Support")))
+                            .map((row) => renderIncludedRow(row, true))}
                         </ul>
                         <ul className="space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600 xl:hidden">
                           {allIncludedRows.map((row) => renderIncludedRow(row, newAtThisTier.has(row.id)))}
@@ -1991,8 +1975,9 @@ function OfferProposalPreviewView({
                           className={`${
                             paymentStatus === "succeeded" && !selected
                               ? "mt-4 w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-base font-semibold text-slate-400 transition disabled:cursor-not-allowed"
-                              : "ui-action-primary mt-4 w-full rounded-lg border px-4 py-3 text-base font-bold transition disabled:cursor-not-allowed disabled:opacity-60"
+                              : "mt-4 w-full rounded-lg border px-4 py-3 text-base font-bold transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
                           }${showMobileSelectBar ? " hidden xl:block" : ""}`}
+                          style={paymentStatus === "succeeded" && !selected ? undefined : { backgroundColor: tierColors[id].background, borderColor: tierColors[id].background, color: tierColors[id].foreground }}
                         >
                           {paymentStatus === "succeeded"
                             ? (selected ? "Selected & Paid" : "Not selected")
