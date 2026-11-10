@@ -1,7 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ProposalViewEventInput } from "@/lib/quotes/viewEvents";
+import {
+  INTERNAL_VIEWER_PARAM,
+  hasInternalViewerCookie,
+  internalViewerCookieValue,
+} from "@/lib/quotes/internalViewer";
 
 const ENDPOINT = "/api/proposal/track";
 const FLUSH_MS = 4000;
@@ -69,7 +74,20 @@ export function useProposalTracking({
   const queue = useRef<ProposalViewEventInput[]>([]);
   const sessionId = useRef<string | null>(null);
   const startedAt = useRef<number>(0);
-  const active = enabled && Boolean(token);
+  // Our own browsers: ?internal=1 marks this browser for good; the cookie then keeps it quiet.
+  const [internalViewer] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      if (new URLSearchParams(window.location.search).get(INTERNAL_VIEWER_PARAM) === "1") {
+        document.cookie = internalViewerCookieValue();
+        return true;
+      }
+      return hasInternalViewerCookie(document.cookie);
+    } catch {
+      return false;
+    }
+  });
+  const active = enabled && Boolean(token) && !internalViewer;
 
   const flush = useCallback(
     (useBeacon = false) => {

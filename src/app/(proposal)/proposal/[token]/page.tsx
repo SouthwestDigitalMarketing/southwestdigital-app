@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { headers } from "next/headers";
+import { hasInternalViewerCookie } from "@/lib/quotes/internalViewer";
 import { BrandRole } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -32,11 +33,14 @@ export default async function PublicProposalPage({
   searchParams,
 }: {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ staffPreview?: string }>;
+  searchParams: Promise<{ staffPreview?: string; internal?: string }>;
 }) {
   const { token } = await params;
-  const { staffPreview } = await searchParams;
-  const hostname = (await headers()).get("x-hostname");
+  const { staffPreview, internal } = await searchParams;
+  const requestHeaders = await headers();
+  const hostname = requestHeaders.get("x-hostname");
+  // Our own browsers (?internal=1 once, then a cookie) never count as a client view.
+  const isInternalViewer = internal === "1" || hasInternalViewerCookie(requestHeaders.get("cookie"));
   const found = await findPublishedPublicQuote({ hostname, token });
   if (!found) notFound();
   const { brand } = found;
@@ -80,7 +84,7 @@ export default async function PublicProposalPage({
   });
   if (!quote) notFound();
   const viewedAt = new Date();
-  if (canRead && quote && !quote.firstViewedAt && !isAuthorizedStaffPreview) {
+  if (canRead && quote && !quote.firstViewedAt && !isAuthorizedStaffPreview && !isInternalViewer) {
     // Self-heal: a real client view is proof the URL made it out somehow,
     // so stamp firstSentAt (if not already) and flip status to "sent". This
     // keeps DB filters (Draft/Sent/Completed) consistent with the derived
