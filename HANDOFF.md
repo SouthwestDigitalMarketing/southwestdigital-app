@@ -283,3 +283,11 @@ its SQLite database was read-only and had 51 canonical Bookkeeping Conroe
 records plus 52 duplicate rows pointing at those same deals. The full source
 inventory and migration gates are in
 `docs/pipeline-source-of-truth.md`.
+
+## 2026-11-09 afternoon (muse, Ummon tab) — tag-driven funnel + Potts verification
+- Merged `feat/automation-event-foundation` (Quo collector, outbox, diary worker + brand guard) and `feat/tag-driven-funnel` (remove-tag mirror, automation coverage migration, kind-follows-tags, drift script, lead-page Tags section) into `main`. Branches pushed, merged, pruned remote+local.
+- Coverage migration applied live via `prisma db execute` (never `migrate deploy`): 15 automation rules verified, step tags unified to LEAD.
+- Gates at merge time: typecheck clean, eslint clean, 1004 passed / 5 skipped / 0 failed.
+- Derek Potts / SJ Equity proposal verified safe (tiers 1250/1460/1875, onboarding $0, $800 credit, due now 450/660/1075; engagement SENT_TO_CLIENT fee WAIVED; Stripe ACTIVE). Created missing `proposal_view_events` table live. Link unchanged, no client contact.
+- Pulled `origin/main` (#77, #78) after the merges; tree clean and in sync.
+- Open: tag phase 2 backfill (drift backlog), Quo timer plan (presented, no go), 4 tag-build follow-ups, 128-vs-45 prospect reconciliation. Preview dev on `100.98.89.93:3001` still running from this checkout.
