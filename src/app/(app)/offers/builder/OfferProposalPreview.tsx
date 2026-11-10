@@ -292,7 +292,7 @@ const baseOptions: Record<OptionId, ProposalOption> = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// Mobile package tabs: drive the swipeable package cards. Desktop shows all cards, so they hide at xl.
+// Package tabs: drive the swipeable package cards (one card in view at a time, every screen size).
 function MobilePackageTabs({
   compact = false,
   className,
@@ -315,7 +315,7 @@ function MobilePackageTabs({
   if (compact) {
     // Slim text row for the bottom bar: still tappable, deliberately quieter than the main tabs.
     return (
-      <div role="tablist" aria-label="Packages" className={`grid grid-cols-3 xl:hidden ${className}`}>
+      <div role="tablist" aria-label="Packages" className={`grid grid-cols-3 ${className}`}>
         {optionMeta.map(({ id }) => {
           const active = activeId === id;
           return (
@@ -336,7 +336,7 @@ function MobilePackageTabs({
     );
   }
   return (
-    <div role="tablist" aria-label="Packages" className={`grid grid-cols-3 gap-1 rounded-2xl bg-slate-100 p-1 xl:hidden ${className}`}>
+    <div role="tablist" aria-label="Packages" className={`grid grid-cols-3 gap-1 rounded-2xl bg-slate-100 p-1 ${className}`}>
       {optionMeta.map(({ id }) => {
         const option = options[id];
         const monthly = Math.round(option.monthlyPrice * discountMultiplier * 100) / 100;
@@ -1472,7 +1472,7 @@ function OfferProposalPreviewView({
 
   // Due-today per package, filled in as the cards render; read by the mobile bottom bar.
   const mobileDueToday: Partial<Record<OptionId, number>> = {};
-  // Below xl the bottom bar carries the one Select button; the cards' own buttons are desktop-only then.
+  // The checkout bar carries the one Select button; the cards' own buttons show only when it is absent (embedded preview, after payment).
   const showMobileSelectBar = !embedded && paymentStatus !== "succeeded";
 
   return (
@@ -1713,7 +1713,7 @@ function OfferProposalPreviewView({
 
           {/* Step 1 — Services */}
           {step === 1 && (
-            <div className={`relative ${embedded ? "" : "pb-40 xl:pb-0"}`}>
+            <div className={`relative ${embedded ? "" : "pb-40"}`}>
               {editMode && onEdit ? (
                 <PreviewEditButton
                   label="Edit package services and options"
@@ -1736,7 +1736,7 @@ function OfferProposalPreviewView({
               ) : null}
 
               {/* Billing: two tabs (all screen sizes) */}
-              <div className="relative mx-auto mb-3 max-w-xl xl:mb-8">
+              <div className="relative mx-auto mb-3 max-w-2xl">
                 {editMode && onEdit ? (
                   <PreviewEditButton
                     label="Edit annual pricing discount"
@@ -1744,7 +1744,7 @@ function OfferProposalPreviewView({
                     className="absolute -right-10 top-1/2 z-20 -translate-y-1/2"
                   />
                 ) : null}
-                <div role="tablist" aria-label="Billing" className="grid grid-cols-2 rounded-2xl bg-slate-100 p-1 text-sm font-bold xl:text-base">
+                <div role="tablist" aria-label="Billing" className="grid grid-cols-2 rounded-2xl bg-slate-100 p-1 text-sm font-bold">
                   {([false, true] as const).map((annual) => {
                     const active = hasTwelveMonthAgreement === annual;
                     return (
@@ -1765,14 +1765,14 @@ function OfferProposalPreviewView({
               </div>
 
               {/* Mobile package tabs above the cards; a slim copy also rides in the bottom bar */}
-              <MobilePackageTabs className="mb-4" options={options} activeId={activePackageId} discountMultiplier={recurringDiscountMultiplier}
+              <MobilePackageTabs className="mx-auto mb-4 max-w-2xl" options={options} activeId={activePackageId} discountMultiplier={recurringDiscountMultiplier}
                 tierColors={tierColors} inkColor={inkColor} onSelect={showPackage} />
 
-              {/* Package cards: a swipeable row on mobile, three columns on desktop */}
+              {/* Package cards: one in view at a time, swipeable, driven by the package tabs */}
               <div
                 ref={packageCarouselRef}
                 onScroll={syncActivePackageFromSwipe}
-                className="relative flex scroll-mt-4 snap-x snap-mandatory items-start gap-4 overflow-x-auto pb-2 [scrollbar-width:none] xl:grid xl:snap-none xl:items-stretch xl:gap-5 xl:overflow-visible xl:pb-0 xl:[grid-template-rows:repeat(6,auto)] xl:grid-cols-3">
+                className="relative mx-auto flex max-w-2xl scroll-mt-4 snap-x snap-mandatory items-start gap-4 overflow-x-auto pb-2 [scrollbar-width:none]">
                 {optionMeta.map(({ id, serviceLevel }) => {
                   const option = options[id];
                   const selected = selectedOptionId === id;
@@ -1822,8 +1822,8 @@ function OfferProposalPreviewView({
                   const additionalSetup  = paidOneTime.filter((r) => !r.cleanupPeriodKey && !isOnboarding(r) && !packageAdditionalOptionRows.some((addOn) => addOn.id === r.id));
 
                   const lowerTierId: OptionId | null = id === "grow" ? "improve" : id === "improve" ? "maintain" : null;
-                  const { lowerTierName, includedRows } = pricingCardServices(option, lowerTierId ? options[lowerTierId] : undefined);
-                  // Mobile shows one package at a time, so it lists everything; rows new at this tier stay highlighted.
+                  const { includedRows } = pricingCardServices(option, lowerTierId ? options[lowerTierId] : undefined);
+                  // One package is in view at a time, so each card lists everything; rows new at this tier stay highlighted.
                   const newAtThisTier = new Set(includedRows.map((row) => row.id));
                   // Order: service level first, then what this tier adds, then what it carries over.
                   const includedRank = (row: (typeof includedRows)[number]) =>
@@ -1852,7 +1852,7 @@ function OfferProposalPreviewView({
                     .filter((row) => row.serviceName.endsWith("Client Support"));
 
                   return (
-                    <section key={id} ref={(el) => { packageCardRefs.current[id] = el; }} data-track-package={id} data-track-position={optionMeta.findIndex((meta) => meta.id === id)} className="w-full shrink-0 snap-start xl:grid xl:w-auto xl:grid-rows-subgrid xl:row-span-6 overflow-hidden rounded-xl border border-t-4 bg-white shadow-sm transition-colors" style={{ borderColor: selected ? brandDark : "#e2e8f0", borderTopColor: tierColors[id].background }}>
+                    <section key={id} ref={(el) => { packageCardRefs.current[id] = el; }} data-track-package={id} data-track-position={optionMeta.findIndex((meta) => meta.id === id)} className="w-full shrink-0 snap-start overflow-hidden rounded-xl border border-t-4 bg-white shadow-sm transition-colors" style={{ borderColor: selected ? brandDark : "#e2e8f0", borderTopColor: tierColors[id].background }}>
                       {/* Card header + service level (one grid row so the cards stay aligned) */}
                       <div>
                         <div className="p-5">
@@ -1945,13 +1945,7 @@ function OfferProposalPreviewView({
                       {/* All included services */}
                       <section>
                         <p className="bg-emerald-100 px-5 py-3 text-xs font-bold uppercase tracking-[0.12em] text-emerald-900">Included with this package</p>
-                        {lowerTierName ? <p className="hidden px-5 pt-4 text-sm font-semibold text-slate-700 xl:block">Everything included with {lowerTierName}{includedRows.length > 0 ? ", plus:" : "."}</p> : null}
-                        <ul className="hidden space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600 xl:block">
-                          {[...includedRows]
-                            .sort((a, b) => Number(!a.serviceName.endsWith("Client Support")) - Number(!b.serviceName.endsWith("Client Support")))
-                            .map((row) => renderIncludedRow(row, true))}
-                        </ul>
-                        <ul className="space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600 xl:hidden">
+                        <ul className="space-y-2 pl-8 pr-5 pt-4 pb-2 text-sm text-slate-600">
                           {allIncludedRows.map((row) => renderIncludedRow(row, newAtThisTier.has(row.id)))}
                         </ul>
                       </section>
@@ -1976,7 +1970,7 @@ function OfferProposalPreviewView({
                             paymentStatus === "succeeded" && !selected
                               ? "mt-4 w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-base font-semibold text-slate-400 transition disabled:cursor-not-allowed"
                               : "mt-4 w-full rounded-lg border px-4 py-3 text-base font-bold transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
-                          }${showMobileSelectBar ? " hidden xl:block" : ""}`}
+                          }${showMobileSelectBar ? " hidden" : ""}`}
                           style={paymentStatus === "succeeded" && !selected ? undefined : { backgroundColor: tierColors[id].background, borderColor: tierColors[id].background, color: tierColors[id].foreground }}
                         >
                           {paymentStatus === "succeeded"
@@ -1984,7 +1978,7 @@ function OfferProposalPreviewView({
                             : selectionSubmittingId === id ? "Saving selection…" : `Select ${option.name}`}
                         </button>
                         {urgencyOffer.active ? (
-                          <p className={`mt-2 text-center text-xs font-medium text-slate-500${showMobileSelectBar ? " hidden xl:block" : ""}`}>{urgencyOffer.ctaHint}</p>
+                          <p className={`mt-2 text-center text-xs font-medium text-slate-500${showMobileSelectBar ? " hidden" : ""}`}>{urgencyOffer.ctaHint}</p>
                         ) : null}
                       </div>
                     </section>
@@ -1994,10 +1988,10 @@ function OfferProposalPreviewView({
 
               {/* Mobile checkout bar: what's due today for the package in view, and its Select button */}
               {showMobileSelectBar ? (
-                <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-1.5 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] backdrop-blur xl:hidden">
-                  <MobilePackageTabs compact className="mx-auto mb-2 max-w-xl" options={options} activeId={activePackageId} discountMultiplier={recurringDiscountMultiplier}
+                <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-1.5 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] backdrop-blur">
+                  <MobilePackageTabs compact className="mx-auto mb-2 max-w-2xl" options={options} activeId={activePackageId} discountMultiplier={recurringDiscountMultiplier}
                     tierColors={tierColors} inkColor={inkColor} onSelect={showPackage} />
-                  <div className="mx-auto flex max-w-xl items-center gap-3">
+                  <div className="mx-auto flex max-w-2xl items-center gap-3">
                     {/* Every package's label and amount share one grid cell, so the block is always as
                         wide as the widest and the button beside it never changes size. Never wraps. */}
                     <div className="grid shrink-0 whitespace-nowrap">
