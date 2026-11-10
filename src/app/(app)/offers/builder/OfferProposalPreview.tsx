@@ -1988,15 +1988,16 @@ function OfferProposalPreviewView({
                   <MobilePackageTabs compact className="mx-auto mb-2 max-w-xl" options={options} activeId={activePackageId} discountMultiplier={recurringDiscountMultiplier}
                     activeBackground={brandDark} activeForeground={brandDarkForeground} inkColor={inkColor} onSelect={showPackage} />
                   <div className="mx-auto flex max-w-xl items-center gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-semibold uppercase tracking-wide text-slate-500">Due today · {options[activePackageId].name}</p>
-                      <p className="text-xl font-bold" style={{ color: inkColor }}>{fmt(mobileDueToday[activePackageId] ?? 0)}</p>
+                    {/* The amount keeps its natural width and never wraps; the button takes the rest. */}
+                    <div className="shrink-0 whitespace-nowrap">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Due today · {options[activePackageId].name}</p>
+                      <p className="text-2xl font-bold leading-tight" style={{ color: inkColor }}>{fmt(mobileDueToday[activePackageId] ?? 0)}</p>
                     </div>
                     <button
                       type="button"
                       disabled={selectionSubmittingId !== null}
                       onClick={() => void selectOptionAndContinue(activePackageId)}
-                      className="ui-action-primary shrink-0 rounded-lg border px-5 py-3 text-base font-bold transition disabled:cursor-not-allowed disabled:opacity-60"
+                      className="ui-action-primary min-w-0 flex-1 truncate rounded-lg border px-3 py-3 text-base font-bold transition disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {selectionSubmittingId === activePackageId ? "Saving…" : `Select ${options[activePackageId].name}`}
                     </button>
