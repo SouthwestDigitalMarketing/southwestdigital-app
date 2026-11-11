@@ -291,3 +291,7 @@ inventory and migration gates are in
 - Derek Potts / SJ Equity proposal verified safe (tiers 1250/1460/1875, onboarding $0, $800 credit, due now 450/660/1075; engagement SENT_TO_CLIENT fee WAIVED; Stripe ACTIVE). Created missing `proposal_view_events` table live. Link unchanged, no client contact.
 - Pulled `origin/main` (#77, #78) after the merges; tree clean and in sync.
 - Open: tag phase 2 backfill (drift backlog), Quo timer plan (presented, no go), 4 tag-build follow-ups, 128-vs-45 prospect reconciliation. Preview dev on `100.98.89.93:3001` still running from this checkout.
+
+## 2026-11-10 evening (Claude, Ummon tab w2N) — git cleanup
+- Repo pruned on Tom's ask: PR #95 merged (`207ad5f`). Worktrees: `southwestdigital-app` (detached at origin/main) and `southwestdigital-app-mobile-ux` (`main`). Remote branches: `main` + `kassad/parked-proposal-type-scale` (Kassad's, kept). `worktrees/swapp-dev` removed: its edits were on main already or marked LOCAL ONLY. Saved patches: `ripley:~/projects/patches/swapp-*.patch`.
+- Open for Tom to pick: deal #53 next step (due 2026-11-10 17:00 CT, passed); SJ Equity pay/agreement check (board 1c82670abb4d, no reply yet); preview should load the saved offer snapshot (patch `swapp-dev-uncommitted-2026-10-27.patch` has a local prototype in `offer-preview/page.tsx`); `/api/pipe/offers` PATCH lacks contactInfo/suppressPromotions, duplicate copies source contact/credit. Prod DB read-only incident 68ab28d82e39 is Donna's.
