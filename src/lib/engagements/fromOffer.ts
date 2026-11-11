@@ -1,3 +1,4 @@
+import { sendProposalAlert } from "@/lib/notifications/staffAlert";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { readAcceptedPayment } from "./acceptedPayment";
@@ -116,7 +117,7 @@ export async function markEngagementDepositPaid(
   },
 ) {
   if (!brandId || !payment.reference) throw new Error("Payment identity is required.");
-  return prisma.$transaction(async (tx) => {
+  const newlyPaid = await prisma.$transaction(async (tx) => {
   const engagement = await tx.engagement.findFirst({
     where: { id: engagementId, brandId },
     select: { id: true, brandId: true, onboardingData: true, updatedAt: true, signedAt: true, onboardingFeeStatus: true },
@@ -134,7 +135,7 @@ export async function markEngagementDepositPaid(
         previousPayment.amount !== payment.amount || previousPayment.currency !== payment.currency) {
       throw new Error("A different payment is already recorded; reconciliation is required.");
     }
-    return; // Preserve the original evidence and timestamp on retries.
+    return false; // Preserve the original evidence and timestamp on retries.
   }
   const paidAt = new Date();
   const updated = await tx.engagement.updateMany({
@@ -156,5 +157,13 @@ export async function markEngagementDepositPaid(
     where: { engagementId, brandId: engagement.brandId, status: { not: "archived" } },
     data: { status: "completed", lastActivityAt: paidAt },
   });
+  return true;
   });
+  if (newlyPaid) {
+    await sendProposalAlert(engagementId, brandId, {
+      kind: "paid", amount: payment.amount, currency: payment.currency,
+      detail: [`via ${payment.provider}`, payment.receiptUrl].filter(Boolean).join("\n"),
+    });
+  }
+  return newlyPaid;
 }

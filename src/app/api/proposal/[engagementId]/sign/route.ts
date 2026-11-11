@@ -1,3 +1,4 @@
+import { sendProposalAlert } from "@/lib/notifications/staffAlert";
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { createHash } from "crypto";
@@ -151,6 +152,13 @@ export async function POST(
     throw error;
   });
   if (!recorded) return NextResponse.json({ error: "The proposal changed or was signed in another tab. Reload to see the current agreement." }, { status: 409 });
+
+  await sendProposalAlert(engagementId, engagement.brandId, {
+    kind: "signed",
+    amount: paymentObligation.amountInCents / 100,
+    currency: paymentObligation.currency,
+    detail: typeof services.tierLabel === "string" ? `Plan: ${services.tierLabel}. Due now, not yet paid.` : "Due now, not yet paid.",
+  });
 
   return NextResponse.json({ ok: true, signedAt: signedAt.toISOString(), signerName });
 }
