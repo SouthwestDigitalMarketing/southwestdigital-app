@@ -81,4 +81,31 @@ describe("proposal payment preparation", () => {
     expect(await response.text()).not.toContain("test-secret");
     expect(mocks.cancel).not.toHaveBeenCalled();
   });
+  it("offers ACH beside card when creating a new intent", async () => {
+    expect((await call()).status).toBe(200);
+    expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ payment_method_types: ["card", "us_bank_account"] }), expect.any(Object));
+  });
+  it("falls back to card only when Stripe rejects ACH, with a distinct idempotency key", async () => {
+    mocks.create
+      .mockRejectedValueOnce(Object.assign(new Error("The payment method type \"us_bank_account\" is invalid."), { type: "StripeInvalidRequestError", param: "payment_method_types" }))
+      .mockResolvedValueOnce({ id: "pi_card", client_secret: "card-secret", livemode: false });
+    const response = await call();
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(expect.objectContaining({ clientSecret: "card-secret" }));
+    expect(mocks.create).toHaveBeenLastCalledWith(expect.objectContaining({ payment_method_types: ["card"] }), { idempotencyKey: "proposal:eng:signed-hash:1:card" });
+  });
+  it("does not fall back on unrelated Stripe errors", async () => {
+    mocks.create.mockRejectedValueOnce(Object.assign(new Error("rate limited"), { type: "StripeRateLimitError" }));
+    expect((await call()).status).toBe(500);
+    expect(mocks.create).toHaveBeenCalledTimes(1);
+  });
+  it("reports a settling ACH debit as processing instead of offering a second form", async () => {
+    mocks.engagement.mockResolvedValue(row({ stripePaymentIntentId: "pi_ach" }));
+    mocks.retrieve.mockResolvedValue({ id: "pi_ach", status: "processing", metadata: { brandId: "brand", engagementId: "eng" } });
+    const response = await call();
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ processing: true });
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.cancel).not.toHaveBeenCalled();
+  });
 });

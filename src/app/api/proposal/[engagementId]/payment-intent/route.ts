@@ -49,6 +49,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ eng
   try {
     const existing = priorIntentId ? await stripe.paymentIntents.retrieve(priorIntentId) : null;
     if (existing?.status === "succeeded") throw new PaymentReconciliationError();
+    // An ACH debit was submitted and is settling. Never offer a second payment
+    // form; the signed webhook marks the deposit paid when it succeeds.
+    if (existing?.status === "processing") {
+      if (existing.metadata.brandId !== engagement.brandId || existing.metadata.engagementId !== engagementId) throw new PaymentReconciliationError();
+      return NextResponse.json({ processing: true });
+    }
     const connectedAccountId = await getChargeableConnectedAccountId(engagement.brandId);
     if (!connectedAccountId) return NextResponse.json({ error: "This firm cannot accept payments until its administrator completes Stripe Connect setup." }, { status: 409 });
 
@@ -68,13 +74,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ eng
     const previousAttempt = typeof services.stripePaymentAttempt === "number" && Number.isSafeInteger(services.stripePaymentAttempt) && services.stripePaymentAttempt >= 0
       ? services.stripePaymentAttempt : 0;
     const paymentAttempt = previousAttempt + 1;
-    const base = destinationPaymentIntentParams({
-      amountInCents: accepted.amountInCents, engagementId, brandId: engagement.brandId,
-      connectedAccountId, receiptEmail: engagement.billingContactEmail ?? undefined,
-    });
-    const created = await stripe.paymentIntents.create({
-      ...base, metadata: { ...base.metadata, selectionHash: accepted.selectionHash, chargeKind: accepted.chargeKind },
-    }, { idempotencyKey: `proposal:${engagementId}:${accepted.selectionHash}:${paymentAttempt}` });
+    const createIntent = (allowBankDebit: boolean) => {
+      const base = destinationPaymentIntentParams({
+        amountInCents: accepted.amountInCents, engagementId, brandId: engagement.brandId,
+        connectedAccountId, receiptEmail: engagement.billingContactEmail ?? undefined, allowBankDebit,
+      });
+      const idempotencyKey = `proposal:${engagementId}:${accepted.selectionHash}:${paymentAttempt}${allowBankDebit ? "" : ":card"}`;
+      return stripe.paymentIntents.create({
+        ...base, metadata: { ...base.metadata, selectionHash: accepted.selectionHash, chargeKind: accepted.chargeKind },
+      }, { idempotencyKey });
+    };
+    let created;
+    try {
+      created = await createIntent(true);
+    } catch (error) {
+      // ACH not enabled on the Stripe account: keep card checkout working.
+      if (!isBankDebitUnavailable(error)) throw error;
+      console.warn("[payment-intent] ACH unavailable; falling back to card only", { engagementId });
+      created = await createIntent(false);
+    }
     const expectation = {
       ...accepted, intentId: created.id, brandId: engagement.brandId, engagementId,
       connectedAccountId, livemode: created.livemode,
@@ -97,4 +115,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ eng
     console.error("[payment-intent] Could not prepare payment:", error);
     return NextResponse.json({ error: "We couldn't start the payment form. Please try again shortly." }, { status: 500 });
   }
+}
+
+function isBankDebitUnavailable(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const { type, param, message } = error as { type?: unknown; param?: unknown; message?: unknown };
+  if (type !== "StripeInvalidRequestError") return false;
+  return (typeof param === "string" && param.startsWith("payment_method_types")) ||
+    (typeof message === "string" && message.includes("us_bank_account"));
 }

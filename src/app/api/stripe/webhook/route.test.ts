@@ -79,4 +79,18 @@ describe("stripe webhook proposal payments", () => {
     expect(mocks.alreadyProcessed).not.toHaveBeenCalled();
     expect(mocks.record).not.toHaveBeenCalled();
   });
+  it("never reconciles a failed or still-processing ACH payment", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    for (const type of ["payment_intent.processing", "payment_intent.payment_failed"]) {
+      const event = { id: `evt_${type}`, type, data: { object: { id: "pi_ach", metadata: { engagementId: "eng", brandId: "brand" }, last_payment_error: { code: "insufficient_funds", payment_method: { type: "us_bank_account" } } } } };
+      const response = await POST(new Request("https://firm.example.test/api/stripe/webhook", {
+        method: "POST", headers: { "stripe-signature": "sig_test" }, body: JSON.stringify(event),
+      }));
+      expect(response.status).toBe(200);
+    }
+    expect(mocks.reconcile).not.toHaveBeenCalled();
+    expect(mocks.record).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith("[stripe/webhook] Proposal payment failed", expect.objectContaining({ intentId: "pi_ach", code: "insufficient_funds" }));
+    errorSpy.mockRestore();
+  });
 });

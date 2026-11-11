@@ -100,6 +100,7 @@ export function HourlyPublicView(props: PublicHourlyProposal) {
         amountDueNow?: number;
         waived?: boolean;
         alreadyResolved?: boolean;
+        processing?: boolean;
         error?: string;
       };
       if (!response.ok) {
@@ -112,6 +113,10 @@ export function HourlyPublicView(props: PublicHourlyProposal) {
       }
       if (data.alreadyResolved) {
         setPayState({ kind: "paid" });
+        return;
+      }
+      if (data.processing) {
+        setPayState({ kind: "pending" });
         return;
       }
       if (data.clientSecret && typeof data.amountDueNow === "number") {
@@ -129,7 +134,10 @@ export function HourlyPublicView(props: PublicHourlyProposal) {
       setPayState({ kind: "paid" });
       return;
     }
-    if (status === "processing") return;
+    if (status === "processing") {
+      setPayState({ kind: "pending" });
+      return;
+    }
     if (!props.engagementId) return;
     try {
       const recorded = await waitForRecordedProposalPayment({

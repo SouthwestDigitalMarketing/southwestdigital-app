@@ -44,6 +44,20 @@ export async function POST(request: Request) {
     }
   }
 
+  if (event.type === "payment_intent.payment_failed") {
+    const paymentIntent = event.data.object;
+    const engagementId = paymentIntent.metadata?.engagementId;
+    if (engagementId) {
+      // A failed ACH debit returns the intent to requires_payment_method, so the
+      // deposit stays unpaid and the client can retry from the proposal link.
+      console.error("[stripe/webhook] Proposal payment failed", {
+        eventId: event.id, intentId: paymentIntent.id, engagementId, brandId: paymentIntent.metadata?.brandId,
+        code: paymentIntent.last_payment_error?.code ?? null,
+        paymentMethodType: paymentIntent.last_payment_error?.payment_method?.type ?? null,
+      });
+    }
+  }
+
   if (event.type === "account.updated") {
     const account = event.data.object;
     if (account.id) {
