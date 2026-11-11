@@ -1,5 +1,13 @@
 # SWapp handoff
 
+## 2026-11-10 — Kassad: client proposal UX (Dan Ruiz offer)
+
+- Merged to main (PRs #79–#90, #94): proposal pricing step uses package tabs (with prices) + one swipeable card + fixed checkout bar (slim tabs, due today, Select) at **every** screen size; billing two-tab control; light section labels; package colors (Grow #D4A017 / Improve brandDark / Maintain #0F766E); full inclusion lists (support level first, then new, then carried) with the time promise inline; cover video shows a thumbnail while the player loads; `?internal=1` marks a browser as internal (cookie `swapp_internal_viewer`) so it never records views/activity.
+- Reverted (#93): 16px desktop type scale (#91/#92). Work parked on origin branch `kassad/parked-proposal-type-scale` (60122f3) — Tom wants to revisit after the Dan proposal.
+- Production is **Vercel** (project `lochside-llc/swapp`), not Netlify; check the PR "Vercel" status and `vercel env ls production`.
+- Checks each PR: `tsc --noEmit`, eslint (0 errors; 1 pre-existing no-img-element warning), `vitest run` (1007–1010 passed, 5 skipped), GitHub typecheck/lint/test. Live verification via Playwright with `/api/proposal/track` aborted.
+- Open: payment checkout not tested end to end recently; Standard Client Support tooltip says 1–2 business days vs 2–3 in `SERVICE_LEVEL_COPY`; offer builder Email step builds links on the admin host (proposal route is brand-host only).
+
 ## 2026-11-08 automation work in progress
 
 Branch `feat/automation-event-foundation` was created from `origin/main`
