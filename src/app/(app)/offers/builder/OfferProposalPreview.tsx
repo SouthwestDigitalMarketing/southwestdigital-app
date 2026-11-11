@@ -1018,8 +1018,10 @@ function OfferProposalPreviewView({
           } else {
             fetch(`/api/proposal/${engagementId}/payment-intent`, { method: "POST", headers: proposalHeaders(proposalToken) })
               .then((r) => r.json())
-              .then((pr: { clientSecret?: string; waived?: boolean; alreadyResolved?: boolean }) => {
-                if (pr.waived) {
+              .then((pr: { clientSecret?: string; waived?: boolean; alreadyResolved?: boolean; processing?: boolean }) => {
+                if (pr.processing) {
+                  setPaymentStatus("processing");
+                } else if (pr.waived) {
                   setPaymentWaived(true);
                   setPaymentStatus("succeeded");
                 } else if (pr.alreadyResolved) {
@@ -1151,7 +1153,7 @@ function OfferProposalPreviewView({
         setSignedSignerName(result?.signerName ?? signerName);
         setSignedAt(result?.signedAt ?? null);
       }
-      if (paymentStatus === "succeeded") {
+      if (paymentStatus) {
         setStep(3);
         return;
       }
@@ -1161,7 +1163,7 @@ function OfferProposalPreviewView({
         return;
       }
       const paymentResponse = await fetch(`/api/proposal/${engagementId}/payment-intent`, { method: "POST", headers: proposalHeaders(proposalToken) });
-      const paymentResult = await paymentResponse.json().catch(() => null) as { clientSecret?: string; waived?: boolean; alreadyResolved?: boolean; error?: string } | null;
+      const paymentResult = await paymentResponse.json().catch(() => null) as { clientSecret?: string; waived?: boolean; alreadyResolved?: boolean; processing?: boolean; error?: string } | null;
       if (!paymentResponse.ok) {
         throw new Error(paymentResult?.error ?? "Unable to start payment");
       }
@@ -1173,6 +1175,11 @@ function OfferProposalPreviewView({
       }
       if (paymentResult?.alreadyResolved) {
         setPaymentStatus("succeeded");
+        setStep(3);
+        return;
+      }
+      if (paymentResult?.processing) {
+        setPaymentStatus("processing");
         setStep(3);
         return;
       }
@@ -2263,7 +2270,7 @@ function OfferProposalPreviewView({
               >
                 {signSubmitting
                   ? "Preparing payment..."
-                  : paymentStatus === "succeeded"
+                  : paymentStatus
                   ? "View Confirmation"
                   : requiresOnboardingPayment ? "Continue to Payment" : "Continue"}
                 <ChevronRight strokeWidth={3} className="h-4 w-4" />
