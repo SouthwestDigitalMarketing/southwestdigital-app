@@ -1,5 +1,13 @@
 # SWapp handoff
 
+## 2026-11-10 night — Ummon (Claude, tab w2N): proposal ACH
+
+- Merged PR #98 (`b3d6ffd`, Vercel success): proposal checkout offers `us_bank_account` beside card (`src/lib/stripe/paymentIntentParams.ts`); card-only retry with idempotency suffix `:card` if Stripe rejects ACH; a `processing` intent returns `{processing: true}` and both proposal views show "processing"; deposit marked paid only on `payment_intent.succeeded`; `payment_intent.payment_failed` is logged only (deposit stays unpaid, client can retry).
+- Stripe: destination charges without `on_behalf_of` use the PLATFORM payment method config (Stripe docs, connect/account-capabilities). Tom was turning on ACH Direct Debit in Dashboard > Settings > Payments > Payment methods > "For your platform account" > Default (`pmc_1SAgma2R5qsZ6eIFjm0IzL1j`) at wrapup; NOT confirmed. Amex not verified. Dashboard also shows a "negative balance" alert (unrelated).
+- Checks: typecheck pass; lint 0 errors; vitest 1017 passed, 5 skipped.
+- Worktree quirk: Turbopack `next build` fails here (node_modules is a symlink out of the root). `npx next build --webpack` compiles and type-checks; it then fails locally on missing `PLATFORM_BASE_URL` (env only).
+- Next: (1) confirm ACH on — an unpaid proposal's payment step should show "US bank account"; (2) Donna's board ask ac7603c57e93: notify Tom when a deposit is paid (and on ACH failure) — not started; Stripe webhook endpoint may need `payment_intent.payment_failed` subscribed.
+
 ## 2026-11-10 — Kassad: client proposal UX (Dan Ruiz offer)
 
 - Merged to main (PRs #79–#90, #94): proposal pricing step uses package tabs (with prices) + one swipeable card + fixed checkout bar (slim tabs, due today, Select) at **every** screen size; billing two-tab control; light section labels; package colors (Grow #D4A017 / Improve brandDark / Maintain #0F766E); full inclusion lists (support level first, then new, then carried) with the time promise inline; cover video shows a thumbnail while the player loads; `?internal=1` marks a browser as internal (cookie `swapp_internal_viewer`) so it never records views/activity.
