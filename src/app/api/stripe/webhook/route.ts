@@ -3,6 +3,7 @@ import { getStripeClient } from "@/lib/stripe";
 import { reconcileProposalPayment } from "@/lib/stripe/reconcileProposalPayment";
 import { recordProcessedStripeEvent, stripeEventAlreadyProcessed } from "@/lib/stripe/processedStripeEvents";
 import { syncConnectedAccountStatus } from "@/lib/stripe/connect";
+import { sendProposalAlert } from "@/lib/notifications/staffAlert";
 
 export async function POST(request: Request) {
   const signature = request.headers.get("stripe-signature");
@@ -44,9 +45,29 @@ export async function POST(request: Request) {
     }
   }
 
+  if (event.type === "payment_intent.processing") {
+    const paymentIntent = event.data.object;
+    const engagementId = paymentIntent.metadata?.engagementId;
+    const brandId = paymentIntent.metadata?.brandId;
+    if (engagementId && brandId && event.id && !await stripeEventAlreadyProcessed(engagementId, brandId, event.id)) {
+      await sendProposalAlert(engagementId, brandId, {
+        kind: "processing", amount: paymentIntent.amount / 100, currency: paymentIntent.currency,
+      });
+      await recordProcessedStripeEvent(engagementId, brandId, event.id).catch(() => undefined);
+    }
+  }
+
   if (event.type === "payment_intent.payment_failed") {
     const paymentIntent = event.data.object;
     const engagementId = paymentIntent.metadata?.engagementId;
+    const brandId = paymentIntent.metadata?.brandId;
+    if (engagementId && brandId && event.id && !await stripeEventAlreadyProcessed(engagementId, brandId, event.id)) {
+      await sendProposalAlert(engagementId, brandId, {
+        kind: "failed", amount: paymentIntent.amount / 100, currency: paymentIntent.currency,
+        detail: paymentIntent.last_payment_error?.message ?? paymentIntent.last_payment_error?.code ?? null,
+      });
+      await recordProcessedStripeEvent(engagementId, brandId, event.id).catch(() => undefined);
+    }
     if (engagementId) {
       // A failed ACH debit returns the intent to requires_payment_method, so the
       // deposit stays unpaid and the client can retry from the proposal link.

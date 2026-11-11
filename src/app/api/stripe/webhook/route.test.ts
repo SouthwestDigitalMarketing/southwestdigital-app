@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   alreadyProcessed: vi.fn(),
   record: vi.fn(),
   syncAccount: vi.fn(),
+  alert: vi.fn(),
 }));
 vi.mock("@/lib/stripe", () => ({ getStripeClient: () => ({ webhooks: { constructEvent: mocks.constructEvent } }) }));
 vi.mock("@/lib/stripe/reconcileProposalPayment", () => ({ reconcileProposalPayment: mocks.reconcile }));
@@ -15,6 +16,7 @@ vi.mock("@/lib/stripe/processedStripeEvents", () => ({
   recordProcessedStripeEvent: mocks.record,
 }));
 vi.mock("@/lib/stripe/connect", () => ({ syncConnectedAccountStatus: mocks.syncAccount }));
+vi.mock("@/lib/notifications/staffAlert", () => ({ sendProposalAlert: mocks.alert }));
 
 function postSucceeded(intent: { id?: string; metadata?: Record<string, string> }, eventId = "evt_1") {
   const event = { id: eventId, type: "payment_intent.succeeded", data: { object: intent } };
@@ -89,8 +91,21 @@ describe("stripe webhook proposal payments", () => {
       expect(response.status).toBe(200);
     }
     expect(mocks.reconcile).not.toHaveBeenCalled();
-    expect(mocks.record).not.toHaveBeenCalled();
+    expect(mocks.alert).toHaveBeenNthCalledWith(1, "eng", "brand", expect.objectContaining({ kind: "processing" }));
+    expect(mocks.alert).toHaveBeenNthCalledWith(2, "eng", "brand", expect.objectContaining({ kind: "failed" }));
+    // Recorded only so a Stripe retry does not text Tom twice.
+    expect(mocks.record).toHaveBeenCalledWith("eng", "brand", "evt_payment_intent.processing");
     expect(errorSpy).toHaveBeenCalledWith("[stripe/webhook] Proposal payment failed", expect.objectContaining({ intentId: "pi_ach", code: "insufficient_funds" }));
     errorSpy.mockRestore();
+  });
+  it("does not alert twice for a retried processing event", async () => {
+    mocks.alreadyProcessed.mockResolvedValue(true);
+    const event = { id: "evt_dup", type: "payment_intent.processing", data: { object: { id: "pi_ach", amount: 78000, currency: "usd", metadata: { engagementId: "eng", brandId: "brand" } } } };
+    const response = await POST(new Request("https://firm.example.test/api/stripe/webhook", {
+      method: "POST", headers: { "stripe-signature": "sig_test" }, body: JSON.stringify(event),
+    }));
+    expect(response.status).toBe(200);
+    expect(mocks.alert).not.toHaveBeenCalled();
+    expect(mocks.record).not.toHaveBeenCalled();
   });
 });
