@@ -1,6 +1,6 @@
 import { spawnSync } from "child_process";
 import { describe, expect, it } from "vitest";
-import { planIntake, safeFileName, signTicket, ticketMatches } from "./ticket";
+import { safeFileName, sendPageLink, signSession, signTicket, ticketMatches } from "./ticket";
 
 const secret = "test-secret-not-for-production";
 
@@ -24,41 +24,25 @@ describe("phone intake tickets", () => {
     expect(py.stdout.trim()).toBe(sig);
   });
 
-  it("builds a put link and refuses the wrong kind of file", () => {
-    const plan = planIntake({
-      name: "take.mp4",
-      size: 12,
-      type: "video/mp4",
-      secret,
-      publicUrl: "http://127.0.0.1:8932",
-      nowSeconds: 1_700_000_000,
-    });
-    expect(plan.ok).toBe(true);
-    if (!plan.ok) return;
-    const url = new URL(plan.putUrl);
-    expect(url.pathname).toBe("/upload");
-    expect(url.searchParams.get("name")).toBe("take.mp4");
-    expect(url.searchParams.get("size")).toBe("12");
-    expect(url.searchParams.get("sig")).toBe(plan.sig);
+  it("builds a send-page link the Python road accepts", () => {
+    const link = sendPageLink({ secret, publicUrl: "http://127.0.0.1:8932", nowSeconds: 1_700_000_000 });
+    expect(link.ok).toBe(true);
+    if (!link.ok) return;
+    const url = new URL(link.url);
+    expect(url.pathname).toBe("/send");
+    expect(url.searchParams.get("exp")).toBe(String(link.exp));
+    const py = spawnSync(
+      "python3",
+      ["scripts/phone_intake.py", "--sign-session", secret, String(link.exp)],
+      { encoding: "utf8" },
+    );
+    expect(py.status).toBe(0);
+    expect(py.stdout.trim()).toBe(url.searchParams.get("sig"));
+    expect(signSession(secret, link.exp)).toBe(url.searchParams.get("sig"));
+  });
 
-    const notAVideo = planIntake({
-      name: "notes.txt",
-      size: 12,
-      type: "text/plain",
-      secret,
-      publicUrl: "http://127.0.0.1:8932",
-      nowSeconds: 1_700_000_000,
-    });
-    expect(notAVideo).toMatchObject({ ok: false, status: 400 });
-
-    const tooBig = planIntake({
-      name: "huge.mp4",
-      size: 3_000_000_001,
-      type: "video/mp4",
-      secret,
-      publicUrl: "http://127.0.0.1:8932",
-      nowSeconds: 1_700_000_000,
-    });
-    expect(tooBig).toMatchObject({ ok: false, status: 400 });
+  it("refuses a missing or bad send road address", () => {
+    expect(sendPageLink({ secret: "", publicUrl: "http://x", nowSeconds: 1 })).toMatchObject({ ok: false });
+    expect(sendPageLink({ secret, publicUrl: "ftp://x", nowSeconds: 1 })).toMatchObject({ ok: false });
   });
 });

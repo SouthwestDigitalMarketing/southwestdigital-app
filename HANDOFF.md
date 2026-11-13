@@ -1,5 +1,13 @@
 # SWapp handoff
 
+## 2026-11-13 — Phone send page link, no HTTPS needed (Ummon Claude)
+
+- Tailnet HTTPS is impossible today: `tailscale cert` returns "your Tailscale account does not support getting TLS certs" and `tailscale serve --https=443` says Serve is not enabled, even after Tom opened the enable page. So the HTTPS page no longer PUTs to ripley. `/phone` now renders a signed link (`session\n<exp>` HMAC, 3 h) to ripley's own send page `http://100.98.89.93:8932/send`; the phone opens it as a top-level link (no mixed content) and PUTs same-origin with the session signature. `src/app/api/phone-intake/route.ts` and `PhoneSend.tsx` were removed.
+- `/youtube/new` on a computer: choosing My phone shows numbered steps to finish on the phone.
+- Vercel production now has `PHONE_INTAKE_SECRET` (sensitive) and `PHONE_INTAKE_PUBLIC_URL=http://100.98.89.93:8932`.
+- Checks: `python3 scripts/phone_intake.py --self-test` ok; typecheck pass; lint 0 errors / 9 warnings; tests 1,036 passed, 5 skipped. From dalliance over the tailnet: send page 200, 5,000,000-byte PUT receipt SHA-256 matched, tampered link 403. A real phone upload is still untested.
+- Receiver service runs a copy at `~/.local/share/swapp-phone-intake/phone_intake.py` (installed from this branch) so worktree removal does not break it. Re-copy after receiver changes.
+
 ## 2026-11-13 — Phone intake integration (current, Ummon Codex)
 
 - Branch `feat/phone-episode-intake` was fast-forwarded to `origin/main` `db073d4` after saving the prior uncommitted work in `/home/tom/projects/patches/swapp-phone-intake-20261113.patch` and `/home/tom/projects/patches/swapp-phone-intake-untracked-20261113.tar.gz`. The stash restore conflicted only in this handoff; both dated sections were kept.

@@ -32,55 +32,35 @@ export function ticketMatches(
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-export type IntakePlan =
-  | { ok: true; putUrl: string; name: string; exp: number; sig: string }
-  | { ok: false; status: number; error: string };
+export function signSession(secret: string, exp: number): string {
+  return createHmac("sha256", secret).update(`session\n${exp}`).digest("hex");
+}
 
-export function planIntake(input: {
-  name: unknown;
-  size: unknown;
-  type: unknown;
+/**
+ * Signed link to ripley's send page. The phone opens it as a plain link, so
+ * the HTTPS site never makes an HTTP request (no mixed-content block) and the
+ * phone PUTs straight to ripley over the tailnet.
+ */
+export function sendPageLink(input: {
   secret: string;
   publicUrl: string;
   nowSeconds: number;
-}): IntakePlan {
+}): { ok: true; url: string; exp: number } | { ok: false; error: string } {
   if (!input.secret || !input.publicUrl) {
-    return { ok: false, status: 503, error: "The send road is not set up on this server." };
+    return { ok: false, error: "The send road is not set up on this server." };
   }
-  let uploadOrigin: URL;
+  let origin: URL;
   try {
-    uploadOrigin = new URL(input.publicUrl);
+    origin = new URL(input.publicUrl);
   } catch {
-    return { ok: false, status: 503, error: "The send road address is not a valid link." };
+    return { ok: false, error: "The send road address is not a valid link." };
   }
-  if (uploadOrigin.protocol !== "http:" && uploadOrigin.protocol !== "https:") {
-    return { ok: false, status: 503, error: "The send road address is not a valid link." };
+  if (origin.protocol !== "http:" && origin.protocol !== "https:") {
+    return { ok: false, error: "The send road address is not a valid link." };
   }
-
-  const name = typeof input.name === "string" ? safeFileName(input.name) : "";
-  if (!name) return { ok: false, status: 400, error: "That file needs a name." };
-
-  const size = input.size;
-  if (typeof size !== "number" || !Number.isInteger(size) || size < 1) {
-    return { ok: false, status: 400, error: "That file is empty." };
-  }
-  if (size > PHONE_INTAKE_MAX_BYTES) {
-    return { ok: false, status: 400, error: "That file is over 3 GB. Pick a smaller one." };
-  }
-
-  if (typeof input.type === "string" && input.type.length > 0) {
-    const kind = input.type.split(";")[0]?.trim().toLowerCase() ?? "";
-    if (!kind.startsWith("video/") && !kind.startsWith("image/")) {
-      return { ok: false, status: 400, error: "Pick a video or a picture." };
-    }
-  }
-
   const exp = input.nowSeconds + PHONE_INTAKE_TTL_SECONDS;
-  const sig = signTicket(input.secret, exp, size, name);
-  const put = new URL("/upload", uploadOrigin);
-  put.searchParams.set("exp", String(exp));
-  put.searchParams.set("size", String(size));
-  put.searchParams.set("name", name);
-  put.searchParams.set("sig", sig);
-  return { ok: true, putUrl: put.toString(), name, exp, sig };
+  const url = new URL("/send", origin);
+  url.searchParams.set("exp", String(exp));
+  url.searchParams.set("sig", signSession(input.secret, exp));
+  return { ok: true, url: url.toString(), exp };
 }
