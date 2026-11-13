@@ -15,7 +15,7 @@ export function SourcePicker() {
 
   return (
     <section className="mt-8">
-      <div className="grid gap-3">
+      <div className="grid gap-3 lg:grid-cols-3">
         {sources.map((item) => (
           <button
             key={item.id}
