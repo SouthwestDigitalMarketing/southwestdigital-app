@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Source = "phone" | "canon" | "ripley";
 
@@ -12,6 +12,11 @@ const sources: { id: Source; title: string; detail: string }[] = [
 
 export function SourcePicker() {
   const [source, setSource] = useState<Source | null>(null);
+  const [onPhone, setOnPhone] = useState(false);
+
+  useEffect(() => {
+    setOnPhone(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
+  }, []);
 
   return (
     <section className="mt-8">
@@ -31,9 +36,15 @@ export function SourcePicker() {
       </div>
       {source === "phone" ? (
         <div className="mt-6 rounded-2xl bg-slate-50 p-5">
-          <h2 className="font-semibold text-slate-900">Send the files from your phone</h2>
-          <p className="mt-2 text-sm text-slate-600">Choose the video on your phone. The upload page will give you a file receipt when it reaches ripley.</p>
-          <a className="mt-4 inline-flex rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white" href="http://100.98.89.93:8931/">Open phone upload</a>
+          <h2 className="font-semibold text-slate-900">The video is on your phone</h2>
+          {onPhone ? (
+            <>
+              <p className="mt-2 text-sm text-slate-600">Choose the video on this phone. The temporary upload page will show a receipt when the file reaches ripley.</p>
+              <a className="mt-4 inline-flex rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white" href="http://100.98.89.93:8931/">Choose video on this phone</a>
+            </>
+          ) : (
+            <p className="mt-2 text-sm text-slate-600">This computer cannot choose a file from your phone. Open this same New video page on your phone to select the video there. You can leave this page open on your computer.</p>
+          )}
         </div>
       ) : source === "canon" ? (
         <p className="mt-6 rounded-2xl bg-slate-50 p-5 text-sm text-slate-700">Keep the full SD card structure. The card copy step is still being connected to this screen.</p>
