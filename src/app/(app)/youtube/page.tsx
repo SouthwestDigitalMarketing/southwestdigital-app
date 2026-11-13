@@ -71,7 +71,7 @@ export default async function YouTubePage() {
         <h1 className="sr-only">YouTube</h1>
         <NewVideoEntry />
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
-        <p className="mt-2 text-sm text-slate-600">This local preview cannot read the brand’s saved YouTube connection, so it cannot load channel data. The connection is still on the brand. <a className="font-semibold underline" href="/api/youtube/connect">Connect YouTube</a>.</p>
+        <p className="mt-2 text-sm text-slate-600">Channel data is unavailable because the saved YouTube connection could not be read here. <a className="font-semibold underline" href="/api/youtube/connect">Connect YouTube</a>.</p>
       </div>
     );
   }
