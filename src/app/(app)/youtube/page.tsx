@@ -56,9 +56,9 @@ export default async function YouTubePage() {
     return (
       <div className="p-8">
         <h1 className="sr-only">YouTube</h1>
-        <NewVideoEntry />
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
         <p className="mt-2 text-sm text-slate-400">YouTube channel not configured for this brand. <a className="font-semibold underline" href="/api/youtube/connect">Connect YouTube</a>.</p>
+        <div className="mt-8"><NewVideoEntry /></div>
       </div>
     );
   }
@@ -69,9 +69,9 @@ export default async function YouTubePage() {
     return (
       <div className="p-8">
         <h1 className="sr-only">YouTube</h1>
-        <NewVideoEntry />
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
-        <p className="mt-2 text-sm text-slate-400">YouTube is not connected for this brand. <a className="font-semibold underline" href="/api/youtube/connect">Connect YouTube</a>.</p>
+        <p className="mt-2 text-sm text-slate-600">This local preview cannot read the brand’s saved YouTube connection, so it cannot load channel data. The connection is still on the brand. <a className="font-semibold underline" href="/api/youtube/connect">Connect YouTube</a>.</p>
+        <div className="mt-8"><NewVideoEntry /></div>
       </div>
     );
   }
@@ -132,13 +132,13 @@ export default async function YouTubePage() {
     return (
       <div className="p-8">
         <h1 className="sr-only">YouTube</h1>
-        <NewVideoEntry />
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
         <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           {/refresh token (expired|revoked)/i.test(error ?? "") ? (
             <>YouTube authorization has expired. <a className="font-semibold underline" href="/api/youtube/connect">Reconnect YouTube</a> to restore analytics.</>
           ) : error ?? "Analytics unavailable."}
         </div>
+        <div className="mt-8"><NewVideoEntry /></div>
       </div>
     );
   }
