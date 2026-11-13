@@ -49,3 +49,15 @@ create contacts for a brand. It is off until both variables exist:
 
 Every request runs in the brand-scoped transaction, so row-level security
 applies. Matching is per brand, by E.164 phone or case-insensitive email.
+
+## Scanner ingest API
+
+`POST /api/scanner/findings` is how ripley workers record a finding. It is off
+until both variables exist, and it only records. It does not fix or send.
+
+- `SCANNER_API_TOKEN_SHA256`: hex SHA-256 of the worker bearer token.
+  `printf '%s' "$TOKEN" | sha256sum`. The token stays on ripley.
+- `SCANNER_API_ACTOR_USER_ID`: the `User.id` the posts are attributed to.
+
+The first brand is Bookkeeping Conroe only. The request runs in the
+brand-scoped transaction, so row-level security applies.

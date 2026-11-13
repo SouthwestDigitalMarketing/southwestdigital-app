@@ -35,6 +35,7 @@ export const NAV_DESTINATIONS: Array<{
   aliases?: string[];
 }> = [
   { id: "nav.dashboard", title: "Dashboard", href: "/dashboard", keys: "g d", aliases: ["home"] },
+  { id: "nav.scanner", title: "Scanner", href: "/scanner", keys: "g n", aliases: ["scan", "findings"] },
   { id: "nav.website", title: "Website", href: "/website", keys: "g w" },
   { id: "nav.youtube", title: "YouTube", href: "/youtube", keys: "g y" },
   { id: "nav.reviews", title: "Reviews", href: "/reviews", keys: "g r" },

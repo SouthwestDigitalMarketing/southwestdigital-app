@@ -1817,6 +1817,49 @@ model AllThingWriteJob {
   @@index([status, createdAt])
 }
 
+// Scanner. Ripley workers post findings. Log-only: a post stores the row and
+// does not fix, send, or start a timer. Reviewed SQL, not applied by migrate:
+// prisma/migrations/20261112203000_scan_finding_and_role/migration.sql
+model ScanRole {
+  id          String        @id @default(cuid())
+  brandId     String
+  key         String
+  label       String
+  holderLabel String?
+  findings    ScanFinding[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([brandId, key])
+  @@index([brandId])
+}
+
+model ScanFinding {
+  id          String    @id @default(cuid())
+  brandId     String
+  room        String
+  key         String
+  what        String
+  severity    String
+  evidence    String
+  state       String    @default("open")
+  fixLevel    Int
+  roleKey     String
+  roleId      String?
+  firstSeenAt DateTime  @default(now())
+  lastSeenAt  DateTime  @default(now())
+  closedAt    DateTime?
+  doneNote    String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  role        ScanRole? @relation(fields: [roleId], references: [id], onDelete: SetNull)
+
+  @@unique([brandId, room, key])
+  @@index([brandId, state, lastSeenAt])
+  @@index([brandId, room])
+  @@index([roleId])
+}
+
 // ─── Content & analytics ─────────────────────────────────────────────────────
 
 model ContentCalendarItem {

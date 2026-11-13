@@ -1,5 +1,53 @@
 # SWapp handoff
 
+## 2026-11-12 — Ummon (Grok, Scanner w2W): log-only page, tables applied
+
+Branch `scanner/findings` in `~/projects/worktrees/swapp-scanner`, cut from
+`origin/main` `2099313`. Tom said ship a usable version now. No timer. Nothing
+is sent to a client.
+
+Applied on the configured Supabase database (direct port 5432, `prisma db
+execute`, not migrate):
+
+- `ScanRole` and `ScanFinding`, forced brand row-level security. Read-back:
+  4 roles (Mail desk Donna, Sales pipeline Kassad, Client delivery Tom,
+  Systems unset) and both tables `relforcerowsecurity = true`.
+- 9 open findings, posted once from this session, not by a timer. Inbox:
+  spam review 2 waiting, newsletter review 70 waiting (`bin/scan status`).
+  Contracts: 6 `SENT_TO_CLIENT` proposals (Rodan Properties LLC, SJ Equity
+  LLC, Hydraulics Technology, Inc., two BBQ Grill People LLC, US Promoline)
+  and 1 `SIGNED` row with `CANCELLATION_REQUESTED` (client name Bookkeeping
+  Conroe, signed 2026-09-04). Same database the app already uses, so the
+  rows are there before the page code deploys.
+
+Code:
+
+- `/scanner` — "Needs you now", by room, and what closed. Sidebar item and
+  keyboard `g n`. Log only.
+- `POST /api/scanner/findings` — off until `SCANNER_API_TOKEN_SHA256` and
+  `SCANNER_API_ACTOR_USER_ID` are set. Bookkeeping Conroe only. A repeat key
+  updates the same row. `presence: "gone"` closes it. Unknown fields are
+  rejected. Nothing is sent or fixed.
+
+Browser on `127.0.0.1:3012` (webpack, dev bypass, Bookkeeping Conroe):
+sidebar Scanner is the current page, `/scanner` shows Needs you now (9),
+`?role=mail-desk` shows 2 and keeps Mail desk selected, `?role=sales-pipeline`
+shows 7. `npx prisma generate` wrote the client into the shared
+`southwestdigital-app/node_modules`. This worktree's `node_modules` is a
+symlink there.
+
+Donna, Kassad, and Severn were told on the board (messages `e3e6f3f82852`,
+`56670e753c67`, `c82faf76fa7d`) and have not answered. Their Foremen are not
+registered, so the pings stayed on the board. The shell shipped without
+their lists. No standing timer. Board now: `9f4d2ffddc85`.
+
+Checks on ripley, 2026-11-12: `tsc --noEmit` passed. `vitest run` 1032
+passed, 5 skipped. ESLint on the new Scanner files and `commands.ts` is
+clean. `AppShell.tsx` still has the old `no-img-element` warning at line
+289, not from this slice. `npx next build --webpack` compiled, type-checked,
+and generated 54 pages, including `/scanner` and `/api/scanner/findings`.
+The dev server on port 3012 was stopped after the browser check.
+
 ## 2026-11-10 night — Ummon (Claude, tab w2N): proposal ACH
 
 - Merged PR #98 (`b3d6ffd`, Vercel success): proposal checkout offers `us_bank_account` beside card (`src/lib/stripe/paymentIntentParams.ts`); card-only retry with idempotency suffix `:card` if Stripe rejects ACH; a `processing` intent returns `{processing: true}` and both proposal views show "processing"; deposit marked paid only on `payment_intent.succeeded`; `payment_intent.payment_failed` is logged only (deposit stays unpaid, client can retry).

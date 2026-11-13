@@ -28,6 +28,7 @@ import {
   Tag,
   BadgePercent,
   ChevronDown,
+  Radar,
   ScrollText,
   Sun,
   X,
@@ -53,6 +54,7 @@ const NAV: Array<{
   dividerAfter?: boolean;
 }> = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, exact: true },
+  { label: "Scanner", href: "/scanner", icon: Radar },
   { label: "Website", href: "/website", icon: Globe },
   { label: "YouTube", href: "/youtube", icon: PlayCircle },
   { label: "Reviews", href: "/reviews", icon: Star, dividerAfter: true },
