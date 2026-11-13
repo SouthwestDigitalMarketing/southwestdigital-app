@@ -1,5 +1,11 @@
 # SWapp handoff
 
+## 2026-11-13 — Phone queue and status list (Ummon Claude)
+
+- Send page: each pick is one batch (`batch`, `count` query on PUT) saved under `~/swapp-phone-intake/<batch>/` with `.batch.json` (expected count, file sizes). Showrunner's `showrunner-inbox.timer` turns each complete batch into its own episode and writes `~/swapp-phone-intake/queue.json`.
+- `GET /status.json?exp&sig` (send-page signature) merges live batches (sending %, received, incomplete) with `queue.json` (episode name, stage, errors). The send page shows it as "Your videos", refreshing every 4 s.
+- Self-test ok (batch incomplete -> received -> episode row). Installed to `~/.local/share/swapp-phone-intake/phone_intake.py`, service restarted; from dalliance `/status.json` returned the first episode.
+
 ## 2026-11-13 — Phone send page link, no HTTPS needed (Ummon Claude)
 
 - Tailnet HTTPS is impossible today: `tailscale cert` returns "your Tailscale account does not support getting TLS certs" and `tailscale serve --https=443` says Serve is not enabled, even after Tom opened the enable page. So the HTTPS page no longer PUTs to ripley. `/phone` now renders a signed link (`session\n<exp>` HMAC, 3 h) to ripley's own send page `http://100.98.89.93:8932/send`; the phone opens it as a top-level link (no mixed content) and PUTs same-origin with the session signature. `src/app/api/phone-intake/route.ts` and `PhoneSend.tsx` were removed.
