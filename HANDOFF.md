@@ -1,5 +1,14 @@
 # SWapp handoff
 
+## 2026-11-13 — Phone intake integration (current, Ummon Codex)
+
+- Branch `feat/phone-episode-intake` was fast-forwarded to `origin/main` `db073d4` after saving the prior uncommitted work in `/home/tom/projects/patches/swapp-phone-intake-20261113.patch` and `/home/tom/projects/patches/swapp-phone-intake-untracked-20261113.tar.gz`. The stash restore conflicted only in this handoff; both dated sections were kept.
+- `/youtube/new` now routes the phone choice to the signed-in `/phone` page. Production will not use the old `:8931` upload page. The phone intake ticket API refuses an insecure `http://` receiver in production; the Python receiver advertises Private Network Access for the HTTPS tailnet path.
+- The ripley receiver on `100.98.89.93:8932` accepted a 1,650,000,000-byte generated file in 1.6 seconds; the receipt byte count, SHA-256, and file size matched. The test file and receipt were removed. This verifies the receiver on ripley, not a real phone browser upload.
+- `python3 scripts/phone_intake.py --self-test` passed (accepted a valid ticket and rejected a bad signature). `npm run typecheck` passed. `npm run lint` had 0 errors and 9 warnings. `npm run test` passed 1,035 with 5 skipped. `PLATFORM_BASE_URL=http://localhost:3000 npx next build --webpack` passed; `/phone` and `/api/phone-intake` are in the build. The separate Phone sidebar item was removed so intake starts from YouTube > Create new video.
+- Production remains unready: `PHONE_INTAKE_SECRET` and `PHONE_INTAKE_PUBLIC_URL` are absent from Vercel production; the receiver's current public URL is HTTP. Board action notices `767e7f8b8336` (Albedo) and `6978e171e147` (Severn) request agreement for HTTPS Tailscale Serve without disturbing TCP 5900 VNC. Do not merge this branch until the HTTPS endpoint and production environment are configured and a signed-in phone test passes. The user unit currently runs `scripts/phone_intake.py` from this worktree; move it to a stable checkout when shipping.
+- Showrunner project creation, media assignment, edit mode, and YouTube publication remain outside this branch and await Johnny's contract response to `bafdc92148f1`.
+
 ## 2026-11-13 — TREB new-video preview (Ummon Codex)
 
 - Branch `ummon/treb-new-video-entry` from current `origin/main`; local dev server on ripley `100.98.89.93:3001` remains running. Ripley `treb-dev-proxy.service` serves branded preview `http://100.98.89.93:3011/login`, forwarding to `:3001` with Host `app.realestatebookkeeper.com`. Dalliance fetch returned HTTP 200 and the TREB sign-in heading. Tom signed in and reached `/youtube` in the correct brand.
@@ -11,6 +20,26 @@
 - Source-choice correction (Tom, 2026-11-13): selecting “My phone” on dalliance had opened the temporary ripley uploader, whose native file picker could only see **dalliance** files. The desktop state now says to continue on the phone; only the phone state offers the temporary upload link. This is still a stopgap, not an integrated SWapp upload. Do not call the desktop picker a phone picker or ask Tom to use it for phone footage.
 - Pre-merge correction (Tom requested merge 2026-11-13): the ripley `:8931` temporary uploader is now exposed only in development. Production phone view says upload is being prepared. The unavailable-connection copy no longer calls production a local preview. Full ingest and Showrunner launch remain unbuilt.
 - Merge gate on `753ded3`: `npm run typecheck` passed; `npm run lint` returned 0 errors and 9 warnings; `npm run test` passed 1,032 tests with 5 skipped. An isolated `npx next build --webpack` compiled and typechecked but first stopped because `PLATFORM_BASE_URL` in this local checkout is not a valid HTTPS or local HTTP URL. Re-run with `PLATFORM_BASE_URL=http://localhost:3000` passed and generated 55 static pages, including `/youtube/new`. The build ran in detached `/tmp/swapp-treb-build-20261113` to avoid disturbing the live dev server.
+## 2026-11-13 — Ummon (Grok, southwestdigital-app w2N:t4): phone send page
+
+Branch `feat/phone-episode-intake` in `~/projects/worktrees/swapp-phone-upload`,
+cut from `origin/main` `3d45828`. Not pushed. No Showrunner project is created.
+Nothing is published to YouTube. Johnny still has the contract ask
+`bafdc92148f1`.
+
+- `/phone` — signed-in page. Pick videos and pictures. Each file gets a
+  ticket, then the phone PUTs the bytes to ripley. The page shows byte count
+  and sha256.
+- `POST /api/phone-intake` — staff only. Needs `PHONE_INTAKE_SECRET` and
+  `PHONE_INTAKE_PUBLIC_URL`. Cap is 3,000,000,000 bytes. Ticket lasts 3 hours.
+- `scripts/phone_intake.py` — the ripley listener. User unit
+  `swapp-phone-intake.service` binds `100.98.89.93:8932` and writes
+  `~/swapp-phone-intake/`. Secret file `~/.config/swapp-phone-intake/env`
+  (mode 600). Same secret is what the Next server must see.
+
+The other Ummon tab stays on `~/projects/southwestdigital-app-mobile-ux`
+`main`, 1 commit behind origin. Port 3001 is that checkout. This branch's
+dev server, when running, is `http://100.98.89.93:3016/phone`.
 
 ## 2026-11-12 — Ummon (Grok, Scanner w2W): log-only page, tables applied
 

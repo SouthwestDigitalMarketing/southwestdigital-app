@@ -10,7 +10,7 @@ const sources: { id: Source; title: string; detail: string }[] = [
   { id: "ripley", title: "Already on ripley", detail: "Files that have already been copied to the video computer" },
 ];
 
-export function SourcePicker({ enableTemporaryUpload }: { enableTemporaryUpload: boolean }) {
+export function SourcePicker() {
   const [source, setSource] = useState<Source | null>(null);
   const [onPhone, setOnPhone] = useState(false);
 
@@ -36,15 +36,13 @@ export function SourcePicker({ enableTemporaryUpload }: { enableTemporaryUpload:
       {source === "phone" ? (
         <div className="mt-6 rounded-2xl bg-slate-50 p-5">
           <h2 className="font-semibold text-slate-900">The video is on your phone</h2>
-          {onPhone && enableTemporaryUpload ? (
+          {onPhone ? (
             <>
-              <p className="mt-2 text-sm text-slate-600">Choose the video on this phone. The temporary upload page will show a receipt when the file reaches ripley.</p>
-              <a className="mt-4 inline-flex rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white" href="http://100.98.89.93:8931/">Choose video on this phone</a>
+              <p className="mt-2 text-sm text-slate-600">Choose the video and any photos on this phone. You will see a receipt when each file reaches ripley.</p>
+              <a className="mt-4 inline-flex rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white" href="/phone">Send files from this phone</a>
             </>
-          ) : onPhone ? (
-            <p className="mt-2 text-sm text-slate-600">The phone upload step is being prepared. Keep the video on your phone for now.</p>
           ) : (
-            <p className="mt-2 text-sm text-slate-600">This computer cannot choose a file from your phone. {enableTemporaryUpload ? "Open this same New video page on your phone to select the video there. You can leave this page open on your computer." : "The phone upload step is being prepared. Keep the video on your phone for now."}</p>
+            <p className="mt-2 text-sm text-slate-600">This computer cannot choose a file from your phone. Open this same New video page on your phone to send the files. You can leave this page open on your computer.</p>
           )}
         </div>
       ) : source === "canon" ? (
