@@ -13,6 +13,7 @@ const sources: { id: Source; title: string; detail: string }[] = [
 export function SourcePicker() {
   const [source, setSource] = useState<Source | null>(null);
   const [onPhone, setOnPhone] = useState(false);
+  const [origin, setOrigin] = useState("");
 
   return (
     <section className="mt-8">
@@ -24,7 +25,10 @@ export function SourcePicker() {
             aria-pressed={source === item.id}
             onClick={() => {
               setSource(item.id);
-              if (item.id === "phone") setOnPhone(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
+              if (item.id === "phone") {
+                setOnPhone(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
+                setOrigin(window.location.origin);
+              }
             }}
             className={`rounded-2xl border p-5 text-left hover:border-slate-500 ${source === item.id ? "border-slate-900 bg-slate-50" : "border-slate-200 bg-white"}`}
           >
@@ -42,7 +46,12 @@ export function SourcePicker() {
               <a className="mt-4 inline-flex rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white" href="/phone">Send files from this phone</a>
             </>
           ) : (
-            <p className="mt-2 text-sm text-slate-600">This computer cannot choose a file from your phone. Open this same New video page on your phone to send the files. You can leave this page open on your computer.</p>
+            <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-slate-700">
+              <li>On your phone, open this site and sign in: <span className="font-semibold break-all">{origin}</span></li>
+              <li>Tap <span className="font-semibold">Create new video</span>, then <span className="font-semibold">My phone</span>.</li>
+              <li>Tap <span className="font-semibold">Send files from this phone</span> and pick the video and photos.</li>
+              <li>Each file shows a receipt when it reaches ripley. You can leave this page open here.</li>
+            </ol>
           )}
         </div>
       ) : source === "canon" ? (
