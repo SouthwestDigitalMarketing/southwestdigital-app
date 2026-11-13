@@ -1,5 +1,11 @@
 # SWapp handoff
 
+## 2026-11-13 — TREB new-video preview (Ummon Codex)
+
+- Branch `ummon/treb-new-video-entry` from current `origin/main`; local dev server on ripley `100.98.89.93:3001` remains running. Ripley `treb-dev-proxy.service` serves branded preview `http://100.98.89.93:3011/login`, forwarding to `:3001` with Host `app.realestatebookkeeper.com`. Dalliance fetch returned HTTP 200 and the TREB sign-in heading. Tom signed in and reached `/youtube` in the correct brand.
+- YouTube page previously returned only an analytics connection prompt. Added a `Make a new video` entry before the analytics branch and `/youtube/new` source choice: phone, Canon C100 SD card, already on ripley. Phone choice links to current tailnet phone inbox `:8931`; this is a working stopgap, not the final authenticated transfer. `npm run typecheck` passed. Desktop visual review of the new screen is pending.
+- Do not ask Tom to connect YouTube before asset ingest. Integration from SWapp upload receipt into Showrunner project folder and mode remains unbuilt. The project folder `~/Videos/showrunner-projects/TREB 261113 New Video` exists, but no media has been copied into it. Johnny/Severn board action notices `a3369a650eed` / `16688b07581f` seek agreement on the shared Showrunner contract before touching that repo.
+
 ## 2026-11-12 — Ummon (Grok, Scanner w2W): log-only page, tables applied
 
 Branch `scanner/findings` in `~/projects/worktrees/swapp-scanner`, cut from
