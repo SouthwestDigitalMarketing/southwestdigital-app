@@ -70,7 +70,8 @@ def live_batches(inbox):
             if os.path.exists(final + ".receipt.json"):
                 got, state = size, "received"
             elif os.path.exists(final + ".part"):
-                got, state = min(os.path.getsize(final + ".part"), size), "sending"
+                got = min(os.path.getsize(final + ".part"), size)
+                state = "sending" if time.time() - os.path.getmtime(final + ".part") < 90 else "paused"
             else:
                 got, state = 0, "failed"
             files.append({"name": name, "bytes": size, "done": got, "state": state})
@@ -80,6 +81,8 @@ def live_batches(inbox):
         expected = int(meta.get("expected") or len(files))
         if any(item["state"] == "sending" for item in files):
             state = "sending"
+        elif any(item["state"] == "paused" for item in files):
+            state = "paused"
         elif received >= expected:
             state = "received"
         else:
@@ -137,6 +140,50 @@ def session_ok(secret, exp, sig):
     return hmac.compare_digest(sign_session(secret, exp), sig)
 
 
+def finalize_upload(final, name):
+    tmp = final + ".part"
+    digest = hashlib.sha256()
+    with open(tmp, "rb") as handle:
+        while True:
+            block = handle.read(8 * 1024 * 1024)
+            if not block:
+                break
+            digest.update(block)
+    os.replace(tmp, final)
+    receipt = {"name": name, "bytes": os.path.getsize(final), "sha256": digest.hexdigest()}
+    with open(final + ".receipt.json", "w", encoding="utf-8") as handle:
+        json.dump(receipt, handle)
+    return receipt
+
+
+def upload_state(folder, name, size):
+    final = os.path.join(folder, name)
+    receipt = read_json(final + ".receipt.json", None)
+    if receipt:
+        return {"received": size, "done": True, "receipt": receipt}
+    try:
+        received = os.path.getsize(final + ".part")
+    except OSError:
+        received = 0
+    return {"received": received, "done": False}
+
+
+def resumable_batch(inbox, name, size):
+    """A batch still waiting on this same file, so a re-pick carries on."""
+    try:
+        names = sorted(os.listdir(inbox))
+    except OSError:
+        return None
+    for batch in names:
+        folder = os.path.join(inbox, batch)
+        if not BATCH.match(batch) or not os.path.isdir(folder):
+            continue
+        meta = read_json(os.path.join(folder, ".batch.json"), None) or {}
+        if meta.get("files", {}).get(name) == size and not os.path.exists(os.path.join(folder, name + ".receipt.json")):
+            return batch
+    return None
+
+
 SEND_PAGE = """<!doctype html><html lang=en><head><meta charset=utf-8>
 <meta name=viewport content="width=device-width,initial-scale=1">
 <title>Send to ripley</title><style>
@@ -158,19 +205,39 @@ b{display:block}.ok{color:#15803d}.bad{color:#be123c}small{display:block;color:#
 const q=new URLSearchParams(location.search);
 const f=document.getElementById('f'),queueEl=document.getElementById('queue');
 let chain=Promise.resolve();
-f.onchange=()=>{const files=[...f.files];f.value='';if(!files.length)return;
-const batch=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8);
+const CHUNK=8*1024*1024;
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const auth={sexp:q.get('exp'),ssig:q.get('sig')};
+f.onchange=async()=>{const files=[...f.files];f.value='';if(!files.length)return;
+let batch=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8);
+try{const r=await(await fetch('/resume?'+new URLSearchParams({...auth,name:files[0].name,size:files[0].size}))).json();if(r.batch)batch=r.batch;}catch(e){}
 for(const file of files)chain=chain.then(()=>send(file,batch,files.length));chain.then(refresh);setTimeout(refresh,800);};
-function send(file,batch,count){return new Promise(done=>{
-const u=new URLSearchParams({sexp:q.get('exp'),ssig:q.get('sig'),size:file.size,name:file.name,batch,count});
-const x=new XMLHttpRequest();x.open('PUT','/upload?'+u);
-x.onload=x.onerror=()=>done();x.send(file);});}
+async function where(base){const r=await fetch('/upload-status?'+new URLSearchParams(base),{cache:'no-store'});return r.json();}
+async function send(file,batch,count){
+ const base={...auth,size:file.size,name:file.name,batch,count};
+ let received=0,tries=0;
+ try{received=(await where(base)).received;}catch(e){}
+ while(received<file.size){
+  try{
+   const end=Math.min(received+CHUNK,file.size);
+   const r=await fetch('/upload?'+new URLSearchParams({...base,offset:received}),{method:'PUT',body:file.slice(received,end)});
+   const j=await r.json();
+   if(r.status===200||r.status===409){received=j.done?file.size:j.received;tries=0;continue;}
+   throw new Error(j.error||'send failed');
+  }catch(e){
+   tries++;if(tries>120)return;
+   await sleep(Math.min(20000,1000*tries));
+   try{received=(await where(base)).received;}catch(e2){}
+  }
+ }
+}
 const when=t=>t?new Date(t*1000).toLocaleString([], {weekday:'short',hour:'numeric',minute:'2-digit'}):'';
 const mb=n=>(n/1e6).toLocaleString(undefined,{maximumFractionDigits:0})+' MB';
 function line(v){
  if(v.state==='sending'){const pct=v.bytes?Math.floor(100*v.done/v.bytes):0;
   return ['Sending '+Math.min(v.received+1,v.expected)+' of '+v.expected+' — '+pct+'%',mb(v.done)+' of '+mb(v.bytes),pct];}
  if(v.state==='received')return ['Received. Making the episode...','Up to a minute.'];
+ if(v.state==='paused'){const pct=v.bytes?Math.floor(100*v.done/v.bytes):0;return ['Paused at '+pct+'%','Keep this page open; it carries on by itself. If you closed it, choose the same video again.',pct];}
  if(v.state==='incomplete')return ['Some files did not arrive','Send them again.'];
  if(v.state==='error')return ['Needs attention',v.message||''];
  return [v.stage||'Episode ready',v.project||''];}
@@ -179,7 +246,7 @@ function refresh(){fetch('/status.json?'+new URLSearchParams({exp:q.get('exp'),s
  if(!d.videos.length){queueEl.innerHTML='<li>Nothing yet.</li>';return;}
  for(const v of d.videos){const li=document.createElement('li');const [head,sub,pct]=line(v);
   const t=document.createElement('b');t.textContent=v.project||('New video, sent '+when(v.created));li.append(t);
-  const h=document.createElement('span');h.textContent=head;h.className=v.state==='error'||v.state==='incomplete'?'bad':(v.project?'ok':'');li.append(h);
+  const h=document.createElement('span');h.textContent=head;h.className=v.state==='error'||v.state==='incomplete'||v.state==='paused'?'bad':(v.project?'ok':'');li.append(h);
   if(sub){const s=document.createElement('small');s.textContent=sub;li.append(s);}
   if(pct!==undefined){const bar=document.createElement('div');bar.className='bar';const i=document.createElement('i');i.style.width=pct+'%';bar.append(i);li.append(bar);}
   queueEl.append(li);}}).catch(()=>{});}
@@ -232,6 +299,27 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self._json(200, queue_status(INBOX))
             return
+        if path in ("/upload-status", "/resume"):
+            query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            secret = os.environ.get("PHONE_INTAKE_SECRET", "")
+            try:
+                sexp = int(query.get("sexp", ["0"])[0])
+                size = int(query.get("size", ["0"])[0])
+            except ValueError:
+                sexp, size = 0, 0
+            if not secret or sexp < int(time.time()) or not session_ok(secret, sexp, query.get("ssig", [""])[0]):
+                self._json(403, {"error": "This send link has expired. Open New video on the site again."})
+                return
+            name = safe_name(query.get("name", [""])[0])
+            if path == "/resume":
+                self._json(200, {"batch": resumable_batch(INBOX, name, size)})
+                return
+            batch = query.get("batch", [""])[0]
+            if not BATCH.match(batch):
+                self._json(400, {"error": "The batch is not valid."})
+                return
+            self._json(200, upload_state(os.path.join(INBOX, batch), name, size))
+            return
         if path == "/send":
             query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             secret = os.environ.get("PHONE_INTAKE_SECRET", "")
@@ -265,6 +353,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         raw_name = query.get("name", [""])[0]
         name = safe_name(raw_name)
+        if "offset" in query and "ssig" in query:
+            self._put_chunk(query, secret, name, size, length)
+            return
         if size < 1 or size > MAX_BYTES or length != size:
             self._json(400, {"error": "The file size does not match the ticket."})
             return
@@ -341,6 +432,59 @@ class Handler(BaseHTTPRequestHandler):
         self._json(200, receipt)
 
 
+def put_chunk(handler, query, secret, name, size, length):
+    """One slice of a send-page file at a byte offset. A dropped connection
+    keeps what arrived; the page asks where to carry on and resends from there."""
+    try:
+        sexp = int(query.get("sexp", ["0"])[0])
+        offset = int(query.get("offset", ["-1"])[0])
+        expected = max(1, min(int(query.get("count", ["1"])[0]), 200))
+    except ValueError:
+        handler._json(400, {"error": "The piece is not valid."})
+        return
+    if sexp < int(time.time()) or not session_ok(secret, sexp, query.get("ssig", [""])[0]):
+        handler._json(403, {"error": "This send link has expired. Open New video on the site again."})
+        return
+    batch = query.get("batch", [""])[0]
+    if not BATCH.match(batch) or size < 1 or size > MAX_BYTES or length < 1 or offset < 0 or offset + length > size:
+        handler._json(400, {"error": "The piece is not valid."})
+        return
+    folder = os.path.join(INBOX, batch)
+    os.makedirs(folder, exist_ok=True)
+    note_batch_file(folder, expected, name, size)
+    current = upload_state(folder, name, size)
+    if current["done"]:
+        handler._json(200, current)
+        return
+    if offset != current["received"]:
+        handler._json(409, current)
+        return
+    final = os.path.join(folder, name)
+    left = length
+    try:
+        with open(final + ".part", "ab") as handle:
+            while left > 0:
+                block = handler.rfile.read(min(1024 * 1024, left))
+                if not block:
+                    break
+                handle.write(block)
+                left -= len(block)
+    except (ConnectionError, BrokenPipeError, OSError):
+        left = 1
+    if left:
+        handler.close_connection = True
+        handler._json(400, upload_state(folder, name, size))
+        return
+    if os.path.getsize(final + ".part") >= size:
+        receipt = finalize_upload(final, name)
+        handler._json(200, {"received": size, "done": True, "receipt": receipt})
+        return
+    handler._json(200, upload_state(folder, name, size))
+
+
+Handler._put_chunk = lambda self, query, secret, name, size, length: put_chunk(self, query, secret, name, size, length)
+
+
 def self_test():
     import tempfile
     import threading
@@ -404,6 +548,26 @@ def self_test():
     with urllib.request.urlopen(status_url) as response:
         videos = json.loads(response.read().decode())["videos"]
     assert videos[0]["project"] == "TREB X", videos
+    big = b"0123456789" * 3
+    base = "http://%s:%d/upload?sexp=%d&ssig=%s&size=%d&name=big.mp4&batch=b2&count=1" % (host, port, sexp, ssig, len(big))
+    def piece(offset, data):
+        request = urllib.request.Request(base + "&offset=%d" % offset, data=data, method="PUT")
+        try:
+            with urllib.request.urlopen(request) as response:
+                return response.status, json.loads(response.read().decode())
+        except urllib.error.HTTPError as error:
+            return error.code, json.loads(error.read().decode())
+    assert piece(0, big[:12]) == (200, {"received": 12, "done": False})
+    code, state = piece(0, big[:12])
+    assert code == 409 and state["received"] == 12, (code, state)
+    stat_url = "http://%s:%d/upload-status?sexp=%d&ssig=%s&size=%d&name=big.mp4&batch=b2" % (host, port, sexp, ssig, len(big))
+    with urllib.request.urlopen(stat_url) as response:
+        assert json.loads(response.read().decode())["received"] == 12
+    resume_url = "http://%s:%d/resume?sexp=%d&ssig=%s&size=%d&name=big.mp4" % (host, port, sexp, ssig, len(big))
+    with urllib.request.urlopen(resume_url) as response:
+        assert json.loads(response.read().decode())["batch"] == "b2"
+    code, state = piece(12, big[12:])
+    assert code == 200 and state["done"] and state["receipt"]["sha256"] == hashlib.sha256(big).hexdigest(), state
     server.shutdown()
     print("ok")
 
