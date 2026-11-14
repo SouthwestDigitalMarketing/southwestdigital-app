@@ -1,5 +1,10 @@
 # SWapp handoff
 
+## 2026-11-13 — Phone uploads over 3 GB (Ummon Claude)
+
+- Tom's 4,969,898,905-byte `3964.mp4` was refused: every `PUT /upload` returned 400 "The piece is not valid." because `MAX_BYTES` was 3,000,000,000. The page retried silently and showed nothing, so the pick looked like it vanished. `MAX_BYTES` is now 60,000,000,000 (ripley `/home` had 565 GB free). Any 4xx other than 409 now stops the retries and prints the refusal in red above "Your videos".
+- Self-test adds a first piece of a 4,969,898,905-byte file (200). Page JS passes `node --check`. Installed to `~/.local/share/swapp-phone-intake/phone_intake.py`, `swapp-phone-intake.service` restarted.
+
 ## 2026-11-13 — Resumable phone uploads (Ummon Claude)
 
 - Tom's 2,130,002,024-byte `3948.mp4` failed twice (phone connection reset after ~1-2 min; old receiver deleted the partial). The send page now PUTs 8 MiB pieces with `offset`; the receiver appends to `<file>.part`, answers 409 with the true offset on a mismatch, keeps the partial on a drop, and finalizes (sha256 receipt) when complete. `GET /upload-status` gives the offset; `GET /resume?name&size` returns a batch still waiting on that file, so re-picking the same video carries on. The page retries up to 120 times with backoff. A `.part` idle for 90 s shows as "Paused at N%".
