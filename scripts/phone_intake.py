@@ -18,7 +18,7 @@ import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-MAX_BYTES = 3_000_000_000
+MAX_BYTES = 60_000_000_000
 SAFE = re.compile(r"[^A-Za-z0-9._-]+")
 INBOX = os.path.expanduser(os.environ.get("PHONE_INTAKE_DIR", "~/swapp-phone-intake"))
 # One pick on the send page is one batch, and one batch becomes one episode.
@@ -199,16 +199,17 @@ b{display:block}.ok{color:#15803d}.bad{color:#be123c}small{display:block;color:#
 <p>Each time you choose files, that becomes one new video. Pick the video and its photos together. Keep this screen open while it sends.</p>
 <label for=f>Choose videos and pictures</label>
 <input id=f type=file accept="video/*,image/*" multiple>
+<p id=msg class=bad></p>
 <h2>Your videos</h2>
 <ul id=queue><li>Loading...</li></ul>
 <script>
 const q=new URLSearchParams(location.search);
-const f=document.getElementById('f'),queueEl=document.getElementById('queue');
+const f=document.getElementById('f'),queueEl=document.getElementById('queue'),msg=document.getElementById('msg');
 let chain=Promise.resolve();
 const CHUNK=8*1024*1024;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const auth={sexp:q.get('exp'),ssig:q.get('sig')};
-f.onchange=async()=>{const files=[...f.files];f.value='';if(!files.length)return;
+f.onchange=async()=>{const files=[...f.files];f.value='';if(!files.length)return;msg.textContent='';
 let batch=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8);
 try{const r=await(await fetch('/resume?'+new URLSearchParams({...auth,name:files[0].name,size:files[0].size}))).json();if(r.batch)batch=r.batch;}catch(e){}
 for(const file of files)chain=chain.then(()=>send(file,batch,files.length));chain.then(refresh);setTimeout(refresh,800);};
@@ -223,9 +224,10 @@ async function send(file,batch,count){
    const r=await fetch('/upload?'+new URLSearchParams({...base,offset:received}),{method:'PUT',body:file.slice(received,end)});
    const j=await r.json();
    if(r.status===200||r.status===409){received=j.done?file.size:j.received;tries=0;continue;}
+   if(r.status>=400&&r.status<500){msg.textContent=file.name+' was not sent: '+(j.error||'refused')+' Tell Ummon.';return;}
    throw new Error(j.error||'send failed');
   }catch(e){
-   tries++;if(tries>120)return;
+   tries++;if(tries>120){msg.textContent=file.name+' could not be sent after many tries. Choose it again.';return;}
    await sleep(Math.min(20000,1000*tries));
    try{received=(await where(base)).received;}catch(e2){}
   }
@@ -568,6 +570,9 @@ def self_test():
         assert json.loads(response.read().decode())["batch"] == "b2"
     code, state = piece(12, big[12:])
     assert code == 200 and state["done"] and state["receipt"]["sha256"] == hashlib.sha256(big).hexdigest(), state
+    # A 4.97 GB phone video (2026-11-13) was refused by the old 3 GB cap.
+    base = "http://%s:%d/upload?sexp=%d&ssig=%s&size=%d&name=huge.mp4&batch=b3&count=1" % (host, port, sexp, ssig, 4_969_898_905)
+    assert piece(0, big) == (200, {"received": len(big), "done": False})
     server.shutdown()
     print("ok")
 
