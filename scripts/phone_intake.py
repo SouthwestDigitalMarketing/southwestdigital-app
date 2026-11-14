@@ -196,7 +196,7 @@ b{display:block}.ok{color:#15803d}.bad{color:#be123c}small{display:block;color:#
 .bar{height:6px;background:#e2e8f0;border-radius:3px;margin-top:8px}.bar i{display:block;height:6px;background:#0f172a;border-radius:3px}
 </style></head><body>
 <h1>Send to ripley</h1>
-<p>Each time you choose files, that becomes one new video. Pick the video and its photos together. Keep this screen open while it sends.</p>
+<p>Each time you choose files, that becomes one new video. Pick everything for it together: your talking clips, your b-roll and any photos. Keep this screen open while it sends.</p>
 <label for=f>Choose videos and pictures</label>
 <input id=f type=file accept="video/*,image/*" multiple>
 <p id=msg class=bad></p>
