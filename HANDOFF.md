@@ -1,5 +1,10 @@
 # SWapp handoff
 
+## 2026-11-13 — Resumable phone uploads (Ummon Claude)
+
+- Tom's 2,130,002,024-byte `3948.mp4` failed twice (phone connection reset after ~1-2 min; old receiver deleted the partial). The send page now PUTs 8 MiB pieces with `offset`; the receiver appends to `<file>.part`, answers 409 with the true offset on a mismatch, keeps the partial on a drop, and finalizes (sha256 receipt) when complete. `GET /upload-status` gives the offset; `GET /resume?name&size` returns a batch still waiting on that file, so re-picking the same video carries on. The page retries up to 120 times with backoff. A `.part` idle for 90 s shows as "Paused at N%".
+- Checks: self-test ok (piece, 409, status, resume, receipt). Live from steelbreeze: 20,000,000-byte file, piece 2 dropped at 9,310,720 bytes, resumed, sha256 matched. Installed and restarted on ripley. The whole-body PUT path is kept for the older per-file tickets.
+
 ## 2026-11-13 — Phone queue and status list (Ummon Claude)
 
 - Send page: each pick is one batch (`batch`, `count` query on PUT) saved under `~/swapp-phone-intake/<batch>/` with `.batch.json` (expected count, file sizes). Showrunner's `showrunner-inbox.timer` turns each complete batch into its own episode and writes `~/swapp-phone-intake/queue.json`.
