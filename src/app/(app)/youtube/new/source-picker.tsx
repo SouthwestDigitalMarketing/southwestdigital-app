@@ -26,7 +26,13 @@ export function SourcePicker() {
             onClick={() => {
               setSource(item.id);
               if (item.id === "phone") {
-                setOnPhone(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
+                const phone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+                // On the phone itself, go straight to the send page; no extra screen.
+                if (phone) {
+                  window.location.href = "/phone";
+                  return;
+                }
+                setOnPhone(phone);
                 setOrigin(window.location.origin);
               }
             }}
@@ -49,7 +55,7 @@ export function SourcePicker() {
             <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-slate-700">
               <li>On your phone, open this site and sign in: <span className="font-semibold break-all">{origin}</span></li>
               <li>Tap <span className="font-semibold">Create new video</span>, then <span className="font-semibold">My phone</span>.</li>
-              <li>Tap <span className="font-semibold">Send files from this phone</span> and pick the video and photos.</li>
+              <li>Pick the talking clips, b-roll and photos together.</li>
               <li>Each file shows a receipt when it reaches ripley. You can leave this page open here.</li>
             </ol>
           )}
