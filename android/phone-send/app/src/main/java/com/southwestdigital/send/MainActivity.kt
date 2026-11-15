@@ -12,7 +12,14 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.media.MediaMetadataRetriever
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.provider.DocumentsContract
 import android.provider.OpenableColumns
+import android.text.format.DateUtils
+import android.text.format.Formatter
+import android.widget.ProgressBar
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
@@ -48,11 +55,13 @@ class MainActivity : Activity() {
         }
         val choose = Button(this).apply {
             text = "Choose videos and pictures"
-            textSize = 22f
+            textSize = 17f
             isAllCaps = false
             setTextColor(Color.WHITE)
-            background = GradientDrawable().apply { setColor(ink); cornerRadius = 24 * dp }
-            minHeight = (resources.displayMetrics.heightPixels * 0.35).toInt()
+            // An ordinary button, like the send page's (Tom, 2026-11-15).
+            background = GradientDrawable().apply { setColor(ink); cornerRadius = 999f }
+            setPadding((24 * dp).toInt(), (14 * dp).toInt(), (24 * dp).toInt(), (14 * dp).toInt())
+            layoutParams = LinearLayout.LayoutParams(-2, -2)
             setOnClickListener { openPicker() }
         }
         root.addView(choose)
@@ -108,17 +117,59 @@ class MainActivity : Activity() {
         data.clipData?.let { clip -> for (n in 0 until clip.itemCount) uris.add(clip.getItemAt(n).uri) }
         if (uris.isEmpty()) data.data?.let { uris.add(it) }
         if (uris.isEmpty()) return
-        val items = uris.mapNotNull { uri ->
-            // Keep read access after the picker closes, so a long upload can carry on.
-            try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (e: SecurityException) {}
-            contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { c ->
-                if (c.moveToFirst()) Item(uri.toString(), c.getString(0) ?: "file", c.getLong(1)) else null
+        // Reading each video's length and date takes a moment; keep it off the screen's thread.
+        thread {
+            val items = uris.mapNotNull { uri -> describe(uri) }
+            val id = java.lang.Long.toString(System.currentTimeMillis(), 36) + "-" + java.util.UUID.randomUUID().toString().take(6)
+            Store.put(this, Batch(id, System.currentTimeMillis(), items = items.toMutableList()))
+            UploadWorker.start(this, id)
+            runOnUiThread { render() }
+        }
+    }
+
+    /** Name, size, video length and recorded date of one picked file. */
+    private fun describe(uri: Uri): Item? {
+        // Keep read access after the picker closes, so a long upload can carry on.
+        try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (e: SecurityException) {}
+        var modified = 0L
+        val base = contentResolver.query(uri, null, null, null, null)?.use { c ->
+            if (!c.moveToFirst()) return@use null
+            val name = c.getString(c.getColumnIndexOrThrow(OpenableColumns.DISPLAY_NAME)) ?: "file"
+            val size = c.getLong(c.getColumnIndexOrThrow(OpenableColumns.SIZE))
+            val m = c.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
+            if (m >= 0) modified = c.getLong(m)
+            name to size
+        } ?: return null
+        var duration = -1L
+        var taken = 0L
+        val type = contentResolver.getType(uri) ?: ""
+        if (type.startsWith("video/")) {
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(this, uri)
+                duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: -1
+                taken = recorded(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DATE))
+            } catch (e: Exception) {
+            } finally {
+                retriever.release()
             }
         }
-        val id = java.lang.Long.toString(System.currentTimeMillis(), 36) + "-" + java.util.UUID.randomUUID().toString().take(6)
-        Store.put(this, Batch(id, System.currentTimeMillis(), items = items.toMutableList()))
-        UploadWorker.start(this, id)
-        render()
+        return Item(uri.toString(), base.first, base.second, duration = duration, taken = if (taken > 0) taken else modified)
+    }
+
+    /** The video's own "recorded" stamp, e.g. 20261115T192514.000Z. */
+    private fun recorded(stamp: String?): Long {
+        if (stamp.isNullOrBlank()) return 0
+        for (pattern in listOf("yyyyMMdd'T'HHmmss.SSS'Z'", "yyyyMMdd'T'HHmmss'Z'")) {
+            try {
+                val format = java.text.SimpleDateFormat(pattern, java.util.Locale.US)
+                format.timeZone = java.util.TimeZone.getTimeZone("UTC")
+                val time = format.parse(stamp)?.time ?: 0
+                // Some phones write 1904 or 1970 when they have no date.
+                if (time > 946684800000L) return time
+            } catch (e: Exception) {}
+        }
+        return 0
     }
 
     private fun render() {
@@ -135,23 +186,20 @@ class MainActivity : Activity() {
             val total = b.items.sumOf { it.size }.coerceAtLeast(1)
             val pct = (100 * b.items.sumOf { it.sent } / total).toInt()
             val head = when (b.state) {
-                "paused" -> "Paused at $pct% — $done of ${b.items.size} arrived"
+                "paused" -> "Paused — $done of ${b.items.size} arrived"
                 "sent" -> "All ${b.items.size} arrived"
                 "failed" -> "$done of ${b.items.size} arrived"
-                else -> "Sending — $done of ${b.items.size} arrived, $pct%"
+                else -> "Sending — $done of ${b.items.size} arrived"
             }
             card.addView(text(head, if (b.state == "failed") bad else ink, 17f, bold = true))
             if (b.message.isNotEmpty()) card.addView(text(b.message, if (b.state == "failed") bad else muted, 14f))
-            for (item in b.items) {
-                val (label, color) = when (item.state) {
-                    "arrived" -> "arrived" to good
-                    "reused" -> "already on ripley, not sent again" to good
-                    "failed" -> ("not sent: " + item.error) to bad
-                    "sending" -> "${(100 * item.sent / item.size.coerceAtLeast(1)).toInt()}%" to ink
-                    else -> "waiting" to muted
-                }
-                card.addView(text("${item.name} — $label", color, 14f))
+            if (b.state != "sent") {
+                // The whole video first, then the connection it is going over, then each file.
+                val overall = if (b.state == "paused") "paused" else batchLeft(b)
+                card.addView(barRow(pct, "$pct%  ·  $overall", ink, dp))
+                card.addView(text(connection(b), muted, 13f).apply { setPadding(0, (4 * dp).toInt(), 0, 0) })
             }
+            for (item in b.items) card.addView(fileRows(item, b.state, dp))
             if (b.state != "sent") {
                 val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, (8 * dp).toInt(), 0, 0) }
                 val paused = b.state == "paused" || b.state == "failed"
@@ -168,6 +216,89 @@ class MainActivity : Activity() {
                 })
             }
             list.addView(card)
+        }
+    }
+
+    /** Three rows per file: its name; size, length and recorded date; a bar with percent and time left. */
+    private fun fileRows(item: Item, batchState: String, dp: Float): View {
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, (10 * dp).toInt(), 0, 0)
+        }
+        box.addView(text(item.name, ink, 15f, bold = true))
+        val meta = mutableListOf(Formatter.formatShortFileSize(this, item.size))
+        if (item.duration >= 0) meta.add(DateUtils.formatElapsedTime(item.duration / 1000))
+        if (item.taken > 0) meta.add(DateUtils.formatDateTime(this, item.taken,
+            DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_SHOW_TIME or DateUtils.FORMAT_ABBREV_MONTH))
+        box.addView(text(meta.joinToString("  ·  "), muted, 13f))
+        val pct = (100 * item.sent / item.size.coerceAtLeast(1)).toInt().coerceIn(0, 100)
+        val (label, color) = when (item.state) {
+            "arrived" -> "100%  ·  arrived" to good
+            "reused" -> "already on ripley" to good
+            "failed" -> ("not sent: " + item.error) to bad
+            "sending" -> "$pct%  ·  " + (if (batchState == "paused") "paused" else left(item)) to ink
+            else -> (if (pct > 0) "$pct%  ·  waiting" else "waiting") to muted
+        }
+        box.addView(barRow(if (item.state == "arrived" || item.state == "reused") 100 else pct, label, color, dp))
+        return box
+    }
+
+    /** A progress bar with its words (percent, time left) beside it. */
+    private fun barRow(pct: Int, label: String, color: Int, dp: Float): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, (4 * dp).toInt(), 0, 0)
+        }
+        row.addView(ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 100
+            progress = pct
+            layoutParams = LinearLayout.LayoutParams(0, (8 * dp).toInt(), 1f)
+        })
+        row.addView(text(label, color, 13f).apply { setPadding((10 * dp).toInt(), 0, 0, 0) })
+        return row
+    }
+
+    /** Time left for the whole video at the current speed. */
+    private fun batchLeft(b: Batch): String {
+        val rate = b.items.firstOrNull { it.state == "sending" }?.rate ?: b.items.maxOfOrNull { it.rate } ?: 0.0
+        if (rate <= 0) return "working out time left"
+        val remaining = b.items.filter { it.state != "arrived" && it.state != "reused" }.sumOf { it.size - it.sent }
+        return duration((remaining / rate).toLong())
+    }
+
+    /** Wi-Fi or mobile data, through Tailscale or not, and how fast it is sending right now. */
+    private fun connection(b: Batch): String {
+        val manager = getSystemService(ConnectivityManager::class.java)
+        val caps = manager.getNetworkCapabilities(manager.activeNetwork)
+        val parts = mutableListOf<String>()
+        when {
+            caps == null -> parts.add("No connection")
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> parts.add("Wi-Fi")
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> parts.add("Mobile data")
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> parts.add("Wired")
+            else -> parts.add("Connected")
+        }
+        // Tailscale shows up as a VPN; without it ripley cannot be reached.
+        if (caps != null) parts.add(if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) "Tailscale on" else "Tailscale off?")
+        val rate = b.items.firstOrNull { it.state == "sending" }?.rate ?: 0.0
+        if (rate > 0 && b.state == "sending") {
+            parts.add(Formatter.formatShortFileSize(this, rate.toLong()) + "/s (" + "%.0f".format(rate * 8 / 1_000_000) + " Mbps)")
+        }
+        return parts.joinToString("  ·  ")
+    }
+
+    /** Time left for this file at its recent speed. */
+    private fun left(item: Item): String {
+        if (item.rate <= 0) return "working out time left"
+        return duration(((item.size - item.sent) / item.rate).toLong())
+    }
+
+    private fun duration(seconds: Long): String {
+        return when {
+            seconds < 60 -> "under a minute left"
+            seconds < 3600 -> "about ${(seconds + 30) / 60} min left"
+            else -> "about ${seconds / 3600} h ${(seconds % 3600) / 60} min left"
         }
     }
 

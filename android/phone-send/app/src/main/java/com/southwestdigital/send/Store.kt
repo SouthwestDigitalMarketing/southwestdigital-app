@@ -13,6 +13,9 @@ data class Item(
     var state: String = "waiting", // waiting, sending, arrived, reused, failed
     var sent: Long = 0,
     var error: String = "",
+    val duration: Long = -1, // video length in ms; -1 for pictures or unknown
+    val taken: Long = 0, // when it was recorded, epoch ms; 0 if unknown
+    var rate: Double = 0.0, // recent send speed, bytes per second
 )
 
 /** One pick is one batch on ripley, and one batch becomes one video. */
@@ -77,7 +80,8 @@ object Store {
             MutableList(items.length()) { i ->
                 val it = items.getJSONObject(i)
                 Item(it.getString("uri"), it.getString("name"), it.getLong("size"), it.optString("state"),
-                    it.optLong("sent"), it.optString("error"))
+                    it.optLong("sent"), it.optString("error"), it.optLong("duration", -1), it.optLong("taken"),
+                    it.optDouble("rate", 0.0))
             },
         )
     }
@@ -86,7 +90,8 @@ object Store {
         val items = JSONArray()
         b.items.forEach {
             items.put(JSONObject().put("uri", it.uri).put("name", it.name).put("size", it.size)
-                .put("state", it.state).put("sent", it.sent).put("error", it.error))
+                .put("state", it.state).put("sent", it.sent).put("error", it.error)
+                .put("duration", it.duration).put("taken", it.taken).put("rate", it.rate))
         }
         return JSONObject().put("id", b.id).put("created", b.created).put("state", b.state)
             .put("message", b.message).put("items", items)

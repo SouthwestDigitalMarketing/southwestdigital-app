@@ -174,16 +174,29 @@ def upload_state(folder, name, size):
     return {"received": received, "done": False}
 
 
-def known_copy(inbox, name, size, batch):
-    """A file ripley already received under this name with exactly this size, in another batch."""
-    for receipt_path in sorted(glob.glob(os.path.join(glob.escape(inbox), "*", name + ".receipt.json"))
-                               + glob.glob(os.path.join(glob.escape(inbox), "done", "*", name + ".receipt.json"))):
+def head_hash(path):
+    """SHA-256 of a file's first MiB; with the exact size it identifies a clip whatever it is called."""
+    with open(path, "rb") as handle:
+        return hashlib.sha256(handle.read(1024 * 1024)).hexdigest()
+
+
+def known_copy(inbox, name, size, batch, head=""):
+    """A file ripley already received in another batch: same size and first MiB (head), else same name and size.
+
+    The phone browser and the app can name one clip differently (4090.mp4 against
+    PXL_20261115_192514234.mp4, 2026-11-15), so the app sends head and the name is ignored.
+    """
+    pattern = "*.receipt.json" if head else glob.escape(name) + ".receipt.json"
+    for receipt_path in sorted(glob.glob(os.path.join(glob.escape(inbox), "*", pattern))
+                               + glob.glob(os.path.join(glob.escape(inbox), "done", "*", pattern))):
         folder = os.path.dirname(receipt_path)
         if os.path.basename(folder) == batch:
             continue
         receipt = read_json(receipt_path, None) or {}
         media = receipt_path[: -len(".receipt.json")]
         if receipt.get("bytes") == size and os.path.isfile(media) and os.path.getsize(media) == size:
+            if head and head_hash(media) != head:
+                continue
             return media, receipt
     return None
 
@@ -395,7 +408,9 @@ class Handler(BaseHTTPRequestHandler):
                 return
             folder = os.path.join(INBOX, batch)
             state = upload_state(folder, name, size)
-            found = None if state["done"] or size <= 0 else known_copy(INBOX, name, size, batch)
+            head = query.get("head", [""])[0]
+            head = head if re.fullmatch(r"[0-9a-f]{64}", head) else ""
+            found = None if state["done"] or size <= 0 else known_copy(INBOX, name, size, batch, head)
             if found:
                 try:
                     expected = int(query.get("count", ["1"])[0])
@@ -739,6 +754,15 @@ def self_test():
         raise SystemExit("bad app link was accepted")
     except urllib.error.HTTPError as error:
         assert error.code == 403, error.code
+    # The app sends the first MiB's hash, so a renamed copy of a received clip is still reused.
+    renamed = "http://%s:%d/upload-status?sexp=%d&ssig=%s&size=%d&name=PXL_renamed.mp4&batch=b7&count=1&head=%s" % (
+        host, port, sexp, ssig, len(big), hashlib.sha256(big).hexdigest())
+    with urllib.request.urlopen(renamed) as response:
+        assert json.loads(response.read().decode()) == {"received": len(big), "done": True, "reused": True}
+    wrong = "http://%s:%d/upload-status?sexp=%d&ssig=%s&size=%d&name=PXL_renamed.mp4&batch=b8&count=1&head=%s" % (
+        host, port, sexp, ssig, len(big), "0" * 64)
+    with urllib.request.urlopen(wrong) as response:
+        assert json.loads(response.read().decode()) == {"received": 0, "done": False}
     # A 4.97 GB phone video (2026-11-13) was refused by the old 3 GB cap.
     base = "http://%s:%d/upload?sexp=%d&ssig=%s&size=%d&name=huge.mp4&batch=b3&count=1" % (host, port, sexp, ssig, 4_969_898_905)
     assert piece(0, big) == (200, {"received": len(big), "done": False})

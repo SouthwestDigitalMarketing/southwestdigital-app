@@ -23,6 +23,7 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import java.io.FileInputStream
 import java.io.IOException
+import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
 /** Sends one batch to ripley in 8 MiB pieces, in the background, picking up where it stopped. */
@@ -60,7 +61,7 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
     }
 
     private suspend fun send(item: Item, count: Int) {
-        val start = Ripley.status(id, item.name, item.size, count)
+        val start = Ripley.status(id, item.name, item.size, count, head(item))
         if (start.optBoolean("done")) {
             mark(item) { it.state = if (start.optBoolean("reused")) "reused" else "arrived"; it.sent = item.size }
             return
@@ -82,14 +83,34 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                         got += n
                     }
                     if (got != want) throw Refused("The file changed size on the phone.")
+                    val began = System.nanoTime()
                     val reply = Ripley.piece(id, item.name, item.size, count, received, buffer, got)
+                    val seconds = (System.nanoTime() - began) / 1e9
                     received = if (reply.optBoolean("done")) item.size else reply.optLong("received", received)
-                    mark(item) { it.sent = received }
+                    // A smoothed speed, so the time left does not jump with every piece.
+                    val now = if (seconds > 0) got / seconds else 0.0
+                    mark(item) { it.sent = received; it.rate = if (it.rate > 0) it.rate * 0.7 + now * 0.3 else now }
                     setForeground(foregroundInfo(Store.get(applicationContext, id) ?: return))
                 }
             }
         }
         mark(item) { it.state = "arrived"; it.sent = item.size }
+    }
+
+    /** SHA-256 of the first MiB: with the size, enough for ripley to spot a file it already has. */
+    private fun head(item: Item): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        applicationContext.contentResolver.openInputStream(Uri.parse(item.uri)).use { input ->
+            val buffer = ByteArray(1024 * 1024)
+            var got = 0
+            while (got < buffer.size) {
+                val n = input!!.read(buffer, got, buffer.size - got)
+                if (n < 0) break
+                got += n
+            }
+            digest.update(buffer, 0, got)
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     private fun mark(item: Item, change: (Item) -> Unit) {
