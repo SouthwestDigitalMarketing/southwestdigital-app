@@ -252,11 +252,14 @@ b{display:block}.ok{color:#15803d}.bad{color:#be123c}small{display:block;color:#
 </style></head><body>
 <label for=f>Choose videos and pictures</label>
 <p style="margin-top:12px">Pick everything for one video at once. Keep this screen open while it sends.</p>
+<p><a id=getapp href="#">Get the phone app</a> (keeps sending through calls and other apps)</p>
 <input id=f type=file accept="video/*,image/*" multiple>
 <p id=msg class=bad></p>
 <ul id=queue></ul>
 <script>
 const q=new URLSearchParams(location.search);
+// Same signed link as this page, so the download needs no extra sign-in.
+document.getElementById('getapp').href='/app.apk?'+new URLSearchParams({exp:q.get('exp'),sig:q.get('sig')});
 const f=document.getElementById('f'),queueEl=document.getElementById('queue'),msg=document.getElementById('msg');
 let chain=Promise.resolve();
 const CHUNK=8*1024*1024;
@@ -646,7 +649,8 @@ def self_test():
     ssig = sign_session(secret, sexp)
     page = "http://%s:%d/send?exp=%d&sig=%s" % (host, port, sexp, ssig)
     with urllib.request.urlopen(page) as response:
-        assert b"Send to ripley" in response.read()
+        sent = response.read()
+        assert b"Send to ripley" in sent and b"Get the phone app" in sent
     try:
         urllib.request.urlopen(page + "00")
         raise SystemExit("bad send link was accepted")
