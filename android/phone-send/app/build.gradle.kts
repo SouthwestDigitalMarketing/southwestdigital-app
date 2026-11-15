@@ -20,8 +20,8 @@ android {
         applicationId = "com.southwestdigital.send"
         minSdk = 29
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "2.0"
         buildConfigField("String", "RIPLEY_URL", "\"${ripley.getProperty("url", "")}\"")
         buildConfigField("String", "SEND_EXP", "\"${ripley.getProperty("sexp", "")}\"")
         buildConfigField("String", "SEND_SIG", "\"${ripley.getProperty("ssig", "")}\"")
@@ -55,4 +55,6 @@ android {
 dependencies {
     implementation("androidx.work:work-runtime-ktx:2.9.1")
     implementation("androidx.core:core-ktx:1.13.1")
+    // Opens SWapp itself full screen through Chrome (a Trusted Web Activity), so Google sign-in works.
+    implementation("com.google.androidbrowserhelper:androidbrowserhelper:2.5.0")
 }

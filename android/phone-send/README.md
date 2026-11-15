@@ -1,6 +1,14 @@
-# Send to ripley (Android)
+# SWapp (Android)
 
-A small Android app that sends picked videos and pictures to the phone receiver
+The SWapp Android app. Opening it shows SWapp itself (`https://app.bookkeepingconroe.com/`) full
+screen through Chrome, a Trusted Web Activity, so Google sign-in works and website changes need no
+reinstall. `public/.well-known/assetlinks.json` proves the app belongs to the site (package
+`com.southwestdigital.send`, signing key SHA-256 `2A:7F:55:...:54:35`); without it Chrome shows an
+address bar. SWapp's YouTube > New video > My phone opens the built-in uploader
+(`intent://pick#Intent;scheme=swappsend;...` with a fallback to `/phone` when the app is missing).
+Long-press the icon for a New video shortcut.
+
+The uploader ("Send to ripley" until 2026-11-15) sends picked videos and pictures to the phone receiver
 on ripley (`scripts/phone_intake.py`), in the background. It replaces keeping the
 `/send` web page open: phone browsers stop uploads when the screen changes apps,
 and the ripley page is plain http, so background web APIs are not available.
