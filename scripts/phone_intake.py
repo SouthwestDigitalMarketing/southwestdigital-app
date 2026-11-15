@@ -239,7 +239,10 @@ SEND_PAGE = """<!doctype html><html lang=en><head><meta charset=utf-8>
 <title>Send to ripley</title><style>
 body{font:17px/1.45 system-ui,sans-serif;margin:0;padding:24px;background:#f8fafc;color:#0f172a}
 h1{font-size:24px;margin:0 0 8px}h2{font-size:20px;margin:32px 0 8px}p{color:#475569;margin:0 0 20px}
-label{display:flex;align-items:center;justify-content:center;min-height:45vh;background:#0f172a;color:#fff;border-radius:24px;padding:16px;text-align:center;font-size:24px;font-weight:600}
+label{display:inline-block;background:#0f172a;color:#fff;border-radius:999px;padding:14px 24px;font-weight:600}
+ol{list-style:none;padding:0;margin:10px 0 0}ol li{border:0;padding:3px 0 3px 28px;margin:0;position:relative;background:none;color:#94a3b8}
+ol li:before{position:absolute;left:4px;content:"○"}ol li.done{color:#475569}ol li.done:before{content:"✓";color:#15803d}
+ol li.now{color:#0f172a;font-weight:600}ol li.now:before{content:"●"}ol li.stopped{color:#be123c;font-weight:600}ol li.stopped:before{content:"✕"}ol small,ol .meter span{font-weight:400}
 input{display:none}a{display:inline-block;margin-top:6px;color:#0f172a;font-weight:600}ul{list-style:none;padding:0;margin:12px 0 0}
 li{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin-bottom:10px;word-break:break-word}
 b{display:block}.ok{color:#15803d}.bad{color:#be123c}small{display:block;color:#64748b}
@@ -286,6 +289,17 @@ async function send(file,batch,count){
 const when=t=>t?new Date(t*1000).toLocaleString([], {weekday:'short',hour:'numeric',minute:'2-digit'}):'';
 const again=v=>v.reused?' '+v.reused+(v.reused===1?' file was':' files were')+' already on ripley, so not sent again.':'';
 const mb=n=>(n/1e6).toLocaleString(undefined,{maximumFractionDigits:0})+' MB';
+// Every autopilot step, ticked off as it goes; the render bars sit under the render step.
+function steps(v){const ol=document.createElement('ol');
+ for(const s of v.steps){const li=document.createElement('li');li.className=s.state;li.textContent=s.label;
+  if(s.state==='stopped'&&s.message){const m=document.createElement('small');m.textContent=s.message;li.append(m);}
+  const r=v.render||{};
+  if(s.state==='now'&&r.total!==undefined){
+   if(r.piece)li.append(meter('Piece '+r.piece+' of '+r.pieces,r.pieceShare));
+   li.append(meter('Whole video',r.total));
+   if(r.minutesLeft){const m=document.createElement('small');m.textContent='About '+r.minutesLeft+' min left';li.append(m);}}
+  ol.append(li);}
+ return ol;}
 // One labelled bar with its percent at the end, for the render.
 function meter(label,share){const pct=Math.floor(100*Math.min(1,Math.max(0,share||0)));
  const row=document.createElement('div');row.className='meter';const l=document.createElement('span');l.textContent=label;
@@ -303,13 +317,9 @@ function refresh(){fetch('/status.json?'+new URLSearchParams({exp:q.get('exp'),s
 .then(r=>r.json()).then(d=>{queueEl.innerHTML='';
  for(const v of d.videos.filter(v=>!v.url)){const li=document.createElement('li');const [head,sub,pct]=line(v);
   const t=document.createElement('b');t.textContent=v.project||('New video, sent '+when(v.created));li.append(t);
+  if(v.steps&&v.steps.length){li.append(steps(v));queueEl.append(li);continue;}
   const h=document.createElement('span');h.textContent=head;h.className=v.state==='error'||v.state==='incomplete'||v.state==='paused'?'bad':(v.project?'ok':'');li.append(h);
   if(sub){const s=document.createElement('small');s.textContent=sub;li.append(s);}
-  const r=v.render||{};
-  if(r.total!==undefined){
-   if(r.piece)li.append(meter('Piece '+r.piece+' of '+r.pieces,r.pieceShare));
-   li.append(meter('Whole video',r.total));
-   if(r.minutesLeft){const s=document.createElement('small');s.textContent='About '+r.minutesLeft+' min left';li.append(s);}}
   if(pct!==undefined){const bar=document.createElement('div');bar.className='bar';const i=document.createElement('i');i.style.width=pct+'%';bar.append(i);li.append(bar);}
   queueEl.append(li);}}).catch(()=>{});}
 refresh();setInterval(refresh,4000);
