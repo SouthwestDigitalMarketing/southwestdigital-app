@@ -189,19 +189,17 @@ SEND_PAGE = """<!doctype html><html lang=en><head><meta charset=utf-8>
 <title>Send to ripley</title><style>
 body{font:17px/1.45 system-ui,sans-serif;margin:0;padding:24px;background:#f8fafc;color:#0f172a}
 h1{font-size:24px;margin:0 0 8px}h2{font-size:20px;margin:32px 0 8px}p{color:#475569;margin:0 0 20px}
-label{display:block;background:#0f172a;color:#fff;border-radius:999px;padding:16px;text-align:center;font-weight:600}
+label{display:flex;align-items:center;justify-content:center;min-height:45vh;background:#0f172a;color:#fff;border-radius:24px;padding:16px;text-align:center;font-size:24px;font-weight:600}
 input{display:none}a{display:inline-block;margin-top:6px;color:#0f172a;font-weight:600}ul{list-style:none;padding:0;margin:12px 0 0}
 li{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin-bottom:10px;word-break:break-word}
 b{display:block}.ok{color:#15803d}.bad{color:#be123c}small{display:block;color:#64748b}
 .bar{height:6px;background:#e2e8f0;border-radius:3px;margin-top:8px}.bar i{display:block;height:6px;background:#0f172a;border-radius:3px}
 </style></head><body>
-<h1>Send to ripley</h1>
-<p>Each time you choose files, that becomes one new video. Pick everything for it together: your talking clips, your b-roll and any photos. Keep this screen open while it sends.</p>
 <label for=f>Choose videos and pictures</label>
+<p style="margin-top:12px">Pick everything for one video at once. Keep this screen open while it sends.</p>
 <input id=f type=file accept="video/*,image/*" multiple>
 <p id=msg class=bad></p>
-<h2>Your videos</h2>
-<ul id=queue><li>Loading...</li></ul>
+<ul id=queue></ul>
 <script>
 const q=new URLSearchParams(location.search);
 const f=document.getElementById('f'),queueEl=document.getElementById('queue'),msg=document.getElementById('msg');
@@ -245,12 +243,10 @@ function line(v){
  return [v.stage||'Episode ready',''];}
 function refresh(){fetch('/status.json?'+new URLSearchParams({exp:q.get('exp'),sig:q.get('sig')}),{cache:'no-store'})
 .then(r=>r.json()).then(d=>{queueEl.innerHTML='';
- if(!d.videos.length){queueEl.innerHTML='<li>Nothing yet.</li>';return;}
- for(const v of d.videos){const li=document.createElement('li');const [head,sub,pct]=line(v);
+ for(const v of d.videos.filter(v=>!v.url)){const li=document.createElement('li');const [head,sub,pct]=line(v);
   const t=document.createElement('b');t.textContent=v.project||('New video, sent '+when(v.created));li.append(t);
   const h=document.createElement('span');h.textContent=head;h.className=v.state==='error'||v.state==='incomplete'||v.state==='paused'?'bad':(v.project?'ok':'');li.append(h);
   if(sub){const s=document.createElement('small');s.textContent=sub;li.append(s);}
-  if(v.url&&/^https:\/\//.test(v.url)){const a=document.createElement('a');a.href=v.url;a.textContent='Watch on YouTube';a.target='_blank';a.rel='noopener';li.append(a);}
   if(pct!==undefined){const bar=document.createElement('div');bar.className='bar';const i=document.createElement('i');i.style.width=pct+'%';bar.append(i);li.append(bar);}
   queueEl.append(li);}}).catch(()=>{});}
 refresh();setInterval(refresh,4000);
