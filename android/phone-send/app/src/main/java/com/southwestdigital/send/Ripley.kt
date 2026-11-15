@@ -63,6 +63,32 @@ object Ripley {
         return json.optJSONArray("videos") ?: org.json.JSONArray()
     }
 
+    /** The newest app ripley has: {"versionCode": n, "versionName": "x.y"}; empty if it cannot say. */
+    fun latestApp(): JSONObject {
+        val conn = URL(BuildConfig.RIPLEY_URL.trimEnd('/') + "/app/version").openConnection() as HttpURLConnection
+        conn.connectTimeout = 4000
+        conn.readTimeout = 4000
+        return try {
+            JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    /** Download the newest app into [target]. */
+    fun downloadApp(target: java.io.File) {
+        val query = "exp=" + URLEncoder.encode(BuildConfig.SEND_EXP, "UTF-8") + "&sig=" + URLEncoder.encode(BuildConfig.SEND_SIG, "UTF-8")
+        val conn = URL(BuildConfig.RIPLEY_URL.trimEnd('/') + "/app.apk?" + query).openConnection() as HttpURLConnection
+        conn.connectTimeout = 20_000
+        conn.readTimeout = 120_000
+        try {
+            if (conn.responseCode != 200) throw IOException("ripley would not send the app (" + conn.responseCode + ")")
+            conn.inputStream.use { input -> target.outputStream().use { input.copyTo(it) } }
+        } finally {
+            conn.disconnect()
+        }
+    }
+
     /** Throw away a half-sent batch on ripley. */
     fun cancel(batch: String) {
         call("POST", url("/cancel", mapOf("batch" to batch)), ByteArray(0), 0)
