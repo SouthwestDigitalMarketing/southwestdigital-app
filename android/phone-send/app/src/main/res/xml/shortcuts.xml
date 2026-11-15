@@ -4,7 +4,7 @@
     <shortcut
         android:shortcutId="new_video"
         android:enabled="true"
-        android:icon="@drawable/ic_send"
+        android:icon="@mipmap/ic_launcher"
         android:shortcutShortLabel="@string/new_video">
         <intent android:action="android.intent.action.VIEW" android:data="swappsend://pick"
             android:targetPackage="com.southwestdigital.send"
