@@ -35,6 +35,10 @@ class SplashActivity : Activity() {
             setBackgroundColor(Color.parseColor("#0F172A"))
             setPadding((32 * dp).toInt(), 0, (32 * dp).toInt(), 0)
         }
+        root.addView(android.widget.ImageView(this).apply {
+            setImageResource(R.drawable.swdm_logo)
+            adjustViewBounds = true
+        }, LinearLayout.LayoutParams((96 * dp).toInt(), (96 * dp).toInt()).apply { bottomMargin = (20 * dp).toInt() })
         root.addView(TextView(this).apply {
             text = "SWapp"
             textSize = 40f
