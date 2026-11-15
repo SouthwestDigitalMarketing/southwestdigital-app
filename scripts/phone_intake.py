@@ -244,6 +244,8 @@ input{display:none}a{display:inline-block;margin-top:6px;color:#0f172a;font-weig
 li{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin-bottom:10px;word-break:break-word}
 b{display:block}.ok{color:#15803d}.bad{color:#be123c}small{display:block;color:#64748b}
 .bar{height:6px;background:#e2e8f0;border-radius:3px;margin-top:8px}.bar i{display:block;height:6px;background:#0f172a;border-radius:3px}
+.meter{display:flex;align-items:center;gap:10px;margin-top:10px}.meter span{flex:0 0 7.5em;font-size:14px;color:#475569}
+.meter .bar{flex:1;height:10px;margin:0;border-radius:5px}.meter .bar i{height:10px;border-radius:5px}.meter b{flex:0 0 3.2em;text-align:right;font-size:15px}
 </style></head><body>
 <label for=f>Choose videos and pictures</label>
 <p style="margin-top:12px">Pick everything for one video at once. Keep this screen open while it sends.</p>
@@ -284,6 +286,11 @@ async function send(file,batch,count){
 const when=t=>t?new Date(t*1000).toLocaleString([], {weekday:'short',hour:'numeric',minute:'2-digit'}):'';
 const again=v=>v.reused?' '+v.reused+(v.reused===1?' file was':' files were')+' already on ripley, so not sent again.':'';
 const mb=n=>(n/1e6).toLocaleString(undefined,{maximumFractionDigits:0})+' MB';
+// One labelled bar with its percent at the end, for the render.
+function meter(label,share){const pct=Math.floor(100*Math.min(1,Math.max(0,share||0)));
+ const row=document.createElement('div');row.className='meter';const l=document.createElement('span');l.textContent=label;
+ const bar=document.createElement('div');bar.className='bar';const i=document.createElement('i');i.style.width=pct+'%';bar.append(i);
+ const n=document.createElement('b');n.textContent=pct+'%';row.append(l,bar,n);return row;}
 function line(v){
  if(v.state==='sending'){const pct=v.bytes?Math.floor(100*v.done/v.bytes):0;
   return ['Sending '+Math.min(v.received+1,v.expected)+' of '+v.expected+' — '+pct+'%',mb(v.done)+' of '+mb(v.bytes)+again(v),pct];}
@@ -298,6 +305,11 @@ function refresh(){fetch('/status.json?'+new URLSearchParams({exp:q.get('exp'),s
   const t=document.createElement('b');t.textContent=v.project||('New video, sent '+when(v.created));li.append(t);
   const h=document.createElement('span');h.textContent=head;h.className=v.state==='error'||v.state==='incomplete'||v.state==='paused'?'bad':(v.project?'ok':'');li.append(h);
   if(sub){const s=document.createElement('small');s.textContent=sub;li.append(s);}
+  const r=v.render||{};
+  if(r.total!==undefined){
+   if(r.piece)li.append(meter('Piece '+r.piece+' of '+r.pieces,r.pieceShare));
+   li.append(meter('Whole video',r.total));
+   if(r.minutesLeft){const s=document.createElement('small');s.textContent='About '+r.minutesLeft+' min left';li.append(s);}}
   if(pct!==undefined){const bar=document.createElement('div');bar.className='bar';const i=document.createElement('i');i.style.width=pct+'%';bar.append(i);li.append(bar);}
   queueEl.append(li);}}).catch(()=>{});}
 refresh();setInterval(refresh,4000);
