@@ -13,8 +13,8 @@ data class Item(
     var state: String = "waiting", // waiting, sending, arrived, reused, failed
     var sent: Long = 0,
     var error: String = "",
-    val duration: Long = -1, // video length in ms; -1 for pictures or unknown
-    val taken: Long = 0, // when it was recorded, epoch ms; 0 if unknown
+    var duration: Long = -1, // video length in ms; -1 for pictures or unknown
+    var taken: Long = 0, // when it was recorded, epoch ms; 0 if unknown
     var rate: Double = 0.0, // recent send speed, bytes per second
 )
 

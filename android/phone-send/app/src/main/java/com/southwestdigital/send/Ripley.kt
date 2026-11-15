@@ -56,6 +56,13 @@ object Ripley {
         return call("PUT", url("/upload", params), data, length).second
     }
 
+    /** What ripley is doing with each recent video: its steps, the render bars, and the link once published. */
+    fun videos(): org.json.JSONArray {
+        val query = "exp=" + URLEncoder.encode(BuildConfig.SEND_EXP, "UTF-8") + "&sig=" + URLEncoder.encode(BuildConfig.SEND_SIG, "UTF-8")
+        val (_, json) = call("GET", URL(BuildConfig.RIPLEY_URL.trimEnd('/') + "/status.json?" + query))
+        return json.optJSONArray("videos") ?: org.json.JSONArray()
+    }
+
     /** Throw away a half-sent batch on ripley. */
     fun cancel(batch: String) {
         call("POST", url("/cancel", mapOf("batch" to batch)), ByteArray(0), 0)

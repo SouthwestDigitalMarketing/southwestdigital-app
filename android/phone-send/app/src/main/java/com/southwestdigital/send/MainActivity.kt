@@ -27,15 +27,20 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import kotlin.concurrent.thread
+import org.json.JSONObject
 
 /** One big button to pick, and a list of what is still on its way to ripley. */
 class MainActivity : Activity() {
     private val pick = 1
     private val ui = Handler(Looper.getMainLooper())
     private lateinit var list: LinearLayout
+    // What ripley reports for each sent video (steps, render bars, YouTube link), by batch id.
+    @Volatile private var episodes: Map<String, JSONObject> = emptyMap()
+    private var polls = 0
     private val tick = object : Runnable {
         override fun run() {
             render()
+            if (polls++ % 4 == 0) thread { refreshEpisodes() }
             ui.postDelayed(this, 1000)
         }
     }
@@ -54,14 +59,14 @@ class MainActivity : Activity() {
             setBackgroundColor(Color.parseColor("#F8FAFC"))
         }
         val choose = Button(this).apply {
-            text = "Choose videos and pictures"
+            text = "+  Choose videos and pictures"
             textSize = 17f
             isAllCaps = false
             setTextColor(Color.WHITE)
-            // An ordinary button, like the send page's (Tom, 2026-11-15).
+            // A full-width button with a plus (Tom, 2026-11-15).
             background = GradientDrawable().apply { setColor(ink); cornerRadius = 999f }
             setPadding((24 * dp).toInt(), (14 * dp).toInt(), (24 * dp).toInt(), (14 * dp).toInt())
-            layoutParams = LinearLayout.LayoutParams(-2, -2)
+            layoutParams = LinearLayout.LayoutParams(-1, -2)
             setOnClickListener { openPicker() }
         }
         root.addView(choose)
@@ -92,6 +97,27 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         ui.post(tick)
+        thread { fillMissingDetails() }
+    }
+
+    /** Files picked before the app read lengths and dates get them now. */
+    private fun fillMissingDetails() {
+        for (b in Store.all(this)) for (item in b.items) {
+            if (item.duration >= 0 || item.taken > 0) continue
+            val found = try { describe(Uri.parse(item.uri)) } catch (e: Exception) { null } ?: continue
+            Store.update(this, b.id) { batch ->
+                batch.items.firstOrNull { it.uri == item.uri }?.let { it.duration = found.duration; it.taken = found.taken }
+            }
+        }
+    }
+
+    private fun refreshEpisodes() {
+        try {
+            val videos = Ripley.videos()
+            episodes = (0 until videos.length()).map { videos.getJSONObject(it) }.associateBy { it.optString("batch") }
+        } catch (e: Exception) {
+            // Out of reach for a moment; keep showing the last report.
+        }
     }
 
     override fun onPause() {
@@ -192,13 +218,15 @@ class MainActivity : Activity() {
                 else -> "Sending — $done of ${b.items.size} arrived"
             }
             card.addView(text(head, if (b.state == "failed") bad else ink, 17f, bold = true))
-            if (b.message.isNotEmpty()) card.addView(text(b.message, if (b.state == "failed") bad else muted, 14f))
+            val published = episodes[b.id]?.optString("url")?.startsWith("https://") == true
+            if (b.message.isNotEmpty() && !published) card.addView(text(b.message, if (b.state == "failed") bad else muted, 14f))
             if (b.state != "sent") {
                 // The whole video first, then the connection it is going over, then each file.
                 val overall = if (b.state == "paused") "paused" else batchLeft(b)
                 card.addView(barRow(pct, "$pct%  ·  $overall", ink, dp))
                 card.addView(text(connection(b), muted, 13f).apply { setPadding(0, (4 * dp).toInt(), 0, 0) })
             }
+            if (b.state == "sent") episodes[b.id]?.let { card.addView(episodeRows(it, dp)) }
             for (item in b.items) card.addView(fileRows(item, b.state, dp))
             if (b.state != "sent") {
                 val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, (8 * dp).toInt(), 0, 0) }
@@ -217,6 +245,49 @@ class MainActivity : Activity() {
             }
             list.addView(card)
         }
+    }
+
+    /** What ripley is doing with the video: every autopilot step, the render bars, then the YouTube link. */
+    private fun episodeRows(v: JSONObject, dp: Float): View {
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, (8 * dp).toInt(), 0, (4 * dp).toInt()) }
+        v.optString("project").takeIf { it.isNotEmpty() }?.let { box.addView(text(it, ink, 15f, bold = true)) }
+        val url = v.optString("url")
+        if (url.startsWith("https://")) {
+            box.addView(text("Published on YouTube", good, 15f, bold = true))
+            box.addView(button("Watch on YouTube") { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }.apply {
+                layoutParams = LinearLayout.LayoutParams(-2, -2).apply { topMargin = (6 * dp).toInt() }
+            })
+            return box
+        }
+        val steps = v.optJSONArray("steps")
+        if (steps == null || steps.length() == 0) {
+            box.addView(text(v.optString("stage", "Making the episode"), muted, 14f))
+            return box
+        }
+        val render = v.optJSONObject("render")
+        for (i in 0 until steps.length()) {
+            val step = steps.getJSONObject(i)
+            val (mark, color, bold) = when (step.optString("state")) {
+                "done" -> Triple("✓", good, false)
+                "now" -> Triple("●", ink, true)
+                "stopped" -> Triple("✕", bad, true)
+                else -> Triple("○", muted, false)
+            }
+            box.addView(text("$mark  " + step.optString("label"), if (mark == "✓") muted else color, 14f, bold = bold))
+            if (step.optString("state") == "stopped" && step.optString("message").isNotEmpty()) {
+                box.addView(text(step.optString("message"), bad, 13f))
+            }
+            if (step.optString("state") == "now" && render != null && render.has("total")) {
+                if (render.has("piece")) {
+                    val share = (100 * render.optDouble("pieceShare")).toInt()
+                    box.addView(barRow(share, "Piece ${render.optInt("piece")} of ${render.optInt("pieces")}  ·  $share%", ink, dp))
+                }
+                val total = (100 * render.optDouble("total")).toInt()
+                val left = if (render.has("minutesLeft")) "  ·  about ${render.optInt("minutesLeft")} min left" else ""
+                box.addView(barRow(total, "Whole video  ·  $total%$left", ink, dp))
+            }
+        }
+        return box
     }
 
     /** Three rows per file: its name; size, length and recorded date; a bar with percent and time left. */
