@@ -428,6 +428,11 @@ class Handler(BaseHTTPRequestHandler):
                 state = reuse_copy(folder, name, size, expected, found)
             self._json(200, state)
             return
+        if path == "/app/version":
+            # What the latest built app is, so the app's splash screen can say up to date or offer
+            # the update. Written next to the APK when it is staged (android/phone-send/README.md).
+            self._json(200, read_json(os.path.splitext(APK)[0] + ".json", {}) or {})
+            return
         if path in ("/app.apk", "/app"):
             # The phone app download: behind the send page's signed link, or the short /app?k= key.
             query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
@@ -448,7 +453,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self.send_response(200)
             self.send_header("Content-Type", "application/vnd.android.package-archive")
-            self.send_header("Content-Disposition", 'attachment; filename="send-to-ripley.apk"')
+            self.send_header("Content-Disposition", 'attachment; filename="swapp.apk"')
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
             self.wfile.write(data)
@@ -773,6 +778,9 @@ def self_test():
         host, port, sexp, ssig, len(big), "0" * 64)
     with urllib.request.urlopen(wrong) as response:
         assert json.loads(response.read().decode()) == {"received": 0, "done": False}
+    write_json(os.path.splitext(APK)[0] + ".json", {"versionCode": 3, "versionName": "3.0"})
+    with urllib.request.urlopen("http://%s:%d/app/version" % (host, port)) as response:
+        assert json.loads(response.read().decode()) == {"versionCode": 3, "versionName": "3.0"}
     # The short app link works with its key and only with it.
     with urllib.request.urlopen("http://%s:%d/app?k=%s" % (host, port, app_key(secret))) as response:
         assert response.read() == b"PK-app"

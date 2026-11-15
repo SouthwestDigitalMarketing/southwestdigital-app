@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:label="SWapp"
@@ -15,7 +16,20 @@
         android:networkSecurityConfig="@xml/network_security"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
-        <!-- The app opens on SWapp itself (app.bookkeepingconroe.com) full screen. -->
+        <!-- First screen: name, version, update check; then SWapp. -->
+        <activity
+            android:name=".SplashActivity"
+            android:exported="true"
+            android:label="SWapp"
+            android:theme="@android:style/Theme.Material.NoActionBar">
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- SWapp itself (app.bookkeepingconroe.com) full screen. -->
         <activity
             android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"
             android:exported="true"
@@ -24,11 +38,6 @@
                 android:value="https://app.bookkeepingconroe.com/" />
             <meta-data android:name="android.support.customtabs.trusted.STATUS_BAR_COLOR"
                 android:resource="@color/navy" />
-            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
             <!-- Links to SWapp open the app instead of a browser tab. -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
@@ -54,6 +63,14 @@
         </activity>
 
         <receiver android:name=".ControlReceiver" android:exported="false" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/update_paths" />
+        </provider>
 
         <!-- WorkManager runs the upload as a data-sync foreground service. -->
         <service

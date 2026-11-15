@@ -37,7 +37,14 @@ symlinked here. Rotating `PHONE_INTAKE_SECRET` revokes the app; rebuild after.
 cd android/phone-send
 ANDROID_HOME=~/Android/Sdk ./gradlew assembleRelease
 cp app/build/outputs/apk/release/app-release.apk ~/.local/share/swapp-phone-intake/send-to-ripley.apk
+# What /app/version reports to the app's splash screen ("Update available" when higher than installed):
+~/Android/Sdk/build-tools/35.0.0/aapt2 dump badging app/build/outputs/apk/release/app-release.apk \
+  | python3 -c "import re,sys,json;t=sys.stdin.read();print(json.dumps({'versionCode':int(re.search(r\"versionCode='(\\d+)'\",t).group(1)),'versionName':re.search(r\"versionName='([^']*)'\",t).group(1)}))" \
+  > ~/.local/share/swapp-phone-intake/send-to-ripley.json
 ```
+
+Bump `versionCode` and `versionName` in `app/build.gradle.kts` for every build Tom should install.
+Short download link for Tom: `http://100.98.89.93:8932/app?k=$(phone_intake.py --app-key "$PHONE_INTAKE_SECRET")`.
 
 The receiver serves it at `/app.apk?exp=..&sig=..` (a signed send-page link with
 `/send` replaced by `/app.apk`). Same signing key every build, so updates install
