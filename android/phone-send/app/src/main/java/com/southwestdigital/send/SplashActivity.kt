@@ -116,7 +116,8 @@ class SplashActivity : Activity() {
 
     private fun enter() {
         if (isFinishing) return
-        startActivity(Intent(this, LauncherActivity::class.java))
+        // NEW_TASK matters: without it the launcher restarts itself in the splash's closing task and never opens Chrome.
+        startActivity(Intent(this, LauncherActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         finish()
     }
 
