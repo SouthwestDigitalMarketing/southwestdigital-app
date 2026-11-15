@@ -26,6 +26,7 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import com.google.androidbrowserhelper.trusted.LauncherActivity
 import kotlin.concurrent.thread
 import org.json.JSONObject
 
@@ -55,7 +56,7 @@ class MainActivity : Activity() {
         val dp = resources.displayMetrics.density
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding((20 * dp).toInt(), (48 * dp).toInt(), (20 * dp).toInt(), (24 * dp).toInt())
+            setPadding((20 * dp).toInt(), (16 * dp).toInt(), (20 * dp).toInt(), (24 * dp).toInt())
             setBackgroundColor(Color.parseColor("#F8FAFC"))
         }
         val choose = Button(this).apply {
@@ -75,7 +76,14 @@ class MainActivity : Activity() {
         })
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(list)
-        setContentView(ScrollView(this).apply { addView(root) })
+        // A SWapp header, so the rest of SWapp is one tap away (Tom, 2026-11-15).
+        val page = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.parseColor("#F8FAFC"))
+        }
+        page.addView(header(dp))
+        page.addView(ScrollView(this).apply { addView(root) }, LinearLayout.LayoutParams(-1, 0, 1f))
+        setContentView(page)
         if (Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 2)
         if (BuildConfig.RIPLEY_URL.isEmpty()) choose.isEnabled = false
         handle(intent)
@@ -84,6 +92,39 @@ class MainActivity : Activity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handle(intent)
+    }
+
+    /** Navy bar like SWapp's: back to SWapp on the left, what this screen is in the middle. */
+    private fun header(dp: Float): View {
+        val bar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setBackgroundColor(ink)
+            setPadding((8 * dp).toInt(), (36 * dp).toInt(), (16 * dp).toInt(), (10 * dp).toInt())
+        }
+        bar.addView(Button(this).apply {
+            text = "‹  SWapp"
+            textSize = 17f
+            isAllCaps = false
+            setTextColor(Color.WHITE)
+            background = null
+            setOnClickListener { backToSwapp() }
+        })
+        bar.addView(TextView(this).apply {
+            text = "New video"
+            textSize = 17f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            gravity = Gravity.END
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        return bar
+    }
+
+    /** Into SWapp on its YouTube page, where Create new video and the channel numbers are. */
+    private fun backToSwapp() {
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://app.bookkeepingconroe.com/youtube"))
+            .setClass(this, LauncherActivity::class.java))
+        finish()
     }
 
     /** SWapp's My phone button opens swappsend://pick: go straight to the picker. */
