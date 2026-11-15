@@ -7,11 +7,13 @@ The signature is the password. Bind the tailnet address, not the open internet.
 Files land in ~/swapp-phone-intake unless PHONE_INTAKE_DIR is set.
 """
 
+import glob
 import hashlib
 import hmac
 import json
 import os
 import re
+import shutil
 import sys
 import threading
 import time
@@ -68,7 +70,8 @@ def live_batches(inbox):
         for name, size in sorted(meta.get("files", {}).items()):
             final = os.path.join(folder, name)
             if os.path.exists(final + ".receipt.json"):
-                got, state = size, "received"
+                got = size
+                state = "reused" if (read_json(final + ".receipt.json", None) or {}).get("reusedFrom") else "received"
             elif os.path.exists(final + ".part"):
                 got = min(os.path.getsize(final + ".part"), size)
                 state = "sending" if time.time() - os.path.getmtime(final + ".part") < 90 else "paused"
@@ -77,7 +80,8 @@ def live_batches(inbox):
             files.append({"name": name, "bytes": size, "done": got, "state": state})
             total += size
             done += got
-        received = sum(1 for item in files if item["state"] == "received")
+        received = sum(1 for item in files if item["state"] in ("received", "reused"))
+        reused = sum(1 for item in files if item["state"] == "reused")
         expected = int(meta.get("expected") or len(files))
         if any(item["state"] == "sending" for item in files):
             state = "sending"
@@ -88,7 +92,7 @@ def live_batches(inbox):
         else:
             state = "incomplete"
         out.append({"batch": batch, "created": meta.get("created"), "state": state, "expected": expected,
-                    "received": received, "bytes": total, "done": done, "files": files})
+                    "received": received, "reused": reused, "bytes": total, "done": done, "files": files})
     return out
 
 
@@ -168,6 +172,37 @@ def upload_state(folder, name, size):
     return {"received": received, "done": False}
 
 
+def known_copy(inbox, name, size, batch):
+    """A file ripley already received under this name with exactly this size, in another batch."""
+    for receipt_path in sorted(glob.glob(os.path.join(glob.escape(inbox), "*", name + ".receipt.json"))
+                               + glob.glob(os.path.join(glob.escape(inbox), "done", "*", name + ".receipt.json"))):
+        folder = os.path.dirname(receipt_path)
+        if os.path.basename(folder) == batch:
+            continue
+        receipt = read_json(receipt_path, None) or {}
+        media = receipt_path[: -len(".receipt.json")]
+        if receipt.get("bytes") == size and os.path.isfile(media) and os.path.getsize(media) == size:
+            return media, receipt
+    return None
+
+
+def reuse_copy(folder, name, size, expected, found):
+    """Put the copy ripley already has into this batch instead of sending it again."""
+    media, receipt = found
+    os.makedirs(folder, exist_ok=True)
+    final = os.path.join(folder, name)
+    for leftover in (final + ".part", final):
+        if os.path.exists(leftover):
+            os.remove(leftover)
+    try:
+        os.link(media, final)
+    except OSError:
+        shutil.copy2(media, final)
+    write_json(final + ".receipt.json", {**receipt, "reusedFrom": os.path.relpath(media, INBOX)})
+    note_batch_file(folder, expected, name, size)
+    return {"received": size, "done": True, "reused": True}
+
+
 def resumable_batch(inbox, name, size):
     """A batch still waiting on this same file, so a re-pick carries on."""
     try:
@@ -232,11 +267,12 @@ async function send(file,batch,count){
  }
 }
 const when=t=>t?new Date(t*1000).toLocaleString([], {weekday:'short',hour:'numeric',minute:'2-digit'}):'';
+const again=v=>v.reused?' '+v.reused+(v.reused===1?' file was':' files were')+' already on ripley, so not sent again.':'';
 const mb=n=>(n/1e6).toLocaleString(undefined,{maximumFractionDigits:0})+' MB';
 function line(v){
  if(v.state==='sending'){const pct=v.bytes?Math.floor(100*v.done/v.bytes):0;
-  return ['Sending '+Math.min(v.received+1,v.expected)+' of '+v.expected+' — '+pct+'%',mb(v.done)+' of '+mb(v.bytes),pct];}
- if(v.state==='received')return ['Received. Making the episode...','Up to a minute.'];
+  return ['Sending '+Math.min(v.received+1,v.expected)+' of '+v.expected+' — '+pct+'%',mb(v.done)+' of '+mb(v.bytes)+again(v),pct];}
+ if(v.state==='received')return ['Received. Making the episode...','Up to a minute.'+again(v)];
  if(v.state==='paused'){const pct=v.bytes?Math.floor(100*v.done/v.bytes):0;return ['Paused at '+pct+'%','Keep this page open; it carries on by itself. If you closed it, choose the same video again.',pct];}
  if(v.state==='incomplete')return ['Some files did not arrive','Send them again.'];
  if(v.state==='error')return ['Needs attention',v.message||''];
@@ -317,7 +353,16 @@ class Handler(BaseHTTPRequestHandler):
             if not BATCH.match(batch):
                 self._json(400, {"error": "The batch is not valid."})
                 return
-            self._json(200, upload_state(os.path.join(INBOX, batch), name, size))
+            folder = os.path.join(INBOX, batch)
+            state = upload_state(folder, name, size)
+            found = None if state["done"] or size <= 0 else known_copy(INBOX, name, size, batch)
+            if found:
+                try:
+                    expected = int(query.get("count", ["1"])[0])
+                except ValueError:
+                    expected = 1
+                state = reuse_copy(folder, name, size, expected, found)
+            self._json(200, state)
             return
         if path == "/send":
             query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
@@ -567,6 +612,21 @@ def self_test():
         assert json.loads(response.read().decode())["batch"] == "b2"
     code, state = piece(12, big[12:])
     assert code == 200 and state["done"] and state["receipt"]["sha256"] == hashlib.sha256(big).hexdigest(), state
+    # The same video picked again for a new video is not sent twice: ripley reuses its copy.
+    os.makedirs(os.path.join(INBOX, "done"), exist_ok=True)
+    os.replace(os.path.join(INBOX, "b2"), os.path.join(INBOX, "done", "b2"))
+    again_url = "http://%s:%d/upload-status?sexp=%d&ssig=%s&size=%d&name=big.mp4&batch=b4&count=1" % (host, port, sexp, ssig, len(big))
+    with urllib.request.urlopen(again_url) as response:
+        assert json.loads(response.read().decode()) == {"received": len(big), "done": True, "reused": True}
+    reused = os.path.join(INBOX, "b4", "big.mp4")
+    assert open(reused, "rb").read() == big
+    assert read_json(reused + ".receipt.json", {})["sha256"] == hashlib.sha256(big).hexdigest()
+    with urllib.request.urlopen(status_url) as response:
+        row = [v for v in json.loads(response.read().decode())["videos"] if v["batch"] == "b4"][0]
+    assert row["state"] == "received" and row["reused"] == 1, row
+    other_size = "http://%s:%d/upload-status?sexp=%d&ssig=%s&size=%d&name=big.mp4&batch=b5&count=1" % (host, port, sexp, ssig, len(big) + 1)
+    with urllib.request.urlopen(other_size) as response:
+        assert json.loads(response.read().decode()) == {"received": 0, "done": False}
     # A 4.97 GB phone video (2026-11-13) was refused by the old 3 GB cap.
     base = "http://%s:%d/upload?sexp=%d&ssig=%s&size=%d&name=huge.mp4&batch=b3&count=1" % (host, port, sexp, ssig, 4_969_898_905)
     assert piece(0, big) == (200, {"received": len(big), "done": False})
