@@ -21,6 +21,8 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 MAX_BYTES = 60_000_000_000
+# The Send to ripley phone app, built on ripley (android/phone-send/README.md).
+APK = os.path.expanduser(os.environ.get("PHONE_INTAKE_APK", "~/.local/share/swapp-phone-intake/send-to-ripley.apk"))
 SAFE = re.compile(r"[^A-Za-z0-9._-]+")
 INBOX = os.path.expanduser(os.environ.get("PHONE_INTAKE_DIR", "~/swapp-phone-intake"))
 # One pick on the send page is one batch, and one batch becomes one episode.
@@ -203,6 +205,19 @@ def reuse_copy(folder, name, size, expected, found):
     return {"received": size, "done": True, "reused": True}
 
 
+def cancel_batch(inbox, batch):
+    """Throw away a batch the phone stopped sending; one that fully arrived is already being made."""
+    folder = os.path.join(inbox, batch)
+    if not os.path.isdir(folder):
+        return 200, {"cancelled": False}
+    row = next((item for item in live_batches(inbox) if item["batch"] == batch), None)
+    if row and row["state"] == "received":
+        return 409, {"error": "Everything arrived; ripley is already making this video."}
+    with BATCH_LOCK:
+        shutil.rmtree(folder, ignore_errors=True)
+    return 200, {"cancelled": True}
+
+
 def resumable_batch(inbox, name, size):
     """A batch still waiting on this same file, so a re-pick carries on."""
     try:
@@ -364,6 +379,30 @@ class Handler(BaseHTTPRequestHandler):
                 state = reuse_copy(folder, name, size, expected, found)
             self._json(200, state)
             return
+        if path == "/app.apk":
+            # The phone app download, behind the same signed link as the send page.
+            query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            secret = os.environ.get("PHONE_INTAKE_SECRET", "")
+            try:
+                exp = int(query.get("exp", ["0"])[0])
+            except ValueError:
+                exp = 0
+            if not secret or exp < int(time.time()) or not session_ok(secret, exp, query.get("sig", [""])[0]):
+                self._send(403, "This link has expired.", "text/plain; charset=utf-8")
+                return
+            try:
+                with open(APK, "rb") as handle:
+                    data = handle.read()
+            except OSError:
+                self._send(404, "The phone app has not been built yet.", "text/plain; charset=utf-8")
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "application/vnd.android.package-archive")
+            self.send_header("Content-Disposition", 'attachment; filename="send-to-ripley.apk"')
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
         if path == "/send":
             query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             secret = os.environ.get("PHONE_INTAKE_SECRET", "")
@@ -377,6 +416,26 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, SEND_PAGE, "text/html; charset=utf-8")
             return
         self._json(404, {"error": "Not found."})
+
+    def do_POST(self):
+        parsed = urllib.parse.urlparse(self.path)
+        if parsed.path != "/cancel":
+            self._json(404, {"error": "Not found."})
+            return
+        query = urllib.parse.parse_qs(parsed.query)
+        secret = os.environ.get("PHONE_INTAKE_SECRET", "")
+        try:
+            sexp = int(query.get("sexp", ["0"])[0])
+        except ValueError:
+            sexp = 0
+        if not secret or sexp < int(time.time()) or not session_ok(secret, sexp, query.get("ssig", [""])[0]):
+            self._json(403, {"error": "This send link has expired."})
+            return
+        batch = query.get("batch", [""])[0]
+        if not BATCH.match(batch):
+            self._json(400, {"error": "The batch is not valid."})
+            return
+        self._json(*cancel_batch(INBOX, batch))
 
     def do_PUT(self):
         parsed = urllib.parse.urlparse(self.path)
@@ -627,6 +686,33 @@ def self_test():
     other_size = "http://%s:%d/upload-status?sexp=%d&ssig=%s&size=%d&name=big.mp4&batch=b5&count=1" % (host, port, sexp, ssig, len(big) + 1)
     with urllib.request.urlopen(other_size) as response:
         assert json.loads(response.read().decode()) == {"received": 0, "done": False}
+    # Cancel throws away a half-sent batch, and refuses one that fully arrived.
+    def post(path):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(path, data=b"", method="POST")) as response:
+                return response.status, json.loads(response.read().decode())
+        except urllib.error.HTTPError as error:
+            return error.code, json.loads(error.read().decode())
+    half = "http://%s:%d/upload?sexp=%d&ssig=%s&size=4&name=c.mp4&batch=b6&count=2" % (host, port, sexp, ssig)
+    with urllib.request.urlopen(urllib.request.Request(half, data=body, method="PUT")):
+        pass
+    cancel = "http://%s:%d/cancel?sexp=%d&ssig=%s&batch=" % (host, port, sexp, ssig)
+    assert post(cancel + "b6") == (200, {"cancelled": True}) and not os.path.exists(os.path.join(INBOX, "b6"))
+    assert post(cancel + "b4")[0] == 409 and os.path.isdir(os.path.join(INBOX, "b4"))
+    assert post(cancel + "nope") == (200, {"cancelled": False})
+    assert post(cancel.replace("ssig=", "ssig=00") + "b4")[0] == 403
+    # The app download needs the signed link.
+    global APK
+    APK = os.path.join(INBOX, "app.apk")
+    with open(APK, "wb") as handle:
+        handle.write(b"PK-app")
+    with urllib.request.urlopen(page.replace("/send?", "/app.apk?")) as response:
+        assert response.read() == b"PK-app"
+    try:
+        urllib.request.urlopen(page.replace("/send?", "/app.apk?") + "00")
+        raise SystemExit("bad app link was accepted")
+    except urllib.error.HTTPError as error:
+        assert error.code == 403, error.code
     # A 4.97 GB phone video (2026-11-13) was refused by the old 3 GB cap.
     base = "http://%s:%d/upload?sexp=%d&ssig=%s&size=%d&name=huge.mp4&batch=b3&count=1" % (host, port, sexp, ssig, 4_969_898_905)
     assert piece(0, big) == (200, {"received": len(big), "done": False})
