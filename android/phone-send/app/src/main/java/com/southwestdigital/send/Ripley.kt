@@ -42,9 +42,13 @@ object Ripley {
         }
     }
 
-    /** How much of this file ripley has; ripley reuses a copy it already has (reused=true). */
-    fun status(batch: String, name: String, size: Long, count: Int): JSONObject =
-        call("GET", url("/upload-status", mapOf("batch" to batch, "name" to name, "size" to size, "count" to count))).second
+    /**
+     * How much of this file ripley has. ripley reuses a copy it already has (reused=true), matched by
+     * size and [head], the SHA-256 of the first MiB, so a file renamed elsewhere is still recognised.
+     */
+    fun status(batch: String, name: String, size: Long, count: Int, head: String): JSONObject =
+        call("GET", url("/upload-status", mapOf("batch" to batch, "name" to name, "size" to size, "count" to count,
+            "head" to head))).second
 
     /** Send one piece; returns how many bytes ripley now has and whether the file is done. */
     fun piece(batch: String, name: String, size: Long, count: Int, offset: Long, data: ByteArray, length: Int): JSONObject {
