@@ -1,0 +1,7 @@
+.gradle/
+build/
+app/build/
+local.properties
+# Ripley address and the long-lived send signature: made on ripley, never committed.
+ripley.properties
+*.apk

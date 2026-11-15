@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Plain http only to ripley's tailnet address; Tailscale encrypts the link. -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">100.98.89.93</domain>
+    </domain-config>
+</network-security-config>
