@@ -132,6 +132,15 @@ def ticket_ok(secret, exp, size, name, sig):
     return hmac.compare_digest(expected, sig)
 
 
+def app_key(secret):
+    """A short fixed key for the app download link, so it fits on one line of a phone screen.
+
+    The full signed link wrapped in Herdr on the phone and a tap opened only its first line
+    (2026-11-15). Twelve hex digits is plenty for a download that is reachable on the tailnet only.
+    """
+    return hmac.new(secret.encode(), b"app-download", hashlib.sha256).hexdigest()[:12]
+
+
 def session_message(exp):
     return ("session\n%s" % exp).encode()
 
@@ -419,15 +428,16 @@ class Handler(BaseHTTPRequestHandler):
                 state = reuse_copy(folder, name, size, expected, found)
             self._json(200, state)
             return
-        if path == "/app.apk":
-            # The phone app download, behind the same signed link as the send page.
+        if path in ("/app.apk", "/app"):
+            # The phone app download: behind the send page's signed link, or the short /app?k= key.
             query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             secret = os.environ.get("PHONE_INTAKE_SECRET", "")
             try:
                 exp = int(query.get("exp", ["0"])[0])
             except ValueError:
                 exp = 0
-            if not secret or exp < int(time.time()) or not session_ok(secret, exp, query.get("sig", [""])[0]):
+            short = bool(secret) and hmac.compare_digest(app_key(secret), query.get("k", [""])[0])
+            if not short and (not secret or exp < int(time.time()) or not session_ok(secret, exp, query.get("sig", [""])[0])):
                 self._send(403, "This link has expired.", "text/plain; charset=utf-8")
                 return
             try:
@@ -763,6 +773,14 @@ def self_test():
         host, port, sexp, ssig, len(big), "0" * 64)
     with urllib.request.urlopen(wrong) as response:
         assert json.loads(response.read().decode()) == {"received": 0, "done": False}
+    # The short app link works with its key and only with it.
+    with urllib.request.urlopen("http://%s:%d/app?k=%s" % (host, port, app_key(secret))) as response:
+        assert response.read() == b"PK-app"
+    try:
+        urllib.request.urlopen("http://%s:%d/app?k=000000000000" % (host, port))
+        raise SystemExit("bad short app key was accepted")
+    except urllib.error.HTTPError as error:
+        assert error.code == 403, error.code
     # A 4.97 GB phone video (2026-11-13) was refused by the old 3 GB cap.
     base = "http://%s:%d/upload?sexp=%d&ssig=%s&size=%d&name=huge.mp4&batch=b3&count=1" % (host, port, sexp, ssig, 4_969_898_905)
     assert piece(0, big) == (200, {"received": len(big), "done": False})
@@ -774,6 +792,9 @@ if __name__ == "__main__":
     if "--sign" in sys.argv:
         i = sys.argv.index("--sign")
         print(sign_ticket(sys.argv[i + 1], int(sys.argv[i + 2]), int(sys.argv[i + 3]), sys.argv[i + 4]))
+        raise SystemExit(0)
+    if "--app-key" in sys.argv:
+        print(app_key(sys.argv[sys.argv.index("--app-key") + 1]))
         raise SystemExit(0)
     if "--sign-session" in sys.argv:
         i = sys.argv.index("--sign-session")
