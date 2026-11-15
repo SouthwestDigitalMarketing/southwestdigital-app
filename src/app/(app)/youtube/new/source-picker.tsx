@@ -27,9 +27,14 @@ export function SourcePicker() {
               setSource(item.id);
               if (item.id === "phone") {
                 const phone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-                // On the phone itself, go straight to the send page; no extra screen.
+                // On the phone itself, go straight to sending; no extra screen. On Android the SWapp
+                // app's uploader opens (it keeps sending in the background); without the app, Chrome
+                // falls back to the web send page.
                 if (phone) {
-                  window.location.href = "/phone";
+                  const web = window.location.origin + "/phone";
+                  window.location.href = /Android/i.test(navigator.userAgent)
+                    ? `intent://pick#Intent;scheme=swappsend;package=com.southwestdigital.send;S.browser_fallback_url=${encodeURIComponent(web)};end`
+                    : "/phone";
                   return;
                 }
                 setOnPhone(phone);
