@@ -102,7 +102,7 @@ def queue_status(inbox):
                 continue
             merged[item["batch"]] = {**current, **item}
     videos = sorted(merged.values(), key=lambda item: item.get("created") or 0, reverse=True)
-    return {"videos": videos[:30]}
+    return {"videos": videos[:6]}
 
 
 def safe_name(raw):
@@ -190,7 +190,7 @@ SEND_PAGE = """<!doctype html><html lang=en><head><meta charset=utf-8>
 body{font:17px/1.45 system-ui,sans-serif;margin:0;padding:24px;background:#f8fafc;color:#0f172a}
 h1{font-size:24px;margin:0 0 8px}h2{font-size:20px;margin:32px 0 8px}p{color:#475569;margin:0 0 20px}
 label{display:block;background:#0f172a;color:#fff;border-radius:999px;padding:16px;text-align:center;font-weight:600}
-input{display:none}ul{list-style:none;padding:0;margin:12px 0 0}
+input{display:none}a{display:inline-block;margin-top:6px;color:#0f172a;font-weight:600}ul{list-style:none;padding:0;margin:12px 0 0}
 li{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin-bottom:10px;word-break:break-word}
 b{display:block}.ok{color:#15803d}.bad{color:#be123c}small{display:block;color:#64748b}
 .bar{height:6px;background:#e2e8f0;border-radius:3px;margin-top:8px}.bar i{display:block;height:6px;background:#0f172a;border-radius:3px}
@@ -242,7 +242,7 @@ function line(v){
  if(v.state==='paused'){const pct=v.bytes?Math.floor(100*v.done/v.bytes):0;return ['Paused at '+pct+'%','Keep this page open; it carries on by itself. If you closed it, choose the same video again.',pct];}
  if(v.state==='incomplete')return ['Some files did not arrive','Send them again.'];
  if(v.state==='error')return ['Needs attention',v.message||''];
- return [v.stage||'Episode ready',v.project||''];}
+ return [v.stage||'Episode ready',''];}
 function refresh(){fetch('/status.json?'+new URLSearchParams({exp:q.get('exp'),sig:q.get('sig')}),{cache:'no-store'})
 .then(r=>r.json()).then(d=>{queueEl.innerHTML='';
  if(!d.videos.length){queueEl.innerHTML='<li>Nothing yet.</li>';return;}
@@ -250,6 +250,7 @@ function refresh(){fetch('/status.json?'+new URLSearchParams({exp:q.get('exp'),s
   const t=document.createElement('b');t.textContent=v.project||('New video, sent '+when(v.created));li.append(t);
   const h=document.createElement('span');h.textContent=head;h.className=v.state==='error'||v.state==='incomplete'||v.state==='paused'?'bad':(v.project?'ok':'');li.append(h);
   if(sub){const s=document.createElement('small');s.textContent=sub;li.append(s);}
+  if(v.url&&/^https:\/\//.test(v.url)){const a=document.createElement('a');a.href=v.url;a.textContent='Watch on YouTube';a.target='_blank';a.rel='noopener';li.append(a);}
   if(pct!==undefined){const bar=document.createElement('div');bar.className='bar';const i=document.createElement('i');i.style.width=pct+'%';bar.append(i);li.append(bar);}
   queueEl.append(li);}}).catch(()=>{});}
 refresh();setInterval(refresh,4000);
