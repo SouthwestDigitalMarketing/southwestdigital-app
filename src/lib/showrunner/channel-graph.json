@@ -1,0 +1,279 @@
+{
+  "generated_from": "Visualizations/youtube-topic-graph.html",
+  "topics": [
+    "AI & workflows",
+    "Firm building",
+    "Office & growth",
+    "Marketing",
+    "Lead generation",
+    "Real-estate workflows",
+    "Cash & payments",
+    "QuickBooks"
+  ],
+  "videos": [
+    {
+      "id": "M4rCoX4CAoM",
+      "title": "The BEST Receive Payments Tutorial",
+      "lane": "evergreen",
+      "views": 147,
+      "topics": [
+        "QuickBooks",
+        "Cash & payments"
+      ],
+      "next": "2YXdkiAo1no"
+    },
+    {
+      "id": "BH6Z0mxElQI",
+      "title": "Should You Start a Bookkeeping Business in 2026",
+      "lane": "journey",
+      "views": 360,
+      "topics": [
+        "Firm building"
+      ],
+      "next": "0LwjeVZpges"
+    },
+    {
+      "id": "_z073VxXOWQ",
+      "title": "Watch Me Get Bookkeeping Leads by Calling Local Businesses",
+      "lane": "journey",
+      "views": 129,
+      "topics": [
+        "Lead generation",
+        "Marketing"
+      ],
+      "next": "gVLTrvrEmIk"
+    },
+    {
+      "id": "0LwjeVZpges",
+      "title": "What Starting a Bookkeeping Business Really Costs You",
+      "lane": "evergreen",
+      "views": 118,
+      "topics": [
+        "Firm building"
+      ],
+      "next": "BH6Z0mxElQI"
+    },
+    {
+      "id": "EfMCrRZkjPE",
+      "title": "3 Benefits Of An Office — Part 2",
+      "lane": "journey",
+      "views": 385,
+      "topics": [
+        "Office & growth"
+      ],
+      "next": "Smsa6i-RL5U"
+    },
+    {
+      "id": "KgD4Sda48UQ",
+      "title": "Get Bookkeeping Leads With This Free Offer",
+      "lane": "bridge",
+      "views": 355,
+      "topics": [
+        "Lead generation",
+        "Marketing"
+      ],
+      "next": "_z073VxXOWQ"
+    },
+    {
+      "id": "Smsa6i-RL5U",
+      "title": "Should You Get An Office For Your Bookkeeping Business?",
+      "lane": "journey",
+      "views": 71,
+      "topics": [
+        "Office & growth"
+      ],
+      "next": "EfMCrRZkjPE"
+    },
+    {
+      "id": "ngcjXS4b2gQ",
+      "title": "Three Benefits of Starting a Bookkeeping Business",
+      "lane": "journey",
+      "views": 91,
+      "topics": [
+        "Firm building"
+      ],
+      "next": "BH6Z0mxElQI"
+    },
+    {
+      "id": "gVLTrvrEmIk",
+      "title": "Get More Bookkeeping Clients With Marketing Analytics",
+      "lane": "evergreen",
+      "views": 48,
+      "topics": [
+        "Lead generation",
+        "Marketing"
+      ],
+      "next": "KgD4Sda48UQ"
+    },
+    {
+      "id": "cF7iRYBysUM",
+      "title": "Will AI Replace Bookkeepers?",
+      "lane": "evergreen",
+      "views": 40,
+      "topics": [
+        "AI & workflows",
+        "Firm building"
+      ],
+      "next": "XZbIvlYaWfY"
+    },
+    {
+      "id": "Rgp1dzPiABc",
+      "title": "Getting Started With QuickBooks",
+      "lane": "evergreen",
+      "views": 54,
+      "topics": [
+        "QuickBooks"
+      ],
+      "next": "2YXdkiAo1no"
+    },
+    {
+      "id": "V3SWGp9sAss",
+      "title": "Google Business Profile for Bookkeepers",
+      "lane": "evergreen",
+      "views": 72,
+      "topics": [
+        "Lead generation",
+        "Marketing"
+      ],
+      "next": "gVLTrvrEmIk"
+    },
+    {
+      "id": "VsEfyVtSlQ0",
+      "title": "How I Got My First Bookkeeping Clients",
+      "lane": "journey",
+      "views": 45,
+      "topics": [
+        "Firm building",
+        "Lead generation"
+      ],
+      "next": "_z073VxXOWQ"
+    },
+    {
+      "id": "_E66d3tcHcM",
+      "title": "My Bookkeeping Firm Has a Sales Problem",
+      "lane": "journey",
+      "views": 35,
+      "topics": [
+        "Firm building",
+        "Lead generation"
+      ],
+      "next": "_z073VxXOWQ"
+    },
+    {
+      "id": "XZbIvlYaWfY",
+      "title": "Inside a Real Estate Bookkeeping Firm",
+      "lane": "journey",
+      "views": 21,
+      "topics": [
+        "Firm building",
+        "AI & workflows"
+      ],
+      "next": "cF7iRYBysUM"
+    },
+    {
+      "id": "nFxeQ0OPuRc",
+      "title": "A Day Behind the Scenes",
+      "lane": "journey",
+      "views": 16,
+      "topics": [
+        "Firm building"
+      ],
+      "next": "XZbIvlYaWfY"
+    },
+    {
+      "id": "VLyQOCiF1Lw",
+      "title": "A Day Building a Real Estate Bookkeeping Firm",
+      "lane": "journey",
+      "views": 17,
+      "topics": [
+        "Firm building"
+      ],
+      "next": "nFxeQ0OPuRc"
+    },
+    {
+      "id": "2YXdkiAo1no",
+      "title": "How to Import a Chart of Accounts",
+      "lane": "evergreen",
+      "views": 113,
+      "topics": [
+        "QuickBooks"
+      ],
+      "next": "E653cTgpTsA"
+    },
+    {
+      "id": "E653cTgpTsA",
+      "title": "How to Record a Cash Property Purchase",
+      "lane": "evergreen",
+      "views": 74,
+      "topics": [
+        "QuickBooks",
+        "Real-estate workflows"
+      ],
+      "next": "M4rCoX4CAoM"
+    },
+    {
+      "id": "ai-fear-september-2026",
+      "title": "How I'm Afraid of AI",
+      "lane": "journey",
+      "views": null,
+      "topics": [
+        "AI & workflows"
+      ],
+      "next": "cF7iRYBysUM"
+    },
+    {
+      "id": "AifJV6LJJb8",
+      "title": "A Remote Bookkeeper's Morning in Conroe",
+      "lane": "journey",
+      "views": 16,
+      "topics": [
+        "Firm building",
+        "AI & workflows"
+      ],
+      "next": "m9F8F2-cB28"
+    },
+    {
+      "id": "nU1wNpV7eog",
+      "title": "A Mead Vendor Became a Lead",
+      "lane": "journey",
+      "views": 74,
+      "topics": [
+        "Lead generation",
+        "AI & workflows"
+      ],
+      "next": "_z073VxXOWQ"
+    },
+    {
+      "id": "QLA2JMGJAUs",
+      "title": "Campfire Talk: Three Futures for 2027",
+      "lane": "journey",
+      "views": 26,
+      "topics": [
+        "AI & workflows",
+        "Firm building"
+      ],
+      "next": "cF7iRYBysUM"
+    },
+    {
+      "id": "m9F8F2-cB28",
+      "title": "Working From My Phone at the Festival",
+      "lane": "journey",
+      "views": 26,
+      "topics": [
+        "Firm building",
+        "AI & workflows"
+      ],
+      "next": "nU1wNpV7eog"
+    },
+    {
+      "id": "g-S6zVZycr4",
+      "title": "A Healthy Lunch Shake in My Car",
+      "lane": "journey",
+      "views": 11,
+      "topics": [
+        "Firm building"
+      ],
+      "next": "AifJV6LJJb8"
+    }
+  ]
+}
