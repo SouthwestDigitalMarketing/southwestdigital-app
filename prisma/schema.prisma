@@ -1931,6 +1931,26 @@ model StrategyNote {
 }
 
 // Tom's reactions to Showrunner's series suggestions and episodes. Brand-scoped, row-level security (see migration).
+/// What ripley's Showrunner is doing with each phone batch: its autopilot steps, render bars,
+/// and the YouTube link once published. Ripley pushes it (POST /api/showrunner/video-status);
+/// the Showrunner page shows it. One row per brand and batch, replaced on every push.
+model ShowrunnerVideoStatus {
+  id        String   @id @default(cuid())
+  brandId   String
+  batch     String
+  project   String?
+  state     String
+  stage     String?  @db.Text
+  steps     Json?
+  render    Json?
+  url       String?
+  sentAt    DateTime?
+  updatedAt DateTime @updatedAt
+
+  @@unique([brandId, batch])
+  @@index([brandId, updatedAt])
+}
+
 model ShowrunnerFeedback {
   id           String   @id @default(cuid())
   brandId      String
