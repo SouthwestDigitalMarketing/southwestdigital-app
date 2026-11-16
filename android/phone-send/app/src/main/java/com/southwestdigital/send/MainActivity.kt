@@ -242,7 +242,7 @@ class MainActivity : Activity() {
     private fun render() {
         list.removeAllViews()
         val dp = resources.displayMetrics.density
-        for (b in Store.all(this)) {
+        for (b in Store.all(this).filter { inFlight(it) }) {
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding((14 * dp).toInt(), (12 * dp).toInt(), (14 * dp).toInt(), (12 * dp).toInt())
@@ -286,6 +286,18 @@ class MainActivity : Activity() {
             }
             list.addView(card)
         }
+    }
+
+    /**
+     * Only the video being made right now (Tom, 2026-11-15: "I'm trying to create a new video").
+     * Still sending, or paused/failed and waiting on a tap, or arrived and ripley still making it.
+     * Finished and published videos, and anything older than a day, are not shown.
+     */
+    private fun inFlight(b: Batch): Boolean {
+        if (System.currentTimeMillis() - b.created > 24 * 3600 * 1000L) return false
+        if (b.state != "sent") return true
+        val episode = episodes[b.id] ?: return false
+        return !episode.optString("url").startsWith("https://")
     }
 
     /** What ripley is doing with the video: every autopilot step, the render bars, then the YouTube link. */
