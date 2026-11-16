@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { requireAppBrand } from "@/lib/brands/staff";
+import { ChannelGraph } from "@/components/showrunner/ChannelGraph";
+import type { GraphData } from "@/lib/showrunner/graph-layout";
+import graphData from "@/lib/showrunner/channel-graph.json";
 
 const card = "block rounded-2xl border border-slate-200 bg-white p-5 shadow-sm";
 
@@ -10,6 +13,9 @@ export default async function ShowrunnerPage() {
     <main className="p-8">
       <h1 className="text-3xl font-semibold text-slate-900">Showrunner</h1>
       <p className="mt-2 text-slate-600">What are we making for {brand.name}?</p>
+      <div className="mt-6 max-w-3xl">
+        <ChannelGraph data={graphData as GraphData} />
+      </div>
       <div className="mt-6 flex max-w-xl flex-col gap-4">
         <Link href="/youtube/new" className={`${card} hover:border-slate-400`}>
           <p className="text-lg font-semibold text-slate-900">New episode</p>

@@ -1,5 +1,11 @@
 # SWapp handoff
 
+## 2026-11-16 — Channel graph on the Showrunner home (Ummon, showrunner-app tab)
+
+- Tom wanted the desktop video graph on the first page of Showrunner on the phone. `/showrunner` now shows it above the three cards: `src/components/showrunner/ChannelGraph.tsx` (client SVG, tap a dot to highlight its topics and next watch, Watch on YouTube link) with `src/lib/showrunner/graph-layout.ts` (deterministic layout, no d3 dependency) and `graph-layout.test.ts`.
+- Data is a SNAPSHOT: `src/lib/showrunner/channel-graph.json`, copied from showrunner-app `Data/channel-graph.json` (25 videos, 2026-11-16, views read from the public watch pages). It goes stale as the autopilot publishes: refresh by copying that file again. A live feed is the next step.
+- Phone labels are hidden until a dot is tapped; from the `md` breakpoint up every title shows. Not yet seen on a real phone at merge time.
+
 ## 2026-11-13 — Phone uploads over 3 GB (Ummon Claude)
 
 - Tom's 4,969,898,905-byte `3964.mp4` was refused: every `PUT /upload` returned 400 "The piece is not valid." because `MAX_BYTES` was 3,000,000,000. The page retried silently and showed nothing, so the pick looked like it vanished. `MAX_BYTES` is now 60,000,000,000 (ripley `/home` had 565 GB free). Any 4xx other than 409 now stops the retries and prints the refusal in red above "Your videos".
