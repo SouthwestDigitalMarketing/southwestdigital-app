@@ -49,7 +49,9 @@ def payload(brand):
 
 def push(url, token, body):
     request = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
-                                     headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
+                                     headers={"Authorization": "Bearer " + token, "Content-Type": "application/json",
+                                              # Cloudflare bans Python's default User-Agent (error code 1010).
+                                              "User-Agent": "swapp-video-status/1"})
     with urllib.request.urlopen(request, timeout=20) as response:
         return response.status
 
