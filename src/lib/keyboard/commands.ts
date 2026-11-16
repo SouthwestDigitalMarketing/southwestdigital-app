@@ -38,6 +38,7 @@ export const NAV_DESTINATIONS: Array<{
   { id: "nav.scanner", title: "Scanner", href: "/scanner", keys: "g n", aliases: ["scan", "findings"] },
   { id: "nav.website", title: "Website", href: "/website", keys: "g w" },
   { id: "nav.youtube", title: "YouTube", href: "/youtube", keys: "g y" },
+  { id: "nav.showrunner", title: "Showrunner", href: "/showrunner", aliases: ["episode", "series", "video"] },
   { id: "nav.reviews", title: "Reviews", href: "/reviews", keys: "g r" },
   { id: "nav.contacts", title: "Contacts", href: "/contacts", keys: "g c", aliases: ["people", "leads"] },
   { id: "nav.pipeline", title: "CRM", href: "/pipeline", keys: "g p", aliases: ["crm", "pipeline", "deals"] },
