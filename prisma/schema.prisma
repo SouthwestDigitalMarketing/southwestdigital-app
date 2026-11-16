@@ -1930,6 +1930,20 @@ model StrategyNote {
   updatedAt       DateTime @updatedAt
 }
 
+// Tom's reactions to Showrunner's series suggestions and episodes. Brand-scoped, row-level security (see migration).
+model ShowrunnerFeedback {
+  id           String   @id @default(cuid())
+  brandId      String
+  seriesSlug   String
+  episodeIndex Int?
+  reaction     String
+  note         String?  @db.Text
+  actorUserId  String?
+  createdAt    DateTime @default(now())
+
+  @@index([brandId, seriesSlug, createdAt])
+}
+
 // ─── Team tools ───────────────────────────────────────────────────────────────
 
 model DailyLog {

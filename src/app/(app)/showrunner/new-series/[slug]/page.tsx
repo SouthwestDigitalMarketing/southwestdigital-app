@@ -2,12 +2,15 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAppBrand } from "@/lib/brands/staff";
 import { findSuggestion } from "../../suggestions";
+import { loadFeedback } from "@/lib/showrunner/load";
+import { FeedbackBar } from "./FeedbackBar";
 
 export default async function SeriesPlanPage({ params }: { params: Promise<{ slug: string }> }) {
-  await requireAppBrand();
+  const { dataContext } = await requireAppBrand();
   const { slug } = await params;
   const series = findSuggestion(slug);
   if (!series) notFound();
+  const feedback = await loadFeedback(dataContext, series.slug);
 
   return (
     <main className="p-8">
@@ -24,6 +27,7 @@ export default async function SeriesPlanPage({ params }: { params: Promise<{ slu
         <ul className="mt-1 list-disc pl-5 text-slate-900">
           {series.why.map((w) => <li key={w}>{w}</li>)}
         </ul>
+        <FeedbackBar seriesSlug={series.slug} episodeIndex={null} latest={feedback.series} />
       </section>
 
       <section className="mt-8 max-w-xl">
@@ -35,6 +39,7 @@ export default async function SeriesPlanPage({ params }: { params: Promise<{ slu
               <p className="mt-1 text-sm text-slate-700">{e.what}</p>
               <p className="mt-2 text-sm text-slate-500">Where: {e.where}</p>
               <p className="text-sm text-slate-500">Who: {e.who}</p>
+              <FeedbackBar seriesSlug={series.slug} episodeIndex={i} latest={feedback[`ep:${i}`]} />
             </li>
           ))}
         </ol>
