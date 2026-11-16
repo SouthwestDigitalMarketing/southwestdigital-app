@@ -19,10 +19,10 @@ export default async function ShowrunnerPage() {
           <p className="text-lg font-semibold text-slate-900">Continue a series</p>
           <p className="mt-1 text-sm text-slate-600">No series yet. Start one below.</p>
         </div>
-        <div className={`${card} opacity-60`} aria-disabled="true">
+        <Link href="/showrunner/new-series" className={`${card} hover:border-slate-400`}>
           <p className="text-lg font-semibold text-slate-900">New series</p>
-          <p className="mt-1 text-sm text-slate-600">Showrunner suggests a series from your channel and business. Coming next.</p>
-        </div>
+          <p className="mt-1 text-sm text-slate-600">Showrunner suggests a series from your channel and business.</p>
+        </Link>
       </div>
     </main>
   );
