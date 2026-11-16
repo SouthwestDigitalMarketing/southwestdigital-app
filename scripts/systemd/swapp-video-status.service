@@ -1,0 +1,13 @@
+[Unit]
+Description=Push ripley's phone-batch status to SWapp's Showrunner page
+After=network-online.target
+
+[Service]
+EnvironmentFile=%h/.config/swapp-video-status/env
+Environment=PHONE_INTAKE_DIR=%h/swapp-phone-intake
+ExecStart=/usr/bin/python3 %h/.local/share/swapp-phone-intake/push_video_status.py
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=default.target

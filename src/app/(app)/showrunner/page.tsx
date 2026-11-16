@@ -1,18 +1,31 @@
 import Link from "next/link";
 import { requireAppBrand } from "@/lib/brands/staff";
 import { ChannelGraph } from "@/components/showrunner/ChannelGraph";
+import { VideosInProgress, type VideoCard } from "@/components/showrunner/VideosInProgress";
+import { loadVideoStatus } from "@/lib/showrunner/load";
+import type { VideoRender, VideoStep } from "@/lib/showrunner/video-status";
 import type { GraphData } from "@/lib/showrunner/graph-layout";
 import graphData from "@/lib/showrunner/channel-graph.json";
 
 const card = "block rounded-2xl border border-slate-200 bg-white p-5 shadow-sm";
 
 export default async function ShowrunnerPage() {
-  const { brand } = await requireAppBrand();
+  const { brand, dataContext } = await requireAppBrand();
+  const videos: VideoCard[] = (await loadVideoStatus(dataContext)).map((row) => ({
+    batch: row.batch,
+    project: row.project,
+    state: row.state,
+    stage: row.stage,
+    steps: Array.isArray(row.steps) ? (row.steps as VideoStep[]) : null,
+    render: row.render && typeof row.render === "object" ? (row.render as VideoRender) : null,
+    url: row.url,
+  }));
 
   return (
     <main className="p-8">
       <h1 className="text-3xl font-semibold text-slate-900">Showrunner</h1>
       <p className="mt-2 text-slate-600">What are we making for {brand.name}?</p>
+      <VideosInProgress videos={videos} />
       <div className="mt-6 max-w-3xl">
         <ChannelGraph data={graphData as GraphData} />
       </div>
