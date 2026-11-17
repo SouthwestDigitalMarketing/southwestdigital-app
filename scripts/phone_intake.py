@@ -310,13 +310,15 @@ REPORT_STATUSES = [
 ]
 
 
-def status_row(key, name, href=None):
-    """One client row in the look its status gives it: a colored edge and a short tag on the right."""
+def status_row(key, name, href=None, note=None):
+    """One client row in the look its status gives it: a colored edge and a short tag on the right.
+    A legend sample carries its meaning inside the row as a second line (note)."""
     import html
     label, color = next(((l, c) for k, l, c, _ in REPORT_STATUSES if k == key), ("", "#94a3b8"))
     tag = "" if key == "none" else "<span class=tag style='color:%s;border-color:%s'>%s</span>" % (color, color, html.escape(label))
     edge = "" if key == "none" else " style='border-left:5px solid %s'" % color
-    inner = "<span class=nm>%s</span>%s" % (html.escape(name), tag)
+    text = html.escape(name) + ("<small>%s</small>" % html.escape(note) if note else "")
+    inner = "<span class=nm>%s</span>%s" % (text, tag)
     if href and key != "none":
         return "<a class='row st'%s href='%s'>%s</a>" % (edge, href, inner)
     return "<div class='row st %s'%s>%s</div>" % ("off" if key == "none" else "", edge, inner)
@@ -325,7 +327,7 @@ def status_row(key, name, href=None):
 def status_legend():
     """A closed 'Legend' button that opens to each status: a sample row as it will look, then what it means."""
     import html
-    items = "".join("<div class=item>%s<p>%s</p></div>" % (status_row(key, "Example Client LLC"), html.escape(meaning))
+    items = "".join("<div class=item>%s</div>" % status_row(key, "Example Client LLC", note=meaning)
                     for key, _, _, meaning in REPORT_STATUSES)
     return "<details class=legend><summary>Legend</summary>%s</details>" % items
 
@@ -344,7 +346,7 @@ def reports_page(root, folder, query):
              ".legend{margin:0 0 14px}.legend summary{display:inline-block;cursor:pointer;list-style:none;border:1px solid #cbd5e1;"
              "border-radius:999px;padding:6px 14px;font-size:14px;font-weight:600;color:#0f172a;background:#fff}"
              ".legend summary::-webkit-details-marker{display:none}.legend summary:after{content:' \\25BE'}.legend[open] summary:after{content:' \\25B4'}"
-             ".legend .item{margin-top:12px}.legend .item p{margin:4px 2px 0;font-size:13px;color:#475569}"
+             ".legend .item{margin-top:8px}.legend .item small{font-size:13px;margin-top:2px}.legend .st{align-items:flex-start}"
              ".st{display:flex;align-items:center;justify-content:space-between;gap:10px}.st .nm{min-width:0}"
              ".tag{flex:0 0 auto;font-size:12px;font-weight:600;border:1px solid;border-radius:999px;padding:1px 8px;background:#fff}"
              "div.row.st:not(.off){background:#fff;color:#0f172a}a.back{color:#475569;display:inline-block;margin-bottom:12px}</style>")
@@ -978,7 +980,9 @@ def self_test():
     signed = "?exp=%d&sig=%s" % (sexp, ssig)
     with urllib.request.urlopen(reports + signed) as response:
         page = response.read()
-        assert b"BnB Getaway LLC" in page and b"SJ Equity LLC" in page and b"<small>" not in page
+        # Client rows show the name only; descriptions live inside the legend's sample rows.
+        clients_part = page.split(b"</details>", 1)[1]
+        assert b"BnB Getaway LLC" in clients_part and b"SJ Equity LLC" in clients_part and b"<small>" not in clients_part
         assert b"Waiting on client" in page and b"5th business day" in page
     with urllib.request.urlopen(reports + "/bnb-getaway" + signed) as response:
         assert b"October 2026" in response.read()
