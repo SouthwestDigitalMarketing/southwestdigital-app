@@ -298,6 +298,26 @@ def report_path(root, folder, year, name):
     return real
 
 
+# Month status for each client, shown as a legend first so Tom can weigh it before the rows use it
+# (Tom, 2026-11-17). Internal target: last month closed and its report issued within the first
+# five business days; weekly Friday client notices in between. (key, label, color, meaning)
+REPORT_STATUSES = [
+    ("done", "Done", "#15803d", "Last month closed and report published; no open client questions."),
+    ("on-track", "On track", "#2563eb", "Within the first 5 business days; close in progress; client owes nothing."),
+    ("waiting", "Waiting on client", "#d97706", "Questions unanswered or statements missing in Double; we cannot finish yet."),
+    ("late", "Late", "#be123c", "Past the 5th business day; client owes nothing; we have not published."),
+    ("none", "No report yet", "#94a3b8", "Nothing published for this client yet."),
+]
+
+
+def status_legend():
+    """Compact key of the month statuses, one line each."""
+    import html
+    rows = "".join("<li><i style='background:%s'></i><b>%s</b> %s</li>" % (color, html.escape(label), html.escape(meaning))
+                   for _, label, color, meaning in REPORT_STATUSES)
+    return "<ul class=legend>%s</ul>" % rows
+
+
 def reports_page(root, folder, query):
     """HTML for the client list, or one client's months. Links keep the signed exp/sig."""
     import html
@@ -308,14 +328,18 @@ def reports_page(root, folder, query):
              "h1{font-size:24px;margin:0 0 12px}a.row{display:block;background:#fff;border:1px solid #e2e8f0;border-radius:10px;"
              "padding:10px 14px;margin-bottom:6px;color:#0f172a;text-decoration:none;font-weight:600}"
              "div.row{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;margin-bottom:6px;font-weight:600;color:#94a3b8}"
-             "small{display:block;color:#64748b;font-weight:400}a.back{color:#475569;display:inline-block;margin-bottom:12px}</style>")
+             "small{display:block;color:#64748b;font-weight:400}"
+             ".legend{list-style:none;padding:10px 12px;margin:0 0 14px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;font-size:13px;color:#475569}"
+             ".legend li{display:flex;gap:8px;align-items:baseline;padding:2px 0}.legend i{flex:0 0 10px;height:10px;border-radius:5px;display:inline-block;transform:translateY(1px)}"
+             ".legend b{flex:0 0 auto;color:#0f172a}a.back{color:#475569;display:inline-block;margin-bottom:12px}</style>")
     if folder is None:
         # Name only, one compact row each: the list will hold 20 to 50 clients (Tom, 2026-11-17).
         # A client without reports yet is a grey row that does not open.
         rows = "".join(("<a class=row href='/reports/%s%s'>%s</a>" % (c["folder"], sign, html.escape(c["name"])))
                        if c["months"] else "<div class=row>%s</div>" % html.escape(c["name"])
                        for c in clients) or "<p>No clients set up for reports yet.</p>"
-        return "<!doctype html><html lang=en><head><meta charset=utf-8><title>Reports</title>%s</head><body><h1>Reports</h1>%s</body></html>" % (style, rows)
+        return ("<!doctype html><html lang=en><head><meta charset=utf-8><title>Reports</title>%s</head><body><h1>Reports</h1>%s%s</body></html>"
+                % (style, status_legend(), rows))
     client = next((c for c in clients if c["folder"] == folder), None)
     if client is None:
         return None
@@ -939,6 +963,7 @@ def self_test():
     with urllib.request.urlopen(reports + signed) as response:
         page = response.read()
         assert b"BnB Getaway LLC" in page and b"SJ Equity LLC" in page and b"<small>" not in page
+        assert b"Waiting on client" in page and b"5th business day" in page
     with urllib.request.urlopen(reports + "/bnb-getaway" + signed) as response:
         assert b"October 2026" in response.read()
     with urllib.request.urlopen(reports + "/bnb-getaway/2026/2026-10.pdf" + signed) as response:
