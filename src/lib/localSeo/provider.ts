@@ -63,7 +63,7 @@ async function updateScanStatus(scanId: string, costDelta = 0) {
     where: { id: scanId },
     data: {
       status,
-      actualCostUsd: { increment: costDelta },
+      ...(costDelta ? { actualCostUsd: { increment: costDelta } } : {}),
       ...(pending ? {} : { completedAt: new Date() }),
     },
   });
@@ -171,7 +171,6 @@ export async function collectReadyLocalSeoTasks() {
   }
   let completed = 0;
   let failed = 0;
-  const costs = new Map<string, number>();
   for (let offset = 0; offset < pending.length; offset += 10) {
     const batch = pending.slice(offset, offset + 10).filter((cell) => ready.has(cell.providerTaskId!));
     await Promise.all(batch.map(async (cell) => {
@@ -182,7 +181,6 @@ export async function collectReadyLocalSeoTasks() {
         const ok = task ? await finishCell(cell.id, task) : false;
         if (ok) completed += 1;
         else failed += 1;
-        if (task?.cost) costs.set(cell.scanId, (costs.get(cell.scanId) ?? 0) + task.cost);
       } catch (error) {
         failed += 1;
         await prisma.localSeoGridCell.update({
@@ -193,6 +191,8 @@ export async function collectReadyLocalSeoTasks() {
     }));
   }
   const scanIds = new Set(pending.map((cell) => cell.scanId));
-  for (const scanId of scanIds) await updateScanStatus(scanId, costs.get(scanId) ?? 0);
+  // DataForSEO charges Standard tasks when task_post accepts them. task_get
+  // echoes that task cost, so adding it again here would double count it.
+  for (const scanId of scanIds) await updateScanStatus(scanId);
   return { completed, failed };
 }
