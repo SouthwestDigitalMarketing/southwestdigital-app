@@ -33,6 +33,7 @@ import {
   ScrollText,
   Sun,
   X,
+  FileText,
 } from "lucide-react";
 import { selectBrand } from "@/app/select-brand/actions";
 import { useBrand } from "@/lib/brands/context";
@@ -59,6 +60,7 @@ const NAV: Array<{
   { label: "Website", href: "/website", icon: Globe },
   { label: "YouTube", href: "/youtube", icon: PlayCircle },
   { label: "Showrunner", href: "/showrunner", icon: Clapperboard },
+  { label: "Reports", href: "/reports", icon: FileText },
   { label: "Reviews", href: "/reviews", icon: Star, dividerAfter: true },
   { label: "Contacts", href: "/contacts", icon: Contact },
   { label: "CRM", href: "/pipeline", icon: TrendingUp },

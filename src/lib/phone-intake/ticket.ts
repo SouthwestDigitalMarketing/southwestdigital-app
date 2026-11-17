@@ -45,6 +45,8 @@ export function sendPageLink(input: {
   secret: string;
   publicUrl: string;
   nowSeconds: number;
+  /** "/reports" opens ripley's published client reports instead of the send page. */
+  path?: "/send" | "/reports";
 }): { ok: true; url: string; exp: number } | { ok: false; error: string } {
   if (!input.secret || !input.publicUrl) {
     return { ok: false, error: "The send road is not set up on this server." };
@@ -59,7 +61,7 @@ export function sendPageLink(input: {
     return { ok: false, error: "The send road address is not a valid link." };
   }
   const exp = input.nowSeconds + PHONE_INTAKE_TTL_SECONDS;
-  const url = new URL("/send", origin);
+  const url = new URL(input.path ?? "/send", origin);
   url.searchParams.set("exp", String(exp));
   url.searchParams.set("sig", signSession(input.secret, exp));
   return { ok: true, url: url.toString(), exp };

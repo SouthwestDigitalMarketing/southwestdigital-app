@@ -25,6 +25,14 @@ MAX_BYTES = 60_000_000_000
 APK = os.path.expanduser(os.environ.get("PHONE_INTAKE_APK", "~/.local/share/swapp-phone-intake/send-to-ripley.apk"))
 SAFE = re.compile(r"[^A-Za-z0-9._-]+")
 INBOX = os.path.expanduser(os.environ.get("PHONE_INTAKE_DIR", "~/swapp-phone-intake"))
+# Published client reports Sol saves on ripley: <root>/<client>/reports/<year>/<YYYY-MM>.pdf.
+# Served read-only to Tom's phone over the tailnet; the files never leave ripley.
+REPORTS_ROOT = os.path.expanduser(os.environ.get("PHONE_INTAKE_REPORTS_ROOT", "~/projects/clients"))
+CLIENT_DIR = re.compile(r"^[a-z0-9][a-z0-9_-]{0,80}$")
+REPORT_YEAR = re.compile(r"^\d{4}$")
+REPORT_FILE = re.compile(r"^(\d{4})-(\d{2})\.pdf$")
+MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August",
+          "September", "October", "November", "December"]
 # One pick on the send page is one batch, and one batch becomes one episode.
 BATCH = re.compile(r"^[A-Za-z0-9-]{1,40}$")
 BATCH_LOCK = threading.Lock()
@@ -238,6 +246,76 @@ def cancel_batch(inbox, batch):
     with BATCH_LOCK:
         shutil.rmtree(folder, ignore_errors=True)
     return 200, {"cancelled": True}
+
+
+def client_name(folder):
+    """'bnb-getaway' -> 'Bnb Getaway': the folder is the only name ripley has."""
+    small = {"and", "of", "the", "llc"}
+    words = [w for w in re.split(r"[-_]+", folder) if w]
+    return " ".join(w.upper() if w in small - {"and", "of", "the"} else (w if w in small else w.capitalize()) for w in words)
+
+
+def list_reports(root):
+    """Clients with published reports, each with its months newest first."""
+    out = []
+    try:
+        folders = sorted(os.listdir(root))
+    except OSError:
+        return out
+    for folder in folders:
+        base = os.path.join(root, folder, "reports")
+        if not CLIENT_DIR.match(folder) or not os.path.isdir(base) or os.path.islink(base):
+            continue
+        months = []
+        for year in sorted(os.listdir(base), reverse=True):
+            year_dir = os.path.join(base, year)
+            if not REPORT_YEAR.match(year) or not os.path.isdir(year_dir) or os.path.islink(year_dir):
+                continue
+            for name in sorted(os.listdir(year_dir), reverse=True):
+                match = REPORT_FILE.match(name)
+                path = os.path.join(year_dir, name)
+                if match and match.group(1) == year and 1 <= int(match.group(2)) <= 12 and os.path.isfile(path) and not os.path.islink(path):
+                    months.append({"year": year, "file": name, "label": "%s %s" % (MONTHS[int(match.group(2)) - 1], year)})
+        if months:
+            out.append({"folder": folder, "name": client_name(folder), "months": months})
+    return out
+
+
+def report_path(root, folder, year, name):
+    """The real file for /reports/<folder>/<year>/<YYYY-MM>.pdf, or None if it is not a published report."""
+    match = REPORT_FILE.match(name)
+    if not (CLIENT_DIR.match(folder) and REPORT_YEAR.match(year) and match and match.group(1) == year):
+        return None
+    path = os.path.join(root, folder, "reports", year, name)
+    real = os.path.realpath(path)
+    if not real.startswith(os.path.realpath(root) + os.sep) or real != os.path.abspath(path) or not os.path.isfile(real):
+        return None
+    return real
+
+
+def reports_page(root, folder, query):
+    """HTML for the client list, or one client's months. Links keep the signed exp/sig."""
+    import html
+    sign = "?" + query
+    clients = list_reports(root)
+    style = ("<meta name=viewport content='width=device-width,initial-scale=1'><style>"
+             "body{font:17px/1.45 system-ui,sans-serif;margin:0;padding:24px;background:#f8fafc;color:#0f172a}"
+             "h1{font-size:24px;margin:0 0 16px}a.row{display:block;background:#fff;border:1px solid #e2e8f0;border-radius:12px;"
+             "padding:14px 16px;margin-bottom:10px;color:#0f172a;text-decoration:none;font-weight:600}"
+             "small{display:block;color:#64748b;font-weight:400}a.back{color:#475569;display:inline-block;margin-bottom:12px}</style>")
+    if folder is None:
+        rows = "".join("<a class=row href='/reports/%s%s'>%s<small>%d report%s, newest %s</small></a>"
+                       % (c["folder"], sign, html.escape(c["name"]), len(c["months"]), "" if len(c["months"]) == 1 else "s",
+                          html.escape(c["months"][0]["label"])) for c in clients) or "<p>No reports yet.</p>"
+        return "<!doctype html><html lang=en><head><meta charset=utf-8><title>Reports</title>%s</head><body><h1>Reports</h1>%s</body></html>" % (style, rows)
+    client = next((c for c in clients if c["folder"] == folder), None)
+    if client is None:
+        return None
+    rows = "".join("<a class=row href='/reports/%s/%s/%s%s'>%s</a>" % (folder, m["year"], m["file"], sign, html.escape(m["label"]))
+                   for m in client["months"])
+    return ("<!doctype html><html lang=en><head><meta charset=utf-8><title>%s reports</title>%s</head><body>"
+            "<a class=back href='/reports%s'>&lsaquo; All clients</a><h1>%s</h1>%s</body></html>"
+            % (html.escape(client["name"]), style, sign, html.escape(client["name"]), rows))
 
 
 def resumable_batch(inbox, name, size):
@@ -454,6 +532,47 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "application/vnd.android.package-archive")
             self.send_header("Content-Disposition", 'attachment; filename="swapp.apk"')
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
+        if path == "/reports" or path.startswith("/reports/"):
+            # Published client reports, behind the same signed link as the send page.
+            query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            secret = os.environ.get("PHONE_INTAKE_SECRET", "")
+            try:
+                exp = int(query.get("exp", ["0"])[0])
+            except ValueError:
+                exp = 0
+            if not secret or exp < int(time.time()) or not session_ok(secret, exp, query.get("sig", [""])[0]):
+                self._send(403, "This link has expired. Open Reports in SWapp again.", "text/plain; charset=utf-8")
+                return
+            sign = urllib.parse.urlencode({"exp": exp, "sig": query.get("sig", [""])[0]})
+            parts = [urllib.parse.unquote(p) for p in path.split("/")[2:] if p]
+            if len(parts) <= 1:
+                page = reports_page(REPORTS_ROOT, parts[0] if parts else None, sign)
+                if page is None:
+                    self._send(404, "No such client.", "text/plain; charset=utf-8")
+                    return
+                self.send_response(200)
+                body = page.encode()
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Cache-Control", "private, no-store")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            real = report_path(REPORTS_ROOT, *parts) if len(parts) == 3 else None
+            if real is None:
+                self._send(404, "No such report.", "text/plain; charset=utf-8")
+                return
+            with open(real, "rb") as handle:
+                data = handle.read()
+            label = "%s %s" % (client_name(parts[0]), parts[2][:-4])
+            self.send_response(200)
+            self.send_header("Content-Type", "application/pdf")
+            self.send_header("Content-Disposition", 'inline; filename="%s.pdf"' % re.sub(r"[^A-Za-z0-9 _-]", "", label))
+            self.send_header("Cache-Control", "private, no-store")
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
             self.wfile.write(data)
@@ -789,6 +908,29 @@ def self_test():
         raise SystemExit("bad short app key was accepted")
     except urllib.error.HTTPError as error:
         assert error.code == 403, error.code
+    # Reports: signed list, client page, the PDF itself; nothing outside reports/<year>/<YYYY-MM>.pdf.
+    global REPORTS_ROOT
+    REPORTS_ROOT = os.path.join(INBOX, "clients")
+    os.makedirs(os.path.join(REPORTS_ROOT, "bnb-getaway", "reports", "2026"))
+    with open(os.path.join(REPORTS_ROOT, "bnb-getaway", "reports", "2026", "2026-10.pdf"), "wb") as handle:
+        handle.write(b"%PDF-oct")
+    with open(os.path.join(REPORTS_ROOT, "bnb-getaway", "secret.txt"), "wb") as handle:
+        handle.write(b"no")
+    reports = "http://%s:%d/reports" % (host, port)
+    signed = "?exp=%d&sig=%s" % (sexp, ssig)
+    with urllib.request.urlopen(reports + signed) as response:
+        assert b"Bnb Getaway" in response.read()
+    with urllib.request.urlopen(reports + "/bnb-getaway" + signed) as response:
+        assert b"October 2026" in response.read()
+    with urllib.request.urlopen(reports + "/bnb-getaway/2026/2026-10.pdf" + signed) as response:
+        assert response.read() == b"%PDF-oct" and response.headers["Content-Type"] == "application/pdf"
+    for bad in ("/bnb-getaway/2026/2026-10.pdf" + signed.replace("sig=", "sig=00"),
+                "/bnb-getaway/2026/..%2Fsecret.txt" + signed, "/bnb-getaway/2026/2025-10.pdf" + signed, "/bnb-getaway/../secret.txt" + signed):
+        try:
+            urllib.request.urlopen(reports + bad)
+            raise SystemExit("report request was allowed: " + bad)
+        except urllib.error.HTTPError as error:
+            assert error.code in (403, 404), (bad, error.code)
     # A 4.97 GB phone video (2026-11-13) was refused by the old 3 GB cap.
     base = "http://%s:%d/upload?sexp=%d&ssig=%s&size=%d&name=huge.mp4&batch=b3&count=1" % (host, port, sexp, ssig, 4_969_898_905)
     assert piece(0, big) == (200, {"received": len(big), "done": False})
