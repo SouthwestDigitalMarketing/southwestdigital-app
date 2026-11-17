@@ -63,6 +63,18 @@ object Ripley {
         return json.optJSONArray("videos") ?: org.json.JSONArray()
     }
 
+    /** Every published client report on ripley: client name, month label, and its path. */
+    fun reports(): org.json.JSONArray {
+        val query = "exp=" + URLEncoder.encode(BuildConfig.SEND_EXP, "UTF-8") + "&sig=" + URLEncoder.encode(BuildConfig.SEND_SIG, "UTF-8")
+        val (_, json) = call("GET", URL(BuildConfig.RIPLEY_URL.trimEnd('/') + "/reports.json?" + query))
+        return json.optJSONArray("reports") ?: org.json.JSONArray()
+    }
+
+    /** A report's address on ripley, signed so the phone can open it. */
+    fun reportUrl(path: String): String =
+        BuildConfig.RIPLEY_URL.trimEnd('/') + path + "?exp=" + URLEncoder.encode(BuildConfig.SEND_EXP, "UTF-8") +
+            "&sig=" + URLEncoder.encode(BuildConfig.SEND_SIG, "UTF-8")
+
     /** The newest app ripley has: {"versionCode": n, "versionName": "x.y"}; empty if it cannot say. */
     fun latestApp(): JSONObject {
         val conn = URL(BuildConfig.RIPLEY_URL.trimEnd('/') + "/app/version").openConnection() as HttpURLConnection
