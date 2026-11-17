@@ -329,7 +329,7 @@ def status_legend():
     import html
     items = "".join("<div class=item>%s</div>" % status_row(key, "Example Client LLC", note=meaning)
                     for key, _, _, meaning in REPORT_STATUSES)
-    return "<details class=legend><summary>Legend</summary>%s</details>" % items
+    return "<details class=legend><summary>Legend</summary><div class=items>%s</div></details>" % items
 
 
 def reports_page(root, folder, query):
@@ -343,9 +343,12 @@ def reports_page(root, folder, query):
              "padding:10px 14px;margin-bottom:6px;color:#0f172a;text-decoration:none;font-weight:600}"
              "div.row{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;margin-bottom:6px;font-weight:600;color:#94a3b8}"
              "small{display:block;color:#64748b;font-weight:400}"
-             ".legend{margin:0 0 14px}.legend summary{display:inline-block;cursor:pointer;list-style:none;border:1px solid #cbd5e1;"
-             "border-radius:999px;padding:6px 14px;font-size:14px;font-weight:600;color:#0f172a;background:#fff}"
-             ".legend summary::-webkit-details-marker{display:none}.legend summary:after{content:' \\25BE'}.legend[open] summary:after{content:' \\25B4'}"
+             ".legend{margin:0 0 14px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden}"
+             ".legend summary{display:flex;justify-content:space-between;align-items:center;cursor:pointer;list-style:none;"
+             "padding:12px 14px;font-size:15px;font-weight:600;color:#0f172a}"
+             ".legend summary::-webkit-details-marker{display:none}.legend summary:after{content:'\\25BE';color:#64748b}"
+             ".legend[open] summary{border-bottom:1px solid #e2e8f0}.legend[open] summary:after{content:'\\25B4'}"
+             ".legend .items{padding:4px 12px 12px;background:#f8fafc}"
              ".legend .item{margin-top:8px}.legend .item small{font-size:13px;margin-top:2px}.legend .st{align-items:flex-start}"
              ".st{display:flex;align-items:center;justify-content:space-between;gap:10px}.st .nm{min-width:0}"
              ".tag{flex:0 0 auto;font-size:12px;font-weight:600;border:1px solid;border-radius:999px;padding:1px 8px;background:#fff}"
