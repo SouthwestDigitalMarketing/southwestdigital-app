@@ -305,16 +305,15 @@ def reports_page(root, folder, query):
     clients = list_reports(root)
     style = ("<meta name=viewport content='width=device-width,initial-scale=1'><style>"
              "body{font:17px/1.45 system-ui,sans-serif;margin:0;padding:24px;background:#f8fafc;color:#0f172a}"
-             "h1{font-size:24px;margin:0 0 16px}a.row{display:block;background:#fff;border:1px solid #e2e8f0;border-radius:12px;"
-             "padding:14px 16px;margin-bottom:10px;color:#0f172a;text-decoration:none;font-weight:600}"
-             "div.row{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;margin-bottom:10px;font-weight:600;color:#475569}"
+             "h1{font-size:24px;margin:0 0 12px}a.row{display:block;background:#fff;border:1px solid #e2e8f0;border-radius:10px;"
+             "padding:10px 14px;margin-bottom:6px;color:#0f172a;text-decoration:none;font-weight:600}"
+             "div.row{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;margin-bottom:6px;font-weight:600;color:#94a3b8}"
              "small{display:block;color:#64748b;font-weight:400}a.back{color:#475569;display:inline-block;margin-bottom:12px}</style>")
     if folder is None:
-        rows = "".join(("<a class=row href='/reports/%s%s'>%s<small>%d report%s, newest %s</small></a>"
-                        % (c["folder"], sign, html.escape(c["name"]), len(c["months"]), "" if len(c["months"]) == 1 else "s",
-                           html.escape(c["months"][0]["label"])))
-                       if c["months"] else
-                       "<div class=row>%s<small>No reports yet</small></div>" % html.escape(c["name"])
+        # Name only, one compact row each: the list will hold 20 to 50 clients (Tom, 2026-11-17).
+        # A client without reports yet is a grey row that does not open.
+        rows = "".join(("<a class=row href='/reports/%s%s'>%s</a>" % (c["folder"], sign, html.escape(c["name"])))
+                       if c["months"] else "<div class=row>%s</div>" % html.escape(c["name"])
                        for c in clients) or "<p>No clients set up for reports yet.</p>"
         return "<!doctype html><html lang=en><head><meta charset=utf-8><title>Reports</title>%s</head><body><h1>Reports</h1>%s</body></html>" % (style, rows)
     client = next((c for c in clients if c["folder"] == folder), None)
@@ -939,7 +938,7 @@ def self_test():
     signed = "?exp=%d&sig=%s" % (sexp, ssig)
     with urllib.request.urlopen(reports + signed) as response:
         page = response.read()
-        assert b"BnB Getaway LLC" in page and b"SJ Equity LLC" in page and b"No reports yet" in page
+        assert b"BnB Getaway LLC" in page and b"SJ Equity LLC" in page and b"<small>" not in page
     with urllib.request.urlopen(reports + "/bnb-getaway" + signed) as response:
         assert b"October 2026" in response.read()
     with urllib.request.urlopen(reports + "/bnb-getaway/2026/2026-10.pdf" + signed) as response:
