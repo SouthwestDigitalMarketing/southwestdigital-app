@@ -310,12 +310,24 @@ REPORT_STATUSES = [
 ]
 
 
-def status_legend():
-    """Compact key of the month statuses, one line each."""
+def status_row(key, name, href=None):
+    """One client row in the look its status gives it: a colored edge and a short tag on the right."""
     import html
-    rows = "".join("<li><i style='background:%s'></i><b>%s</b> %s</li>" % (color, html.escape(label), html.escape(meaning))
-                   for _, label, color, meaning in REPORT_STATUSES)
-    return "<ul class=legend>%s</ul>" % rows
+    label, color = next(((l, c) for k, l, c, _ in REPORT_STATUSES if k == key), ("", "#94a3b8"))
+    tag = "" if key == "none" else "<span class=tag style='color:%s;border-color:%s'>%s</span>" % (color, color, html.escape(label))
+    edge = "" if key == "none" else " style='border-left:5px solid %s'" % color
+    inner = "<span class=nm>%s</span>%s" % (html.escape(name), tag)
+    if href and key != "none":
+        return "<a class='row st'%s href='%s'>%s</a>" % (edge, href, inner)
+    return "<div class='row st %s'%s>%s</div>" % ("off" if key == "none" else "", edge, inner)
+
+
+def status_legend():
+    """A closed 'Legend' button that opens to each status: a sample row as it will look, then what it means."""
+    import html
+    items = "".join("<div class=item>%s<p>%s</p></div>" % (status_row(key, "Example Client LLC"), html.escape(meaning))
+                    for key, _, _, meaning in REPORT_STATUSES)
+    return "<details class=legend><summary>Legend</summary>%s</details>" % items
 
 
 def reports_page(root, folder, query):
@@ -329,9 +341,13 @@ def reports_page(root, folder, query):
              "padding:10px 14px;margin-bottom:6px;color:#0f172a;text-decoration:none;font-weight:600}"
              "div.row{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:10px;padding:10px 14px;margin-bottom:6px;font-weight:600;color:#94a3b8}"
              "small{display:block;color:#64748b;font-weight:400}"
-             ".legend{list-style:none;padding:10px 12px;margin:0 0 14px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;font-size:13px;color:#475569}"
-             ".legend li{display:flex;gap:8px;align-items:baseline;padding:2px 0}.legend i{flex:0 0 10px;height:10px;border-radius:5px;display:inline-block;transform:translateY(1px)}"
-             ".legend b{flex:0 0 auto;color:#0f172a}a.back{color:#475569;display:inline-block;margin-bottom:12px}</style>")
+             ".legend{margin:0 0 14px}.legend summary{display:inline-block;cursor:pointer;list-style:none;border:1px solid #cbd5e1;"
+             "border-radius:999px;padding:6px 14px;font-size:14px;font-weight:600;color:#0f172a;background:#fff}"
+             ".legend summary::-webkit-details-marker{display:none}.legend summary:after{content:' \\25BE'}.legend[open] summary:after{content:' \\25B4'}"
+             ".legend .item{margin-top:12px}.legend .item p{margin:4px 2px 0;font-size:13px;color:#475569}"
+             ".st{display:flex;align-items:center;justify-content:space-between;gap:10px}.st .nm{min-width:0}"
+             ".tag{flex:0 0 auto;font-size:12px;font-weight:600;border:1px solid;border-radius:999px;padding:1px 8px;background:#fff}"
+             "div.row.st:not(.off){background:#fff;color:#0f172a}a.back{color:#475569;display:inline-block;margin-bottom:12px}</style>")
     if folder is None:
         # Name only, one compact row each: the list will hold 20 to 50 clients (Tom, 2026-11-17).
         # A client without reports yet is a grey row that does not open.
