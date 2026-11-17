@@ -95,7 +95,8 @@ export function LocalSeoDashboard({ initialSettings, initialScans, storageMissin
   if (storageMissing) return <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-950">The Local SEO tables are not in the database yet. The migration is ready; apply it after review.</section>;
 
   return (
-    <div className="space-y-6">
+    // Same page padding as the other SWapp pages (p-4 on phones, p-8 wider).
+    <div className="space-y-6 p-4 sm:p-8">
       <header>
         <p className="text-sm font-medium text-slate-500">Bookkeeping Conroe · Google Maps</p>
         <h1 className="mt-1 text-2xl font-semibold text-slate-950">Local SEO geo grid</h1>
