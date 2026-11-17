@@ -28,7 +28,8 @@ INBOX = os.path.expanduser(os.environ.get("PHONE_INTAKE_DIR", "~/swapp-phone-int
 # Published client reports Sol saves on ripley: <root>/<client>/reports/<year>/<YYYY-MM>.pdf.
 # Served read-only to Tom's phone over the tailnet; the files never leave ripley.
 REPORTS_ROOT = os.path.expanduser(os.environ.get("PHONE_INTAKE_REPORTS_ROOT", "~/projects/clients"))
-# Proper names for the Reports page, {"<folder>": "BnB Getaway LLC"}; folders not listed fall back to title case.
+# The clients the Reports page shows, with their proper names: {"<folder>": "BnB Getaway LLC"}.
+# Today that is the clients with a Double account (Tom, 2026-11-17: Double reports only).
 REPORT_NAMES = os.path.expanduser(os.environ.get("PHONE_INTAKE_REPORT_NAMES", "~/.config/swapp-phone-intake/report-names.json"))
 CLIENT_DIR = re.compile(r"^[a-z0-9][a-z0-9_-]{0,80}$")
 REPORT_YEAR = re.compile(r"^\d{4}$")
@@ -261,17 +262,17 @@ def client_name(folder):
 
 
 def list_reports(root):
-    """Clients with published reports, each with its months newest first."""
+    """Every client in REPORT_NAMES, by name, each with its published months newest first (maybe none)."""
     out = []
-    try:
-        folders = sorted(os.listdir(root))
-    except OSError:
-        return out
-    for folder in folders:
-        base = os.path.join(root, folder, "reports")
-        if not CLIENT_DIR.match(folder) or not os.path.isdir(base) or os.path.islink(base):
+    named = read_json(REPORT_NAMES, {}) or {}
+    for folder in sorted(named, key=lambda f: client_name(f).lower()):
+        if not CLIENT_DIR.match(folder):
             continue
+        base = os.path.join(root, folder, "reports")
         months = []
+        if not os.path.isdir(base) or os.path.islink(base):
+            out.append({"folder": folder, "name": client_name(folder), "months": months})
+            continue
         for year in sorted(os.listdir(base), reverse=True):
             year_dir = os.path.join(base, year)
             if not REPORT_YEAR.match(year) or not os.path.isdir(year_dir) or os.path.islink(year_dir):
@@ -281,8 +282,7 @@ def list_reports(root):
                 path = os.path.join(year_dir, name)
                 if match and match.group(1) == year and 1 <= int(match.group(2)) <= 12 and os.path.isfile(path) and not os.path.islink(path):
                     months.append({"year": year, "file": name, "label": "%s %s" % (MONTHS[int(match.group(2)) - 1], year)})
-        if months:
-            out.append({"folder": folder, "name": client_name(folder), "months": months})
+        out.append({"folder": folder, "name": client_name(folder), "months": months})
     return out
 
 
@@ -307,11 +307,15 @@ def reports_page(root, folder, query):
              "body{font:17px/1.45 system-ui,sans-serif;margin:0;padding:24px;background:#f8fafc;color:#0f172a}"
              "h1{font-size:24px;margin:0 0 16px}a.row{display:block;background:#fff;border:1px solid #e2e8f0;border-radius:12px;"
              "padding:14px 16px;margin-bottom:10px;color:#0f172a;text-decoration:none;font-weight:600}"
+             "div.row{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;margin-bottom:10px;font-weight:600;color:#475569}"
              "small{display:block;color:#64748b;font-weight:400}a.back{color:#475569;display:inline-block;margin-bottom:12px}</style>")
     if folder is None:
-        rows = "".join("<a class=row href='/reports/%s%s'>%s<small>%d report%s, newest %s</small></a>"
-                       % (c["folder"], sign, html.escape(c["name"]), len(c["months"]), "" if len(c["months"]) == 1 else "s",
-                          html.escape(c["months"][0]["label"])) for c in clients) or "<p>No reports yet.</p>"
+        rows = "".join(("<a class=row href='/reports/%s%s'>%s<small>%d report%s, newest %s</small></a>"
+                        % (c["folder"], sign, html.escape(c["name"]), len(c["months"]), "" if len(c["months"]) == 1 else "s",
+                           html.escape(c["months"][0]["label"])))
+                       if c["months"] else
+                       "<div class=row>%s<small>No reports yet</small></div>" % html.escape(c["name"])
+                       for c in clients) or "<p>No clients set up for reports yet.</p>"
         return "<!doctype html><html lang=en><head><meta charset=utf-8><title>Reports</title>%s</head><body><h1>Reports</h1>%s</body></html>" % (style, rows)
     client = next((c for c in clients if c["folder"] == folder), None)
     if client is None:
@@ -930,11 +934,12 @@ def self_test():
         handle.write(b"no")
     global REPORT_NAMES
     REPORT_NAMES = os.path.join(INBOX, "names.json")
-    write_json(REPORT_NAMES, {"bnb-getaway": "BnB Getaway LLC"})
+    write_json(REPORT_NAMES, {"bnb-getaway": "BnB Getaway LLC", "sj-equity-llc": "SJ Equity LLC"})
     reports = "http://%s:%d/reports" % (host, port)
     signed = "?exp=%d&sig=%s" % (sexp, ssig)
     with urllib.request.urlopen(reports + signed) as response:
-        assert b"BnB Getaway LLC" in response.read()
+        page = response.read()
+        assert b"BnB Getaway LLC" in page and b"SJ Equity LLC" in page and b"No reports yet" in page
     with urllib.request.urlopen(reports + "/bnb-getaway" + signed) as response:
         assert b"October 2026" in response.read()
     with urllib.request.urlopen(reports + "/bnb-getaway/2026/2026-10.pdf" + signed) as response:
