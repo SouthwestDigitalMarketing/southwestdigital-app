@@ -20,19 +20,23 @@ DataForSEO credentials are configured as Vercel Production secrets:
 out of the repo. The grid parser uses the recorded fixture at
 `src/lib/localSeo/__fixtures__/maps-serp.json`.
 
-First live Standard scan completed and is visible on `/local-seo`. It used a
-3×3 grid, 1 mile spacing, and `bookkeeping Conroe`: 9 of 9 cells completed;
-all 9 returned rank 1. The estimate and DataForSEO charge were both $0.0054.
-The account balance moved from $1.00 to $0.9946. The initial production
-estimate was double-counted because DataForSEO repeats task-post cost on each
-task-get response; PR #141 (`c84b38a`) fixed accounting, and the test record's
-`actualCostUsd` was corrected to $0.0054. PR #138 (`c442b35`) fixed the
-versioned Maps endpoint paths. Production Vercel deployment `c84b38a` is
-READY. The first full default scan is scheduled for Monday, 2026-11-23 at
-15:00 UTC, after which the daily cron collects Standard task results.
-Default scan cost: 392 SERPs, $0.2352. It is within the user's $0.25 test cap.
-The 9-point one-phrase scan is a smoke test, not enough evidence for broad
-ranking decisions. A signed-in visual review of the page remains outstanding.
+First live Standard scan completed and is visible on `/local-seo`. The first
+3×3 test used one phrase: 9 of 9 cells completed, all rank 1, estimate and
+actual charge $0.0054; the account balance moved from $1.00 to $0.9946. PR
+#138 (`c442b35`) fixed the versioned Maps endpoints. PR #141 (`c84b38a`) fixed
+Standard task cost accounting after task-get responses repeated the
+task-post cost; the test record's `actualCostUsd` was corrected to $0.0054.
+
+The first full scan ran on 2026-11-17 as a Standard run: 7×7 points, eight
+phrases, 392/392 cells complete. There were 96 ranked points, all in the top
+3; 296 points had no matching listing. Top-3 share was 24.5% across all
+points; average rank was 1.18 among the ranked points. Estimated and actual
+cost were both $0.2352, within the user's $0.25 cap; balance moved from
+$0.9946 to $0.7594. Fifty-eight tasks returned DataForSEO status 40102
+(`No Search Results.`); each was verified and saved as a completed,
+not-found cell. This PR makes future scans handle that response the same way.
+The next weekly scan is Monday, 2026-11-23 at 15:00 UTC. A signed-in visual
+review of the page remains outstanding.
 
 Checks on Ripley: `npx prisma validate` passed; Prisma Client generated with
 fake local-only database URLs. `npm run typecheck` passed. `npm run lint --
@@ -41,9 +45,8 @@ fake local-only database URLs. `npm run typecheck` passed. `npm run lint --
 passed with fake local-only DB URLs and `PLATFORM_BASE_URL=http://localhost:3000`.
 PR checks passed: typecheck/lint/test, Vercel preview, and Netlify deploy preview;
 Netlify Pages changed was skipped. Post-merge GitHub CI and the production
-Vercel deploy passed. The remote topic branch is deleted. No live API scan or
-signed-in page review was done because the DataForSEO account and credentials
-are not ready.
+Vercel deploy passed. The remote topic branch is deleted. A signed-in visual
+page review remains outstanding.
 
 Cost at defaults: 392 SERPs. Standard weekly scan is estimated at $0.2352,
 about $1.02 per month. Manual Live scan is estimated at $0.784. UI and server
