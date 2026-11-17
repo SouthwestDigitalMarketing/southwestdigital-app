@@ -41,6 +41,15 @@ describe("phone intake tickets", () => {
     expect(signSession(secret, link.exp)).toBe(url.searchParams.get("sig"));
   });
 
+  it("signs the same session link for ripley's Reports page", () => {
+    const link = sendPageLink({ secret, publicUrl: "http://127.0.0.1:8932", nowSeconds: 1_700_000_000, path: "/reports" });
+    expect(link.ok).toBe(true);
+    if (!link.ok) return;
+    const url = new URL(link.url);
+    expect(url.pathname).toBe("/reports");
+    expect(url.searchParams.get("sig")).toBe(signSession(secret, link.exp));
+  });
+
   it("refuses a missing or bad send road address", () => {
     expect(sendPageLink({ secret: "", publicUrl: "http://x", nowSeconds: 1 })).toMatchObject({ ok: false });
     expect(sendPageLink({ secret, publicUrl: "ftp://x", nowSeconds: 1 })).toMatchObject({ ok: false });
