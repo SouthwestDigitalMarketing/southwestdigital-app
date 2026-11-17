@@ -541,7 +541,7 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(data)
             return
-        if path == "/reports" or path.startswith("/reports/"):
+        if path in ("/reports", "/reports.json") or path.startswith("/reports/"):
             # Published client reports, behind the same signed link as the send page.
             query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             secret = os.environ.get("PHONE_INTAKE_SECRET", "")
@@ -553,6 +553,13 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(403, "This link has expired. Open Reports in SWapp again.", "text/plain; charset=utf-8")
                 return
             sign = urllib.parse.urlencode({"exp": exp, "sig": query.get("sig", [""])[0]})
+            if path == "/reports.json":
+                # Every published report, for the app's "new report" phone alert.
+                items = [{"client": c["folder"], "name": c["name"], "label": m["label"],
+                          "path": "/reports/%s/%s/%s" % (c["folder"], m["year"], m["file"])}
+                         for c in list_reports(REPORTS_ROOT) for m in c["months"]]
+                self._json(200, {"reports": items})
+                return
             parts = [urllib.parse.unquote(p) for p in path.split("/")[2:] if p]
             if len(parts) <= 1:
                 page = reports_page(REPORTS_ROOT, parts[0] if parts else None, sign)
@@ -932,6 +939,10 @@ def self_test():
         assert b"October 2026" in response.read()
     with urllib.request.urlopen(reports + "/bnb-getaway/2026/2026-10.pdf" + signed) as response:
         assert response.read() == b"%PDF-oct" and response.headers["Content-Type"] == "application/pdf"
+    with urllib.request.urlopen(reports + ".json" + signed) as response:
+        listed = json.loads(response.read().decode())["reports"]
+    assert listed == [{"client": "bnb-getaway", "name": "BnB Getaway LLC", "label": "October 2026",
+                       "path": "/reports/bnb-getaway/2026/2026-10.pdf"}], listed
     for bad in ("/bnb-getaway/2026/2026-10.pdf" + signed.replace("sig=", "sig=00"),
                 "/bnb-getaway/2026/..%2Fsecret.txt" + signed, "/bnb-getaway/2026/2025-10.pdf" + signed, "/bnb-getaway/../secret.txt" + signed):
         try:
