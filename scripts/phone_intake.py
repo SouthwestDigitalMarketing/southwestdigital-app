@@ -28,6 +28,8 @@ INBOX = os.path.expanduser(os.environ.get("PHONE_INTAKE_DIR", "~/swapp-phone-int
 # Published client reports Sol saves on ripley: <root>/<client>/reports/<year>/<YYYY-MM>.pdf.
 # Served read-only to Tom's phone over the tailnet; the files never leave ripley.
 REPORTS_ROOT = os.path.expanduser(os.environ.get("PHONE_INTAKE_REPORTS_ROOT", "~/projects/clients"))
+# Proper names for the Reports page, {"<folder>": "BnB Getaway LLC"}; folders not listed fall back to title case.
+REPORT_NAMES = os.path.expanduser(os.environ.get("PHONE_INTAKE_REPORT_NAMES", "~/.config/swapp-phone-intake/report-names.json"))
 CLIENT_DIR = re.compile(r"^[a-z0-9][a-z0-9_-]{0,80}$")
 REPORT_YEAR = re.compile(r"^\d{4}$")
 REPORT_FILE = re.compile(r"^(\d{4})-(\d{2})\.pdf$")
@@ -249,7 +251,10 @@ def cancel_batch(inbox, batch):
 
 
 def client_name(folder):
-    """'bnb-getaway' -> 'Bnb Getaway': the folder is the only name ripley has."""
+    """The client's proper name from REPORT_NAMES, else the folder title-cased ('bnb-getaway' -> 'Bnb Getaway')."""
+    named = read_json(REPORT_NAMES, {}) or {}
+    if isinstance(named.get(folder), str) and named[folder].strip():
+        return named[folder].strip()[:120]
     small = {"and", "of", "the", "llc"}
     words = [w for w in re.split(r"[-_]+", folder) if w]
     return " ".join(w.upper() if w in small - {"and", "of", "the"} else (w if w in small else w.capitalize()) for w in words)
@@ -916,10 +921,13 @@ def self_test():
         handle.write(b"%PDF-oct")
     with open(os.path.join(REPORTS_ROOT, "bnb-getaway", "secret.txt"), "wb") as handle:
         handle.write(b"no")
+    global REPORT_NAMES
+    REPORT_NAMES = os.path.join(INBOX, "names.json")
+    write_json(REPORT_NAMES, {"bnb-getaway": "BnB Getaway LLC"})
     reports = "http://%s:%d/reports" % (host, port)
     signed = "?exp=%d&sig=%s" % (sexp, ssig)
     with urllib.request.urlopen(reports + signed) as response:
-        assert b"Bnb Getaway" in response.read()
+        assert b"BnB Getaway LLC" in response.read()
     with urllib.request.urlopen(reports + "/bnb-getaway" + signed) as response:
         assert b"October 2026" in response.read()
     with urllib.request.urlopen(reports + "/bnb-getaway/2026/2026-10.pdf" + signed) as response:
