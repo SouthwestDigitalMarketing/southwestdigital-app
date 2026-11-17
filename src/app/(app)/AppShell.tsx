@@ -30,6 +30,7 @@ import {
   BadgePercent,
   ChevronDown,
   Radar,
+  MapPinned,
   ScrollText,
   Sun,
   X,
@@ -57,6 +58,7 @@ const NAV: Array<{
 }> = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, exact: true },
   { label: "Scanner", href: "/scanner", icon: Radar },
+  { label: "Local SEO", href: "/local-seo", icon: MapPinned },
   { label: "Website", href: "/website", icon: Globe },
   { label: "YouTube", href: "/youtube", icon: PlayCircle },
   { label: "Showrunner", href: "/showrunner", icon: Clapperboard },

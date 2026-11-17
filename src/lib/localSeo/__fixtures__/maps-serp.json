@@ -1,0 +1,17 @@
+{
+  "tasks": [
+    {
+      "status_code": 20000,
+      "result": [
+        {
+          "type": "maps",
+          "items": [
+            { "type": "maps_search", "rank_group": 1, "rank_absolute": 1, "title": "Local CPA Group", "phone": "+1 936 555 0100", "url": "https://localcpa.example/", "address": "1 Main St, Conroe, TX" },
+            { "type": "maps_search", "rank_group": 2, "rank_absolute": 2, "title": "Bookkeeping Conroe", "phone": "(936) 283-4346", "url": "https://www.bookkeepingconroe.com/", "address": "96 Beach Walk Blvd, Conroe, TX" },
+            { "type": "maps_search", "rank_group": 3, "rank_absolute": 3, "title": "North County Books", "phone": null, "url": null, "address": "2 Main St, Conroe, TX" }
+          ]
+        }
+      ]
+    }
+  ]
+}

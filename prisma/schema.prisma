@@ -581,6 +581,8 @@ model Brand {
   leadAttributionTouches LeadAttributionTouch[]
   offboardingPlans       BrandOffboardingPlan[]
   dataExports            BrandDataExport[]
+  localSeoConfig          LocalSeoConfig?
+  localSeoScans           LocalSeoScan[]
   catalogServices        CatalogService[]
   catalogServiceTags     CatalogServiceTag[]
   quoteRevisions         QuoteRevision[]
@@ -604,6 +606,58 @@ model BrandDomain {
   updatedAt  DateTime      @updatedAt
 
   @@index([brandId, purpose, status])
+}
+
+model LocalSeoConfig {
+  id           String   @id @default(cuid())
+  brandId      String   @unique
+  gridSize     Int      @default(7)
+  spacingMiles Float    @default(1)
+  keywords     Json
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  brand        Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+}
+
+model LocalSeoScan {
+  id               String             @id @default(cuid())
+  brandId          String
+  source           String
+  scheduleKey      String?            @unique
+  status           String             @default("queued")
+  gridSize         Int
+  spacingMiles     Float
+  keywords         Json
+  estimatedCostUsd Float
+  actualCostUsd    Float              @default(0)
+  error            String?
+  startedAt        DateTime           @default(now())
+  completedAt      DateTime?
+  brand            Brand              @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  cells            LocalSeoGridCell[]
+
+  @@index([brandId, startedAt])
+  @@index([status, startedAt])
+}
+
+model LocalSeoGridCell {
+  id             String       @id @default(cuid())
+  scanId         String
+  keyword        String
+  row            Int
+  column         Int
+  latitude       Float
+  longitude      Float
+  providerTaskId String?      @unique
+  status         String       @default("queued")
+  rank           Int?
+  competitors    Json         @default("[]")
+  error          String?
+  scan           LocalSeoScan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@unique([scanId, keyword, row, column])
+  @@index([scanId, keyword])
+  @@index([status, providerTaskId])
 }
 
 model BrandMembership {
