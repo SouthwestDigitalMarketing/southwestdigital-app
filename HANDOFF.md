@@ -12,11 +12,13 @@ scan on Mondays.
 
 The reviewed additive SQL is
 `prisma/migrations/20261117170000_local_seo_geo_grid/migration.sql`.
-It has not been applied to any database. DataForSEO API calls were not made:
-Tom has not created the account or added credentials. `DATAFORSEO_LOGIN` and
-`DATAFORSEO_PASSWORD` must be configured as Vercel secrets from `pass` before
-manual or scheduled scans work; `CRON_SECRET` is also required. The grid
-parser uses the recorded fixture at
+It was applied on 2026-11-17 with `prisma db execute` through
+`DIRECT_DATABASE_URL` on port 5432. A Prisma read-back verified the three
+expected tables: `LocalSeoConfig`, `LocalSeoGridCell`, and `LocalSeoScan`.
+DataForSEO API calls were not made because the account and credentials are not
+ready. Set `DATAFORSEO_LOGIN`, `DATAFORSEO_PASSWORD`, and `CRON_SECRET` as
+Vercel secrets before manual or scheduled scans. The grid parser uses the
+recorded fixture at
 `src/lib/localSeo/__fixtures__/maps-serp.json`.
 
 Checks on Ripley: `npx prisma validate` passed; Prisma Client generated with
@@ -26,9 +28,9 @@ fake local-only database URLs. `npm run typecheck` passed. `npm run lint --
 passed with fake local-only DB URLs and `PLATFORM_BASE_URL=http://localhost:3000`.
 PR checks passed: typecheck/lint/test, Vercel preview, and Netlify deploy preview;
 Netlify Pages changed was skipped. Post-merge GitHub CI and the production
-Vercel deploy passed. The remote topic branch is deleted. The production
-database migration is still unapplied, and no live API scan or signed-in page
-review was done because the DataForSEO account and credentials are not ready.
+Vercel deploy passed. The remote topic branch is deleted. No live API scan or
+signed-in page review was done because the DataForSEO account and credentials
+are not ready.
 
 Cost at defaults: 392 SERPs. Standard weekly scan is estimated at $0.2352,
 about $1.02 per month. Manual Live scan is estimated at $0.784. UI and server
