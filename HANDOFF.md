@@ -1,5 +1,35 @@
 # SWapp handoff
 
+## 2026-11-17 — Local SEO geo grid (in progress)
+
+Branch `feat/local-seo-geo-grid`, based on `origin/main` `891a0e9`.
+The staff-only `/local-seo` page configures a 3×3–9×9 grid, 0.5/1/2 mile
+spacing, and up to 12 phrases. Default is 7×7 and eight phrases. It records
+Google Maps ranking and competitor results, shows the grid, top-3 share,
+average rank, competitor frequency, and rank history. Manual scans use Live;
+the Vercel daily cron checks queued Standard results and starts one weekly
+scan on Mondays.
+
+The reviewed additive SQL is
+`prisma/migrations/20261117170000_local_seo_geo_grid/migration.sql`.
+It has not been applied to any database. DataForSEO API calls were not made:
+Tom has not created the account or added credentials. `DATAFORSEO_LOGIN` and
+`DATAFORSEO_PASSWORD` must be configured as Vercel secrets from `pass` before
+manual or scheduled scans work; `CRON_SECRET` is also required. The grid
+parser uses the recorded fixture at
+`src/lib/localSeo/__fixtures__/maps-serp.json`.
+
+Checks on Ripley: `npx prisma validate` passed; Prisma Client generated with
+fake local-only database URLs. `npm run typecheck` passed. `npm run lint --
+--quiet` passed. `npm test` passed: 136 files, 1058 tests passed, 5 skipped;
+1 test file skipped. `git diff --check` passed. `npm run build -- --webpack`
+passed with fake local-only DB URLs and `PLATFORM_BASE_URL=http://localhost:3000`.
+The branch has not been committed, pushed, opened as a PR, merged, or deployed.
+
+Cost at defaults: 392 SERPs. Standard weekly scan is estimated at $0.2352,
+about $1.02 per month. Manual Live scan is estimated at $0.784. UI and server
+enforce a $2.00 estimated cost cap per scan.
+
 ## 2026-11-16 — Channel graph on the Showrunner home (Ummon, showrunner-app tab)
 
 - Tom wanted the desktop video graph on the first page of Showrunner on the phone. `/showrunner` now shows it above the three cards: `src/components/showrunner/ChannelGraph.tsx` (client SVG, tap a dot to highlight its topics and next watch, Watch on YouTube link) with `src/lib/showrunner/graph-layout.ts` (deterministic layout, no d3 dependency) and `graph-layout.test.ts`.
