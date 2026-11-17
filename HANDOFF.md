@@ -15,11 +15,24 @@ The reviewed additive SQL is
 It was applied on 2026-11-17 with `prisma db execute` through
 `DIRECT_DATABASE_URL` on port 5432. A Prisma read-back verified the three
 expected tables: `LocalSeoConfig`, `LocalSeoGridCell`, and `LocalSeoScan`.
-DataForSEO API calls were not made because the account and credentials are not
-ready. Set `DATAFORSEO_LOGIN`, `DATAFORSEO_PASSWORD`, and `CRON_SECRET` as
-Vercel secrets before manual or scheduled scans. The grid parser uses the
-recorded fixture at
+DataForSEO credentials are configured as Vercel Production secrets:
+`DATAFORSEO_LOGIN`, `DATAFORSEO_PASSWORD`, and `CRON_SECRET`. Values are kept
+out of the repo. The grid parser uses the recorded fixture at
 `src/lib/localSeo/__fixtures__/maps-serp.json`.
+
+First live Standard scan completed and is visible on `/local-seo`. It used a
+3×3 grid, 1 mile spacing, and `bookkeeping Conroe`: 9 of 9 cells completed;
+all 9 returned rank 1. The estimate and DataForSEO charge were both $0.0054.
+The account balance moved from $1.00 to $0.9946. The initial production
+estimate was double-counted because DataForSEO repeats task-post cost on each
+task-get response; PR #141 (`c84b38a`) fixed accounting, and the test record's
+`actualCostUsd` was corrected to $0.0054. PR #138 (`c442b35`) fixed the
+versioned Maps endpoint paths. Production Vercel deployment `c84b38a` is
+READY. The first full default scan is scheduled for Monday, 2026-11-23 at
+15:00 UTC, after which the daily cron collects Standard task results.
+Default scan cost: 392 SERPs, $0.2352. It is within the user's $0.25 test cap.
+The 9-point one-phrase scan is a smoke test, not enough evidence for broad
+ranking decisions. A signed-in visual review of the page remains outstanding.
 
 Checks on Ripley: `npx prisma validate` passed; Prisma Client generated with
 fake local-only database URLs. `npm run typecheck` passed. `npm run lint --
