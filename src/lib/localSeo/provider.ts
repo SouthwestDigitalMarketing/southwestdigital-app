@@ -39,7 +39,8 @@ function params(cell: { id: string; keyword: string; latitude: number; longitude
 }
 
 async function finishCell(cellId: string, task: ProviderTask) {
-  if (!task.status_code || task.status_code >= 40000 || !task.result?.[0]) {
+  const noSearchResults = task.status_code === 40102 && task.status_message === "No Search Results.";
+  if (!task.status_code || (task.status_code >= 40000 && !noSearchResults) || !task.result?.[0]) {
     await prisma.localSeoGridCell.update({
       where: { id: cellId },
       data: { status: "failed", error: task.status_message ?? "DataForSEO returned no results." },
