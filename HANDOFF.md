@@ -1,8 +1,8 @@
 # SWapp handoff
 
-## 2026-11-17 — Local SEO geo grid (in progress)
+## 2026-11-17 — Local SEO geo grid (shipped)
 
-Branch `feat/local-seo-geo-grid`, based on `origin/main` `891a0e9`.
+PR #131 merged as `6b2aa0e` from `feat/local-seo-geo-grid`.
 The staff-only `/local-seo` page configures a 3×3–9×9 grid, 0.5/1/2 mile
 spacing, and up to 12 phrases. Default is 7×7 and eight phrases. It records
 Google Maps ranking and competitor results, shows the grid, top-3 share,
@@ -24,9 +24,11 @@ fake local-only database URLs. `npm run typecheck` passed. `npm run lint --
 --quiet` passed. `npm test` passed: 136 files, 1058 tests passed, 5 skipped;
 1 test file skipped. `git diff --check` passed. `npm run build -- --webpack`
 passed with fake local-only DB URLs and `PLATFORM_BASE_URL=http://localhost:3000`.
-Commit `004e9e1` is pushed to `feat/local-seo-geo-grid`; PR #131 is open.
-GitHub typecheck/lint/test and the Vercel preview are still running. The change
-has not been merged or deployed to production.
+PR checks passed: typecheck/lint/test, Vercel preview, and Netlify deploy preview;
+Netlify Pages changed was skipped. Post-merge GitHub CI and the production
+Vercel deploy passed. The remote topic branch is deleted. The production
+database migration is still unapplied, and no live API scan or signed-in page
+review was done because the DataForSEO account and credentials are not ready.
 
 Cost at defaults: 392 SERPs. Standard weekly scan is estimated at $0.2352,
 about $1.02 per month. Manual Live scan is estimated at $0.784. UI and server
