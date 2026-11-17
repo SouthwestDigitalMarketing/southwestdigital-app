@@ -1,6 +1,7 @@
 import "server-only";
 
 import { prisma } from "@/lib/prisma";
+import { dataForSeoApiUrl } from "./api-path";
 import { parseMapResults, type MapItem } from "./grid";
 
 type ProviderTask = { id?: string; status_code?: number; status_message?: string; cost?: number; data?: { tag?: string }; result?: Array<{ items?: MapItem[] }> | null };
@@ -13,7 +14,7 @@ function authHeader() {
 }
 
 async function api(path: string, init: RequestInit = {}) {
-  const response = await fetch(`https://api.dataforseo.com${path}`, {
+  const response = await fetch(dataForSeoApiUrl(path), {
     ...init,
     headers: { Authorization: authHeader(), "Content-Type": "application/json", ...init.headers },
     cache: "no-store",
