@@ -24,7 +24,9 @@ fake local-only database URLs. `npm run typecheck` passed. `npm run lint --
 --quiet` passed. `npm test` passed: 136 files, 1058 tests passed, 5 skipped;
 1 test file skipped. `git diff --check` passed. `npm run build -- --webpack`
 passed with fake local-only DB URLs and `PLATFORM_BASE_URL=http://localhost:3000`.
-The branch has not been committed, pushed, opened as a PR, merged, or deployed.
+Commit `004e9e1` is pushed to `feat/local-seo-geo-grid`; PR #131 is open.
+GitHub typecheck/lint/test and the Vercel preview are still running. The change
+has not been merged or deployed to production.
 
 Cost at defaults: 392 SERPs. Standard weekly scan is estimated at $0.2352,
 about $1.02 per month. Manual Live scan is estimated at $0.784. UI and server
