@@ -1,5 +1,45 @@
 # SWapp handoff
 
+## 2026-11-18 — Prisma migrations baselined (shipped)
+
+PR #152 merged as `00b8cd6`. SWapp now uses the standard Prisma workflow;
+read `docs/deployment/database-migrations.md`. The old "never run migrate"
+rule is superseded, and hand-applying SQL to production is now forbidden
+(the deploy would apply it again).
+
+- `prisma/migrations/0_init` recreates production's `public` schema; old
+  migrations are in `prisma/migrations-archive/`.
+- Production `_prisma_migrations`: SWapp's 9 old rows removed, `0_init`
+  resolved as applied. Uncle Invoice's 31 rows (same table) untouched; its
+  `migrate status` reports up to date.
+- The production build (`scripts/vercel-build.sh`) ran `prisma migrate
+  deploy` and applied `20261118210000_options_template_default_unique`
+  (log, 2026-11-18 20:21 UTC). Afterwards `migrate diff` production vs
+  `schema.prisma` exited 0. Preview builds skip migrations (verified in the
+  #152 preview log).
+- CI job `migrations match schema` passed on #152.
+- Backup before any change: `ripley:~/backups/swapp-db/prod-20261118T200824Z.dump`
+  (+ `-schema.sql`, and `prisma_migrations-before-baseline-20261118.csv`).
+  A test restore had all 145 tables; Brand 7 and MeetingLead 59 matched
+  production.
+- Local dev DB: `docker compose -p swapp-dev up -d` (127.0.0.1:5434, user and
+  password `swapp`). On ripley the main checkout's `.env` now points there;
+  production DB credentials moved to `~/.config/swapp/prod-db.env` (600), and
+  `~/.local/bin/proposal-status` reads that file (verified). Backup of the old
+  `.env`: `~/.config/swapp/southwestdigital-app.env.bak-20261118`.
+
+Not changed, still pointing at production in their `.env`: worktrees
+`southwestdigital-app-mobile-ux`, `swapp-seo-run` (an operator run made today)
+and `worktrees/swapp-scanner`. Their owners should switch them to the local
+database. Open branches with migrations in the old folder layout must rebase:
+their new migration folders are applied by the next production deploy, so a
+change already hand-applied to production would fail there.
+
+Follow-ups: give Uncle Invoice its own logbook (`schema=uncleinvoice` on its
+Netlify database URLs, after copying its rows to
+`uncleinvoice._prisma_migrations`; Netlify masks the values, so this needs
+Tom). Longer term, SWapp in its own Supabase project (database-hosting.md).
+
 ## 2026-11-17 — Local SEO geo grid (shipped)
 
 PR #131 merged as `6b2aa0e` from `feat/local-seo-geo-grid`.
