@@ -31,6 +31,8 @@ REPORTS_ROOT = os.path.expanduser(os.environ.get("PHONE_INTAKE_REPORTS_ROOT", "~
 # The clients the Reports page shows, with their proper names: {"<folder>": "BnB Getaway LLC"}.
 # Today that is the clients with a Double account (Tom, 2026-11-17: Double reports only).
 REPORT_NAMES = os.path.expanduser(os.environ.get("PHONE_INTAKE_REPORT_NAMES", "~/.config/swapp-phone-intake/report-names.json"))
+# Each client's month status, written hourly by scripts/report_status.py from Double.
+REPORT_STATUS = os.path.expanduser(os.environ.get("PHONE_INTAKE_REPORT_STATUS", "~/.local/share/swapp-phone-intake/report-status.json"))
 CLIENT_DIR = re.compile(r"^[a-z0-9][a-z0-9_-]{0,80}$")
 REPORT_YEAR = re.compile(r"^\d{4}$")
 REPORT_FILE = re.compile(r"^(\d{4})-(\d{2})\.pdf$")
@@ -314,6 +316,8 @@ def status_row(key, name, href=None, note=None):
     """One client row in the look its status gives it: a colored edge and a short tag on the right.
     A legend sample carries its meaning inside the row as a second line (note)."""
     import html
+    if key is None:  # reports saved, status not worked out yet: a plain row
+        return "<a class=row href='%s'>%s</a>" % (href, html.escape(name)) if href else "<div class=row>%s</div>" % html.escape(name)
     label, color = next(((l, c) for k, l, c, _ in REPORT_STATUSES if k == key), ("", "#94a3b8"))
     tag = "" if key == "none" else "<span class=tag style='color:%s;border-color:%s'>%s</span>" % (color, color, html.escape(label))
     edge = "" if key == "none" else " style='border-left:5px solid %s'" % color
@@ -350,15 +354,19 @@ def reports_page(root, folder, query):
              ".legend[open] summary{border-bottom:1px solid #e2e8f0}.legend[open] summary:after{content:'\\25B4'}"
              ".legend .items{padding:4px 12px 12px;background:#f8fafc}"
              ".legend .item{margin-top:8px}.legend .item small{font-size:13px;margin-top:2px}.legend .st{align-items:flex-start}"
-             ".st{display:flex;align-items:center;justify-content:space-between;gap:10px}.st .nm{min-width:0}"
+             ".st,a.row.st{display:flex;align-items:center;justify-content:space-between;gap:10px}.st .nm{min-width:0}"
              ".tag{flex:0 0 auto;font-size:12px;font-weight:600;border:1px solid;border-radius:999px;padding:1px 8px;background:#fff}"
              "div.row.st:not(.off){background:#fff;color:#0f172a}a.back{color:#475569;display:inline-block;margin-bottom:12px}</style>")
     if folder is None:
-        # Name only, one compact row each: the list will hold 20 to 50 clients (Tom, 2026-11-17).
-        # A client without reports yet is a grey row that does not open.
-        rows = "".join(("<a class=row href='/reports/%s%s'>%s</a>" % (c["folder"], sign, html.escape(c["name"])))
-                       if c["months"] else "<div class=row>%s</div>" % html.escape(c["name"])
-                       for c in clients) or "<p>No clients set up for reports yet.</p>"
+        # Name only, one compact row each (20 to 50 clients), in the look of last month's status
+        # (Tom, 2026-11-17). A client without saved reports is grey and does not open.
+        statuses = (read_json(REPORT_STATUS, {}) or {}).get("clients") or {}
+        known = {k for k, _, _, _ in REPORT_STATUSES}
+        def row(c):
+            status = (statuses.get(c["folder"]) or {}).get("status")
+            key = "none" if not c["months"] else (status if status in known else None)
+            return status_row(key, c["name"], href="/reports/%s%s" % (c["folder"], sign))
+        rows = "".join(row(c) for c in clients) or "<p>No clients set up for reports yet.</p>"
         return ("<!doctype html><html lang=en><head><meta charset=utf-8><title>Reports</title>%s</head><body><h1>Reports</h1>%s%s</body></html>"
                 % (style, status_legend(), rows))
     client = next((c for c in clients if c["folder"] == folder), None)
@@ -968,6 +976,10 @@ def self_test():
         raise SystemExit("bad short app key was accepted")
     except urllib.error.HTTPError as error:
         assert error.code == 403, error.code
+    # Rows take last month's status from report-status.json; no saved reports stays grey.
+    global REPORT_STATUS
+    REPORT_STATUS = os.path.join(INBOX, "status.json")
+    write_json(REPORT_STATUS, {"clients": {"bnb-getaway": {"status": "late"}, "sj-equity-llc": {"status": "done"}}})
     # Reports: signed list, client page, the PDF itself; nothing outside reports/<year>/<YYYY-MM>.pdf.
     global REPORTS_ROOT
     REPORTS_ROOT = os.path.join(INBOX, "clients")
@@ -986,6 +998,7 @@ def self_test():
         # Client rows show the name only; descriptions live inside the legend's sample rows.
         clients_part = page.split(b"</details>", 1)[1]
         assert b"BnB Getaway LLC" in clients_part and b"SJ Equity LLC" in clients_part and b"<small>" not in clients_part
+        assert b">Late</span>" in clients_part and b">Done</span>" not in clients_part  # SJ has no reports: grey
         assert b"Waiting on client" in page and b"5th business day" in page
     with urllib.request.urlopen(reports + "/bnb-getaway" + signed) as response:
         assert b"October 2026" in response.read()

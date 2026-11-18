@@ -1,0 +1,6 @@
+[Unit]
+Description=Work out each client's month status from Double for SWapp Reports
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 %h/.local/share/swapp-phone-intake/report_status.py
