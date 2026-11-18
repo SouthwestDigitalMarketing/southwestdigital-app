@@ -9,8 +9,11 @@ import {
   latestPeriod,
   LOOKBACK_DAYS,
   type BoardEvidence,
+  type ClientStage,
   type EvidenceStatus,
 } from "./schedule";
+
+export const CLIENT_STAGES: ClientStage[] = ["onboarding", "active", "former"];
 
 /**
  * Bearer token for agents. Only its SHA-256 is configured
@@ -44,6 +47,8 @@ export type EvidenceInput = {
   reportedBy: string;
   sourceEventId: string;
   occurredAt: Date;
+  /** onboarding-quickbooks only: the qb company slug to link. */
+  qbCompany: string;
 };
 
 /** Validates an evidence post against the playbook. Returns an error message or the input. */
@@ -64,11 +69,19 @@ export function parseEvidence(raw: Record<string, unknown>, now: Date): Evidence
   if (!sourceEventId) return "sourceEventId is required (any id unique to this report)";
   const occurredAt = raw.occurredAt === undefined ? now : new Date(String(raw.occurredAt));
   if (!Number.isFinite(occurredAt.getTime())) return "occurredAt must be an ISO date-time";
-  const today = firmDateKey(now);
-  const period = raw.period === undefined ? latestPeriod(duty, now) : clean(raw.period, 10);
-  if (!period || !DATE.test(period)) return "period must be YYYY-MM-DD";
-  if (period > today) return "period is in the future";
-  if (!isOccurrence(duty, period)) return `${dutyId} is not due on ${period}`;
+  const qbCompany = clean(raw.qbCompany, 100);
+  if (qbCompany && !KEY.test(qbCompany)) return "qbCompany must be the qb slug, e.g. bnb-getaway-llc";
+  if (qbCompany && dutyId !== "onboarding-quickbooks") return "qbCompany goes with onboarding-quickbooks only";
+  // An onboarding step's day comes from the client (the day they were won);
+  // the route fills it in.
+  let period = "";
+  if (duty.cadence !== "onboarding") {
+    const today = firmDateKey(now);
+    period = (raw.period === undefined ? latestPeriod(duty, now) : clean(raw.period, 10)) ?? "";
+    if (!DATE.test(period)) return "period must be YYYY-MM-DD";
+    if (period > today) return "period is in the future";
+    if (!isOccurrence(duty, period)) return `${dutyId} is not due on ${period}`;
+  }
   return {
     dutyId,
     clientKey,
@@ -80,6 +93,7 @@ export function parseEvidence(raw: Record<string, unknown>, now: Date): Evidence
     reportedBy,
     sourceEventId,
     occurredAt,
+    qbCompany,
   };
 }
 
@@ -90,6 +104,7 @@ export type ClientInput = {
   qbCompany: string | null;
   startsOn: string;
   active: boolean;
+  stage: ClientStage | undefined;
 };
 
 export function parseClient(raw: Record<string, unknown>): ClientInput | string {
@@ -106,6 +121,10 @@ export function parseClient(raw: Record<string, unknown>): ClientInput | string 
   const qbCompany = clean(raw.qbCompany, 100);
   if (qbCompany && !KEY.test(qbCompany)) return "qbCompany must be the qb slug, e.g. bnb-getaway-llc";
   if (raw.active !== undefined && typeof raw.active !== "boolean") return "active must be true or false";
+  const stage = raw.stage === undefined ? undefined : clean(raw.stage, 20);
+  if (stage !== undefined && !CLIENT_STAGES.includes(stage as ClientStage)) {
+    return `stage must be one of: ${CLIENT_STAGES.join(", ")}`;
+  }
   return {
     key,
     name,
@@ -113,6 +132,7 @@ export function parseClient(raw: Record<string, unknown>): ClientInput | string 
     qbCompany: qbCompany || null,
     startsOn,
     active: raw.active === undefined ? true : (raw.active as boolean),
+    stage: stage as ClientStage | undefined,
   };
 }
 
@@ -123,9 +143,9 @@ export async function loadBoard(brandId: string, now: Date) {
   const since = new Date(now.getTime() - (LOOKBACK_DAYS + 1) * 86_400_000);
   const [clients, rows] = await Promise.all([
     prisma.operationsClient.findMany({
-      where: { brandId, active: true },
+      where: { brandId, active: true, stage: { not: "former" } },
       orderBy: { name: "asc" },
-      select: { id: true, key: true, name: true, startsOn: true },
+      select: { id: true, key: true, name: true, startsOn: true, stage: true, wonOn: true },
     }),
     prisma.operationsEvidence.findMany({
       where: { brandId, period: { gte: since } },
@@ -141,7 +161,14 @@ export async function loadBoard(brandId: string, now: Date) {
       },
     }),
   ]);
-  const boardClients = clients.map((c) => ({ id: c.id, key: c.key, name: c.name, startsOn: dateKey(c.startsOn) }));
+  const boardClients = clients.map((c) => ({
+    id: c.id,
+    key: c.key,
+    name: c.name,
+    startsOn: dateKey(c.startsOn),
+    stage: c.stage as ClientStage,
+    wonOn: c.wonOn ? dateKey(c.wonOn) : null,
+  }));
   const evidence: BoardEvidence[] = rows.map((r) => ({
     dutyId: r.dutyId,
     clientId: r.operationsClientId,

@@ -82,9 +82,9 @@ export default async function OperationsPage() {
           ))}
         </Section>
       ) : null}
-      <Section title="Still due today" count={dueLater.length}>
+      <Section title="Still due" count={dueLater.length}>
         {dueLater.length === 0 ? (
-          <Empty>Nothing else due today.</Empty>
+          <Empty>Nothing else due.</Empty>
         ) : (
           groupItems(dueLater).map((group) => (
             <GroupRow key={group.key} items={group.items} todayKey={todayKey} />
@@ -114,6 +114,9 @@ export default async function OperationsPage() {
               <span className="flex min-w-0 items-center gap-3">
                 <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${HEALTH_DOT[health]}`} aria-hidden />
                 <span className="truncate font-medium text-slate-900">{client.name}</span>
+                {client.stage === "onboarding" ? (
+                  <span className="shrink-0 rounded-full bg-sky-100 px-2 py-0.5 text-xs text-sky-800">New client</span>
+                ) : null}
               </span>
               <span className="shrink-0 text-xs text-slate-500">{clientSummary(own)}</span>
             </div>

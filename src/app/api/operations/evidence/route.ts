@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/simpleRateLimit";
 import { PipeBrandError, resolveBrand } from "@/lib/pipe/contacts";
 import { authenticateOperationsRequest, parseEvidence } from "@/lib/operations/api";
+import { PLAYBOOK } from "@/lib/operations/playbook";
+import { firmDateKey, onboardingPeriod } from "@/lib/operations/schedule";
 
 export const dynamic = "force-dynamic";
 
@@ -30,15 +32,23 @@ export async function POST(request: Request) {
   try {
     const brand = await resolveBrand(typeof raw.brand === "string" ? raw.brand.trim() : "");
     let clientId: string | null = null;
+    let period = input.period;
+    const duty = PLAYBOOK.find((d) => d.id === input.dutyId)!;
     if (input.clientKey) {
       const client = await prisma.operationsClient.findFirst({
         where: { brandId: brand.id, key: input.clientKey, active: true },
-        select: { id: true },
+        select: { id: true, stage: true, wonOn: true },
       });
       if (!client) {
         return NextResponse.json({ error: `No active Operations client ${input.clientKey}.` }, { status: 404 });
       }
       clientId = client.id;
+      if (duty.cadence === "onboarding") {
+        if (client.stage !== "onboarding" || !client.wonOn) {
+          return NextResponse.json({ error: `${input.clientKey} is not in onboarding.` }, { status: 409 });
+        }
+        period = onboardingPeriod(duty, client.wonOn.toISOString().slice(0, 10));
+      }
     }
     const existing = await prisma.operationsEvidence.findUnique({
       where: { brandId_sourceEventId: { brandId: brand.id, sourceEventId: input.sourceEventId } },
@@ -50,7 +60,7 @@ export async function POST(request: Request) {
         brandId: brand.id,
         dutyId: input.dutyId,
         operationsClientId: clientId,
-        period: new Date(`${input.period}T00:00:00Z`),
+        period: new Date(`${period}T00:00:00Z`),
         status: input.status,
         summary: input.summary,
         details: input.details === null ? Prisma.JsonNull : (input.details as Prisma.InputJsonValue),
@@ -59,9 +69,26 @@ export async function POST(request: Request) {
         sourceEventId: input.sourceEventId,
         occurredAt: input.occurredAt,
       },
-      select: { id: true, period: true },
+      select: { id: true },
     });
-    return NextResponse.json({ id: row.id, period: input.period }, { status: 201 });
+    let stage: string | undefined;
+    if (clientId && input.status === "done") {
+      if (input.dutyId === "onboarding-quickbooks" && input.qbCompany) {
+        await prisma.operationsClient.update({ where: { id: clientId }, data: { qbCompany: input.qbCompany } });
+      }
+      // Opening balances done: the client moves to the monthly routine, with
+      // recurring duties from the next day.
+      if (input.dutyId === "onboarding-opening-balances") {
+        const tomorrow = new Date(`${firmDateKey(new Date())}T00:00:00Z`);
+        tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+        await prisma.operationsClient.update({
+          where: { id: clientId },
+          data: { stage: "active", startsOn: tomorrow },
+        });
+        stage = "active";
+      }
+    }
+    return NextResponse.json({ id: row.id, period, ...(stage ? { stage } : {}) }, { status: 201 });
   } catch (error) {
     if (error instanceof PipeBrandError) return NextResponse.json({ error: error.message }, { status: 404 });
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {

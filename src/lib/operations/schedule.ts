@@ -106,7 +106,22 @@ export function stateOf(dueAt: Date, latest: EvidenceStatus | undefined, now: Da
   return now.getTime() >= dueAt.getTime() ? "overdue" : "due";
 }
 
-export type BoardClient = { id: string; key?: string; name: string; startsOn: string };
+export type ClientStage = "onboarding" | "active" | "former";
+export type BoardClient = {
+  id: string;
+  key?: string;
+  name: string;
+  startsOn: string;
+  /** Default "active". */
+  stage?: ClientStage;
+  /** Day the client was won; onboarding duties count from here. */
+  wonOn?: string | null;
+};
+
+/** Due day of an onboarding duty for a client won on `wonOn`. */
+export function onboardingPeriod(duty: Duty, wonOn: string): string {
+  return addDays(wonOn, duty.dayOffset ?? 0);
+}
 export type BoardEvidence = {
   dutyId: string;
   clientId: string | null;
@@ -124,8 +139,10 @@ export type BoardItem = Occurrence & {
 };
 
 /**
- * Every occurrence in the lookback window, per client for client duties,
- * with its state. Sorted most urgent first, then oldest due first.
+ * Every recurring occurrence in the lookback window for active clients, plus
+ * every onboarding step for clients in onboarding (all of them, from the day
+ * they were won, so the checklist shows whole). Sorted most urgent first,
+ * then oldest due first.
  */
 export function buildBoard(input: {
   now: Date;
@@ -143,12 +160,25 @@ export function buildBoard(input: {
     if (!seen || seen.occurredAt.getTime() <= row.occurredAt.getTime()) latest.set(key, row);
   }
 
+  const playbook = input.playbook ?? PLAYBOOK;
   const items: BoardItem[] = [];
-  for (const occ of occurrences(from, now, input.playbook)) {
-    const targets = occ.duty.scope === "firm" ? [null] : clients.filter((c) => c.startsOn <= occ.period);
+  const recurringClients = clients.filter((c) => (c.stage ?? "active") === "active");
+  for (const occ of occurrences(from, now, playbook)) {
+    const targets =
+      occ.duty.scope === "firm" ? [null] : recurringClients.filter((c) => c.startsOn <= occ.period);
     for (const client of targets) {
       const evidence = latest.get(`${occ.duty.id}|${client?.id ?? ""}|${occ.period}`) ?? null;
       items.push({ ...occ, client, evidence, state: stateOf(occ.dueAt, evidence?.status, now) });
+    }
+  }
+  const onboardingDuties = playbook.filter((d) => d.cadence === "onboarding");
+  for (const client of clients) {
+    if (client.stage !== "onboarding" || !client.wonOn) continue;
+    for (const duty of onboardingDuties) {
+      const period = onboardingPeriod(duty, client.wonOn);
+      const dueAt = firmInstant(period, duty.dueHour ?? 17);
+      const evidence = latest.get(`${duty.id}|${client.id}|${period}`) ?? null;
+      items.push({ duty, period, dueAt, client, evidence, state: stateOf(dueAt, evidence?.status, now) });
     }
   }
   return items.sort(
