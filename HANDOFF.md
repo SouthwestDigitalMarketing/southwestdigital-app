@@ -1,5 +1,42 @@
 # SWapp handoff
 
+## 2026-11-18 — Client won automation (shipped)
+
+PR #156 merged as `6e191d4`. The production build applied migration
+`20261118220000_client_won_records` (log 22:50 UTC): `Engagement.contactId`;
+`OperationsClient.stage` (onboarding|active|former), `wonOn`, `engagementId`.
+
+- A live paid proposal (Stripe webhook) runs `onClientWon`
+  (`src/lib/operations/clientWon.ts`): service record filled, contact linked
+  (by email, else created), client tags added (Reviews pipeline starts from
+  `review-pending`), open Pipe Prospects deals to won and `lead` removed,
+  Operations client in stage onboarding with a 6-step checklist
+  (`onboarding-*` duties in `playbook.ts`). Result is posted as evidence on
+  `onboarding-records`. Test payments (livemode false) skip it. Rerun by hand:
+  `ops client-won <engagementId>`.
+- Posting `done` on `onboarding-opening-balances` moves the client to active
+  (recurring duties from the next day).
+- `~/.local/bin/qb-clients` (ripley, not in a repo) asks
+  `GET /api/operations/clients` first: onboarding = SETUP, active = ACTIVE,
+  former = LOCKED; falls back to tags when SWapp is unreachable or the
+  company is not on the roster. Verified after deploy with `qb-clients --json`.
+- Rodan backfill (2026-11-18 22:51 UTC): all 5 steps done; read back from
+  production: engagement MONTHLY_BOOKKEEPING / MONTHLY_RECURRING / 480,
+  linked to contact `cmw9tyw5k0001l208zv48urd4`; tags now active-client,
+  contract-signed, monthly-bookkeeping, paid, qb-work-setup, review-pending,
+  service-monthly-bookkeeping-active (lead removed); Operations
+  `rodan-properties-llc` onboarding, active, wonOn 2026-11-11; 2 pipe-prospects
+  deals moved to won (leads `cmw9tz0jh0004l208m1jjujre` from 11-09 and
+  `cmwdto8c6000hl308916nflph` from 11-12, likely a duplicate; Kassad told).
+  Rodan's onboarding steps due 11-13/11-14 show overdue until Sol's agents
+  post evidence.
+- Checks: typecheck pass; lint 0 errors; vitest 1083 passed, 5 skipped;
+  `next build` pass; CI pass. Local end-to-end against the Docker DB passed
+  and a second run was idempotent.
+- Known: Sales' local copy does not apply tag removals, so `lead` stays in
+  `sales.db` (Kassad's decision, board `de02c2af7180`). An old `prospects`
+  pipeline item for Rodan still sits at education-interest; not touched.
+
 ## 2026-11-18 — Operations evidence store (shipped)
 
 PR #154 merged as `1ca192a`. The production build applied migration
