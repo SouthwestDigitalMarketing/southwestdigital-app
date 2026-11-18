@@ -23,9 +23,8 @@ use the Live endpoint and finish in the staff request.
 
 ## Setup
 
-1. Apply `prisma/migrations/20261117170000_local_seo_geo_grid/migration.sql`
-   through the project's reviewed `prisma db execute` process. Do not use
-   `prisma migrate deploy`, `prisma migrate dev`, or `prisma db push`.
+1. The schema is in production (included in the 2026-11-18 baseline,
+   `prisma/migrations/0_init`).
 2. Store DataForSEO's login and password in `pass` as `dataforseo/api`, then
    configure the production Vercel secrets `DATAFORSEO_LOGIN` and
    `DATAFORSEO_PASSWORD` from those values. Never commit either value.

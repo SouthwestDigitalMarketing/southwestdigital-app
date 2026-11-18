@@ -100,10 +100,10 @@ pgbouncer it hangs on connection teardown after applying the schema.
 `.env.local` is already wired correctly; do not override `DIRECT_DATABASE_URL`
 in scripts.
 
-**Before running any Prisma command against a real database, read
-`docs/deployment/database-migration-state.md`.** The migration history is
-divergent from the schema: `prisma migrate deploy` and `prisma migrate dev` must
-not be used, and changes are applied as reviewed idempotent SQL instead.
+**Local development uses its own Docker database, never production.** Start
+it with `docker compose -p swapp-dev up -d` (Postgres on `127.0.0.1:5434`) and
+change the schema with `npx prisma migrate dev`. Production is migrated by the
+deploy. Read `docs/deployment/database-migrations.md`.
 
 ```bash
 npx prisma generate                                        # after any schema change

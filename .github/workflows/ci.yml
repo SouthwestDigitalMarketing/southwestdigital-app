@@ -43,6 +43,46 @@ jobs:
       - name: Unit tests
         run: npm test
 
+  # Builds an empty database from prisma/migrations and fails if the result
+  # differs from prisma/schema.prisma: a schema change with no migration, or
+  # a migration that does not apply cleanly, is caught before merge.
+  migrations:
+    name: migrations match schema
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: swapp
+          POSTGRES_PASSWORD: swapp
+          POSTGRES_DB: swapp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U swapp -d swapp"
+          --health-interval 3s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://swapp:swapp@localhost:5432/swapp
+      DIRECT_DATABASE_URL: postgresql://swapp:swapp@localhost:5432/swapp
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply migrations to an empty database
+        run: npx prisma migrate deploy
+
+      - name: Compare database with schema.prisma
+        run: npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
+
 # Playwright is deliberately not run here. Those specs drive a real dev server
 # against a real Supabase database and sign in as a staff user, so they need
 # secrets and a reachable DB rather than a clean CI container. They stay a

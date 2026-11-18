@@ -334,10 +334,10 @@ enum EngagementStatus {
 enum AgreementManagerStatus {
   ACTIVE
   VOIDED
+  ARCHIVED
   VOIDED_BEFORE_SIGNATURE
   CANCELLATION_REQUESTED
   TERMINATED_AFTER_SIGNATURE
-  ARCHIVED
 }
 
 enum EngagementPricingModel {
@@ -545,50 +545,54 @@ model VerificationToken {
 // ─── Brand / tenant ──────────────────────────────────────────────────────────
 
 model Brand {
-  id                     String                 @id @default(cuid())
-  slug                   String                 @unique
-  name                   String
-  legalName              String?
-  status                 BrandStatus            @default(DRAFT)
-  subscriptionStartedAt  DateTime?
-  subscriptionEndedAt    DateTime?
-  accessEndsAt           DateTime?
-  dataExportedAt         DateTime?
-  retentionEndsAt        DateTime?
-  deletedAt              DateTime?
-  domains                BrandDomain[]
-  memberships            BrandMembership[]
-  theme                  BrandTheme?
-  toolLinks              BrandToolLink[]
-  media                  BrandMedia[]
-  mediaFolders           BrandMediaFolder[]
-  discounts              BrandDiscount[]
-  brandDiscountQuotes    BrandDiscountQuote[]
-  crmContacts            Contact[]              @relation("CrmBrandContacts")
-  contactTags            ContactTag[]
-  contactTagAutomations  ContactTagAutomation[]
-  relatedContactLinks    ContactBrandLink[]     @relation("ContactRelatedBrands")
-  features               BrandFeature[]
-  integrations           BrandIntegration[]
-  agreementTemplates     AgreementTemplate[]
-  optionsTemplates       ProposalOptionsTemplate[]
-  auditEvents            AuditEvent[]
-  customerAccounts       CustomerAccount[]
-  leads                  Lead[]
-  pipeTasks              PipeTask[]
-  customerContacts       CustomerContact[]
-  leadContacts           LeadContact[]
-  leadAttributionTouches LeadAttributionTouch[]
-  offboardingPlans       BrandOffboardingPlan[]
-  dataExports            BrandDataExport[]
+  id                      String                    @id @default(cuid())
+  slug                    String                    @unique
+  name                    String
+  legalName               String?
+  status                  BrandStatus               @default(DRAFT)
+  subscriptionStartedAt   DateTime?
+  subscriptionEndedAt     DateTime?
+  accessEndsAt            DateTime?
+  dataExportedAt          DateTime?
+  retentionEndsAt         DateTime?
+  deletedAt               DateTime?
+  domains                 BrandDomain[]
+  memberships             BrandMembership[]
+  theme                   BrandTheme?
+  toolLinks               BrandToolLink[]
+  media                   BrandMedia[]
+  mediaFolders            BrandMediaFolder[]
+  discounts               BrandDiscount[]
+  brandDiscountQuotes     BrandDiscountQuote[]
+  crmContacts             Contact[]                 @relation("CrmBrandContacts")
+  contactTags             ContactTag[]
+  contactTagAutomations   ContactTagAutomation[]
+  relatedContactLinks     ContactBrandLink[]        @relation("ContactRelatedBrands")
+  features                BrandFeature[]
+  integrations            BrandIntegration[]
+  agreementTemplates      AgreementTemplate[]
+  optionsTemplates        ProposalOptionsTemplate[]
+  auditEvents             AuditEvent[]
+  customerAccounts        CustomerAccount[]
+  leads                   Lead[]
+  pipeTasks               PipeTask[]
+  customerContacts        CustomerContact[]
+  leadContacts            LeadContact[]
+  leadAttributionTouches  LeadAttributionTouch[]
+  offboardingPlans        BrandOffboardingPlan[]
+  dataExports             BrandDataExport[]
   localSeoConfig          LocalSeoConfig?
   localSeoScans           LocalSeoScan[]
-  catalogServices        CatalogService[]
-  catalogServiceTags     CatalogServiceTag[]
-  quoteRevisions         QuoteRevision[]
-  emailConnections       EmailConnection[]
-  createdAt              DateTime               @default(now())
-  updatedAt              DateTime               @updatedAt
+  catalogServices         CatalogService[]
+  catalogServiceTags      CatalogServiceTag[]
+  quoteRevisions          QuoteRevision[]
+  emailConnections        EmailConnection[]
+  scanRoles               ScanRole[]
+  scanFindings            ScanFinding[]
+  showrunnerVideoStatuses ShowrunnerVideoStatus[]
+  showrunnerFeedback      ShowrunnerFeedback[]
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
 
   @@index([status])
 }
@@ -759,7 +763,7 @@ model BrandTheme {
   monthlyOffersAcceptedGoal  Int?
   proposalFeaturedVideoUrl   String?
   proposalFeaturedImageUrl   String?
-  proposalLightColor         String? @map("proposalPrimaryColor")
+  proposalLightColor         String?  @map("proposalPrimaryColor")
   proposalAccentColor        String?
   accentForegroundColor      String   @default("#ffffff")
   brand                      Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
@@ -813,28 +817,28 @@ model BrandMedia {
 }
 
 model BrandDiscount {
-  id           String    @id @default(cuid())
-  brandId      String
-  contactId    String?
-  name         String
-  kind         String
-  percent      Int       @default(10)
-  amount       Decimal   @default(250) @db.Decimal(12, 2)
-  title        String    @default("")
-  details      String    @default("") @db.Text
-  activationMode       String    @default("held")
-  activationDelayDays  Int       @default(0)
-  presentedAt          DateTime?
-  deadlineMode         String    @default("relative")
-  durationDays         Int       @default(14)
-  deadlineDate         DateTime?
-  active               Boolean   @default(true)
-  sortOrder    Int       @default(0)
-  brand        Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  contact      Contact?  @relation("BrandDiscountContact", fields: [contactId], references: [id], onDelete: SetNull)
-  offerAssignments BrandDiscountQuote[]
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id                  String               @id @default(cuid())
+  brandId             String
+  contactId           String?
+  name                String
+  kind                String
+  percent             Int                  @default(10)
+  amount              Decimal              @default(250) @db.Decimal(12, 2)
+  title               String               @default("")
+  details             String               @default("") @db.Text
+  activationMode      String               @default("held")
+  activationDelayDays Int                  @default(0)
+  presentedAt         DateTime?
+  deadlineMode        String               @default("relative")
+  durationDays        Int                  @default(14)
+  deadlineDate        DateTime?
+  active              Boolean              @default(true)
+  sortOrder           Int                  @default(0)
+  brand               Brand                @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  contact             Contact?             @relation("BrandDiscountContact", fields: [contactId], references: [id], onDelete: SetNull)
+  offerAssignments    BrandDiscountQuote[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
 
   @@index([brandId, active, sortOrder])
   @@index([contactId])
@@ -844,7 +848,7 @@ model BrandDiscountQuote {
   brandId    String
   discountId String
   quoteId    String
-  assignedAt DateTime @default(now())
+  assignedAt DateTime      @default(now())
   brand      Brand         @relation(fields: [brandId], references: [id], onDelete: Cascade)
   discount   BrandDiscount @relation(fields: [discountId], references: [id], onDelete: Cascade)
   quote      Quote         @relation(fields: [quoteId], references: [id], onDelete: Cascade)
@@ -1683,48 +1687,48 @@ model TeamMeetingClient {
 }
 
 model MeetingLead {
-  id                  String                  @id @default(cuid())
-  brandId             String
-  name                String
-  company             String?
-  email               String?
-  clientId            String?
-  customerAccountId   String?
-  kind                LeadKind                @default(LEAD)
-  bookkeepingCategory LeadBookkeepingCategory @default(SMALL_BUSINESS)
-  expectedServices    String?
-  notes               String?
-  isActive            Boolean                 @default(true)
+  id                       String                  @id @default(cuid())
+  brandId                  String
+  name                     String
+  company                  String?
+  email                    String?
+  clientId                 String?
+  customerAccountId        String?
+  kind                     LeadKind                @default(LEAD)
+  bookkeepingCategory      LeadBookkeepingCategory @default(SMALL_BUSINESS)
+  expectedServices         String?
+  notes                    String?
+  isActive                 Boolean                 @default(true)
   // Identity and working fields for the pipe terminal tool. pipe's deal
   // numbers never change, so pipeId is the stable cross-system key. Due
   // dates stay text: they are calendar days, not instants.
-  pipeId              String?
-  nextAction          String?
-  nextDue             String?
-  amount              Decimal?                @db.Decimal(14, 2)
-  amountKind          String?
+  pipeId                   String?
+  nextAction               String?
+  nextDue                  String?
+  amount                   Decimal?                @db.Decimal(14, 2)
+  amountKind               String?
   // Commercial terms belong to the opportunity, not the person. `amountKind`
   // above remains the source document kind (offer or invoice).
-  offerType                 String?
-  valueBasis                String?
-  firstPaymentReceivedAt    DateTime?
-  serviceAgreementSignedAt  DateTime?
-  invoiceRef          String?
-  invoiceDate         String?
-  yesContactId        String?
+  offerType                String?
+  valueBasis               String?
+  firstPaymentReceivedAt   DateTime?
+  serviceAgreementSignedAt DateTime?
+  invoiceRef               String?
+  invoiceDate              String?
+  yesContactId             String?
   // pipe's Leads step (reach|qb|book|call|quote|nurture). Validated and kept
   // consistent with the pipe stage in src/lib/pipe/deals.ts, not by the DB.
-  leadStep            String?
-  client              TicketClient?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  customerAccount     CustomerAccount?        @relation(fields: [customerAccountId], references: [id], onDelete: SetNull)
-  meetings            TeamMeetingLead[]
-  contacts            LeadContact[]
-  pipelineItems       PipelineItem[]
-  createdAt           DateTime                @default(now())
-  updatedAt           DateTime                @updatedAt
+  leadStep                 String?
+  client                   TicketClient?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  customerAccount          CustomerAccount?        @relation(fields: [customerAccountId], references: [id], onDelete: SetNull)
+  meetings                 TeamMeetingLead[]
+  contacts                 LeadContact[]
+  pipelineItems            PipelineItem[]
+  createdAt                DateTime                @default(now())
+  updatedAt                DateTime                @updatedAt
 
-  @@index([brandId, clientId, createdAt])
   @@unique([brandId, pipeId])
+  @@index([brandId, clientId, createdAt])
 }
 
 model TeamMeetingLead {
@@ -1841,7 +1845,7 @@ model PipelineItem {
 // A source event is recorded once, even when a scheduled scan sees it again.
 // The paired job makes the All Thing update visible and retryable.
 model SalesEvidenceEvent {
-  id            String   @id @default(cuid())
+  id            String            @id @default(cuid())
   brandId       String
   leadId        String?
   source        String
@@ -1850,7 +1854,7 @@ model SalesEvidenceEvent {
   occurredAt    DateTime
   summary       String
   sourceRef     String?
-  createdAt     DateTime @default(now())
+  createdAt     DateTime          @default(now())
   allThingJob   AllThingWriteJob?
 
   @@unique([brandId, source, sourceEventId])
@@ -1858,14 +1862,14 @@ model SalesEvidenceEvent {
 }
 
 model AllThingWriteJob {
-  id          String   @id @default(cuid())
-  eventId     String   @unique
-  status      String   @default("pending")
-  attempts    Int      @default(0)
+  id          String             @id @default(cuid())
+  eventId     String             @unique
+  status      String             @default("pending")
+  attempts    Int                @default(0)
   lastError   String?
   completedAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @default(now()) @updatedAt
   event       SalesEvidenceEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@index([status, createdAt])
@@ -1881,8 +1885,9 @@ model ScanRole {
   label       String
   holderLabel String?
   findings    ScanFinding[]
+  brand       Brand         @relation(fields: [brandId], references: [id], onDelete: Cascade)
   createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  updatedAt   DateTime      @default(now()) @updatedAt
 
   @@unique([brandId, key])
   @@index([brandId])
@@ -1905,7 +1910,8 @@ model ScanFinding {
   closedAt    DateTime?
   doneNote    String?
   createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  updatedAt   DateTime  @default(now()) @updatedAt
+  brand       Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
   role        ScanRole? @relation(fields: [roleId], references: [id], onDelete: SetNull)
 
   @@unique([brandId, room, key])
@@ -1989,17 +1995,18 @@ model StrategyNote {
 /// and the YouTube link once published. Ripley pushes it (POST /api/showrunner/video-status);
 /// the Showrunner page shows it. One row per brand and batch, replaced on every push.
 model ShowrunnerVideoStatus {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   brandId   String
   batch     String
   project   String?
   state     String
-  stage     String?  @db.Text
+  stage     String?   @db.Text
   steps     Json?
   render    Json?
   url       String?
   sentAt    DateTime?
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime  @default(now()) @updatedAt
+  brand     Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
   @@unique([brandId, batch])
   @@index([brandId, updatedAt])
@@ -2014,6 +2021,7 @@ model ShowrunnerFeedback {
   note         String?  @db.Text
   actorUserId  String?
   createdAt    DateTime @default(now())
+  brand        Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
   @@index([brandId, seriesSlug, createdAt])
 }
@@ -2174,124 +2182,124 @@ model MotivationalQuote {
 // ─── Engagements & proposals ─────────────────────────────────────────────────
 
 model Engagement {
-  id                                 String                  @id @default(cuid())
-  brandId                            String
-  clientName                         String                  @default("")
-  clientLegalName                    String                  @default("")
-  dba                                String?
-  entityType                         String?
-  primaryContactName                 String?
-  primaryContactEmail                String?
-  primaryContactPhone                String?
-  billingContactName                 String?
-  billingContactEmail                String?
-  billingContactPhone                String?
-  businessAddress                    String?
-  quickBooksCompanyName              String?
-  relatedEntities                    String?
-  clientNotes                        String?
-  engagementType                     EngagementType?
-  productKind                        String                  @default("bookkeeping")
-  status                             EngagementStatus        @default(DRAFT)
-  pricingModel                       EngagementPricingModel?
-  feeAmount                          Decimal?
-  hourlyRate                         Decimal?
-  depositRequired                    Boolean                 @default(false)
-  depositAmount                      Decimal?
-  billingFrequency                   String?
-  paymentTerms                       String?
-  effectiveDate                      DateTime?
-  startDate                          DateTime?
-  endDate                            DateTime?
-  assignedOwnerMembershipId          String?
-  internalReviewerMembershipId       String?
-  urgencyNotes                       String?
-  notes                              String?
-  realEstateDetails                  Json?
-  monthlyScope                       Json?
-  cleanupScope                       Json?
-  hourlyScope                        Json?
-  auditSupportScope                  Json?
-  exclusions                         Json?
-  customExclusions                   Json?
-  intakeTokenHash                    String?
-  intakeData                         Json?
-  onboardingData                     Json?
-  intakeSubmittedAt                  DateTime?
-  intakeExpiresAt                    DateTime?
-  salesCallCompleted                 Boolean                 @default(false)
-  salesCallDate                      DateTime?
-  salesCallNotes                     String?
-  initialClientProblem               String?
-  urgencyOrDeadline                  String?
-  initialEstimateDiscussed           String?
-  scopingMode                        ScopingMode             @default(AGREEMENT)
-  isExpedited                        Boolean                 @default(false)
-  onboardingFee                      Decimal?
-  onboardingFeeWaived                Boolean                 @default(false)
-  onboardingFeeStatus                OnboardingFeeStatus     @default(REQUIRED)
-  onboardingFeeCreditable            Boolean                 @default(true)
-  onboardingFeeCreditAppliedTo       FeeCreditTarget         @default(DISCOVERY_DEPOSIT)
-  onboardingFeeCreditAmount          Decimal?
-  estimatedTotalFee                  Decimal?
-  discoveryDepositPercent            Decimal                 @default(25)
-  discoveryDepositStatus             DiscoveryDepositStatus?
-  fullFeeDueUpfront                  Boolean                 @default(false)
-  discoveryRequired                  Boolean                 @default(true)
-  discoveryCompletedAt               DateTime?
-  finalScopeConfirmedAt              DateTime?
-  revisedFeeAmount                   Decimal?
-  changeOrderRequired                Boolean                 @default(false)
-  periodStart                        DateTime?
-  periodEnd                          DateTime?
-  taxYearsInvolved                   String?
-  accountsIncluded                   String?
-  creditCardsIncluded                String?
-  loansIncluded                      String?
-  payrollInvolved                    Boolean                 @default(false)
-  contractorPaymentsInvolved         Boolean                 @default(false)
-  missingRecordsKnown                String?
-  knownProblems                      String?
-  requiredDocuments                  String?
-  deliverables                       String?
-  specialReportingPeriodStart        DateTime?
-  specialReportingPeriodEnd          DateTime?
-  specialReportDescription           String?
-  auditPolicyOrLenderSupportRequired Boolean                 @default(false)
-  agreementText                      String?
-  agreementManagerStatus             AgreementManagerStatus @default(ACTIVE)
-  agreementSentAt                    DateTime?
-  agreementCancellationRequestedAt   DateTime?
-  agreementCancellationRequestedByUserId String?
-  agreementCancellationReason        String?
-  agreementCancellationTokenHash     String? @unique
-  agreementCancellationTokenExpiresAt DateTime?
-  agreementCancellationAcknowledgedAt DateTime?
-  agreementCancellationAcknowledgedByName String?
+  id                                       String                  @id @default(cuid())
+  brandId                                  String
+  clientName                               String                  @default("")
+  clientLegalName                          String                  @default("")
+  dba                                      String?
+  entityType                               String?
+  primaryContactName                       String?
+  primaryContactEmail                      String?
+  primaryContactPhone                      String?
+  billingContactName                       String?
+  billingContactEmail                      String?
+  billingContactPhone                      String?
+  businessAddress                          String?
+  quickBooksCompanyName                    String?
+  relatedEntities                          String?
+  clientNotes                              String?
+  engagementType                           EngagementType?
+  productKind                              String                  @default("bookkeeping")
+  status                                   EngagementStatus        @default(DRAFT)
+  pricingModel                             EngagementPricingModel?
+  feeAmount                                Decimal?
+  hourlyRate                               Decimal?
+  depositRequired                          Boolean                 @default(false)
+  depositAmount                            Decimal?
+  billingFrequency                         String?
+  paymentTerms                             String?
+  effectiveDate                            DateTime?
+  startDate                                DateTime?
+  endDate                                  DateTime?
+  assignedOwnerMembershipId                String?
+  internalReviewerMembershipId             String?
+  urgencyNotes                             String?
+  notes                                    String?
+  realEstateDetails                        Json?
+  monthlyScope                             Json?
+  cleanupScope                             Json?
+  hourlyScope                              Json?
+  auditSupportScope                        Json?
+  exclusions                               Json?
+  customExclusions                         Json?
+  intakeTokenHash                          String?
+  intakeData                               Json?
+  onboardingData                           Json?
+  intakeSubmittedAt                        DateTime?
+  intakeExpiresAt                          DateTime?
+  salesCallCompleted                       Boolean                 @default(false)
+  salesCallDate                            DateTime?
+  salesCallNotes                           String?
+  initialClientProblem                     String?
+  urgencyOrDeadline                        String?
+  initialEstimateDiscussed                 String?
+  scopingMode                              ScopingMode             @default(AGREEMENT)
+  isExpedited                              Boolean                 @default(false)
+  onboardingFee                            Decimal?
+  onboardingFeeWaived                      Boolean                 @default(false)
+  onboardingFeeStatus                      OnboardingFeeStatus     @default(REQUIRED)
+  onboardingFeeCreditable                  Boolean                 @default(true)
+  onboardingFeeCreditAppliedTo             FeeCreditTarget         @default(DISCOVERY_DEPOSIT)
+  onboardingFeeCreditAmount                Decimal?
+  estimatedTotalFee                        Decimal?
+  discoveryDepositPercent                  Decimal                 @default(25)
+  discoveryDepositStatus                   DiscoveryDepositStatus?
+  fullFeeDueUpfront                        Boolean                 @default(false)
+  discoveryRequired                        Boolean                 @default(true)
+  discoveryCompletedAt                     DateTime?
+  finalScopeConfirmedAt                    DateTime?
+  revisedFeeAmount                         Decimal?
+  changeOrderRequired                      Boolean                 @default(false)
+  periodStart                              DateTime?
+  periodEnd                                DateTime?
+  taxYearsInvolved                         String?
+  accountsIncluded                         String?
+  creditCardsIncluded                      String?
+  loansIncluded                            String?
+  payrollInvolved                          Boolean                 @default(false)
+  contractorPaymentsInvolved               Boolean                 @default(false)
+  missingRecordsKnown                      String?
+  knownProblems                            String?
+  requiredDocuments                        String?
+  deliverables                             String?
+  specialReportingPeriodStart              DateTime?
+  specialReportingPeriodEnd                DateTime?
+  specialReportDescription                 String?
+  auditPolicyOrLenderSupportRequired       Boolean                 @default(false)
+  agreementText                            String?
+  agreementManagerStatus                   AgreementManagerStatus  @default(ACTIVE)
+  agreementSentAt                          DateTime?
+  agreementCancellationRequestedAt         DateTime?
+  agreementCancellationRequestedByUserId   String?
+  agreementCancellationReason              String?
+  agreementCancellationTokenHash           String?                 @unique
+  agreementCancellationTokenExpiresAt      DateTime?
+  agreementCancellationAcknowledgedAt      DateTime?
+  agreementCancellationAcknowledgedByName  String?
   agreementCancellationAcknowledgedByEmail String?
-  agreementTokenHash                 String?
-  signerName                         String?
-  signerTitle                        String?
-  signedAt                           DateTime?
-  signerIpAddress                    String?
-  signerUserAgent                    String?
-  agreementTextHash                  String?
-  consentToElectronicSignature       Boolean                 @default(false)
-  agreementReadAndAgreed             Boolean                 @default(false)
-  agreementScrolledToEnd             Boolean                 @default(false)
-  agreementScrolledAt                DateTime?
-  agreementNotes                     String?
-  isTestProposal                     Boolean                 @default(false)
-  discoveryTokenHash                 String?
-  createdByMembershipId              String?
-  createdAt                          DateTime                @default(now())
-  updatedAt                          DateTime                @updatedAt
-  discoveryItems                     DiscoveryItem[]
-  proposalDocuments                  ProposalDocument[]
-  quotes                             Quote[]
-  assignedOwner                      BrandMembership?        @relation("EngagementAssignedOwner", fields: [assignedOwnerMembershipId], references: [id], onDelete: SetNull)
-  internalReviewer                   BrandMembership?        @relation("EngagementInternalReviewer", fields: [internalReviewerMembershipId], references: [id], onDelete: SetNull)
-  createdBy                          BrandMembership?        @relation("EngagementCreatedBy", fields: [createdByMembershipId], references: [id], onDelete: SetNull)
+  agreementTokenHash                       String?
+  signerName                               String?
+  signerTitle                              String?
+  signedAt                                 DateTime?
+  signerIpAddress                          String?
+  signerUserAgent                          String?
+  agreementTextHash                        String?
+  consentToElectronicSignature             Boolean                 @default(false)
+  agreementReadAndAgreed                   Boolean                 @default(false)
+  agreementScrolledToEnd                   Boolean                 @default(false)
+  agreementScrolledAt                      DateTime?
+  agreementNotes                           String?
+  isTestProposal                           Boolean                 @default(false)
+  discoveryTokenHash                       String?
+  createdByMembershipId                    String?
+  createdAt                                DateTime                @default(now())
+  updatedAt                                DateTime                @updatedAt
+  discoveryItems                           DiscoveryItem[]
+  proposalDocuments                        ProposalDocument[]
+  quotes                                   Quote[]
+  assignedOwner                            BrandMembership?        @relation("EngagementAssignedOwner", fields: [assignedOwnerMembershipId], references: [id], onDelete: SetNull)
+  internalReviewer                         BrandMembership?        @relation("EngagementInternalReviewer", fields: [internalReviewerMembershipId], references: [id], onDelete: SetNull)
+  createdBy                                BrandMembership?        @relation("EngagementCreatedBy", fields: [createdByMembershipId], references: [id], onDelete: SetNull)
 
   @@index([brandId, status, engagementType])
   @@index([assignedOwnerMembershipId])
@@ -2614,35 +2622,35 @@ model QuoteClient {
 }
 
 model Quote {
-  id                    String          @id @default(cuid())
+  id                    String               @id @default(cuid())
   brandId               String
-  offerCode             String          @unique @default(cuid())
-  slug                  String          @unique
+  offerCode             String               @unique @default(cuid())
+  slug                  String               @unique
   clientId              String
-  kind                  String          @default("bookkeeping")
-  status                String          @default("draft")
+  kind                  String               @default("bookkeeping")
+  status                String               @default("draft")
   packageId             String?
-  totalOneTime          Decimal         @default(0) @db.Decimal(12, 2)
-  totalRecurring        Decimal         @default(0) @db.Decimal(12, 2)
-  onboardingFee         Decimal         @default(0) @db.Decimal(12, 2)
+  totalOneTime          Decimal              @default(0) @db.Decimal(12, 2)
+  totalRecurring        Decimal              @default(0) @db.Decimal(12, 2)
+  onboardingFee         Decimal              @default(0) @db.Decimal(12, 2)
   snapshotJson          Json
   publishedSnapshotJson Json?
-  publicToken           String?         @unique
+  publicToken           String?              @unique
   publishedAt           DateTime?
   firstViewedAt         DateTime?
-  engagementId          String?         @unique
-  createdAt             DateTime        @default(now())
-  updatedAt             DateTime        @updatedAt
+  engagementId          String?              @unique
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
   sentAt                DateTime?
   firstSentAt           DateTime?
   lastSentAt            DateTime?
   lastActivityAt        DateTime?
   lastFollowUpAt        DateTime?
   expiresAt             DateTime?
-  client                QuoteClient     @relation(fields: [clientId], references: [id])
+  client                QuoteClient          @relation(fields: [clientId], references: [id])
   lineItems             QuoteLineItem[]
   revisions             QuoteRevision[]
-  engagement            Engagement?     @relation(fields: [engagementId], references: [id], onDelete: SetNull)
+  engagement            Engagement?          @relation(fields: [engagementId], references: [id], onDelete: SetNull)
   discountAssignments   BrandDiscountQuote[]
   viewEvents            ProposalViewEvent[]
 
@@ -2761,28 +2769,30 @@ model BrandFeature {
 // One row per QuickBooks invoice, mirrored by scripts/sync-ar-snapshot.mjs.
 // Invoice status and applied payments come from the read-only BookBot invoice feed.
 model CustomerArSnapshot {
-  id           String   @id @default(cuid())
-  brandId      String
-  qbCompany    String
-  qboInvoiceId String?
-  qboCustomerId String?
-  customerName String
-  invoiceRef   String?
-  qboDocNumber String?
-  txnDate      DateTime?
-  dueDate      DateTime?
-  totalAmount  Decimal? @db.Decimal(12, 2)
-  openBalance  Decimal  @db.Decimal(12, 2)
-  status       String?
-  emailStatus  String?
-  paymentHistory Json?   @db.JsonB
-  syncedAt     DateTime @default(now())
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             String    @id @default(cuid())
+  brandId        String
+  qbCompany      String
+  qboInvoiceId   String?
+  qboCustomerId  String?
+  customerName   String
+  invoiceRef     String?
+  qboDocNumber   String?
+  txnDate        DateTime?
+  dueDate        DateTime?
+  totalAmount    Decimal?  @db.Decimal(12, 2)
+  openBalance    Decimal   @db.Decimal(12, 2)
+  status         String?
+  emailStatus    String?
+  paymentHistory Json?     @db.JsonB
+  syncedAt       DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  @@unique([brandId, qbCompany, customerName, invoiceRef])
+  // Postgres cut this generated name at 63 characters; keep the live name.
+  @@unique([brandId, qbCompany, customerName, invoiceRef], map: "CustomerArSnapshot_brandId_qbCompany_customerName_invoiceRef_ke")
   @@unique([brandId, qbCompany, qboInvoiceId])
   @@index([brandId, customerName])
+  @@index([brandId, qboCustomerId])
 }
 
 model BrandIntegration {

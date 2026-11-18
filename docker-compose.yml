@@ -1,0 +1,22 @@
+# Local development database. Never point development at production:
+# see docs/deployment/database-migrations.md.
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: swapp
+      POSTGRES_PASSWORD: swapp
+      POSTGRES_DB: swapp
+    ports:
+      - "127.0.0.1:5434:5432"
+    volumes:
+      - swapp_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U swapp -d swapp"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  swapp_pg:

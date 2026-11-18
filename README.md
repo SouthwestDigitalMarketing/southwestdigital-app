@@ -30,6 +30,7 @@ below map the rest.
 - `docs/IMPLEMENTATION-STATUS.md` — progress against those gates
 - `HANDOFF.md` — current branch state and work in progress
 - `docs/local-development.md` — setup, dev login, checks, scripts
+- `docs/deployment/database-migrations.md` — how schema changes reach production
 
 ## Status
 
