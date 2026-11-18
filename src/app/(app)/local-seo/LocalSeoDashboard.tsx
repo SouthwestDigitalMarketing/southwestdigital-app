@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { DEFAULT_KEYWORDS, estimateScanCost, parseGridSettings, type GridSettings } from "@/lib/localSeo/grid";
+import { LocalSeoMap } from "./LocalSeoMap";
 
 type Competitor = { name: string; rank: number; address?: string | null };
 type Cell = { keyword: string; row: number; column: number; latitude: number; longitude: number; status: string; rank: number | null; competitors: Competitor[] };
@@ -117,6 +118,7 @@ export function LocalSeoDashboard({ initialSettings, initialScans, storageMissin
               {(latest?.keywords ?? settings.keywords).map((keyword) => <option key={keyword} value={keyword}>{keyword}</option>)}
             </select>
           </div>
+          {latest && visibleCells.length > 0 ? <LocalSeoMap cells={visibleCells} /> : null}
           {!latest || visibleCells.length === 0 ? <p className="mt-8 rounded-xl bg-slate-50 p-8 text-center text-sm text-slate-500">No results for this phrase yet.</p> : (
             <div className="mx-auto mt-6 grid max-w-[420px] gap-2" style={{ gridTemplateColumns: `repeat(${latest.gridSize}, minmax(0, 1fr))` }} aria-label={`Map rank grid for ${selectedKeyword}`}>
               {visibleCells.sort((a, b) => a.row - b.row || a.column - b.column).map((cell) => <div key={`${cell.row}-${cell.column}`} title={`${cell.latitude}, ${cell.longitude}`} className={`flex aspect-square flex-col items-center justify-center rounded-lg border text-xs font-semibold ${cell.status !== "complete" ? "border-slate-200 bg-slate-100 text-slate-400" : cell.rank === null ? "border-red-200 bg-red-100 text-red-900" : cell.rank <= 3 ? "border-emerald-300 bg-emerald-100 text-emerald-950" : cell.rank <= 10 ? "border-amber-300 bg-amber-100 text-amber-950" : "border-orange-300 bg-orange-100 text-orange-950"}`}><span>{cell.rank === null ? (cell.status === "complete" ? "—" : "…") : `#${cell.rank}`}</span><span className="mt-1 text-[9px] font-normal">{cell.row + 1},{cell.column + 1}</span></div>)}
