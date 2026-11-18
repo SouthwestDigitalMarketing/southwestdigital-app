@@ -8,8 +8,9 @@ was accessed while preparing this runbook. The scratch evidence is recorded at
 This is an operator checklist, not authorization to run it. Never put a
 production password or connection URL in this file, a shell history, a repo,
 or a local `.env`. Use the approved secret manager and a reviewed, disposable
-operator session. Do not run `prisma migrate deploy`, `prisma migrate dev`, or
-`prisma db push`; the project migration rules prohibit those commands.
+operator session. Schema and policy changes ship as migrations applied by the
+production deploy; see [database-migrations.md](database-migrations.md).
+Role and grant changes are operator steps, not migrations.
 
 References: [database-hosting.md](database-hosting.md),
 [database-role-provisioning.md](database-role-provisioning.md), and

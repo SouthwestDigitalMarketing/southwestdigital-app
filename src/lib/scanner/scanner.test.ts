@@ -143,16 +143,15 @@ describe("the page groups", () => {
   });
 });
 
-describe("the SQL file", () => {
-  const sql = readFileSync("prisma/migrations/20261112203000_scan_finding_and_role/migration.sql", "utf8");
-  it("is idempotent, forces brand row-level security, and seeds only Bookkeeping Conroe", () => {
-    expect(sql).toContain('CREATE TABLE IF NOT EXISTS "ScanFinding"');
-    expect(sql).toContain('CREATE TABLE IF NOT EXISTS "ScanRole"');
-    expect(sql).toContain("FORCE ROW LEVEL SECURITY");
-    expect(sql).toContain("DROP POLICY IF EXISTS");
-    expect(sql).toContain("bookkeeping-conroe");
-    expect(sql).not.toContain("prisma migrate");
-    for (const room of SCAN_ROOMS) expect(sql).toContain(`'${room.key}'`);
-    for (const role of SCAN_ROLES) expect(sql).toContain(`'${role.key}'`);
+describe("the schema SQL", () => {
+  // Scanner tables live in the 2026-11-18 baseline migration.
+  const sql = readFileSync("prisma/migrations/0_init/migration.sql", "utf8");
+  it("forces brand row-level security and checks every room and role", () => {
+    expect(sql).toContain('ALTER TABLE "ScanFinding" FORCE ROW LEVEL SECURITY');
+    expect(sql).toContain('ALTER TABLE "ScanRole" FORCE ROW LEVEL SECURITY');
+    expect(sql).toContain("CREATE POLICY scan_finding_brand_context");
+    expect(sql).toContain("CREATE POLICY scan_role_brand_context");
+    for (const room of SCAN_ROOMS) expect(sql).toContain(`'${room.key}'::text`);
+    for (const role of SCAN_ROLES) expect(sql).toContain(`'${role.key}'::text`);
   });
 });
