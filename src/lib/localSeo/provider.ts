@@ -32,7 +32,9 @@ function params(cell: { id: string; keyword: string; latitude: number; longitude
     language_code: "en",
     location_coordinate: `${cell.latitude},${cell.longitude},15z`,
     depth: 20,
-    search_this_area: true,
+    // Off: rank the way a real searcher sees it. On, Google lists only businesses inside the
+    // ~1 mi view at this zoom, so most outer points came back empty (1-5 listings, 2026-11-18).
+    search_this_area: false,
     search_places: false,
     tag: cell.id,
   };
