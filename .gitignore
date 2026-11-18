@@ -49,3 +49,4 @@ next-env.d.ts
 /.claude/settings.local.json
 # user-owned Claude local files if they reappear
 .claude/
+__pycache__/
