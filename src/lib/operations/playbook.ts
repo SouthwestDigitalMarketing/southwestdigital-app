@@ -3,8 +3,8 @@
  * client. First draft chosen by Sol on Tom's go (2026-11-18); Tom edits it.
  * Design brief: All Thing concepts/swapp-operations.md.
  *
- * Status is not tracked yet. A duty only counts as done once an agent posts
- * evidence for it; until that store exists, every duty reads "not connected".
+ * A duty only counts as done once an agent posts evidence for it
+ * (OperationsEvidence); see schedule.ts for how due and overdue are worked out.
  */
 
 export type Cadence = "daily" | "weekly" | "monthly";
@@ -19,6 +19,8 @@ export type Duty = {
   weekday?: number;
   /** monthly: day of the month it is due. */
   dayOfMonth?: number;
+  /** Firm-local hour (24h) on the due day after which it is overdue. Default 17. */
+  dueHour?: number;
   /** "client" duties repeat for every active client; "firm" duties run once. */
   scope: "client" | "firm";
   owner: string;
@@ -32,6 +34,7 @@ export const PLAYBOOK: Duty[] = [
     title: "Bank feeds categorized",
     cadence: "daily",
     when: "Every business morning by 9am",
+    dueHour: 9,
     scope: "client",
     owner: "Agent",
     what: "Code yesterday's pending bank and card transactions the client's own history answers. Park the rest in Uncategorized and ask one portal question (Notify off, no duplicates).",
@@ -42,6 +45,7 @@ export const PLAYBOOK: Duty[] = [
     title: "Portal checked",
     cadence: "daily",
     when: "Every business morning by 9am",
+    dueHour: 9,
     scope: "client",
     owner: "Agent",
     what: "New uploads in Double filed by content; new answers applied to the books.",
@@ -62,6 +66,7 @@ export const PLAYBOOK: Duty[] = [
     title: "Morning review",
     cadence: "daily",
     when: "Every business morning",
+    dueHour: 12,
     scope: "firm",
     owner: "Tom",
     what: "Open Operations, clear everything under Needs you, address anything red today.",

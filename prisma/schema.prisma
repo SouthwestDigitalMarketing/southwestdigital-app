@@ -591,6 +591,8 @@ model Brand {
   scanFindings            ScanFinding[]
   showrunnerVideoStatuses ShowrunnerVideoStatus[]
   showrunnerFeedback      ShowrunnerFeedback[]
+  operationsClients       OperationsClient[]
+  operationsEvidence      OperationsEvidence[]
   createdAt               DateTime                  @default(now())
   updatedAt               DateTime                  @updatedAt
 
@@ -3132,4 +3134,55 @@ model ProposalViewEvent {
   @@index([quoteId, occurredAt])
   @@index([quoteId, sessionId])
   @@map("proposal_view_events")
+}
+
+/// A client the Operations playbook runs for. Seeded from Double's client
+/// list; `startsOn` is the first day duties are expected for this client.
+model OperationsClient {
+  id             String               @id @default(cuid())
+  brandId        String
+  /// Stable slug agents use, e.g. "rodan-properties".
+  key            String
+  name           String
+  doubleClientId Int?
+  /// `qb` company slug, e.g. "bnb-getaway-llc".
+  qbCompany      String?
+  startsOn       DateTime             @db.Date
+  active         Boolean              @default(true)
+  brand          Brand                @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  evidence       OperationsEvidence[]
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@unique([brandId, key])
+  @@unique([brandId, doubleClientId])
+  @@index([brandId, active])
+}
+
+/// Append-only log of what agents report for a playbook duty. The newest row
+/// for (duty, client, period) is the duty's state; nothing else marks a duty
+/// done. `period` is the firm-local date the duty fell due.
+model OperationsEvidence {
+  id                 String            @id @default(cuid())
+  brandId            String
+  dutyId             String
+  operationsClientId String?
+  period             DateTime          @db.Date
+  /// done | waiting_client | needs_tom | failed
+  status             String
+  summary            String
+  details            Json?             @db.JsonB
+  /// Link, message id or record id that proves the work.
+  sourceRef          String?
+  reportedBy         String
+  /// Caller-chosen id; a repeated post with the same id is ignored.
+  sourceEventId      String
+  occurredAt         DateTime
+  brand              Brand             @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  client             OperationsClient? @relation(fields: [operationsClientId], references: [id], onDelete: Cascade)
+  createdAt          DateTime          @default(now())
+
+  @@unique([brandId, sourceEventId])
+  @@index([brandId, period])
+  @@index([operationsClientId, dutyId, period])
 }
