@@ -4,6 +4,7 @@ import { reconcileProposalPayment } from "@/lib/stripe/reconcileProposalPayment"
 import { recordProcessedStripeEvent, stripeEventAlreadyProcessed } from "@/lib/stripe/processedStripeEvents";
 import { syncConnectedAccountStatus } from "@/lib/stripe/connect";
 import { sendProposalAlert } from "@/lib/notifications/staffAlert";
+import { onClientWon } from "@/lib/operations/clientWon";
 
 export async function POST(request: Request) {
   const signature = request.headers.get("stripe-signature");
@@ -41,6 +42,14 @@ export async function POST(request: Request) {
         // payment as successfully reconciled. Do not record event.id on throw.
         console.error("[stripe/webhook] Proposal payment requires reconciliation", { eventId: event.id, intentId: paymentIntent.id });
         return NextResponse.json({ error: "Payment reconciliation pending" }, { status: 500 });
+      }
+      // The payment is recorded; now every system learns the client was won.
+      // Live money only, so test proposals never become clients. Failures are
+      // reported on the Operations screen, never by failing the webhook.
+      if (paymentIntent.livemode) {
+        await onClientWon(engagementId, brandId).catch((error: unknown) => {
+          console.error("[stripe/webhook] client-won follow-up failed", { engagementId, error });
+        });
       }
     }
   }

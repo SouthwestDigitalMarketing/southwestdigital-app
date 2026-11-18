@@ -1489,6 +1489,7 @@ model Contact {
   tagLinks       ContactTagLink[]
   brandLinks     ContactBrandLink[]
   brandDiscounts BrandDiscount[]      @relation("BrandDiscountContact")
+  engagements    Engagement[]
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
 
@@ -2299,11 +2300,16 @@ model Engagement {
   discoveryItems                           DiscoveryItem[]
   proposalDocuments                        ProposalDocument[]
   quotes                                   Quote[]
+  /// The client's contact, set when the client is won (service-records-design).
+  contactId                                String?
+  contact                                  Contact?                @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  operationsClient                         OperationsClient?
   assignedOwner                            BrandMembership?        @relation("EngagementAssignedOwner", fields: [assignedOwnerMembershipId], references: [id], onDelete: SetNull)
   internalReviewer                         BrandMembership?        @relation("EngagementInternalReviewer", fields: [internalReviewerMembershipId], references: [id], onDelete: SetNull)
   createdBy                                BrandMembership?        @relation("EngagementCreatedBy", fields: [createdByMembershipId], references: [id], onDelete: SetNull)
 
   @@index([brandId, status, engagementType])
+  @@index([contactId])
   @@index([assignedOwnerMembershipId])
   @@index([createdAt])
 }
@@ -3149,6 +3155,14 @@ model OperationsClient {
   qbCompany      String?
   startsOn       DateTime             @db.Date
   active         Boolean              @default(true)
+  /// onboarding | active | former. Onboarding runs the setup checklist and
+  /// limits agents to setup work in the client's books; active runs the
+  /// recurring playbook; former runs nothing and locks the books.
+  stage          String               @default("active")
+  /// First day of the onboarding checklist (the day the client was won).
+  wonOn          DateTime?            @db.Date
+  engagementId   String?              @unique
+  engagement     Engagement?          @relation(fields: [engagementId], references: [id], onDelete: SetNull)
   brand          Brand                @relation(fields: [brandId], references: [id], onDelete: Cascade)
   evidence       OperationsEvidence[]
   createdAt      DateTime             @default(now())

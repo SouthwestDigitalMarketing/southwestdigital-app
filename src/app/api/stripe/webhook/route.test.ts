@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   record: vi.fn(),
   syncAccount: vi.fn(),
   alert: vi.fn(),
+  clientWon: vi.fn(),
 }));
 vi.mock("@/lib/stripe", () => ({ getStripeClient: () => ({ webhooks: { constructEvent: mocks.constructEvent } }) }));
 vi.mock("@/lib/stripe/reconcileProposalPayment", () => ({ reconcileProposalPayment: mocks.reconcile }));
@@ -17,8 +18,9 @@ vi.mock("@/lib/stripe/processedStripeEvents", () => ({
 }));
 vi.mock("@/lib/stripe/connect", () => ({ syncConnectedAccountStatus: mocks.syncAccount }));
 vi.mock("@/lib/notifications/staffAlert", () => ({ sendProposalAlert: mocks.alert }));
+vi.mock("@/lib/operations/clientWon", () => ({ onClientWon: mocks.clientWon }));
 
-function postSucceeded(intent: { id?: string; metadata?: Record<string, string> }, eventId = "evt_1") {
+function postSucceeded(intent: { id?: string; livemode?: boolean; metadata?: Record<string, string> }, eventId = "evt_1") {
   const event = { id: eventId, type: "payment_intent.succeeded", data: { object: intent } };
   mocks.constructEvent.mockImplementation((_raw: string) => JSON.parse(_raw));
   return POST(new Request("https://firm.example.test/api/stripe/webhook", {
@@ -35,6 +37,7 @@ beforeEach(() => {
   mocks.reconcile.mockResolvedValue(undefined);
   mocks.alreadyProcessed.mockResolvedValue(false);
   mocks.record.mockResolvedValue(undefined);
+  mocks.clientWon.mockResolvedValue({ done: [], failed: [], clientKey: "x" });
 });
 
 afterEach(() => {
@@ -42,6 +45,20 @@ afterEach(() => {
 });
 
 describe("stripe webhook proposal payments", () => {
+  it("runs the client-won follow-up for live payments only", async () => {
+    await postSucceeded({ id: "pi_live", livemode: true, metadata: { engagementId: "eng", brandId: "brand" } }, "evt_live");
+    await postSucceeded({ id: "pi_test", livemode: false, metadata: { engagementId: "eng2", brandId: "brand" } }, "evt_test");
+    expect(mocks.clientWon).toHaveBeenCalledTimes(1);
+    expect(mocks.clientWon).toHaveBeenCalledWith("eng", "brand");
+  });
+
+  it("still acknowledges the payment when the client-won follow-up fails", async () => {
+    mocks.clientWon.mockRejectedValue(new Error("boom"));
+    const response = await postSucceeded({ id: "pi_live", livemode: true, metadata: { engagementId: "eng", brandId: "brand" } });
+    expect(response.status).toBe(200);
+    expect(mocks.record).toHaveBeenCalledWith("eng", "brand", "evt_1");
+  });
+
   it("acknowledges a duplicate payment_intent.succeeded without reconciling again", async () => {
     const intent = { id: "pi_1", metadata: { engagementId: "eng", brandId: "brand" } };
     mocks.alreadyProcessed.mockResolvedValueOnce(false).mockResolvedValueOnce(true);

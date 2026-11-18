@@ -10,7 +10,9 @@ const USAGE = `ops board                      open work (problems first)
 ops duties                     duty ids and who does them
 ops done|waiting|needs-tom|failed DUTY --summary "..." [--client KEY] [--period YYYY-MM-DD]
                                [--ref LINK-OR-ID] [--by NAME] [--details JSON] [--event-id ID]
-ops client KEY --name "..." --starts YYYY-MM-DD [--double ID] [--qb SLUG] [--inactive]
+                               [--qb SLUG]  (onboarding-quickbooks: links the client's qb company)
+ops client KEY --name "..." --starts YYYY-MM-DD [--double ID] [--qb SLUG] [--stage onboarding|active|former] [--inactive]
+ops client-won ENGAGEMENT-ID   re-run the new-client steps (backfill or retry)
 Options: --brand SLUG (default bookkeeping-conroe)`;
 
 const STATUS = { done: "done", waiting: "waiting_client", "needs-tom": "needs_tom", failed: "failed" };
@@ -85,6 +87,7 @@ async function main() {
       sourceRef: opts.ref,
       reportedBy: opts.by || process.env.USER || "agent",
       details: opts.details ? JSON.parse(opts.details) : undefined,
+      qbCompany: opts.qb,
     };
     // Same report sent twice (a retry) is recorded once.
     body.sourceEventId =
@@ -92,6 +95,7 @@ async function main() {
       createHash("sha256").update(JSON.stringify([body.duty, body.client, body.period, body.status, body.summary])).digest("hex").slice(0, 32);
     const out = await call("POST", "/api/operations/evidence", body);
     console.log(out.duplicate ? `already recorded (${out.id ?? "same event id"})` : `recorded ${out.id} for ${out.period}`);
+    if (out.stage) console.log(`client moved to ${out.stage}`);
     return;
   }
   if (cmd === "client") {
@@ -103,9 +107,18 @@ async function main() {
       startsOn: opts.starts,
       doubleClientId: opts.double ? Number(opts.double) : undefined,
       qbCompany: opts.qb,
+      stage: opts.stage,
       active: !opts.inactive,
     });
-    console.log(`${out.key}: ${out.active ? "active" : "inactive"}`);
+    console.log(`${out.key}: ${out.active ? out.stage : "inactive"}`);
+    return;
+  }
+  if (cmd === "client-won") {
+    if (!target) throw new Error(`usage:\n${USAGE}`);
+    const out = await call("POST", "/api/operations/client-won", { brand, engagementId: target });
+    for (const line of out.done) console.log(`done    ${line}`);
+    for (const line of out.failed) console.log(`FAILED  ${line}`);
+    if (out.failed.length) process.exitCode = 1;
     return;
   }
   console.log(USAGE);

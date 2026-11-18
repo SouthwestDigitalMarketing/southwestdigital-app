@@ -108,3 +108,32 @@ describe("board", () => {
     expect(healthOf([])).toBe("none");
   });
 });
+
+describe("onboarding", () => {
+  const now = new Date("2026-11-19T21:00:00Z"); // 15:00 Chicago
+  const newClient = { id: "c9", name: "New Co", startsOn: "2026-11-18", stage: "onboarding" as const, wonOn: "2026-11-18" };
+
+  it("lists every onboarding step for a client in onboarding, dated from the day they were won", () => {
+    const items = buildBoard({ now, clients: [newClient], evidence: [] }).filter((i) => i.client?.id === "c9");
+    expect(items.every((i) => i.duty.cadence === "onboarding")).toBe(true);
+    expect(items.find((i) => i.duty.id === "onboarding-records")).toMatchObject({ period: "2026-11-18", state: "overdue" });
+    expect(items.find((i) => i.duty.id === "onboarding-quickbooks")).toMatchObject({ period: "2026-11-20", state: "due" });
+    expect(items.find((i) => i.duty.id === "onboarding-opening-balances")?.period).toBe("2026-12-02");
+  });
+
+  it("gives an onboarding client no recurring duties, and an active client no onboarding steps", () => {
+    const active = { ...client, stage: "active" as const, wonOn: "2026-11-18" };
+    const items = buildBoard({ now, clients: [newClient, active], evidence: [] });
+    expect(items.some((i) => i.client?.id === "c9" && i.duty.cadence !== "onboarding")).toBe(false);
+    expect(items.some((i) => i.client?.id === "c1" && i.duty.cadence === "onboarding")).toBe(false);
+  });
+
+  it("marks a step done from its evidence", () => {
+    const items = buildBoard({
+      now,
+      clients: [newClient],
+      evidence: [evidence({ dutyId: "onboarding-records", clientId: "c9", period: "2026-11-18" })],
+    });
+    expect(items.find((i) => i.duty.id === "onboarding-records")?.state).toBe("done");
+  });
+});

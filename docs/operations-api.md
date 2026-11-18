@@ -25,6 +25,8 @@ ops waiting daily-portal --client rodan-properties --summary "October Chase stat
 ops needs-tom weekly-status-note --client bnb-getaway --summary "Draft in Zoho Drafts" --ref "Drafts UID 512"
 ops failed daily-bank-feeds --client ari-warehouse --summary "QBO sign-in expired"
 ops client rodan-properties --name "RODAN PROPERTIES, LLC" --starts 2026-11-19 --double 882165
+ops done onboarding-quickbooks --client new-co-llc --qb new-co-llc --summary "Invite accepted; qb connected"
+ops client-won <engagement-id>              # re-run the new-client steps (backfill, retry)
 ```
 
 `--period YYYY-MM-DD` reports for an earlier due day; without it the newest
@@ -43,6 +45,33 @@ Brand defaults to `bookkeeping-conroe` in `ops`; the API requires `brand`.
   `doubleClientId`, `qbCompany`, `active`. Upserts by `key`.
 - `GET /api/operations/board?brand=...`: every occurrence in the last 14
   days with its state.
+- `GET /api/operations/clients?brand=...`: the roster with stage and
+  `qbCompany`.
+- `POST /api/operations/client-won`: `brand`, `engagementId`; re-runs the
+  new-client steps.
+
+## A new client (automatic)
+
+When a client pays a signed proposal (live Stripe payment), the webhook runs
+`onClientWon` (`src/lib/operations/clientWon.ts`):
+
+1. the engagement becomes the service record (monthly type, pricing, fee) and
+   is linked to the contact (found by email, or created);
+2. the contact gets `contract-signed`, `paid`, `active-client`, and for
+   monthly work `monthly-bookkeeping` and `service-monthly-bookkeeping-active`,
+   plus `review-pending`, which starts the Reviews pipeline;
+3. open Pipe Prospects deals move to won and `lead` comes off;
+4. the client joins Operations in the **onboarding** stage, which runs the
+   one-time checklist (`cadence: "onboarding"` duties, due N days after the
+   payment) instead of the recurring playbook.
+
+What happened is posted as evidence on "Client set up in our systems"; a
+failed step shows red there. Marking `onboarding-opening-balances` done moves
+the client to **active** (the monthly routine) from the next day.
+
+`qb-clients` reads the roster (`GET /api/operations/clients`): onboarding =
+Setup, active = Active, former = Locked, matched by `qbCompany`. Companies not
+on the roster still use the contact tags.
 
 ## Who is a client
 

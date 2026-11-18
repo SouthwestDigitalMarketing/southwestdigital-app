@@ -7,7 +7,7 @@
  * (OperationsEvidence); see schedule.ts for how due and overdue are worked out.
  */
 
-export type Cadence = "daily" | "weekly" | "monthly";
+export type Cadence = "daily" | "weekly" | "monthly" | "onboarding";
 
 export type Duty = {
   id: string;
@@ -21,6 +21,8 @@ export type Duty = {
   dayOfMonth?: number;
   /** Firm-local hour (24h) on the due day after which it is overdue. Default 17. */
   dueHour?: number;
+  /** onboarding: due this many days after the client was won. Runs once. */
+  dayOffset?: number;
   /** "client" duties repeat for every active client; "firm" duties run once. */
   scope: "client" | "firm";
   owner: string;
@@ -29,6 +31,74 @@ export type Duty = {
 };
 
 export const PLAYBOOK: Duty[] = [
+  // Onboarding: once per new client, counted from the day they paid. Draft
+  // offsets (Ummon, 2026-11-18) for Sol to adjust.
+  {
+    id: "onboarding-records",
+    title: "Client set up in our systems",
+    cadence: "onboarding",
+    dayOffset: 0,
+    when: "The day they pay",
+    scope: "client",
+    owner: "SWapp, automatic",
+    what: "Contact marked a client, deal won, client added to Operations and to the Reviews pipeline.",
+    evidence: "SWapp's own report of each step",
+  },
+  {
+    id: "onboarding-quickbooks",
+    title: "QuickBooks access received",
+    cadence: "onboarding",
+    dayOffset: 2,
+    when: "2 days after they pay",
+    scope: "client",
+    owner: "Agent",
+    what: "Our accountant invite to their QuickBooks Online is accepted and the company is connected to qb.",
+    evidence: "qb company slug (ops --qb)",
+  },
+  {
+    id: "onboarding-double",
+    title: "Double portal set up",
+    cadence: "onboarding",
+    dayOffset: 2,
+    when: "2 days after they pay",
+    scope: "client",
+    owner: "Agent",
+    what: "Client created in Double and connected to their QuickBooks.",
+    evidence: "Double client id",
+  },
+  {
+    id: "onboarding-portal-invite",
+    title: "Client invited to the portal",
+    cadence: "onboarding",
+    dayOffset: 3,
+    when: "3 days after they pay",
+    scope: "client",
+    owner: "Agent, Tom approves the message",
+    what: "Client added as a portal contact and told how to upload.",
+    evidence: "Portal contact added; message id",
+  },
+  {
+    id: "onboarding-documents",
+    title: "Documents requested",
+    cadence: "onboarding",
+    dayOffset: 3,
+    when: "3 days after they pay",
+    scope: "client",
+    owner: "Agent",
+    what: "Portal questions for the statements and records needed for opening balances and the first close.",
+    evidence: "Portal questions posted",
+  },
+  {
+    id: "onboarding-opening-balances",
+    title: "Opening balances entered",
+    cadence: "onboarding",
+    dayOffset: 14,
+    when: "2 weeks after they pay",
+    scope: "client",
+    owner: "Agent",
+    what: "Opening balances entered and tied to statements. Marking this done moves the client to the monthly routine.",
+    evidence: "Balances tied out, read back from QuickBooks",
+  },
   {
     id: "daily-bank-feeds",
     title: "Bank feeds categorized",
@@ -199,6 +269,7 @@ export const CADENCES: Array<{ id: Cadence; label: string }> = [
   { id: "daily", label: "Daily" },
   { id: "weekly", label: "Weekly" },
   { id: "monthly", label: "Monthly" },
+  { id: "onboarding", label: "New client" },
 ];
 
 const TIME_ZONE = "America/Chicago";
@@ -229,7 +300,8 @@ export function dutiesDueOn(at: Date, playbook: Duty[] = PLAYBOOK): Duty[] {
   return playbook.filter((duty) => {
     if (duty.cadence === "daily") return businessDay;
     if (duty.cadence === "weekly") return duty.weekday === weekday;
-    return duty.dayOfMonth === day;
+    if (duty.cadence === "monthly") return duty.dayOfMonth === day;
+    return false; // onboarding duties are dated per client, see schedule.ts
   });
 }
 
