@@ -61,6 +61,9 @@ def decide(today, close, report_saved, waiting):
         return "done"
     if waiting:
         return "waiting"
+    if not close:
+        # No close for the due month in Double: we are still bringing older months up to date.
+        return "catching-up"
     year, month = today.year, today.month
     if today <= fifth_business_day(year, month):
         return "on-track"

@@ -308,6 +308,7 @@ REPORT_STATUSES = [
     ("on-track", "On track", "#2563eb", "Within the first 5 business days; close in progress; client owes nothing."),
     ("waiting", "Waiting on client", "#d97706", "Questions unanswered or statements missing in Double; we cannot finish yet."),
     ("late", "Late", "#be123c", "Past the 5th business day; client owes nothing; we have not published."),
+    ("catching-up", "Catching up", "#7c3aed", "Still bringing older months up to date; last month's close has not started in Double."),
     ("none", "No report yet", "#94a3b8", "Nothing published for this client yet."),
 ]
 
