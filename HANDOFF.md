@@ -1,5 +1,32 @@
 # SWapp handoff
 
+## 2026-11-18 — Operations evidence store (shipped)
+
+PR #154 merged as `1ca192a`. The production build applied migration
+`20261118203117_operations_evidence` (log 20:47 UTC): tables
+`OperationsClient` and `OperationsEvidence`. `/operations` now shows real
+states; a duty is green only with posted evidence, overdue after its due hour
+without it. Tracking starts 2026-11-19 (`TRACKING_STARTS` in
+`src/lib/operations/schedule.ts`). API and `ops` CLI: `docs/operations-api.md`.
+
+- `OPERATIONS_API_TOKEN_SHA256` is set in Vercel Production. The token is on
+  ripley in `~/.config/swapp/operations.env` (600); `~/.local/bin/ops` wraps
+  `scripts/ops.mjs` from the main checkout (hops to ripley elsewhere).
+- Roster: Tom enrolled 8 clients on 2026-11-18 (all Double clients except
+  Bookkeeping Conroe), keys = `qb` slugs, `startsOn` 2026-11-19. Bayou City
+  Horticulture has no `qb` company (not connected). Read back from
+  production: 8 rows, all active.
+- Checks: typecheck pass; lint 0 errors; vitest 1076 passed, 5 skipped;
+  `next build` pass; CI (including migrations job) pass. Local end-to-end
+  against the Docker DB: enroll, post, duplicate, refusals, 401.
+- Board action notice `4cf0d7f0e2c2` asks Sol's agents to start posting on
+  2026-11-19. Until they do, the page will show those duties overdue.
+- Known: `scripts/seed-initial-brands.mjs` fails on the current schema
+  (`Unknown argument primaryColor`); not fixed.
+
+Next slices (Tom's order): single-client screen, Needs you actions, editable
+or per-client playbook, then feeds (Double close progress, QBO, Zoho, Quo).
+
 ## 2026-11-18 — Prisma migrations baselined (shipped)
 
 PR #152 merged as `00b8cd6`. SWapp now uses the standard Prisma workflow;
