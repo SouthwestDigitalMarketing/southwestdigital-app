@@ -64,6 +64,9 @@ describe("website link", () => {
     expect(mergeToolLinks([], "real-estate-bookkeeper").find((link) => link.key === "website")?.url).toBe(
       "https://realestatebookkeeper.com/",
     );
+    expect(mergeToolLinks([], "contigo-accounting").find((link) => link.key === "website")?.url).toBe(
+      "https://www.contigoaccounting.com/",
+    );
     expect(visibleToolLinks(mergeToolLinks([], "melbourne-cfo")).map((link) => link.key)).not.toContain("website");
   });
 
