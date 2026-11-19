@@ -593,6 +593,7 @@ model Brand {
   showrunnerFeedback      ShowrunnerFeedback[]
   operationsClients       OperationsClient[]
   operationsEvidence      OperationsEvidence[]
+  serviceRecords          ServiceRecord[]
   createdAt               DateTime                  @default(now())
   updatedAt               DateTime                  @updatedAt
 
@@ -1490,6 +1491,7 @@ model Contact {
   brandLinks     ContactBrandLink[]
   brandDiscounts BrandDiscount[]      @relation("BrandDiscountContact")
   engagements    Engagement[]
+  serviceRecords ServiceRecord[]
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
 
@@ -2304,6 +2306,7 @@ model Engagement {
   contactId                                String?
   contact                                  Contact?                @relation(fields: [contactId], references: [id], onDelete: SetNull)
   operationsClient                         OperationsClient?
+  serviceRecords                           ServiceRecord[]
   assignedOwner                            BrandMembership?        @relation("EngagementAssignedOwner", fields: [assignedOwnerMembershipId], references: [id], onDelete: SetNull)
   internalReviewer                         BrandMembership?        @relation("EngagementInternalReviewer", fields: [internalReviewerMembershipId], references: [id], onDelete: SetNull)
   createdBy                                BrandMembership?        @relation("EngagementCreatedBy", fields: [createdByMembershipId], references: [id], onDelete: SetNull)
@@ -3199,4 +3202,53 @@ model OperationsEvidence {
   @@unique([brandId, sourceEventId])
   @@index([brandId, period])
   @@index([operationsClientId, dutyId, period])
+}
+
+/// One paid service a client has (All Thing concepts/service-records-design).
+/// An engagement is the agreement; it can open several records (monthly plus
+/// onboarding), and a one-off job paid by invoice has none. A record exists
+/// only with the evidence that opened it. Active on a day = started and not
+/// ended; MRR = fees of active monthly records. A fee change by amendment ends
+/// the old record (endReason replaced) and opens a new one pointing back to it.
+model ServiceRecord {
+  id             String         @id @default(cuid())
+  brandId        String
+  contactId      String
+  engagementId   String?
+  /// Service key, as in the service-<product>-active tag: monthly-bookkeeping,
+  /// onboarding, cleanup, catch-up, hourly-bookkeeping, hourly-onsite, ...
+  product        String
+  /// monthly | one_time | hourly
+  basis          String
+  /// Agreed fee: per month (monthly), total (one_time), per hour (hourly).
+  /// Required for monthly; may be empty for hourly priced by invoice.
+  feeAmount      Decimal?
+  startDate      DateTime       @db.Date
+  /// Last day of service; set only together with endReason.
+  endDate        DateTime?      @db.Date
+  /// job_done | client_cancelled | terminated_by_us | agreement_ended |
+  /// replaced | lapsed (billing stopped, no notice on file)
+  endReason      String?
+  /// swapp_proposal | qbo_contract | agreement_file | paid_invoice
+  evidenceSource String
+  /// Engagement id, QBO contract name, agreement file path or invoice number.
+  evidenceRef    String
+  /// Day the agreement was signed (or the invoice paid).
+  evidenceDate   DateTime       @db.Date
+  notes          String?
+  previousId     String?        @unique
+  previous       ServiceRecord? @relation("ServiceRecordAmendment", fields: [previousId], references: [id], onDelete: SetNull)
+  next           ServiceRecord? @relation("ServiceRecordAmendment")
+  /// Caller-chosen id so a loader or automation can upsert without duplicates.
+  sourceKey      String?
+  brand          Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  contact        Contact        @relation(fields: [contactId], references: [id], onDelete: Restrict)
+  engagement     Engagement?    @relation(fields: [engagementId], references: [id], onDelete: SetNull)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@unique([brandId, sourceKey])
+  @@index([brandId, basis, startDate])
+  @@index([contactId])
+  @@index([engagementId])
 }

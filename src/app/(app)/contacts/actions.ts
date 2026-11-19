@@ -363,6 +363,10 @@ export async function deleteContactAction(formData: FormData) {
       select: { id: true },
     });
     if (!existing) throw new Error("Contact not found.");
+    // Service history must outlive the contact screen (service-records-design).
+    if (await transaction.serviceRecord.count({ where: { contactId } })) {
+      throw new Error("This contact has service records. Archive it instead.");
+    }
 
     await transaction.contact.delete({ where: { id: contactId } });
   });
