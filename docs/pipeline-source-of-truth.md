@@ -28,8 +28,9 @@ from both systems.
   sync fills from the monthly estimate.
 - This gap is why the dashboard cannot reliably distinguish monthly work from
   one-time work or show the actual payment and agreement milestones.
-- SWapp contact MRR is a separate brand-scoped `Contact.mrrUsd` value. It is
-  not derived automatically from an open Sales lead.
+- Client MRR comes from service records (signed agreements), not from a
+  Sales lead or a typed value; the hand-typed `Contact.mrrUsd` was dropped on
+  2026-11-18 (service-records-design step 5; see `docs/operations-api.md`).
 
 The source review is recorded in `HANDOFF.md` and Sales `README.md` under
 "Leads steps", "Offers", and "How syncing works".
