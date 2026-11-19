@@ -94,7 +94,9 @@ def close_detail(closes, close, bearer):
     # Reconciled accounts we cannot match to statements: no account number in Double's task name.
     out["unchecked"] = sorted({t.get("name") for t in tasks
                                if t.get("type") == "accountReconcilation" and not statements.last4(t.get("name"))
-                               and not re.search(r"cash on hand|petty|undeposited|clearing|inactive|\bold\b", t.get("name") or "", re.I)})
+                               and not statements.DEAD.search(t.get("name") or "")
+                               and not re.match(r"\d\d\s", t.get("name") or "")  # parent headers: '01 BANKS'
+                               and not re.search(r"^cash$|cash on hand|petty|undeposited|clearing|liabilities", t.get("name") or "", re.I)})
     if close:
         out["tasksDone"] = sum(1 for t in tasks if t.get("status") == "done")
         out["tasksTotal"] = len(tasks)
