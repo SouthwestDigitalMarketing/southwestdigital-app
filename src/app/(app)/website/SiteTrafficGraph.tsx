@@ -1,5 +1,6 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import {
   ComposedChart,
   Bar,
@@ -11,6 +12,14 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { goalColors, goalSegments, type GoalBand } from "./goal-colors";
+import {
+  MOBILE_MAX_DAILY_BARS,
+  fmtMobileTick,
+  mobileTickVisible,
+  toBuckets,
+  toWeeklyBuckets,
+  type TrafficBucket,
+} from "./traffic-chart-mobile";
 
 export type TrafficComparisonRow = {
   date: string; // "YYYY-MM-DD" for daily, "YYYY-MM-DDTHH:00:00" for hourly
@@ -32,6 +41,23 @@ const PACE_BANDS: { key: GoalBand; color: string }[] = [
   { key: "band4", color: goalColors(75).bar },
   { key: "band5", color: goalColors(100).bar },
 ];
+
+// Tailwind's `sm` breakpoint: below 640 px the chart switches to its phone layout.
+const PHONE_QUERY = "(max-width: 639px)";
+
+function subscribePhone(onChange: () => void) {
+  const mql = window.matchMedia(PHONE_QUERY);
+  mql.addEventListener("change", onChange);
+  return () => mql.removeEventListener("change", onChange);
+}
+
+function useIsPhone() {
+  return useSyncExternalStore(
+    subscribePhone,
+    () => window.matchMedia(PHONE_QUERY).matches,
+    () => false,
+  );
+}
 
 function formatK(n: number) {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
@@ -58,6 +84,40 @@ function fmtTooltipDate(value: string, granularity: "daily" | "hourly") {
   const d = new Date(value);
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) +
     " " + d.toLocaleTimeString("en-US", { hour: "numeric", hour12: true }).replace(":00", "");
+}
+
+function fmtWeekRange(bucket: TrafficBucket) {
+  const fmt = (v: string) =>
+    new Date(`${v}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return `${fmt(bucket.date)} – ${fmt(bucket.endDate)}`;
+}
+
+function MobileTick({
+  x,
+  y,
+  index,
+  buckets,
+  mode,
+}: {
+  x?: number;
+  y?: number;
+  index?: number;
+  buckets: TrafficBucket[];
+  mode: "daily" | "weekly" | "hourly";
+}) {
+  const i = index ?? -1;
+  const bucket = buckets[i];
+  if (!bucket || !mobileTickVisible(bucket, i, buckets.length, mode)) return null;
+  return (
+    <text
+      x={x}
+      y={y}
+      dy={12}
+      textAnchor={i === buckets.length - 1 ? "end" : "middle"} // keep the newest label inside the card
+      fill="var(--text-secondary)" fontSize={11}>
+      {fmtMobileTick(bucket, i, buckets.length, mode)}
+    </text>
+  );
 }
 
 function DateTick({
@@ -96,37 +156,46 @@ function DateTick({
 }
 
 export function SiteTrafficGraph({ rows, goal, label, granularity }: Props) {
+  const isPhone = useIsPhone();
+  const weekly = isPhone && granularity === "daily" && rows.length > MOBILE_MAX_DAILY_BARS;
+  const mobileMode = weekly ? "weekly" : granularity;
+  const buckets = weekly ? toWeeklyBuckets(rows) : toBuckets(rows);
   const total = rows.reduce((s, r) => s + r.current, 0);
   const prevTotal = rows.reduce((s, r) => s + r.previous, 0);
   const pctChange = prevTotal > 0 ? ((total - prevTotal) / prevTotal) * 100 : null;
   const isUp = pctChange !== null && pctChange >= 0;
   const targetPerBucket = rows.length > 0 && goal > 0 ? goal / rows.length : 0;
-  const bucketLabel = granularity === "daily" ? "day" : "hour";
+  const perDay = rows.length > 0 && goal > 0 ? goal / rows.length : 0;
+  const bucketLabel = weekly ? "week" : granularity === "daily" ? "day" : "hour";
   const paceLabel = granularity === "daily" ? "daily" : "hourly";
   const chartTitle = granularity === "daily" ? "Daily engaged sessions" : "Hourly engaged sessions";
-  const chartRows = rows.map((row) => ({
-    ...row,
-    ...goalSegments(row.current, targetPerBucket),
-  }));
+  const chartRows = buckets.map((bucket) => {
+    const target = weekly ? perDay * bucket.days : targetPerBucket;
+    return { ...bucket, target, ...goalSegments(bucket.current, target) };
+  });
+  const footerTarget = weekly ? perDay * 7 : targetPerBucket;
 
-  function pacePct(value: number) {
-    return targetPerBucket > 0 ? (value / targetPerBucket) * 100 : 0;
+  function pacePct(value: number, target: number) {
+    return target > 0 ? (value / target) * 100 : 0;
   }
 
   return (
     <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6">
-      <div className="mb-4 flex items-end justify-between gap-6">
+      <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{chartTitle}</p>
           <p className="mt-1 text-lg font-semibold tabular-nums text-slate-900">
-            {total.toLocaleString("en-US")} total — {label.toLowerCase()}
+            {total.toLocaleString("en-US")} total<span className="hidden sm:inline"> — {label.toLowerCase()}</span>
           </p>
           {pctChange !== null ? (
             <p className={`mt-0.5 text-xs font-medium ${isUp ? "text-emerald-600" : "text-amber-600"}`}>
+              <span className="text-slate-500 sm:hidden">{label} · </span>
               {isUp ? "+" : ""}{pctChange.toFixed(1)}% vs. prev. period
             </p>
           ) : (
-            <p className="mt-0.5 text-xs text-slate-400">No comparison data</p>
+            <p className="mt-0.5 text-xs text-slate-400">
+              <span className="sm:hidden">{label} · </span>No comparison data
+            </p>
           )}
         </div>
 
@@ -148,65 +217,75 @@ export function SiteTrafficGraph({ rows, goal, label, granularity }: Props) {
         </div>
       </div>
 
-      <ResponsiveContainer width="100%" height={240}>
-        <ComposedChart data={chartRows} margin={{ top: 24, right: 4, left: 8, bottom: 36 }} barCategoryGap="25%">
-          <XAxis
-            dataKey="date"
-            tick={<DateTick granularity={granularity} />}
-            tickLine={false}
-            axisLine={false}
-            interval={0}
-          />
-          <YAxis
-            tickFormatter={formatK}
-            tick={{ fontSize: 10, fill: "var(--chart-muted)" }}
-            tickLine={false}
-            axisLine={false}
-            width={36}
-          />
-          <Tooltip
-            content={({ active, payload, label: lbl }) => {
-              if (!active || !payload?.length) return null;
-              const row = payload[0]?.payload as TrafficComparisonRow | undefined;
-              const currentValue = Number(row?.current ?? 0);
-              const currentPace = pacePct(currentValue);
-              return (
-                <div className="ui-tooltip rounded-lg px-3 py-2 text-xs shadow-sm">
-                  <p className="mb-1 font-semibold">{fmtTooltipDate(String(lbl), granularity)}</p>
-                  <p>{currentValue.toLocaleString("en-US")} engaged sessions</p>
-                  <p className="opacity-70">prev. {Number(row?.previous ?? 0).toLocaleString("en-US")}</p>
-                  <p className="mt-1 font-semibold">
-                    {Math.round(currentPace)}% of {paceLabel} pace
-                  </p>
-                </div>
-              );
-            }}
-            cursor={{ fill: "var(--chart-cursor)" }}
-          />
-          {PACE_BANDS.map(({ key, color }, index) => (
-            <Bar key={key} dataKey={key} stackId="current" fill={color}>
-              {index === PACE_BANDS.length - 1 ? (
-                <LabelList
-                  dataKey="current"
-                  position="top"
-                  fill="var(--text-secondary)"
-                  fontSize={9}
-                />
-              ) : null}
-            </Bar>
-          ))}
-          <Line
-            dataKey="previous"
-            stroke="var(--chart-muted)"
-            strokeWidth={1.5}
-            strokeDasharray="4 3"
-            dot={false}
-            activeDot={false}
-          />
-        </ComposedChart>
-      </ResponsiveContainer>
+      {/* Phones: a tap focuses the chart; hide the focus box it would draw. */}
+      <div className={isPhone ? "[&_*:focus]:outline-none" : undefined}>
+        <ResponsiveContainer width="100%" height={isPhone ? 220 : 240}>
+          <ComposedChart
+            data={chartRows}
+            margin={isPhone ? { top: 16, right: 4, left: 0, bottom: 4 } : { top: 24, right: 4, left: 8, bottom: 36 }}
+            barCategoryGap={isPhone ? "20%" : "25%"}
+          >
+            <XAxis
+              dataKey="date"
+              tick={isPhone ? <MobileTick buckets={buckets} mode={mobileMode} /> : <DateTick granularity={granularity} />}
+              tickLine={false}
+              axisLine={false}
+              interval={0}
+            />
+            <YAxis
+              tickFormatter={formatK}
+              tick={{ fontSize: 10, fill: "var(--chart-muted)" }}
+              tickLine={false}
+              axisLine={false}
+              width={isPhone ? 28 : 36}
+            allowDecimals={!isPhone}
+            />
+            <Tooltip
+              content={({ active, payload, label: lbl }) => {
+                if (!active || !payload?.length) return null;
+                const row = payload[0]?.payload as (TrafficBucket & { target: number }) | undefined;
+                const currentValue = Number(row?.current ?? 0);
+                const currentPace = pacePct(currentValue, row?.target ?? targetPerBucket);
+                return (
+                  <div className="ui-tooltip rounded-lg px-3 py-2 text-xs shadow-sm">
+                    <p className="mb-1 font-semibold">
+                      {weekly && row ? fmtWeekRange(row) : fmtTooltipDate(String(lbl), granularity)}
+                    </p>
+                    <p>{currentValue.toLocaleString("en-US")} engaged sessions</p>
+                    <p className="opacity-70">prev. {Number(row?.previous ?? 0).toLocaleString("en-US")}</p>
+                    <p className="mt-1 font-semibold">
+                      {Math.round(currentPace)}% of {weekly ? "weekly" : paceLabel} pace
+                    </p>
+                  </div>
+                );
+              }}
+              cursor={{ fill: "var(--chart-cursor)" }}
+            />
+            {PACE_BANDS.map(({ key, color }, index) => (
+              <Bar key={key} dataKey={key} stackId="current" fill={color}>
+                {index === PACE_BANDS.length - 1 ? (
+                  <LabelList
+                    dataKey="current"
+                    position="top"
+                    fill="var(--text-secondary)"
+                    fontSize={9}
+                  />
+                ) : null}
+              </Bar>
+            ))}
+            <Line
+              dataKey="previous"
+              stroke="var(--chart-muted)"
+              strokeWidth={1.5}
+              strokeDasharray="4 3"
+              dot={false}
+              activeDot={false}
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
       <p className="mt-2 text-xs text-slate-400">
-        Each bar is measured against {targetPerBucket.toLocaleString("en-US", { maximumFractionDigits: 1 })} engaged sessions per {bucketLabel}
+        Each bar is measured against {footerTarget.toLocaleString("en-US", { maximumFractionDigits: 1 })} engaged sessions per {bucketLabel}
         {" "}and progresses through five theme-derived pace bands.
       </p>
     </div>
