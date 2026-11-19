@@ -405,17 +405,30 @@ def statement_list(info):
             mark, text, cls = "?", "None on file", "wait"
         else:
             mark, text, cls = "&#10003;", "In, %s" % month_day(state), "ok"
-        rows.append("<li class=%s><span>%s</span><b>%s</b><em>%s</em></li>" % (cls, mark, html.escape(a["name"]), html.escape(text)))
+        rows.append("<li class=%s><span>%s</span><b>%s</b><em>%s</em><small>%s</small></li>"
+                    % (cls, mark, html.escape(a["name"]), html.escape(text), html.escape(statement_dates(a))))
     for name in info.get("unchecked") or []:
         rows.append("<li class=wait><span>?</span><b>%s</b><em>Can't check: no account number in Double</em></li>" % html.escape(name))
     return "<div class=stm><b>Statements for %s</b><ul>%s</ul></div>" % (html.escape(title), "".join(rows))
+
+
+def statement_dates(account):
+    """'Covers through Oct 31 · next ends about Nov 30', or the overdue end dates; next dates are estimates."""
+    last, nxt, overdue = account.get("lastEnd"), account.get("nextEnd"), account.get("overdue") or []
+    if not last:
+        return "No statement on file"
+    if overdue:
+        span = month_day(overdue[0]) if len(overdue) == 1 else "%s to %s" % (month_day(overdue[0]), month_day(overdue[-1]))
+        return "Covers through %s · missing: ends %s (%d)" % (month_day(last), span, len(overdue))
+    return "Covers through %s · next ends about %s" % (month_day(last), month_day(nxt)) if nxt else "Covers through %s" % month_day(last)
 
 
 def month_day(iso):
     import datetime as dt
     try:
         day = dt.date.fromisoformat(iso)
-        return "%s %d" % (day.strftime("%b"), day.day)
+        # The year only when it is not this year: 'Oct 31', 'Apr 17, 2025'.
+        return "%s %d" % (day.strftime("%b"), day.day) + (", %d" % day.year if day.year != dt.date.today().year else "")
     except (TypeError, ValueError):
         return str(iso)
 
@@ -447,6 +460,12 @@ def status_facts(info):
         facts.append(("Open month", month_label(open_months[0])))
     if info.get("lastClosed"):
         facts.append(("Last closed", month_label(info["lastClosed"])))
+    with_dates = [a for a in info.get("statements") or [] if a.get("lastEnd")]
+    if with_dates:
+        earliest = min(with_dates, key=lambda a: a["lastEnd"])
+        gap = len(info.get("statements") or []) - len(with_dates)
+        facts.append(("All statements in through", month_day(earliest["lastEnd"]) + (" (%s)" % earliest["name"] if len(with_dates) > 1 else "")
+                      + (", %d with none on file" % gap if gap else "")))
     if info.get("tasksTotal"):
         facts.append(("Close tasks", "%d of %d done" % (info.get("tasksDone") or 0, info["tasksTotal"])))
     if info.get("toReconcile"):
@@ -483,7 +502,7 @@ def reports_page(root, folder, query):
              ".stm{margin-top:10px}.stm>b{font-size:13px;color:#64748b}.stm ul{list-style:none;margin:4px 0 0;padding:0}"
              ".stm li{display:grid;grid-template-columns:18px 1fr auto;gap:6px;padding:4px 0;border-top:1px solid #f1f5f9;font-size:15px}"
              ".stm li em{font-style:normal;color:#475569}.stm .ok span{color:#15803d}.stm .miss span,.stm .miss em{color:#be123c;font-weight:600}"
-             ".stm .wait span{color:#94a3b8}small.gap{color:#be123c;font-weight:600}"
+             ".stm li small{grid-column:2/4;margin:0;font-size:12px;color:#64748b}.stm .wait span{color:#94a3b8}small.gap{color:#be123c;font-weight:600}"
              ".why small{margin-top:8px;font-size:12px}h2{font-size:15px;color:#64748b;margin:0 0 8px;font-weight:600}"
              "div.row.st:not(.off){background:#fff;color:#0f172a}a.back{color:#475569;display:inline-block;margin-bottom:12px}</style>")
     if folder is None:

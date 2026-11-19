@@ -185,6 +185,32 @@ def owed_accounts(folder, names):
     return picked
 
 
+def add_months(year, month, step):
+    total = year * 12 + month - 1 + step
+    return total // 12, total % 12 + 1
+
+
+def expected_ends(ends, quarterly, until):
+    """Statement end dates expected after the newest one, up to 'until', from the account's pattern:
+    month-end cycles stay on month end; others keep their usual day of the month (capped at month end).
+    These are estimates; only a statement confirms its own end date."""
+    if not ends:
+        return []
+    last = ends[-1]
+    # Follow the newest statement: month-end cycles stay on month end, others keep its day of the month
+    # (First Financial's Oct statement ran 10/01 thru 11/01, so the next ends about Dec 1).
+    on_month_end = last == month_end(last.year, last.month)
+    usual = last.day
+    step = 3 if quarterly else 1
+    out, year, month = [], last.year, last.month
+    while True:
+        year, month = add_months(year, month, step)
+        end = month_end(year, month) if on_month_end else dt.date(year, month, min(usual, month_end(year, month).day))
+        out.append(end)
+        if end > until:
+            return out
+
+
 def owed(accounts, statements, months, today):
     """For each owed account: cadence and, per month 'YYYY-MM', the date its statement arrived, or
     'missing' / 'not issued yet' / 'none on file' (no statement for this account read in the window:
@@ -209,7 +235,14 @@ def owed(accounts, statements, months, today):
             by_month["%04d-%02d" % (year, month)] = "not issued yet" if today <= cycle_end + dt.timedelta(days=10) else "missing"
         if not any(v not in ("missing", "not issued yet") for v in by_month.values()):
             by_month = {k: ("none on file" if v == "missing" else v) for k, v in by_month.items()}
-        result.append({"name": name, "last4": digits, "cadence": "quarterly" if quarterly else "monthly", "months": by_month})
+        ends = sorted({dt.date.fromisoformat(e) for _, e in spans})
+        # A statement is out about 10 days after its period ends; earlier expected ends are overdue.
+        expected = expected_ends(ends, quarterly, today - dt.timedelta(days=10))
+        overdue = [e.isoformat() for e in expected if e <= today - dt.timedelta(days=10)]
+        result.append({"name": name, "last4": digits, "cadence": "quarterly" if quarterly else "monthly", "months": by_month,
+                       "lastEnd": ends[-1].isoformat() if ends else None,
+                       "nextEnd": expected[0].isoformat() if expected else None,
+                       "overdue": overdue})
     return result
 
 
