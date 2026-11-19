@@ -16,6 +16,7 @@ ops client-won ENGAGEMENT-ID   re-run the new-client steps (backfill or retry)
 ops services                   service records and today's MRR under the rule
 ops service-load FILE.json     upsert service records (JSON array, one object per record;
                                fields in docs/operations-api.md); safe to run again
+ops service-sync [--dry-run]   set service and client tags from the records (also nightly)
 Options: --brand SLUG (default bookkeeping-conroe)`;
 
 const STATUS = { done: "done", waiting: "waiting_client", "needs-tom": "needs_tom", failed: "failed" };
@@ -40,6 +41,7 @@ function parse(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === "--inactive") opts.inactive = true;
+    else if (a === "--dry-run") opts.dryRun = true;
     else if (a.startsWith("--")) opts[a.slice(2)] = argv[(i += 1)];
     else args.push(a);
   }
@@ -125,13 +127,14 @@ async function main() {
     return;
   }
   if (cmd === "services") {
-    const { today, mrr, records } = await call("GET", `/api/operations/service-records?brand=${encodeURIComponent(brand)}`);
+    const { today, mrr, mismatches, records } = await call("GET", `/api/operations/service-records?brand=${encodeURIComponent(brand)}`);
     for (const r of records) {
       const fee = r.feeAmount === null ? "-" : `$${r.feeAmount}`;
       const end = r.endDate ? `${r.endDate} ${r.endReason}` : r.startDate > today ? "starting" : "active";
       console.log(`${r.contactName.slice(0, 28).padEnd(28)} ${r.product.padEnd(24)} ${r.basis.padEnd(8)} ${fee.padStart(8)}  ${r.startDate}  ${end}`);
     }
     console.log(`MRR ${today}: $${mrr.total}/mo, ${mrr.clients} client${mrr.clients === 1 ? "" : "s"} (${records.length} records)`);
+    for (const m of mismatches ?? []) console.log(`MISMATCH ${m.name}: ${m.problem}`);
     return;
   }
   if (cmd === "service-load") {
@@ -144,6 +147,7 @@ async function main() {
       try {
         const out = await call("PUT", "/api/operations/service-records", { brand, ...record });
         console.log(`${out.created ? "created" : "updated"}  ${out.sourceKey}`);
+        if (out.tags) console.log(`         tags +${out.tags.add.join(" +") || "-"}  -${out.tags.remove.join(" -") || "-"}`);
       } catch (error) {
         failed += 1;
         console.log(`FAILED   ${record.sourceKey ?? "(no sourceKey)"}: ${error.message}`);
@@ -151,6 +155,15 @@ async function main() {
     }
     console.log(`${records.length - failed} loaded, ${failed} failed`);
     if (failed) process.exitCode = 1;
+    return;
+  }
+  if (cmd === "service-sync") {
+    const dryRun = Boolean(opts.dryRun);
+    const { changes } = await call("POST", "/api/operations/service-records/sync", { brand, dryRun });
+    for (const c of changes) {
+      console.log(`${c.name.slice(0, 28).padEnd(28)} +${c.add.join(" +") || "-"}  -${c.remove.join(" -") || "-"}`);
+    }
+    console.log(`${changes.length} contact${changes.length === 1 ? "" : "s"} ${dryRun ? "would change (dry run)" : "changed"}`);
     return;
   }
   console.log(USAGE);

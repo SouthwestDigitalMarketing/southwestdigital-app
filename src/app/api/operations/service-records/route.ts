@@ -4,13 +4,15 @@ import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/simpleRateLimit";
 import { PipeBrandError, resolveBrand } from "@/lib/pipe/contacts";
 import { authenticateOperationsRequest } from "@/lib/operations/api";
-import { firmDateKey } from "@/lib/operations/schedule";
-import { monthlyRecurringRevenue, parseServiceRecord } from "@/lib/operations/serviceRecords";
+import { parseServiceRecord } from "@/lib/operations/serviceRecords";
+import { getRecordMrr } from "@/lib/operations/serviceRecordsMrr";
+import { syncServiceTags } from "@/lib/operations/serviceTags";
 
 /**
  * Service records (concepts/service-records-design). GET lists them with
  * today's MRR under the rule; PUT upserts one record by its sourceKey, so a
- * loader can be run again safely.
+ * loader can be run again safely. MRR is the dashboard's: clients counted by
+ * their recurring service tag, fees from records.
  */
 
 function unauthorized(status: 401 | 503) {
@@ -48,8 +50,14 @@ export async function GET(request: Request) {
       evidenceDate: day(r.evidenceDate),
       previousSourceKey: r.previous?.sourceKey ?? null,
     }));
-    const today = firmDateKey(new Date());
-    return NextResponse.json({ today, mrr: monthlyRecurringRevenue(records, today), records });
+    // Same numbers as the dashboard: counted by tag, fees from records.
+    const counted = await getRecordMrr(brand.id);
+    return NextResponse.json({
+      today: counted.day,
+      mrr: { total: counted.clients.reduce((sum, c) => sum + c.mrr, 0), clients: counted.clients.length },
+      mismatches: counted.mismatches,
+      records,
+    });
   } catch (error) {
     if (error instanceof PipeBrandError) return NextResponse.json({ error: error.message }, { status: 404 });
     throw error;
@@ -118,7 +126,9 @@ export async function PUT(request: Request) {
       update: data,
       select: { id: true, sourceKey: true },
     });
-    return NextResponse.json({ ...record, created: !existed });
+    // The record sets the contact's service and client tags.
+    const tags = await syncServiceTags(brand.id, { contactIds: [input.contactId] });
+    return NextResponse.json({ ...record, created: !existed, tags: tags[0] ?? null });
   } catch (error) {
     if (error instanceof PipeBrandError) return NextResponse.json({ error: error.message }, { status: 404 });
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {

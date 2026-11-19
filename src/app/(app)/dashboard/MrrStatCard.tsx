@@ -82,6 +82,7 @@ export function MrrStatCard({
   current,
   clients,
   starting = [],
+  mismatches = 0,
   pastDueById,
   syncedAsOf,
   goal,
@@ -92,6 +93,8 @@ export function MrrStatCard({
   clients: MrrClient[];
   /** Monthly agreements signed but not started yet; not in the total. */
   starting?: Array<MrrClient & { startDate: string }>;
+  /** Clients whose service tags and records disagree (listed on /dashboard/revenue). */
+  mismatches?: number;
   pastDueById: Record<string, PastDueEntry>;
   syncedAsOf: string | null;
   goal: number | null;
@@ -123,6 +126,11 @@ export function MrrStatCard({
           {starting.length > 0 ? (
             <span className="mt-0.5 block text-xs text-slate-500">
               + {fmtMoney(starting.reduce((sum, client) => sum + client.mrr, 0))}/mo signed, starting
+            </span>
+          ) : null}
+          {mismatches > 0 ? (
+            <span className="mt-0.5 block text-xs font-semibold text-amber-700">
+              {mismatches} mismatch{mismatches === 1 ? "" : "es"} between tags and records
             </span>
           ) : null}
         </span>
