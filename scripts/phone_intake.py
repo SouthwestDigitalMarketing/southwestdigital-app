@@ -372,9 +372,19 @@ def status_reason(info, today=None):
     else:
         work = "%s's close in Double is %s done." % (name, percent)
     if status == "late":
-        days = ((today or dt.date.today()) - due).days if due else 0
-        return ["%s report was due %s." % (name, due_text), work + (" %d days late." % days if days > 0 else "")]
+        return ["%s report was due %s." % (name, due_text), work]
     return ["%s report is due %s." % (name, due_text), work]
+
+
+def days_late(info, today=None):
+    """Days past the due date for a late client, else 0."""
+    import datetime as dt
+    if info.get("status") != "late":
+        return 0
+    try:
+        return max(0, ((today or dt.date.today()) - dt.date.fromisoformat(info.get("due") or "")).days)
+    except ValueError:
+        return 0
 
 
 def month_label(ym):
@@ -494,7 +504,8 @@ def reports_page(root, folder, query):
              ".st,a.row.st{display:flex;align-items:center;justify-content:space-between;gap:10px}.st .nm{min-width:0}"
              ".tag{flex:0 0 auto;font-size:12px;font-weight:600;border:1px solid;border-radius:999px;padding:1px 8px;background:#fff}"
              ".why{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin:0 0 16px}"
-             ".why .tag{display:inline-block;margin-bottom:6px}.why p{margin:0}.why p+p{margin-top:2px;color:#334155}"
+             ".why .head{display:flex;align-items:center;gap:10px;margin-bottom:6px}.why .late{font-size:14px;font-weight:700}"
+             ".why .tag{display:inline-block}.why p{margin:0}.why p+p{margin-top:2px;color:#334155}"
              ".why dl{margin:6px 0 0;font-size:15px}"
              ".why dt{color:#64748b;font-size:13px;margin-top:10px}.why dd{margin:0;font-weight:600}"
              ".why blockquote{margin:10px 0 0;padding:8px 10px;background:#f8fafc;border-radius:8px;font-size:14px;color:#334155}"
@@ -540,8 +551,12 @@ def reports_page(root, folder, query):
         if note:
             lines += "<blockquote><b>Our note to the client in Double</b>%s</blockquote>" % html.escape(note)
         checked = (saved_status.get("updated") or "").replace("T", " ")[:16]
-        why = ("<div class=why style='border-left:5px solid %s'><span class=tag style='color:%s;border-color:%s'>%s</span>%s"
-               "<small>Checked in Double %s</small></div>" % (color, color, color, html.escape(label), lines, html.escape(checked)))
+        late = days_late(info)
+        head = "<span class=tag style='color:%s;border-color:%s'>%s</span>" % (color, color, html.escape(label))
+        if late:
+            head += "<span class=late style='color:%s'>%d day%s late</span>" % (color, late, "" if late == 1 else "s")
+        why = ("<div class=why style='border-left:5px solid %s'><div class=head>%s</div>%s"
+               "<small>Checked in Double %s</small></div>" % (color, head, lines, html.escape(checked)))
     return ("<!doctype html><html lang=en><head><meta charset=utf-8><title>%s reports</title>%s</head><body>"
             "<a class=back href='/reports%s'>&lsaquo; All clients</a><h1>%s</h1>%s<h2>Reports</h2>%s</body></html>"
             % (html.escape(client["name"]), style, sign, html.escape(client["name"]), why, rows))
