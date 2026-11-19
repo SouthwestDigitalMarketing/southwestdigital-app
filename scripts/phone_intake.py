@@ -422,6 +422,36 @@ def statement_list(info):
     return "<div class=stm><b>Statements for %s</b><ul>%s</ul></div>" % (html.escape(title), "".join(rows))
 
 
+def feed_list(info):
+    """'Bank feeds': each connected account as read from the QuickBooks Banking page, with when it was read."""
+    import datetime as dt
+    import html
+    feed = info.get("feeds") or {}
+    accounts = feed.get("accounts") or []
+    if not accounts:
+        return "<div class=stm><b>Bank feeds</b><ul><li class=wait><span>?</span><b>Not checked yet</b>" \
+               "<em>Read from the QuickBooks Banking page; nothing recorded for this client.</em></li></ul></div>"
+    rows = []
+    for a in accounts:
+        state = a.get("state")
+        mark, cls = {"ok": ("&#10003;", "ok"), "stale": ("!", "miss"), "disconnected": ("&#10007;", "miss"),
+                     "error": ("&#10007;", "miss")}.get(state, ("?", "wait"))
+        label = {"ok": "Connected", "stale": "Not updating", "disconnected": "Disconnected", "error": "Error"}.get(state, state or "")
+        detail = "Last updated %s" % month_day(a.get("lastUpdated"))
+        if a.get("pending") is not None:
+            detail += " · %d pending" % a["pending"]
+        if a.get("note"):
+            detail += " · " + a["note"]
+        rows.append("<li class=%s><span>%s</span><b>%s</b><em>%s</em><small>%s</small></li>"
+                    % (cls, mark, html.escape(a.get("name") or ""), html.escape(label), html.escape(detail)))
+    try:
+        age = (dt.date.today() - dt.date.fromisoformat(feed.get("checked") or "")).days
+        checked = "today" if age == 0 else ("yesterday" if age == 1 else "%d days ago" % age)
+    except ValueError:
+        checked = "unknown"
+    return "<div class=stm><b>Bank feeds</b> <i>checked in QuickBooks %s</i><ul>%s</ul></div>" % (checked, "".join(rows))
+
+
 def statement_dates(account):
     """'Covers through Oct 31 · next ends about Nov 30', or the overdue end dates; next dates are estimates."""
     last, nxt, overdue = account.get("lastEnd"), account.get("nextEnd"), account.get("overdue") or []
@@ -454,7 +484,9 @@ def status_facts(info):
     note = info.get("note") or ""
     note_says = any(w in note.lower() for w in ("do not have", "missing", "waiting on", "we need"))
     if info.get("status") != "done":
-        if info.get("missing"):
+        if any(a.get("state") in ("disconnected", "error") for a in (info.get("feeds") or {}).get("accounts") or []):
+            facts.append(("Whose move", "The client's: reconnect the bank feed"))
+        elif info.get("missing"):
             facts.append(("Whose move", "The client's: statements missing"))
         elif info.get("waiting") or note_says:
             facts.append(("Whose move", "The client's (see the note below)"))
@@ -514,7 +546,7 @@ def reports_page(root, folder, query):
              ".stm li{position:relative;padding:8px 0 8px 24px;border-top:1px solid #f1f5f9;font-size:15px}"
              ".stm li span{position:absolute;left:2px;top:8px}.stm li b,.stm li em{display:block}"
              ".stm li em{font-style:normal;color:#475569}.stm .ok span{color:#15803d}.stm .miss span,.stm .miss em{color:#be123c;font-weight:600}"
-             ".stm li small{margin:2px 0 0;font-size:13px;color:#64748b}.stm .wait span{color:#94a3b8}small.gap{color:#be123c;font-weight:600}"
+             ".stm li small{margin:2px 0 0;font-size:13px;color:#64748b}.stm>i{font-style:normal;font-size:12px;color:#94a3b8}.stm .wait span{color:#94a3b8}small.gap{color:#be123c;font-weight:600}"
              ".why small{margin-top:8px;font-size:12px}h2{font-size:15px;color:#64748b;margin:0 0 8px;font-weight:600}"
              "div.row.st:not(.off){background:#fff;color:#0f172a}a.back{color:#475569;display:inline-block;margin-bottom:12px}</style>")
     if folder is None:
@@ -548,6 +580,7 @@ def reports_page(root, folder, query):
         if facts:
             lines += "<dl>%s</dl>" % "".join("<dt>%s</dt><dd>%s</dd>" % (html.escape(k), html.escape(v)) for k, v in facts)
         lines += statement_list(info)
+        lines += feed_list(info)
         if note:
             lines += "<blockquote><b>Our note to the client in Double</b>%s</blockquote>" % html.escape(note)
         checked = (saved_status.get("updated") or "").replace("T", " ")[:16]

@@ -26,6 +26,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import phone_intake  # noqa: E402  (same folder: reports root and names)
 import statements  # noqa: E402
+import bank_feeds  # noqa: E402
 
 API = "https://api.doublehq.com"
 CREDENTIALS = os.path.expanduser(os.environ.get("BOOKBOT_DOUBLE_JSON", "~/.config/bookbot/double.json"))
@@ -141,12 +142,22 @@ def main():
             close = next((c for c in closes if c.get("yearMonth") == ym), None)
             detail = close_detail(closes, close, bearer)
         saved = os.path.isfile(os.path.join(phone_intake.REPORTS_ROOT, folder, "reports", "%04d" % year, "%04d-%02d.pdf" % (year, month)))
-        out[folder] = {"status": decide(today, close, saved, bool(waiting.get(folder))),
+        feed = bank_feeds.for_client(folder)
+        blocked = bank_feeds.blocking(feed)
+        reason = waiting.get(folder) if isinstance(waiting.get(folder), str) else None
+        if blocked and not reason:
+            # A disconnected or failing bank feed stops the close until the client reconnects it.
+            first = blocked[0]
+            since = dt.date.fromisoformat(first["lastUpdated"]).strftime("%b %-d") if first.get("lastUpdated") else "?"
+            reason = "reconnect the %s bank feed (%s since %s)" % (
+                ", ".join(a["name"] for a in blocked), "disconnected" if first["state"] == "disconnected" else "failing", since)
+        out[folder] = {"status": decide(today, close, saved, bool(waiting.get(folder)) or bool(blocked)),
+                       "feeds": feed,
                        "month": "%04d-%02d" % (year, month),
                        "close": (close or {}).get("status"), "progress": (close or {}).get("progress"),
                        "due": fifth_business_day(today.year, today.month).isoformat(),
                        "saved": saved,
-                       "waiting": waiting.get(folder) if isinstance(waiting.get(folder), str) else None,
+                       "waiting": reason,
                        "doubleClient": bool(client), **detail}
     # Statements owed and arrived, for the 12 months up to the due month.
     cache = statements.load_cache()
