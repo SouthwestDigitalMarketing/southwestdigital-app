@@ -372,9 +372,19 @@ def status_reason(info, today=None):
     else:
         work = "%s's close in Double is %s done." % (name, percent)
     if status == "late":
-        days = ((today or dt.date.today()) - due).days if due else 0
-        return ["%s report was due %s." % (name, due_text), work + (" %d days late." % days if days > 0 else "")]
+        return ["%s report was due %s." % (name, due_text), work]
     return ["%s report is due %s." % (name, due_text), work]
+
+
+def days_late(info, today=None):
+    """Days past the due date for a late client, else 0."""
+    import datetime as dt
+    if info.get("status") != "late":
+        return 0
+    try:
+        return max(0, ((today or dt.date.today()) - dt.date.fromisoformat(info.get("due") or "")).days)
+    except ValueError:
+        return 0
 
 
 def month_label(ym):
@@ -405,17 +415,30 @@ def statement_list(info):
             mark, text, cls = "?", "None on file", "wait"
         else:
             mark, text, cls = "&#10003;", "In, %s" % month_day(state), "ok"
-        rows.append("<li class=%s><span>%s</span><b>%s</b><em>%s</em></li>" % (cls, mark, html.escape(a["name"]), html.escape(text)))
+        rows.append("<li class=%s><span>%s</span><b>%s</b><em>%s</em><small>%s</small></li>"
+                    % (cls, mark, html.escape(a["name"]), html.escape(text), html.escape(statement_dates(a))))
     for name in info.get("unchecked") or []:
         rows.append("<li class=wait><span>?</span><b>%s</b><em>Can't check: no account number in Double</em></li>" % html.escape(name))
     return "<div class=stm><b>Statements for %s</b><ul>%s</ul></div>" % (html.escape(title), "".join(rows))
+
+
+def statement_dates(account):
+    """'Covers through Oct 31 · next ends about Nov 30', or the overdue end dates; next dates are estimates."""
+    last, nxt, overdue = account.get("lastEnd"), account.get("nextEnd"), account.get("overdue") or []
+    if not last:
+        return "No statement on file"
+    if overdue:
+        span = month_day(overdue[0]) if len(overdue) == 1 else "%s to %s" % (month_day(overdue[0]), month_day(overdue[-1]))
+        return "Covers through %s · missing: ends %s (%d)" % (month_day(last), span, len(overdue))
+    return "Covers through %s · next ends about %s" % (month_day(last), month_day(nxt)) if nxt else "Covers through %s" % month_day(last)
 
 
 def month_day(iso):
     import datetime as dt
     try:
         day = dt.date.fromisoformat(iso)
-        return "%s %d" % (day.strftime("%b"), day.day)
+        # The year only when it is not this year: 'Oct 31', 'Apr 17, 2025'.
+        return "%s %d" % (day.strftime("%b"), day.day) + (", %d" % day.year if day.year != dt.date.today().year else "")
     except (TypeError, ValueError):
         return str(iso)
 
@@ -447,6 +470,12 @@ def status_facts(info):
         facts.append(("Open month", month_label(open_months[0])))
     if info.get("lastClosed"):
         facts.append(("Last closed", month_label(info["lastClosed"])))
+    with_dates = [a for a in info.get("statements") or [] if a.get("lastEnd")]
+    if with_dates:
+        earliest = min(with_dates, key=lambda a: a["lastEnd"])
+        gap = len(info.get("statements") or []) - len(with_dates)
+        facts.append(("All statements in through", month_day(earliest["lastEnd"]) + (" (%s)" % earliest["name"] if len(with_dates) > 1 else "")
+                      + (", %d with none on file" % gap if gap else "")))
     if info.get("tasksTotal"):
         facts.append(("Close tasks", "%d of %d done" % (info.get("tasksDone") or 0, info["tasksTotal"])))
     if info.get("toReconcile"):
@@ -475,15 +504,17 @@ def reports_page(root, folder, query):
              ".st,a.row.st{display:flex;align-items:center;justify-content:space-between;gap:10px}.st .nm{min-width:0}"
              ".tag{flex:0 0 auto;font-size:12px;font-weight:600;border:1px solid;border-radius:999px;padding:1px 8px;background:#fff}"
              ".why{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin:0 0 16px}"
-             ".why .tag{display:inline-block;margin-bottom:6px}.why p{margin:0}.why p+p{margin-top:2px;color:#334155}"
-             ".why dl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:10px 0 0;font-size:15px}"
-             ".why dt{color:#64748b}.why dd{margin:0;font-weight:600}"
+             ".why .head{display:flex;align-items:center;gap:10px;margin-bottom:6px}.why .late{font-size:14px;font-weight:700}"
+             ".why .tag{display:inline-block}.why p{margin:0}.why p+p{margin-top:2px;color:#334155}"
+             ".why dl{margin:6px 0 0;font-size:15px}"
+             ".why dt{color:#64748b;font-size:13px;margin-top:10px}.why dd{margin:0;font-weight:600}"
              ".why blockquote{margin:10px 0 0;padding:8px 10px;background:#f8fafc;border-radius:8px;font-size:14px;color:#334155}"
              ".why blockquote b{display:block;font-size:12px;color:#64748b;margin-bottom:2px}"
              ".stm{margin-top:10px}.stm>b{font-size:13px;color:#64748b}.stm ul{list-style:none;margin:4px 0 0;padding:0}"
-             ".stm li{display:grid;grid-template-columns:18px 1fr auto;gap:6px;padding:4px 0;border-top:1px solid #f1f5f9;font-size:15px}"
+             ".stm li{position:relative;padding:8px 0 8px 24px;border-top:1px solid #f1f5f9;font-size:15px}"
+             ".stm li span{position:absolute;left:2px;top:8px}.stm li b,.stm li em{display:block}"
              ".stm li em{font-style:normal;color:#475569}.stm .ok span{color:#15803d}.stm .miss span,.stm .miss em{color:#be123c;font-weight:600}"
-             ".stm .wait span{color:#94a3b8}small.gap{color:#be123c;font-weight:600}"
+             ".stm li small{margin:2px 0 0;font-size:13px;color:#64748b}.stm .wait span{color:#94a3b8}small.gap{color:#be123c;font-weight:600}"
              ".why small{margin-top:8px;font-size:12px}h2{font-size:15px;color:#64748b;margin:0 0 8px;font-weight:600}"
              "div.row.st:not(.off){background:#fff;color:#0f172a}a.back{color:#475569;display:inline-block;margin-bottom:12px}</style>")
     if folder is None:
@@ -520,8 +551,12 @@ def reports_page(root, folder, query):
         if note:
             lines += "<blockquote><b>Our note to the client in Double</b>%s</blockquote>" % html.escape(note)
         checked = (saved_status.get("updated") or "").replace("T", " ")[:16]
-        why = ("<div class=why style='border-left:5px solid %s'><span class=tag style='color:%s;border-color:%s'>%s</span>%s"
-               "<small>Checked in Double %s</small></div>" % (color, color, color, html.escape(label), lines, html.escape(checked)))
+        late = days_late(info)
+        head = "<span class=tag style='color:%s;border-color:%s'>%s</span>" % (color, color, html.escape(label))
+        if late:
+            head += "<span class=late style='color:%s'>%d day%s late</span>" % (color, late, "" if late == 1 else "s")
+        why = ("<div class=why style='border-left:5px solid %s'><div class=head>%s</div>%s"
+               "<small>Checked in Double %s</small></div>" % (color, head, lines, html.escape(checked)))
     return ("<!doctype html><html lang=en><head><meta charset=utf-8><title>%s reports</title>%s</head><body>"
             "<a class=back href='/reports%s'>&lsaquo; All clients</a><h1>%s</h1>%s<h2>Reports</h2>%s</body></html>"
             % (html.escape(client["name"]), style, sign, html.escape(client["name"]), why, rows))
