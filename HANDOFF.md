@@ -1,5 +1,35 @@
 # SWapp handoff
 
+## 2026-11-18/19 — Service records steps 3-5 done (shipped)
+
+All Thing `concepts/service-records-design.md`, Tom's go via Kassad for each.
+
+- **Step 3 rest** (#165, `7c71937`): records set tags (`serviceTagPlan`,
+  `syncServiceTags`; after every record save, nightly `/api/cron/service-tags`
+  06:15 UTC, `ops service-sync [--dry-run]`). Dashboard counts clients by
+  `service-<product>-active` for a recurring product, fees from records;
+  mismatches on the card and `/dashboard/revenue`. Funnel: step-less deals go
+  by stage. Dashboard periods are Chicago days. Production sync: 7 contacts
+  changed, rerun 0.
+- **Step 4** (#167 `2370c80`, #168 `2ab091c`): client-won opens records from
+  the paid proposal; opening balances done ends the onboarding record;
+  `ops agreements-scan` opens records from `*SIGNED*.pdf` + builder JSON (no
+  Intuit completion email exists in Zoho or Gmail); `ops service-check
+  [--fix] [--save]` compares our QuickBooks billing (qb, read-only) with
+  records, deals and tags. Timer `swapp-service-check.timer` on ripley
+  (07:10 Chicago; unit files in `scripts/systemd/`), run once by hand: ok.
+  First check: 1 item for Tom (Contigo billed $400 in Nov, no agreement),
+  4 duplicate won deals for Kassad. Scan review entry is mailroom-app PR #82,
+  waiting on Donna's ok (not merged).
+- **Step 5** (#169 `b71378b`, #170 `c088352`): `Contact.mrrUsd` removed from
+  screens/forms (contact page tile reads records), then dropped by migration
+  `20261119040000_drop_contact_mrr_usd` (applied 03:46 UTC 11-19). Values
+  before: ripley `~/backups/swapp-db/contact-mrrUsd-before-drop-20261118.csv`
+  (3 rows, $750, all covered by records).
+- Still open: Sales `pipe mrr` reads its own won-deal MRR ($1,050 incl.
+  Contigo); point it at `ops services` (Kassad noted `~/projects/sales` sits on
+  branch `ummon/sales-live-cutover`).
+
 ## 2026-11-18 — Dashboard MRR reads service records (shipped)
 
 PR #162 merged as `563a4b2` (step 3 of `concepts/service-records-design.md`,
@@ -9,8 +39,7 @@ records active today (America/Chicago), per client; future-start monthly
 records show as "signed, starting", not in the total. Production expectation
 $1,230/mo, 4 clients (`ops services` agrees). Checked locally with phone-size
 screenshots (local sign-in needs `AUTH_SECRET=localdevsecret-...` and the
-saved cookie; see this session's notes). `Contact.mrrUsd` is still on the
-contact form (step 5 retires it). Not done from the design's dashboard list:
+saved cookie). `Contact.mrrUsd` was retired in step 5 (below). Not done from the design's dashboard list:
 lead funnel step-1 default, Chicago date ranges.
 
 ## 2026-11-18 — Service records: table, loader, backfill (shipped)
