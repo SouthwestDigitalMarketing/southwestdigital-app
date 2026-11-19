@@ -13,6 +13,9 @@ ops done|waiting|needs-tom|failed DUTY --summary "..." [--client KEY] [--period 
                                [--qb SLUG]  (onboarding-quickbooks: links the client's qb company)
 ops client KEY --name "..." --starts YYYY-MM-DD [--double ID] [--qb SLUG] [--stage onboarding|active|former] [--inactive]
 ops client-won ENGAGEMENT-ID   re-run the new-client steps (backfill or retry)
+ops services                   service records and today's MRR under the rule
+ops service-load FILE.json     upsert service records (JSON array, one object per record;
+                               fields in docs/operations-api.md); safe to run again
 Options: --brand SLUG (default bookkeeping-conroe)`;
 
 const STATUS = { done: "done", waiting: "waiting_client", "needs-tom": "needs_tom", failed: "failed" };
@@ -119,6 +122,35 @@ async function main() {
     for (const line of out.done) console.log(`done    ${line}`);
     for (const line of out.failed) console.log(`FAILED  ${line}`);
     if (out.failed.length) process.exitCode = 1;
+    return;
+  }
+  if (cmd === "services") {
+    const { today, mrr, records } = await call("GET", `/api/operations/service-records?brand=${encodeURIComponent(brand)}`);
+    for (const r of records) {
+      const fee = r.feeAmount === null ? "-" : `$${r.feeAmount}`;
+      const end = r.endDate ? `${r.endDate} ${r.endReason}` : r.startDate > today ? "starting" : "active";
+      console.log(`${r.contactName.slice(0, 28).padEnd(28)} ${r.product.padEnd(24)} ${r.basis.padEnd(8)} ${fee.padStart(8)}  ${r.startDate}  ${end}`);
+    }
+    console.log(`MRR ${today}: $${mrr.total}/mo, ${mrr.clients} client${mrr.clients === 1 ? "" : "s"} (${records.length} records)`);
+    return;
+  }
+  if (cmd === "service-load") {
+    if (!target) throw new Error(`usage:\n${USAGE}`);
+    const records = JSON.parse(readFileSync(target, "utf8"));
+    if (!Array.isArray(records)) throw new Error("the file must hold a JSON array");
+    let failed = 0;
+    // In file order, so a record that replaces another comes after it.
+    for (const record of records) {
+      try {
+        const out = await call("PUT", "/api/operations/service-records", { brand, ...record });
+        console.log(`${out.created ? "created" : "updated"}  ${out.sourceKey}`);
+      } catch (error) {
+        failed += 1;
+        console.log(`FAILED   ${record.sourceKey ?? "(no sourceKey)"}: ${error.message}`);
+      }
+    }
+    console.log(`${records.length - failed} loaded, ${failed} failed`);
+    if (failed) process.exitCode = 1;
     return;
   }
   console.log(USAGE);
