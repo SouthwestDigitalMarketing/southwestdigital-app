@@ -349,7 +349,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     ];
   }).flat();
 
-  // From service records (signed agreements), not the hand-typed Contact.mrrUsd.
+  // From service records (signed agreements).
   const mrrClients = recordMrr.clients;
   const mrr = summarizeMrr(mrrClients.map((client) => client.mrr));
   const todayKey = new Date().toISOString().slice(0, 10);
