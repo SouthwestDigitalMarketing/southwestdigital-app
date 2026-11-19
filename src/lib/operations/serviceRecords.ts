@@ -127,3 +127,34 @@ export function monthlyRecurringRevenue(
     clients: new Set(active.map((r) => r.contactId)).size,
   };
 }
+
+export type ClientMrr = { id: string; name: string; company: string | null; mrr: number };
+export type StartingMrr = ClientMrr & { startDate: string };
+
+/**
+ * Per-client MRR on `day` from monthly records, biggest first, and the
+ * monthly records signed but not started yet ("signed, starting"), soonest
+ * first. A future record of a client already counted still shows as starting.
+ */
+export function clientMrrOn(
+  records: (Dated & { basis: string; feeAmount: number | null; contactId: string; contactName: string; company: string | null })[],
+  day: string,
+): { clients: ClientMrr[]; starting: StartingMrr[] } {
+  const byClient = new Map<string, ClientMrr>();
+  const starting: StartingMrr[] = [];
+  for (const r of records) {
+    if (r.basis !== "monthly") continue;
+    const fee = r.feeAmount ?? 0;
+    if (isActiveOn(r, day)) {
+      const seen = byClient.get(r.contactId) ?? { id: r.contactId, name: r.contactName, company: r.company, mrr: 0 };
+      seen.mrr += fee;
+      byClient.set(r.contactId, seen);
+    } else if (r.startDate > day) {
+      starting.push({ id: r.contactId, name: r.contactName, company: r.company, mrr: fee, startDate: r.startDate });
+    }
+  }
+  return {
+    clients: [...byClient.values()].sort((a, b) => b.mrr - a.mrr || a.name.localeCompare(b.name)),
+    starting: starting.sort((a, b) => a.startDate.localeCompare(b.startDate) || a.name.localeCompare(b.name)),
+  };
+}
