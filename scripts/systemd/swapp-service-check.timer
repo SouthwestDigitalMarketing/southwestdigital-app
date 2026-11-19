@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily SWapp service records check (07:10 Chicago)
+
+[Timer]
+OnCalendar=*-*-* 07:10:00 America/Chicago
+Persistent=true
+
+[Install]
+WantedBy=timers.target

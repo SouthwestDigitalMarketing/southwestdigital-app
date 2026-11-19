@@ -108,3 +108,27 @@ active today; a record starting later shows as "starting" and is not counted.
   mismatches (card, `/dashboard/revenue`, `ops services`).
 - HTTP: `GET /api/operations/service-records?brand=SLUG`,
   `PUT /api/operations/service-records` with one object plus `brand`.
+
+### How records open, and the daily check (step 4)
+
+- **Paid SWapp proposal:** client-won opens the records from the accepted
+  proposal (monthly from the first of the prepaid month; onboarding, cleanup
+  and add-ons as one-time from the pay day). Skipped when the engagement
+  already has records. Marking `onboarding-opening-balances` done ends the
+  open onboarding record (job_done).
+- **Signed agreement (QBO Contracts):** Intuit sends no completion email to
+  Zoho or Gmail (checked 2026-11-18), so the trigger is the signed PDF saved
+  in the client folder. `ops agreements-scan` takes every `*SIGNED*.pdf` under
+  `~/projects/clients/<slug>/agreements/` whose builder JSON exists
+  (`_leads/<slug>/agreements/vN/<slug>.json`) and opens what is missing
+  (`POST /api/operations/service-records/from-agreement`). A product the
+  client already has (active, starting, or a one-time job within 31 days) is
+  skipped. `ops service-from-agreement JSON PDF` does one by hand.
+- **Daily check:** `ops service-check [--fix] [--save]` reads this month's
+  Sales by Customer from our QuickBooks (`qb`, read-only) and posts it to
+  `POST /api/operations/service-check`. Items, each with an owner: billed with
+  no record (Tom: no agreement on file), amount differs from agreed fees,
+  active monthly with nothing billed (Sol), client still an open lead (agent:
+  deals moved to won with `--fix`), duplicate won deals (Kassad), tag/record
+  disagreements (agent with `--fix`; a hand-set tag with no record is Tom's).
+  `--save` writes `~/.local/state/swapp/service-check.json` for the scan review.
