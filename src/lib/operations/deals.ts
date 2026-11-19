@@ -9,6 +9,14 @@ import { createBrandDataContext, withBrandDataTransaction } from "@/lib/tenancy/
  * payment and signature dates) and take `lead` off. Returns how many deals
  * moved. Used by client-won and by the service-records check.
  */
+// Sales files one pipe-prospects row per Bookkeeping Conroe QuickBooks invoice
+// (MeetingLead.amountKind = "invoice"). Those rows track receivables, not the
+// sale, so they are never moved to won here or counted as a client's deals.
+// amountKind is nullable and `not` alone would drop the nulls, hence the OR.
+export const NOT_INVOICE_LEAD = {
+  OR: [{ amountKind: null }, { amountKind: { not: "invoice" } }],
+};
+
 export async function markOpenDealsWon(input: {
   brandId: string;
   brandSlug: string;
@@ -30,7 +38,7 @@ export async function markOpenDealsWon(input: {
         pipelineId: pipeline.id,
         isActive: true,
         stage: { key: { notIn: ["won", "lost"] } },
-        lead: { brandId: input.brandId, contacts: { some: { contactId: input.contactId } } },
+        lead: { brandId: input.brandId, contacts: { some: { contactId: input.contactId } }, ...NOT_INVOICE_LEAD },
       },
       select: { id: true, leadId: true },
     });

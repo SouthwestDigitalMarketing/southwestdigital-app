@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { matchArCustomerToContact } from "@/lib/ar/matchArCustomers";
 import { PIPE_PROSPECTS_KEY } from "@/lib/pipe/deals";
 import { firmDateKey } from "./schedule";
-import { markOpenDealsWon } from "./deals";
+import { markOpenDealsWon, NOT_INVOICE_LEAD } from "./deals";
 import { billingMismatches, isActiveOn, type CheckItem } from "./serviceRecords";
 import { getRecordMrr } from "./serviceRecordsMrr";
 import { syncServiceTags } from "./serviceTags";
@@ -89,7 +89,7 @@ export async function runServiceCheck(input: {
     where: {
       isActive: true,
       pipeline: { brandId: input.brandId, key: PIPE_PROSPECTS_KEY },
-      lead: { contacts: { some: { contactId: { in: clientIds.length ? clientIds : ["-"] } } } },
+      lead: { contacts: { some: { contactId: { in: clientIds.length ? clientIds : ["-"] } } }, ...NOT_INVOICE_LEAD },
     },
     select: { id: true, stage: { select: { key: true } }, lead: { select: { contacts: { select: { contactId: true } } } } },
   });

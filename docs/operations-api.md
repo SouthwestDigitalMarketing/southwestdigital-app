@@ -129,6 +129,6 @@ active today; a record starting later shows as "starting" and is not counted.
   `POST /api/operations/service-check`. Items, each with an owner: billed with
   no record (Tom: no agreement on file), amount differs from agreed fees,
   active monthly with nothing billed (Sol), client still an open lead (agent:
-  deals moved to won with `--fix`), duplicate won deals (Kassad), tag/record
+  deals moved to won with `--fix`), duplicate won deals (Kassad; Sales invoice rows, `amountKind = invoice`, are skipped in both), tag/record
   disagreements (agent with `--fix`; a hand-set tag with no record is Tom's).
   `--save` writes `~/.local/state/swapp/service-check.json` for the scan review.
