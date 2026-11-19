@@ -205,7 +205,7 @@ export default async function SettingsPage({
             themePreset: brand.theme?.themePreset ?? "brand-colors",
           }}
         />
-        <ToolLinksForm links={mergeToolLinks(stored)} />
+        <ToolLinksForm links={mergeToolLinks(stored, brand.slug)} />
       </div>
     </div>
   );

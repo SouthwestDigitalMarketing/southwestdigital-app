@@ -84,6 +84,7 @@ const TOOL_ICONS: Record<string, React.ElementType> = {
   calendar: Calendar,
   mail: Mail,
   skool: GraduationCap,
+  website: Globe,
 };
 
 function NavItem({
