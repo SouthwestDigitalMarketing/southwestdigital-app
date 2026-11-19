@@ -1,5 +1,29 @@
 # SWapp handoff
 
+## 2026-11-18 — Service records: table, loader, backfill (shipped)
+
+Steps 2 of All Thing `concepts/service-records-design.md` (Tom's go via
+Kassad, board 304efb48f94c). PR #158 (`33e9ad5`) added `ServiceRecord`;
+production build applied `20261118233000_service_records` (log 02:09 UTC
+11-19). PR #159 (`e5e6600`) added the loader.
+
+- Design: Engagement stays the agreement; `ServiceRecord` is one paid service
+  (contact required, engagement optional, basis monthly|one_time|hourly,
+  fee, start/end + endReason, evidence source/ref/date, previousId for fee
+  amendments, sourceKey for idempotent loads). DB CHECKs: monthly needs fee
+  > 0 and non-invoice evidence; end date and reason together.
+- Loader: `PUT/GET /api/operations/service-records`; `ops services`,
+  `ops service-load FILE.json`. Docs: `docs/operations-api.md`.
+- Backfill loaded to production 2026-11-19 ~02:20 UTC: 13 records, 0 failed;
+  file kept at ripley `~/projects/clients/_service-records/loaded-2026-11-18.json`.
+  `ops services`: MRR $1,230/mo, 4 clients (AAA 150, BnB 150, Bayou City 450,
+  Rodan 480 from 2026-11-01 per its SOW; November paid in the deposit).
+- Not loaded: Taylor-Martino, Scotty Williams, CleanCap (ended; no SWapp
+  contact); Contigo, ARI, Samuel Yates (no agreement on file: GAP by rule).
+- Not built (not approved): dashboard MRR from records (step 3), patrol
+  mismatch check and QBO Contracts automation (step 4), retiring
+  `Contact.mrrUsd` (step 5); `onClientWon` does not yet open a record.
+
 ## 2026-11-18 — Client won automation (shipped)
 
 PR #156 merged as `6e191d4`. The production build applied migration
