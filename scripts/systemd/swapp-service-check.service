@@ -1,0 +1,11 @@
+# Daily service-records upkeep on ripley (docs/operations-api.md § step 4).
+# Install: cp scripts/systemd/swapp-service-check.* ~/.config/systemd/user/
+#          systemctl --user daemon-reload && systemctl --user enable --now swapp-service-check.timer
+[Unit]
+Description=SWapp service records: open records from signed agreements, then the billing check
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/.local/bin:%h/.local/share/mise/shims:/usr/local/bin:/usr/bin
+ExecStart=%h/.local/bin/ops agreements-scan
+ExecStart=%h/.local/bin/ops service-check --fix --save
