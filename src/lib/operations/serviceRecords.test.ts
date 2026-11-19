@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isActiveOn, monthlyRecurringRevenue, parseServiceRecord } from "./serviceRecords";
+import { clientMrrOn, isActiveOn, monthlyRecurringRevenue, parseServiceRecord } from "./serviceRecords";
 
 const monthly = {
   sourceKey: "backfill-2026-11-18:aaa:monthly-bookkeeping",
@@ -61,5 +61,26 @@ describe("monthlyRecurringRevenue", () => {
   it("treats the end date as the last day of service", () => {
     expect(isActiveOn(records[3], "2026-07-31")).toBe(true);
     expect(isActiveOn(records[3], "2026-08-01")).toBe(false);
+  });
+});
+
+describe("clientMrrOn", () => {
+  const base = { company: null, endDate: null };
+  const records = [
+    { ...base, contactId: "aaa", contactName: "AAA", basis: "monthly", feeAmount: 150, startDate: "2026-01-01" },
+    { ...base, contactId: "bayou", contactName: "Bayou", basis: "monthly", feeAmount: 450, startDate: "2026-10-01" },
+    { ...base, contactId: "bayou", contactName: "Bayou", basis: "monthly", feeAmount: 50, startDate: "2026-11-01" },
+    { ...base, contactId: "new", contactName: "New", basis: "monthly", feeAmount: 300, startDate: "2026-12-01" },
+    { ...base, contactId: "aaa", contactName: "AAA", basis: "one_time", feeAmount: 900, startDate: "2026-11-01" },
+    { ...base, contactId: "old", contactName: "Old", basis: "monthly", feeAmount: 300, startDate: "2026-01-01", endDate: "2026-07-31" },
+  ];
+
+  it("sums active monthly records per client, biggest first, and lists future ones as starting", () => {
+    const out = clientMrrOn(records, "2026-11-18");
+    expect(out.clients.map((c) => [c.id, c.mrr])).toEqual([
+      ["bayou", 500],
+      ["aaa", 150],
+    ]);
+    expect(out.starting).toEqual([{ id: "new", name: "New", company: null, mrr: 300, startDate: "2026-12-01" }]);
   });
 });

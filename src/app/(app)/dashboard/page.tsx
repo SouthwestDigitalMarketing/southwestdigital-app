@@ -13,6 +13,7 @@ import { DashboardControls } from "./DashboardControls";
 import { hasYouTubeActivity, summarizeMrr } from "./utils";
 import { getPastDueByContact } from "@/lib/ar/pastDue";
 import { getMrrGoals } from "@/lib/dashboard/mrr-goals";
+import { getRecordMrr } from "@/lib/operations/serviceRecordsMrr";
 import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { PIPE_PROSPECTS_KEY } from "@/lib/pipe/deals";
 import { LEAD_STEP_STAGE, LEAD_STEPS, type LeadStep } from "@/lib/pipe/lead-steps";
@@ -244,7 +245,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const selectedPeriod = getDashboardPeriod(range, windowEnd);
   const previous = getPreviousDashboardPeriod(range, windowEnd, selectedPeriod);
 
-  const [pipelineRows, mrrRows, [theme, mrrGoals], [currentOffers, previousOffers], [currentReviews, previousReviews]] = await Promise.all([
+  const [pipelineRows, recordMrr, [theme, mrrGoals], [currentOffers, previousOffers], [currentReviews, previousReviews]] = await Promise.all([
     withBrandDataTransaction(dataContext, (transaction) => transaction.pipeline.findMany({
       where: { brandId: brand.id, key: PIPE_PROSPECTS_KEY, isActive: true },
       orderBy: [{ createdAt: "asc" }, { name: "asc" }],
@@ -269,11 +270,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         },
       },
     })),
-    prisma.contact.findMany({
-      where: { brandId: brand.id, isActive: true, mrrUsd: { not: null } },
-      select: { id: true, name: true, company: true, mrrUsd: true },
-      orderBy: [{ mrrUsd: "desc" }, { name: "asc" }],
-    }),
+    getRecordMrr(brand.id),
     Promise.all([
       prisma.brandTheme.findUnique({
         where: { brandId: brand.id },
@@ -352,12 +349,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     ];
   }).flat();
 
-  const mrrClients = mrrRows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    company: row.company,
-    mrr: Number(row.mrrUsd),
-  }));
+  // From service records (signed agreements), not the hand-typed Contact.mrrUsd.
+  const mrrClients = recordMrr.clients;
   const mrr = summarizeMrr(mrrClients.map((client) => client.mrr));
   const todayKey = new Date().toISOString().slice(0, 10);
   const { byId: mrrPastDue, syncedAsOf: arSyncedAsOf } = await getPastDueByContact(
@@ -479,10 +472,11 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
       <DashboardSection title="Revenue" icon={<DollarSign size={14} />}>
         <MrrStatCard
-          label={`MRR · ${mrr.count.toLocaleString("en-US")} client${mrr.count === 1 ? "" : "s"} with MRR set`}
+          label={`MRR · ${mrr.count.toLocaleString("en-US")} client${mrr.count === 1 ? "" : "s"}`}
           value={`$${mrr.total.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/mo`}
           current={mrr.total}
           clients={mrrClients}
+          starting={recordMrr.starting}
           pastDueById={mrrPastDue}
           syncedAsOf={arSyncedAsOf}
           goal={mrrGoals.monthlyMrrGoal}

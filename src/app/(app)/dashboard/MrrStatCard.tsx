@@ -81,6 +81,7 @@ export function MrrStatCard({
   value,
   current,
   clients,
+  starting = [],
   pastDueById,
   syncedAsOf,
   goal,
@@ -89,6 +90,8 @@ export function MrrStatCard({
   value: string;
   current: number;
   clients: MrrClient[];
+  /** Monthly agreements signed but not started yet; not in the total. */
+  starting?: Array<MrrClient & { startDate: string }>;
   pastDueById: Record<string, PastDueEntry>;
   syncedAsOf: string | null;
   goal: number | null;
@@ -117,6 +120,11 @@ export function MrrStatCard({
           >
             {value}
           </span>
+          {starting.length > 0 ? (
+            <span className="mt-0.5 block text-xs text-slate-500">
+              + {fmtMoney(starting.reduce((sum, client) => sum + client.mrr, 0))}/mo signed, starting
+            </span>
+          ) : null}
         </span>
         <ChevronDown
           size={18}
@@ -165,8 +173,30 @@ export function MrrStatCard({
               })}
             </ul>
           ) : (
-            <p className="px-1 py-2 text-sm text-slate-500">No clients carry monthly revenue yet.</p>
+            <p className="px-1 py-2 text-sm text-slate-500">No active monthly service records.</p>
           )}
+          {starting.length > 0 ? (
+            <>
+              <p className="px-1 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Signed, starting
+              </p>
+              <ul className="divide-y divide-slate-100">
+                {starting.map((client) => (
+                  <li key={`${client.id}-${client.startDate}`}>
+                    <Link href={`/contacts/${client.id}`} className="flex items-center justify-between gap-2 px-1 py-2.5">
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-slate-800">{client.name}</span>
+                        <span className="block truncate text-xs text-slate-400">
+                          Starts {new Date(`${client.startDate}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-500">{fmtMoney(client.mrr)}/mo</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
           {syncedAsOf ? (
             <p className="px-1 pt-1 text-[11px] text-slate-400">
               Collections as of {new Date(syncedAsOf).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
