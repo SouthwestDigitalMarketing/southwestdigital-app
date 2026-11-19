@@ -25,6 +25,7 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import phone_intake  # noqa: E402  (same folder: reports root and names)
+import statements  # noqa: E402
 
 API = "https://api.doublehq.com"
 CREDENTIALS = os.path.expanduser(os.environ.get("BOOKBOT_DOUBLE_JSON", "~/.config/bookbot/double.json"))
@@ -84,8 +85,17 @@ def close_detail(closes, close, bearer):
             note = text[:400]
             break
     out = {"openMonths": open_months, "lastClosed": done[-1] if done else None, "note": note}
+    # Accounts the client owes statements for: reconciliation tasks with an account number, from the
+    # due close, or the newest close when the due month is not open yet (catching up).
+    latest = close or (max(closes, key=lambda c: c.get("yearMonth") or "") if closes else None)
+    tasks = double_get("/api/tasks/", {"endCloseId": latest["id"], "limit": 200}, bearer) if latest else []
+    out["accounts"] = sorted({t.get("name") for t in tasks
+                              if t.get("type") == "accountReconcilation" and statements.last4(t.get("name"))})
+    # Reconciled accounts we cannot match to statements: no account number in Double's task name.
+    out["unchecked"] = sorted({t.get("name") for t in tasks
+                               if t.get("type") == "accountReconcilation" and not statements.last4(t.get("name"))
+                               and not re.search(r"cash on hand|petty|undeposited|clearing|inactive|\bold\b", t.get("name") or "", re.I)})
     if close:
-        tasks = double_get("/api/tasks/", {"endCloseId": close["id"], "limit": 200}, bearer)
         out["tasksDone"] = sum(1 for t in tasks if t.get("status") == "done")
         out["tasksTotal"] = len(tasks)
         out["toReconcile"] = [t.get("name") for t in tasks
@@ -136,6 +146,14 @@ def main():
                        "saved": saved,
                        "waiting": waiting.get(folder) if isinstance(waiting.get(folder), str) else None,
                        "doubleClient": bool(client), **detail}
+    # Statements owed and arrived, for the 12 months up to the due month.
+    cache = statements.load_cache()
+    months = [((year * 12 + month - 1 - back) // 12, (year * 12 + month - 1 - back) % 12 + 1) for back in range(11, -1, -1)]
+    for folder, info in out.items():
+        found = statements.scan(os.path.join(phone_intake.REPORTS_ROOT, folder), cache)
+        info["statements"] = statements.owed(statements.owed_accounts(folder, info.get("accounts") or []), found, months, today)
+        info["missing"] = [a["name"] for a in info["statements"] if a["months"].get(info["month"]) == "missing"]
+    statements.save_cache(cache)
     tmp = OUT + ".tmp"
     with open(tmp, "w", encoding="utf-8") as handle:
         json.dump({"updated": dt.datetime.now().isoformat(timespec="seconds"), "clients": out}, handle)

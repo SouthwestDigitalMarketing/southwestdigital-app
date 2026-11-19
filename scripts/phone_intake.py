@@ -386,13 +386,60 @@ def month_label(ym):
         return str(ym)
 
 
+def statement_list(info):
+    """'Statements for October': one line per owed account, arrived (date) / missing / not issued yet."""
+    import html
+    accounts = info.get("statements") or []
+    if not accounts or info.get("status") == "catching-up":
+        return ""
+    ym = info.get("month") or ""
+    title = month_label(ym.replace("-", "")).split()[0] if ym else "last month"
+    rows = []
+    for a in accounts:
+        state = a["months"].get(ym)
+        if state == "missing":
+            mark, text, cls = "&#10007;", "Missing", "miss"
+        elif state == "not issued yet":
+            mark, text, cls = "&#9675;", "Not issued yet (%s)" % a["cadence"], "wait"
+        elif state == "none on file":
+            mark, text, cls = "?", "None on file", "wait"
+        else:
+            mark, text, cls = "&#10003;", "In, %s" % month_day(state), "ok"
+        rows.append("<li class=%s><span>%s</span><b>%s</b><em>%s</em></li>" % (cls, mark, html.escape(a["name"]), html.escape(text)))
+    for name in info.get("unchecked") or []:
+        rows.append("<li class=wait><span>?</span><b>%s</b><em>Can't check: no account number in Double</em></li>" % html.escape(name))
+    return "<div class=stm><b>Statements for %s</b><ul>%s</ul></div>" % (html.escape(title), "".join(rows))
+
+
+def month_day(iso):
+    import datetime as dt
+    try:
+        day = dt.date.fromisoformat(iso)
+        return "%s %d" % (day.strftime("%b"), day.day)
+    except (TypeError, ValueError):
+        return str(iso)
+
+
+def missing_for(info, ym):
+    """Owed statements that were missing for one report month 'YYYY-MM'."""
+    return [a["name"] for a in info.get("statements") or [] if a["months"].get(ym) == "missing"]
+
+
 def status_facts(info):
     """What to decide on: whose move, months still open, tasks left, accounts to reconcile, our note to the client."""
     facts = []
     note = info.get("note") or ""
-    client_owes = bool(info.get("waiting")) or any(w in note.lower() for w in ("do not have", "missing", "waiting on", "we need"))
+    note_says = any(w in note.lower() for w in ("do not have", "missing", "waiting on", "we need"))
     if info.get("status") != "done":
-        facts.append(("Whose move", "The client's (see the note below)" if client_owes else "Ours"))
+        if info.get("missing"):
+            facts.append(("Whose move", "The client's: statements missing"))
+        elif info.get("waiting") or note_says:
+            facts.append(("Whose move", "The client's (see the note below)"))
+        else:
+            if info.get("statements") and info.get("unchecked"):
+                facts.append(("Whose move", "Ours, for the accounts we can check"))
+            else:
+                facts.append(("Whose move", "Ours: the client has sent what we need" if info.get("statements") else "Ours"))
     open_months = info.get("openMonths") or []
     if len(open_months) > 1:
         facts.append(("Not closed", "%d months, oldest %s" % (len(open_months), month_label(open_months[0]))))
@@ -433,6 +480,10 @@ def reports_page(root, folder, query):
              ".why dt{color:#64748b}.why dd{margin:0;font-weight:600}"
              ".why blockquote{margin:10px 0 0;padding:8px 10px;background:#f8fafc;border-radius:8px;font-size:14px;color:#334155}"
              ".why blockquote b{display:block;font-size:12px;color:#64748b;margin-bottom:2px}"
+             ".stm{margin-top:10px}.stm>b{font-size:13px;color:#64748b}.stm ul{list-style:none;margin:4px 0 0;padding:0}"
+             ".stm li{display:grid;grid-template-columns:18px 1fr auto;gap:6px;padding:4px 0;border-top:1px solid #f1f5f9;font-size:15px}"
+             ".stm li em{font-style:normal;color:#475569}.stm .ok span{color:#15803d}.stm .miss span,.stm .miss em{color:#be123c;font-weight:600}"
+             ".stm .wait span{color:#94a3b8}small.gap{color:#be123c;font-weight:600}"
              ".why small{margin-top:8px;font-size:12px}h2{font-size:15px;color:#64748b;margin:0 0 8px;font-weight:600}"
              "div.row.st:not(.off){background:#fff;color:#0f172a}a.back{color:#475569;display:inline-block;margin-bottom:12px}</style>")
     if folder is None:
@@ -450,10 +501,13 @@ def reports_page(root, folder, query):
     client = next((c for c in clients if c["folder"] == folder), None)
     if client is None:
         return None
-    rows = "".join("<a class=row href='/reports/%s/%s/%s%s'>%s</a>" % (folder, m["year"], m["file"], sign, html.escape(m["label"]))
-                   for m in client["months"]) or "<p><small>No reports saved yet.</small></p>"
     saved_status = read_json(REPORT_STATUS, {}) or {}
     info = (saved_status.get("clients") or {}).get(folder) or {}
+    def month_row(m):
+        gaps = missing_for(info, m["file"][:7])
+        warn = "<small class=gap>Built without: %s</small>" % html.escape(", ".join(gaps)) if gaps else ""
+        return "<a class=row href='/reports/%s/%s/%s%s'>%s%s</a>" % (folder, m["year"], m["file"], sign, html.escape(m["label"]), warn)
+    rows = "".join(month_row(m) for m in client["months"]) or "<p><small>No reports saved yet.</small></p>"
     why = ""
     entry = next(((label, color) for k, label, color, _ in REPORT_STATUSES if k == info.get("status")), None)
     if entry:
@@ -462,6 +516,7 @@ def reports_page(root, folder, query):
         facts, note = status_facts(info)
         if facts:
             lines += "<dl>%s</dl>" % "".join("<dt>%s</dt><dd>%s</dd>" % (html.escape(k), html.escape(v)) for k, v in facts)
+        lines += statement_list(info)
         if note:
             lines += "<blockquote><b>Our note to the client in Double</b>%s</blockquote>" % html.escape(note)
         checked = (saved_status.get("updated") or "").replace("T", " ")[:16]
