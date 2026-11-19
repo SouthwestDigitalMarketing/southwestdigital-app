@@ -363,6 +363,8 @@ def status_reason(info, today=None):
                 else "Waiting on the client to answer questions or send statements in Double."]
     if status == "catching-up":
         return ["Still finishing older months.", "%s's close isn't open in Double yet." % name]
+    if info.get("tasksTotal") and close != "done":
+        percent = "0%" if not info.get("tasksDone") else "%d%%" % round(100 * info["tasksDone"] / info["tasksTotal"])
     if close == "done" and not info.get("saved"):
         work = "%s's close is done, but the report isn't saved here yet." % name
     elif close in (None, "notStarted") or percent in (None, "0%"):
@@ -373,6 +375,36 @@ def status_reason(info, today=None):
         days = ((today or dt.date.today()) - due).days if due else 0
         return ["%s report was due %s." % (name, due_text), work + (" %d days late." % days if days > 0 else "")]
     return ["%s report is due %s." % (name, due_text), work]
+
+
+def month_label(ym):
+    """'202610' -> 'Oct 2026'."""
+    import datetime as dt
+    try:
+        return dt.date(int(ym[:4]), int(ym[4:6]), 1).strftime("%b %Y")
+    except (TypeError, ValueError):
+        return str(ym)
+
+
+def status_facts(info):
+    """What to decide on: whose move, months still open, tasks left, accounts to reconcile, our note to the client."""
+    facts = []
+    note = info.get("note") or ""
+    client_owes = bool(info.get("waiting")) or any(w in note.lower() for w in ("do not have", "missing", "waiting on", "we need"))
+    if info.get("status") != "done":
+        facts.append(("Whose move", "The client's (see the note below)" if client_owes else "Ours"))
+    open_months = info.get("openMonths") or []
+    if len(open_months) > 1:
+        facts.append(("Not closed", "%d months, oldest %s" % (len(open_months), month_label(open_months[0]))))
+    elif open_months:
+        facts.append(("Open month", month_label(open_months[0])))
+    if info.get("lastClosed"):
+        facts.append(("Last closed", month_label(info["lastClosed"])))
+    if info.get("tasksTotal"):
+        facts.append(("Close tasks", "%d of %d done" % (info.get("tasksDone") or 0, info["tasksTotal"])))
+    if info.get("toReconcile"):
+        facts.append(("Not reconciled", ", ".join(info["toReconcile"])))
+    return facts, note
 
 
 def reports_page(root, folder, query):
@@ -397,6 +429,10 @@ def reports_page(root, folder, query):
              ".tag{flex:0 0 auto;font-size:12px;font-weight:600;border:1px solid;border-radius:999px;padding:1px 8px;background:#fff}"
              ".why{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin:0 0 16px}"
              ".why .tag{display:inline-block;margin-bottom:6px}.why p{margin:0}.why p+p{margin-top:2px;color:#334155}"
+             ".why dl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:10px 0 0;font-size:15px}"
+             ".why dt{color:#64748b}.why dd{margin:0;font-weight:600}"
+             ".why blockquote{margin:10px 0 0;padding:8px 10px;background:#f8fafc;border-radius:8px;font-size:14px;color:#334155}"
+             ".why blockquote b{display:block;font-size:12px;color:#64748b;margin-bottom:2px}"
              ".why small{margin-top:8px;font-size:12px}h2{font-size:15px;color:#64748b;margin:0 0 8px;font-weight:600}"
              "div.row.st:not(.off){background:#fff;color:#0f172a}a.back{color:#475569;display:inline-block;margin-bottom:12px}</style>")
     if folder is None:
@@ -423,6 +459,11 @@ def reports_page(root, folder, query):
     if entry:
         label, color = entry
         lines = "".join("<p>%s</p>" % html.escape(line) for line in status_reason(info))
+        facts, note = status_facts(info)
+        if facts:
+            lines += "<dl>%s</dl>" % "".join("<dt>%s</dt><dd>%s</dd>" % (html.escape(k), html.escape(v)) for k, v in facts)
+        if note:
+            lines += "<blockquote><b>Our note to the client in Double</b>%s</blockquote>" % html.escape(note)
         checked = (saved_status.get("updated") or "").replace("T", " ")[:16]
         why = ("<div class=why style='border-left:5px solid %s'><span class=tag style='color:%s;border-color:%s'>%s</span>%s"
                "<small>Checked in Double %s</small></div>" % (color, color, color, html.escape(label), lines, html.escape(checked)))

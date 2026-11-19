@@ -70,6 +70,29 @@ def decide(today, close, report_saved, waiting):
     return "late"
 
 
+def close_detail(closes, close, bearer):
+    """The practical why from Double: months still open, last month closed, this close's tasks, and the
+    note we wrote the client (executive summary). Double's public API has no client-questions endpoint."""
+    months = sorted(c.get("yearMonth") for c in closes if c.get("yearMonth"))
+    open_months = [m for m in months if next(c for c in closes if c.get("yearMonth") == m).get("status") != "done"]
+    done = [m for m in months if m not in open_months]
+    note = ""
+    for c in sorted(closes, key=lambda c: c.get("yearMonth") or "", reverse=True):
+        summary = ((c.get("managementNotes") or {}).get("executiveSummary") or "")
+        text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", summary)).strip()
+        if text:
+            note = text[:400]
+            break
+    out = {"openMonths": open_months, "lastClosed": done[-1] if done else None, "note": note}
+    if close:
+        tasks = double_get("/api/tasks/", {"endCloseId": close["id"], "limit": 200}, bearer)
+        out["tasksDone"] = sum(1 for t in tasks if t.get("status") == "done")
+        out["tasksTotal"] = len(tasks)
+        out["toReconcile"] = [t.get("name") for t in tasks
+                              if t.get("type") == "accountReconcilation" and t.get("status") != "done"]
+    return out
+
+
 def double_get(path, params, bearer):
     url = "%s%s?%s" % (API, path, urllib.parse.urlencode(params))
     request = urllib.request.Request(url, headers={"Authorization": "Bearer " + bearer, "User-Agent": "swapp-report-status/1"})
@@ -100,10 +123,11 @@ def main():
     out = {}
     for folder, name in names.items():
         client = by_key.get(key(name))
-        close = None
+        close, detail = None, {}
         if client:
-            closes = double_get("/api/end-closes/summary/", {"clientId": client["id"], "limit": 6}, bearer)
+            closes = double_get("/api/clients/%d/end-closes" % client["id"], {"limit": 24}, bearer)
             close = next((c for c in closes if c.get("yearMonth") == ym), None)
+            detail = close_detail(closes, close, bearer)
         saved = os.path.isfile(os.path.join(phone_intake.REPORTS_ROOT, folder, "reports", "%04d" % year, "%04d-%02d.pdf" % (year, month)))
         out[folder] = {"status": decide(today, close, saved, bool(waiting.get(folder))),
                        "month": "%04d-%02d" % (year, month),
@@ -111,7 +135,7 @@ def main():
                        "due": fifth_business_day(today.year, today.month).isoformat(),
                        "saved": saved,
                        "waiting": waiting.get(folder) if isinstance(waiting.get(folder), str) else None,
-                       "doubleClient": bool(client)}
+                       "doubleClient": bool(client), **detail}
     tmp = OUT + ".tmp"
     with open(tmp, "w", encoding="utf-8") as handle:
         json.dump({"updated": dt.datetime.now().isoformat(timespec="seconds"), "clients": out}, handle)
