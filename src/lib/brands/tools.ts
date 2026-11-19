@@ -53,6 +53,7 @@ export const DEFAULT_TOOL_LINKS: ToolLink[] = [
 // sets one in Settings.
 export const BRAND_WEBSITES: Record<string, string> = {
   "bookkeeping-conroe": "https://www.bookkeepingconroe.com/",
+  "southwest-digital-marketing": "https://southwestdigital.io/",
 };
 
 export function defaultToolLinks(brandSlug?: string): ToolLink[] {
