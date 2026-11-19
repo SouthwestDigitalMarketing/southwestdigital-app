@@ -1,5 +1,16 @@
 # SWapp handoff
 
+## 2026-11-19 — Website traffic card phone layout (#175, shipped)
+
+`/website` Daily Engaged Sessions card below `sm` (640 px) only; desktop
+unchanged. Flat sparse x labels (Mondays at 30d, every day at 7d, 6/12 h
+hourly, every Nth week), stacked header, legend on its own row, 90d shows 13
+weekly bars (pace target = daily goal x days in bucket). Helpers and tests in
+`src/app/(app)/website/traffic-chart-mobile.ts`. Tom approved the look on his
+phone from a sample-data preview: no GA4 key locally
+(`GOOGLE_SERVICE_ACCOUNT_JSON_BASE64` is a Production-only Vercel secret), so
+a real-data phone check happens on production.
+
 ## 2026-11-18/19 — Service records steps 3-5 done (shipped)
 
 All Thing `concepts/service-records-design.md`, Tom's go via Kassad for each.
