@@ -1,5 +1,18 @@
 # SWapp handoff
 
+## 2026-11-18 — Dashboard MRR reads service records (shipped)
+
+PR #162 merged as `563a4b2` (step 3 of `concepts/service-records-design.md`,
+Tom's go). The MRR card and `/dashboard/revenue` use `getRecordMrr`
+(`src/lib/operations/serviceRecordsMrr.ts`): agreed fees of monthly service
+records active today (America/Chicago), per client; future-start monthly
+records show as "signed, starting", not in the total. Production expectation
+$1,230/mo, 4 clients (`ops services` agrees). Checked locally with phone-size
+screenshots (local sign-in needs `AUTH_SECRET=localdevsecret-...` and the
+saved cookie; see this session's notes). `Contact.mrrUsd` is still on the
+contact form (step 5 retires it). Not done from the design's dashboard list:
+lead funnel step-1 default, Chicago date ranges.
+
 ## 2026-11-18 — Service records: table, loader, backfill (shipped)
 
 Steps 2 of All Thing `concepts/service-records-design.md` (Tom's go via
