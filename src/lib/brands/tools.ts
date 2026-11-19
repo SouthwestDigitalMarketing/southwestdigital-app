@@ -1,4 +1,4 @@
-export const TOOL_LINK_KEYS = ["quickbooks", "double", "calendar", "mail", "skool"] as const;
+export const TOOL_LINK_KEYS = ["quickbooks", "double", "calendar", "mail", "skool", "website"] as const;
 
 export type ToolLinkKey = (typeof TOOL_LINK_KEYS)[number];
 
@@ -40,7 +40,26 @@ export const DEFAULT_TOOL_LINKS: ToolLink[] = [
     url: "https://www.skool.com/login",
     sortOrder: 4,
   },
+  {
+    key: "website",
+    label: "Website",
+    url: "",
+    sortOrder: 5,
+  },
 ];
+
+// The public site differs per brand, so the Website link's default comes from
+// the brand slug. A brand not listed here shows no Website link until an admin
+// sets one in Settings.
+export const BRAND_WEBSITES: Record<string, string> = {
+  "bookkeeping-conroe": "https://www.bookkeepingconroe.com/",
+};
+
+export function defaultToolLinks(brandSlug?: string): ToolLink[] {
+  return DEFAULT_TOOL_LINKS.map((link) =>
+    link.key === "website" ? { ...link, url: (brandSlug && BRAND_WEBSITES[brandSlug]) || "" } : link,
+  );
+}
 
 export function isToolLinkKey(value: string): value is ToolLinkKey {
   return (TOOL_LINK_KEYS as readonly string[]).includes(value);
@@ -72,10 +91,11 @@ export function parseToolUrl(value: string): string | null {
 
 export function mergeToolLinks(
   stored: Array<{ key: string; label: string; url: string; sortOrder: number }>,
+  brandSlug?: string,
 ): ToolLink[] {
   const byKey = new Map(stored.filter((link) => isToolLinkKey(link.key)).map((link) => [link.key, link]));
 
-  return DEFAULT_TOOL_LINKS.map((fallback) => {
+  return defaultToolLinks(brandSlug).map((fallback) => {
     const existing = byKey.get(fallback.key);
     if (!existing) return fallback;
     return {

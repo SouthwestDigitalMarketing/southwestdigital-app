@@ -75,7 +75,7 @@ async function loadResolvedBrand(brandId: string, userId?: string) {
   return {
     brand: {
       ...brandFields,
-      toolLinks: visibleToolLinks(mergeToolLinks(storedToolLinks)),
+      toolLinks: visibleToolLinks(mergeToolLinks(storedToolLinks, brandFields.slug)),
     },
     membership,
   };
@@ -145,6 +145,6 @@ export async function resolvePublicBrand(hostname: string | null) {
   const { toolLinks: storedToolLinks, ...brandFields } = brand;
   return {
     ...brandFields,
-    toolLinks: visibleToolLinks(mergeToolLinks(storedToolLinks)),
+    toolLinks: visibleToolLinks(mergeToolLinks(storedToolLinks, brandFields.slug)),
   };
 }

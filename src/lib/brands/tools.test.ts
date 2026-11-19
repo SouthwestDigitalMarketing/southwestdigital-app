@@ -35,6 +35,7 @@ describe("mergeToolLinks", () => {
       "calendar",
       "mail",
       "skool",
+      "website",
     ]);
     expect(merged[1].url).toBe("https://app.doublehq.com/");
   });
@@ -49,5 +50,22 @@ describe("mergeToolLinks", () => {
       "mail",
       "skool",
     ]);
+  });
+});
+
+describe("website link", () => {
+  it("defaults to the brand's own site and is hidden for brands without one", () => {
+    const conroe = mergeToolLinks([], "bookkeeping-conroe");
+    expect(conroe.find((link) => link.key === "website")?.url).toBe("https://www.bookkeepingconroe.com/");
+    expect(visibleToolLinks(conroe).at(-1)?.key).toBe("website");
+    expect(visibleToolLinks(mergeToolLinks([], "melbourne-cfo")).map((link) => link.key)).not.toContain("website");
+  });
+
+  it("keeps a stored website URL over the default", () => {
+    const merged = mergeToolLinks(
+      [{ key: "website", label: "Site", url: "https://example.com/", sortOrder: 5 }],
+      "bookkeeping-conroe",
+    );
+    expect(merged.find((link) => link.key === "website")).toMatchObject({ label: "Site", url: "https://example.com/" });
   });
 });
