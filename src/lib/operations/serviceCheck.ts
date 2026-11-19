@@ -66,10 +66,20 @@ export async function runServiceCheck(input: {
   }));
 
   // QuickBooks customers to contacts, the same matcher as past-due amounts.
-  const contacts = await prisma.contact.findMany({
+  // A contact also answers to the business names on its engagements, since
+  // the QuickBooks customer is usually the business ("RODAN PROPERTIES, LLC"
+  // for contact Dan Ruiz).
+  const people = await prisma.contact.findMany({
     where: { brandId: input.brandId, isActive: true },
-    select: { id: true, name: true, company: true },
+    select: { id: true, name: true, company: true, engagements: { select: { clientLegalName: true, clientName: true } } },
   });
+  const contacts = people.flatMap((c) => [
+    { id: c.id, name: c.name, company: c.company },
+    ...c.engagements
+      .flatMap((e) => [e.clientLegalName, e.clientName])
+      .filter((n) => n.trim())
+      .map((n) => ({ id: c.id, name: n, company: null })),
+  ]);
   const billing = input.billing.map((row) => ({ ...row, contactId: matchArCustomerToContact(row.customer, contacts) }));
   items.push(...billingMismatches({ month: input.month, asOf, billing, records }));
 
