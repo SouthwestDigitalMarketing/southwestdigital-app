@@ -58,6 +58,9 @@ describe("website link", () => {
     const conroe = mergeToolLinks([], "bookkeeping-conroe");
     expect(conroe.find((link) => link.key === "website")?.url).toBe("https://www.bookkeepingconroe.com/");
     expect(visibleToolLinks(conroe).at(-1)?.key).toBe("website");
+    expect(mergeToolLinks([], "southwest-digital-marketing").find((link) => link.key === "website")?.url).toBe(
+      "https://southwestdigital.io/",
+    );
     expect(visibleToolLinks(mergeToolLinks([], "melbourne-cfo")).map((link) => link.key)).not.toContain("website");
   });
 
