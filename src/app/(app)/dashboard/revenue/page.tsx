@@ -13,7 +13,7 @@ function fmtMoney(value: number): string {
 
 export default async function RevenuePage() {
   const { brand } = await requireAppBrand();
-  // From service records (signed agreements), not the hand-typed Contact.mrrUsd.
+  // From service records (signed agreements).
   const { clients, starting, mismatches } = await getRecordMrr(brand.id);
   const { total, count, average } = summarizeMrr(clients.map((client) => client.mrr));
   const todayKey = new Date().toISOString().slice(0, 10);

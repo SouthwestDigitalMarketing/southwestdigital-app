@@ -11,6 +11,8 @@ import { BrandStatus } from "@prisma/client";
 import { ContactTagsEditor } from "../ContactTagsEditor";
 import { BrandAssignment, ClientAssignment } from "../AssignmentToggles";
 import { matchArCustomerToContact } from "@/lib/ar/matchArCustomers";
+import { firmDateKey } from "@/lib/operations/schedule";
+import { isActiveOn } from "@/lib/operations/serviceRecords";
 
 type PageProps = { params: Promise<{ id: string }> };
 
@@ -155,6 +157,22 @@ export default async function ContactDetailPage({ params }: PageProps) {
 
   if (!contact) notFound();
 
+  // Monthly fee from the client's signed agreements (service records), not a
+  // hand-typed number (service-records-design step 5).
+  const today = firmDateKey(new Date());
+  const monthlyRecords = (
+    await prisma.serviceRecord.findMany({
+      where: { brandId: brand.id, contactId: contact.id, basis: "monthly" },
+      select: { feeAmount: true, startDate: true, endDate: true },
+    })
+  ).map((r) => ({
+    fee: Number(r.feeAmount ?? 0),
+    startDate: r.startDate.toISOString().slice(0, 10),
+    endDate: r.endDate ? r.endDate.toISOString().slice(0, 10) : null,
+  }));
+  const recordMrr = monthlyRecords.filter((r) => isActiveOn(r, today)).reduce((sum, r) => sum + r.fee, 0);
+  const startingMrr = monthlyRecords.filter((r) => r.startDate > today).reduce((sum, r) => sum + r.fee, 0);
+
   const assigned = new Set(contact.tagLinks.map((link: { tagId: string }) => link.tagId));
   const pipelinePlacements: Array<{ pipeline: string; stage: string }> = [];
   const contactMatch = [{ id: contact.id, name: contact.name, company: contact.company }];
@@ -211,10 +229,10 @@ export default async function ContactDetailPage({ params }: PageProps) {
             <div className="border-b border-r border-white/10 p-4 sm:border-b-0 sm:p-5">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">MRR</p>
               <p className="mt-2 whitespace-nowrap text-2xl font-bold tabular-nums tracking-tight sm:text-3xl">
-                {contact.mrrUsd == null ? "—" : formatMoney(Number(contact.mrrUsd))}
+                {recordMrr ? formatMoney(recordMrr) : startingMrr ? formatMoney(startingMrr) : "—"}
               </p>
               <p className="mt-1 text-xs text-slate-400">
-                {contact.mrrUsd == null ? "Not set" : "per month"}
+                {recordMrr ? "per month, signed agreement" : startingMrr ? "per month, starting" : "No monthly agreement"}
               </p>
             </div>
             <div className="border-b border-white/10 p-4 sm:border-b-0 sm:border-r sm:p-5">
@@ -390,7 +408,6 @@ export default async function ContactDetailPage({ params }: PageProps) {
                 phone: contact.phoneE164 ?? "",
                 company: contact.company ?? "",
                 roleTitle: contact.roleTitle ?? "",
-                mrrUsd: contact.mrrUsd?.toString() ?? "",
                 notes: contact.notes ?? "",
                 isActive: contact.isActive,
               }}

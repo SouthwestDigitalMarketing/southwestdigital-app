@@ -8,7 +8,6 @@ import { tagDrivenMrr, type ClientMrr, type MrrMismatch, type StartingMrr } from
  * MRR for the dashboard (concepts/service-records-design, Tom's tag rule):
  * clients counted by their `service-<product>-active` tag for a recurring
  * product, fees from their active monthly service records, today in Chicago.
- * Replaces the hand-typed Contact.mrrUsd.
  */
 export async function getRecordMrr(
   brandId: string,
