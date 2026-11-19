@@ -79,3 +79,23 @@ Operations keeps its own roster (`OperationsClient`), seeded from Double's
 active client list. `startsOn` is the first day duties are expected for that
 client; deactivate with `ops client KEY ... --inactive`. Tracking starts
 firm-wide on `TRACKING_STARTS` (2026-11-19).
+
+## Service records
+
+One row per paid service a client has (All Thing
+`concepts/service-records-design.md`). MRR = agreed fees of monthly records
+active today; a record starting later shows as "starting" and is not counted.
+
+- `ops services` lists them with today's MRR.
+- `ops service-load FILE.json` upserts a JSON array, in file order. Each
+  object: `sourceKey` (your id; reloading updates the same row), `contactId`,
+  optional `engagementId`, `product` (service key, e.g. `monthly-bookkeeping`),
+  `basis` (`monthly` | `one_time` | `hourly`), `feeAmount` (per month, total,
+  or per hour), `startDate`, optional `endDate` + `endReason` (`job_done`,
+  `client_cancelled`, `terminated_by_us`, `agreement_ended`, `replaced`,
+  `lapsed`), `evidenceSource` (`swapp_proposal`, `qbo_contract`,
+  `agreement_file`, `paid_invoice`), `evidenceRef`, `evidenceDate`, optional
+  `notes`, optional `previousSourceKey` (the record a fee amendment replaces).
+- A monthly record needs a fee and a signed agreement (never `paid_invoice`).
+- HTTP: `GET /api/operations/service-records?brand=SLUG`,
+  `PUT /api/operations/service-records` with one object plus `brand`.
