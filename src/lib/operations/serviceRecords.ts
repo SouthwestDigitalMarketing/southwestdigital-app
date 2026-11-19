@@ -116,18 +116,6 @@ export function isActiveOn(record: Dated, day: string): boolean {
   return record.startDate <= day && (record.endDate === null || record.endDate >= day);
 }
 
-/** Agreed monthly fees of monthly records active on `day`, and the clients they cover. */
-export function monthlyRecurringRevenue(
-  records: (Dated & { basis: string; feeAmount: number | null; contactId: string })[],
-  day: string,
-): { total: number; clients: number } {
-  const active = records.filter((r) => r.basis === "monthly" && isActiveOn(r, day));
-  return {
-    total: active.reduce((sum, r) => sum + (r.feeAmount ?? 0), 0),
-    clients: new Set(active.map((r) => r.contactId)).size,
-  };
-}
-
 export type ClientMrr = { id: string; name: string; company: string | null; mrr: number };
 export type StartingMrr = ClientMrr & { startDate: string };
 
@@ -156,5 +144,100 @@ export function clientMrrOn(
   return {
     clients: [...byClient.values()].sort((a, b) => b.mrr - a.mrr || a.name.localeCompare(b.name)),
     starting: starting.sort((a, b) => a.startDate.localeCompare(b.startDate) || a.name.localeCompare(b.name)),
+  };
+}
+
+const SERVICE_TAG = /^service-([a-z0-9][a-z0-9-]*)-(active|ended)$/;
+
+/**
+ * Tags a contact should carry from its service records on `day`
+ * (concepts/client-lifecycle-tags § Service status): `service-<product>-active`
+ * while a record of that product is active, `-ended` once every record of it
+ * has ended (a record that has not started yet changes neither); then
+ * `active-client` if any service is active, `former-client` if services exist
+ * but none is active or starting. Service tags for products with no records
+ * (set by hand before records existed) are left alone and still count as
+ * active. Returns only the changes.
+ */
+export function serviceTagPlan(
+  records: (Dated & { product: string })[],
+  tags: string[],
+  day: string,
+): { add: string[]; remove: string[] } {
+  const want = new Set(tags);
+  const products = new Set(records.map((r) => r.product));
+  let anyStarting = false;
+  for (const product of products) {
+    const mine = records.filter((r) => r.product === product);
+    if (mine.some((r) => isActiveOn(r, day))) {
+      want.add(`service-${product}-active`);
+      want.delete(`service-${product}-ended`);
+    } else if (mine.some((r) => r.startDate > day)) {
+      anyStarting = true;
+    } else {
+      want.add(`service-${product}-ended`);
+      want.delete(`service-${product}-active`);
+    }
+  }
+  const anyActive = [...want].some((t) => SERVICE_TAG.exec(t)?.[2] === "active");
+  if (anyActive) {
+    want.add("active-client");
+    want.delete("former-client");
+  } else if (products.size > 0 && !anyStarting) {
+    want.add("former-client");
+    want.delete("active-client");
+  }
+  const had = new Set(tags);
+  return {
+    add: [...want].filter((t) => !had.has(t)).sort(),
+    remove: [...had].filter((t) => !want.has(t)).sort(),
+  };
+}
+
+/** Product of a `service-<product>-active` tag, or null. */
+export function activeServiceProduct(tag: string): string | null {
+  const m = SERVICE_TAG.exec(tag);
+  return m && m[2] === "active" ? m[1] : null;
+}
+
+export type MrrMismatch = { id: string; name: string; problem: string };
+
+/**
+ * Tom's rule (2026-11-18): the tag decides who counts, the record gives the
+ * fee. A client counts when it carries `service-<product>-active` for a
+ * recurring product (a product sold monthly in any record, so no product
+ * name is hard-coded). Where tags and records disagree the client is listed
+ * as a mismatch: counted at $0 when tagged with no active record, left out
+ * when it has an active record but no tag.
+ */
+export function tagDrivenMrr(input: {
+  records: (Parameters<typeof clientMrrOn>[0][number] & { product: string })[];
+  /** Contacts with their tag keys (only those carrying some service tag are needed). */
+  tagged: { id: string; name: string; company: string | null; tags: string[] }[];
+  day: string;
+}): { clients: ClientMrr[]; starting: StartingMrr[]; mismatches: MrrMismatch[] } {
+  const recurring = new Set(input.records.filter((r) => r.basis === "monthly").map((r) => r.product));
+  const fromRecords = clientMrrOn(input.records, input.day);
+  const feeById = new Map(fromRecords.clients.map((c) => [c.id, c]));
+  const counted = input.tagged.filter((c) =>
+    c.tags.some((t) => {
+      const product = activeServiceProduct(t);
+      return product !== null && recurring.has(product);
+    }),
+  );
+  const countedIds = new Set(counted.map((c) => c.id));
+  const mismatches: MrrMismatch[] = [];
+  const clients = counted.map((c) => {
+    const fee = feeById.get(c.id)?.mrr ?? 0;
+    if (!feeById.has(c.id)) mismatches.push({ id: c.id, name: c.name, problem: "Recurring service tag but no active monthly record" });
+    return { id: c.id, name: c.name, company: c.company, mrr: fee };
+  });
+  for (const c of fromRecords.clients) {
+    if (!countedIds.has(c.id)) mismatches.push({ id: c.id, name: c.name, problem: "Active monthly record but no service tag" });
+  }
+  return {
+    clients: clients.sort((a, b) => b.mrr - a.mrr || a.name.localeCompare(b.name)),
+    starting: fromRecords.starting,
+    mismatches,
   };
 }

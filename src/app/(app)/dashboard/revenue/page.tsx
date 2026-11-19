@@ -14,7 +14,7 @@ function fmtMoney(value: number): string {
 export default async function RevenuePage() {
   const { brand } = await requireAppBrand();
   // From service records (signed agreements), not the hand-typed Contact.mrrUsd.
-  const { clients, starting } = await getRecordMrr(brand.id);
+  const { clients, starting, mismatches } = await getRecordMrr(brand.id);
   const { total, count, average } = summarizeMrr(clients.map((client) => client.mrr));
   const todayKey = new Date().toISOString().slice(0, 10);
   const { byId: pastDue } = await getPastDueByContact(brand.id, clients, todayKey);
@@ -29,7 +29,7 @@ export default async function RevenuePage() {
           {count > 0 ? ` · ${fmtMoney(Math.round(average * 100) / 100)} average` : ""}
         </p>
         <p className="mt-1 text-xs text-slate-400">
-          Agreed monthly fees from signed agreements (service records) active today.
+          Clients with an active recurring service tag; fees from their signed agreements (service records) active today.
         </p>
 
         {clients.length > 0 ? (
@@ -68,6 +68,27 @@ export default async function RevenuePage() {
             No active monthly service records.
           </p>
         )}
+
+        {mismatches.length > 0 ? (
+          <>
+            <h2 id="mismatches" className="mt-6 text-sm font-semibold text-amber-700">
+              Mismatches · {mismatches.length}
+            </h2>
+            <ul className="mt-2 overflow-hidden rounded-xl border border-amber-200 bg-white">
+              {mismatches.map((item) => (
+                <li key={`${item.id}-${item.problem}`} className="border-b border-slate-100 last:border-b-0">
+                  <Link
+                    href={`/contacts/${item.id}`}
+                    className="block px-4 py-3 transition-colors hover:bg-slate-50"
+                  >
+                    <span className="block truncate text-sm font-semibold text-slate-900">{item.name}</span>
+                    <span className="block text-xs text-amber-700">{item.problem}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
 
         {starting.length > 0 ? (
           <>

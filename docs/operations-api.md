@@ -97,5 +97,14 @@ active today; a record starting later shows as "starting" and is not counted.
   `agreement_file`, `paid_invoice`), `evidenceRef`, `evidenceDate`, optional
   `notes`, optional `previousSourceKey` (the record a fee amendment replaces).
 - A monthly record needs a fee and a signed agreement (never `paid_invoice`).
+- Records set the tags (Tom, 2026-11-18): `service-<product>-active` while a
+  record of that product is active, `-ended` once all have ended, then
+  `active-client` / `former-client`. This runs after every record save and
+  nightly (`/api/cron/service-tags`, 06:15 UTC). `ops service-sync [--dry-run]`
+  runs it by hand.
+- The tag decides who counts: dashboard MRR and `ops services` count clients
+  with `service-<product>-active` for a recurring product (one sold monthly in
+  any record) and take fees from records. Disagreements are listed as
+  mismatches (card, `/dashboard/revenue`, `ops services`).
 - HTTP: `GET /api/operations/service-records?brand=SLUG`,
   `PUT /api/operations/service-records` with one object plus `brand`.

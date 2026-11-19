@@ -10,10 +10,11 @@ import { StatCard } from "./StatCards";
 import { OffersStatCard } from "./OffersStatCard";
 import { MrrStatCard, PipelineMrrStatCard, type PipelineMrrPipeline } from "./MrrStatCard";
 import { DashboardControls } from "./DashboardControls";
-import { hasYouTubeActivity, summarizeMrr } from "./utils";
+import { funnelStepFor, hasYouTubeActivity, summarizeMrr } from "./utils";
 import { getPastDueByContact } from "@/lib/ar/pastDue";
 import { getMrrGoals } from "@/lib/dashboard/mrr-goals";
 import { getRecordMrr } from "@/lib/operations/serviceRecordsMrr";
+import { firmDateKey, firmInstant } from "@/lib/operations/schedule";
 import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { PIPE_PROSPECTS_KEY } from "@/lib/pipe/deals";
 import { LEAD_STEP_STAGE, LEAD_STEPS, type LeadStep } from "@/lib/pipe/lead-steps";
@@ -52,8 +53,17 @@ function fmtDuration(seconds: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-function startOfUtcDay(value: Date): Date {
-  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
+/**
+ * Periods are firm-local calendar days (America/Chicago), each held as a UTC
+ * midnight so date strings and month math stay simple. Database filters use
+ * periodInstants to turn them into real Chicago-midnight instants.
+ */
+function startOfFirmDay(value: Date): Date {
+  return new Date(`${firmDateKey(value)}T00:00:00Z`);
+}
+
+function periodInstants(p: DashboardPeriod): { gte: Date; lt: Date } {
+  return { gte: firmInstant(dateString(p.start), 0), lt: firmInstant(dateString(p.endExclusive), 0) };
 }
 
 function addUtcDays(value: Date, days: number): Date {
@@ -80,11 +90,11 @@ function period(start: Date, endExclusive: Date, label: string): DashboardPeriod
 }
 
 function getDashboardPeriod(range: DashboardRange, now: Date): DashboardPeriod {
-  const today = startOfUtcDay(now);
+  const today = startOfFirmDay(now);
   const tomorrow = addUtcDays(today, 1);
-  const currentMonth = startOfUtcMonth(now);
-  const currentQuarter = startOfUtcQuarter(now);
-  const currentYear = startOfUtcYear(now);
+  const currentMonth = startOfUtcMonth(today);
+  const currentQuarter = startOfUtcQuarter(today);
+  const currentYear = startOfUtcYear(today);
 
   switch (range) {
     case "last-7-days":
@@ -126,11 +136,11 @@ function rollingPreviousPeriod(current: DashboardPeriod): DashboardPeriod {
 }
 
 function getPreviousDashboardPeriod(range: DashboardRange, now: Date, current: DashboardPeriod): DashboardPeriod {
-  const today = startOfUtcDay(now);
+  const today = startOfFirmDay(now);
   const tomorrow = addUtcDays(today, 1);
-  const currentMonth = startOfUtcMonth(now);
-  const currentQuarter = startOfUtcQuarter(now);
-  const currentYear = startOfUtcYear(now);
+  const currentMonth = startOfUtcMonth(today);
+  const currentQuarter = startOfUtcQuarter(today);
+  const currentYear = startOfUtcYear(today);
 
   switch (range) {
     case "this-month":
@@ -183,10 +193,10 @@ async function getOfferStats(brandId: string, selectedPeriod: DashboardPeriod) {
       brandId,
       status: { in: ["sent", "accepted", "rejected"] },
       OR: [
-        { sentAt: { gte: selectedPeriod.start, lt: selectedPeriod.endExclusive } },
+        { sentAt: periodInstants(selectedPeriod) },
         {
           sentAt: null,
-          updatedAt: { gte: selectedPeriod.start, lt: selectedPeriod.endExclusive },
+          updatedAt: periodInstants(selectedPeriod),
         },
       ],
     },
@@ -205,7 +215,7 @@ async function getReviewStats(brandId: string, selectedPeriod: DashboardPeriod) 
   const requests = await prisma.reviewRequest.findMany({
     where: {
       brandId,
-      sentAt: { gte: selectedPeriod.start, lt: selectedPeriod.endExclusive },
+      sentAt: periodInstants(selectedPeriod),
     },
     select: { openedAt: true, clickedAt: true, outcome: true },
   });
@@ -311,17 +321,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         && LEAD_STEP_STAGE[rawStep as LeadStep] === item.stage.key
         ? rawStep as LeadStep
         : null;
-      const funnelNumber = validStep === "reach"
-        ? 1
-        : validStep === "qb" || validStep === "book" || (!validStep && item.stage.key === "talking")
-          ? 2
-          : validStep === "payment"
-            ? 4
-            : validStep === "agreement"
-              ? 5
-              : validStep === "session"
-                ? 4
-                : 3;
+      const funnelNumber = funnelStepFor(validStep, item.stage.key);
       const stageMap = item.lead.valueBasis === "one_time" ? oneTimeByStage : monthlyByStage;
       stageMap.set(funnelNumber, [
         ...(stageMap.get(funnelNumber) ?? []),
@@ -477,6 +477,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           current={mrr.total}
           clients={mrrClients}
           starting={recordMrr.starting}
+          mismatches={recordMrr.mismatches.length}
           pastDueById={mrrPastDue}
           syncedAsOf={arSyncedAsOf}
           goal={mrrGoals.monthlyMrrGoal}
