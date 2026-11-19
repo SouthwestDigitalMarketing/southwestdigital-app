@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activeServiceProduct, clientMrrOn, tagDrivenMrr, isActiveOn, parseServiceRecord, serviceTagPlan } from "./serviceRecords";
+import { activeServiceProduct, billingMismatches, isoDay, recordsFromAgreement, recordsFromProposal, clientMrrOn, tagDrivenMrr, isActiveOn, parseServiceRecord, serviceTagPlan } from "./serviceRecords";
 
 const monthly = {
   sourceKey: "backfill-2026-11-18:aaa:monthly-bookkeeping",
@@ -161,6 +161,105 @@ describe("tagDrivenMrr", () => {
     expect(out.mismatches).toEqual([
       { id: "hand", name: "hand", problem: "Recurring service tag but no active monthly record" },
       { id: "bnb", name: "bnb", problem: "Active monthly record but no service tag" },
+    ]);
+  });
+});
+
+describe("recordsFromProposal", () => {
+  const meta = { engagementId: "e1", contactId: "c1", paidDay: "2026-11-11", signedDay: "2026-11-11" };
+
+  it("opens monthly from the first of the prepaid month and one-time fees on the pay day", () => {
+    const out = recordsFromProposal(
+      { recurringMonthlyTotal: 480, onboardingFee: 300, cleanupTotal: 0, prepaidMonths: 1, selectedTierLabel: "Improve" },
+      meta,
+    );
+    expect(out.map((r) => [r.sourceKey, r.basis, r.feeAmount, r.startDate])).toEqual([
+      ["client-won:e1:monthly-bookkeeping", "monthly", 480, "2026-11-01"],
+      ["client-won:e1:onboarding", "one_time", 300, "2026-11-11"],
+    ]);
+    expect(out.every((r) => parseServiceRecord(r as unknown as Record<string, unknown>) !== null)).toBe(true);
+    expect(typeof parseServiceRecord(out[0] as unknown as Record<string, unknown>)).toBe("object");
+  });
+
+  it("starts monthly on the pay day when no month was prepaid, and adds cleanup", () => {
+    const out = recordsFromProposal({ recurringMonthlyTotal: 300, cleanupTotal: 900 }, meta);
+    expect(out.map((r) => [r.product, r.startDate])).toEqual([
+      ["monthly-bookkeeping", "2026-11-11"],
+      ["catch-up-bookkeeping", "2026-11-11"],
+    ]);
+  });
+});
+
+describe("recordsFromAgreement", () => {
+  const rodan = {
+    file_slug: "Rodan-Properties-LLC",
+    effective_date_iso: "2026-11-11",
+    parties: { client_email: "R4-1980@hotmail.com" },
+    plan: "improve",
+    start_date: "November 1, 2026",
+    fees: { monthly: 480, onboarding: 300, notes: ["paid"] },
+  };
+
+  it("maps the builder JSON to records found by the client's email", () => {
+    const out = recordsFromAgreement(rodan, { evidenceRef: "rodan.pdf", evidenceDate: "2026-11-11" });
+    expect(Array.isArray(out)).toBe(true);
+    expect((out as ReturnType<typeof recordsFromProposal>).map((r) => [r.sourceKey, r.contactEmail, r.basis, r.feeAmount, r.startDate])).toEqual([
+      ["agreement:rodan-properties-llc:2026-11-11:monthly-bookkeeping", "r4-1980@hotmail.com", "monthly", 480, "2026-11-01"],
+      ["agreement:rodan-properties-llc:2026-11-11:onboarding", "r4-1980@hotmail.com", "one_time", 300, "2026-11-11"],
+    ]);
+  });
+
+  it("refuses an agreement it cannot read", () => {
+    expect(recordsFromAgreement({ ...rodan, parties: {} }, { evidenceRef: "x", evidenceDate: null })).toMatch(/client_email/);
+    expect(recordsFromAgreement({ ...rodan, start_date: "soon" }, { evidenceRef: "x", evidenceDate: null })).toMatch(/start_date/);
+    expect(isoDay("February 29, 2026")).toBeNull();
+    expect(isoDay("March 1, 2026")).toBe("2026-03-01");
+  });
+});
+
+describe("billingMismatches", () => {
+  const rec = (contactId: string, product: string, basis: string, feeAmount: number | null, startDate: string, endDate: string | null = null) => ({
+    contactId,
+    contactName: contactId,
+    product,
+    basis,
+    feeAmount,
+    startDate,
+    endDate,
+  });
+  const records = [
+    rec("aaa", "monthly-bookkeeping", "monthly", 150, "2026-01-01"),
+    rec("rodan", "monthly-bookkeeping", "monthly", 480, "2026-11-01"),
+    rec("rodan", "onboarding", "one_time", 300, "2026-11-11"),
+    rec("bayou", "monthly-bookkeeping", "monthly", 450, "2026-10-01"),
+    rec("woods", "hourly-onsite", "one_time", 200, "2026-11-06", "2026-11-06"),
+    rec("sj", "hourly-bookkeeping", "hourly", null, "2026-10-28"),
+  ];
+  const billing = [
+    { customer: "AAA Discount Maid Service", amount: 150, contactId: "aaa" },
+    { customer: "RODAN PROPERTIES, LLC", amount: 780, contactId: "rodan" },
+    { customer: "Woodlands Landscaping", amount: 200, contactId: "woods" },
+    { customer: "SJ Equity LLC", amount: 812.5, contactId: "sj" },
+    { customer: "Contigo Accounting", amount: 400, contactId: null },
+  ];
+
+  it("passes matching bills, flags unknown billing for Tom and a missing invoice for Sol", () => {
+    const out = billingMismatches({ month: "2026-11", asOf: "2026-11-18", billing, records });
+    expect(out.map((i) => [i.kind, i.owner, i.name])).toEqual([
+      ["billed-no-record", "tom", "Contigo Accounting"],
+      ["no-invoice", "sol", "bayou"],
+    ]);
+  });
+
+  it("flags an amount that differs from the agreed fee", () => {
+    const out = billingMismatches({
+      month: "2026-11",
+      asOf: "2026-11-30",
+      billing: [{ customer: "AAA", amount: 200, contactId: "aaa" }],
+      records: [records[0]],
+    });
+    expect(out).toEqual([
+      expect.objectContaining({ kind: "amount-differs", owner: "sol", detail: expect.stringContaining("agreed $150") }),
     ]);
   });
 });

@@ -4,9 +4,12 @@ import { ContactTagKind, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { applyPipeTag } from "@/lib/pipe/tags";
 import { upsertPipeContact } from "@/lib/pipe/contacts";
-import { PIPE_PROSPECTS_KEY } from "@/lib/pipe/deals";
 import { createBrandDataContext, withBrandDataTransaction } from "@/lib/tenancy/context";
 import { firmDateKey } from "./schedule";
+import { markOpenDealsWon } from "./deals";
+import { recordsFromProposal } from "./serviceRecords";
+import { upsertServiceRecord } from "./serviceRecordStore";
+import { syncServiceTags } from "./serviceTags";
 
 /**
  * Runs when a client pays a signed proposal (live payments only). Every
@@ -18,7 +21,8 @@ import { firmDateKey } from "./schedule";
  * 2. the contact gets the client tags (concepts/client-lifecycle-tags),
  *    which also starts the Reviews pipeline;
  * 3. open Pipe Prospects deals move to won, and `lead` comes off;
- * 4. the client joins Operations in the onboarding stage.
+ * 4. service records open from the proposal (they set the service tags);
+ * 5. the client joins Operations in the onboarding stage.
  *
  * Each step is idempotent and reported, not thrown: payment is already
  * recorded, so a failed step shows as a failed "Client set up in our
@@ -163,36 +167,23 @@ export async function onClientWon(engagementId: string, brandId: string): Promis
 
     // 4. Open deals to won; then `lead` comes off.
     await step("Deal marked won", async () => {
-      const moved = await withBrandDataTransaction(context, async (tx) => {
-        const pipeline = await tx.pipeline.findUnique({
-          where: { brandId_key: { brandId, key: PIPE_PROSPECTS_KEY } },
-          select: { id: true, stages: { select: { id: true, key: true } } },
-        });
-        const won = pipeline?.stages.find((s) => s.key === "won");
-        if (!pipeline || !won) return 0;
-        const open = await tx.pipelineItem.findMany({
-          where: {
-            pipelineId: pipeline.id,
-            isActive: true,
-            stage: { key: { notIn: ["won", "lost"] } },
-            lead: { brandId, contacts: { some: { contactId: contactId! } } },
-          },
-          select: { id: true, leadId: true },
-        });
-        for (const item of open) {
-          await tx.pipelineItem.update({ where: { id: item.id }, data: { stageId: won.id } });
-          await tx.meetingLead.update({
-            where: { id: item.leadId },
-            data: { firstPaymentReceivedAt: paidAt, ...(signedAt ? { serviceAgreementSignedAt: signedAt } : {}) },
-          });
-        }
-        return open.length;
-      });
-      await applyPipeTag({
-        actorUserId,
-        input: { brand: brandSlug, contactId: contactId!, tag: "lead", action: "remove" },
-      });
+      const moved = await markOpenDealsWon({ brandId, brandSlug, contactId: contactId!, actorUserId, paidAt, signedAt });
       return `${moved} deal${moved === 1 ? "" : "s"} moved`;
+    });
+
+    // 4b. Service records from the accepted proposal; they set the service tags.
+    await step("Service records opened", async () => {
+      const existing = await prisma.serviceRecord.count({ where: { brandId, engagementId: engagement.id } });
+      if (existing) return `${existing} already on file`;
+      const records = recordsFromProposal(isRecord(acceptance.selection) ? acceptance.selection : {}, {
+        engagementId: engagement.id,
+        contactId: contactId!,
+        paidDay: firmDateKey(paidAt),
+        signedDay: signedAt ? firmDateKey(signedAt) : null,
+      });
+      for (const record of records) await upsertServiceRecord(brandId, record);
+      await syncServiceTags(brandId, { contactIds: [contactId!] });
+      return records.map((r) => `${r.product} $${r.feeAmount}`).join(", ") || "none";
     });
   }
 

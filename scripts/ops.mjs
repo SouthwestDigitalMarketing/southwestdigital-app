@@ -3,7 +3,8 @@
 // Config: ~/.config/swapp/operations.env with SWAPP_OPERATIONS_TOKEN and
 // SWAPP_BASE_URL. See docs/operations-api.md.
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 
 const USAGE = `ops board                      open work (problems first)
@@ -17,6 +18,13 @@ ops services                   service records and today's MRR under the rule
 ops service-load FILE.json     upsert service records (JSON array, one object per record;
                                fields in docs/operations-api.md); safe to run again
 ops service-sync [--dry-run]   set service and client tags from the records (also nightly)
+ops service-from-agreement BUILDER.json SIGNED.pdf [--dry-run]
+                               open records from a signed agreement (QBO Contracts path)
+ops agreements-scan [--dry-run] every *SIGNED*.pdf in ~/projects/clients/<slug>/agreements with
+                               builder JSON in _leads/<slug>/agreements/vN/: open missing records
+ops service-check [--fix] [--month YYYY-MM] [--save]
+                               billing (qb, our QuickBooks) vs records, deals and tags; --fix runs
+                               the agents' fixes; --save writes ~/.local/state/swapp/service-check.json
 Options: --brand SLUG (default bookkeeping-conroe)`;
 
 const STATUS = { done: "done", waiting: "waiting_client", "needs-tom": "needs_tom", failed: "failed" };
@@ -42,6 +50,8 @@ function parse(argv) {
     const a = argv[i];
     if (a === "--inactive") opts.inactive = true;
     else if (a === "--dry-run") opts.dryRun = true;
+    else if (a === "--fix") opts.fix = true;
+    else if (a === "--save") opts.save = true;
     else if (a.startsWith("--")) opts[a.slice(2)] = argv[(i += 1)];
     else args.push(a);
   }
@@ -58,6 +68,59 @@ async function call(method, path, body) {
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`${res.status}: ${json.error ?? res.statusText}`);
   return json;
+}
+
+
+const CLIENTS = `${homedir()}/projects/clients`;
+
+/** Newest builder JSON for a client folder slug: _leads/<slug>/agreements/vN/<slug>.json. */
+function builderJson(slug) {
+  const dir = `${CLIENTS}/_leads/${slug}/agreements`;
+  if (!existsSync(dir)) return null;
+  const versions = readdirSync(dir)
+    .filter((d) => /^v\d+$/.test(d) && existsSync(`${dir}/${d}/${slug}.json`))
+    .sort((a, b) => Number(b.slice(1)) - Number(a.slice(1)));
+  return versions.length ? `${dir}/${versions[0]}/${slug}.json` : null;
+}
+
+// Signed agreement PDFs anywhere under ~/projects/clients/<slug>/agreements (not _leads or _archived).
+function signedAgreements() {
+  const out = [];
+  for (const slug of readdirSync(CLIENTS)) {
+    if (slug.startsWith("_") || slug.startsWith(".")) continue;
+    const walk = (dir) => {
+      if (!existsSync(dir)) return;
+      for (const name of readdirSync(dir)) {
+        const path = `${dir}/${name}`;
+        if (statSync(path).isDirectory()) walk(path);
+        else if (/SIGNED.*\.pdf$/i.test(name)) out.push({ slug, path });
+      }
+    };
+    walk(`${CLIENTS}/${slug}/agreements`);
+  }
+  return out;
+}
+
+async function fromAgreement(brand, jsonPath, pdfPath, dryRun) {
+  const agreement = JSON.parse(readFileSync(jsonPath, "utf8"));
+  const evidenceDate = pdfPath.split("/").pop().match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
+  const evidenceRef = pdfPath.replace(homedir(), "~");
+  return call("POST", "/api/operations/service-records/from-agreement", { brand, agreement, evidenceRef, evidenceDate, dryRun });
+}
+
+/** This month's (or MONTH's) Sales by Customer from our QuickBooks, read-only. */
+function billingFor(month) {
+  const [y, m] = month.split("-").map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+  const out = execFileSync("qb", ["report", "sales-by-customer", "-c", "bookkeeping-conroe", "-p", `${month}-01..${last}`, "--json"], {
+    encoding: "utf8",
+    maxBuffer: 20 * 1024 * 1024,
+  });
+  const rows = JSON.parse(out).data?.Rows?.Row ?? [];
+  return rows
+    .filter((r) => r.type === "Data" && r.ColData?.length >= 2)
+    .map((r) => ({ customer: r.ColData[0].value, amount: Number(r.ColData[1].value) }))
+    .filter((r) => r.customer && Number.isFinite(r.amount));
 }
 
 async function main() {
@@ -164,6 +227,52 @@ async function main() {
       console.log(`${c.name.slice(0, 28).padEnd(28)} +${c.add.join(" +") || "-"}  -${c.remove.join(" -") || "-"}`);
     }
     console.log(`${changes.length} contact${changes.length === 1 ? "" : "s"} ${dryRun ? "would change (dry run)" : "changed"}`);
+    return;
+  }
+  if (cmd === "service-from-agreement") {
+    const pdf = args[2];
+    if (!target || !pdf) throw new Error(`usage:\n${USAGE}`);
+    const out = await fromAgreement(brand, target, pdf, Boolean(opts.dryRun));
+    for (const r of out.results) console.log(`${r.outcome.padEnd(10)} ${r.sourceKey}`);
+    if (out.tags) console.log(`tags +${out.tags.add.join(" +") || "-"}  -${out.tags.remove.join(" -") || "-"}`);
+    return;
+  }
+  if (cmd === "agreements-scan") {
+    let opened = 0;
+    let failed = 0;
+    for (const { slug, path } of signedAgreements()) {
+      const json = builderJson(slug);
+      if (!json) continue; // older agreements, entered by hand (backfill)
+      try {
+        const out = await fromAgreement(brand, json, path, Boolean(opts.dryRun));
+        for (const r of out.results) {
+          if (r.outcome.startsWith("skipped")) continue;
+          opened += 1;
+          console.log(`${r.outcome.padEnd(10)} ${r.sourceKey}  (${path.replace(homedir(), "~")})`);
+        }
+      } catch (error) {
+        failed += 1;
+        console.log(`FAILED     ${path.replace(homedir(), "~")}: ${error.message}`);
+      }
+    }
+    console.log(`${opened} record${opened === 1 ? "" : "s"} ${opts.dryRun ? "would open" : "opened"}, ${failed} failed`);
+    if (failed) process.exitCode = 1;
+    return;
+  }
+  if (cmd === "service-check") {
+    const month = opts.month || new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" }).slice(0, 7);
+    const billing = billingFor(month);
+    const out = await call("POST", "/api/operations/service-check", { brand, month, billing, fix: Boolean(opts.fix) });
+    const order = ["tom", "sol", "kassad", "agent"];
+    const items = [...out.items].sort((a, b) => order.indexOf(a.owner) - order.indexOf(b.owner));
+    for (const i of items) console.log(`${i.fixed ? "fixed " : "      "}${i.owner.padEnd(7)} ${i.name.slice(0, 30).padEnd(30)} ${i.detail}`);
+    const forTom = items.filter((i) => i.owner === "tom" && !i.fixed).length;
+    console.log(`${month}: ${billing.length} billed customers, ${items.length} item${items.length === 1 ? "" : "s"}, ${forTom} for Tom`);
+    if (opts.save) {
+      const dir = `${homedir()}/.local/state/swapp`;
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(`${dir}/service-check.json`, JSON.stringify({ checkedAt: new Date().toISOString(), month, items }, null, 1));
+    }
     return;
   }
   console.log(USAGE);

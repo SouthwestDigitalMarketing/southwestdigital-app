@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/simpleRateLimit";
 import { PipeBrandError, resolveBrand } from "@/lib/pipe/contacts";
@@ -7,6 +6,7 @@ import { authenticateOperationsRequest } from "@/lib/operations/api";
 import { parseServiceRecord } from "@/lib/operations/serviceRecords";
 import { getRecordMrr } from "@/lib/operations/serviceRecordsMrr";
 import { syncServiceTags } from "@/lib/operations/serviceTags";
+import { ServiceRecordError, upsertServiceRecord } from "@/lib/operations/serviceRecordStore";
 
 /**
  * Service records (concepts/service-records-design). GET lists them with
@@ -81,59 +81,13 @@ export async function PUT(request: Request) {
   if (typeof input === "string") return NextResponse.json({ error: input }, { status: 400 });
   try {
     const brand = await resolveBrand(typeof raw.brand === "string" ? raw.brand.trim() : "");
-    const contact = await prisma.contact.findFirst({
-      where: { id: input.contactId, brandId: brand.id },
-      select: { id: true },
-    });
-    if (!contact) return NextResponse.json({ error: "contactId is not a contact of this brand." }, { status: 400 });
-    if (input.engagementId) {
-      const engagement = await prisma.engagement.findFirst({
-        where: { id: input.engagementId, brandId: brand.id },
-        select: { id: true },
-      });
-      if (!engagement) return NextResponse.json({ error: "engagementId is not an engagement of this brand." }, { status: 400 });
-    }
-    let previousId: string | null = null;
-    if (input.previousSourceKey) {
-      const previous = await prisma.serviceRecord.findUnique({
-        where: { brandId_sourceKey: { brandId: brand.id, sourceKey: input.previousSourceKey } },
-        select: { id: true },
-      });
-      if (!previous) return NextResponse.json({ error: "previousSourceKey: no such record (load it first)." }, { status: 400 });
-      previousId = previous.id;
-    }
-    const date = (value: string) => new Date(`${value}T00:00:00Z`);
-    const data = {
-      contactId: input.contactId,
-      engagementId: input.engagementId,
-      product: input.product,
-      basis: input.basis,
-      feeAmount: input.feeAmount === null ? null : new Prisma.Decimal(input.feeAmount),
-      startDate: date(input.startDate),
-      endDate: input.endDate ? date(input.endDate) : null,
-      endReason: input.endReason,
-      evidenceSource: input.evidenceSource,
-      evidenceRef: input.evidenceRef,
-      evidenceDate: date(input.evidenceDate),
-      notes: input.notes,
-      previousId,
-    };
-    const where = { brandId_sourceKey: { brandId: brand.id, sourceKey: input.sourceKey } };
-    const existed = Boolean(await prisma.serviceRecord.findUnique({ where, select: { id: true } }));
-    const record = await prisma.serviceRecord.upsert({
-      where,
-      create: { brandId: brand.id, sourceKey: input.sourceKey, ...data },
-      update: data,
-      select: { id: true, sourceKey: true },
-    });
+    const record = await upsertServiceRecord(brand.id, input);
     // The record sets the contact's service and client tags.
-    const tags = await syncServiceTags(brand.id, { contactIds: [input.contactId] });
-    return NextResponse.json({ ...record, created: !existed, tags: tags[0] ?? null });
+    const tags = await syncServiceTags(brand.id, { contactIds: [record.contactId] });
+    return NextResponse.json({ id: record.id, sourceKey: record.sourceKey, created: record.created, tags: tags[0] ?? null });
   } catch (error) {
     if (error instanceof PipeBrandError) return NextResponse.json({ error: error.message }, { status: 404 });
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      return NextResponse.json({ error: "That record is already the replacement of another record." }, { status: 409 });
-    }
+    if (error instanceof ServiceRecordError) return NextResponse.json({ error: error.message }, { status: error.status });
     throw error;
   }
 }

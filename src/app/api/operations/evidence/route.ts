@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { syncServiceTags } from "@/lib/operations/serviceTags";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/simpleRateLimit";
@@ -79,13 +80,29 @@ export async function POST(request: Request) {
       // Opening balances done: the client moves to the monthly routine, with
       // recurring duties from the next day.
       if (input.dutyId === "onboarding-opening-balances") {
-        const tomorrow = new Date(`${firmDateKey(new Date())}T00:00:00Z`);
+        const today = new Date(`${firmDateKey(new Date())}T00:00:00Z`);
+        const tomorrow = new Date(today);
         tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-        await prisma.operationsClient.update({
+        const client = await prisma.operationsClient.update({
           where: { id: clientId },
           data: { stage: "active", startsOn: tomorrow },
+          select: { engagementId: true },
         });
         stage = "active";
+        // The onboarding job is done: its service record ends today.
+        if (client.engagementId) {
+          const ended = await prisma.serviceRecord.findMany({
+            where: { brandId: brand.id, engagementId: client.engagementId, product: "onboarding", endDate: null },
+            select: { id: true, contactId: true },
+          });
+          for (const record of ended) {
+            await prisma.serviceRecord.update({
+              where: { id: record.id },
+              data: { endDate: today, endReason: "job_done" },
+            });
+          }
+          if (ended.length) await syncServiceTags(brand.id, { contactIds: [...new Set(ended.map((r) => r.contactId))] });
+        }
       }
     }
     return NextResponse.json({ id: row.id, period, ...(stage ? { stage } : {}) }, { status: 201 });
