@@ -337,6 +337,44 @@ def status_legend():
     return "<details class=legend><summary>Legend</summary><div class=items>%s</div></details>" % items
 
 
+def status_reason(info, today=None):
+    """Why a client has its tag, in one or two plain sentences (Tom, 2026-11-18: tap the client, see why)."""
+    import datetime as dt
+    status = info.get("status")
+    try:
+        year, month = (int(x) for x in (info.get("month") or "").split("-"))
+        name = dt.date(year, month, 1).strftime("%B")
+    except ValueError:
+        name = "Last month"
+    try:
+        due = dt.date.fromisoformat(info.get("due") or "")
+    except ValueError:
+        due = None
+    due_text = "%s, %s %d" % (due.strftime("%a"), due.strftime("%b"), due.day) if due else "the 5th business day"
+    close, progress = info.get("close"), info.get("progress")
+    try:
+        percent = "%d%%" % round(float(str(progress).rstrip("%")))
+    except ValueError:
+        percent = None
+    if status == "done":
+        return ["%s report is published." % name]
+    if status == "waiting":
+        return ["Waiting on the client: %s." % info["waiting"].rstrip(".") if info.get("waiting")
+                else "Waiting on the client to answer questions or send statements in Double."]
+    if status == "catching-up":
+        return ["Still finishing older months.", "%s's close isn't open in Double yet." % name]
+    if close == "done" and not info.get("saved"):
+        work = "%s's close is done, but the report isn't saved here yet." % name
+    elif close in (None, "notStarted") or percent in (None, "0%"):
+        work = "We haven't started %s's close in Double yet." % name
+    else:
+        work = "%s's close in Double is %s done." % (name, percent)
+    if status == "late":
+        days = ((today or dt.date.today()) - due).days if due else 0
+        return ["%s report was due %s." % (name, due_text), work + (" %d days late." % days if days > 0 else "")]
+    return ["%s report is due %s." % (name, due_text), work]
+
+
 def reports_page(root, folder, query):
     """HTML for the client list, or one client's months. Links keep the signed exp/sig."""
     import html
@@ -357,6 +395,9 @@ def reports_page(root, folder, query):
              ".legend .item{margin-top:8px}.legend .item small{font-size:13px;margin-top:2px}.legend .st{align-items:flex-start}"
              ".st,a.row.st{display:flex;align-items:center;justify-content:space-between;gap:10px}.st .nm{min-width:0}"
              ".tag{flex:0 0 auto;font-size:12px;font-weight:600;border:1px solid;border-radius:999px;padding:1px 8px;background:#fff}"
+             ".why{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin:0 0 16px}"
+             ".why .tag{display:inline-block;margin-bottom:6px}.why p{margin:0}.why p+p{margin-top:2px;color:#334155}"
+             ".why small{margin-top:8px;font-size:12px}h2{font-size:15px;color:#64748b;margin:0 0 8px;font-weight:600}"
              "div.row.st:not(.off){background:#fff;color:#0f172a}a.back{color:#475569;display:inline-block;margin-bottom:12px}</style>")
     if folder is None:
         # Name only, one compact row each (20 to 50 clients), in the look of last month's status
@@ -365,7 +406,7 @@ def reports_page(root, folder, query):
         known = {k for k, _, _, _ in REPORT_STATUSES}
         def row(c):
             status = (statuses.get(c["folder"]) or {}).get("status")
-            key = "none" if not c["months"] else (status if status in known else None)
+            key = status if status in known else ("none" if not c["months"] else None)
             return status_row(key, c["name"], href="/reports/%s%s" % (c["folder"], sign))
         rows = "".join(row(c) for c in clients) or "<p>No clients set up for reports yet.</p>"
         return ("<!doctype html><html lang=en><head><meta charset=utf-8><title>Reports</title>%s</head><body><h1>Reports</h1>%s%s</body></html>"
@@ -374,10 +415,20 @@ def reports_page(root, folder, query):
     if client is None:
         return None
     rows = "".join("<a class=row href='/reports/%s/%s/%s%s'>%s</a>" % (folder, m["year"], m["file"], sign, html.escape(m["label"]))
-                   for m in client["months"])
+                   for m in client["months"]) or "<p><small>No reports saved yet.</small></p>"
+    saved_status = read_json(REPORT_STATUS, {}) or {}
+    info = (saved_status.get("clients") or {}).get(folder) or {}
+    why = ""
+    entry = next(((label, color) for k, label, color, _ in REPORT_STATUSES if k == info.get("status")), None)
+    if entry:
+        label, color = entry
+        lines = "".join("<p>%s</p>" % html.escape(line) for line in status_reason(info))
+        checked = (saved_status.get("updated") or "").replace("T", " ")[:16]
+        why = ("<div class=why style='border-left:5px solid %s'><span class=tag style='color:%s;border-color:%s'>%s</span>%s"
+               "<small>Checked in Double %s</small></div>" % (color, color, color, html.escape(label), lines, html.escape(checked)))
     return ("<!doctype html><html lang=en><head><meta charset=utf-8><title>%s reports</title>%s</head><body>"
-            "<a class=back href='/reports%s'>&lsaquo; All clients</a><h1>%s</h1>%s</body></html>"
-            % (html.escape(client["name"]), style, sign, html.escape(client["name"]), rows))
+            "<a class=back href='/reports%s'>&lsaquo; All clients</a><h1>%s</h1>%s<h2>Reports</h2>%s</body></html>"
+            % (html.escape(client["name"]), style, sign, html.escape(client["name"]), why, rows))
 
 
 def resumable_batch(inbox, name, size):
@@ -980,7 +1031,7 @@ def self_test():
     # Rows take last month's status from report-status.json; no saved reports stays grey.
     global REPORT_STATUS
     REPORT_STATUS = os.path.join(INBOX, "status.json")
-    write_json(REPORT_STATUS, {"clients": {"bnb-getaway": {"status": "late"}, "sj-equity-llc": {"status": "done"}}})
+    write_json(REPORT_STATUS, {"clients": {"bnb-getaway": {"status": "late", "month": "2026-10", "due": "2026-11-06", "close": "notStarted"}, "sj-equity-llc": {"status": "done"}}})
     # Reports: signed list, client page, the PDF itself; nothing outside reports/<year>/<YYYY-MM>.pdf.
     global REPORTS_ROOT
     REPORTS_ROOT = os.path.join(INBOX, "clients")
@@ -999,10 +1050,15 @@ def self_test():
         # Client rows show the name only; descriptions live inside the legend's sample rows.
         clients_part = page.split(b"</details>", 1)[1]
         assert b"BnB Getaway LLC" in clients_part and b"SJ Equity LLC" in clients_part and b"<small>" not in clients_part
-        assert b">Late</span>" in clients_part and b">Done</span>" not in clients_part  # SJ has no reports: grey
+        # Any client with a status opens and shows its tag, even before reports are saved.
+        assert b">Late</span>" in clients_part and b">Done</span>" in clients_part and b"/reports/sj-equity-llc?" in clients_part
         assert b"Waiting on client" in page and b"5th business day" in page
     with urllib.request.urlopen(reports + "/bnb-getaway" + signed) as response:
-        assert b"October 2026" in response.read()
+        client_page = response.read()
+        # The client page opens with why the tag is what it is, above the months.
+        assert b"October 2026" in client_page and b"class=why" in client_page and b"report was due" in client_page
+    with urllib.request.urlopen(reports + "/sj-equity-llc" + signed) as response:
+        assert b"No reports saved yet." in response.read()
     with urllib.request.urlopen(reports + "/bnb-getaway/2026/2026-10.pdf" + signed) as response:
         assert response.read() == b"%PDF-oct" and response.headers["Content-Type"] == "application/pdf"
     with urllib.request.urlopen(reports + ".json" + signed) as response:

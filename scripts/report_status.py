@@ -108,6 +108,9 @@ def main():
         out[folder] = {"status": decide(today, close, saved, bool(waiting.get(folder))),
                        "month": "%04d-%02d" % (year, month),
                        "close": (close or {}).get("status"), "progress": (close or {}).get("progress"),
+                       "due": fifth_business_day(today.year, today.month).isoformat(),
+                       "saved": saved,
+                       "waiting": waiting.get(folder) if isinstance(waiting.get(folder), str) else None,
                        "doubleClient": bool(client)}
     tmp = OUT + ".tmp"
     with open(tmp, "w", encoding="utf-8") as handle:
