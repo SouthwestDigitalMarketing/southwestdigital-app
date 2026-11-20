@@ -1,5 +1,18 @@
 # SWapp handoff
 
+## 2026-11-20 — Scorecard privacy mode (Ummon)
+
+"Privacy off/on" button in the Scorecard header (`src/components/PrivacyToggle.tsx`, reusable
+if privacy goes app-wide). Cookie `swapp_privacy=1` on the SWapp host (path `/`, 1 year;
+ripley's Reports cookie is separate). The page reads it server-side and passes the data
+through `privatizeScorecard` (`src/lib/scorecard/privacy.ts`): waiting-list and report-days
+client names become `Client A…` (one letter per client on the page, assigned by order shown,
+so letters are not stable across refreshes and do not match ripley's Reports aliases), and
+sync failure notes are dropped. Turning privacy on does a full reload so the first load's RSC
+payload with real names is gone. Checked locally on the fixture: visible text, embedded page
+data and raw HTML have no real names; 390 px has no horizontal scroll. Charts and counts carry
+no names.
+
 ## 2026-11-20 — Reports privacy mode (Ummon)
 
 Header switch "Privacy off/on" on every ripley Reports page (`scripts/phone_intake.py`),
