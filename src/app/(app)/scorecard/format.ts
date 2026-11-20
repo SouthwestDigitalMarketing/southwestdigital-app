@@ -18,6 +18,8 @@ export const REPORTS_TRACKING_STARTS = "2026-11-19";
 
 /** A source not heard from in this long shows amber. */
 export const STALE_SYNC_SECONDS = 15 * 60;
+/** The nightly totals job (source "qbo") runs once a day. */
+export const DAILY_SYNC_STALE_SECONDS = 26 * 3600;
 
 const MINUTE = 60;
 const HOUR = 3600;
@@ -99,9 +101,9 @@ export function formatAgo(iso: string, now: Date): string {
   return `${days} day${days === 1 ? "" : "s"} ago`;
 }
 
-export function isStale(iso: string, now: Date): boolean {
+export function isStale(iso: string, now: Date, maxSeconds = STALE_SYNC_SECONDS): boolean {
   const seconds = (now.getTime() - new Date(iso).getTime()) / 1000;
-  return !Number.isFinite(seconds) || seconds > STALE_SYNC_SECONDS;
+  return !Number.isFinite(seconds) || seconds > maxSeconds;
 }
 
 /** 0.873 -> "87%"; null -> "—". */

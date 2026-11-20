@@ -16,7 +16,7 @@ export const SCORECARD_KINDS = [
 ] as const;
 export type ScorecardKind = (typeof SCORECARD_KINDS)[number];
 
-export const SCORECARD_SOURCES = ["quo", "zoho", "reports"] as const;
+export const SCORECARD_SOURCES = ["quo", "zoho", "reports", "qbo"] as const;
 export type ScorecardSource = (typeof SCORECARD_SOURCES)[number];
 
 /** One event as the collector posts it (POST /api/scorecard/ingest). */
