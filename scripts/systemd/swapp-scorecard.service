@@ -1,0 +1,11 @@
+# Scorecard collector on ripley (docs/scorecard-collector.md).
+# Install: cp scripts/systemd/swapp-scorecard.* ~/.config/systemd/user/
+#          systemctl --user daemon-reload && systemctl --user enable --now swapp-scorecard.timer
+[Unit]
+Description=SWapp Scorecard: client response times from Quo and Zoho headers
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/.local/bin:%h/.local/share/mise/shims:/usr/local/bin:/usr/bin
+TimeoutStartSec=240
+ExecStart=/usr/bin/python3 %h/projects/southwestdigital-app/scripts/scorecard_collect.py
