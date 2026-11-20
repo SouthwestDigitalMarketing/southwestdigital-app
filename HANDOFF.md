@@ -1,5 +1,16 @@
 # SWapp handoff
 
+## 2026-11-20 — Agreement versions: highest version wins, "v2 · Draft" first (Ummon)
+
+Tom: versions must be in the file name; on a phone folders are invisible and names get cut. Naming
+rule (All Thing `sops/sop-quote-and-contract.md`): `<date>_GSA_<Client-Slug>_v<N>_<DRAFT|FINAL|SIGNED>.pdf`.
+ripley `scripts/phone_intake.py`: version from `_v<N>` in the name, else the `v<N>` folder, else 0;
+GSA = "General-Services-Agreement" or a `GSA` token; GSA draft/signed = highest version, then date
+(SJ Equity's v1 and v2 had the same name and v1 was winning). List rows lead with a coloured
+"v2 · Draft" / "v2 · Final, ready to sign" / "Signed" line, then the file name and date.
+Checks: self-test ok (same name in v1/ and v2/ -> v2; `_v3_DRAFT` beats both; labels); installed on
+ripley; live SJ Equity list "v2 · Draft, v1 · Draft, Signed", View -> v2; 412px screenshot checked.
+
 ## 2026-11-20 — `_FINAL` agreements: ready to sign, no DRAFT stamp (Ummon)
 
 ripley `scripts/phone_intake.py`: an unsigned agreement PDF with a FINAL token in its name

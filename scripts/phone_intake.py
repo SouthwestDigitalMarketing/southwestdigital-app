@@ -431,6 +431,9 @@ AGREEMENT_SUBDIR = re.compile(r"^v\d{1,3}$")
 # An unsigned PDF named with a FINAL token ("..._FINAL.pdf") is the execution copy, ready to sign: it is
 # not a draft, so it is served without the DRAFT stamp (Tom, 2026-11-20).
 AGREEMENT_FINAL = re.compile(r"(?:^|[_ .-])FINAL(?:[_ .-]|$)", re.I)
+# The version is in the file name ("..._v2_DRAFT.pdf", Tom 2026-11-20); older files only had a v<N> folder.
+AGREEMENT_VERSION = re.compile(r"(?:^|[_ .-])v(\d{1,3})(?:[_ .-]|$)", re.I)
+AGREEMENT_GSA = re.compile(r"general-services-agreement|(?:^|[_ .-])GSA(?:[_ .-]|$)", re.I)
 
 
 def list_agreements(root, folder):
@@ -448,18 +451,26 @@ def list_agreements(root, folder):
         for name in os.listdir(directory):
             path = os.path.join(directory, name)
             if AGREEMENT_FILE.match(name) and os.path.isfile(path) and not os.path.islink(path):
+                named = AGREEMENT_VERSION.search(name[:-4])
                 out.append({"rel": (sub + "/" if sub else "") + name, "name": name,
+                            "version": int(named.group(1)) if named else int(sub[1:]) if sub else 0,
                             "signed": "SIGNED" in name.upper(), "final": bool(AGREEMENT_FINAL.search(name[:-4])) and "SIGNED" not in name.upper(),
                             "date": name[:10] if re.match(r"\d{4}-\d{2}-\d{2}", name) else ""})
-    return sorted(out, key=lambda a: (a["date"], a["name"]), reverse=True)
+    return sorted(out, key=lambda a: (a["date"], a["version"], a["name"]), reverse=True)
+
+
+def agreement_label(a):
+    """'v2 · Draft' (or 'Draft' with no version): what Tom must be able to read first on a phone."""
+    status = "Signed" if a["signed"] else "Final, ready to sign" if a["final"] else "Draft"
+    return ("v%d · %s" % (a["version"], status)) if a["version"] else status
 
 
 def gsa_file(root, folder, kind):
     """rel path of the newest General Services Agreement PDF: the unsigned draft, or the SIGNED copy."""
-    for a in list_agreements(root, folder) or []:
-        if "general-services-agreement" in a["name"].lower() and a["signed"] == (kind == "signed"):
-            return a["rel"]
-    return None
+    found = [a for a in list_agreements(root, folder) or []
+             if AGREEMENT_GSA.search(a["name"]) and a["signed"] == (kind == "signed")]
+    # Highest version wins, then the newest date: a v2 beats a v1 even under the same name.
+    return max(found, key=lambda a: (a["version"], a["date"], a["name"]))["rel"] if found else None
 
 
 DRAFT_CACHE = os.path.expanduser(os.environ.get("PHONE_INTAKE_DRAFT_CACHE", "~/.cache/swapp-phone-intake/drafts"))
@@ -570,10 +581,10 @@ def agreements_page(root, folder, query):
         return None
     name = client_name(folder)
     rows = "".join(
-        "<a class=row href='/agreements/%s/%s/view?%s'>%s<small>%s</small><span class=tag style='color:%s;border-color:%s'>%s</span></a>" % (
-            urllib.parse.quote(folder), urllib.parse.quote(a["rel"]), query, html.escape(a["name"][:-4].replace("_", " ")),
-            html.escape(a["date"]), *(("#15803d",) * 2 if a["signed"] else ("#1d4ed8",) * 2 if a["final"] else ("#b45309",) * 2),
-            "Signed" if a["signed"] else "Final, ready to sign" if a["final"] else "Draft") for a in found) or "<p><small>No agreements saved yet.</small></p>"
+        "<a class=row href='/agreements/%s/%s/view?%s'><b style='color:%s'>%s</b><small>%s</small><small>%s</small></a>" % (
+            urllib.parse.quote(folder), urllib.parse.quote(a["rel"]), query,
+            "#15803d" if a["signed"] else "#1d4ed8" if a["final"] else "#b45309", html.escape(agreement_label(a)),
+            html.escape(a["name"][:-4].replace("_", " ")), html.escape(a["date"])) for a in found) or "<p><small>No agreements saved yet.</small></p>"
     return ("<!doctype html><html lang=en><head><meta charset=utf-8><title>%s agreements</title>%s</head><body>"
             "<a class=back href='/agreements?%s'>&lsaquo; All clients</a><h1>%s</h1><h2>Agreements</h2>%s</body></html>"
             % (html.escape(name), AGREEMENTS_STYLE, query, html.escape(name), rows))
@@ -1980,7 +1991,7 @@ def self_test():
     agreements = "http://%s:%d/agreements" % (host, port)
     with urllib.request.urlopen(agreements + "/sj-equity-llc" + signed) as response:
         listing = response.read().decode()
-    assert listing.index("SIGNED") < listing.index("v1/") and ">Signed<" in listing and ">Draft<" in listing and "notes.txt" not in listing, listing
+    assert listing.index("SIGNED") < listing.index("v1/") and ">Signed<" in listing and ">v1 · Draft<" in listing and "notes.txt" not in listing, listing
     os.makedirs(os.path.join(REPORTS_ROOT, "empty-co", "agreements"))
     with urllib.request.urlopen(agreements + signed) as response:
         index = response.read().decode()
@@ -2006,6 +2017,20 @@ def self_test():
     with urllib.request.urlopen(agreements + "/final-co" + signed) as response:
         assert ">Final, ready to sign<" in response.read().decode()
     assert not AGREEMENT_FINAL.search("2026-11-20_Finalize-Notes") and AGREEMENT_FINAL.search("x_final")
+    # Versions: the same name in v1/ and v2/ resolves to v2; a _v3 in the name beats both.
+    vdir = os.path.join(REPORTS_ROOT, "versions-co", "agreements")
+    for sub in ("v1", "v2"):
+        os.makedirs(os.path.join(vdir, sub))
+        open(os.path.join(vdir, sub, "2026-11-20_General-Services-Agreement_Versions-Co.pdf"), "wb").write(simple_pdf(b"BT /F1 12 Tf 72 720 Td (" + sub.encode() + b") Tj ET"))
+    with urllib.request.urlopen(agreements + "/versions-co/gsa/draft/stat" + signed) as response:
+        assert json.loads(response.read().decode())["name"] == "2026-11-20_General-Services-Agreement_Versions-Co.pdf"
+    assert gsa_file(REPORTS_ROOT, "versions-co", "draft") == "v2/2026-11-20_General-Services-Agreement_Versions-Co.pdf"
+    open(os.path.join(vdir, "2026-11-20_GSA_Versions-Co_v3_DRAFT.pdf"), "wb").write(simple_pdf(b"BT /F1 12 Tf 72 720 Td (v3) Tj ET"))
+    assert gsa_file(REPORTS_ROOT, "versions-co", "draft") == "2026-11-20_GSA_Versions-Co_v3_DRAFT.pdf"
+    open(os.path.join(vdir, "2026-11-20_GSA_Versions-Co_v3_FINAL.pdf"), "wb").write(simple_pdf(b"BT /F1 12 Tf 72 720 Td (v3f) Tj ET"))
+    with urllib.request.urlopen(agreements + "/versions-co" + signed) as response:
+        vlist = response.read().decode()
+    assert ">v3 · Draft<" in vlist and ">v3 · Final, ready to sign<" in vlist and ">v2 · Draft<" in vlist, vlist
     with urllib.request.urlopen(agreements + "/sj-equity-llc/gsa/draft" + signed + "&dl=1") as response:
         assert response.headers["Content-Disposition"].startswith("attachment;") and response.read() == stamped
     with urllib.request.urlopen(agreements + "/sj-equity-llc/gsa/draft/view" + signed + "&ret=" + urllib.parse.quote("https://app.example.test/leads/x#gsa")) as response:
