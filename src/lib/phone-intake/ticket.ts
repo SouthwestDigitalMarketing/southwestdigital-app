@@ -45,8 +45,10 @@ export function sendPageLink(input: {
   secret: string;
   publicUrl: string;
   nowSeconds: number;
-  /** "/reports" opens ripley's published client reports instead of the send page. */
-  path?: "/send" | "/reports";
+  /** "/reports" opens ripley's published client reports; "/agreements/<client>" one client's agreement PDFs. */
+  path?: "/send" | "/reports" | `/agreements/${string}`;
+  /** Extra address parameters, such as the client code ripley tries as a second folder name. */
+  extra?: Record<string, string>;
 }): { ok: true; url: string; exp: number } | { ok: false; error: string } {
   if (!input.secret || !input.publicUrl) {
     return { ok: false, error: "The send road is not set up on this server." };
@@ -62,6 +64,7 @@ export function sendPageLink(input: {
   }
   const exp = input.nowSeconds + PHONE_INTAKE_TTL_SECONDS;
   const url = new URL(input.path ?? "/send", origin);
+  for (const [key, value] of Object.entries(input.extra ?? {})) url.searchParams.set(key, value);
   url.searchParams.set("exp", String(exp));
   url.searchParams.set("sig", signSession(input.secret, exp));
   return { ok: true, url: url.toString(), exp };

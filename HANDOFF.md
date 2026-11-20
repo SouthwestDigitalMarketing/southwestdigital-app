@@ -1,5 +1,20 @@
 # SWapp handoff
 
+## 2026-11-20 — Agreement PDFs on the client record (Ummon)
+
+Client record (`/clients/[id]`) has an "Agreements (PDFs)" button -> `/clients/[id]/agreements`
+(staff login, brand-checked) signs a link and redirects to ripley's tailnet
+`/agreements/<name-slug>?alt=<client code>` in `scripts/phone_intake.py`. Ripley lists
+`~/projects/clients/<client>/agreements/[v<N>/]*.pdf` (SIGNED in the file name = Signed) and
+opens each inline; same signed-session link as Reports. SWapp stores nothing (Tom, 2026-11-20: keep
+the PDFs in the client folders on ripley). Needs the phone on Tailscale, like Reports.
+Checks: `phone_intake.py --self-test` ok (list, open, bad sig, traversal, non-PDF); vitest
+`src/lib/phone-intake` 6 pass; `tsc --noEmit` clean. Live on ripley (installed copy restarted):
+SJ Equity listing + PDF (143,843 bytes) fetched with a signed link. Not checked: the SWapp button
+on a real phone (needs login; folder name comes from the client name slug, then the code).
+Follow-up: client-name mismatch with the folder name shows "No agreements saved yet".
+Privacy mode is not applied to this page.
+
 ## 2026-11-20 — Scorecard privacy mode (Ummon)
 
 "Privacy off/on" button in the Scorecard header (`src/components/PrivacyToggle.tsx`, reusable
