@@ -89,7 +89,9 @@ export function BillingLegendButton() {
                 </span>
               </li>
             </ul>
-            <p className="mt-4 text-xs text-slate-400">Swipe the row to see past and future days.</p>
+            <p className="mt-4 text-xs text-slate-400">
+              Swipe the row to see past and future days. Double-tap it to jump back to today. Past days are grayed out.
+            </p>
           </div>
         </Modal>
       )}
@@ -99,26 +101,48 @@ export function BillingLegendButton() {
 
 /**
  * One swipeable row of days: 10 visible on a phone, more on wider screens.
- * Opens with yesterday at the left edge; both edges fade out.
+ * Opens with yesterday at the left edge; both edges fade out. A double-tap
+ * (double-click on desktop) scrolls back there. Past days are dimmed.
  */
 export function BillingCalendarStrip({ days }: { days: BillingCalendarDay[] }) {
   const scroller = useRef<HTMLDivElement>(null);
   const yesterday = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  const lastTap = useRef(0);
+
+  function resetToToday(behavior: ScrollBehavior) {
     if (scroller.current && yesterday.current) {
-      scroller.current.scrollLeft = yesterday.current.offsetLeft;
+      scroller.current.scrollTo({ left: yesterday.current.offsetLeft, behavior });
     }
+  }
+
+  useEffect(() => {
+    resetToToday("instant");
   }, []);
+
+  // Phones do not reliably fire dblclick, so count touch taps ourselves.
+  function onPointerUp(event: React.PointerEvent) {
+    if (event.pointerType !== "touch") return;
+    const now = event.timeStamp;
+    if (now - lastTap.current < 300) {
+      lastTap.current = 0;
+      resetToToday("smooth");
+    } else {
+      lastTap.current = now;
+    }
+  }
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white py-2 sm:py-3">
       <div
         ref={scroller}
+        onDoubleClick={() => resetToToday("smooth")}
+        onPointerUp={onPointerUp}
         className="relative grid snap-x auto-cols-[calc(100%/10)] grid-flow-col overflow-x-auto [scrollbar-width:none] sm:auto-cols-[calc(100%/14)] lg:auto-cols-[calc(100%/21)] [&::-webkit-scrollbar]:hidden"
         style={{
           maskImage: "linear-gradient(to right, transparent, #000 7%, #000 93%, transparent)",
           WebkitMaskImage: "linear-gradient(to right, transparent, #000 7%, #000 93%, transparent)",
+          touchAction: "manipulation",
         }}
       >
         {days.map((d) => {
@@ -128,7 +152,9 @@ export function BillingCalendarStrip({ days }: { days: BillingCalendarDay[] }) {
             <div
               key={d.date}
               ref={d.offset === -1 ? yesterday : undefined}
-              className={`flex snap-start flex-col items-center gap-1 py-1 ${d.payWindow ? "bg-emerald-50" : ""}`}
+              className={`flex snap-start flex-col items-center gap-1 py-1 ${d.payWindow ? "bg-emerald-50" : ""} ${
+                d.offset < 0 ? "opacity-40 grayscale" : ""
+              }`}
               title={`${monthOf(d.date)} ${d.day}${event ? ` · ${event.label}` : ""}`}
             >
               <span className={`h-3.5 text-[11px] font-bold leading-3.5 tabular-nums ${event?.text ?? ""}`}>
