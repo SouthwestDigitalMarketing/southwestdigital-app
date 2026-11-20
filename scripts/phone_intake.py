@@ -33,6 +33,12 @@ REPORTS_ROOT = os.path.expanduser(os.environ.get("PHONE_INTAKE_REPORTS_ROOT", "~
 REPORT_NAMES = os.path.expanduser(os.environ.get("PHONE_INTAKE_REPORT_NAMES", "~/.config/swapp-phone-intake/report-names.json"))
 # Each client's month status, written hourly by scripts/report_status.py from Double.
 REPORT_STATUS = os.path.expanduser(os.environ.get("PHONE_INTAKE_REPORT_STATUS", "~/.local/share/swapp-phone-intake/report-status.json"))
+# PDF.js (pdfjs-dist 3.11.174) for the report viewer, served from here so nothing loads from a CDN.
+PDFJS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pdfjs")
+PDFJS_FILES = {"pdf.min.js": "application/javascript", "pdf.worker.min.js": "application/javascript"}
+# A signed Reports link lasts this long; an open viewer page asks for a fresh one before it runs out.
+REPORT_SESSION_SECONDS = 3 * 3600
+REPORT_RENEW_BELOW = 3600
 CLIENT_DIR = re.compile(r"^[a-z0-9][a-z0-9_-]{0,80}$")
 REPORT_YEAR = re.compile(r"^\d{4}$")
 REPORT_FILE = re.compile(r"^(\d{4})-(\d{2})\.pdf$")
@@ -569,7 +575,7 @@ def reports_page(root, folder, query):
     def month_row(m):
         gaps = missing_for(info, m["file"][:7])
         warn = "<small class=gap>Built without: %s</small>" % html.escape(", ".join(gaps)) if gaps else ""
-        return "<a class=row href='/reports/%s/%s/%s%s'>%s%s</a>" % (folder, m["year"], m["file"], sign, html.escape(m["label"]), warn)
+        return "<a class=row href='/reports/%s/%s/%s/view%s'>%s%s</a>" % (folder, m["year"], m["file"][:7], sign, html.escape(m["label"]), warn)
     rows = "".join(month_row(m) for m in client["months"]) or "<p><small>No reports saved yet.</small></p>"
     why = ""
     entry = next(((label, color) for k, label, color, _ in REPORT_STATUSES if k == info.get("status")), None)
@@ -593,6 +599,107 @@ def reports_page(root, folder, query):
     return ("<!doctype html><html lang=en><head><meta charset=utf-8><title>%s reports</title>%s</head><body>"
             "<a class=back href='/reports%s'>&lsaquo; All clients</a><h1>%s</h1>%s<h2>Reports</h2>%s</body></html>"
             % (html.escape(client["name"]), style, sign, html.escape(client["name"]), why, rows))
+
+
+REPORT_VIEWER = r"""<!doctype html><html lang=en><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<title>__TITLE__</title><style>
+html,body{margin:0;background:#475569;font:15px/1.3 system-ui,sans-serif}
+#bar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#0f172a;color:#e2e8f0;padding:8px 10px}
+#bar a,#bar button{color:#fff;background:#334155;border:0;border-radius:8px;padding:8px 12px;font:600 15px system-ui,sans-serif;text-decoration:none;cursor:pointer}
+#bar button:active,#bar a:active{background:#1e293b}
+#bar .sp{flex:1 1 auto}#when{font-size:13px;color:#cbd5e1}#when b{color:#fff}
+#pages{display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px 0 40px}
+#pages canvas{display:block;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.4);max-width:100%;height:auto}
+#msg{color:#e2e8f0;text-align:center;padding:30px 16px}
+</style></head><body>
+<div id=bar><a id=back href="__BACK__">&lsaquo; __CLIENT__</a><button id=refresh type=button>Refresh</button>
+<span id=when>Loading&hellip;</span><span class=sp></span><a id=dl href="__RAW__">Download</a></div>
+<div id=pages><div id=msg>Loading report&hellip;</div></div>
+<script src="/reports/_pdfjs/pdf.min.js?__SIGN__"></script>
+<script>
+(function(){
+var CFG=__CFG__;
+var sign=CFG.sign, seen=null, busy=false, shown=false;
+var pages=document.getElementById('pages'), when=document.getElementById('when');
+pdfjsLib.GlobalWorkerOptions.workerSrc='/reports/_pdfjs/pdf.worker.min.js?'+sign;
+function url(p,extra){return p+'?'+sign+(extra||'');}
+function setSign(r){
+  sign='exp='+r.exp+'&sig='+r.sig;
+  document.getElementById('back').href='/reports/'+CFG.folder+'?'+sign;
+  document.getElementById('dl').href=url(CFG.raw);
+}
+function stamp(sec){
+  var d=new Date(sec*1000);
+  var t=new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'}).format(d);
+  when.innerHTML='Updated <b>'+t+'</b>';
+}
+function note(text){when.textContent=text;}
+async function render(buf,mtime){
+  var pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  var width=Math.min(document.documentElement.clientWidth,1000);
+  var scale=Math.min(Math.max(window.devicePixelRatio||1,2),3);
+  var canvases=[];
+  for(var n=1;n<=pdf.numPages;n++){
+    var page=await pdf.getPage(n);
+    var base=page.getViewport({scale:1});
+    var vp=page.getViewport({scale:(width/base.width)*scale});
+    var c=document.createElement('canvas');c.width=Math.floor(vp.width);c.height=Math.floor(vp.height);
+    c.style.width=(c.width/scale)+'px';
+    await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
+    canvases.push(c);
+  }
+  // Keep the reader's place: which page is at the top, and how far down it.
+  var keep=null,old=pages.querySelectorAll('canvas');
+  for(var i=0;i<old.length;i++){var r=old[i].getBoundingClientRect();
+    if(r.bottom>document.getElementById('bar').offsetHeight){keep={i:i,f:(document.getElementById('bar').offsetHeight-r.top)/r.height};break;}}
+  pages.replaceChildren.apply(pages,canvases);
+  if(keep&&canvases.length){var t=canvases[Math.min(keep.i,canvases.length-1)];
+    window.scrollTo(0,window.scrollY+t.getBoundingClientRect().top-document.getElementById('bar').offsetHeight+keep.f*t.getBoundingClientRect().height);}
+  shown=true;stamp(mtime);
+  pdf.destroy();
+}
+async function load(mtime){
+  var res=await fetch(url(CFG.raw,'&t='+Date.now()),{cache:'no-store'});
+  if(!res.ok)throw new Error('http '+res.status);
+  var buf=await res.arrayBuffer();
+  await render(buf,mtime);
+}
+async function check(force){
+  if(busy)return;busy=true;
+  try{
+    var res=await fetch(url(CFG.stat,'&t='+Date.now()),{cache:'no-store'});
+    if(res.status===403){note('This link expired. Go back and open the report again.');return;}
+    if(!res.ok)throw new Error('http '+res.status);
+    var s=await res.json();
+    if(s.renew)setSign(s.renew);
+    var key=s.mtime+':'+s.size;
+    if(force||key!==seen){await load(s.mtime);seen=key;}
+  }catch(e){
+    // A half-saved file or a dropped connection: keep what is on screen and try again next time.
+    if(!shown){pages.innerHTML='<div id=msg>Could not load the report yet. Trying again&hellip;</div>';}
+    else{note('Update failed, retrying…');}
+  }finally{busy=false;}
+}
+document.getElementById('refresh').onclick=function(){note('Refreshing…');check(true);};
+document.addEventListener('visibilitychange',function(){if(!document.hidden)check(false);});
+check(true);setInterval(function(){if(!document.hidden)check(false);},10000);
+})();
+</script></body></html>"""
+
+
+def report_viewer_page(root, folder, year, month, query):
+    """The HTML viewer for one report: PDF.js on ripley, a top bar, and a page that refreshes itself."""
+    import html
+    name = "%s-%s.pdf" % (year, month)
+    if report_path(root, folder, year, name) is None:
+        return None
+    label = "%s %s" % (client_name(folder), "%s %s" % (MONTHS[int(month) - 1], year))
+    raw = "/reports/%s/%s/%s" % (folder, year, name)
+    cfg = {"sign": query, "folder": folder, "raw": raw, "stat": "/reports/%s/%s/%s-%s/stat" % (folder, year, year, month)}
+    return (REPORT_VIEWER.replace("__TITLE__", html.escape(label)).replace("__CLIENT__", html.escape(client_name(folder)))
+            .replace("__BACK__", "/reports/%s?%s" % (folder, query)).replace("__RAW__", raw + "?" + query)
+            .replace("__SIGN__", query).replace("__CFG__", json.dumps(cfg).replace("<", "\\u003c")))
 
 
 def resumable_batch(inbox, name, size):
@@ -833,6 +940,37 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, {"reports": items})
                 return
             parts = [urllib.parse.unquote(p) for p in path.split("/")[2:] if p]
+            if len(parts) == 2 and parts[0] == "_pdfjs" and parts[1] in PDFJS_FILES:
+                with open(os.path.join(PDFJS_DIR, parts[1]), "rb") as handle:
+                    data = handle.read()
+                self.send_response(200)
+                self.send_header("Content-Type", PDFJS_FILES[parts[1]])
+                self.send_header("Cache-Control", "private, max-age=86400")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
+            if len(parts) == 4 and parts[3] in ("view", "stat") and re.match(r"^\d{4}-\d{2}$", parts[2]) and parts[2][:4] == parts[1]:
+                real = report_path(REPORTS_ROOT, parts[0], parts[1], parts[2] + ".pdf")
+                if real is None or not 1 <= int(parts[2][5:]) <= 12:
+                    self._send(404, "No such report.", "text/plain; charset=utf-8")
+                    return
+                if parts[3] == "stat":
+                    info = os.stat(real)
+                    payload = {"mtime": int(info.st_mtime), "size": info.st_size}
+                    if exp - int(time.time()) < REPORT_RENEW_BELOW:
+                        fresh = int(time.time()) + REPORT_SESSION_SECONDS
+                        payload["renew"] = {"exp": fresh, "sig": sign_session(secret, fresh)}
+                    self._json(200, payload)
+                    return
+                body = report_viewer_page(REPORTS_ROOT, parts[0], parts[1], parts[2][5:], sign).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Cache-Control", "private, no-store")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             if len(parts) <= 1:
                 page = reports_page(REPORTS_ROOT, parts[0] if parts else None, sign)
                 if page is None:
@@ -1225,6 +1363,29 @@ def self_test():
         assert b"No reports saved yet." in response.read()
     with urllib.request.urlopen(reports + "/bnb-getaway/2026/2026-10.pdf" + signed) as response:
         assert response.read() == b"%PDF-oct" and response.headers["Content-Type"] == "application/pdf"
+    # The month link opens a viewer page; PDF.js and the file stamp come from the same signed link.
+    assert b"/reports/bnb-getaway/2026/2026-10/view?" in client_page
+    with urllib.request.urlopen(reports + "/bnb-getaway/2026/2026-10/view" + signed) as response:
+        viewer = response.read()
+        assert response.headers["Content-Type"].startswith("text/html") and b"/reports/_pdfjs/pdf.min.js" in viewer and b"October 2026" in viewer
+    with urllib.request.urlopen(reports + "/_pdfjs/pdf.min.js" + signed) as response:
+        assert len(response.read()) > 100_000
+    long_exp = int(time.time()) + 3 * 3600
+    with urllib.request.urlopen(reports + "/bnb-getaway/2026/2026-10/stat?exp=%d&sig=%s" % (long_exp, sign_session("self-test-secret", long_exp))) as response:
+        stat = json.loads(response.read().decode())
+        assert stat["size"] == 8 and stat["mtime"] > 0 and "renew" not in stat, stat
+    # A link with under an hour left comes back with a fresh one, signed the same way.
+    soon = int(time.time()) + 600
+    with urllib.request.urlopen(reports + "/bnb-getaway/2026/2026-10/stat?exp=%d&sig=%s" % (soon, sign_session("self-test-secret", soon))) as response:
+        renew = json.loads(response.read().decode())["renew"]
+    assert renew["exp"] > time.time() + 3 * 3600 - 60 and session_ok("self-test-secret", renew["exp"], renew["sig"])
+    for bad in ("/_pdfjs/..%2Fphone_intake.py" + signed, "/_pdfjs/pdf.min.js" + signed.replace("sig=", "sig=00"),
+                "/bnb-getaway/2026/2026-13/view" + signed, "/bnb-getaway/2026/2025-10/stat" + signed, "/bnb-getaway/2026/2026-10/other" + signed):
+        try:
+            urllib.request.urlopen(reports + bad)
+            raise SystemExit("viewer request was allowed: " + bad)
+        except urllib.error.HTTPError as error:
+            assert error.code in (403, 404), (bad, error.code)
     with urllib.request.urlopen(reports + ".json" + signed) as response:
         listed = json.loads(response.read().decode())["reports"]
     assert listed == [{"client": "bnb-getaway", "name": "BnB Getaway LLC", "label": "October 2026",

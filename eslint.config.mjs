@@ -11,6 +11,6 @@ export default defineConfig([
       "@typescript-eslint/no-require-imports": "off",
     },
   },
-  globalIgnores([".next/**", "generated/**", "coverage/**"]),
+  globalIgnores([".next/**", "generated/**", "coverage/**", "scripts/pdfjs/**"]),
 ]);
 
