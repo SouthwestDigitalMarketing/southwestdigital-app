@@ -124,42 +124,93 @@ export function IssuedAgreementsTable({ agreements }: { agreements: IssuedAgreem
     });
   }
 
+  function rowActions(agreement: IssuedAgreement) {
+    const offer = agreement.quotes[0];
+    return (
+      <div className="flex items-center justify-end gap-1">
+        {offer ? (
+          <Link
+            href={`/offers/${offer.id}`}
+            aria-label="View offer"
+            title="View offer"
+            className="ui-action-ghost inline-flex h-9 w-9 items-center justify-center rounded-full transition"
+          >
+            <Eye className="h-4 w-4" />
+          </Link>
+        ) : null}
+        {agreement.agreementManagerStatus === "ACTIVE" || agreement.agreementManagerStatus === "CANCELLATION_REQUESTED" ? (
+          <>
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() => { if (agreement.signedAt) setCancellationReason(""); setConfirmation({ ids: [agreement.id], action: agreement.signedAt ? "requestCancellation" : "void", label: agreement.signedAt ? (agreement.agreementManagerStatus === "CANCELLATION_REQUESTED" ? "resend cancellation request" : "request cancellation") : "void" }); }}
+              aria-label={agreement.signedAt ? (agreement.agreementManagerStatus === "CANCELLATION_REQUESTED" ? "Resend cancellation request" : "Request agreement cancellation") : "Void agreement"}
+              title={agreement.signedAt ? (agreement.agreementManagerStatus === "CANCELLATION_REQUESTED" ? "Resend cancellation request" : "Request agreement cancellation") : "Void agreement"}
+              className="ui-action-ghost inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:text-red-700 disabled:opacity-50"
+            >
+              <Ban className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() => setConfirmation({ ids: [agreement.id], action: "archive", label: "archive" })}
+              aria-label="Archive agreement"
+              title="Archive agreement"
+              className="ui-action-ghost inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:text-slate-900 disabled:opacity-50"
+            >
+              <Archive className="h-4 w-4" />
+            </button>
+          </>
+        ) : null}
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() => setConfirmation({ ids: [agreement.id], action: "delete", label: "delete" })}
+          aria-label="Delete agreement"
+          title="Delete agreement"
+          className="ui-action-ghost inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:text-red-700 disabled:opacity-50"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+    );
+  }
+
   return (
     <section>
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap gap-2">
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div className="min-w-0 md:flex-1">
+          <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap">
             <Link
               href="/offers/contact"
-              className="ui-action-primary inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-lg border px-4 py-2 text-sm font-semibold transition"
+              className="ui-action-primary inline-flex min-h-11 items-center justify-center rounded-lg border px-3 py-2 text-center text-sm font-semibold transition md:whitespace-nowrap md:px-4"
             >
               New agreement
             </Link>
             <Link
               href="/agreements/templates"
-              className="ui-action-secondary inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-lg border px-4 py-2 text-sm font-semibold transition"
+              className="ui-action-secondary inline-flex min-h-11 items-center justify-center rounded-lg border px-3 py-2 text-center text-sm font-semibold transition md:whitespace-nowrap md:px-4"
             >
-              Manage Agreement Templates
+              <span className="md:hidden">Templates</span>
+              <span className="hidden md:inline">Manage Agreement Templates</span>
             </Link>
           </div>
-          <p className="mt-2 w-full text-xs text-amber-700">
+          <p className="mt-2 text-xs leading-snug text-amber-700">
             Agreement language can have legal consequences. Have qualified counsel review templates before using them with clients.
           </p>
         </div>
-        <div className="flex flex-col items-stretch gap-4 sm:items-end">
-          <div className="flex gap-5 text-right text-sm">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total</p>
-              <p className="mt-1 text-xl font-semibold text-slate-900">{agreements.length}</p>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Signed</p>
-              <p className="mt-1 text-xl font-semibold text-emerald-700">{signedCount}</p>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Awaiting</p>
-              <p className="mt-1 text-xl font-semibold text-amber-700">{awaitingSignatureCount}</p>
-            </div>
+        <div className="grid grid-cols-3 gap-2 md:flex md:gap-5 md:text-right">
+          <div className="max-md:rounded-lg max-md:border max-md:border-slate-200 max-md:bg-white max-md:px-3 max-md:py-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total</p>
+            <p className="mt-1 text-xl font-semibold text-slate-900">{agreements.length}</p>
+          </div>
+          <div className="max-md:rounded-lg max-md:border max-md:border-slate-200 max-md:bg-white max-md:px-3 max-md:py-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Signed</p>
+            <p className="mt-1 text-xl font-semibold text-emerald-700">{signedCount}</p>
+          </div>
+          <div className="max-md:rounded-lg max-md:border max-md:border-slate-200 max-md:bg-white max-md:px-3 max-md:py-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Awaiting</p>
+            <p className="mt-1 text-xl font-semibold text-amber-700">{awaitingSignatureCount}</p>
           </div>
         </div>
       </div>
@@ -184,7 +235,41 @@ export function IssuedAgreementsTable({ agreements }: { agreements: IssuedAgreem
             <p className="mt-3 text-sm text-slate-500">No issued agreements yet.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <ul className="divide-y divide-slate-100 md:hidden">
+            {agreements.map((agreement) => {
+              const status = agreementStatus(agreement);
+              return (
+                <li key={agreement.id} className="flex gap-3 px-4 py-4">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(agreement.id)}
+                    onChange={() => toggleAgreement(agreement.id)}
+                    aria-label={`Select agreement for ${agreement.clientName || "unnamed client"}`}
+                    className="theme-checkbox mt-1 h-5 w-5 shrink-0 rounded border-slate-300 focus:ring-slate-400"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="min-w-0 font-semibold text-slate-900">{agreement.clientName || "Unnamed client"}</p>
+                      <span className={`inline-flex shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_STYLES[status]}`}>
+                        {status}
+                      </span>
+                    </div>
+                    <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 text-sm text-slate-600">
+                      <dt className="text-slate-400">Issued</dt>
+                      <dd>{formatDate(agreement.agreementSentAt ?? agreement.createdAt)}</dd>
+                      <dt className="text-slate-400">Signed</dt>
+                      <dd>{formatDate(agreement.signedAt)}</dd>
+                      <dt className="text-slate-400">Payment</dt>
+                      <dd>{paymentStatus(agreement.onboardingFeeStatus)}</dd>
+                    </dl>
+                    <div className="mt-1">{rowActions(agreement)}</div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden overflow-x-auto md:block">
             <KeyboardListRegion openHrefs={Object.fromEntries(agreements.flatMap((agreement) => agreement.quotes[0] ? [[agreement.id, `/offers/${agreement.quotes[0].id}`]] : []))}>
             <table className="w-full min-w-[760px] text-sm">
               <thead>
@@ -211,7 +296,6 @@ export function IssuedAgreementsTable({ agreements }: { agreements: IssuedAgreem
               <tbody className="divide-y divide-slate-100">
                 {agreements.map((agreement) => {
                   const status = agreementStatus(agreement);
-                  const offer = agreement.quotes[0];
 
                   return (
                     <tr key={agreement.id} data-keyboard-row={agreement.id} className="hover:bg-slate-50">
@@ -249,52 +333,7 @@ export function IssuedAgreementsTable({ agreements }: { agreements: IssuedAgreem
                       </td>
                       <td className="px-5 py-4 text-slate-600">{paymentStatus(agreement.onboardingFeeStatus)}</td>
                       <td className="px-5 py-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          {offer ? (
-                            <Link
-                              href={`/offers/${offer.id}`}
-                              aria-label="View offer"
-                              title="View offer"
-                              className="ui-action-ghost inline-flex h-9 w-9 items-center justify-center rounded-full transition"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Link>
-                          ) : null}
-                          {agreement.agreementManagerStatus === "ACTIVE" || agreement.agreementManagerStatus === "CANCELLATION_REQUESTED" ? (
-                            <>
-                              <button
-                                type="button"
-                                disabled={isPending}
-                                onClick={() => { if (agreement.signedAt) setCancellationReason(""); setConfirmation({ ids: [agreement.id], action: agreement.signedAt ? "requestCancellation" : "void", label: agreement.signedAt ? (agreement.agreementManagerStatus === "CANCELLATION_REQUESTED" ? "resend cancellation request" : "request cancellation") : "void" }); }}
-                                aria-label={agreement.signedAt ? (agreement.agreementManagerStatus === "CANCELLATION_REQUESTED" ? "Resend cancellation request" : "Request agreement cancellation") : "Void agreement"}
-                                title={agreement.signedAt ? (agreement.agreementManagerStatus === "CANCELLATION_REQUESTED" ? "Resend cancellation request" : "Request agreement cancellation") : "Void agreement"}
-                                className="ui-action-ghost inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:text-red-700 disabled:opacity-50"
-                              >
-                                <Ban className="h-4 w-4" />
-                              </button>
-                              <button
-                                type="button"
-                                disabled={isPending}
-                                onClick={() => setConfirmation({ ids: [agreement.id], action: "archive", label: "archive" })}
-                                aria-label="Archive agreement"
-                                title="Archive agreement"
-                                className="ui-action-ghost inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:text-slate-900 disabled:opacity-50"
-                              >
-                                <Archive className="h-4 w-4" />
-                              </button>
-                            </>
-                          ) : null}
-                          <button
-                            type="button"
-                            disabled={isPending}
-                            onClick={() => setConfirmation({ ids: [agreement.id], action: "delete", label: "delete" })}
-                            aria-label="Delete agreement"
-                            title="Delete agreement"
-                            className="ui-action-ghost inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:text-red-700 disabled:opacity-50"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
+                        {rowActions(agreement)}
                       </td>
                     </tr>
                   );
@@ -303,6 +342,7 @@ export function IssuedAgreementsTable({ agreements }: { agreements: IssuedAgreem
             </table>
             </KeyboardListRegion>
           </div>
+          </>
         )}
       </div>
       {confirmation ? (

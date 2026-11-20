@@ -1,5 +1,17 @@
 # SWapp handoff
 
+## 2026-11-20 — Agreements page usable on a phone (Ummon)
+
+Tom (phone screenshot): `/agreements` was barely usable at phone width (warning squeezed into a
+column, totals cramped, table cut off on the right). Below `md`: PDF card is one tappable row with a
+chevron; New agreement / Templates side by side; warning full width; totals as three tiles
+(`max-md:` classes, because `[data-theme] .bg-white` overrides a plain `md:bg-transparent`); the
+table is replaced by one card per agreement (client, status pill, issued/signed/payment, the same
+row actions via `rowActions()`). Desktop table unchanged. Checks: eslint + tsc clean; local dev
+(port 3017, local DB, dev-bypass login; needed `AUTH_SECRET` and `PLATFORM_BASE_URL=http://localhost:3017`
+in the env, and a hard-linked `node_modules` copy, since Turbopack refuses a symlink out of the
+worktree) screenshot at 412px: 0px horizontal overflow; 1280px: desktop table as before.
+
 ## 2026-11-20 — Agreements menu page opens every client's agreement PDFs (Ummon)
 
 The client-record button (PR #185) sits on SWapp *ticket clients* (bc_next, Test Client...), which are
