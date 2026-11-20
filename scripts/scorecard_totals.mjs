@@ -151,6 +151,9 @@ function loadOpsEnv(file = OPS_ENV) {
 
 async function countQuickBooks(config, today) {
   process.env.BOOKBOT_CONFIG_DIR ??= path.join(HOME, ".config/bookbot-prod");
+  // bookbot treats the working directory as its project root and refuses a config dir
+  // inside it; qb cds into bookbot-app first, and so does this (systemd starts in $HOME).
+  process.chdir(BOOKBOT_ROOT);
   const load = (file) => import(pathToFileURL(path.join(BOOKBOT_ROOT, "src", file)).href);
   const { readAllTokens, readAllConnections } = await load("config.ts");
   const { fetchReport, refreshTokens, PROD_API_BASE, PROD_CALLBACK_URL } = await load("qbo.ts");
