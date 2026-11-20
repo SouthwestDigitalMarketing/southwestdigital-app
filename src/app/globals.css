@@ -741,6 +741,10 @@ body {
   color: #fb7185;
 }
 
+[data-theme="dark"] .text-blue-700 {
+  color: #60a5fa;
+}
+
 [data-theme="dark"] .bg-emerald-50 {
   background-color: #083b31;
 }
@@ -879,6 +883,10 @@ body {
   [data-theme="system"] .text-rose-600,
   [data-theme="system"] .text-rose-700 {
     color: #fb7185;
+  }
+
+  [data-theme="system"] .text-blue-700 {
+    color: #60a5fa;
   }
 
   [data-theme="system"] .bg-emerald-50 {
