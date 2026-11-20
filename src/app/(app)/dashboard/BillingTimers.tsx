@@ -1,5 +1,6 @@
 import { CalendarClock } from "lucide-react";
-import type { BillingTimer } from "@/lib/dashboard/billing-timers";
+import type { BillingCalendarDay, BillingTimer } from "@/lib/dashboard/billing-timers";
+import { BillingCalendarStrip } from "./BillingCalendarStrip";
 
 const SHORT_LABEL: Record<BillingTimer["key"], string> = {
   payday: "Payday",
@@ -51,7 +52,7 @@ function TimerCard({ timer }: { timer: BillingTimer }) {
   );
 }
 
-export function BillingTimers({ timers }: { timers: BillingTimer[] }) {
+export function BillingTimers({ timers, days }: { timers: BillingTimer[]; days: BillingCalendarDay[] }) {
   return (
     <section className="mt-5 sm:mt-6">
       <div className="mb-2 flex items-center gap-1.5 text-slate-500 sm:mb-3">
@@ -60,6 +61,7 @@ export function BillingTimers({ timers }: { timers: BillingTimer[] }) {
         </span>
         <h2 className="text-xs font-semibold uppercase tracking-wide">Billing calendar</h2>
       </div>
+      <BillingCalendarStrip days={days} />
       <div className="grid min-w-0 grid-cols-3 gap-2 sm:gap-5">
         {timers.map((timer) => (
           <TimerCard key={timer.key} timer={timer} />

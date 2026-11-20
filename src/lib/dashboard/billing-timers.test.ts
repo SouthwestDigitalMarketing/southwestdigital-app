@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { billingTimers } from "./billing-timers";
+import { billingCalendarDays, billingTimers } from "./billing-timers";
 
 function byKey(today: string) {
   return Object.fromEntries(billingTimers(today).map((t) => [t.key, t]));
@@ -35,5 +35,23 @@ describe("billingTimers", () => {
     expect(byKey("2028-02-10").reminders.date).toBe("2028-02-26");
     expect(byKey("2026-12-30").payday).toMatchObject({ days: 2, date: "2027-01-01" });
     expect(byKey("2026-12-30").reminders.date).toBe("2027-01-28");
+  });
+});
+
+describe("billingCalendarDays", () => {
+  it("marks payday, reminder day, late-fee day and the pay window", () => {
+    const days = billingCalendarDays("2026-11-20", 1, 20);
+    expect(days[0]).toMatchObject({ date: "2026-11-19", offset: -1 });
+    expect(days[1]).toMatchObject({ date: "2026-11-20", offset: 0, weekday: 5, event: null });
+    const at = (date: string) => days.find((d) => d.date === date);
+    expect(at("2026-11-27")?.event).toBe("reminders");
+    expect(at("2026-12-01")).toMatchObject({ event: "payday", payWindow: true });
+    expect(at("2026-12-07")).toMatchObject({ event: null, payWindow: true });
+    expect(at("2026-12-08")).toMatchObject({ event: "late_fees", payWindow: false });
+    expect(days).toHaveLength(22);
+  });
+
+  it("puts February's reminder on the 25th", () => {
+    expect(billingCalendarDays("2027-02-20", 0, 10).find((d) => d.event === "reminders")?.date).toBe("2027-02-25");
   });
 });

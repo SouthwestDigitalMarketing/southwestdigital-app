@@ -80,3 +80,40 @@ export function billingTimers(today: string): BillingTimer[] {
     { key: "late_fees", label: "Late fees applied", days: daysTo(lateFee), date: toKey(lateFee), running },
   ];
 }
+
+export type BillingCalendarDay = {
+  date: string; // "YYYY-MM-DD"
+  day: number;
+  weekday: number; // 0 = Sunday
+  offset: number; // days from today; 0 = today
+  event: BillingTimer["key"] | null;
+  /** The 1st-7th: clients can still pay without a late fee. */
+  payWindow: boolean;
+};
+
+/** One entry per day from `before` days ago to `after` days ahead of `today`. */
+export function billingCalendarDays(today: string, before: number, after: number): BillingCalendarDay[] {
+  const start = serial(parseKey(today));
+  const days: BillingCalendarDay[] = [];
+  for (let offset = -before; offset <= after; offset++) {
+    const d = new Date((start + offset) * 86_400_000);
+    const ymd = { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
+    const event =
+      ymd.day === 1
+        ? "payday"
+        : ymd.day === LATE_FEE_GRACE_DAYS + 1
+          ? "late_fees"
+          : ymd.day === reminderDay(ymd.year, ymd.month).day
+            ? "reminders"
+            : null;
+    days.push({
+      date: toKey(ymd),
+      day: ymd.day,
+      weekday: d.getUTCDay(),
+      offset,
+      event,
+      payWindow: ymd.day <= LATE_FEE_GRACE_DAYS,
+    });
+  }
+  return days;
+}
