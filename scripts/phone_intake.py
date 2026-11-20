@@ -428,6 +428,9 @@ def report_path(root, folder, year, name):
 # (Tom, 2026-11-20): the files stay in the client folder on ripley, SWapp holds none.
 AGREEMENT_FILE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,200}\.pdf$")
 AGREEMENT_SUBDIR = re.compile(r"^v\d{1,3}$")
+# An unsigned PDF named with a FINAL token ("..._FINAL.pdf") is the execution copy, ready to sign: it is
+# not a draft, so it is served without the DRAFT stamp (Tom, 2026-11-20).
+AGREEMENT_FINAL = re.compile(r"(?:^|[_ .-])FINAL(?:[_ .-]|$)", re.I)
 
 
 def list_agreements(root, folder):
@@ -446,7 +449,8 @@ def list_agreements(root, folder):
             path = os.path.join(directory, name)
             if AGREEMENT_FILE.match(name) and os.path.isfile(path) and not os.path.islink(path):
                 out.append({"rel": (sub + "/" if sub else "") + name, "name": name,
-                            "signed": "SIGNED" in name.upper(), "date": name[:10] if re.match(r"\d{4}-\d{2}-\d{2}", name) else ""})
+                            "signed": "SIGNED" in name.upper(), "final": bool(AGREEMENT_FINAL.search(name[:-4])) and "SIGNED" not in name.upper(),
+                            "date": name[:10] if re.match(r"\d{4}-\d{2}-\d{2}", name) else ""})
     return sorted(out, key=lambda a: (a["date"], a["name"]), reverse=True)
 
 
@@ -568,8 +572,8 @@ def agreements_page(root, folder, query):
     rows = "".join(
         "<a class=row href='/agreements/%s/%s/view?%s'>%s<small>%s</small><span class=tag style='color:%s;border-color:%s'>%s</span></a>" % (
             urllib.parse.quote(folder), urllib.parse.quote(a["rel"]), query, html.escape(a["name"][:-4].replace("_", " ")),
-            html.escape(a["date"]), "#15803d" if a["signed"] else "#b45309", "#15803d" if a["signed"] else "#b45309",
-            "Signed" if a["signed"] else "Unsigned") for a in found) or "<p><small>No agreements saved yet.</small></p>"
+            html.escape(a["date"]), *(("#15803d",) * 2 if a["signed"] else ("#1d4ed8",) * 2 if a["final"] else ("#b45309",) * 2),
+            "Signed" if a["signed"] else "Final, ready to sign" if a["final"] else "Draft") for a in found) or "<p><small>No agreements saved yet.</small></p>"
     return ("<!doctype html><html lang=en><head><meta charset=utf-8><title>%s agreements</title>%s</head><body>"
             "<a class=back href='/agreements?%s'>&lsaquo; All clients</a><h1>%s</h1><h2>Agreements</h2>%s</body></html>"
             % (html.escape(name), AGREEMENTS_STYLE, query, html.escape(name), rows))
@@ -1384,7 +1388,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(404, "No such agreement.", "text/plain; charset=utf-8")
                 return
             name = os.path.basename(real)
-            if "SIGNED" not in name.upper():
+            if "SIGNED" not in name.upper() and not AGREEMENT_FINAL.search(name[:-4]):
                 # Unsigned means draft: always served with the DRAFT stamp, never the clean file.
                 stamped = draft_copy(real)
                 if stamped is None:
@@ -1976,7 +1980,7 @@ def self_test():
     agreements = "http://%s:%d/agreements" % (host, port)
     with urllib.request.urlopen(agreements + "/sj-equity-llc" + signed) as response:
         listing = response.read().decode()
-    assert listing.index("SIGNED") < listing.index("v1/") and ">Signed<" in listing and ">Unsigned<" in listing and "notes.txt" not in listing, listing
+    assert listing.index("SIGNED") < listing.index("v1/") and ">Signed<" in listing and ">Draft<" in listing and "notes.txt" not in listing, listing
     os.makedirs(os.path.join(REPORTS_ROOT, "empty-co", "agreements"))
     with urllib.request.urlopen(agreements + signed) as response:
         index = response.read().decode()
@@ -1994,6 +1998,14 @@ def self_test():
     subprocess.run(["qpdf", "--qdf", "--object-streams=disable", os.path.join(INBOX, "stamped.pdf"), os.path.join(INBOX, "plain.pdf")], check=False)
     assert b"(DRAFT)" in open(os.path.join(INBOX, "plain.pdf"), "rb").read(), "no DRAFT stamp in the served draft"
     assert open(os.path.join(adir, "v1", "2026-11-20_General-Services-Agreement_SJ-Equity-LLC.pdf"), "rb").read() == draft_pdf
+    final_pdf = simple_pdf(b"BT /F1 12 Tf 72 720 Td (Execution copy) Tj ET")
+    os.makedirs(os.path.join(REPORTS_ROOT, "final-co", "agreements"))
+    open(os.path.join(REPORTS_ROOT, "final-co", "agreements", "2026-11-21_General-Services-Agreement_Final-Co_FINAL.pdf"), "wb").write(final_pdf)
+    with urllib.request.urlopen(agreements + "/final-co/gsa/draft" + signed) as response:
+        assert response.read() == final_pdf and "_DRAFT" not in response.headers["Content-Disposition"]
+    with urllib.request.urlopen(agreements + "/final-co" + signed) as response:
+        assert ">Final, ready to sign<" in response.read().decode()
+    assert not AGREEMENT_FINAL.search("2026-11-20_Finalize-Notes") and AGREEMENT_FINAL.search("x_final")
     with urllib.request.urlopen(agreements + "/sj-equity-llc/gsa/draft" + signed + "&dl=1") as response:
         assert response.headers["Content-Disposition"].startswith("attachment;") and response.read() == stamped
     with urllib.request.urlopen(agreements + "/sj-equity-llc/gsa/draft/view" + signed + "&ret=" + urllib.parse.quote("https://app.example.test/leads/x#gsa")) as response:

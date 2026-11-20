@@ -1,5 +1,15 @@
 # SWapp handoff
 
+## 2026-11-20 — `_FINAL` agreements: ready to sign, no DRAFT stamp (Ummon)
+
+ripley `scripts/phone_intake.py`: an unsigned agreement PDF with a FINAL token in its name
+(`..._FINAL.pdf`, `AGREEMENT_FINAL`) is the execution copy: served as is (no DRAFT stamp) and listed as
+"Final, ready to sign" (blue). Other unsigned PDFs are now labelled "Draft" (was "Unsigned"). GSA
+`draft` still resolves to the newest unsigned GSA file, so a FINAL copy shows on View once saved.
+Kassad's SJ Equity rewrite brief (`~/briefs/kassad-sj-equity-gsa-final.md`, board fa35063bba73) names
+the execution copy `_FINAL`. Checks: self-test ok (FINAL served unstamped and labelled; "Finalize" does
+not count); installed on ripley, live SJ Equity list shows Draft / Signed.
+
 ## 2026-11-20 — Scorecard big numbers (Ummon)
 
 Tom: "how many total transactions we have categorized and recorded across all of our clients…
