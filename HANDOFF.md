@@ -1,5 +1,30 @@
 # SWapp handoff
 
+## 2026-11-20 — Agreement viewer (Reports-style), DRAFT stamp, test-proposal filter (Ummon)
+
+Tom: drafts must carry a DRAFT watermark; a way to download; a Refresh for updated drafts, like the
+Double reports viewer.
+- ripley `scripts/phone_intake.py`: `REPORT_VIEWER` reused (CFG `back`/`backSigned`/`noun`/`dl`).
+  `/agreements/<folder>/<doc>/view` and `/stat`, where doc is `gsa/draft|signed` (always the newest
+  GSA file) or a file path. Back = `?ret=` (https only, from SWapp) else the client's list. Download
+  adds `&dl=1` (attachment). List rows open the viewer.
+- Any agreement PDF without SIGNED in its name is served DRAFT-stamped (qpdf `--overlay` of a
+  generated one-page mark, cached in `~/.cache/swapp-phone-intake/drafts` by path+size+mtime;
+  filename `..._DRAFT.pdf`). The client-folder file is never changed. Stamp failure -> 500, never
+  the clean file.
+- SWapp: GSA panel View -> `/agreements/pdfs?doc=...&ret=/leads/<id>#gsa` -> viewer. Strip and
+  panels skip proposals whose contact email is at example.com/.net/.org (old "Automated Proposal
+  Test", $1, 2026-09-04, had no isTestProposal flag).
+- Checks: self-test ok (stamp present after qpdf --qdf, folder copy unchanged, dl attachment, viewer
+  CFG, ret rejects javascript:, stat); tsc, lint 0 errors, vitest; installed on ripley, live: SJ
+  Equity draft download 148,749 bytes, 13 pages, stamped; Rodan signed served clean; viewer at 412px
+  renders 13 stamped pages, Back/Refresh/Download in one row.
+- Incident while checking the test proposal (mine): `set default_transaction_read_only=on` through
+  the 6543 pooler made prod writes fail 14:37-14:46 CST. Reset, verified; rule 6 in
+  `docs/deployment/database-migrations.md`, All Thing troubleshooting row 2da77ff.
+- Also: the main checkout's `node_modules` was found empty at 14:33 (likely after removing a
+  worktree whose node_modules was a `cp -al` hard-link copy); restored with `npm ci`. Use `npm ci`
+  in worktrees, not hard links.
 ## 2026-11-20 — Billing calendar: double-tap to today, past days grayed (#194, shipped)
 
 `BillingCalendarStrip.tsx`: double-tap (touch, counted in `onPointerUp`) or

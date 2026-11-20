@@ -3,7 +3,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { readAcceptedPayment } from "@/lib/engagements/acceptedPayment";
 import { withBrandDataTransaction, type BrandDataContext } from "@/lib/tenancy/context";
-import { readPaidProposal, type GsaDates, type GsaStep, type PaidProposal } from "./progress";
+import { isTestEmail, readPaidProposal, type GsaDates, type GsaStep, type PaidProposal } from "./progress";
 
 export type GsaProposal = GsaDates & {
   engagementId: string;
@@ -18,6 +18,7 @@ const engagementSelect = {
   id: true,
   clientName: true,
   contactId: true,
+  primaryContactEmail: true,
   onboardingData: true,
   gsaDraftedAt: true,
   gsaSentAt: true,
@@ -29,6 +30,7 @@ type EngagementRow = {
   id: string;
   clientName: string;
   contactId: string | null;
+  primaryContactEmail: string | null;
   onboardingData: unknown;
   gsaDraftedAt: Date | null;
   gsaSentAt: Date | null;
@@ -72,7 +74,7 @@ function toProposal(row: EngagementRow, leads: Map<string, string>): GsaProposal
 }
 
 function live(row: EngagementRow) {
-  return readAcceptedPayment(row.onboardingData)?.isTestProposal !== true;
+  return readAcceptedPayment(row.onboardingData)?.isTestProposal !== true && !isTestEmail(row.primaryContactEmail);
 }
 
 /** Every paid proposal agreement whose GSA is not signed yet, longest waiting first. */

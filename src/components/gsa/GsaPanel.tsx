@@ -12,10 +12,11 @@ function day(date: Date | null) {
   return date ? date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Chicago" }) : null;
 }
 
-function pdfHref(proposal: GsaProposal, company: string, doc?: "draft" | "signed") {
+function pdfHref(proposal: GsaProposal, company: string, doc?: "draft" | "signed", returnTo?: string) {
   const params = new URLSearchParams();
   for (const folder of gsaFolderCandidates(proposal.gsaClientFolder, company)) params.append("folder", folder);
   if (doc) params.set("doc", doc);
+  if (doc && returnTo) params.set("ret", `${returnTo}#gsa`);
   return `/agreements/pdfs?${params.toString()}`;
 }
 
@@ -26,7 +27,13 @@ const VIEW_DOC = { drafted: "draft", signed: "signed" } as const;
  * The GSA detail for one paid proposal agreement: what was bought, the three
  * GSA steps with dates, what to do next, and the agreement PDFs on ripley.
  */
-export function GsaPanel({ proposal, company, now }: { proposal: GsaProposal; company: string; now: Date }) {
+export function GsaPanel({ proposal, company, now, returnTo }: {
+  proposal: GsaProposal;
+  company: string;
+  now: Date;
+  /** This page's path, so the viewer's Back button comes here. */
+  returnTo?: string;
+}) {
   const step = currentGsaStep(proposal);
   const signed = step === "signed";
   const hours = hoursSincePaid(proposal.paid.paidAt, now);
@@ -71,7 +78,7 @@ export function GsaPanel({ proposal, company, now }: { proposal: GsaProposal; co
               </span>
               {at && key in VIEW_DOC ? (
                 <Link
-                  href={pdfHref(proposal, company || proposal.clientName, VIEW_DOC[key as keyof typeof VIEW_DOC])}
+                  href={pdfHref(proposal, company || proposal.clientName, VIEW_DOC[key as keyof typeof VIEW_DOC], returnTo)}
                   aria-label={`View the ${key === "signed" ? "signed GSA" : "GSA draft"}`}
                   className="ui-action-secondary inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition"
                 >
