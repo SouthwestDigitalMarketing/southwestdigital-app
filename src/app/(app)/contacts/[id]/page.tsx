@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireStaffBrand } from "@/lib/brands/staff";
+import { paidProposalsForContacts } from "@/lib/gsa/store";
+import { GsaPanel } from "@/components/gsa/GsaPanel";
 import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { ensureDefaultContactTags } from "@/lib/contacts/seed";
 import { formatPhone } from "@/lib/phone";
@@ -201,6 +203,7 @@ export default async function ContactDetailPage({ params }: PageProps) {
     .map((link: { client: { createdAt: Date } }) => link.client.createdAt)
     .sort((left: Date, right: Date) => left.getTime() - right.getTime())[0] ?? null;
   const now = new Date();
+  const gsaProposals = await paidProposalsForContacts(dataContext, [contact.id]);
 
   return (
     <div className="space-y-5 p-4 sm:space-y-8 sm:p-8">
@@ -218,6 +221,10 @@ export default async function ContactDetailPage({ params }: PageProps) {
             </div>
           </div>
         </div>
+
+        {gsaProposals.map((proposal) => (
+          <GsaPanel key={proposal.engagementId} proposal={proposal} company={contact.company || contact.name} now={now} />
+        ))}
 
         <section className="overflow-hidden rounded-2xl bg-slate-900 text-white shadow-sm">
           <div className="border-b border-white/10 px-4 py-2.5">

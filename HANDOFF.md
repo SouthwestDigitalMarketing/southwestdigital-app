@@ -1,5 +1,26 @@
 # SWapp handoff
 
+## 2026-11-20 — GSA alarm: paid proposal agreement, GSA not signed (Ummon)
+
+Tom: until the proposal agreement is paid AND the GSA is signed they are a lead; paid-no-GSA is the
+hottest lead and must be surfaced (terms: All Thing `sops/sop-quote-and-contract.md` § Words we use).
+- Migration `20261120195824_engagement_gsa_progress` (additive): `Engagement.gsaDraftedAt`,
+  `gsaSentAt`, `gsaSignedAt`, `gsaClientFolder`. Logic `src/lib/gsa/progress.ts` (pure, tested) and
+  `store.ts`: paid = `onboardingFeeStatus PAID`, agreement ACTIVE/CANCELLATION_REQUESTED, not a test proposal.
+- Dashboard: `GsaAlarm` strip at the top, only when any; amber, red once a payment is 24h+ old
+  (SOP promises the GSA within 24h). Rows link to the lead (via LeadContact) else the contact, `#gsa`.
+- `GsaPanel` on `/leads/[id]` and `/contacts/[id]`: tier, amount, paid date, next action, Drafted /
+  Sent / Signed with Mark done / Undo (server action `src/app/(app)/gsa/actions.ts`), link to the
+  ripley PDFs (`/agreements/pdfs?folder=...`, tries saved folder, company slug, slug without LLC).
+- `GET/POST /api/operations/gsa` for agents (docs/operations-api.md). Signed also fills the leads'
+  empty serviceAgreementSignedAt / firstPaymentReceivedAt. Undo does not clear those.
+- NOT changed: payment still runs onClientWon (deal Won, Operations onboarding). Tom's idea 3
+  (Won only after the GSA) needs Kassad first. Idea 4 (pre-fill Exhibit A from the proposal) not started.
+- Checks: tsc clean; lint 0 errors; vitest 1208 pass (5 new); local dev at 412px and 1280px
+  (0 overflow): two paid test proposals (30h red, 5h amber), Mark Drafted/Signed from the panel,
+  signed one left the strip; API GET/POST/400/401 checked. Local test rows reset afterwards.
+- After deploy: mark Rodan's GSA signed (its signed PDF is in `rodan-properties/agreements`) so only
+  SJ Equity shows.
 ## 2026-11-20 — Dashboard billing countdowns (#188, shipped)
 
 Top of the Bookkeeping Conroe dashboard only (`BILLING_TIMERS_BRAND_SLUG`):

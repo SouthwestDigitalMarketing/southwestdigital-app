@@ -2288,6 +2288,13 @@ model Engagement {
   signerName                               String?
   signerTitle                              String?
   signedAt                                 DateTime?
+  // GSA (General Services Agreement) progress after the proposal agreement is
+  // paid: until gsaSignedAt is set the client is still a lead (Tom, 2026-11-20).
+  // gsaClientFolder is the ripley folder under ~/projects/clients holding the PDFs.
+  gsaDraftedAt                             DateTime?
+  gsaSentAt                                DateTime?
+  gsaSignedAt                              DateTime?
+  gsaClientFolder                          String?
   signerIpAddress                          String?
   signerUserAgent                          String?
   agreementTextHash                        String?
