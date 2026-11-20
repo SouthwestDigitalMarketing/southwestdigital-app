@@ -732,14 +732,15 @@ html,body{margin:0;background:#475569;font:15px/1.3 system-ui,sans-serif}
 #bar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#0f172a;color:#e2e8f0;padding:8px 10px}
 #bar a,#bar button{color:#fff;background:#334155;border:0;border-radius:8px;padding:8px 12px;font:600 15px system-ui,sans-serif;text-decoration:none;cursor:pointer}
 #bar button:active,#bar a:active{background:#1e293b}
-#bar .sp{flex:1 1 auto}#when{font-size:13px;color:#cbd5e1}#when b{color:#fff}
+#bar .sp{flex:1 1 auto}#when{order:9;flex-basis:100%;font-size:13px;color:#cbd5e1}#when b{color:#fff}
+#bar #back{font-size:22px;line-height:1;padding:5px 14px}
 #pages{display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px 0 40px}
 #pages canvas{display:block;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.4);max-width:100%;height:auto}
 #msg{color:#e2e8f0;text-align:center;padding:30px 16px}
 .pv{font:600 15px system-ui,sans-serif;border-radius:8px;padding:8px 12px;cursor:pointer;border:0;background:#334155;color:#fff}.pv.on{background:#7c3aed}
 </style></head><body>
-<div id=bar><a id=back href="__BACK__">&lsaquo; __CLIENT__</a><button id=refresh type=button>Refresh</button>
-<span id=when>Loading&hellip;</span><span class=sp></span>__PRIVACY____DOWNLOAD__</div>
+<div id=bar><a id=back href="__BACK__" aria-label="Back to __CLIENT__" title="Back to __CLIENT__">&lsaquo;</a><button id=refresh type=button>Refresh</button>
+<span class=sp></span>__PRIVACY____DOWNLOAD__<span id=when>Loading&hellip;</span></div>
 <div id=pages><div id=msg>Loading report&hellip;</div></div>
 <script src="/reports/_pdfjs/pdf.min.js?__SIGN__"></script>
 <script>
