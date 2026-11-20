@@ -1,5 +1,12 @@
 # SWapp handoff
 
+## 2026-11-20 — Billing calendar: double-tap to today, past days grayed (#194, shipped)
+
+`BillingCalendarStrip.tsx`: double-tap (touch, counted in `onPointerUp`) or
+double-click smooth-scrolls back to yesterday at the left edge;
+`touch-action: manipulation` on the row. Days before today are
+`opacity-40 grayscale`. Not tested on a real phone by the agent.
+
 ## 2026-11-20 — GSA panel: View the draft / signed GSA (Ummon)
 
 Tom: where it says Drafted, one tap should open the draft. GSA panel rows Drafted and Signed (once
