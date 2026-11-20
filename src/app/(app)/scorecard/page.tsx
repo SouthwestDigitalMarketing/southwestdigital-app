@@ -1,7 +1,10 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { FileText, ListChecks, Mail, MessageSquare, Phone } from "lucide-react";
 import { requireStaffBrand } from "@/lib/brands/staff";
 import { getScorecardData } from "@/lib/scorecard/queries";
+import { PRIVACY_COOKIE, privacyOn, privatizeScorecard } from "@/lib/scorecard/privacy";
+import { PrivacyToggle } from "@/components/PrivacyToggle";
 import type { MeasureSummary, ScorecardChannel, ScorecardData, ScorecardSource } from "@/lib/scorecard/types";
 import { LiveRefresh } from "./LiveRefresh";
 import { ScorecardCharts } from "./ScorecardCharts";
@@ -40,7 +43,9 @@ export default async function ScorecardPage({
   const { brand } = await requireStaffBrand();
   const range = parseRange((await searchParams).range);
   const now = new Date();
-  const data = await getScorecardData(brand.id, range, now);
+  const privacy = privacyOn((await cookies()).get(PRIVACY_COOKIE)?.value);
+  const raw = await getScorecardData(brand.id, range, now);
+  const data = privacy ? privatizeScorecard(raw) : raw;
   const rangeLabel = data.from === data.to ? formatDate(data.to) : `${formatDate(data.from)} – ${formatDate(data.to)}`;
 
   return (
@@ -51,21 +56,24 @@ export default async function ScorecardPage({
           <h1 className="text-xl font-semibold text-slate-900">Scorecard</h1>
           <p className="mt-1 text-sm text-slate-500">How fast we answer clients · {rangeLabel}</p>
         </div>
-        <nav className="flex gap-1 self-start rounded-lg border border-slate-200 bg-white p-1" aria-label="Range">
-          {SCORECARD_RANGES.map(({ value, label }) => (
-            <Link
-              key={value}
-              href={`/scorecard?range=${value}`}
-              scroll={false}
-              aria-current={range === value ? "page" : undefined}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                range === value ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"
-              }`}
-            >
-              {label}
-            </Link>
-          ))}
-        </nav>
+        <div className="flex flex-wrap items-center gap-2 self-start">
+          <PrivacyToggle on={privacy} cookie={PRIVACY_COOKIE} />
+          <nav className="flex gap-1 rounded-lg border border-slate-200 bg-white p-1" aria-label="Range">
+            {SCORECARD_RANGES.map(({ value, label }) => (
+              <Link
+                key={value}
+                href={`/scorecard?range=${value}`}
+                scroll={false}
+                aria-current={range === value ? "page" : undefined}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  range === value ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                {label}
+              </Link>
+            ))}
+          </nav>
+        </div>
       </div>
 
       <LiveStrip data={data} now={now} />
