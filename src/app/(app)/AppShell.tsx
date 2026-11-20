@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -89,6 +89,19 @@ const TOOL_ICONS: Record<string, React.ElementType> = {
   website: Globe,
 };
 
+/** A small spinner on the tapped item until its page (or loading skeleton) is on screen. */
+function NavPending() {
+  const { pending } = useLinkStatus();
+  return (
+    <span
+      aria-hidden
+      className={`ml-auto h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent transition-opacity ${
+        pending ? "opacity-60" : "opacity-0"
+      }`}
+    />
+  );
+}
+
 function NavItem({
   href,
   icon: Icon,
@@ -114,7 +127,9 @@ function NavItem({
   return (
     <Link
       href={href}
-      onClick={onNavigate}
+      // Tapping the page you are on navigates nowhere, so close the menu now; any other item
+      // keeps it open (with a spinner) until the new page arrives, instead of revealing the old one.
+      onClick={active ? onNavigate : undefined}
       title={collapsed ? label : undefined}
       aria-current={active ? "page" : undefined}
       className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${collapsed ? "justify-center" : ""} ${
@@ -124,6 +139,7 @@ function NavItem({
     >
       <Icon size={16} />
       <span className={collapsed ? "hidden" : undefined}>{label}</span>
+      {collapsed ? null : <NavPending />}
     </Link>
   );
 }
@@ -178,6 +194,14 @@ export function AppShell({
   const { brand } = useBrand();
   const [deviceTheme, setDeviceTheme] = useState<"light" | "dark" | null>(null);
   const [open, setOpen] = useState(false);
+  // The phone menu closes when the route actually changes (Tom, 2026-11-20: closing it on tap
+  // showed the previous page, usually the Dashboard, until the new one loaded).
+  const pathname = usePathname();
+  const [menuPath, setMenuPath] = useState(pathname);
+  if (menuPath !== pathname) {
+    setMenuPath(pathname);
+    setOpen(false);
+  }
   const [collapsed, setCollapsed] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(256);
