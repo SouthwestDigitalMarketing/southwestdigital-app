@@ -1,5 +1,22 @@
 # SWapp handoff
 
+## 2026-11-20 — Scorecard big numbers (Ummon)
+
+Tom: "how many total transactions we have categorized and recorded across all of our clients…
+maybe reports issued as well". Top of `/scorecard`: Transactions recorded, Reports issued,
+Client messages answered (all-time, this month, last month) and a per-month bar chart.
+New table `ScorecardMonthly` (migration `20261120211041_scorecard_monthly`, additive),
+`POST /api/scorecard/totals`, `src/lib/scorecard/totals.ts`, `TotalsChart.tsx`. Nightly
+`scripts/scorecard_totals.mjs` on ripley (systemd `swapp-scorecard-totals.*`) reads QuickBooks
+Transaction List with Created By / Last Modified By through bookbot-app's modules and counts
+our team's touches by month; reports from the client folders. Definitions: docs/scorecard.md
+§ Big numbers. First dry run 2026-11-20: 32,374 transactions (Dec 2025 – Nov 2026, 7 of 7
+client books), 136 reports (Jan 2019 – Nov 2026). Rodan's books are kept by their own staff
+(53 ours). Whole-book total including history before us is ~120k; deliberately not shown.
+The migration was made with `migrate dev` on a scratch database on the local Docker server
+(`swapp_ummon_scratch`): the shared dev DB has an unmerged `20261120230000_app_pin_lock`
+applied and migrate dev wanted to reset it.
+
 ## 2026-11-20 — Reports follow SWapp's privacy switch (Ummon)
 
 ripley `scripts/phone_intake.py`: a valid signed `/reports...` link with `privacy=1|0` sets this

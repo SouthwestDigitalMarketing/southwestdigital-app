@@ -596,6 +596,7 @@ model Brand {
   serviceRecords          ServiceRecord[]
   scorecardEvents         ScorecardEvent[]
   scorecardSyncs          ScorecardSync[]
+  scorecardMonthly        ScorecardMonthly[]
   createdAt               DateTime                  @default(now())
   updatedAt               DateTime                  @updatedAt
 
@@ -3316,4 +3317,21 @@ model ScorecardSync {
   updatedAt   DateTime @updatedAt
 
   @@unique([brandId, source])
+}
+
+/// Monthly totals behind the Scorecard's big numbers (docs/scorecard.md § Big numbers).
+/// Aggregates only: no client, transaction or report detail. The nightly totals job on
+/// ripley replaces every month of a metric on each run.
+model ScorecardMonthly {
+  id        String   @id @default(cuid())
+  brandId   String
+  /// "transactions" (QuickBooks, entered or last changed by our team) or "reports" (issued).
+  metric    String
+  /// Firm-local month, "YYYY-MM".
+  month     String
+  value     Int
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  updatedAt DateTime @updatedAt
+
+  @@unique([brandId, metric, month])
 }

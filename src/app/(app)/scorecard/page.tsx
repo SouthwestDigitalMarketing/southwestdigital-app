@@ -1,15 +1,18 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { FileText, ListChecks, Mail, MessageSquare, Phone } from "lucide-react";
+import { BookCheck, FileText, ListChecks, Mail, MessageSquare, MessagesSquare, Phone } from "lucide-react";
 import { requireStaffBrand } from "@/lib/brands/staff";
 import { getScorecardData } from "@/lib/scorecard/queries";
 import { PRIVACY_COOKIE, privacyOn } from "@/lib/privacy";
 import { privatizeScorecard } from "@/lib/scorecard/privacy";
+import { getScorecardTotals, type ScorecardTotals, type TotalFigure } from "@/lib/scorecard/totals";
 import type { MeasureSummary, ScorecardChannel, ScorecardData, ScorecardSource } from "@/lib/scorecard/types";
 import { LiveRefresh } from "./LiveRefresh";
 import { ScorecardCharts } from "./ScorecardCharts";
+import { TotalsChart } from "./TotalsChart";
 import {
   CHANNEL_LABEL,
+  DAILY_SYNC_STALE_SECONDS,
   REPORTS_TRACKING_STARTS,
   SCORECARD_RANGES,
   formatAgo,
@@ -30,6 +33,7 @@ const SOURCE_LABEL: Record<ScorecardSource, string> = {
   quo: "Quo (texts and calls)",
   zoho: "Zoho (email)",
   reports: "Reports",
+  qbo: "QuickBooks (nightly)",
 };
 
 // Below this many delivered reports the card says tracking only just started.
@@ -44,7 +48,7 @@ export default async function ScorecardPage({
   const range = parseRange((await searchParams).range);
   const now = new Date();
   const privacy = privacyOn((await cookies()).get(PRIVACY_COOKIE)?.value);
-  const raw = await getScorecardData(brand.id, range, now);
+  const [raw, totals] = await Promise.all([getScorecardData(brand.id, range, now), getScorecardTotals(brand.id, now)]);
   const data = privacy ? privatizeScorecard(raw) : raw;
   const rangeLabel = data.from === data.to ? formatDate(data.to) : `${formatDate(data.from)} – ${formatDate(data.to)}`;
 
@@ -73,6 +77,8 @@ export default async function ScorecardPage({
         </nav>
       </div>
 
+      <BigNumbers totals={totals} />
+
       <LiveStrip data={data} now={now} />
 
       <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
@@ -94,6 +100,71 @@ export default async function ScorecardPage({
 
       <HowWeMeasure businessHours={data.businessHours.label} />
     </div>
+  );
+}
+
+const count = (n: number) => n.toLocaleString("en-US");
+
+function BigNumber({
+  title,
+  icon,
+  figure,
+  caption,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  figure: Omit<TotalFigure, "months">;
+  caption: string;
+}) {
+  return (
+    <div className="flex flex-col rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+      <div className="flex items-center gap-1.5 text-slate-400">
+        {icon}
+        <h2 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:text-xs">{title}</h2>
+      </div>
+      {figure.since === null ? (
+        <p className="mt-3 text-sm text-slate-400">Not counted yet. The nightly count fills this in.</p>
+      ) : (
+        <>
+          <p className="mt-2 text-4xl font-semibold tabular-nums sm:text-5xl" style={{ color: "var(--text-primary)" }}>
+            {count(figure.allTime)}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            {caption} since {formatMonth(figure.since)}
+          </p>
+          <Facts
+            rows={[
+              ["This month", count(figure.thisMonth)],
+              ["Last month", count(figure.lastMonth)],
+            ]}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+/** All-time totals; they ignore the range picker. */
+function BigNumbers({ totals }: { totals: ScorecardTotals }) {
+  return (
+    <section className="mt-6" aria-label="All-time totals">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+        <BigNumber
+          title="Transactions recorded"
+          icon={<BookCheck size={14} />}
+          figure={totals.transactions}
+          caption="in clients' books by our team"
+        />
+        <BigNumber title="Reports issued" icon={<FileText size={14} />} figure={totals.reports} caption="monthly reports" />
+        <BigNumber
+          title="Client messages answered"
+          icon={<MessagesSquare size={14} />}
+          figure={totals.messages}
+          caption="texts, calls and emails"
+        />
+      </div>
+      <TotalsChart transactions={totals.transactions.months} reports={totals.reports.months} />
+    </section>
   );
 }
 
@@ -144,7 +215,7 @@ function LiveStrip({ data, now }: { data: ScorecardData; now: Date }) {
         ) : (
           <ul className="divide-y divide-slate-100">
             {data.syncs.map((sync) => {
-              const stale = isStale(sync.lastRunAt, now);
+              const stale = isStale(sync.lastRunAt, now, sync.source === "qbo" ? DAILY_SYNC_STALE_SECONDS : undefined);
               const tone = !sync.ok ? "text-red-700" : stale ? "text-amber-700" : "text-slate-600";
               return (
                 <li key={sync.source} className="px-4 py-2.5">

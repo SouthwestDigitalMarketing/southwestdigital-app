@@ -63,7 +63,38 @@ median and p90.
    `OperationsEvidence` at read time. Live: a client component calls
    `router.refresh()` every 60 s.
 
+## Big numbers
+
+All-time totals across the top of the page, each with this month and last month,
+plus a per-month bar chart (last 24 months). They ignore the range picker.
+
+- **Transactions recorded** — QuickBooks transactions in each client's books that
+  our team entered (Created By) or last changed (Last Modified By), counted in the
+  month that happened. Team = `Thomas MacDonald` (Tom's login, which our agents also
+  use); our own books (Bookkeeping Conroe, Thomas Grant MacDonald) are skipped. Both
+  lists can be overridden in `ripley:~/.config/swapp-scorecard/totals.json`
+  (`{"team": [...], "skipCompanies": [...]}`). Transactions entered by a client's own
+  staff or by bank-feed rules, and never changed by us, do not count. A
+  transaction last changed by someone else after we entered it still counts in its
+  create month.
+- **Reports issued** — published `ripley:~/projects/clients/<client>/reports/<year>/<YYYY-MM>.pdf`,
+  by the month each report covers (superseded copies live in other folders and do
+  not count).
+- **Client messages answered** — `ScorecardEvent` rows for clients with a response:
+  text and email replies, live-answered calls, and callbacks, by response month.
+
+`scripts/scorecard_totals.mjs` runs nightly on ripley (`swapp-scorecard-totals.timer`,
+03:40 Central). It reads QuickBooks read-only through bookbot-app's own connection
+code (`~/projects/bookbot-app/src/{config,qbo}.ts`, the same token refresh `qb` uses,
+so it never races `qb` over saved tokens), counts, and posts one number per metric
+per month to `POST /api/scorecard/totals`, which replaces that metric's months in
+`ScorecardMonthly`. If any company's read fails, transactions are not posted and
+yesterday's numbers stay. The QuickBooks run shows in Last sync as "QuickBooks
+(nightly)", stale after 26 hours. `--dry-run` prints the counts; `--only reports`
+or `--only transactions` runs one metric.
+
 ## Privacy
 
 SWapp stores timing, channel, contact id and a match method. No message text,
-subject, phone recording or file. Client records stay on ripley.
+subject, phone recording or file. Client records stay on ripley. Big numbers
+are monthly counts only: no client, company, transaction or report detail.

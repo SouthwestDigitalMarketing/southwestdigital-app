@@ -1,0 +1,11 @@
+# Scorecard big numbers on ripley (docs/scorecard.md § Big numbers).
+# Install: cp scripts/systemd/swapp-scorecard-totals.* ~/.config/systemd/user/
+#          systemctl --user daemon-reload && systemctl --user enable --now swapp-scorecard-totals.timer
+[Unit]
+Description=SWapp Scorecard: nightly totals (QuickBooks transactions, reports issued)
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/.local/bin:%h/.local/share/mise/shims:/usr/local/bin:/usr/bin
+TimeoutStartSec=900
+ExecStart=/usr/bin/env node %h/projects/southwestdigital-app/scripts/scorecard_totals.mjs

@@ -1,0 +1,11 @@
+# Runs the Scorecard totals job nightly (docs/scorecard.md § Big numbers).
+[Unit]
+Description=Run the SWapp Scorecard totals job nightly
+
+[Timer]
+OnCalendar=*-*-* 03:40:00 America/Chicago
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
