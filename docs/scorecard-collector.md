@@ -1,7 +1,7 @@
 # Scorecard collector
 
 `scripts/scorecard_collect.py` works out how fast we answer clients and posts
-the timings to SWapp for `/scorecard`. The measures, rules and API are in
+the timings to SWapp for the Dashboard's Scorecard sections. The measures, rules and API are in
 [`scorecard.md`](scorecard.md); this page covers running the collector.
 Python 3 standard library only. Runs on **ripley** (the data lives there).
 

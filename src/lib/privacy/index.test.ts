@@ -15,7 +15,8 @@ describe("privacyCovers", () => {
     expect(privacyCovers("/reports")).toBe(true);
     expect(privacyCovers("/reports/x")).toBe(true);
     expect(privacyCovers("/scorecards")).toBe(false);
-    expect(privacyCovers("/dashboard")).toBe(false);
+    expect(privacyCovers("/dashboard")).toBe(true);
+    expect(privacyCovers("/operations")).toBe(false);
     expect(privacyCovers("/contacts/abc")).toBe(false);
   });
 });
