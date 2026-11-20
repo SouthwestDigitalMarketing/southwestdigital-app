@@ -1,5 +1,8 @@
+import Link from "next/link";
+import { Plus } from "lucide-react";
+import { prisma } from "@/lib/prisma";
 import { requireStaffBrand } from "@/lib/brands/staff";
-import { campaignsForBrand, mapLink, type AdCampaign, type AdStatus } from "@/lib/ads/campaigns";
+import { BEFORE_GO_LIVE, campaignFromRow, mapLink, type AdCampaign, type AdStatus } from "@/lib/ads/campaigns";
 
 export const dynamic = "force-dynamic";
 
@@ -19,15 +22,24 @@ const STATUS_CLASS: Record<AdStatus, string> = {
 
 export default async function AdsPage() {
   const { brand } = await requireStaffBrand();
-  const campaigns = campaignsForBrand(brand.slug);
+  const saved = await prisma.adCampaign.findMany({ where: { brandId: brand.id }, orderBy: { createdAt: "desc" } });
+  const campaigns = saved.map(campaignFromRow);
   const running = campaigns.filter((campaign) => campaign.status === "running");
   const planned = campaigns.filter((campaign) => campaign.status === "draft");
 
   return (
     <div className="mx-auto max-w-5xl p-4 sm:p-8">
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <h1 className="text-xl font-semibold text-slate-900">Ads</h1>
-        <p className="mt-1 text-sm text-slate-500">What&apos;s running and what&apos;s next</p>
+      <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900">Ads</h1>
+          <p className="mt-1 text-sm text-slate-500">What&apos;s running and what&apos;s next</p>
+        </div>
+        <Link
+          href="/ads/new"
+          className="ui-action-primary inline-flex items-center justify-center gap-1.5 self-start rounded-lg border px-4 py-2 text-sm font-semibold transition"
+        >
+          <Plus size={16} /> Create ad
+        </Link>
       </div>
 
       <section className="mt-6">
@@ -43,14 +55,25 @@ export default async function AdsPage() {
         )}
       </section>
 
-      {planned.length > 0 && (
-        <section className="mt-8">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Planned</h2>
+      <section className="mt-8">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Drafts</h2>
+        {planned.length === 0 ? (
+          <p className="mt-2 rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
+            No drafts yet. Use Create ad to start one.
+          </p>
+        ) : (
           <div className="mt-2 grid gap-4">
             {planned.map((campaign) => <CampaignCard key={campaign.id} campaign={campaign} />)}
           </div>
-        </section>
-      )}
+        )}
+      </section>
+
+      <section className="mt-8 rounded-xl border border-slate-200 bg-white p-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Before an ad goes live</h2>
+        <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-slate-700">
+          {BEFORE_GO_LIVE.map((step) => <li key={step}>{step}</li>)}
+        </ol>
+      </section>
     </div>
   );
 }
@@ -81,6 +104,13 @@ function CampaignCard({ campaign }: { campaign: AdCampaign }) {
           </ul>
         </Field>
         <Field label="Offer">{campaign.offer}</Field>
+        {campaign.headline && (
+          <Field label="Ad">
+            <span className="font-semibold">{campaign.headline}</span>
+            {campaign.primaryText && <span className="mt-1 block whitespace-pre-line text-slate-600">{campaign.primaryText}</span>}
+            {campaign.callToAction && <span className="mt-1 block text-slate-500">Button: {campaign.callToAction}</span>}
+          </Field>
+        )}
         <Field label="Landing page">
           <span className="break-all">{campaign.landingPage.replace(/^https?:\/\//, "")}</span>
           {!campaign.landingPageLive && <span className="text-slate-500"> · not built yet</span>}
@@ -94,14 +124,6 @@ function CampaignCard({ campaign }: { campaign: AdCampaign }) {
         </Field>
       </dl>
 
-      {campaign.nextSteps.length > 0 && (
-        <div className="mt-4 border-t border-slate-100 pt-3">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Next steps</h4>
-          <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-slate-700">
-            {campaign.nextSteps.map((step) => <li key={step}>{step}</li>)}
-          </ol>
-        </div>
-      )}
     </article>
   );
 }
