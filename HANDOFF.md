@@ -1,5 +1,12 @@
 # SWapp handoff
 
+## 2026-11-20 — Agreement downloads always carry the version (Ummon)
+
+Tom's phone said "already downloaded" for SJ Equity v2 because v1 and v2 had the same file name (v2 only
+in a `v2/` folder). ripley `scripts/phone_intake.py`: a file kept only in a `v<N>` folder is served
+with `_v<N>` added to its name (`..._v2_DRAFT.pdf`); names that already carry `_v<N>` or `DRAFT` are
+not doubled. Self-test ok; live: SJ Equity download `..._SJ-Equity-LLC_v2_DRAFT.pdf`, 120,651 bytes.
+
 ## 2026-11-20 — Dashboard and Scorecard merged (Ummon)
 
 Tom: "merge the dashboard and the scorecard… use your best judgment". One page, `/dashboard`:

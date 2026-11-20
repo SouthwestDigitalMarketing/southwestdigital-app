@@ -1399,13 +1399,20 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(404, "No such agreement.", "text/plain; charset=utf-8")
                 return
             name = os.path.basename(real)
+            # The saved name always carries the version (Tom, 2026-11-20): a file kept only in a v<N>
+            # folder gets "_v<N>" added, so a phone never takes v2 for the v1 it already downloaded.
+            folder_version = parts[1] if len(parts) == 3 and AGREEMENT_SUBDIR.match(parts[1]) else None
+            if folder_version and not AGREEMENT_VERSION.search(name[:-4]):
+                name = "%s_%s.pdf" % (name[:-4], folder_version)
             if "SIGNED" not in name.upper() and not AGREEMENT_FINAL.search(name[:-4]):
                 # Unsigned means draft: always served with the DRAFT stamp, never the clean file.
                 stamped = draft_copy(real)
                 if stamped is None:
                     self._send(500, "Could not add the DRAFT stamp to this agreement.", "text/plain; charset=utf-8")
                     return
-                real, name = stamped, name[:-4] + "_DRAFT.pdf"
+                real = stamped
+                if not re.search(r"(?:^|[_ .-])DRAFT(?:[_ .-]|$)", name[:-4], re.I):
+                    name = name[:-4] + "_DRAFT.pdf"
             with open(real, "rb") as handle:
                 data = handle.read()
             self.send_response(200)
@@ -2022,6 +2029,8 @@ def self_test():
     for sub in ("v1", "v2"):
         os.makedirs(os.path.join(vdir, sub))
         open(os.path.join(vdir, sub, "2026-11-20_General-Services-Agreement_Versions-Co.pdf"), "wb").write(simple_pdf(b"BT /F1 12 Tf 72 720 Td (" + sub.encode() + b") Tj ET"))
+    with urllib.request.urlopen(agreements + "/versions-co/gsa/draft" + signed + "&dl=1") as response:
+        assert "Versions-Co_v2_DRAFT.pdf" in response.headers["Content-Disposition"], response.headers["Content-Disposition"]
     with urllib.request.urlopen(agreements + "/versions-co/gsa/draft/stat" + signed) as response:
         assert json.loads(response.read().decode())["name"] == "2026-11-20_General-Services-Agreement_Versions-Co.pdf"
     assert gsa_file(REPORTS_ROOT, "versions-co", "draft") == "v2/2026-11-20_General-Services-Agreement_Versions-Co.pdf"
