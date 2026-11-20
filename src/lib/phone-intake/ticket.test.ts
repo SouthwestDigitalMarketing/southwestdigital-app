@@ -50,6 +50,19 @@ describe("phone intake tickets", () => {
     expect(url.searchParams.get("sig")).toBe(signSession(secret, link.exp));
   });
 
+  it("signs a link to one client's agreements with the client code as a second name", () => {
+    const link = sendPageLink({
+      secret, publicUrl: "http://127.0.0.1:8932", nowSeconds: 1_700_000_000,
+      path: "/agreements/sj-equity-llc", extra: { alt: "sj-equity" },
+    });
+    expect(link.ok).toBe(true);
+    if (!link.ok) return;
+    const url = new URL(link.url);
+    expect(url.pathname).toBe("/agreements/sj-equity-llc");
+    expect(url.searchParams.get("alt")).toBe("sj-equity");
+    expect(url.searchParams.get("sig")).toBe(signSession(secret, link.exp));
+  });
+
   it("refuses a missing or bad send road address", () => {
     expect(sendPageLink({ secret: "", publicUrl: "http://x", nowSeconds: 1 })).toMatchObject({ ok: false });
     expect(sendPageLink({ secret, publicUrl: "ftp://x", nowSeconds: 1 })).toMatchObject({ ok: false });

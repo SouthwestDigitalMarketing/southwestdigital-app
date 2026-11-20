@@ -423,6 +423,70 @@ def report_path(root, folder, year, name):
     return real
 
 
+# Agreements saved per client: <root>/<client>/agreements/[v1/]<date>_<name>.pdf. A file with
+# SIGNED in its name is the signed copy. Served read-only behind the same signed link as Reports
+# (Tom, 2026-11-20): the files stay in the client folder on ripley, SWapp holds none.
+AGREEMENT_FILE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,200}\.pdf$")
+AGREEMENT_SUBDIR = re.compile(r"^v\d{1,3}$")
+
+
+def list_agreements(root, folder):
+    """The agreement PDFs for one client, newest date first: [{"rel", "name", "signed", "date"}]."""
+    if not CLIENT_DIR.match(folder or ""):
+        return None
+    base = os.path.join(root, folder, "agreements")
+    if not os.path.isdir(base) or os.path.islink(base):
+        return []
+    out = []
+    for sub in [""] + sorted(d for d in os.listdir(base) if AGREEMENT_SUBDIR.match(d)):
+        directory = os.path.join(base, sub) if sub else base
+        if sub and (not os.path.isdir(directory) or os.path.islink(directory)):
+            continue
+        for name in os.listdir(directory):
+            path = os.path.join(directory, name)
+            if AGREEMENT_FILE.match(name) and os.path.isfile(path) and not os.path.islink(path):
+                out.append({"rel": (sub + "/" if sub else "") + name, "name": name,
+                            "signed": "SIGNED" in name.upper(), "date": name[:10] if re.match(r"\d{4}-\d{2}-\d{2}", name) else ""})
+    return sorted(out, key=lambda a: (a["date"], a["name"]), reverse=True)
+
+
+def agreement_path(root, folder, rel):
+    """The real file for /agreements/<folder>/<rel>, or None if it is not a saved agreement PDF."""
+    parts = rel.split("/")
+    if len(parts) > 2 or not AGREEMENT_FILE.match(parts[-1]) or (len(parts) == 2 and not AGREEMENT_SUBDIR.match(parts[0])):
+        return None
+    if not CLIENT_DIR.match(folder or ""):
+        return None
+    path = os.path.join(root, folder, "agreements", *parts)
+    real = os.path.realpath(path)
+    if not real.startswith(os.path.realpath(root) + os.sep) or real != os.path.abspath(path) or not os.path.isfile(real):
+        return None
+    return real
+
+
+def agreements_page(root, folder, query):
+    """HTML listing one client's agreements; each row opens the PDF. None if the folder name is not valid."""
+    import html
+    found = list_agreements(root, folder)
+    if found is None:
+        return None
+    name = client_name(folder)
+    rows = "".join(
+        "<a class=row href='/agreements/%s/%s?%s'>%s<small>%s</small><span class=tag style='color:%s;border-color:%s'>%s</span></a>" % (
+            urllib.parse.quote(folder), urllib.parse.quote(a["rel"]), query, html.escape(a["name"][:-4].replace("_", " ")),
+            html.escape(a["date"]), "#15803d" if a["signed"] else "#b45309", "#15803d" if a["signed"] else "#b45309",
+            "Signed" if a["signed"] else "Unsigned") for a in found) or "<p><small>No agreements saved yet.</small></p>"
+    style = ("<meta name=viewport content='width=device-width,initial-scale=1'><style>"
+             "body{font:17px/1.45 system-ui,sans-serif;margin:0;padding:24px;background:#f8fafc;color:#0f172a}"
+             "h1{font-size:24px;margin:0 0 12px}h2{font-size:15px;color:#64748b;margin:0 0 8px;font-weight:600}"
+             "a.row{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;background:#fff;border:1px solid #e2e8f0;"
+             "border-radius:10px;padding:10px 14px;margin-bottom:6px;color:#0f172a;text-decoration:none;font-weight:600;overflow-wrap:anywhere}"
+             "small{grid-column:1;color:#64748b;font-weight:400}.tag{grid-row:1/3;grid-column:2;font-size:12px;font-weight:600;"
+             "border:1px solid;border-radius:999px;padding:1px 8px;background:#fff}</style>")
+    return ("<!doctype html><html lang=en><head><meta charset=utf-8><title>%s agreements</title>%s</head><body>"
+            "<h1>%s</h1><h2>Agreements</h2>%s</body></html>" % (html.escape(name), style, html.escape(name), rows))
+
+
 # Month status for each client, shown as a legend first so Tom can weigh it before the rows use it
 # (Tom, 2026-11-17). Internal target: last month closed and its report issued within the first
 # five business days; weekly Friday client notices in between. (key, label, color, meaning)
@@ -1113,6 +1177,52 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(data)
             return
+        if path.startswith("/agreements/"):
+            # One client's saved agreement PDFs, behind the same signed link as Reports.
+            query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            secret = os.environ.get("PHONE_INTAKE_SECRET", "")
+            try:
+                exp = int(query.get("exp", ["0"])[0])
+            except ValueError:
+                exp = 0
+            if not secret or exp < int(time.time()) or not session_ok(secret, exp, query.get("sig", [""])[0]):
+                self._send(403, "This link has expired. Open Agreements in SWapp again.", "text/plain; charset=utf-8")
+                return
+            sign = urllib.parse.urlencode({"exp": exp, "sig": query.get("sig", [""])[0]})
+            parts = [urllib.parse.unquote(p) for p in path.split("/")[2:] if p]
+            if len(parts) == 1:
+                # SWapp sends the name slug, and the client code as ?alt=; the first that has a folder wins.
+                folder = parts[0]
+                for candidate in [parts[0]] + [a for a in query.get("alt", []) if CLIENT_DIR.match(a)]:
+                    if os.path.isdir(os.path.join(REPORTS_ROOT, candidate, "agreements")):
+                        folder = candidate
+                        break
+                page = agreements_page(REPORTS_ROOT, folder, sign)
+                if page is None:
+                    self._send(404, "No such client.", "text/plain; charset=utf-8")
+                    return
+                body = page.encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Cache-Control", "private, no-store")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            real = agreement_path(REPORTS_ROOT, parts[0], "/".join(parts[1:])) if len(parts) in (2, 3) else None
+            if real is None:
+                self._send(404, "No such agreement.", "text/plain; charset=utf-8")
+                return
+            with open(real, "rb") as handle:
+                data = handle.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/pdf")
+            self.send_header("Content-Disposition", 'inline; filename="%s"' % os.path.basename(real))
+            self.send_header("Cache-Control", "private, no-store")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
         if path in ("/reports", "/reports.json") or path.startswith("/reports/"):
             # Published client reports, behind the same signed link as the send page.
             query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
@@ -1647,6 +1757,29 @@ def self_test():
         try:
             urllib.request.urlopen(reports + bad)
             raise SystemExit("report request was allowed: " + bad)
+        except urllib.error.HTTPError as error:
+            assert error.code in (403, 404), (bad, error.code)
+    # Agreements: listed per client, PDFs open inline, nothing outside agreements/ or v<N>/ is reachable.
+    adir = os.path.join(REPORTS_ROOT, "sj-equity-llc", "agreements")
+    os.makedirs(os.path.join(adir, "v1"))
+    open(os.path.join(adir, "v1", "2026-11-20_General-Services-Agreement_SJ-Equity-LLC.pdf"), "wb").write(b"%PDF-draft")
+    open(os.path.join(adir, "2026-12-01_General-Services-Agreement_SJ-Equity_SIGNED.pdf"), "wb").write(b"%PDF-signed")
+    open(os.path.join(adir, "notes.txt"), "w").write("private")
+    open(os.path.join(REPORTS_ROOT, "sj-equity-llc", "secret.pdf"), "wb").write(b"%PDF-secret")
+    agreements = "http://%s:%d/agreements" % (host, port)
+    with urllib.request.urlopen(agreements + "/sj-equity-llc" + signed) as response:
+        listing = response.read().decode()
+    assert listing.index("SIGNED") < listing.index("v1/") and ">Signed<" in listing and ">Unsigned<" in listing and "notes.txt" not in listing, listing
+    with urllib.request.urlopen(agreements + "/sj-equity?alt=sj-equity-llc&" + signed[1:]) as response:
+        assert b">Signed<" in response.read()
+    with urllib.request.urlopen(agreements + "/sj-equity-llc/v1/2026-11-20_General-Services-Agreement_SJ-Equity-LLC.pdf" + signed) as response:
+        assert response.headers["Content-Type"] == "application/pdf" and response.read() == b"%PDF-draft"
+    for bad in ("/sj-equity-llc" + signed.replace("sig=", "sig=00"), "/sj-equity-llc/notes.txt" + signed,
+                "/sj-equity-llc/..%2Fsecret.pdf" + signed, "/sj-equity-llc/v1/..%2F..%2Fsecret.pdf" + signed,
+                "/sj-equity-llc/2026-12-01_General-Services-Agreement_SJ-Equity_SIGNED.pdf" + signed.replace("sig=", "sig=00")):
+        try:
+            urllib.request.urlopen(agreements + bad)
+            raise SystemExit("agreement request was allowed: " + bad)
         except urllib.error.HTTPError as error:
             assert error.code in (403, 404), (bad, error.code)
     # A 4.97 GB phone video (2026-11-13) was refused by the old 3 GB cap.

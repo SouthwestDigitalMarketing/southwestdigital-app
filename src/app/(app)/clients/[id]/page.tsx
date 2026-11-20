@@ -53,6 +53,12 @@ export default async function ClientDetailPage({ params }: PageProps) {
             {client.name || client.code}
           </h1>
           <p className="mt-1 font-mono text-xs text-slate-400">{client.code}</p>
+          <a
+            href={`/clients/${client.id}/agreements`}
+            className="mt-3 inline-block rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
+          >
+            Agreements (PDFs)
+          </a>
         </div>
 
         <section className="rounded-xl border border-slate-200 bg-white p-6">
