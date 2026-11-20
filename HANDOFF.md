@@ -1,5 +1,16 @@
 # SWapp handoff
 
+## 2026-11-20 — GSA panel: View the draft / signed GSA (Ummon)
+
+Tom: where it says Drafted, one tap should open the draft. GSA panel rows Drafted and Signed (once
+marked) have a View button -> `/agreements/pdfs?folder=...&doc=draft|signed` (staff login, signed
+link) -> ripley `scripts/phone_intake.py` `/agreements/<folder>/gsa/draft|signed`: the newest
+`*General-Services-Agreement*` PDF in the client's agreements folder, unsigned or SIGNED. Folder
+lookup with `?alt=` now applies to every `/agreements/<folder>/...` address, not only the list.
+Checks: self-test ok (draft, signed, wrong folder via alt, 404 none, bad sig); tsc + eslint clean;
+installed on ripley and restarted; live: SJ Equity draft (143,843 bytes, 13 pages), Rodan signed
+(807,469 bytes), SJ Equity signed -> 404 "No signed GSA saved..."; local 412px screenshot of the panel
+and the redirect target checked. Needs Tailscale, like all ripley PDFs.
 ## 2026-11-20 — Billing calendar day strip (#191, shipped)
 
 Replaces the #188 countdown cards on the Bookkeeping Conroe dashboard with a
