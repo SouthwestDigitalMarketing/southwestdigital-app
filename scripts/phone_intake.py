@@ -464,6 +464,37 @@ def agreement_path(root, folder, rel):
     return real
 
 
+AGREEMENTS_STYLE = ("<meta name=viewport content='width=device-width,initial-scale=1'><style>"
+                    "body{font:17px/1.45 system-ui,sans-serif;margin:0;padding:24px;background:#f8fafc;color:#0f172a}"
+                    "h1{font-size:24px;margin:0 0 12px}h2{font-size:15px;color:#64748b;margin:0 0 8px;font-weight:600}"
+                    "a.row{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;background:#fff;border:1px solid #e2e8f0;"
+                    "border-radius:10px;padding:10px 14px;margin-bottom:6px;color:#0f172a;text-decoration:none;font-weight:600;overflow-wrap:anywhere}"
+                    "small{grid-column:1;color:#64748b;font-weight:400}.tags{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}"
+                    ".tag{grid-row:1/3;grid-column:2;font-size:12px;font-weight:600;border:1px solid;border-radius:999px;padding:1px 8px;background:#fff}"
+                    "a.back{color:#475569;display:inline-block;margin-bottom:12px}</style>")
+
+
+def agreements_index_page(root, query):
+    """HTML listing every client folder that has agreement PDFs, with how many are signed and unsigned."""
+    import html
+    rows = []
+    for folder in sorted(os.listdir(root), key=lambda f: client_name(f).lower() if CLIENT_DIR.match(f) else f):
+        found = list_agreements(root, folder) if CLIENT_DIR.match(folder) else None
+        if not found:
+            continue
+        signed = sum(1 for a in found if a["signed"])
+        unsigned = len(found) - signed
+        tags = ("<span class=tag style='color:#15803d;border-color:#15803d'>%d signed</span>" % signed if signed else "") + (
+            "<span class=tag style='color:#b45309;border-color:#b45309'>%d unsigned</span>" % unsigned if unsigned else "")
+        # Unsigned first: those are the ones waiting on Tom (newest file date as the tie-break).
+        rows.append((0 if unsigned else 1, "", "<a class=row href='/agreements/%s?%s'>%s<span class=tags>%s</span></a>" % (
+            urllib.parse.quote(folder), query, html.escape(client_name(folder)), tags)))
+    rows.sort(key=lambda r: (r[0], r[2]))
+    body = "".join(r[2] for r in rows) or "<p><small>No agreements saved yet.</small></p>"
+    return ("<!doctype html><html lang=en><head><meta charset=utf-8><title>Agreements</title>%s</head><body>"
+            "<h1>Agreements</h1><h2>Clients with agreement PDFs</h2>%s</body></html>" % (AGREEMENTS_STYLE, body))
+
+
 def agreements_page(root, folder, query):
     """HTML listing one client's agreements; each row opens the PDF. None if the folder name is not valid."""
     import html
@@ -476,15 +507,9 @@ def agreements_page(root, folder, query):
             urllib.parse.quote(folder), urllib.parse.quote(a["rel"]), query, html.escape(a["name"][:-4].replace("_", " ")),
             html.escape(a["date"]), "#15803d" if a["signed"] else "#b45309", "#15803d" if a["signed"] else "#b45309",
             "Signed" if a["signed"] else "Unsigned") for a in found) or "<p><small>No agreements saved yet.</small></p>"
-    style = ("<meta name=viewport content='width=device-width,initial-scale=1'><style>"
-             "body{font:17px/1.45 system-ui,sans-serif;margin:0;padding:24px;background:#f8fafc;color:#0f172a}"
-             "h1{font-size:24px;margin:0 0 12px}h2{font-size:15px;color:#64748b;margin:0 0 8px;font-weight:600}"
-             "a.row{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;background:#fff;border:1px solid #e2e8f0;"
-             "border-radius:10px;padding:10px 14px;margin-bottom:6px;color:#0f172a;text-decoration:none;font-weight:600;overflow-wrap:anywhere}"
-             "small{grid-column:1;color:#64748b;font-weight:400}.tag{grid-row:1/3;grid-column:2;font-size:12px;font-weight:600;"
-             "border:1px solid;border-radius:999px;padding:1px 8px;background:#fff}</style>")
     return ("<!doctype html><html lang=en><head><meta charset=utf-8><title>%s agreements</title>%s</head><body>"
-            "<h1>%s</h1><h2>Agreements</h2>%s</body></html>" % (html.escape(name), style, html.escape(name), rows))
+            "<a class=back href='/agreements?%s'>&lsaquo; All clients</a><h1>%s</h1><h2>Agreements</h2>%s</body></html>"
+            % (html.escape(name), AGREEMENTS_STYLE, query, html.escape(name), rows))
 
 
 # Month status for each client, shown as a legend first so Tom can weigh it before the rows use it
@@ -1177,7 +1202,7 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(data)
             return
-        if path.startswith("/agreements/"):
+        if path == "/agreements" or path.startswith("/agreements/"):
             # One client's saved agreement PDFs, behind the same signed link as Reports.
             query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             secret = os.environ.get("PHONE_INTAKE_SECRET", "")
@@ -1190,6 +1215,15 @@ class Handler(BaseHTTPRequestHandler):
                 return
             sign = urllib.parse.urlencode({"exp": exp, "sig": query.get("sig", [""])[0]})
             parts = [urllib.parse.unquote(p) for p in path.split("/")[2:] if p]
+            if not parts:
+                body = agreements_index_page(REPORTS_ROOT, sign).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Cache-Control", "private, no-store")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             if len(parts) == 1:
                 # SWapp sends the name slug, and the client code as ?alt=; the first that has a folder wins.
                 folder = parts[0]
@@ -1770,6 +1804,11 @@ def self_test():
     with urllib.request.urlopen(agreements + "/sj-equity-llc" + signed) as response:
         listing = response.read().decode()
     assert listing.index("SIGNED") < listing.index("v1/") and ">Signed<" in listing and ">Unsigned<" in listing and "notes.txt" not in listing, listing
+    os.makedirs(os.path.join(REPORTS_ROOT, "empty-co", "agreements"))
+    with urllib.request.urlopen(agreements + signed) as response:
+        index = response.read().decode()
+    assert "SJ Equity Llc" in index or "SJ Equity LLC" in index, index
+    assert "1 signed" in index and "1 unsigned" in index and "empty-co" not in index.lower() and "Empty Co" not in index, index
     with urllib.request.urlopen(agreements + "/sj-equity?alt=sj-equity-llc&" + signed[1:]) as response:
         assert b">Signed<" in response.read()
     with urllib.request.urlopen(agreements + "/sj-equity-llc/v1/2026-11-20_General-Services-Agreement_SJ-Equity-LLC.pdf" + signed) as response:
