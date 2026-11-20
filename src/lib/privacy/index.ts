@@ -14,7 +14,7 @@ export function privacyOn(value: string | undefined): boolean {
  * Pages that hide client names themselves when privacy is on. Every other page is
  * blurred by the shell until it is added here.
  */
-export const PRIVACY_COVERED_PATHS = ["/scorecard", "/reports"];
+export const PRIVACY_COVERED_PATHS = ["/dashboard", "/scorecard", "/reports"];
 
 export function privacyCovers(pathname: string): boolean {
   return PRIVACY_COVERED_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));

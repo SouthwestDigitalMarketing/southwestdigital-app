@@ -1,5 +1,21 @@
 # SWapp handoff
 
+## 2026-11-20 — Dashboard and Scorecard merged (Ummon)
+
+Tom: "merge the dashboard and the scorecard… use your best judgment". One page, `/dashboard`:
+GSA alarm, reporting period, billing calendar, **all-time totals** (Transactions recorded /
+Reports issued / Client messages answered + per-month chart), **Waiting for a reply + Last
+sync**, Revenue, Pipelines, Offers, **Response times** (own range tabs, `?rt=today|week|30d|90d`,
+kept when the period changes, and vice versa), Reviews, Website, YouTube, folded **How we
+measure**. Scorecard UI moved to `src/app/(app)/dashboard/_scorecard/` (`sections.tsx` plus the
+moved charts/format files). `/scorecard` redirects; the sidebar item is gone; the keyboard
+command "Scorecard" opens `/dashboard#response-times`. The page refreshes every 5 minutes
+(was 60 s on Scorecard; Dashboard reruns GA4/YouTube on each refresh).
+
+Privacy: `/dashboard` is now covered. With privacy on, MRR clients (and "starting"), pipeline
+leads (`Lead A…`), the GSA alarm and the Scorecard lists are aliased server-side through one
+`createAliaser()` (`src/lib/privacy/alias.ts`), so a client keeps one letter across sections.
+Checked locally: 14 real names seen with privacy off, none on screen or in page data with it on.
 ## 2026-11-20 — Agreement versions: highest version wins, "v2 · Draft" first (Ummon)
 
 Tom: versions must be in the file name; on a phone folders are invisible and names get cut. Naming

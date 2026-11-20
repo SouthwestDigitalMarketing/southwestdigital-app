@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { requireAppBrand } from "@/lib/brands/staff";
 import { ReviewOutcome } from "@prisma/client";
@@ -22,6 +23,15 @@ import { PIPE_PROSPECTS_KEY } from "@/lib/pipe/deals";
 import { LEAD_STEP_STAGE, LEAD_STEPS, type LeadStep } from "@/lib/pipe/lead-steps";
 import { paidAwaitingGsa } from "@/lib/gsa/store";
 import { GsaAlarm } from "@/components/gsa/GsaAlarm";
+import { PRIVACY_COOKIE, privacyOn } from "@/lib/privacy";
+import { createAliaser } from "@/lib/privacy/alias";
+import { getScorecardData } from "@/lib/scorecard/queries";
+import { getScorecardTotals } from "@/lib/scorecard/totals";
+import { privatizeScorecard } from "@/lib/scorecard/privacy";
+import type { ScorecardRange } from "@/lib/scorecard/types";
+import { BigNumbers, HowWeMeasure, LiveStrip, ResponseTimes } from "./_scorecard/sections";
+import { LiveRefresh } from "./_scorecard/LiveRefresh";
+import { parseRange } from "./_scorecard/format";
 
 export const dynamic = "force-dynamic";
 
@@ -248,7 +258,8 @@ function getDashboardRange(value: string | string[] | undefined): DashboardRange
 }
 
 type PageProps = {
-  searchParams: Promise<{ range?: string | string[] }>;
+  /** `range`: the reporting period. `rt`: the response-time range (today, week, 30d, 90d). */
+  searchParams: Promise<{ range?: string | string[]; rt?: string | string[] }>;
 };
 
 export default async function DashboardPage({ searchParams }: PageProps) {
@@ -258,8 +269,10 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const windowEnd = new Date();
   const selectedPeriod = getDashboardPeriod(range, windowEnd);
   const previous = getPreviousDashboardPeriod(range, windowEnd, selectedPeriod);
+  const responseRange = parseRange(params.rt);
+  const privacy = privacyOn((await cookies()).get(PRIVACY_COOKIE)?.value);
 
-  const [awaitingGsa, pipelineRows, recordMrr, [theme, mrrGoals], [currentOffers, previousOffers], [currentReviews, previousReviews]] = await Promise.all([
+  const [awaitingGsaRaw, pipelineRows, recordMrr, [theme, mrrGoals], [currentOffers, previousOffers], [currentReviews, previousReviews], [scorecardRaw, totals]] = await Promise.all([
     paidAwaitingGsa(dataContext),
     withBrandDataTransaction(dataContext, (transaction) => transaction.pipeline.findMany({
       where: { brandId: brand.id, key: PIPE_PROSPECTS_KEY, isActive: true },
@@ -310,8 +323,9 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     ]),
     Promise.all([getOfferStats(brand.id, selectedPeriod), getOfferStats(brand.id, previous)]),
     Promise.all([getReviewStats(brand.id, selectedPeriod), getReviewStats(brand.id, previous)]),
+    Promise.all([getScorecardData(brand.id, responseRange, windowEnd), getScorecardTotals(brand.id, windowEnd)]),
   ]);
-  const pipelineOverview: PipelineMrrPipeline[] = pipelineRows.map((pipeline) => {
+  const pipelineOverviewRaw: PipelineMrrPipeline[] = pipelineRows.map((pipeline) => {
     const monthlyByStage = new Map<number, PipelineMrrPipeline["stages"][number]["items"]>();
     const oneTimeByStage = new Map<number, PipelineMrrPipeline["stages"][number]["items"]>();
     for (const item of pipeline.items) {
@@ -355,14 +369,36 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   }).flat();
 
   // From service records (signed agreements).
-  const mrrClients = recordMrr.clients;
-  const mrr = summarizeMrr(mrrClients.map((client) => client.mrr));
+  const mrr = summarizeMrr(recordMrr.clients.map((client) => client.mrr));
   const todayKey = new Date().toISOString().slice(0, 10);
   const { byId: mrrPastDue, syncedAsOf: arSyncedAsOf } = await getPastDueByContact(
     brand.id,
-    mrrClients,
+    recordMrr.clients,
     todayKey,
   );
+
+  // Privacy mode (screen recordings): every name on the page becomes "Client A" or
+  // "Lead A" here, on the server, so real names never reach the browser. One aliaser,
+  // so a client keeps the same letter in every section.
+  const alias = createAliaser();
+  const hide = <T extends { name: string; company: string | null }>(row: T, kind: "Client" | "Lead" = "Client"): T =>
+    privacy ? { ...row, name: alias(row.name, kind), company: null } : row;
+  const mrrClients = recordMrr.clients.map((client) => hide(client));
+  const mrrStarting = recordMrr.starting.map((client) => hide(client));
+  const pipelineOverview = pipelineOverviewRaw.map((pipeline) => ({
+    ...pipeline,
+    stages: pipeline.stages.map((stage) => ({ ...stage, items: stage.items.map((item) => hide(item, "Lead")) })),
+  }));
+  const awaitingGsa = privacy
+    ? awaitingGsaRaw.map((proposal) => ({ ...proposal, clientName: alias(proposal.clientName), gsaClientFolder: null }))
+    : awaitingGsaRaw;
+  const scorecard = privacy ? privatizeScorecard(scorecardRaw, alias) : scorecardRaw;
+  const responseHref = (rt: ScorecardRange) => {
+    const query = new URLSearchParams();
+    if (range !== "last-30-days") query.set("range", range);
+    query.set("rt", rt);
+    return `/dashboard?${query.toString()}#response-times`;
+  };
 
   const windowEndStr = dateString(addUtcDays(selectedPeriod.endExclusive, -1));
   const windowStartStr = dateString(selectedPeriod.start);
@@ -466,6 +502,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
   return (
     <div className="px-4 py-5 sm:p-8">
+      {/* The collector posts every 5 minutes; refreshing faster only re-reads GA4 and YouTube. */}
+      <LiveRefresh seconds={300} />
       <h1 className="sr-only">Dashboard</h1>
       <GsaAlarm proposals={awaitingGsa} now={windowEnd} />
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-4">
@@ -480,13 +518,17 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         <BillingTimers days={billingCalendarDays(firmDateKey(new Date()), 30, 60)} />
       )}
 
+      <BigNumbers totals={totals} />
+
+      <LiveStrip data={scorecard} now={windowEnd} />
+
       <DashboardSection title="Revenue" icon={<DollarSign size={14} />}>
         <MrrStatCard
           label={`MRR · ${mrr.count.toLocaleString("en-US")} client${mrr.count === 1 ? "" : "s"}`}
           value={`$${mrr.total.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/mo`}
           current={mrr.total}
           clients={mrrClients}
-          starting={recordMrr.starting}
+          starting={mrrStarting}
           mismatches={recordMrr.mismatches.length}
           pastDueById={mrrPastDue}
           syncedAsOf={arSyncedAsOf}
@@ -516,6 +558,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           acceptedGoal={offersAcceptedGoal}
         />
       </DashboardSection>
+
+      <ResponseTimes data={scorecard} range={responseRange} hrefFor={responseHref} />
 
       <DashboardSection title="Reviews" icon={<Star size={14} />}>
         <StatCard
@@ -577,6 +621,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           )
         ) : <NotConfiguredCard title="YouTube" />}
       </DashboardSection>
+
+      <HowWeMeasure businessHours={scorecard.businessHours.label} />
     </div>
   );
 }

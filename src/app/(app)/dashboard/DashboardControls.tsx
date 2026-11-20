@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 type RangeOption = {
   value: string;
@@ -16,11 +16,15 @@ export function DashboardControls({
   selectedRange: string;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
   function update(range: string) {
     const params = new URLSearchParams();
     if (range !== "last-30-days") params.set("range", range);
+    // Keep the response-time range the Scorecard section is showing.
+    const rt = searchParams.get("rt");
+    if (rt) params.set("rt", rt);
     const query = params.toString();
     startTransition(() => router.push(`/dashboard${query ? `?${query}` : ""}`, { scroll: false }));
   }

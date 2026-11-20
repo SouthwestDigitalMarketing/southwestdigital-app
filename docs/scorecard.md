@@ -1,7 +1,11 @@
 # Scorecard
 
-How fast we answer clients, measured from the source systems, shown at
-`/scorecard` (sidebar, right after Operations). Tom named it 2026-11-20; the
+How fast we answer clients, measured from the source systems, shown on the
+Dashboard (`/dashboard`; merged there 2026-11-20 at Tom's request, `/scorecard`
+redirects to `/dashboard?rt=<range>#response-times`). UI lives in
+`src/app/(app)/dashboard/_scorecard/`: all-time totals and the waiting/sync strip
+near the top, the Response times section (its own range, `?rt=`) after Offers, and
+"How we measure" folded at the bottom. Tom named it 2026-11-20; the
 numbers feed a public video, so every number must be computed, real and
 explainable. Contract types: `src/lib/scorecard/types.ts`.
 
@@ -61,7 +65,8 @@ median and p90.
 3. **Page** reads `getScorecardData(brandId, range, now)`
    (`src/lib/scorecard/queries.ts`); report and duty measures are computed from
    `OperationsEvidence` at read time. Live: a client component calls
-   `router.refresh()` every 60 s.
+   `router.refresh()` every 5 minutes on the Dashboard (the collector posts every 5
+   minutes; faster refreshes only re-read GA4 and YouTube).
 
 ## Big numbers
 
