@@ -1,5 +1,12 @@
 # SWapp handoff
 
+## 2026-11-20 — Reports follow SWapp's privacy switch (Ummon)
+
+ripley `scripts/phone_intake.py`: a valid signed `/reports...` link with `privacy=1|0` sets this
+host's `swapp_privacy` cookie (Path `/reports`, 1 year) and 302s to the same URL without the
+param. SWapp's `/reports` always sends it, so Reports match the app's one switch each time they
+are opened from SWapp. ripley's own header button still works for that tab. Forged/expired
+links still 403 with no cookie. Self-test covers both values and the forged case.
 ## 2026-11-20 — One privacy switch for the whole app (Ummon)
 
 Tom: "make the privacy button one switch for the whole app". `PrivacyToggle` now lives in the
