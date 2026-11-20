@@ -29,7 +29,7 @@ python3 scripts/scorecard_collect.py --backfill             # then send
 
 | Flag | Meaning |
 |---|---|
-| (none) | Send events started in the last 14 days, plus every open (unanswered) one. Reads the last 90 days of mail. |
+| (none) | Send events started or answered in the last 14 days, plus every open (unanswered) one. Reads the last 90 days of mail. |
 | `--backfill` | Send all history (all mail, all of `sales.db`). Safe to repeat: events upsert by `sourceKey`. |
 | `--dry-run` | Post nothing. Print counts, answered counts and clock medians (minutes) per kind. No names, numbers or addresses. |
 | `--source quo\|zoho\|all` | Which source to collect and post (default `all`). |
@@ -68,7 +68,10 @@ Zoho read failed (a `zoho` sync with `ok: false` is still posted).
   (`details.voicemail` when `duration > 0`); answered by the next outgoing call
   or answering text to that number on any line.
 - `email_reply` (`zoho:email:<sha1(Message-ID)[:16]>`): a burst is the mail
-  from one client between two Sent messages to that client; bulk mail
+  from one client until anything answers it (a thread reply to any recipient,
+  a Sent to the client, or a Quo text or call to the client's number); the
+  next client mail after that starts a new burst. A Sent or Quo contact after
+  7 days still ends the burst, unanswered; bulk mail
   (`List-Unsubscribe`, `Auto-Submitted` other than `no`, `Precedence`
   bulk/list/junk) and our own domains (`bookkeepingconroe.com`,
   `southwestdigital.io`, `realestatebookkeeper.com`) never count. Answer: a Sent
@@ -77,6 +80,8 @@ Zoho read failed (a `zoho` sync with `ok: false` is still posted).
   (`"address"`). An answering Quo text or call to the client's number before
   that (or within 7 days when there is no email answer) wins, with
   `responseVia` `text`/`call`.
+- Normal runs post every open event and every event started or answered in the
+  last 14 days, so an old event answered late replaces the open copy SWapp holds.
 - Events go to `POST /api/scorecard/ingest` in batches of up to 500; the last
   batch per source carries `sync` (`quo` `coveredTo` = newest row in
   `sales.db`; `zoho` `coveredTo` = run time).

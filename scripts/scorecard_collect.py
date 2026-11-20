@@ -50,7 +50,7 @@ HEADER_FIELDS = ("FROM TO CC DATE MESSAGE-ID IN-REPLY-TO REFERENCES AUTO-SUBMITT
 FETCH_ITEM = "(UID BODY.PEEK[HEADER.FIELDS (%s)])" % HEADER_FIELDS
 OWN_DOMAINS = ("bookkeepingconroe.com", "southwestdigital.io", "realestatebookkeeper.com")
 
-RECENT_DAYS = 14          # normal runs send events started in this window, plus open ones
+RECENT_DAYS = 14          # normal runs send events started or answered in this window, plus open ones
 IMAP_SINCE_DAYS = 90      # normal runs read this much mail; --backfill reads all of it
 EMAIL_ADDRESS_DAYS = 7    # an address-only email answer must come within this many days
 BATCH = 500
@@ -348,60 +348,80 @@ def email_key(rec):
     return "zoho:email:" + hashlib.sha1(basis.encode()).hexdigest()[:16]
 
 
+def email_answer(first_t, until, ids, sent, mine_out, quo):
+    """(closed, answer time, via, match) for a burst that starts at first_t, looking only
+    at contact before until (the next client mail; None = no later mail).
+
+    Anything that answers the client closes the burst: a Sent naming a burst message
+    (thread, to any recipient), a Sent to one of the client's addresses, or a Quo text or
+    call to the client's number. Only a thread answers after 7 days; a later Sent or Quo
+    contact still closes the burst, unanswered. closed=False means nothing yet, so the
+    next client mail joins this burst.
+    """
+    week = dt.timedelta(days=EMAIL_ADDRESS_DAYS)
+
+    def inside(x):
+        return first_t < x and (until is None or x < until)
+
+    thread = next((r["t"] for r in sent if inside(r["t"]) and ids & r["refs"]), None)
+    addr = next((r["t"] for r in mine_out if inside(r["t"])), None)
+    q = next((x for x in quo if inside(x[0])), None)
+    if thread is None and addr is None and q is None:
+        return False, None, None, None
+    if thread is not None:
+        answer, via, match = thread, "email", "thread"
+    elif addr is not None and addr - first_t <= week:
+        answer, via, match = addr, "email", "address"
+    else:
+        answer, via, match = None, None, None
+    if q and (q[0] < answer if answer else q[0] - first_t <= week):
+        answer, via, match = q[0], q[1], q[1]
+    return True, answer, via, match
+
+
 def email_events(boxes, clients, quo_outgoing):
     """email_reply events for clients (docs/scorecard.md).
 
-    A burst is the inbound mail from one client between two Sent messages to that client.
-    Its first message starts the event. Answer: the earliest Sent whose In-Reply-To or
+    A burst is the inbound mail from one client until something answers it (see
+    email_answer); the next client mail after that starts a new burst. Its first message
+    starts the event. Answer: the earliest Sent whose In-Reply-To or
     References names a message of the burst (thread); else the earliest Sent to one of the
     client's addresses within 7 days (address). A Quo text or call to the client's number
     before that answer (or within 7 days when there is none) answers it instead.
     """
     inbound = dedupe([r for b in INBOUND_BOXES for r in boxes.get(b, [])])
-    sent = dedupe(boxes.get(SENT_BOX, []))
+    sent = sorted(dedupe(boxes.get(SENT_BOX, [])), key=lambda r: r["t"])
     sent_ids = {r["message_id"] for r in sent if r["message_id"]}
-    week = dt.timedelta(days=EMAIL_ADDRESS_DAYS)
     events = []
     for client in clients.rows:
         addrs = {a for a in (e.strip().lower() for e in client.get("emails") or [])
                  if a and not is_own(a)}
         if not addrs:
             continue
-        mine_in = [r for r in inbound
-                   if r["message_id"] not in sent_ids and r["from"]
-                   and r["from"][0] in addrs and not is_own(r["from"][0]) and not is_bulk(r)]
-        mine_out = sorted((r for r in sent if addrs & set(r["to"])), key=lambda r: r["t"])
-        stream = sorted([(r["t"], 0, r) for r in mine_in] + [(r["t"], 1, r) for r in mine_out],
-                        key=lambda x: (x[0], x[1]))
-        bursts, current = [], None
-        for _, is_sent, r in stream:
-            if is_sent:
-                current = None
-            elif current is None:
-                current = [r]
-                bursts.append(current)
-            else:
-                current.append(r)
+        mine_in = sorted((r for r in inbound
+                          if r["message_id"] not in sent_ids and r["from"]
+                          and r["from"][0] in addrs and not is_own(r["from"][0])
+                          and not is_bulk(r)), key=lambda r: r["t"])
+        mine_out = [r for r in sent if addrs & set(r["to"])]
         phones = {e164(p) for p in client.get("phones") or []} - {None}
         quo = sorted(x for p in phones for x in quo_outgoing.get(p, []))
-        for burst in bursts:
-            first = burst[0]
+        k = 0
+        while k < len(mine_in):
+            first = mine_in[k]
+            burst, ids = [first], {first["message_id"]} - {None}
+            k += 1
+            # Grow the burst until something answers it before the next client mail.
+            while True:
+                until = mine_in[k]["t"] if k < len(mine_in) else None
+                closed, answer, via, match = email_answer(first["t"], until, ids, sent,
+                                                          mine_out, quo)
+                if closed or until is None:
+                    break
+                burst.append(mine_in[k])
+                ids |= {mine_in[k]["message_id"]} - {None}
+                k += 1
             if not Clients.in_window(client, first["t"]):
                 continue
-            ids = {r["message_id"] for r in burst if r["message_id"]}
-            after = [r for r in mine_out if r["t"] > first["t"]]
-            thread = next((r for r in sorted(sent, key=lambda r: r["t"])
-                           if r["t"] > first["t"] and ids & r["refs"]), None)
-            if thread:
-                answer, match = thread["t"], "thread"
-            else:
-                addr = next((r for r in after if r["t"] - first["t"] <= week), None)
-                answer, match = (addr["t"], "address") if addr else (None, None)
-            via = "email" if answer else None
-            q = next((x for x in quo if first["t"] < x[0] and
-                      (x[0] < answer if answer else x[0] - first["t"] <= week)), None)
-            if q:
-                answer, via, match = q[0], q[1], q[1]
             details = {"match": match} if match else {}
             if len(burst) > 1:
                 details["burst"] = len(burst)
@@ -473,7 +493,10 @@ def keep(events, now, backfill):
     if backfill:
         return events
     since = now - dt.timedelta(days=RECENT_DAYS)
-    return [e for e in events if e["respondedAt"] is None or parse_ts(e["startedAt"]) >= since]
+    # Open events are always re-sent; an old event answered inside the window is re-sent
+    # too, or SWapp would keep the open copy an earlier run posted.
+    return [e for e in events if e["respondedAt"] is None
+            or parse_ts(e["startedAt"]) >= since or parse_ts(e["respondedAt"]) >= since]
 
 
 SOURCE_KINDS = {"quo": ["text_reply", "call_answered", "call_missed"], "zoho": ["email_reply"]}

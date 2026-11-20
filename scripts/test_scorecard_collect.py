@@ -192,6 +192,38 @@ class EmailTests(unittest.TestCase):
         self.assertEqual(len(ev), 1)
         self.assertEqual(ev[0]["details"], {"match": "thread", "burst": 2})
 
+    def test_quo_answer_closes_the_email_burst(self):
+        boxes = {"INBOX": [mail("INBOX", 1, t(2, "15:00"), PAT, mid="<a@x>"),
+                           mail("INBOX", 2, t(10, "15:00"), PAT, mid="<b@x>")],
+                 "Sent": []}
+        quo = {CLIENT: [(t(2, "15:30"), "call"), (t(10, "16:00"), "text")]}
+        ev = self.events(boxes, quo=quo)
+        self.assertEqual(len(ev), 2)
+        self.assertEqual((ev[0]["responseVia"], ev[0]["details"]), ("call", {"match": "call"}))
+        self.assertEqual(ev[1]["startedAt"], sc.iso(t(10, "15:00")))
+        self.assertEqual((ev[1]["responseVia"], ev[1]["details"]), ("text", {"match": "text"}))
+
+    def test_thread_reply_to_another_address_closes_the_burst(self):
+        boxes = {"INBOX": [mail("INBOX", 1, t(2, "15:00"), PAT, mid="<a@x>"),
+                           mail("INBOX", 2, t(5, "15:00"), PAT, mid="<b@x>")],
+                 "Sent": [mail("Sent", 9, t(2, "17:00"), ME, to="cc@example.com",
+                               mid="<r@me>", refs="<a@x>"),
+                          mail("Sent", 10, t(5, "16:00"), ME, to=PAT, mid="<s@me>")]}
+        ev = self.events(boxes)
+        self.assertEqual(len(ev), 2)
+        self.assertEqual(ev[0]["details"], {"match": "thread"})
+        self.assertEqual(ev[1]["details"], {"match": "address"})
+        self.assertEqual(ev[1]["respondedAt"], sc.iso(t(5, "16:00")))
+
+    def test_late_contact_closes_the_burst_unanswered(self):
+        boxes = {"INBOX": [mail("INBOX", 1, t(2, "15:00"), PAT, mid="<a@x>"),
+                           mail("INBOX", 2, t(20, "15:00"), PAT, mid="<b@x>")],
+                 "Sent": []}
+        ev = self.events(boxes, quo={CLIENT: [(t(12, "15:00"), "text")]})
+        self.assertEqual(len(ev), 2)
+        self.assertIsNone(ev[0]["respondedAt"])
+        self.assertIsNone(ev[1]["respondedAt"])
+
     def test_own_addresses_and_bulk_are_skipped(self):
         rows = [client_row(emails=[PAT, "tom@southwestdigital.io"])]
         boxes = {"INBOX": [mail("INBOX", 1, t(2, "15:00"), "tom@southwestdigital.io", mid="<o@x>"),
@@ -223,6 +255,11 @@ class WindowTests(unittest.TestCase):
                {"startedAt": sc.iso(t(25, "12:00")), "respondedAt": sc.iso(t(25, "13:00"))}]
         self.assertEqual(len(sc.keep(evs, now, False)), 2)
         self.assertEqual(len(sc.keep(evs, now, True)), 3)
+
+    def test_keep_old_event_answered_recently(self):
+        now = t(30, "12:00")
+        evs = [{"startedAt": sc.iso(t(1, "12:00")), "respondedAt": sc.iso(t(28, "09:00"))}]
+        self.assertEqual(len(sc.keep(evs, now, False)), 1)
 
 
 if __name__ == "__main__":
