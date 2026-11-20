@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Check, FileText } from "lucide-react";
+import { Check, Eye, FileText } from "lucide-react";
 import {
   GSA_DUE_HOURS, GSA_STEPS, GSA_STEP_LABELS, currentGsaStep, formatWaiting, gsaFolderCandidates, hoursSincePaid, nextGsaAction,
 } from "@/lib/gsa/progress";
@@ -12,11 +12,15 @@ function day(date: Date | null) {
   return date ? date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Chicago" }) : null;
 }
 
-function pdfHref(proposal: GsaProposal, company: string) {
+function pdfHref(proposal: GsaProposal, company: string, doc?: "draft" | "signed") {
   const params = new URLSearchParams();
   for (const folder of gsaFolderCandidates(proposal.gsaClientFolder, company)) params.append("folder", folder);
+  if (doc) params.set("doc", doc);
   return `/agreements/pdfs?${params.toString()}`;
 }
+
+/** The step whose PDF a "View" button opens: the draft (also what was sent), or the signed copy. */
+const VIEW_DOC = { drafted: "draft", signed: "signed" } as const;
 
 /**
  * The GSA detail for one paid proposal agreement: what was bought, the three
@@ -65,6 +69,16 @@ export function GsaPanel({ proposal, company, now }: { proposal: GsaProposal; co
                 <span className="block text-sm font-medium text-slate-900">{GSA_STEP_LABELS[key]}</span>
                 <span className="block text-xs text-slate-500">{at ? day(at) : "Not yet"}</span>
               </span>
+              {at && key in VIEW_DOC ? (
+                <Link
+                  href={pdfHref(proposal, company || proposal.clientName, VIEW_DOC[key as keyof typeof VIEW_DOC])}
+                  aria-label={`View the ${key === "signed" ? "signed GSA" : "GSA draft"}`}
+                  className="ui-action-secondary inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition"
+                >
+                  <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+                  View
+                </Link>
+              ) : null}
               <GsaStepButton engagementId={proposal.engagementId} step={key} done={Boolean(at)} label={GSA_STEP_LABELS[key]} />
             </li>
           );
@@ -76,7 +90,7 @@ export function GsaPanel({ proposal, company, now }: { proposal: GsaProposal; co
         className="mt-3 inline-flex min-h-10 items-center gap-2 text-sm font-medium text-slate-700 hover:underline"
       >
         <FileText className="h-4 w-4" aria-hidden="true" />
-        Agreement PDFs (needs Tailscale)
+        All agreement PDFs (needs Tailscale)
       </Link>
     </section>
   );

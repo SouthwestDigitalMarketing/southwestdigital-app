@@ -450,6 +450,14 @@ def list_agreements(root, folder):
     return sorted(out, key=lambda a: (a["date"], a["name"]), reverse=True)
 
 
+def gsa_file(root, folder, kind):
+    """rel path of the newest General Services Agreement PDF: the unsigned draft, or the SIGNED copy."""
+    for a in list_agreements(root, folder) or []:
+        if "general-services-agreement" in a["name"].lower() and a["signed"] == (kind == "signed"):
+            return a["rel"]
+    return None
+
+
 def agreement_path(root, folder, rel):
     """The real file for /agreements/<folder>/<rel>, or None if it is not a saved agreement PDF."""
     parts = rel.split("/")
@@ -1215,6 +1223,20 @@ class Handler(BaseHTTPRequestHandler):
                 return
             sign = urllib.parse.urlencode({"exp": exp, "sig": query.get("sig", [""])[0]})
             parts = [urllib.parse.unquote(p) for p in path.split("/")[2:] if p]
+            if parts:
+                # SWapp sends its best folder name, and others to try as ?alt=; the first that exists wins.
+                for candidate in [parts[0]] + [a for a in query.get("alt", []) if CLIENT_DIR.match(a)]:
+                    if os.path.isdir(os.path.join(REPORTS_ROOT, candidate, "agreements")):
+                        parts[0] = candidate
+                        break
+            if len(parts) == 3 and parts[1] == "gsa" and parts[2] in ("draft", "signed"):
+                # GSA shortcut from SWapp's GSA panel: the newest draft or signed copy.
+                rel = gsa_file(REPORTS_ROOT, parts[0], parts[2])
+                if rel is None:
+                    self._send(404, "No %s GSA saved in this client's agreements folder yet." % ("signed" if parts[2] == "signed" else "draft"),
+                               "text/plain; charset=utf-8")
+                    return
+                parts = [parts[0]] + rel.split("/")
             if not parts:
                 body = agreements_index_page(REPORTS_ROOT, sign).encode()
                 self.send_response(200)
@@ -1225,13 +1247,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(body)
                 return
             if len(parts) == 1:
-                # SWapp sends the name slug, and the client code as ?alt=; the first that has a folder wins.
-                folder = parts[0]
-                for candidate in [parts[0]] + [a for a in query.get("alt", []) if CLIENT_DIR.match(a)]:
-                    if os.path.isdir(os.path.join(REPORTS_ROOT, candidate, "agreements")):
-                        folder = candidate
-                        break
-                page = agreements_page(REPORTS_ROOT, folder, sign)
+                page = agreements_page(REPORTS_ROOT, parts[0], sign)
                 if page is None:
                     self._send(404, "No such client.", "text/plain; charset=utf-8")
                     return
@@ -1811,6 +1827,16 @@ def self_test():
     assert "1 signed" in index and "1 unsigned" in index and "empty-co" not in index.lower() and "Empty Co" not in index, index
     with urllib.request.urlopen(agreements + "/sj-equity?alt=sj-equity-llc&" + signed[1:]) as response:
         assert b">Signed<" in response.read()
+    with urllib.request.urlopen(agreements + "/sj-equity/gsa/draft?alt=sj-equity-llc&" + signed[1:]) as response:
+        assert response.read() == b"%PDF-draft"
+    with urllib.request.urlopen(agreements + "/sj-equity-llc/gsa/signed" + signed) as response:
+        assert response.read() == b"%PDF-signed"
+    for bad in ("/empty-co/gsa/draft" + signed, "/sj-equity-llc/gsa/other" + signed, "/sj-equity-llc/gsa/draft" + signed.replace("sig=", "sig=00")):
+        try:
+            urllib.request.urlopen(agreements + bad)
+            raise SystemExit("gsa request was allowed: " + bad)
+        except urllib.error.HTTPError as error:
+            assert error.code in (403, 404), (bad, error.code)
     with urllib.request.urlopen(agreements + "/sj-equity-llc/v1/2026-11-20_General-Services-Agreement_SJ-Equity-LLC.pdf" + signed) as response:
         assert response.headers["Content-Type"] == "application/pdf" and response.read() == b"%PDF-draft"
     for bad in ("/sj-equity-llc" + signed.replace("sig=", "sig=00"), "/sj-equity-llc/notes.txt" + signed,
