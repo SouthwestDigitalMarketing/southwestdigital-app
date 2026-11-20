@@ -10,6 +10,8 @@ import { StatCard } from "./StatCards";
 import { OffersStatCard } from "./OffersStatCard";
 import { MrrStatCard, PipelineMrrStatCard, type PipelineMrrPipeline } from "./MrrStatCard";
 import { DashboardControls } from "./DashboardControls";
+import { BillingTimers } from "./BillingTimers";
+import { BILLING_TIMERS_BRAND_SLUG, billingTimers } from "@/lib/dashboard/billing-timers";
 import { funnelStepFor, hasYouTubeActivity, summarizeMrr } from "./utils";
 import { getPastDueByContact } from "@/lib/ar/pastDue";
 import { getMrrGoals } from "@/lib/dashboard/mrr-goals";
@@ -469,6 +471,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           selectedRange={range}
         />
       </div>
+
+      {brand.slug === BILLING_TIMERS_BRAND_SLUG && <BillingTimers timers={billingTimers(firmDateKey(new Date()))} />}
 
       <DashboardSection title="Revenue" icon={<DollarSign size={14} />}>
         <MrrStatCard
