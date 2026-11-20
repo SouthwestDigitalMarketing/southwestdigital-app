@@ -45,8 +45,8 @@ export function sendPageLink(input: {
   secret: string;
   publicUrl: string;
   nowSeconds: number;
-  /** "/reports" opens ripley's published client reports; "/agreements/<client>" one client's agreement PDFs. */
-  path?: "/send" | "/reports" | `/agreements/${string}`;
+  /** "/reports" opens ripley's published client reports; "/agreements" the clients with agreement PDFs, "/agreements/<client>" one client's. */
+  path?: "/send" | "/reports" | "/agreements" | `/agreements/${string}`;
   /** Extra address parameters, such as the client code ripley tries as a second folder name. */
   extra?: Record<string, string>;
 }): { ok: true; url: string; exp: number } | { ok: false; error: string } {

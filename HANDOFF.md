@@ -1,5 +1,18 @@
 # SWapp handoff
 
+## 2026-11-20 — Agreements menu page opens every client's agreement PDFs (Ummon)
+
+The client-record button (PR #185) sits on SWapp *ticket clients* (bc_next, Test Client...), which are
+not the real clients, so SJ Equity had no way in. `/agreements` (menu item) now has a "Client agreement
+PDFs" card at the top -> `/agreements/pdfs` (staff login, signs a link) -> ripley's tailnet
+`/agreements` index in `scripts/phone_intake.py`: every client folder under `~/projects/clients` with
+PDFs in `agreements/[v<N>/]`, "N signed" / "N unsigned" tags, clients with unsigned first. Rows open the
+per-client list from #185. Nothing stored in SWapp; phone needs Tailscale. Folders starting with `_`
+and clients without PDFs are not listed. Checks: `phone_intake.py --self-test` ok (index added),
+vitest `src/lib/phone-intake` 6 pass, `tsc` clean; installed on ripley and restarted; screenshot of the
+index at 412px wide read fine. Not checked: the SWapp card/redirect on a real phone (needs login).
+"Unsigned" is any PDF without SIGNED in its name, so old drafts count as unsigned.
+
 ## 2026-11-20 — Agreement PDFs on the client record (Ummon)
 
 Client record (`/clients/[id]`) has an "Agreements (PDFs)" button -> `/clients/[id]/agreements`
