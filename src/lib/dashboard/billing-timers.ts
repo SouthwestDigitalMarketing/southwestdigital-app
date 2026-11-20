@@ -10,6 +10,9 @@
  *   from the 1st; before that it says when it starts.
  */
 
+/** Only Bookkeeping Conroe bills on this calendar (Tom, 2026-11-20). */
+export const BILLING_TIMERS_BRAND_SLUG = "bookkeeping-conroe";
+
 export const REMINDER_DAYS_BEFORE_MONTH_END = 3;
 export const LATE_FEE_GRACE_DAYS = 7;
 
