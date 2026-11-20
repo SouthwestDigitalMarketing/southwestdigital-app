@@ -36,6 +36,7 @@ export const NAV_DESTINATIONS: Array<{
 }> = [
   { id: "nav.dashboard", title: "Dashboard", href: "/dashboard", keys: "g d", aliases: ["home"] },
   { id: "nav.operations", title: "Operations", href: "/operations", aliases: ["playbook", "duties", "daily", "today"] },
+  { id: "nav.scorecard", title: "Scorecard", href: "/scorecard", aliases: ["response time", "speed", "how fast", "kpi"] },
   { id: "nav.scanner", title: "Scanner", href: "/scanner", keys: "g n", aliases: ["scan", "findings"] },
   { id: "nav.localSeo", title: "Local SEO", href: "/local-seo", aliases: ["geo grid", "maps", "local search"] },
   { id: "nav.website", title: "Website", href: "/website", keys: "g w" },
