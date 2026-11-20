@@ -38,13 +38,17 @@ REPORT_STATUS = os.path.expanduser(os.environ.get("PHONE_INTAKE_REPORT_STATUS", 
 # the HTML, and the viewer blacks out the client's name and account-like numbers in the PDF.
 PRIVACY_COOKIE = "swapp_privacy"
 # Extra words to black out per client (owner names, a trading name): {"<folder>": ["Jane Smith"]}.
+# Each client's privacy letter, fixed once given so 'Client C' never changes hands: {"<folder>": 2}.
+REPORT_ALIASES = os.path.expanduser(os.environ.get("PHONE_INTAKE_PRIVACY_ALIASES", "~/.local/share/swapp-phone-intake/privacy-aliases.json"))
+ALIAS_LOCK = threading.Lock()
 REPORT_PRIVACY_WORDS = os.path.expanduser(os.environ.get("PHONE_INTAKE_PRIVACY_WORDS", "~/.config/swapp-phone-intake/privacy-words.json"))
 # Name words too common to black out on their own ("Rental Properties" is an account, not a client).
 PRIVACY_COMMON = {"llc", "pllc", "inc", "ltd", "corp", "co", "company", "the", "and", "of", "for", "dba", "group",
                   "services", "service", "solutions", "properties", "property", "rental", "rentals", "holdings",
                   "enterprises", "partners", "management", "personal", "business", "equity", "capital", "cash",
                   "bank", "income", "revenue", "assets", "asset", "investments", "investment", "financial", "trust",
-                  "home", "homes", "real", "estate", "realty", "consulting", "llp", "pc", "pa"}
+                  "home", "homes", "real", "estate", "realty", "consulting", "llp", "pc", "pa", "car", "cars", "auto",
+                  "city", "discount", "warehouse"}
 # PDF.js (pdfjs-dist 3.11.174) for the report viewer, served from here so nothing loads from a CDN.
 PDFJS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pdfjs")
 PDFJS_FILES = {"pdf.min.js": "application/javascript", "pdf.worker.min.js": "application/javascript"}
@@ -292,10 +296,23 @@ def privacy_on(cookie_header):
     return PRIVACY_COOKIE in jar and jar[PRIVACY_COOKIE].value == "1"
 
 
-def client_alias(folder):
-    """'Client A', 'Client B', ... in folder order, the same on every page while privacy is on."""
+def alias_numbers():
+    """Every client's fixed privacy number; new clients get the next one, nobody is renumbered."""
     named = sorted(f for f in (read_json(REPORT_NAMES, {}) or {}) if CLIENT_DIR.match(f))
-    i = named.index(folder) if folder in named else len(named)
+    with ALIAS_LOCK:
+        numbers = {k: v for k, v in (read_json(REPORT_ALIASES, {}) or {}).items() if isinstance(v, int)}
+        new = [f for f in named if f not in numbers]
+        for folder in new:
+            numbers[folder] = max(numbers.values(), default=-1) + 1
+        if new:
+            write_json(REPORT_ALIASES, numbers)
+    return numbers
+
+
+def client_alias(folder):
+    """'Client A', 'Client B', ... fixed per client (REPORT_ALIASES), the same on every page while privacy is on."""
+    numbers = alias_numbers()
+    i = numbers.get(folder, max(numbers.values(), default=-1) + 1)
     letters = ""
     while True:
         i, r = divmod(i, 26)
@@ -317,6 +334,18 @@ def resolve_folder(token):
     if token in named or not re.match(r"^client-[a-z]{1,3}$", token or ""):
         return token
     return next((f for f in named if alias_slug(f) == token), token)
+
+
+def account_labels():
+    """'Account 1', 'Account 2', ... per page, the same account always the same label: an account name can
+    carry the client's or an owner's name ('TCB Chk - Owner Personal'), not only digits."""
+    seen = {}
+    def label(name):
+        key = (name or "").strip().lower()
+        if key not in seen:
+            seen[key] = "Account %d" % (len(seen) + 1)
+        return seen[key]
+    return label
 
 
 def mask_digits(text):
@@ -346,7 +375,11 @@ def privacy_toggle(private):
     label = "&#128274; Privacy on" if private else "Privacy off"
     return ("<button id=pv class='pv%s' type=button aria-pressed=%s title='Hide client names and account numbers'>%s</button>"
             "<script>document.getElementById('pv').onclick=function(){document.cookie='%s=%s;path=/reports;max-age=31536000;samesite=lax';"
-            "location.reload();};</script>" % (" on" if private else "", "true" if private else "false", label, PRIVACY_COOKIE, "0" if private else "1"))
+            "location.reload();};"
+            # A switch flipped in another tab redraws this one too, so no tab is left showing the other mode.
+            "setInterval(function(){if((document.cookie.indexOf('%s=1')>=0)!==%s)location.reload();},2000);</script>"
+            % (" on" if private else "", "true" if private else "false", label, PRIVACY_COOKIE, "0" if private else "1",
+               PRIVACY_COOKIE, "true" if private else "false"))
 
 
 PRIVACY_STYLE = (".pv{flex:0 0 auto;font:600 14px system-ui,sans-serif;border-radius:999px;padding:6px 12px;cursor:pointer;"
@@ -641,7 +674,7 @@ def reports_page(root, folder, query, private=False):
              "div.row.st:not(.off){background:#fff;color:#0f172a}a.back{color:#475569;display:inline-block;margin-bottom:12px}"
              ".top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 12px}.top h1{margin:0}"
              + PRIVACY_STYLE + "</style>")
-    mask = mask_digits if private else (lambda text: text)
+    mask = account_labels() if private else (lambda text: text)
     shown = (lambda c: client_alias(c["folder"])) if private else (lambda c: c["name"])
     slug = (lambda f: alias_slug(f)) if private else (lambda f: f)
     if folder is None:
@@ -732,23 +765,43 @@ function note(text){when.textContent=text;}
 var WORDS=null;
 if(CFG.privacy){WORDS={};CFG.privacy.words.forEach(function(h){WORDS[h]=1;});}
 function fnv(w){var h=0x811c9dc5;for(var i=0;i<w.length;i++){h^=w.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0;}return h>>>0;}
-var PATTERNS=[
-  /(?<![A-Za-z])(?:[xX*\u2022#]|\.{2,}|\u2026)\s?\d{2,}/g,
-  /(?:ending(?:\s+in)?|acct\.?|account(?:\s*(?:number|no\.?))?|a\/c)[\s:#xX*\u2022]*\d{3,}/gi,
+// Account-shaped text names the whole line ('*1234 TCB Chk - Owner Personal'): hide the line.
+var LINE=[
+  /(?<![A-Za-z])(?:[xX*•#]+|\.{2,}|…)\s?\d{2,}/,
+  /(?:ending(?:\s+in)?|acct\.?|account(?:\s*(?:number|no\.?))?|a\/c)[\s:#xX*•]*\d{3,}/i,
+  /\(\s*[xX*•#]*\d{3,}\s*\)/,
+  /[A-Za-z)\]]\s*(?:[-–—:#]\s*)?(?!(?:19|20)\d\d\s*$)\d{4}\s*$/,
+  /\(deleted\)/i
+];
+// Hide just the matching text.
+var SPAN=[
   /[^\s@]+@[^\s@]+\.[A-Za-z]{2,}/g,
   /\(?\b\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}\b/g,
   /\b\d{2}-\d{7}\b|\b\d{3}-\d{2}-\d{4}\b/g,
   /(?<![\d.,$])\d{5,}(?!\d|[.,]\d|\s?%)/g,
-  /\b\d{1,6}\s+(?:[NSEW]\.?\s+)?(?:[A-Z][A-Za-z'.-]*\s+){1,4}(?:Rd|Road|St|Street|Ave|Avenue|Dr|Drive|Ln|Lane|Blvd|Boulevard|Ct|Court|Way|Pl|Place|Pkwy|Parkway|Hwy|Highway|Cir|Circle|Trl|Trail|Loop|Ter|Terrace|Cv|Cove|Bend|Xing|Fwy|Freeway)\b\.?/g
+  /\b\d{1,6}\s+(?:[NSEW]\.?\s+)?(?:(?:\d+(?:st|nd|rd|th)|[A-Za-z][A-Za-z'.-]*)\s+){1,4}(?:Rd|Road|St|Street|Ave|Avenue|Dr|Drive|Ln|Lane|Blvd|Boulevard|Ct|Court|Way|Pl|Place|Pkwy|Parkway|Hwy|Highway|Cir|Circle|Trl|Trail|Loop|Ter|Terrace|Cv|Cove|Bend|Xing|Fwy|Freeway)\b\.?/gi,
+  /\b[NSEW]\.?\s+\d+(?:st|nd|rd|th)\s+(?:St|Street|Ave|Avenue|Rd|Road|Dr|Drive)\b/gi,
+  /\bP\.?\s?O\.?\s*Box\s*\d+/gi,
+  /\b(?:FM|CR|RM|SH|County\s+Road|Farm\s+to\s+Market)\s*-?\s*\d{2,4}\b/gi
 ];
+// Owner and equity lines name a person after the dash ('Distributions - First Last'): hide the name.
+var TAIL=/\b(?:distributions?|draws?|owner'?s?(?:\s+(?:draw|equity|contributions?|investment|distributions?|pay|loan))?|shareholder(?:\s+(?:loan|distributions?|contributions?))?|member(?:\s+(?:draws?|distributions?|contributions?))?|partner(?:\s+(?:draws?|distributions?|contributions?))?|contributions?)\s*[-–—:]\s*(\S.*)$/id;
+var RANKED=/^\s*\d{1,2}\.\s+(\S.*)$/d;
+var POSSESSIVE=/\b[A-Z][a-z]+['\u2019]s\b/g;
+function spans(s){
+  var out=[],m;
+  for(var i=0;i<LINE.length;i++)if(LINE[i].test(s))return [[0,s.length]];
+  SPAN.forEach(function(p){p.lastIndex=0;while((m=p.exec(s)))out.push([m.index,m.index+m[0].length]);});
+  if((m=TAIL.exec(s)))out.push(m.indices[1]);
+  // Numbered lists ('3. Jane Smith', the top payees) are mostly people: hide the name, keep the rank.
+  if((m=RANKED.exec(s)))out.push(m.indices[1]);
+  // A capitalised possessive in summary text is usually a person ('Jane's draw').
+  POSSESSIVE.lastIndex=0;while((m=POSSESSIVE.exec(s)))out.push([m.index,m.index+m[0].length]);
+  return out;
+}
 function hits(s){
-  var out=[],m,re;
-  re=/[A-Za-z0-9]+/g;
+  var out=spans(s),m,re=/[A-Za-z0-9]+/g;
   while((m=re.exec(s))){var w=m[0].toLowerCase();if(w.length>=2&&WORDS[fnv(w)])out.push([m.index,m.index+m[0].length]);}
-  PATTERNS.forEach(function(p,i){p.lastIndex=0;while((m=p.exec(s))){
-    // An account number names the line ('*1234 TCB Chk - Owner Personal'): hide the whole line.
-    if(i<2){out.push([0,s.length]);continue;}
-    out.push([m.index,m.index+m[0].length]);}});
   return out;
 }
 async function redact(page,vp,ctx){
@@ -1081,7 +1134,17 @@ class Handler(BaseHTTPRequestHandler):
                 return
             parts = [urllib.parse.unquote(p) for p in path.split("/")[2:] if p]
             if parts and parts[0] != "_pdfjs":
-                parts[0] = resolve_folder(parts[0])
+                token, parts[0] = parts[0], resolve_folder(parts[0])
+                if private and token == parts[0] and token in (read_json(REPORT_NAMES, {}) or {}):
+                    # Privacy on and a real client folder in the address bar (a link from before the
+                    # switch, or history): move to the alias address so the name leaves the screen.
+                    self.send_response(302)
+                    self.send_header("Location", "/reports/%s?%s" % ("/".join([alias_slug(token)] + parts[1:]),
+                                                                   urllib.parse.urlparse(self.path).query))
+                    self.send_header("Cache-Control", "no-store")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
             if len(parts) == 2 and parts[0] == "_pdfjs" and parts[1] in PDFJS_FILES:
                 with open(os.path.join(PDFJS_DIR, parts[1]), "rb") as handle:
                     data = handle.read()
@@ -1132,7 +1195,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             with open(real, "rb") as handle:
                 data = handle.read()
-            label = "%s %s" % (client_name(parts[0]), parts[2][:-4])
+            label = "%s %s" % (client_alias(parts[0]) if private else client_name(parts[0]), parts[2][:-4])
             self.send_response(200)
             self.send_header("Content-Type", "application/pdf")
             self.send_header("Content-Disposition", 'inline; filename="%s.pdf"' % re.sub(r"[^A-Za-z0-9 _-]", "", label))
@@ -1484,8 +1547,10 @@ def self_test():
         handle.write(b"%PDF-oct")
     with open(os.path.join(REPORTS_ROOT, "bnb-getaway", "secret.txt"), "wb") as handle:
         handle.write(b"no")
-    global REPORT_NAMES
+    global REPORT_NAMES, REPORT_ALIASES, REPORT_PRIVACY_WORDS
     REPORT_NAMES = os.path.join(INBOX, "names.json")
+    REPORT_ALIASES = os.path.join(INBOX, "aliases.json")
+    REPORT_PRIVACY_WORDS = os.path.join(INBOX, "privacy-words.json")
     write_json(REPORT_NAMES, {"bnb-getaway": "BnB Getaway LLC", "sj-equity-llc": "SJ Equity LLC"})
     reports = "http://%s:%d/reports" % (host, port)
     signed = "?exp=%d&sig=%s" % (sexp, ssig)
@@ -1539,7 +1604,21 @@ def self_test():
     hidden = private_get("/bnb-getaway")
     for leak in (b"BnB", b"bnb-getaway", b"4821", b"9934", b"Jane"):
         assert leak not in hidden, leak
-    assert b"Client A" in hidden and b"Hidden in privacy mode" in hidden and b"WFB Chk" in hidden
+    assert b"Client A" in hidden and b"Hidden in privacy mode" in hidden and b"Account 1" in hidden and b"WFB" not in hidden
+    # A real folder in the address bar moves to its alias while privacy is on; a client added later
+    # gets the next letter and nobody else's letter changes.
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *args, **kwargs):
+            return None
+    try:
+        urllib.request.build_opener(NoRedirect).open(urllib.request.Request(
+            reports + "/bnb-getaway/2026/2026-10/view" + signed, headers={"Cookie": PRIVACY_COOKIE + "=1"}))
+        raise SystemExit("real folder was served with privacy on")
+    except urllib.error.HTTPError as error:
+        assert error.code == 302 and error.headers["Location"].startswith("/reports/client-a/2026/2026-10/view?"), error.headers["Location"]
+    write_json(REPORT_NAMES, {"aaa-new-client": "AAA New", "bnb-getaway": "BnB Getaway LLC", "sj-equity-llc": "SJ Equity LLC"})
+    assert (client_alias("bnb-getaway"), client_alias("sj-equity-llc"), client_alias("aaa-new-client")) == ("Client A", "Client B", "Client C")
+    write_json(REPORT_NAMES, {"bnb-getaway": "BnB Getaway LLC", "sj-equity-llc": "SJ Equity LLC"})
     with urllib.request.urlopen(reports + "/bnb-getaway" + signed) as response:
         shown = response.read()
         assert b"4821" in shown and b"Jane Doe" in shown and b"Privacy off" in shown
