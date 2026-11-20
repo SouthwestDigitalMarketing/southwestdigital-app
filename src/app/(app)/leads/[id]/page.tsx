@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireStaffBrand } from "@/lib/brands/staff";
+import { paidProposalsForContacts } from "@/lib/gsa/store";
+import { GsaPanel } from "@/components/gsa/GsaPanel";
 import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { LeadManagement } from "../LeadManagement";
 
@@ -90,6 +92,9 @@ export default async function LeadDetailPage({ params, searchParams }: PageProps
     });
   });
 
+  const gsaProposals = await paidProposalsForContacts(dataContext, linkedContacts.map((contact) => contact.id));
+  const now = new Date();
+
   return (
     <div className="space-y-4 p-4 sm:space-y-6 sm:p-8">
       <div>
@@ -98,6 +103,10 @@ export default async function LeadDetailPage({ params, searchParams }: PageProps
         <h1 className="mt-1 text-2xl font-semibold text-slate-900 sm:text-3xl">{lead.name}</h1>
         <p className="mt-1 text-sm text-slate-600">{lead.company || "No company listed"}</p>
       </div>
+
+      {gsaProposals.map((proposal) => (
+        <GsaPanel key={proposal.engagementId} proposal={proposal} company={lead.company || lead.name} now={now} />
+      ))}
 
       {query.updated === "1" ? <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">Lead details saved.</p> : null}
       <LeadManagement lead={{

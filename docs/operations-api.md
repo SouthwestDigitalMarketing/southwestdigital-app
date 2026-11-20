@@ -49,6 +49,14 @@ Brand defaults to `bookkeeping-conroe` in `ops`; the API requires `brand`.
   `qbCompany`.
 - `POST /api/operations/client-won`: `brand`, `engagementId`; re-runs the
   new-client steps.
+- `GET /api/operations/gsa?brand=...`: paid proposal agreements whose GSA
+  (General Services Agreement) is not signed yet, with tier, amount, paid date
+  and the steps done so far.
+- `POST /api/operations/gsa`: `brand`, `engagementId`, `step` (`drafted` |
+  `sent` | `signed`); optional `done` (false clears it), `at` (ISO date),
+  `folder` (the client folder under `ripley:~/projects/clients`). Marking it
+  signed also fills empty "Service agreement signed" / "Initial payment
+  received" dates on the contact's leads.
 
 ## A new client (automatic)
 
