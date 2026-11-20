@@ -33,6 +33,18 @@ REPORTS_ROOT = os.path.expanduser(os.environ.get("PHONE_INTAKE_REPORTS_ROOT", "~
 REPORT_NAMES = os.path.expanduser(os.environ.get("PHONE_INTAKE_REPORT_NAMES", "~/.config/swapp-phone-intake/report-names.json"))
 # Each client's month status, written hourly by scripts/report_status.py from Double.
 REPORT_STATUS = os.path.expanduser(os.environ.get("PHONE_INTAKE_REPORT_STATUS", "~/.local/share/swapp-phone-intake/report-status.json"))
+# Privacy mode for screen recordings (Tom, 2026-11-20): a header switch on every Reports page,
+# remembered in this cookie. When on, the server leaves names, account digits and notes out of
+# the HTML, and the viewer blacks out the client's name and account-like numbers in the PDF.
+PRIVACY_COOKIE = "swapp_privacy"
+# Extra words to black out per client (owner names, a trading name): {"<folder>": ["Jane Smith"]}.
+REPORT_PRIVACY_WORDS = os.path.expanduser(os.environ.get("PHONE_INTAKE_PRIVACY_WORDS", "~/.config/swapp-phone-intake/privacy-words.json"))
+# Name words too common to black out on their own ("Rental Properties" is an account, not a client).
+PRIVACY_COMMON = {"llc", "pllc", "inc", "ltd", "corp", "co", "company", "the", "and", "of", "for", "dba", "group",
+                  "services", "service", "solutions", "properties", "property", "rental", "rentals", "holdings",
+                  "enterprises", "partners", "management", "personal", "business", "equity", "capital", "cash",
+                  "bank", "income", "revenue", "assets", "asset", "investments", "investment", "financial", "trust",
+                  "home", "homes", "real", "estate", "realty", "consulting", "llp", "pc", "pa"}
 # PDF.js (pdfjs-dist 3.11.174) for the report viewer, served from here so nothing loads from a CDN.
 PDFJS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pdfjs")
 PDFJS_FILES = {"pdf.min.js": "application/javascript", "pdf.worker.min.js": "application/javascript"}
@@ -269,6 +281,78 @@ def client_name(folder):
     return " ".join(w.upper() if w in small - {"and", "of", "the"} else (w if w in small else w.capitalize()) for w in words)
 
 
+def privacy_on(cookie_header):
+    """True when the Privacy switch is on in this browser."""
+    import http.cookies
+    jar = http.cookies.SimpleCookie()
+    try:
+        jar.load(cookie_header or "")
+    except http.cookies.CookieError:
+        return False
+    return PRIVACY_COOKIE in jar and jar[PRIVACY_COOKIE].value == "1"
+
+
+def client_alias(folder):
+    """'Client A', 'Client B', ... in folder order, the same on every page while privacy is on."""
+    named = sorted(f for f in (read_json(REPORT_NAMES, {}) or {}) if CLIENT_DIR.match(f))
+    i = named.index(folder) if folder in named else len(named)
+    letters = ""
+    while True:
+        i, r = divmod(i, 26)
+        letters = chr(65 + r) + letters
+        if not i:
+            break
+        i -= 1
+    return "Client " + letters
+
+
+def alias_slug(folder):
+    """'client-a': the folder name used in links while privacy is on, so the address bar shows no name."""
+    return client_alias(folder).lower().replace(" ", "-")
+
+
+def resolve_folder(token):
+    """A real client folder from a link: the folder itself, or its privacy alias ('client-a')."""
+    named = [f for f in (read_json(REPORT_NAMES, {}) or {}) if CLIENT_DIR.match(f)]
+    if token in named or not re.match(r"^client-[a-z]{1,3}$", token or ""):
+        return token
+    return next((f for f in named if alias_slug(f) == token), token)
+
+
+def mask_digits(text):
+    """An account name with its numbers hidden: '*4821 WFB Chk' -> '*•••• WFB Chk'."""
+    return re.sub(r"\d{2,}", "\u2022\u2022\u2022\u2022", text or "")
+
+
+def privacy_hash(word):
+    """FNV-1a 32-bit of a word lower-cased to [a-z0-9]; the viewer hashes PDF words the same way,
+    so the page can match the client's name without carrying it."""
+    h = 0x811C9DC5
+    for ch in re.sub(r"[^a-z0-9]", "", word.lower()).encode():
+        h = ((h ^ ch) * 0x01000193) & 0xFFFFFFFF
+    return h
+
+
+def privacy_words(folder):
+    """Hashes of the words to black out in this client's PDFs: its name, folder and any extras."""
+    extra = (read_json(REPORT_PRIVACY_WORDS, {}) or {}).get(folder) or []
+    text = " ".join([client_name(folder), folder] + [w for w in extra if isinstance(w, str)])
+    words = {w for w in re.findall(r"[a-z0-9]+", text.lower()) if len(w) >= 2 and w not in PRIVACY_COMMON}
+    return sorted(privacy_hash(w) for w in words)
+
+
+def privacy_toggle(private):
+    """The header switch. It sets the cookie for /reports and reloads, so the server redraws the page."""
+    label = "&#128274; Privacy on" if private else "Privacy off"
+    return ("<button id=pv class='pv%s' type=button aria-pressed=%s title='Hide client names and account numbers'>%s</button>"
+            "<script>document.getElementById('pv').onclick=function(){document.cookie='%s=%s;path=/reports;max-age=31536000;samesite=lax';"
+            "location.reload();};</script>" % (" on" if private else "", "true" if private else "false", label, PRIVACY_COOKIE, "0" if private else "1"))
+
+
+PRIVACY_STYLE = (".pv{flex:0 0 auto;font:600 14px system-ui,sans-serif;border-radius:999px;padding:6px 12px;cursor:pointer;"
+                 "border:1px solid #cbd5e1;background:#fff;color:#334155}.pv.on{background:#7c3aed;border-color:#7c3aed;color:#fff}")
+
+
 def list_reports(root):
     """Every client in REPORT_NAMES, by name, each with its published months newest first (maybe none)."""
     out = []
@@ -343,7 +427,7 @@ def status_legend():
     return "<details class=legend><summary>Legend</summary><div class=items>%s</div></details>" % items
 
 
-def status_reason(info, today=None):
+def status_reason(info, today=None, private=False):
     """Why a client has its tag, in one or two plain sentences (Tom, 2026-11-18: tap the client, see why)."""
     import datetime as dt
     status = info.get("status")
@@ -365,7 +449,7 @@ def status_reason(info, today=None):
     if status == "done":
         return ["%s report is published." % name]
     if status == "waiting":
-        return ["Waiting on the client: %s." % info["waiting"].rstrip(".") if info.get("waiting")
+        return ["Waiting on the client: %s." % info["waiting"].rstrip(".") if info.get("waiting") and not private
                 else "Waiting on the client to answer questions or send statements in Double."]
     if status == "catching-up":
         return ["Still finishing older months.", "%s's close isn't open in Double yet." % name]
@@ -402,7 +486,7 @@ def month_label(ym):
         return str(ym)
 
 
-def statement_list(info):
+def statement_list(info, mask=lambda text: text):
     """'Statements for October': one line per owed account, arrived (date) / missing / not issued yet."""
     import html
     accounts = info.get("statements") or []
@@ -422,13 +506,13 @@ def statement_list(info):
         else:
             mark, text, cls = "&#10003;", "In, %s" % month_day(state), "ok"
         rows.append("<li class=%s><span>%s</span><b>%s</b><em>%s</em><small>%s</small></li>"
-                    % (cls, mark, html.escape(a["name"]), html.escape(text), html.escape(statement_dates(a))))
+                    % (cls, mark, html.escape(mask(a["name"])), html.escape(text), html.escape(statement_dates(a))))
     for name in info.get("unchecked") or []:
-        rows.append("<li class=wait><span>?</span><b>%s</b><em>Can't check: no account number in Double</em></li>" % html.escape(name))
+        rows.append("<li class=wait><span>?</span><b>%s</b><em>Can't check: no account number in Double</em></li>" % html.escape(mask(name)))
     return "<div class=stm><b>Statements for %s</b><ul>%s</ul></div>" % (html.escape(title), "".join(rows))
 
 
-def feed_list(info):
+def feed_list(info, mask=lambda text: text, private=False):
     """'Bank feeds': each connected account as read from the QuickBooks Banking page, with when it was read."""
     import datetime as dt
     import html
@@ -446,10 +530,10 @@ def feed_list(info):
         detail = "Last updated %s" % month_day(a.get("lastUpdated"))
         if a.get("pending") is not None:
             detail += " · %d pending" % a["pending"]
-        if a.get("note"):
+        if a.get("note") and not private:
             detail += " · " + a["note"]
         rows.append("<li class=%s><span>%s</span><b>%s</b><em>%s</em><small>%s</small></li>"
-                    % (cls, mark, html.escape(a.get("name") or ""), html.escape(label), html.escape(detail)))
+                    % (cls, mark, html.escape(mask(a.get("name") or "")), html.escape(label), html.escape(detail)))
     try:
         age = (dt.date.today() - dt.date.fromisoformat(feed.get("checked") or "")).days
         checked = "today" if age == 0 else ("yesterday" if age == 1 else "%d days ago" % age)
@@ -484,7 +568,7 @@ def missing_for(info, ym):
     return [a["name"] for a in info.get("statements") or [] if a["months"].get(ym) == "missing"]
 
 
-def status_facts(info):
+def status_facts(info, mask=lambda text: text):
     """What to decide on: whose move, months still open, tasks left, accounts to reconcile, our note to the client."""
     facts = []
     note = info.get("note") or ""
@@ -512,16 +596,16 @@ def status_facts(info):
     if with_dates:
         earliest = min(with_dates, key=lambda a: a["lastEnd"])
         gap = len(info.get("statements") or []) - len(with_dates)
-        facts.append(("All statements in through", month_day(earliest["lastEnd"]) + (" (%s)" % earliest["name"] if len(with_dates) > 1 else "")
+        facts.append(("All statements in through", month_day(earliest["lastEnd"]) + (" (%s)" % mask(earliest["name"]) if len(with_dates) > 1 else "")
                       + (", %d with none on file" % gap if gap else "")))
     if info.get("tasksTotal"):
         facts.append(("Close tasks", "%d of %d done" % (info.get("tasksDone") or 0, info["tasksTotal"])))
     if info.get("toReconcile"):
-        facts.append(("Not reconciled", ", ".join(info["toReconcile"])))
+        facts.append(("Not reconciled", ", ".join(mask(n) for n in info["toReconcile"])))
     return facts, note
 
 
-def reports_page(root, folder, query):
+def reports_page(root, folder, query, private=False):
     """HTML for the client list, or one client's months. Links keep the signed exp/sig."""
     import html
     sign = "?" + query
@@ -554,7 +638,12 @@ def reports_page(root, folder, query):
              ".stm li em{font-style:normal;color:#475569}.stm .ok span{color:#15803d}.stm .miss span,.stm .miss em{color:#be123c;font-weight:600}"
              ".stm li small{margin:2px 0 0;font-size:13px;color:#64748b}.stm>i{font-style:normal;font-size:12px;color:#94a3b8}.stm .wait span{color:#94a3b8}small.gap{color:#be123c;font-weight:600}"
              ".why small{margin-top:8px;font-size:12px}h2{font-size:15px;color:#64748b;margin:0 0 8px;font-weight:600}"
-             "div.row.st:not(.off){background:#fff;color:#0f172a}a.back{color:#475569;display:inline-block;margin-bottom:12px}</style>")
+             "div.row.st:not(.off){background:#fff;color:#0f172a}a.back{color:#475569;display:inline-block;margin-bottom:12px}"
+             ".top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 12px}.top h1{margin:0}"
+             + PRIVACY_STYLE + "</style>")
+    mask = mask_digits if private else (lambda text: text)
+    shown = (lambda c: client_alias(c["folder"])) if private else (lambda c: c["name"])
+    slug = (lambda f: alias_slug(f)) if private else (lambda f: f)
     if folder is None:
         # Name only, one compact row each (20 to 50 clients), in the look of last month's status
         # (Tom, 2026-11-17). A client without saved reports is grey and does not open.
@@ -563,10 +652,10 @@ def reports_page(root, folder, query):
         def row(c):
             status = (statuses.get(c["folder"]) or {}).get("status")
             key = status if status in known else ("none" if not c["months"] else None)
-            return status_row(key, c["name"], href="/reports/%s%s" % (c["folder"], sign))
+            return status_row(key, shown(c), href="/reports/%s%s" % (slug(c["folder"]), sign))
         rows = "".join(row(c) for c in clients) or "<p>No clients set up for reports yet.</p>"
-        return ("<!doctype html><html lang=en><head><meta charset=utf-8><title>Reports</title>%s</head><body><h1>Reports</h1>%s%s</body></html>"
-                % (style, status_legend(), rows))
+        return ("<!doctype html><html lang=en><head><meta charset=utf-8><title>Reports</title>%s</head><body>"
+                "<div class=top><h1>Reports</h1>%s</div>%s%s</body></html>" % (style, privacy_toggle(private), status_legend(), rows))
     client = next((c for c in clients if c["folder"] == folder), None)
     if client is None:
         return None
@@ -574,21 +663,22 @@ def reports_page(root, folder, query):
     info = (saved_status.get("clients") or {}).get(folder) or {}
     def month_row(m):
         gaps = missing_for(info, m["file"][:7])
-        warn = "<small class=gap>Built without: %s</small>" % html.escape(", ".join(gaps)) if gaps else ""
-        return "<a class=row href='/reports/%s/%s/%s/view%s'>%s%s</a>" % (folder, m["year"], m["file"][:7], sign, html.escape(m["label"]), warn)
+        warn = "<small class=gap>Built without: %s</small>" % html.escape(", ".join(mask(g) for g in gaps)) if gaps else ""
+        return "<a class=row href='/reports/%s/%s/%s/view%s'>%s%s</a>" % (slug(folder), m["year"], m["file"][:7], sign, html.escape(m["label"]), warn)
     rows = "".join(month_row(m) for m in client["months"]) or "<p><small>No reports saved yet.</small></p>"
     why = ""
     entry = next(((label, color) for k, label, color, _ in REPORT_STATUSES if k == info.get("status")), None)
     if entry:
         label, color = entry
-        lines = "".join("<p>%s</p>" % html.escape(line) for line in status_reason(info))
-        facts, note = status_facts(info)
+        lines = "".join("<p>%s</p>" % html.escape(line) for line in status_reason(info, private=private))
+        facts, note = status_facts(info, mask)
         if facts:
             lines += "<dl>%s</dl>" % "".join("<dt>%s</dt><dd>%s</dd>" % (html.escape(k), html.escape(v)) for k, v in facts)
-        lines += statement_list(info)
-        lines += feed_list(info)
+        lines += statement_list(info, mask)
+        lines += feed_list(info, mask, private)
         if note:
-            lines += "<blockquote><b>Our note to the client in Double</b>%s</blockquote>" % html.escape(note)
+            lines += "<blockquote><b>Our note to the client in Double</b>%s</blockquote>" % (
+                "<i>Hidden in privacy mode</i>" if private else html.escape(note))
         checked = (saved_status.get("updated") or "").replace("T", " ")[:16]
         late = days_late(info)
         head = "<span class=tag style='color:%s;border-color:%s'>%s</span>" % (color, color, html.escape(label))
@@ -596,9 +686,10 @@ def reports_page(root, folder, query):
             head += "<span class=late style='color:%s'>%d day%s late</span>" % (color, late, "" if late == 1 else "s")
         why = ("<div class=why style='border-left:5px solid %s'><div class=head>%s</div>%s"
                "<small>Checked in Double %s</small></div>" % (color, head, lines, html.escape(checked)))
+    name = shown(client)
     return ("<!doctype html><html lang=en><head><meta charset=utf-8><title>%s reports</title>%s</head><body>"
-            "<a class=back href='/reports%s'>&lsaquo; All clients</a><h1>%s</h1>%s<h2>Reports</h2>%s</body></html>"
-            % (html.escape(client["name"]), style, sign, html.escape(client["name"]), why, rows))
+            "<a class=back href='/reports%s'>&lsaquo; All clients</a><div class=top><h1>%s</h1>%s</div>%s<h2>Reports</h2>%s</body></html>"
+            % (html.escape(name), style, sign, html.escape(name), privacy_toggle(private), why, rows))
 
 
 REPORT_VIEWER = r"""<!doctype html><html lang=en><head><meta charset=utf-8>
@@ -612,9 +703,10 @@ html,body{margin:0;background:#475569;font:15px/1.3 system-ui,sans-serif}
 #pages{display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px 0 40px}
 #pages canvas{display:block;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.4);max-width:100%;height:auto}
 #msg{color:#e2e8f0;text-align:center;padding:30px 16px}
+.pv{font:600 15px system-ui,sans-serif;border-radius:8px;padding:8px 12px;cursor:pointer;border:0;background:#334155;color:#fff}.pv.on{background:#7c3aed}
 </style></head><body>
 <div id=bar><a id=back href="__BACK__">&lsaquo; __CLIENT__</a><button id=refresh type=button>Refresh</button>
-<span id=when>Loading&hellip;</span><span class=sp></span><a id=dl href="__RAW__">Download</a></div>
+<span id=when>Loading&hellip;</span><span class=sp></span>__PRIVACY____DOWNLOAD__</div>
 <div id=pages><div id=msg>Loading report&hellip;</div></div>
 <script src="/reports/_pdfjs/pdf.min.js?__SIGN__"></script>
 <script>
@@ -627,7 +719,7 @@ function url(p,extra){return p+'?'+sign+(extra||'');}
 function setSign(r){
   sign='exp='+r.exp+'&sig='+r.sig;
   document.getElementById('back').href='/reports/'+CFG.folder+'?'+sign;
-  document.getElementById('dl').href=url(CFG.raw);
+  var dl=document.getElementById('dl');if(dl)dl.href=url(CFG.raw);
 }
 function stamp(sec){
   var d=new Date(sec*1000);
@@ -635,6 +727,45 @@ function stamp(sec){
   when.innerHTML='Updated <b>'+t+'</b>';
 }
 function note(text){when.textContent=text;}
+// Privacy mode: black out the client's name (matched by word hash, so this page never carries it)
+// and anything shaped like an account number, email, phone or tax id, before the page is shown.
+var WORDS=null;
+if(CFG.privacy){WORDS={};CFG.privacy.words.forEach(function(h){WORDS[h]=1;});}
+function fnv(w){var h=0x811c9dc5;for(var i=0;i<w.length;i++){h^=w.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0;}return h>>>0;}
+var PATTERNS=[
+  /(?<![A-Za-z])(?:[xX*\u2022#]|\.{2,}|\u2026)\s?\d{2,}/g,
+  /(?:ending(?:\s+in)?|acct\.?|account(?:\s*(?:number|no\.?))?|a\/c)[\s:#xX*\u2022]*\d{3,}/gi,
+  /[^\s@]+@[^\s@]+\.[A-Za-z]{2,}/g,
+  /\(?\b\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}\b/g,
+  /\b\d{2}-\d{7}\b|\b\d{3}-\d{2}-\d{4}\b/g,
+  /(?<![\d.,$])\d{5,}(?!\d|[.,]\d|\s?%)/g,
+  /\b\d{1,6}\s+(?:[NSEW]\.?\s+)?(?:[A-Z][A-Za-z'.-]*\s+){1,4}(?:Rd|Road|St|Street|Ave|Avenue|Dr|Drive|Ln|Lane|Blvd|Boulevard|Ct|Court|Way|Pl|Place|Pkwy|Parkway|Hwy|Highway|Cir|Circle|Trl|Trail|Loop|Ter|Terrace|Cv|Cove|Bend|Xing|Fwy|Freeway)\b\.?/g
+];
+function hits(s){
+  var out=[],m,re;
+  re=/[A-Za-z0-9]+/g;
+  while((m=re.exec(s))){var w=m[0].toLowerCase();if(w.length>=2&&WORDS[fnv(w)])out.push([m.index,m.index+m[0].length]);}
+  PATTERNS.forEach(function(p,i){p.lastIndex=0;while((m=p.exec(s))){
+    // An account number names the line ('*1234 TCB Chk - Owner Personal'): hide the whole line.
+    if(i<2){out.push([0,s.length]);continue;}
+    out.push([m.index,m.index+m[0].length]);}});
+  return out;
+}
+async function redact(page,vp,ctx){
+  var tc=await page.getTextContent();
+  ctx.fillStyle='#0f172a';
+  tc.items.forEach(function(it){
+    var s=it.str||'';if(!s.trim())return;
+    var spans=hits(s);if(!spans.length)return;
+    var t=pdfjsLib.Util.transform(vp.transform,it.transform);
+    // Character widths vary, so each bar reaches one average character past its text on both sides.
+    var h=Math.hypot(t[2],t[3]),w=it.width*vp.scale,per=w/s.length,pad=Math.max(per*1.6,h*0.3);
+    spans.forEach(function(sp){
+      var x0=t[4]+Math.max(0,sp[0]*per-pad),x1=t[4]+Math.min(w+pad,sp[1]*per+pad);
+      ctx.fillRect(x0,t[5]-h*1.05,x1-x0,h*1.35);
+    });
+  });
+}
 async function render(buf,mtime){
   var pdf=await pdfjsLib.getDocument({data:buf}).promise;
   var width=Math.min(document.documentElement.clientWidth,1000);
@@ -647,6 +778,7 @@ async function render(buf,mtime){
     var c=document.createElement('canvas');c.width=Math.floor(vp.width);c.height=Math.floor(vp.height);
     c.style.width=(c.width/scale)+'px';
     await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
+    if(WORDS)await redact(page,vp,c.getContext('2d'));
     canvases.push(c);
   }
   // Keep the reader's place: which page is at the top, and how far down it.
@@ -688,17 +820,24 @@ check(true);setInterval(function(){if(!document.hidden)check(false);},10000);
 </script></body></html>"""
 
 
-def report_viewer_page(root, folder, year, month, query):
+def report_viewer_page(root, folder, year, month, query, private=False):
     """The HTML viewer for one report: PDF.js on ripley, a top bar, and a page that refreshes itself."""
     import html
     name = "%s-%s.pdf" % (year, month)
     if report_path(root, folder, year, name) is None:
         return None
-    label = "%s %s" % (client_name(folder), "%s %s" % (MONTHS[int(month) - 1], year))
-    raw = "/reports/%s/%s/%s" % (folder, year, name)
-    cfg = {"sign": query, "folder": folder, "raw": raw, "stat": "/reports/%s/%s/%s-%s/stat" % (folder, year, year, month)}
-    return (REPORT_VIEWER.replace("__TITLE__", html.escape(label)).replace("__CLIENT__", html.escape(client_name(folder)))
-            .replace("__BACK__", "/reports/%s?%s" % (folder, query)).replace("__RAW__", raw + "?" + query)
+    shown = client_alias(folder) if private else client_name(folder)
+    label = "%s %s" % (shown, "%s %s" % (MONTHS[int(month) - 1], year))
+    link = alias_slug(folder) if private else folder
+    raw = "/reports/%s/%s/%s" % (link, year, name)
+    cfg = {"sign": query, "folder": link, "raw": raw, "stat": "/reports/%s/%s/%s-%s/stat" % (link, year, year, month),
+           "privacy": {"words": privacy_words(folder)} if private else None}
+    # The privacy switch reuses the list pages' button, restyled for the dark bar; no Download while it is on.
+    toggle = privacy_toggle(private)
+    download = "" if private else '<a id=dl href="%s">Download</a>' % html.escape(raw + "?" + query)
+    return (REPORT_VIEWER.replace("__TITLE__", html.escape(label)).replace("__CLIENT__", html.escape(shown))
+            .replace("__PRIVACY__", toggle).replace("__DOWNLOAD__", download)
+            .replace("__BACK__", "/reports/%s?%s" % (link, query))
             .replace("__SIGN__", query).replace("__CFG__", json.dumps(cfg).replace("<", "\\u003c")))
 
 
@@ -932,6 +1071,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(403, "This link has expired. Open Reports in SWapp again.", "text/plain; charset=utf-8")
                 return
             sign = urllib.parse.urlencode({"exp": exp, "sig": query.get("sig", [""])[0]})
+            private = privacy_on(self.headers.get("Cookie"))
             if path == "/reports.json":
                 # Every published report, for the app's "new report" phone alert.
                 items = [{"client": c["folder"], "name": c["name"], "label": m["label"],
@@ -940,6 +1080,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, {"reports": items})
                 return
             parts = [urllib.parse.unquote(p) for p in path.split("/")[2:] if p]
+            if parts and parts[0] != "_pdfjs":
+                parts[0] = resolve_folder(parts[0])
             if len(parts) == 2 and parts[0] == "_pdfjs" and parts[1] in PDFJS_FILES:
                 with open(os.path.join(PDFJS_DIR, parts[1]), "rb") as handle:
                     data = handle.read()
@@ -963,7 +1105,7 @@ class Handler(BaseHTTPRequestHandler):
                         payload["renew"] = {"exp": fresh, "sig": sign_session(secret, fresh)}
                     self._json(200, payload)
                     return
-                body = report_viewer_page(REPORTS_ROOT, parts[0], parts[1], parts[2][5:], sign).encode()
+                body = report_viewer_page(REPORTS_ROOT, parts[0], parts[1], parts[2][5:], sign, private).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Cache-Control", "private, no-store")
@@ -972,7 +1114,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(body)
                 return
             if len(parts) <= 1:
-                page = reports_page(REPORTS_ROOT, parts[0] if parts else None, sign)
+                page = reports_page(REPORTS_ROOT, parts[0] if parts else None, sign, private)
                 if page is None:
                     self._send(404, "No such client.", "text/plain; charset=utf-8")
                     return
@@ -1379,6 +1521,36 @@ def self_test():
     with urllib.request.urlopen(reports + "/bnb-getaway/2026/2026-10/stat?exp=%d&sig=%s" % (soon, sign_session("self-test-secret", soon))) as response:
         renew = json.loads(response.read().decode())["renew"]
     assert renew["exp"] > time.time() + 3 * 3600 - 60 and session_ok("self-test-secret", renew["exp"], renew["sig"])
+    # Privacy mode: aliases instead of names, account digits and notes hidden, no Download, and the
+    # viewer carries word hashes of the name, never the name itself.
+    write_json(REPORT_STATUS, {"clients": {"bnb-getaway": {
+        "status": "late", "month": "2026-10", "due": "2026-11-06", "close": "notStarted", "note": "Call Jane Doe re 4821",
+        "statements": [{"name": "*4821 WFB Chk", "lastEnd": "2026-10-31", "months": {"2026-10": "missing"}, "cadence": "monthly"}],
+        "toReconcile": ["*9934 WNB Savings"], "feeds": {"accounts": [{"name": "*4821 WFB Chk", "state": "ok", "note": "Jane's card"}]}},
+        "sj-equity-llc": {"status": "done"}}})
+    def private_get(path):
+        request = urllib.request.Request(reports + path + signed, headers={"Cookie": PRIVACY_COOKIE + "=1"})
+        with urllib.request.urlopen(request) as response:
+            return response.read()
+    listing = private_get("")
+    assert b"BnB Getaway" not in listing and b"SJ Equity" not in listing and b"Client A" in listing and b"Client B" in listing
+    assert b"bnb-getaway" not in listing and b"sj-equity" not in listing and b"/reports/client-a?" in listing
+    assert b"Privacy on" in listing and b"aria-pressed=true" in listing
+    hidden = private_get("/bnb-getaway")
+    for leak in (b"BnB", b"bnb-getaway", b"4821", b"9934", b"Jane"):
+        assert leak not in hidden, leak
+    assert b"Client A" in hidden and b"Hidden in privacy mode" in hidden and b"WFB Chk" in hidden
+    with urllib.request.urlopen(reports + "/bnb-getaway" + signed) as response:
+        shown = response.read()
+        assert b"4821" in shown and b"Jane Doe" in shown and b"Privacy off" in shown
+    private_viewer = private_get("/bnb-getaway/2026/2026-10/view")
+    assert b"BnB" not in private_viewer and b"getaway" not in private_viewer.lower()
+    assert private_get("/client-a/2026/2026-10.pdf") == b"%PDF-oct" and b"Client A" in private_get("/client-a")
+    assert b">Download<" not in private_viewer and b"Client A" in private_viewer
+    assert str(privacy_hash("getaway")).encode() in private_viewer and privacy_hash("Get-Away") == privacy_hash("getaway")
+    assert "llc" not in [w for w in ("llc",) if privacy_hash(w) in privacy_words("bnb-getaway")]
+    assert b">Download<" in viewer
+    assert mask_digits("*4821 WFB Chk") == "*\u2022\u2022\u2022\u2022 WFB Chk" and client_alias("sj-equity-llc") == "Client B"
     for bad in ("/_pdfjs/..%2Fphone_intake.py" + signed, "/_pdfjs/pdf.min.js" + signed.replace("sig=", "sig=00"),
                 "/bnb-getaway/2026/2026-13/view" + signed, "/bnb-getaway/2026/2025-10/stat" + signed, "/bnb-getaway/2026/2026-10/other" + signed):
         try:
