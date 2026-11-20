@@ -1,0 +1,10 @@
+# Runs the Scorecard collector every 5 minutes (docs/scorecard-collector.md).
+[Unit]
+Description=Run the SWapp Scorecard collector every 5 minutes
+
+[Timer]
+OnCalendar=*:0/5
+Persistent=true
+
+[Install]
+WantedBy=timers.target
