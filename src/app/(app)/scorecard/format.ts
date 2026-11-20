@@ -1,5 +1,5 @@
 // Plain-word formatting for the Scorecard page. Pure, so it is unit-tested.
-import type { ScorecardChannel, ScorecardRange } from "@/lib/scorecard/types";
+import type { MeasureSummary, ScorecardChannel, ScorecardRange } from "@/lib/scorecard/types";
 
 export const SCORECARD_RANGES: { value: ScorecardRange; label: string }[] = [
   { value: "today", label: "Today" },
@@ -29,19 +29,63 @@ function oneDecimal(n: number) {
 }
 
 /**
- * Seconds as "4 min", "1.5 h", "2 days". Days are 24-hour days; hours are used
- * up to 48 h so a business-hours span never jumps straight to "1 day".
+ * What a span of seconds counts. "business" seconds only tick inside business
+ * hours (docs/scorecard.md), so they are never turned into days: 63 business
+ * hours is about 7 working days, and "2.6 days" would understate it. "clock"
+ * seconds count every hour, so 24-hour days are honest there.
  */
-export function formatDuration(seconds: number): string {
+export type DurationBasis = "business" | "clock";
+
+/**
+ * Seconds as "4 min", "1.5 h", "63 h" (business) or "2 days" (clock, from 48 h).
+ * The basis is required so a business span can never be read as 24-hour days.
+ */
+export function formatDuration(seconds: number, basis: DurationBasis): string {
   const s = Math.max(0, seconds);
   if (s < MINUTE) return "under 1 min";
   if (s < HOUR) {
     const min = Math.round(s / MINUTE);
     return min >= 60 ? "1 h" : `${min} min`;
   }
-  if (s < 48 * HOUR) return `${oneDecimal(s / HOUR)} h`;
-  const days = oneDecimal(s / DAY);
-  return `${days} days`;
+  if (basis === "business" || s < 48 * HOUR) return `${oneDecimal(s / HOUR)} h`;
+  return `${oneDecimal(s / DAY)} days`;
+}
+
+/** Clock seconds as calendar days, one decimal, like the report rows: "19 days". */
+export function formatCalendarDays(seconds: number): string {
+  const days = oneDecimal(Math.max(0, seconds) / DAY);
+  return `${days} day${days === "1" ? "" : "s"}`;
+}
+
+/**
+ * The headline figures for one measure card. Business measures lead with the
+ * business-time median and add the clock median for honesty. Reports are
+ * timed in calendar days (10 days after month end), so they lead with the
+ * clock median and p90 in days, matching the per-report rows on the card.
+ */
+export function measureFigures(
+  summary: Pick<MeasureSummary, "medianSeconds" | "p90Seconds" | "medianClockSeconds" | "p90ClockSeconds">,
+  basis: DurationBasis,
+): { median: string; p90: string; extra: [string, string][] } | null {
+  if (basis === "clock") {
+    if (summary.medianClockSeconds === null) return null;
+    return {
+      median: formatCalendarDays(summary.medianClockSeconds),
+      p90: formatCalendarDays(summary.p90ClockSeconds ?? 0),
+      extra: [],
+    };
+  }
+  if (summary.medianSeconds === null) return null;
+  return {
+    median: formatDuration(summary.medianSeconds, "business"),
+    p90: formatDuration(summary.p90Seconds ?? 0, "business"),
+    extra: [
+      [
+        "Median on the clock",
+        summary.medianClockSeconds === null ? "—" : formatDuration(summary.medianClockSeconds, "clock"),
+      ],
+    ],
+  };
 }
 
 /** "just now", "4 min ago", "2 h ago", "3 days ago". */
@@ -76,7 +120,7 @@ export function targetWords(channel: ScorecardChannel, targetSeconds: number): s
     const hours = targetSeconds / HOUR;
     return `within ${hours} business hour${hours === 1 ? "" : "s"}`;
   }
-  return `within ${formatDuration(targetSeconds)} of business time`;
+  return `within ${formatDuration(targetSeconds, "business")} of business time`;
 }
 
 /** "2026-11-19" -> "Nov 19, 2026". */

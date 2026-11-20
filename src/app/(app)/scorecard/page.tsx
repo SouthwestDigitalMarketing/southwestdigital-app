@@ -15,8 +15,10 @@ import {
   formatMonth,
   formatShare,
   isStale,
+  measureFigures,
   parseRange,
   targetWords,
+  type DurationBasis,
 } from "./format";
 
 export const dynamic = "force-dynamic";
@@ -118,7 +120,7 @@ function LiveStrip({ data, now }: { data: ScorecardData; now: Date }) {
                     </span>
                   </span>
                   <span className="shrink-0 text-right text-sm font-semibold tabular-nums text-slate-900">
-                    {formatDuration(item.businessSecondsWaiting)}
+                    {formatDuration(item.businessSecondsWaiting, "business")}
                     <span className="block text-[11px] font-normal text-slate-400">business time</span>
                   </span>
                 </li>
@@ -217,35 +219,35 @@ function Empty({ children }: { children: React.ReactNode }) {
   return <p className="mt-3 text-sm text-slate-400">{children}</p>;
 }
 
-/** Median, p90, clock median, counts and the target share for one measure. */
+/**
+ * Median, p90, counts and the target share for one measure. `basis` picks the
+ * figures: business time (plus the clock median), or calendar days for reports.
+ */
 function MeasureBody({
   summary,
   channel,
+  basis = "business",
   noun = "client contacts",
   caption = "median, business hours",
 }: {
   summary: MeasureSummary;
   channel: ScorecardChannel;
+  basis?: DurationBasis;
   noun?: string;
   caption?: string;
 }) {
   if (summary.count === 0) return <Empty>No {noun} in this range</Empty>;
-  const answeredAny = summary.medianSeconds !== null;
+  const figures = measureFigures(summary, basis);
   return (
     <>
-      {answeredAny ? (
-        <Big value={formatDuration(summary.medianSeconds!)} caption={caption} />
+      {figures ? (
+        <Big value={figures.median} caption={caption} />
       ) : (
         <Big value="None answered" caption={`${summary.count} still open`} />
       )}
       <Facts
         rows={[
-          ...(answeredAny
-            ? ([
-                ["90th percentile", formatDuration(summary.p90Seconds ?? 0)],
-                ["Median on the clock", summary.medianClockSeconds === null ? "—" : formatDuration(summary.medianClockSeconds)],
-              ] as [string, string][])
-            : []),
+          ...(figures ? ([["90th percentile", figures.p90], ...figures.extra] as [string, string][]) : []),
           ["Answered", `${summary.answered} of ${summary.count}`],
           [`On target (${targetWords(channel, summary.targetSeconds)})`, formatShare(summary.withinTargetShare)],
         ]}
@@ -290,9 +292,9 @@ function CallsCard({ calls }: { calls: ScorecardData["calls"] }) {
                 : ([
                     [
                       "Callback median",
-                      callback.medianSeconds === null ? "none yet" : formatDuration(callback.medianSeconds),
+                      callback.medianSeconds === null ? "none yet" : formatDuration(callback.medianSeconds, "business"),
                     ],
-                    ["Callback 90th percentile", callback.p90Seconds === null ? "—" : formatDuration(callback.p90Seconds)],
+                    ["Callback 90th percentile", callback.p90Seconds === null ? "—" : formatDuration(callback.p90Seconds, "business")],
                     ["Called back", `${callback.answered} of ${callback.count}`],
                     [
                       `Callback on target (${targetWords("call", callback.targetSeconds)})`,
@@ -316,7 +318,13 @@ function ReportsCard({ reports }: { reports: ScorecardData["reports"] }) {
           date, so they are not counted.
         </p>
       ) : null}
-      <MeasureBody summary={reports} channel="report" noun="reports due" caption="median, month end to published" />
+      <MeasureBody
+        summary={reports}
+        channel="report"
+        basis="clock"
+        noun="reports due"
+        caption="median, calendar days from month end to published"
+      />
       {reports.days.length > 0 ? (
         <ul className="mt-3 space-y-1 border-t border-slate-100 pt-2 text-xs">
           {reports.days.map((row) => (
