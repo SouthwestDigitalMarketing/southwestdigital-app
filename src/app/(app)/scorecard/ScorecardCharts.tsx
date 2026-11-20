@@ -63,12 +63,12 @@ function fmtBucket(row: { date: string; endDate: string; days: number }) {
   return row.days > 1 ? `${fmtDay(row.date)} – ${fmtDay(row.endDate)}` : fmtDay(row.date);
 }
 
-// Hours on the axis: "30m", "2h", "1.5d" (24-hour days).
+// Business hours on the axis: "30m", "2h", "63h". Never 24-hour days, since
+// business time only ticks 9 h a weekday (see formatDuration).
 function fmtHoursTick(hours: number) {
   if (hours === 0) return "0";
   if (hours < 1) return `${Math.round(hours * 60)}m`;
-  if (hours < 48) return `${Math.round(hours * 10) / 10}h`;
-  return `${Math.round((hours / 24) * 10) / 10}d`;
+  return `${Math.round(hours * 10) / 10}h`;
 }
 
 // About five evenly spaced labels, anchored on the newest point.
@@ -194,8 +194,8 @@ export function ScorecardCharts({
                           <p>No answered client contacts</p>
                         ) : (
                           <>
-                            <p>Median {formatDuration(row.medianHours * 3600)}</p>
-                            <p className="opacity-70">90th percentile {formatDuration((row.p90Hours ?? 0) * 3600)}</p>
+                            <p>Median {formatDuration(row.medianHours * 3600, "business")}</p>
+                            <p className="opacity-70">90th percentile {formatDuration((row.p90Hours ?? 0) * 3600, "business")}</p>
                           </>
                         )}
                         <p className="mt-1 opacity-70">{row.count} needed an answer</p>
@@ -228,7 +228,7 @@ export function ScorecardCharts({
         <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-slate-500">
           <Legend color="var(--chart-series-1)" label="Median" />
           <Legend color="var(--chart-series-4)" label="90th percentile" dashed />
-          <Legend color="var(--chart-muted)" label={`Target, ${formatDuration(targetSeconds[measure])} business time`} dotted />
+          <Legend color="var(--chart-muted)" label={`Target, ${formatDuration(targetSeconds[measure], "business")} business time`} dotted />
         </div>
         {weekly ? (
           <p className="mt-2 text-xs text-slate-400">

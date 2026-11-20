@@ -1,35 +1,80 @@
 import { describe, expect, it } from "vitest";
 import {
   formatAgo,
+  formatCalendarDays,
   formatDate,
   formatDuration,
   formatMonth,
   formatShare,
   isStale,
+  measureFigures,
   parseRange,
   targetWords,
 } from "./format";
 
 describe("formatDuration", () => {
   it("says minutes under an hour", () => {
-    expect(formatDuration(5)).toBe("under 1 min");
-    expect(formatDuration(240)).toBe("4 min");
-    expect(formatDuration(3590)).toBe("1 h");
+    expect(formatDuration(5, "business")).toBe("under 1 min");
+    expect(formatDuration(240, "business")).toBe("4 min");
+    expect(formatDuration(3590, "clock")).toBe("1 h");
   });
 
   it("says hours with one decimal up to 48 h", () => {
-    expect(formatDuration(5400)).toBe("1.5 h");
-    expect(formatDuration(7200)).toBe("2 h");
-    expect(formatDuration(47 * 3600)).toBe("47 h");
+    expect(formatDuration(5400, "business")).toBe("1.5 h");
+    expect(formatDuration(7200, "clock")).toBe("2 h");
+    expect(formatDuration(47 * 3600, "clock")).toBe("47 h");
   });
 
-  it("says days from 48 h", () => {
-    expect(formatDuration(2 * 86400)).toBe("2 days");
-    expect(formatDuration(3.5 * 86400)).toBe("3.5 days");
+  it("keeps business time in hours, never 24-hour days", () => {
+    // 7 business days of 9 h is 63 business hours, not "2.6 days".
+    expect(formatDuration(63 * 3600, "business")).toBe("63 h");
+    expect(formatDuration(2 * 86400, "business")).toBe("48 h");
+  });
+
+  it("says 24-hour days for clock time from 48 h", () => {
+    expect(formatDuration(2 * 86400, "clock")).toBe("2 days");
+    expect(formatDuration(3.5 * 86400, "clock")).toBe("3.5 days");
   });
 
   it("never goes negative", () => {
-    expect(formatDuration(-10)).toBe("under 1 min");
+    expect(formatDuration(-10, "business")).toBe("under 1 min");
+  });
+});
+
+describe("formatCalendarDays", () => {
+  it("says calendar days with one decimal", () => {
+    expect(formatCalendarDays(19 * 86400)).toBe("19 days");
+    expect(formatCalendarDays(86400)).toBe("1 day");
+    expect(formatCalendarDays(0.5 * 86400)).toBe("0.5 days");
+  });
+});
+
+describe("measureFigures", () => {
+  // A report published 19 calendar days after month end: about 13 weekdays
+  // of 9 business hours, 117 business hours.
+  const report = {
+    medianSeconds: 117 * 3600,
+    p90Seconds: 120 * 3600,
+    medianClockSeconds: 19 * 86400,
+    p90ClockSeconds: 21 * 86400,
+  };
+
+  it("leads reports with calendar days from the clock fields", () => {
+    expect(measureFigures(report, "clock")).toEqual({ median: "19 days", p90: "21 days", extra: [] });
+  });
+
+  it("leads business measures with business hours plus the clock median", () => {
+    expect(measureFigures(report, "business")).toEqual({
+      median: "117 h",
+      p90: "120 h",
+      extra: [["Median on the clock", "19 days"]],
+    });
+  });
+
+  it("is null when nothing was answered", () => {
+    const none = { medianSeconds: null, p90Seconds: null, medianClockSeconds: null, p90ClockSeconds: null };
+    expect(measureFigures(none, "clock")).toBeNull();
+    expect(measureFigures(none, "business")).toBeNull();
   });
 });
 
