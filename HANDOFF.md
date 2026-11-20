@@ -1,5 +1,16 @@
 # SWapp handoff
 
+## 2026-11-20 — Billing calendar day strip (#191, shipped)
+
+Replaces the #188 countdown cards on the Bookkeeping Conroe dashboard with a
+swipeable day strip (`BillingCalendarStrip.tsx`): 30 days back to 60 ahead,
+opens at yesterday, 10 visible on phones / 14 at `sm` / 21 at `lg`, faded
+edges. Payday green, reminders (last day - 3) blue, late fees (8th) red,
+1st-7th shaded, today ringed; days-until above each upcoming colored day;
+legend in a `Modal` behind `?`. `billingTimers()` removed;
+`billingCalendarDays()` remains. Added dark/system `.text-blue-700` mapping in
+`globals.css`. Dark mode not checked inside the signed-in app.
+
 ## 2026-11-20 — GSA alarm: paid proposal agreement, GSA not signed (Ummon)
 
 Tom: until the proposal agreement is paid AND the GSA is signed they are a lead; paid-no-GSA is the
