@@ -39,6 +39,7 @@ export const NAV_DESTINATIONS: Array<{
   { id: "nav.scorecard", title: "Scorecard", href: "/scorecard", aliases: ["response time", "speed", "how fast", "kpi"] },
   { id: "nav.scanner", title: "Scanner", href: "/scanner", keys: "g n", aliases: ["scan", "findings"] },
   { id: "nav.localSeo", title: "Local SEO", href: "/local-seo", aliases: ["geo grid", "maps", "local search"] },
+  { id: "nav.ads", title: "Ads", href: "/ads", aliases: ["facebook ads", "meta ads", "campaigns", "advertising"] },
   { id: "nav.website", title: "Website", href: "/website", keys: "g w" },
   { id: "nav.youtube", title: "YouTube", href: "/youtube", keys: "g y" },
   { id: "nav.showrunner", title: "Showrunner", href: "/showrunner", aliases: ["episode", "series", "video"] },

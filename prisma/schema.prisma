@@ -583,6 +583,7 @@ model Brand {
   dataExports             BrandDataExport[]
   localSeoConfig          LocalSeoConfig?
   localSeoScans           LocalSeoScan[]
+  adCampaigns             AdCampaign[]
   catalogServices         CatalogService[]
   catalogServiceTags      CatalogServiceTag[]
   quoteRevisions          QuoteRevision[]
@@ -615,6 +616,29 @@ model BrandDomain {
   updatedAt  DateTime      @updatedAt
 
   @@index([brandId, purpose, status])
+}
+
+// Ads drafted in SWapp (/ads). Nothing here is sent to Meta or Google yet.
+model AdCampaign {
+  id               String   @id @default(cuid())
+  brandId          String
+  name             String
+  status           String   @default("draft")
+  platform         String   @default("meta")
+  area             String
+  pins             Json
+  offer            String
+  landingPage      String
+  headline         String
+  primaryText      String
+  callToAction     String
+  dailyBudgetCents Int?
+  createdById      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  brand            Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId, createdAt])
 }
 
 model LocalSeoConfig {
@@ -1466,36 +1490,36 @@ model CampaignContact {
 // ─── Contacts & CRM ──────────────────────────────────────────────────────────
 
 model Contact {
-  id             String               @id @default(cuid())
-  brandId        String
-  name           String
-  firstName      String?
-  lastName       String?
-  email          String?
-  secondaryEmail String?
-  phoneE164      String?
-  businessEmail  String?
-  personalEmail  String?
-  phoneNumber    String?
-  company        String?
-  notes          String?
-  roleTitle      String?
-  isActive       Boolean              @default(true)
-  brand          Brand                @relation("CrmBrandContacts", fields: [brandId], references: [id], onDelete: Cascade)
-  clientLinks    ClientContact[]
-  customerLinks  CustomerContact[]
-  leadLinks      LeadContact[]
-  meetings       TeamMeetingContact[]
-  campaignLinks  CampaignContact[]
-  reviewRequests ReviewRequest[]
-  tagLinks       ContactTagLink[]
-  brandLinks     ContactBrandLink[]
-  brandDiscounts BrandDiscount[]      @relation("BrandDiscountContact")
-  engagements    Engagement[]
-  serviceRecords ServiceRecord[]
+  id              String               @id @default(cuid())
+  brandId         String
+  name            String
+  firstName       String?
+  lastName        String?
+  email           String?
+  secondaryEmail  String?
+  phoneE164       String?
+  businessEmail   String?
+  personalEmail   String?
+  phoneNumber     String?
+  company         String?
+  notes           String?
+  roleTitle       String?
+  isActive        Boolean              @default(true)
+  brand           Brand                @relation("CrmBrandContacts", fields: [brandId], references: [id], onDelete: Cascade)
+  clientLinks     ClientContact[]
+  customerLinks   CustomerContact[]
+  leadLinks       LeadContact[]
+  meetings        TeamMeetingContact[]
+  campaignLinks   CampaignContact[]
+  reviewRequests  ReviewRequest[]
+  tagLinks        ContactTagLink[]
+  brandLinks      ContactBrandLink[]
+  brandDiscounts  BrandDiscount[]      @relation("BrandDiscountContact")
+  engagements     Engagement[]
+  serviceRecords  ServiceRecord[]
   scorecardEvents ScorecardEvent[]
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
 
   @@unique([brandId, id])
   @@index([brandId, isActive, name])
@@ -3303,17 +3327,17 @@ model ScorecardEvent {
 /// Scorecard collector heartbeat per source (quo | zoho | reports): proves how
 /// fresh the numbers are on the live view.
 model ScorecardSync {
-  id          String   @id @default(cuid())
-  brandId     String
-  source      String
-  lastRunAt   DateTime
+  id         String    @id @default(cuid())
+  brandId    String
+  source     String
+  lastRunAt  DateTime
   /// Newest source item the collector saw (e.g. newest Quo message time).
-  coveredTo   DateTime?
-  eventsSent  Int      @default(0)
-  ok          Boolean  @default(true)
-  note        String?
-  brand       Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  updatedAt   DateTime @updatedAt
+  coveredTo  DateTime?
+  eventsSent Int       @default(0)
+  ok         Boolean   @default(true)
+  note       String?
+  brand      Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  updatedAt  DateTime  @updatedAt
 
   @@unique([brandId, source])
 }

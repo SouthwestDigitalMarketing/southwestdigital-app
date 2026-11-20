@@ -1,5 +1,20 @@
 # SWapp handoff
 
+## 2026-11-20 — Ads page and Create ad (Kassad, PR #193)
+
+`/ads` (sidebar after Local SEO, keyboard command "Ads"): Running now (empty: "No ads
+running."), Drafts, and a "Before an ad goes live" checklist. **Create ad** (`/ads/new`)
+saves a draft only: area (presets in `src/lib/ads/draft.ts`, `AD_AREAS`; Bentwater = two
+1-mile pins, Meta's minimum radius), name, headline, ad text, button, daily budget
+(optional, $1–$500), offer, landing page (https). Defaults are the "off your plate" copy.
+New table `AdCampaign` (migration `20261120210000_ad_campaigns`, additive, brandId-scoped,
+no RLS, same as LocalSeo). Nothing calls Meta; nothing spends money. Next: Meta Marketing
+API read (spend, leads) once Tom confirms the ad account; edit/delete drafts; more areas.
+Checks: `vitest src/lib/ads` 6 passed, `tsc` clean, eslint clean; headless walk at 390 px on
+a local dev server (`PLATFORM_BASE_URL=http://100.98.89.93:3047`, platform-host login, no
+BrandDomain needed): Create ad → bad budget shows the error → save → draft card on /ads; no
+horizontal scroll. Local Docker DB has the migration applied and one test draft.
+
 ## 2026-11-20 — Billing calendar: double-tap to today, past days grayed (#194, shipped)
 
 `BillingCalendarStrip.tsx`: double-tap (touch, counted in `onPointerUp`) or
