@@ -1413,6 +1413,18 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(403, "This link has expired. Open Reports in SWapp again.", "text/plain; charset=utf-8")
                 return
             sign = urllib.parse.urlencode({"exp": exp, "sig": query.get("sig", [""])[0]})
+            setting = query.get("privacy", [""])[0]
+            if setting in ("0", "1"):
+                # SWapp's one privacy switch: Reports opened from the app carry privacy=1|0. Save it as
+                # this host's cookie and reload without it, so the address bar stays clean.
+                rest = urllib.parse.urlencode([(k, v) for k, vs in query.items() if k != "privacy" for v in vs])
+                self.send_response(302)
+                self.send_header("Location", "%s?%s" % (path, rest))
+                self.send_header("Set-Cookie", "%s=%s; Path=/reports; Max-Age=31536000; SameSite=Lax" % (PRIVACY_COOKIE, setting))
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
             private = privacy_on(self.headers.get("Cookie"))
             if path == "/reports.json":
                 # Every published report, for the app's "new report" phone alert.
@@ -1905,6 +1917,21 @@ def self_test():
         raise SystemExit("real folder was served with privacy on")
     except urllib.error.HTTPError as error:
         assert error.code == 302 and error.headers["Location"].startswith("/reports/client-a/2026/2026-10/view?"), error.headers["Location"]
+    # SWapp's one switch: privacy=1|0 on the link sets this host's cookie and reloads without it;
+    # an expired or forged link still gets 403, never a cookie.
+    for setting in ("1", "0"):
+        try:
+            urllib.request.build_opener(NoRedirect).open(reports + "/bnb-getaway" + signed + "&privacy=" + setting)
+            raise SystemExit("privacy=%s was not redirected" % setting)
+        except urllib.error.HTTPError as error:
+            assert error.code == 302, error.code
+            assert error.headers["Set-Cookie"].startswith("%s=%s; Path=/reports;" % (PRIVACY_COOKIE, setting)), error.headers["Set-Cookie"]
+            assert error.headers["Location"] == "/reports/bnb-getaway" + signed, error.headers["Location"]
+    try:
+        urllib.request.urlopen(reports + "/bnb-getaway" + signed.replace("sig=", "sig=00") + "&privacy=0")
+        raise SystemExit("forged link was allowed")
+    except urllib.error.HTTPError as error:
+        assert error.code == 403 and "Set-Cookie" not in error.headers, error.code
     write_json(REPORT_NAMES, {"aaa-new-client": "AAA New", "bnb-getaway": "BnB Getaway LLC", "sj-equity-llc": "SJ Equity LLC"})
     assert (client_alias("bnb-getaway"), client_alias("sj-equity-llc"), client_alias("aaa-new-client")) == ("Client A", "Client B", "Client C")
     write_json(REPORT_NAMES, {"bnb-getaway": "BnB Getaway LLC", "sj-equity-llc": "SJ Equity LLC"})
