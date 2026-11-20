@@ -458,6 +458,61 @@ def gsa_file(root, folder, kind):
     return None
 
 
+DRAFT_CACHE = os.path.expanduser(os.environ.get("PHONE_INTAKE_DRAFT_CACHE", "~/.cache/swapp-phone-intake/drafts"))
+
+
+def simple_pdf(content, width=612, height=792, opacity=None):
+    """A one-page PDF drawing `content` (PDF operators) with Helvetica-Bold as /F1, optional /GS1 opacity."""
+    gs = b" /ExtGState << /GS1 6 0 R >>" if opacity is not None else b""
+    objs = [b"<< /Type /Catalog /Pages 2 0 R >>",
+            b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %d %d] /Resources << /Font << /F1 5 0 R >>%s >> /Contents 4 0 R >>"
+            % (width, height, gs),
+            b"<< /Length %d >>\nstream\n" % len(content) + content + b"\nendstream",
+            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>"]
+    if opacity is not None:
+        objs.append(b"<< /Type /ExtGState /ca %.2f /CA %.2f >>" % (opacity, opacity))
+    out, offsets = b"%PDF-1.4\n", []
+    for number, obj in enumerate(objs, 1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n" % number + obj + b"\nendobj\n"
+    xref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objs) + 1) + b"".join(b"%010d 00000 n \n" % o for o in offsets)
+    return out + b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(objs) + 1, xref)
+
+
+# A large light-grey diagonal DRAFT, centred on a letter page (Tom, 2026-11-20: drafts must say so).
+DRAFT_MARK = b"q /GS1 gs 0.55 0.55 0.6 rg BT /F1 150 Tf 0.7071 0.7071 -0.7071 0.7071 170 190 Tm (DRAFT) Tj ET Q"
+
+
+def draft_copy(real):
+    """Path of a DRAFT-stamped copy of this PDF, made with qpdf and cached by file, size and time.
+    The file in the client folder is never changed. None if the stamp could not be made."""
+    import hashlib
+    import subprocess
+    info = os.stat(real)
+    key = hashlib.sha256(("%s|%d|%d" % (real, info.st_size, int(info.st_mtime_ns))).encode()).hexdigest()[:32]
+    out = os.path.join(DRAFT_CACHE, key + ".pdf")
+    if os.path.isfile(out):
+        return out
+    os.makedirs(DRAFT_CACHE, exist_ok=True)
+    mark = os.path.join(DRAFT_CACHE, "_mark.pdf")
+    with open(mark + ".tmp", "wb") as handle:
+        handle.write(simple_pdf(DRAFT_MARK, opacity=0.18))
+    os.replace(mark + ".tmp", mark)
+    temp = out + ".%d.tmp" % os.getpid()
+    result = subprocess.run(["qpdf", "--overlay", mark, "--repeat=1", "--", real, temp], capture_output=True, timeout=60)
+    # qpdf exits 3 for warnings with a usable file.
+    if result.returncode not in (0, 3) or not os.path.isfile(temp):
+        try:
+            os.remove(temp)
+        except OSError:
+            pass
+        return None
+    os.replace(temp, out)
+    return out
+
+
 def agreement_path(root, folder, rel):
     """The real file for /agreements/<folder>/<rel>, or None if it is not a saved agreement PDF."""
     parts = rel.split("/")
@@ -511,7 +566,7 @@ def agreements_page(root, folder, query):
         return None
     name = client_name(folder)
     rows = "".join(
-        "<a class=row href='/agreements/%s/%s?%s'>%s<small>%s</small><span class=tag style='color:%s;border-color:%s'>%s</span></a>" % (
+        "<a class=row href='/agreements/%s/%s/view?%s'>%s<small>%s</small><span class=tag style='color:%s;border-color:%s'>%s</span></a>" % (
             urllib.parse.quote(folder), urllib.parse.quote(a["rel"]), query, html.escape(a["name"][:-4].replace("_", " ")),
             html.escape(a["date"]), "#15803d" if a["signed"] else "#b45309", "#15803d" if a["signed"] else "#b45309",
             "Signed" if a["signed"] else "Unsigned") for a in found) or "<p><small>No agreements saved yet.</small></p>"
@@ -838,7 +893,7 @@ html,body{margin:0;background:#475569;font:15px/1.3 system-ui,sans-serif}
 </style></head><body>
 <div id=bar><a id=back href="__BACK__" aria-label="Back to __CLIENT__" title="Back to __CLIENT__">&lsaquo;</a><button id=refresh type=button>Refresh</button>
 <span class=sp></span>__PRIVACY____DOWNLOAD__<span id=when>Loading&hellip;</span></div>
-<div id=pages><div id=msg>Loading report&hellip;</div></div>
+<div id=pages><div id=msg>Loading __NOUN__&hellip;</div></div>
 <script src="/reports/_pdfjs/pdf.min.js?__SIGN__"></script>
 <script>
 (function(){
@@ -849,8 +904,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc='/reports/_pdfjs/pdf.worker.min.js?'+sign
 function url(p,extra){return p+'?'+sign+(extra||'');}
 function setSign(r){
   sign='exp='+r.exp+'&sig='+r.sig;
-  document.getElementById('back').href='/reports/'+CFG.folder+'?'+sign;
-  var dl=document.getElementById('dl');if(dl)dl.href=url(CFG.raw);
+  if(CFG.backSigned)document.getElementById('back').href=CFG.back+'?'+sign;
+  var dl=document.getElementById('dl');if(dl)dl.href=url(CFG.raw,CFG.dl||'');
 }
 function stamp(sec){
   var d=new Date(sec*1000);
@@ -952,7 +1007,7 @@ async function check(force){
   if(busy)return;busy=true;
   try{
     var res=await fetch(url(CFG.stat,'&t='+Date.now()),{cache:'no-store'});
-    if(res.status===403){note('This link expired. Go back and open the report again.');return;}
+    if(res.status===403){note('This link expired. Go back and open the '+CFG.noun+' again.');return;}
     if(!res.ok)throw new Error('http '+res.status);
     var s=await res.json();
     if(s.renew)setSign(s.renew);
@@ -960,7 +1015,7 @@ async function check(force){
     if(force||key!==seen){await load(s.mtime);seen=key;}
   }catch(e){
     // A half-saved file or a dropped connection: keep what is on screen and try again next time.
-    if(!shown){pages.innerHTML='<div id=msg>Could not load the report yet. Trying again&hellip;</div>';}
+    if(!shown){pages.innerHTML='<div id=msg>Could not load the '+CFG.noun+' yet. Trying again&hellip;</div>';}
     else{note('Update failed, retrying…');}
   }finally{busy=false;}
 }
@@ -982,14 +1037,46 @@ def report_viewer_page(root, folder, year, month, query, private=False):
     link = alias_slug(folder) if private else folder
     raw = "/reports/%s/%s/%s" % (link, year, name)
     cfg = {"sign": query, "folder": link, "raw": raw, "stat": "/reports/%s/%s/%s-%s/stat" % (link, year, year, month),
+           "back": "/reports/%s" % link, "backSigned": True, "noun": "report",
            "privacy": {"words": privacy_words(folder)} if private else None}
     # The privacy switch reuses the list pages' button, restyled for the dark bar; no Download while it is on.
     toggle = privacy_toggle(private)
     download = "" if private else '<a id=dl href="%s">Download</a>' % html.escape(raw + "?" + query)
     return (REPORT_VIEWER.replace("__TITLE__", html.escape(label)).replace("__CLIENT__", html.escape(shown))
             .replace("__PRIVACY__", toggle).replace("__DOWNLOAD__", download)
-            .replace("__BACK__", "/reports/%s?%s" % (link, query))
+            .replace("__BACK__", "/reports/%s?%s" % (link, query)).replace("__NOUN__", "report")
             .replace("__SIGN__", query).replace("__CFG__", json.dumps(cfg).replace("<", "\\u003c")))
+
+
+def agreement_viewer_page(folder, doc, query, ret=None):
+    """The Reports viewer for one agreement PDF. doc is ("gsa", "draft"|"signed") or ("file", rel).
+
+    Back returns to ret (the SWapp page that opened it, https only) or to the client's agreement list.
+    Download asks for an attachment; unsigned PDFs arrive with the DRAFT stamp either way."""
+    import html
+    base = "/agreements/%s" % urllib.parse.quote(folder)
+    if doc[0] == "gsa":
+        raw = "%s/gsa/%s" % (base, doc[1])
+        label = "%s GSA %s" % (client_name(folder), "draft" if doc[1] == "draft" else "(signed)")
+    else:
+        raw = "%s/%s" % (base, urllib.parse.quote(doc[1]))
+        label = "%s %s" % (client_name(folder), os.path.basename(doc[1])[:-4].replace("_", " "))
+    back = ret if ret else base
+    cfg = {"sign": query, "raw": raw, "stat": raw + "/stat", "back": back, "backSigned": not ret,
+           "noun": "agreement", "dl": "&dl=1", "privacy": None}
+    download = '<a id=dl href="%s">Download</a>' % html.escape(raw + "?" + query + "&dl=1")
+    return (REPORT_VIEWER.replace("__TITLE__", html.escape(label)).replace("__CLIENT__", html.escape(client_name(folder)))
+            .replace("__PRIVACY__", "").replace("__DOWNLOAD__", download)
+            .replace("__BACK__", html.escape(back if ret else back + "?" + query)).replace("__NOUN__", "agreement")
+            .replace("__SIGN__", query).replace("__CFG__", json.dumps(cfg).replace("<", "\\u003c")))
+
+
+def safe_return(raw):
+    """The SWapp page to go back to: an https address only, else None."""
+    if not raw:
+        return None
+    parts = urllib.parse.urlparse(raw)
+    return raw if parts.scheme == "https" and parts.netloc and len(raw) <= 500 else None
 
 
 def resumable_batch(inbox, name, size):
@@ -1229,14 +1316,47 @@ class Handler(BaseHTTPRequestHandler):
                     if os.path.isdir(os.path.join(REPORTS_ROOT, candidate, "agreements")):
                         parts[0] = candidate
                         break
+            # A document address may end in /view (the viewer) or /stat (its size and time, for Refresh).
+            action = parts.pop() if len(parts) >= 2 and parts[-1] in ("view", "stat") else None
+            doc = None
             if len(parts) == 3 and parts[1] == "gsa" and parts[2] in ("draft", "signed"):
-                # GSA shortcut from SWapp's GSA panel: the newest draft or signed copy.
+                # GSA shortcut from SWapp's GSA panel: always the newest draft or signed copy.
                 rel = gsa_file(REPORTS_ROOT, parts[0], parts[2])
                 if rel is None:
                     self._send(404, "No %s GSA saved in this client's agreements folder yet." % ("signed" if parts[2] == "signed" else "draft"),
                                "text/plain; charset=utf-8")
                     return
+                doc = ("gsa", parts[2])
                 parts = [parts[0]] + rel.split("/")
+            elif len(parts) in (2, 3):
+                doc = ("file", "/".join(parts[1:]))
+            if action and doc is None:
+                self._send(404, "No such agreement.", "text/plain; charset=utf-8")
+                return
+            if action == "view":
+                if agreement_path(REPORTS_ROOT, parts[0], "/".join(parts[1:])) is None:
+                    self._send(404, "No such agreement.", "text/plain; charset=utf-8")
+                    return
+                body = agreement_viewer_page(parts[0], doc, sign, safe_return(query.get("ret", [""])[0])).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Cache-Control", "private, no-store")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            if action == "stat":
+                real = agreement_path(REPORTS_ROOT, parts[0], "/".join(parts[1:]))
+                if real is None:
+                    self._send(404, "No such agreement.", "text/plain; charset=utf-8")
+                    return
+                info = os.stat(real)
+                payload = {"mtime": int(info.st_mtime), "size": info.st_size, "name": os.path.basename(real)}
+                if exp - int(time.time()) < REPORT_RENEW_BELOW:
+                    fresh = int(time.time()) + REPORT_SESSION_SECONDS
+                    payload["renew"] = {"exp": fresh, "sig": sign_session(secret, fresh)}
+                self._json(200, payload)
+                return
             if not parts:
                 body = agreements_index_page(REPORTS_ROOT, sign).encode()
                 self.send_response(200)
@@ -1263,11 +1383,19 @@ class Handler(BaseHTTPRequestHandler):
             if real is None:
                 self._send(404, "No such agreement.", "text/plain; charset=utf-8")
                 return
+            name = os.path.basename(real)
+            if "SIGNED" not in name.upper():
+                # Unsigned means draft: always served with the DRAFT stamp, never the clean file.
+                stamped = draft_copy(real)
+                if stamped is None:
+                    self._send(500, "Could not add the DRAFT stamp to this agreement.", "text/plain; charset=utf-8")
+                    return
+                real, name = stamped, name[:-4] + "_DRAFT.pdf"
             with open(real, "rb") as handle:
                 data = handle.read()
             self.send_response(200)
             self.send_header("Content-Type", "application/pdf")
-            self.send_header("Content-Disposition", 'inline; filename="%s"' % os.path.basename(real))
+            self.send_header("Content-Disposition", '%s; filename="%s"' % ("attachment" if query.get("dl") == ["1"] else "inline", name))
             self.send_header("Cache-Control", "private, no-store")
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
@@ -1556,7 +1684,7 @@ def self_test():
     import urllib.error
     import urllib.request
 
-    global INBOX
+    global INBOX, DRAFT_CACHE
     secret = "self-test-secret"
     os.environ["PHONE_INTAKE_SECRET"] = secret
     INBOX = tempfile.mkdtemp(prefix="phone-intake-")
@@ -1812,7 +1940,9 @@ def self_test():
     # Agreements: listed per client, PDFs open inline, nothing outside agreements/ or v<N>/ is reachable.
     adir = os.path.join(REPORTS_ROOT, "sj-equity-llc", "agreements")
     os.makedirs(os.path.join(adir, "v1"))
-    open(os.path.join(adir, "v1", "2026-11-20_General-Services-Agreement_SJ-Equity-LLC.pdf"), "wb").write(b"%PDF-draft")
+    DRAFT_CACHE = os.path.join(INBOX, "draft-cache")
+    draft_pdf = simple_pdf(b"BT /F1 12 Tf 72 720 Td (Agreement draft) Tj ET")
+    open(os.path.join(adir, "v1", "2026-11-20_General-Services-Agreement_SJ-Equity-LLC.pdf"), "wb").write(draft_pdf)
     open(os.path.join(adir, "2026-12-01_General-Services-Agreement_SJ-Equity_SIGNED.pdf"), "wb").write(b"%PDF-signed")
     open(os.path.join(adir, "notes.txt"), "w").write("private")
     open(os.path.join(REPORTS_ROOT, "sj-equity-llc", "secret.pdf"), "wb").write(b"%PDF-secret")
@@ -1827,18 +1957,39 @@ def self_test():
     assert "1 signed" in index and "1 unsigned" in index and "empty-co" not in index.lower() and "Empty Co" not in index, index
     with urllib.request.urlopen(agreements + "/sj-equity?alt=sj-equity-llc&" + signed[1:]) as response:
         assert b">Signed<" in response.read()
+    # Drafts are served with the DRAFT stamp (the folder copy is untouched); signed copies as they are.
     with urllib.request.urlopen(agreements + "/sj-equity/gsa/draft?alt=sj-equity-llc&" + signed[1:]) as response:
-        assert response.read() == b"%PDF-draft"
+        stamped = response.read()
+        assert response.headers["Content-Disposition"].startswith("inline;") and "_DRAFT.pdf" in response.headers["Content-Disposition"]
+    assert stamped.startswith(b"%PDF") and stamped != draft_pdf, stamped[:200]
+    import subprocess
+    open(os.path.join(INBOX, "stamped.pdf"), "wb").write(stamped)
+    subprocess.run(["qpdf", "--qdf", "--object-streams=disable", os.path.join(INBOX, "stamped.pdf"), os.path.join(INBOX, "plain.pdf")], check=False)
+    assert b"(DRAFT)" in open(os.path.join(INBOX, "plain.pdf"), "rb").read(), "no DRAFT stamp in the served draft"
+    assert open(os.path.join(adir, "v1", "2026-11-20_General-Services-Agreement_SJ-Equity-LLC.pdf"), "rb").read() == draft_pdf
+    with urllib.request.urlopen(agreements + "/sj-equity-llc/gsa/draft" + signed + "&dl=1") as response:
+        assert response.headers["Content-Disposition"].startswith("attachment;") and response.read() == stamped
+    with urllib.request.urlopen(agreements + "/sj-equity-llc/gsa/draft/view" + signed + "&ret=" + urllib.parse.quote("https://app.example.test/leads/x#gsa")) as response:
+        viewer = response.read().decode()
+    assert '"raw": "/agreements/sj-equity-llc/gsa/draft"' in viewer and '"back": "https://app.example.test/leads/x#gsa"' in viewer and ">Download<" in viewer, viewer[:400]
+    with urllib.request.urlopen(agreements + "/sj-equity-llc/gsa/draft/view" + signed + "&ret=" + urllib.parse.quote("javascript:alert(1)")) as response:
+        assert "javascript:" not in response.read().decode()
+    with urllib.request.urlopen(agreements + "/sj-equity-llc/gsa/draft/stat" + signed) as response:
+        stat = json.loads(response.read().decode())
+    assert stat["size"] == len(draft_pdf) and stat["name"].endswith("SJ-Equity-LLC.pdf"), stat
+    with urllib.request.urlopen(agreements + "/sj-equity-llc/v1/2026-11-20_General-Services-Agreement_SJ-Equity-LLC.pdf/view" + signed) as response:
+        assert b'"backSigned": true' in response.read()
     with urllib.request.urlopen(agreements + "/sj-equity-llc/gsa/signed" + signed) as response:
         assert response.read() == b"%PDF-signed"
-    for bad in ("/empty-co/gsa/draft" + signed, "/sj-equity-llc/gsa/other" + signed, "/sj-equity-llc/gsa/draft" + signed.replace("sig=", "sig=00")):
+    for bad in ("/empty-co/gsa/draft" + signed, "/sj-equity-llc/gsa/other" + signed, "/sj-equity-llc/gsa/draft" + signed.replace("sig=", "sig=00"),
+                "/empty-co/gsa/draft/view" + signed, "/sj-equity-llc/view" + signed, "/sj-equity-llc/nope.pdf/stat" + signed):
         try:
             urllib.request.urlopen(agreements + bad)
             raise SystemExit("gsa request was allowed: " + bad)
         except urllib.error.HTTPError as error:
             assert error.code in (403, 404), (bad, error.code)
     with urllib.request.urlopen(agreements + "/sj-equity-llc/v1/2026-11-20_General-Services-Agreement_SJ-Equity-LLC.pdf" + signed) as response:
-        assert response.headers["Content-Type"] == "application/pdf" and response.read() == b"%PDF-draft"
+        assert response.headers["Content-Type"] == "application/pdf" and response.read() == stamped
     for bad in ("/sj-equity-llc" + signed.replace("sig=", "sig=00"), "/sj-equity-llc/notes.txt" + signed,
                 "/sj-equity-llc/..%2Fsecret.pdf" + signed, "/sj-equity-llc/v1/..%2F..%2Fsecret.pdf" + signed,
                 "/sj-equity-llc/2026-12-01_General-Services-Agreement_SJ-Equity_SIGNED.pdf" + signed.replace("sig=", "sig=00")):

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { currentGsaStep, formatWaiting, gsaFolderCandidates, hoursSincePaid, nextGsaAction, readPaidProposal } from "./progress";
+import { currentGsaStep, formatWaiting, gsaFolderCandidates, hoursSincePaid, isTestEmail, nextGsaAction, readPaidProposal } from "./progress";
 
 const none = { gsaDraftedAt: null, gsaSentAt: null, gsaSignedAt: null };
 
@@ -35,6 +35,14 @@ describe("GSA progress", () => {
     expect(formatWaiting(6)).toBe("6h");
     expect(formatWaiting(47)).toBe("47h");
     expect(formatWaiting(73)).toBe("3d");
+  });
+
+  it("treats reserved example domains as test proposals", () => {
+    expect(isTestEmail("proposal-test@example.com")).toBe(true);
+    expect(isTestEmail("a@mail.example.org")).toBe(true);
+    expect(isTestEmail("sweddington@potts-law.com")).toBe(false);
+    expect(isTestEmail("someone@notexample.com")).toBe(false);
+    expect(isTestEmail(null)).toBe(false);
   });
 
   it("guesses the ripley folder from the company name", () => {
