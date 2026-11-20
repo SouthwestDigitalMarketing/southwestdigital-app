@@ -1,5 +1,18 @@
 # SWapp handoff
 
+## 2026-11-20 — Ads page (Kassad)
+
+`/ads` (sidebar after Local SEO, keyboard command "Ads"): what ads are running and what is
+planned, per brand. Data lives in code for now, `src/lib/ads/campaigns.ts`
+(`campaignsForBrand(slug)`); no table, no migration, no Meta connection. Bookkeeping Conroe
+has one draft, "Bentwater" (Facebook and Instagram, two 1-mile pins over the Bentwater
+neighborhood, offer "off your plate" free books review, landing page
+bookkeepingconroe.com/off-your-plate not built, budget unset). Running now shows "No ads
+running." Next: Meta Marketing API read (spend, leads) once Tom confirms the ad account;
+then campaigns move to the database. Checks: `vitest src/lib/ads` 3 passed, `tsc` clean,
+eslint clean on touched files. Not seen rendered: the local dev DB has no BrandDomain for
+Bookkeeping Conroe, so local login shows "Portal not configured"; check on the preview.
+
 ## 2026-11-20 — GSA panel: View the draft / signed GSA (Ummon)
 
 Tom: where it says Drafted, one tap should open the draft. GSA panel rows Drafted and Signed (once

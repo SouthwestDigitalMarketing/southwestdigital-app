@@ -36,6 +36,7 @@ import {
   X,
   FileText,
   Gauge,
+  Megaphone,
 } from "lucide-react";
 import { selectBrand } from "@/app/select-brand/actions";
 import { useBrand } from "@/lib/brands/context";
@@ -62,6 +63,7 @@ const NAV: Array<{
   { label: "Scorecard", href: "/scorecard", icon: Gauge },
   { label: "Scanner", href: "/scanner", icon: Radar },
   { label: "Local SEO", href: "/local-seo", icon: MapPinned },
+  { label: "Ads", href: "/ads", icon: Megaphone },
   { label: "Website", href: "/website", icon: Globe },
   { label: "YouTube", href: "/youtube", icon: PlayCircle },
   { label: "Showrunner", href: "/showrunner", icon: Clapperboard },
