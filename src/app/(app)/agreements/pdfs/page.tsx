@@ -4,6 +4,15 @@ import { sendPageLink } from "@/lib/phone-intake/ticket";
 
 export const dynamic = "force-dynamic";
 
+function agreementsIndexLink() {
+  return sendPageLink({
+    secret: process.env.PHONE_INTAKE_SECRET ?? "",
+    publicUrl: process.env.PHONE_INTAKE_PUBLIC_URL ?? "",
+    nowSeconds: Math.floor(Date.now() / 1000),
+    path: "/agreements",
+  });
+}
+
 /**
  * Agreement PDFs live in each client's folder on ripley and never leave it. This
  * page checks the staff login, then signs a link to ripley's tailnet Agreements
@@ -11,12 +20,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function AgreementPdfsPage() {
   await requireStaffBrand();
-  const link = sendPageLink({
-    secret: process.env.PHONE_INTAKE_SECRET ?? "",
-    publicUrl: process.env.PHONE_INTAKE_PUBLIC_URL ?? "",
-    nowSeconds: Math.floor(Date.now() / 1000),
-    path: "/agreements",
-  });
+  const link = agreementsIndexLink();
   if (link.ok) redirect(link.url);
 
   return (
