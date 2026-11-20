@@ -1,5 +1,15 @@
 # SWapp handoff
 
+## 2026-11-20 — Dashboard billing countdowns (#188, shipped)
+
+Top of the Bookkeeping Conroe dashboard only (`BILLING_TIMERS_BRAND_SLUG`):
+Payday (next 1st), Invoice reminders go out (last day of month minus 3),
+Late fees applied (runs the 1st-7th, lands on the 8th; otherwise "Starts in
+N days"). Firm-local days via `firmDateKey`; logic and tests in
+`src/lib/dashboard/billing-timers.ts`. Display only: the reminder email and
+late-fee charging are not built (Tom: email content to be settled later).
+Dark mode not checked inside the signed-in app.
+
 ## 2026-11-20 — Agreements menu page opens every client's agreement PDFs (Ummon)
 
 The client-record button (PR #185) sits on SWapp *ticket clients* (bc_next, Test Client...), which are
