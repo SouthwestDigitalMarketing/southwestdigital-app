@@ -1,5 +1,19 @@
 # SWapp handoff
 
+## 2026-11-20 — Reports viewer that refreshes itself (Sol's brief, for Tom)
+
+Month links on ripley's Reports page now open `/reports/<folder>/<year>/<YYYY-MM>/view`:
+PDF.js (pdfjs-dist 3.11.174, `scripts/pdfjs/`, served at `/reports/_pdfjs/`, no CDN)
+with a top bar (Back to client, Refresh, "Updated <file time, Chicago>", Download).
+The page polls `.../stat` every 10 s (mtime + size) and re-renders in place, keeping
+the reader's page and position, when Sol re-saves the PDF. A half-written file keeps
+the old render and retries. `stat` hands back a fresh signed link when under 1 h is
+left, so an open viewer outlives the 3 h TTL. The raw PDF path
+(`/reports/<f>/<y>/<YYYY-MM>.pdf`) is unchanged (Download, `/reports.json` alerts).
+Deploy: copy `phone_intake.py` and `pdfjs/` to `~/.local/share/swapp-phone-intake/`,
+restart `swapp-phone-intake.service`. Not embedded: PDF.js standard fonts and cmaps
+(Double PDFs embed their fonts; check if a report ever shows missing text).
+
 ## 2026-11-19 — Website traffic card phone layout (#175, shipped)
 
 `/website` Daily Engaged Sessions card below `sm` (640 px) only; desktop
