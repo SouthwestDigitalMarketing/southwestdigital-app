@@ -594,6 +594,8 @@ model Brand {
   operationsClients       OperationsClient[]
   operationsEvidence      OperationsEvidence[]
   serviceRecords          ServiceRecord[]
+  scorecardEvents         ScorecardEvent[]
+  scorecardSyncs          ScorecardSync[]
   createdAt               DateTime                  @default(now())
   updatedAt               DateTime                  @updatedAt
 
@@ -1491,6 +1493,7 @@ model Contact {
   brandDiscounts BrandDiscount[]      @relation("BrandDiscountContact")
   engagements    Engagement[]
   serviceRecords ServiceRecord[]
+  scorecardEvents ScorecardEvent[]
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
 
@@ -3250,4 +3253,60 @@ model ServiceRecord {
   @@index([brandId, basis, startDate])
   @@index([contactId])
   @@index([engagementId])
+}
+
+/// Scorecard (docs/scorecard.md): one client contact that needed an answer
+/// from us, and when we answered. Aggregate timing only: never a message
+/// body, subject or recording. Written by the ripley collector through
+/// POST /api/scorecard/ingest (idempotent on sourceKey).
+model ScorecardEvent {
+  id              String    @id @default(cuid())
+  brandId         String
+  /// SWapp Contact the event belongs to (a client per ServiceRecord).
+  contactId       String?
+  /// text | call | email | report
+  channel         String
+  /// text_reply | call_answered | call_missed | email_reply | report_delivered
+  kind            String
+  /// When the client reached out (or the period closed, for reports).
+  startedAt       DateTime
+  /// When we answered: our first reply / call back / report published.
+  /// Null = still waiting (live view) or never answered.
+  respondedAt     DateTime?
+  /// Clock seconds from startedAt to respondedAt.
+  clockSeconds    Int?
+  /// Same span counted only inside business hours (src/lib/scorecard/hours.ts).
+  businessSeconds Int?
+  /// How we answered: text | call | email | answered_live | voicemail_then_text ...
+  responseVia     String?
+  /// Matching method / flags, e.g. {"match":"thread"} or {"voicemail":true}.
+  details         Json?     @db.JsonB
+  /// Caller-chosen id, e.g. "quo:msg:<id>"; a repeated post updates the row.
+  sourceKey       String
+  brand           Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  contact         Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([brandId, sourceKey])
+  @@index([brandId, channel, startedAt])
+  @@index([contactId])
+}
+
+/// Scorecard collector heartbeat per source (quo | zoho | reports): proves how
+/// fresh the numbers are on the live view.
+model ScorecardSync {
+  id          String   @id @default(cuid())
+  brandId     String
+  source      String
+  lastRunAt   DateTime
+  /// Newest source item the collector saw (e.g. newest Quo message time).
+  coveredTo   DateTime?
+  eventsSent  Int      @default(0)
+  ok          Boolean  @default(true)
+  note        String?
+  brand       Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([brandId, source])
 }
