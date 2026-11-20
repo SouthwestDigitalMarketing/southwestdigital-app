@@ -1,5 +1,22 @@
 # SWapp handoff
 
+## 2026-11-20 — Reports privacy mode (Ummon)
+
+Header switch "Privacy off/on" on every ripley Reports page (`scripts/phone_intake.py`),
+for screen recordings. Cookie `swapp_privacy=1` (path `/reports`); other open tabs follow
+within 2 s. When on, the server writes aliases (`Client A`, fixed per client in
+`~/.local/share/swapp-phone-intake/privacy-aliases.json`), alias links (`/reports/client-a`;
+real-folder URLs 302 to the alias), `Account N` for account names, hides notes, free-text
+waiting reasons, feed notes and Download. The viewer blacks out, before a page is shown:
+client-name words (FNV hashes, never the name; extras per client in
+`~/.config/swapp-phone-intake/privacy-words.json`, seeded 2026-11-20 with owner names from
+SWapp contacts), whole lines with account-shaped numbers or "(deleted)", emails, phones,
+EIN/SSN, long digit runs, street addresses/PO Box/FM roads, names after Distributions/Draw/Owner
+dashes, numbered-list names (top payees), capitalised possessives. Adversarial review x2 over
+the 7 clients' latest reports. Known gaps: images (logos) are not scanned; a last-4 between
+1900 and 2099 alone at a line end is treated as a year; people's names elsewhere in free
+text need `privacy-words.json`.
+
 ## 2026-11-20 — Scorecard (Ummon, built by an agent team)
 
 `/scorecard` (sidebar after Operations): how fast we answer clients. Spec
