@@ -2,6 +2,7 @@ import "server-only";
 import { BrandRole, UserStatus } from "@prisma/client";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { requireUnlocked } from "@/lib/app-lock/server";
 import { auth } from "@/auth";
 import { selectCurrentBrand } from "@/lib/brands/access";
 import { ACTIVE_BRAND_COOKIE } from "@/lib/brands/active-brand";
@@ -13,6 +14,7 @@ import { requireTrustedPortalHost } from "./request-host";
 export async function requireActiveBrandContext(options?: { minimumRole?: BrandRole }) {
   const session = await auth();
   if (!session?.user || session.user.status !== UserStatus.ACTIVE) redirect("/login");
+  await requireUnlocked(session.user.id);
 
   const [cookieStore, membershipBrands, requestEntry] = await Promise.all([
     cookies(),

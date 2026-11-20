@@ -498,11 +498,34 @@ model User {
   auditEvents               AuditEvent[]
   initiatedOffboardingPlans BrandOffboardingPlan[] @relation("OffboardingInitiator")
   requestedDataExports      BrandDataExport[]      @relation("DataExportRequester")
+  /// App lock (staff screens): scrypt hash of the 6-digit PIN, never the PIN.
+  pinHash                   String?
+  pinChangedAt              DateTime?
+  pinFailedCount            Int                    @default(0)
+  pinLockedUntil            DateTime?
+  passkeys                  UserPasskey[]
   createdAt                 DateTime               @default(now())
   updatedAt                 DateTime               @updatedAt
 
   @@index([status])
   @@index([platformRole])
+}
+
+/// WebAuthn credential (Face ID / fingerprint) that unlocks the app lock on one device.
+model UserPasskey {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  credentialId String    @unique
+  publicKey    Bytes
+  counter      BigInt    @default(0)
+  transports   String[]
+  rpId         String
+  name         String
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime?
+
+  @@index([userId])
 }
 
 model Account {

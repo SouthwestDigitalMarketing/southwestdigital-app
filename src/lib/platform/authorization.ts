@@ -6,6 +6,7 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isPlatformHostname } from "@/lib/brands/active-brand";
 import { isPlatformAdministrator } from "./access";
+import { requireUnlocked } from "@/lib/app-lock/server";
 
 export async function requirePlatformAdministrator() {
   const requestHeaders = await headers();
@@ -22,6 +23,8 @@ export async function requirePlatformAdministrator() {
   if (!isPlatformAdministrator(session.user.platformRole)) {
     redirect("/access-denied");
   }
+
+  await requireUnlocked(session.user.id);
 
   return { session };
 }

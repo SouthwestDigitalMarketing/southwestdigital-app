@@ -8,6 +8,8 @@ export default function proxy(req: NextRequest) {
 
   const headers = new Headers(req.headers);
   headers.set("x-hostname", hostname);
+  // The app lock sends a locked device back here after /unlock.
+  headers.set("x-pathname", req.nextUrl.pathname + req.nextUrl.search);
   return NextResponse.next({ request: { headers } });
 }
 

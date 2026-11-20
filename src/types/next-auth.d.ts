@@ -8,6 +8,8 @@ declare module "next-auth" {
       id: string;
       status: UserStatus;
       platformRole: PlatformRole;
+      /** ms since epoch of the sign-in that issued this session; 0 if unknown. */
+      signedInAt?: number;
       name?: string | null;
       email?: string | null;
       image?: string | null;
@@ -19,6 +21,7 @@ declare module "next-auth/jwt" {
   interface JWT {
     platformRole?: PlatformRole;
     status?: UserStatus;
+    signedInAt?: number;
   }
 }
 

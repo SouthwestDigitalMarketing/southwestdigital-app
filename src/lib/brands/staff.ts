@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { BrandRole, MembershipStatus, PlatformRole } from "@prisma/client";
 import { resolveBrandById } from "@/lib/brands/resolve";
 import { requireActiveBrandContext } from "@/lib/tenancy/current";
+import { getAppLockState } from "@/lib/app-lock/server";
 
 export function isPlatformOperator(role: PlatformRole | undefined) {
   return role === PlatformRole.OWNER || role === PlatformRole.ADMIN;
@@ -19,6 +20,8 @@ async function loadActiveAppBrand() {
   const operator = isPlatformOperator(session.user.platformRole);
   const activeMembership = resolved.membership?.status === MembershipStatus.ACTIVE;
   if (!operator && !activeMembership) redirect("/login?error=AccessDenied");
+  // requireActiveBrandContext already sent a locked device to /unlock.
+  const appLock = await getAppLockState(session.user.id);
 
   return {
     session,
@@ -29,6 +32,7 @@ async function loadActiveAppBrand() {
     dataContext,
     platformRole: session.user.platformRole,
     isPlatformOperator: operator,
+    appLock,
   };
 }
 
