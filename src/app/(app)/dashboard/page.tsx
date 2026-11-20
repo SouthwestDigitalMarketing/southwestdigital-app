@@ -20,6 +20,8 @@ import { firmDateKey, firmInstant } from "@/lib/operations/schedule";
 import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { PIPE_PROSPECTS_KEY } from "@/lib/pipe/deals";
 import { LEAD_STEP_STAGE, LEAD_STEPS, type LeadStep } from "@/lib/pipe/lead-steps";
+import { paidAwaitingGsa } from "@/lib/gsa/store";
+import { GsaAlarm } from "@/components/gsa/GsaAlarm";
 
 export const dynamic = "force-dynamic";
 
@@ -257,7 +259,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const selectedPeriod = getDashboardPeriod(range, windowEnd);
   const previous = getPreviousDashboardPeriod(range, windowEnd, selectedPeriod);
 
-  const [pipelineRows, recordMrr, [theme, mrrGoals], [currentOffers, previousOffers], [currentReviews, previousReviews]] = await Promise.all([
+  const [awaitingGsa, pipelineRows, recordMrr, [theme, mrrGoals], [currentOffers, previousOffers], [currentReviews, previousReviews]] = await Promise.all([
+    paidAwaitingGsa(dataContext),
     withBrandDataTransaction(dataContext, (transaction) => transaction.pipeline.findMany({
       where: { brandId: brand.id, key: PIPE_PROSPECTS_KEY, isActive: true },
       orderBy: [{ createdAt: "asc" }, { name: "asc" }],
@@ -464,6 +467,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   return (
     <div className="px-4 py-5 sm:p-8">
       <h1 className="sr-only">Dashboard</h1>
+      <GsaAlarm proposals={awaitingGsa} now={windowEnd} />
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-4">
         <h2 className="text-lg font-semibold text-slate-900">Performance overview</h2>
         <DashboardControls
