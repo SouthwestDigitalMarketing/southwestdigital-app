@@ -1,12 +1,5 @@
 import type { ScorecardData } from "./types";
 
-/** Same cookie name as the Reports privacy toggle on ripley; each host keeps its own copy. */
-export const PRIVACY_COOKIE = "swapp_privacy";
-
-export function privacyOn(value: string | undefined): boolean {
-  return value === "1";
-}
-
 /** "Client A" … "Client Z", then "Client AA", "Client AB" … */
 export function clientAlias(index: number): string {
   let letters = "";

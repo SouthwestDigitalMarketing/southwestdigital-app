@@ -36,6 +36,7 @@ import {
   X,
   FileText,
   Gauge,
+  EyeOff,
 } from "lucide-react";
 import { selectBrand } from "@/app/select-brand/actions";
 import { useBrand } from "@/lib/brands/context";
@@ -48,6 +49,8 @@ import { normalizeThemeChoice, resolveEffectiveThemeColors } from "@/lib/brands/
 import { signOutAction } from "./actions";
 import { Modal } from "@/components/Modal";
 import { KeyboardProvider } from "@/components/keyboard/KeyboardProvider";
+import { PrivacyToggle } from "@/components/PrivacyToggle";
+import { privacyCovers } from "@/lib/privacy";
 import { APP_COMMANDS } from "@/lib/keyboard/commands";
 
 const NAV: Array<{
@@ -185,11 +188,14 @@ export function AppShell({
   user,
   accessibleBrands,
   activeBrandId,
+  privacy,
 }: {
   children: React.ReactNode;
   user: { name?: string | null; email?: string | null };
   accessibleBrands: Array<{ id: string; name: string }>;
   activeBrandId: string;
+  /** Privacy mode (cookie, read by the layout): covered pages hide names, the rest are blurred. */
+  privacy: boolean;
 }) {
   const { brand } = useBrand();
   const [deviceTheme, setDeviceTheme] = useState<"light" | "dark" | null>(null);
@@ -202,6 +208,7 @@ export function AppShell({
     setMenuPath(pathname);
     setOpen(false);
   }
+  const curtain = privacy && !privacyCovers(pathname);
   const [collapsed, setCollapsed] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(256);
@@ -294,7 +301,7 @@ export function AppShell({
         className={`py-1 ${collapsed ? "px-1" : "px-3"}`}
         style={{ borderBottom: `1px solid ${dividerColor}` }}
       >
-        <div className={`flex items-center py-1 ${collapsed ? "justify-center gap-2 px-0" : "gap-3 px-3"}`}>
+        <div className={`flex items-center py-1 ${collapsed ? "flex-col justify-center gap-2 px-0" : "gap-3 px-3"}`}>
           <button
             type="button"
             aria-label="Open profile"
@@ -311,6 +318,10 @@ export function AppShell({
           <div className={`min-w-0 flex-1 ${collapsed ? "hidden" : ""}`}>
             <p className="truncate text-sm font-medium" style={{ color: navTextColor }}>{profileName}</p>
           </div>
+          {/* The phone header has its own switch; this one is for the desktop sidebar. */}
+          <span className="max-lg:hidden">
+            <PrivacyToggle on={privacy} iconOnly={collapsed} />
+          </span>
         </div>
       </div>
       <div
@@ -546,13 +557,16 @@ export function AppShell({
             <Menu size={20} />
           </button>
           <span className="ml-3 min-w-0 truncate text-sm font-semibold text-slate-900">{brand.name}</span>
+          <span className="ml-auto pl-2">
+            <PrivacyToggle on={privacy} compact />
+          </span>
           <button
             type="button"
             aria-label={mode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             aria-pressed={mode === "dark"}
             title={mode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             onClick={toggleDeviceTheme}
-            className="ml-auto inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500"
+            className="ml-1 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500"
           >
             {mode === "dark" ? <Sun size={20} /> : <Moon size={20} />}
           </button>
@@ -564,7 +578,32 @@ export function AppShell({
           className="app-shell-main min-w-0 flex-1 overflow-y-auto"
           style={{ background: mainPanelBackground }}
         >
-          {children}
+          {curtain ? (
+            <>
+              <div
+                inert
+                aria-hidden
+                className="pointer-events-none select-none blur-xl"
+                data-privacy-curtain
+              >
+                {children}
+              </div>
+              <div className="fixed inset-x-0 bottom-0 top-14 z-20 flex items-center justify-center p-6 lg:left-[var(--app-sidebar-width)] lg:top-0">
+                <div className="max-w-sm rounded-2xl bg-white p-6 text-center shadow-xl">
+                  <EyeOff className="mx-auto text-violet-600" size={24} aria-hidden />
+                  <h2 className="mt-3 text-base font-semibold text-slate-900">Privacy is on</h2>
+                  <p className="mt-1 text-sm text-slate-600">
+                    This page can show client names, so it is blurred. Turn privacy off to use it.
+                  </p>
+                  <div className="mt-4 flex justify-center">
+                    <PrivacyToggle on label="Turn privacy off" />
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            children
+          )}
         </main>
       </div>
       </KeyboardProvider>

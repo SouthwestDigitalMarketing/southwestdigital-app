@@ -1,5 +1,17 @@
 # SWapp handoff
 
+## 2026-11-20 — One privacy switch for the whole app (Ummon)
+
+Tom: "make the privacy button one switch for the whole app". `PrivacyToggle` now lives in the
+shell: phone header (icon while off, "Privacy on" pill while on) and the desktop sidebar's
+profile row (icon-only when collapsed). The layout reads cookie `swapp_privacy` and passes
+`privacy` to `AppShell`. Pages listed in `PRIVACY_COVERED_PATHS` (`src/lib/privacy`) hide names
+themselves (today `/scorecard`, `/reports`); every other page is blurred (`inert`, `blur-xl`)
+under a "Privacy is on" card with a "Turn privacy off" button. To cover a page: hide names
+server-side, then add its path. Toggling reloads the page (no stale RSC payload). `/reports`
+adds `privacy=1|0` to the signed ripley link; ripley applying it to its own cookie is a
+separate phone_intake.py change (see below / next entry). Checked locally with Playwright.
+
 ## 2026-11-20 — Agreement viewer (Reports-style), DRAFT stamp, test-proposal filter (Ummon)
 
 Tom: drafts must carry a DRAFT watermark; a way to download; a Refresh for updated drafts, like the

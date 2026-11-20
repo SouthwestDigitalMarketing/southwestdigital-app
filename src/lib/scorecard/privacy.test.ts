@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clientAlias, privacyOn, privatizeScorecard } from "./privacy";
+import { clientAlias, privatizeScorecard } from "./privacy";
 import type { ScorecardData } from "./types";
 
 const summary = {
@@ -40,14 +40,6 @@ function data(): ScorecardData {
     businessHours: { label: "Mon–Fri 8–5" },
   } as ScorecardData;
 }
-
-describe("privacyOn", () => {
-  it("is on only for the value 1", () => {
-    expect(privacyOn("1")).toBe(true);
-    expect(privacyOn("0")).toBe(false);
-    expect(privacyOn(undefined)).toBe(false);
-  });
-});
 
 describe("clientAlias", () => {
   it("runs A to Z, then AA", () => {
