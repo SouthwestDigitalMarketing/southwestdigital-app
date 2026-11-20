@@ -394,7 +394,8 @@ export async function getScorecardData(brandId: string, range: ScorecardRange, n
 
   const [events, reports, dutyClients, dutyEvidence, syncs] = await Promise.all([
     prisma.scorecardEvent.findMany({
-      where: { brandId, startedAt: { gte: since, lte: now } },
+      // Clients only: an event whose contact was dropped at ingest never counts.
+      where: { brandId, contactId: { not: null }, startedAt: { gte: since, lte: now } },
       select: {
         channel: true,
         kind: true,

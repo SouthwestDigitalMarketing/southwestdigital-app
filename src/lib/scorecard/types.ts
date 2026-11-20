@@ -105,7 +105,7 @@ export type WaitingItem = {
 };
 
 export type DutySummary = {
-  /** Duty occurrences due in range that have evidence. */
+  /** Duty occurrences due in range (doneOnTime + doneLate + notDone). */
   due: number;
   doneOnTime: number;
   doneLate: number;

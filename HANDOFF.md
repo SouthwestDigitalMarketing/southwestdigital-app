@@ -1,5 +1,25 @@
 # SWapp handoff
 
+## 2026-11-20 — Scorecard (Ummon, built by an agent team)
+
+`/scorecard` (sidebar after Operations): how fast we answer clients. Spec
+`docs/scorecard.md`, API `docs/scorecard-api.md`, collector
+`docs/scorecard-collector.md`, contract `src/lib/scorecard/types.ts`.
+Tables `ScorecardEvent`, `ScorecardSync` (migration `20261120124026_scorecard`).
+Ripley collector `scripts/scorecard_collect.py` (stdlib Python; Quo
+`sales.db` read-only, Zoho headers read-only) posts to
+`POST /api/scorecard/ingest` with the Operations token; timer
+`swapp-scorecard.timer` every 5 min (unit files in `scripts/systemd/`).
+Clients = contacts with a `ServiceRecord`, inside their record window.
+Business hours Mon–Fri 8–5 Central (`src/lib/scorecard/hours.ts`).
+Known limits: report delivery has no trustworthy history before Operations
+evidence (tracking 2026-11-19; PDF mtimes are save dates, Double API has no
+publish time); voicemail count reads 0 (every no-answer call in `sales.db` has
+`duration=0`); weekly phone-chart medians are count-weighted daily medians.
+Built with the Workflow tool: 3 builders in worktrees, adversarial reviewer
+per builder (core 1 round, collector 2, ui 3). Process: All Thing
+`sops/sop-agent-teams.md`.
+
 ## 2026-11-19 — Website traffic card phone layout (#175, shipped)
 
 `/website` Daily Engaged Sessions card below `sm` (640 px) only; desktop
