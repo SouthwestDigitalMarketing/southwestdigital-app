@@ -26,7 +26,7 @@ function Bar({ label, share }: { label: string; share: number }) {
   const pct = Math.floor(100 * Math.min(1, Math.max(0, share)));
   return (
     <div className="mt-2 flex items-center gap-3 text-sm text-slate-600">
-      <span className="w-28 shrink-0">{label}</span>
+      <span className="w-36 shrink-0">{label}</span>
       <div className="h-2.5 flex-1 rounded-full bg-slate-200">
         <div className="h-2.5 rounded-full bg-slate-900" style={{ width: `${pct}%` }} />
       </div>
@@ -67,7 +67,13 @@ export function VideosInProgress({ videos }: { videos: VideoCard[] }) {
                   {step.state === "now" && video.render?.total !== undefined ? (
                     <div className="ml-6 font-normal">
                       {video.render.piece && video.render.pieces ? (
-                        <Bar label={`Piece ${video.render.piece} of ${video.render.pieces}`} share={video.render.pieceShare ?? 0} />
+                        <Bar
+                          label={`${video.render.pieceLabel ?? "Piece"} ${video.render.piece} of ${video.render.pieces}`}
+                          share={video.render.pieceShare ?? 0}
+                        />
+                      ) : null}
+                      {video.render.pieceName ? (
+                        <p className="mt-1 text-sm text-slate-500">Now: {video.render.pieceName}</p>
                       ) : null}
                       <Bar label="Whole video" share={video.render.total} />
                       {video.render.minutesLeft ? <p className="mt-1 text-sm text-slate-500">About {video.render.minutesLeft} min left</p> : null}

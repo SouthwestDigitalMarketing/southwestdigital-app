@@ -3,8 +3,19 @@ import { timingSafeEqual } from "node:crypto";
 /** One autopilot step as ripley reports it. */
 export type VideoStep = { label: string; state: "done" | "now" | "todo" | "stopped"; message?: string };
 
-/** The render job's numbers, shown as two bars under the render step. */
-export type VideoRender = { total?: number; piece?: number; pieces?: number; pieceShare?: number; minutesLeft?: number };
+/**
+ * The current step's numbers, shown as two bars under it. `pieceLabel` names the unit
+ * ("Graphic" → "Graphic 12 of 50"; default "Piece") and `pieceName` the one in progress ("Lower third").
+ */
+export type VideoRender = {
+  total?: number;
+  piece?: number;
+  pieces?: number;
+  pieceShare?: number;
+  minutesLeft?: number;
+  pieceLabel?: string;
+  pieceName?: string;
+};
 
 export type VideoStatusInput = {
   batch: string;
@@ -54,7 +65,15 @@ export function parseVideoStatus(raw: unknown): VideoStatusInput | null {
   let render: VideoRender | null = null;
   if (row.render && typeof row.render === "object") {
     const r = row.render as Record<string, unknown>;
-    render = { total: share(r.total), piece: count(r.piece), pieces: count(r.pieces), pieceShare: share(r.pieceShare), minutesLeft: count(r.minutesLeft) };
+    render = {
+      total: share(r.total),
+      piece: count(r.piece),
+      pieces: count(r.pieces),
+      pieceShare: share(r.pieceShare),
+      minutesLeft: count(r.minutesLeft),
+      pieceLabel: text(r.pieceLabel, 30) ?? undefined,
+      pieceName: text(r.pieceName, 80) ?? undefined,
+    };
     if (render.total === undefined) render = null;
   }
   const url = typeof row.url === "string" && row.url.startsWith("https://") ? row.url.slice(0, 300) : null;

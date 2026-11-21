@@ -8,6 +8,15 @@ const steps = [
 ];
 
 describe("parseVideoStatus", () => {
+  it("keeps the graphics step's unit and current graphic", () => {
+    const row = parseVideoStatus({
+      batch: "b3",
+      state: "episode",
+      render: { total: 0.3, piece: 12, pieces: 50, pieceShare: 0.4, pieceLabel: " Graphic ", pieceName: "Lower third", minutesLeft: 25 },
+    });
+    expect(row?.render).toEqual({ total: 0.3, piece: 12, pieces: 50, pieceShare: 0.4, minutesLeft: 25, pieceLabel: "Graphic", pieceName: "Lower third" });
+  });
+
   it("keeps a queue.json row with steps, render bars and its sent time", () => {
     const row = parseVideoStatus({
       batch: "mwjmg87n-a9a9fc", project: "TREB 261116 New Video", state: "episode", stage: "Rendering",
