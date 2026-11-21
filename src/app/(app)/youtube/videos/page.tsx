@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { requireAppBrand } from "@/lib/brands/staff";
@@ -60,8 +59,7 @@ export default async function AllVideosPage() {
 
   return (
     <div className="p-4 sm:p-8">
-      <Link href="/youtube" className="text-sm text-slate-600 underline">Back to YouTube</Link>
-      <h1 className="mt-4 text-2xl font-semibold text-slate-900">All videos</h1>
+      <h1 className="text-2xl font-semibold text-slate-900">All videos</h1>
       <p className="mt-1 text-sm text-slate-500">Numbers are all time; the last 2–3 days may not be counted yet.</p>
       {"error" in result ? (
         <div className="mt-4 rounded-xl border border-slate-200 bg-white px-5 py-4 text-sm text-amber-900">
