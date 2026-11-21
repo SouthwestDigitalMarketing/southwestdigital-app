@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * Ripley pushes its phone-batch status here (scripts/push_video_status.py): every
- * video's autopilot steps, render bars and YouTube link, for the Showrunner page.
+ * video's autopilot steps, render bars, title, thumbnail, details and YouTube link, for the Showrunner page.
  * Body: { brand: "<slug>", videos: [queue.json rows] }.
  */
 export async function POST(request: Request) {
@@ -45,6 +45,9 @@ export async function POST(request: Request) {
         steps: row.steps ?? Prisma.JsonNull,
         render: row.render ?? Prisma.JsonNull,
         url: row.url,
+        title: row.title,
+        thumbnail: row.thumbnail,
+        details: row.details ?? Prisma.JsonNull,
         sentAt: row.sentAt,
       };
       await tx.showrunnerVideoStatus.upsert({
