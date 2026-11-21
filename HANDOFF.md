@@ -6,6 +6,14 @@
 are green and it is checked (preview or render), squash-merge it and report; do not stop to ask.
 Still ask first for anything outside SWapp code (production data, outbound sends, secrets).
 
+## 2026-11-21 — Video status: per-step unit and current item (Ummon)
+
+Tom wants to see which show graphic is being added. `render` in queue.json / `POST
+/api/showrunner/video-status` now also accepts `pieceLabel` (≤30 chars, e.g. "Graphic"; bar reads
+"Graphic 12 of 50", default "Piece") and `pieceName` (≤80, shown as "Now: Lower third"). `render`
+still needs `total`. The showrunner-app agent (w33) was briefed to report these during "Adding the
+show graphics". Checks: vitest src/lib/showrunner 17 passed.
+
 ## 2026-11-21 — YouTube folded into Showrunner (Ummon)
 
 Tom: "combine showrunner and YouTube… one single process… it should be showrunner". One menu item,
