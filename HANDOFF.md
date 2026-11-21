@@ -1,5 +1,15 @@
 # SWapp handoff
 
+## 2026-11-21 — YouTube: All videos screen, roomier rows (Ummon)
+
+Tom: published videos don't belong in Videos in progress; Top videos too cramped. YouTube screen
+now shows only unfinished videos (`url` null) and an **All videos** button. `/youtube/videos`
+lists every upload (`src/lib/youtube/uploads.ts`, uploads playlist, newest first) with lifetime
+views / avg % watched / watch time (`getTopVideos` oldest upload → today, 200). Shared
+`VideoList`: thumbnail + full title + date, labelled 3-number row underneath; Top videos uses it.
+Checks: CI green on #206; 412 px sample render. Not seen with live channel data (YouTube keys
+only on production).
+
 ## 2026-11-21 — App lock: PIN or Face ID / fingerprint, monthly change reminder (Ummon)
 
 Tom: a 6-digit PIN on SWapp with biometrics, reminded on the 1st of each month to change it;
