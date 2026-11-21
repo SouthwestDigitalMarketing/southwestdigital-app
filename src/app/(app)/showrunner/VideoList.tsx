@@ -25,6 +25,16 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
+function Stats({ video, className }: { video: VideoListItem; className: string }) {
+  return (
+    <div className={className}>
+      <Stat label="Views" value={video.views.toLocaleString("en-US")} />
+      <Stat label="Avg % watched" value={`${video.averageViewPercentage.toFixed(1)}%`} />
+      <Stat label="Watch time" value={fmtWatchTime(video.estimatedMinutesWatched)} />
+    </div>
+  );
+}
+
 function watchUrl(videoId: string) {
   return `https://www.youtube.com/watch?v=${videoId}`;
 }
@@ -91,13 +101,12 @@ export function VideoList({
               <div className="min-w-0">
                 <p className="font-medium leading-snug text-slate-900">{v.title}</p>
                 {v.detail ? <p className="mt-1 text-xs text-slate-500">{v.detail}</p> : null}
+                {/* Wide screens: numbers sit under the title, beside the thumbnail. */}
+                <Stats video={v} className="mt-2 hidden gap-8 sm:flex" />
               </div>
             </div>
-            <div className="mt-3 grid grid-cols-3 gap-3">
-              <Stat label="Views" value={v.views.toLocaleString("en-US")} />
-              <Stat label="Avg % watched" value={`${v.averageViewPercentage.toFixed(1)}%`} />
-              <Stat label="Watch time" value={fmtWatchTime(v.estimatedMinutesWatched)} />
-            </div>
+            {/* Phones: numbers get their own row under the thumbnail. */}
+            <Stats video={v} className="mt-3 grid grid-cols-3 gap-3 sm:hidden" />
           </a>
         </li>
       ))}
