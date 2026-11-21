@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { DEFAULT_KEYWORDS, createGrid, estimateScanCost, parseGridSettings, SCAN_HARD_CAP_USD } from "@/lib/localSeo/grid";
+import { DEFAULT_GRID, DEFAULT_KEYWORDS, createGrid, estimateScanCost, parseGridSettings, SCAN_HARD_CAP_USD } from "@/lib/localSeo/grid";
 import { collectReadyLocalSeoTasks, startLocalSeoScan } from "@/lib/localSeo/provider";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +37,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ collected, scheduled: false, reason: "A scan is still queued." });
     }
     const saved = await prisma.localSeoConfig.findUnique({ where: { brandId: brand.id } });
-    const settings = parseGridSettings(saved ?? { gridSize: 7, spacingMiles: 1, keywords: DEFAULT_KEYWORDS });
+    const settings = parseGridSettings(saved ?? { ...DEFAULT_GRID, keywords: DEFAULT_KEYWORDS });
     if (!settings) return NextResponse.json({ collected, scheduled: false, reason: "Saved grid settings are invalid." }, { status: 400 });
     const estimate = estimateScanCost(settings, "standard");
     console.info("Local SEO weekly scan cost estimate", { scheduleKey, serpCount: estimate.serpCount, estimatedCostUsd: estimate.totalUsd });

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { DEFAULT_KEYWORDS, estimateScanCost, parseGridSettings, type GridSettings } from "@/lib/localSeo/grid";
+import { DEFAULT_KEYWORDS, estimateScanCost, parseGridSettings, SPACING_OPTIONS, type GridSettings } from "@/lib/localSeo/grid";
 import { LocalSeoMap } from "./LocalSeoMap";
 
 type Competitor = { name: string; rank: number; address?: string | null };
@@ -51,7 +51,7 @@ export function LocalSeoDashboard({ initialSettings, initialScans, storageMissin
 
   async function saveSettings() {
     const parsed = parseGridSettings({ ...settings, keywords: keywordText.split("\n") });
-    if (!parsed) { setMessage("Use 1–12 keywords, an odd grid from 3 to 9, and spacing of 0.5, 1, or 2 miles."); return; }
+    if (!parsed) { setMessage(`Use 1–12 keywords, an odd grid from 3 to 9, and spacing of ${SPACING_OPTIONS.join(", ")} miles.`); return; }
     setBusy(true); setMessage("");
     try {
       const response = await fetch("/api/local-seo/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(parsed) });
@@ -132,7 +132,7 @@ export function LocalSeoDashboard({ initialSettings, initialScans, storageMissin
           <h2 className="text-lg font-semibold text-slate-900">Settings and scan</h2>
           <div className="mt-4 grid grid-cols-2 gap-3">
             <label className="text-xs font-medium text-slate-600">Grid size<select value={settings.gridSize} onChange={(event) => { setSettings({ ...settings, gridSize: Number(event.target.value) }); setConfirmedCost(false); }} className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"><option value={3}>3 × 3</option><option value={5}>5 × 5</option><option value={7}>7 × 7</option><option value={9}>9 × 9</option></select></label>
-            <label className="text-xs font-medium text-slate-600">Point spacing<select value={settings.spacingMiles} onChange={(event) => { setSettings({ ...settings, spacingMiles: Number(event.target.value) }); setConfirmedCost(false); }} className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"><option value={0.5}>0.5 mi</option><option value={1}>1 mi</option><option value={2}>2 mi</option></select></label>
+            <label className="text-xs font-medium text-slate-600">Point spacing<select value={settings.spacingMiles} onChange={(event) => { setSettings({ ...settings, spacingMiles: Number(event.target.value) }); setConfirmedCost(false); }} className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">{SPACING_OPTIONS.map((miles) => <option key={miles} value={miles}>{miles} mi</option>)}</select></label>
           </div>
           <label className="mt-4 block text-xs font-medium text-slate-600">Search phrases <span className="font-normal">(one per line, up to 12)</span><textarea rows={7} value={keywordText} onChange={(event) => { setKeywordText(event.target.value); setConfirmedCost(false); }} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900" /></label>
           <button onClick={saveSettings} disabled={busy || !settingsAreValid} className="mt-3 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-800 disabled:opacity-50">Save settings</button>
