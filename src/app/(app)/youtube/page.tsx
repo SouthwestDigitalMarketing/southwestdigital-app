@@ -16,7 +16,7 @@ import { getSourceTagClicksCumulative, type SourceTagClickReport } from "@/lib/c
 import { getSourceTagVideos, type SourceTagVideo } from "@/lib/youtube/sourceTagVideos";
 import { DomainPurpose } from "@prisma/client";
 import { getYouTubeRefreshToken } from "@/lib/youtube/credentials";
-import { NewVideoEntry } from "./NewVideoEntry";
+import { InProgress } from "./InProgress";
 import { VideoList } from "./VideoList";
 import { loadVideoCards } from "@/lib/showrunner/load";
 
@@ -60,7 +60,7 @@ export default async function YouTubePage() {
     return (
       <div className="p-8">
         <h1 className="sr-only">YouTube</h1>
-        <NewVideoEntry videos={videos} />
+        <InProgress videos={videos} />
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
         <p className="mt-2 text-sm text-slate-400">YouTube channel not configured for this brand. <a className="font-semibold underline" href="/api/youtube/connect">Connect YouTube</a>.</p>
       </div>
@@ -73,7 +73,7 @@ export default async function YouTubePage() {
     return (
       <div className="p-8">
         <h1 className="sr-only">YouTube</h1>
-        <NewVideoEntry videos={videos} />
+        <InProgress videos={videos} />
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
         <p className="mt-2 text-sm text-slate-600">Channel data is unavailable because the saved YouTube connection could not be read here. <a className="font-semibold underline" href="/api/youtube/connect">Connect YouTube</a>.</p>
       </div>
@@ -136,7 +136,7 @@ export default async function YouTubePage() {
     return (
       <div className="p-8">
         <h1 className="sr-only">YouTube</h1>
-        <NewVideoEntry videos={videos} />
+        <InProgress videos={videos} />
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
         <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           {/refresh token (expired|revoked)/i.test(error ?? "") ? (
@@ -184,7 +184,7 @@ export default async function YouTubePage() {
   return (
     <div className="p-8">
       <h1 className="sr-only">YouTube</h1>
-      <NewVideoEntry videos={videos} />
+      <InProgress videos={videos} />
       <div>
         <h2 className="text-lg font-semibold text-slate-900">Channel performance</h2>
         <p className="mt-1 text-sm text-slate-500">
