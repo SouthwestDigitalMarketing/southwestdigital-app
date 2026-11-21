@@ -2,7 +2,9 @@ import "server-only";
 
 import type { BrandDataContext } from "@/lib/tenancy/context";
 import { withBrandDataTransaction } from "@/lib/tenancy/context";
+import type { VideoCard } from "@/components/showrunner/VideosInProgress";
 import { latestByTarget, type LatestFeedback } from "./feedback";
+import type { VideoRender, VideoStep } from "./video-status";
 
 export async function loadFeedback(
   context: BrandDataContext,
@@ -41,4 +43,17 @@ export async function loadVideoStatus(context: BrandDataContext): Promise<VideoS
       select: { batch: true, project: true, state: true, stage: true, steps: true, render: true, url: true, updatedAt: true },
     }),
   );
+}
+
+/** loadVideoStatus shaped for the VideosInProgress cards (Showrunner and YouTube pages). */
+export async function loadVideoCards(context: BrandDataContext): Promise<VideoCard[]> {
+  return (await loadVideoStatus(context)).map((row) => ({
+    batch: row.batch,
+    project: row.project,
+    state: row.state,
+    stage: row.stage,
+    steps: Array.isArray(row.steps) ? (row.steps as VideoStep[]) : null,
+    render: row.render && typeof row.render === "object" ? (row.render as VideoRender) : null,
+    url: row.url,
+  }));
 }

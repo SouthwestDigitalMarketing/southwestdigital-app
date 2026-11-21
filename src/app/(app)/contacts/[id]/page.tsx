@@ -223,7 +223,7 @@ export default async function ContactDetailPage({ params }: PageProps) {
         </div>
 
         {gsaProposals.map((proposal) => (
-          <GsaPanel key={proposal.engagementId} proposal={proposal} company={contact.company || contact.name} now={now} />
+          <GsaPanel key={proposal.engagementId} proposal={proposal} company={contact.company || contact.name} now={now} returnTo={`/contacts/${encodeURIComponent(contact.id)}`} />
         ))}
 
         <section className="overflow-hidden rounded-2xl bg-slate-900 text-white shadow-sm">

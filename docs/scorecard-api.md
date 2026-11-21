@@ -115,6 +115,29 @@ Response `200`:
 }
 ```
 
+## POST /api/scorecard/totals
+
+Same Bearer token. One metric's monthly counts from the nightly totals job
+(`scripts/scorecard_totals.mjs`); every month of that metric is replaced.
+
+```json
+{
+  "brand": "bookkeeping-conroe",
+  "metric": "transactions",
+  "months": [{ "month": "2026-10", "value": 823 }, { "month": "2026-11", "value": 2517 }],
+  "note": "32374 transactions, 7 client books"
+}
+```
+
+- `metric`: `transactions` or `reports`.
+- `months`: up to 1000, each a firm-local `YYYY-MM` not after this month, no repeats,
+  `value` a whole number 0 to 100,000,000.
+- `note`: optional, up to 300 characters (shown nowhere but the sync record).
+- A `transactions` post also upserts the `qbo` sync record.
+
+Response: `{ "metric": "transactions", "months": 12, "total": 32374 }`. 400 with
+`{ "error": "..." }` on a bad body.
+
 ## How the page reads it
 
 `getScorecardData(brandId, range, now)` in `src/lib/scorecard/queries.ts`:

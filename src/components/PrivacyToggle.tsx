@@ -1,37 +1,51 @@
 "use client";
 
-import { useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
+import { PRIVACY_COOKIE } from "@/lib/privacy";
 
 /**
- * Hides client names for screen recordings. Stores the choice in a cookie for a
- * year and re-renders the server page, which does the hiding. Off-screen pages
- * pick the choice up on their next load.
+ * The app-wide privacy switch. Stores the choice in a cookie for a year and
+ * reloads the whole page: the server does the hiding, and a soft refresh would
+ * leave the last render's real names in the page's embedded data.
+ *
+ * `compact` drops the label while privacy is off (the phone header); "Privacy on"
+ * always shows its label so it is obvious. `iconOnly` never shows a label (the
+ * collapsed sidebar). `label` replaces the text, for buttons that read as an
+ * action ("Turn privacy off").
  */
-export function PrivacyToggle({ on, cookie }: { on: boolean; cookie: string }) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
+export function PrivacyToggle({
+  on,
+  compact = false,
+  iconOnly = false,
+  label,
+}: {
+  on: boolean;
+  compact?: boolean;
+  iconOnly?: boolean;
+  label?: string;
+}) {
   const toggle = () => {
-    document.cookie = `${cookie}=${on ? "0" : "1"}; path=/; max-age=31536000; samesite=lax`;
-    // Turning privacy on reloads the whole page: a soft refresh would leave the
-    // first load's real names in the page's embedded data.
-    if (!on) window.location.reload();
-    else startTransition(() => router.refresh());
+    document.cookie = `${PRIVACY_COOKIE}=${on ? "0" : "1"}; path=/; max-age=31536000; samesite=lax`;
+    window.location.reload();
   };
+  const showLabel = !iconOnly && (on || !compact);
   return (
     <button
       type="button"
       onClick={toggle}
-      disabled={pending}
       aria-pressed={on}
-      title={on ? "Client names are hidden. Tap to show them." : "Tap to hide client names."}
-      className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-60 ${
-        on ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
+      aria-label={on ? "Privacy on: client names are hidden" : "Privacy off: tap to hide client names"}
+      title={on ? "Client names are hidden. Tap to show them." : "Hide client names for screen recordings"}
+      className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border text-xs font-semibold transition-colors ${
+        showLabel ? "px-3" : "w-8 justify-center"
+      } ${
+        on
+          ? "border-violet-600 bg-violet-600 text-white hover:bg-violet-700"
+          : "border-slate-200 bg-white text-slate-500 hover:bg-slate-100"
       }`}
     >
-      {on ? <EyeOff size={14} /> : <Eye size={14} />}
-      {on ? "Privacy on" : "Privacy off"}
+      {on ? <EyeOff size={14} aria-hidden /> : <Eye size={14} aria-hidden />}
+      {showLabel ? (label ?? (on ? "Privacy on" : "Privacy off")) : null}
     </button>
   );
 }

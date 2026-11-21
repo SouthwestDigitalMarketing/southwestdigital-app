@@ -24,6 +24,14 @@ applied to production automatically by the production deploy.
    `npx prisma migrate dev --create-only`, edit the SQL, then
    `npx prisma migrate dev` to apply it.
 
+6. **Never run `SET` or `RESET` on the production pooler (`DATABASE_URL`,
+   port 6543, transaction mode).** The setting sticks to a shared server
+   connection the app also uses. On 2026-11-20 a read-only check ran
+   `set default_transaction_read_only=on` there and every SWapp write failed
+   for 9 minutes. For a safe read use
+   `psql -1 -c "SET TRANSACTION READ ONLY; select ..."` (it ends with the
+   transaction). Recovery steps: All Thing `sops/troubleshooting.md`.
+
 ## Everyday workflow
 
 ```bash

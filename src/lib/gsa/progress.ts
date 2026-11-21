@@ -13,6 +13,14 @@ export const GSA_STEP_LABELS: Record<GsaStep, string> = {
   signed: "Signed",
 };
 
+/**
+ * Older test proposals predate SWapp's isTestProposal flag; their contact email
+ * uses a domain reserved for testing (example.com, .net, .org), which no client has.
+ */
+export function isTestEmail(email: string | null | undefined): boolean {
+  return /@(?:[a-z0-9-]+\.)*example\.(?:com|net|org)$/i.test((email ?? "").trim());
+}
+
 /** The process promises the GSA within 24 hours of payment. */
 export const GSA_DUE_HOURS = 24;
 

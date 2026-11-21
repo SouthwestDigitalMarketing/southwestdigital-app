@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { clientAlias, privacyOn, privatizeScorecard } from "./privacy";
+import { clientAlias, createAliaser } from "@/lib/privacy/alias";
+import { privatizeScorecard } from "./privacy";
 import type { ScorecardData } from "./types";
 
 const summary = {
@@ -41,14 +42,6 @@ function data(): ScorecardData {
   } as ScorecardData;
 }
 
-describe("privacyOn", () => {
-  it("is on only for the value 1", () => {
-    expect(privacyOn("1")).toBe(true);
-    expect(privacyOn("0")).toBe(false);
-    expect(privacyOn(undefined)).toBe(false);
-  });
-});
-
 describe("clientAlias", () => {
   it("runs A to Z, then AA", () => {
     expect(clientAlias(0)).toBe("Client A");
@@ -66,6 +59,13 @@ describe("privatizeScorecard", () => {
     expect(out.syncs[0]).toMatchObject({ ok: false, note: null });
     const text = JSON.stringify(out);
     for (const real of ["Jane", "Smith", "Acme", "Zed", "example.com"]) expect(text).not.toContain(real);
+  });
+  it("shares letters with the rest of the page through one aliaser", () => {
+    const alias = createAliaser();
+    expect(alias("Zed Dental")).toBe("Client A");
+    expect(alias("Somebody", "Lead")).toBe("Lead A");
+    const out = privatizeScorecard(data(), alias);
+    expect(out.reports.days.map((r) => r.client)).toEqual(["Client B", "Client A"]);
   });
   it("keeps the numbers", () => {
     const out = privatizeScorecard(data());

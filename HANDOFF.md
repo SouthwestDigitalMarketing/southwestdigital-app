@@ -1,5 +1,132 @@
 # SWapp handoff
 
+## 2026-11-21 — App lock: PIN or Face ID / fingerprint, monthly change reminder (Ummon)
+
+Tom: a 6-digit PIN on SWapp with biometrics, reminded on the 1st of each month to change it;
+"just my accounts". Required for `PIN_REQUIRED_EMAILS` (`src/lib/app-lock/policy.ts`: Tom's 3
+accounts); others opt in at Settings → Security, after which the lock applies to them too.
+`requireActiveBrandContext` and platform admin auth call `requireUnlocked` → `/unlock?next=…`.
+Unlock: HMAC cookie `swapp_unlock`, 8 h, tied to user + `pinChangedAt` (a PIN change relocks other
+devices). PIN rules: 6 digits, no repeats or straight runs; scrypt; 5 wrong → 15 min. Forgot PIN →
+sign out → fresh Google sign-in (`signedInAt` in the JWT) → choose a new PIN. Passkeys:
+@simplewebauthn v9, per rpId, `UserPasskey` table. Banner from the 1st (firm month) until changed.
+Migration `20261120230000_app_pin_lock` (additive). Checks: vitest 1235 passed; local e2e 16/16.
+Not tested: passkeys (need HTTPS; first test on production). Agents driving SWapp as Tom must stop
+at `/unlock` and ask Tom (board 31f10796bffa).
+
+## 2026-11-21 — YouTube screen shows Videos in progress (Ummon)
+
+Tom backed out of a phone upload and the YouTube screen only offered **Create new video**. The
+Videos in progress cards (ripley pushes status every 10 s; they refresh themselves) lived only on
+`/showrunner`. `loadVideoCards` (`src/lib/showrunner/load.ts`) now feeds both pages; `NewVideoEntry`
+renders the cards under the button in all four YouTube page states (nothing shown when no video is
+in progress or published in the last 24 h). Checks: CI green on #204. Not seen with a live upload.
+
+## 2026-11-20 — Agreement downloads always carry the version (Ummon)
+
+Tom's phone said "already downloaded" for SJ Equity v2 because v1 and v2 had the same file name (v2 only
+in a `v2/` folder). ripley `scripts/phone_intake.py`: a file kept only in a `v<N>` folder is served
+with `_v<N>` added to its name (`..._v2_DRAFT.pdf`); names that already carry `_v<N>` or `DRAFT` are
+not doubled. Self-test ok; live: SJ Equity download `..._SJ-Equity-LLC_v2_DRAFT.pdf`, 120,651 bytes.
+
+## 2026-11-20 — Dashboard and Scorecard merged (Ummon)
+
+Tom: "merge the dashboard and the scorecard… use your best judgment". One page, `/dashboard`:
+GSA alarm, reporting period, billing calendar, **all-time totals** (Transactions recorded /
+Reports issued / Client messages answered + per-month chart), **Waiting for a reply + Last
+sync**, Revenue, Pipelines, Offers, **Response times** (own range tabs, `?rt=today|week|30d|90d`,
+kept when the period changes, and vice versa), Reviews, Website, YouTube, folded **How we
+measure**. Scorecard UI moved to `src/app/(app)/dashboard/_scorecard/` (`sections.tsx` plus the
+moved charts/format files). `/scorecard` redirects; the sidebar item is gone; the keyboard
+command "Scorecard" opens `/dashboard#response-times`. The page refreshes every 5 minutes
+(was 60 s on Scorecard; Dashboard reruns GA4/YouTube on each refresh).
+
+Privacy: `/dashboard` is now covered. With privacy on, MRR clients (and "starting"), pipeline
+leads (`Lead A…`), the GSA alarm and the Scorecard lists are aliased server-side through one
+`createAliaser()` (`src/lib/privacy/alias.ts`), so a client keeps one letter across sections.
+Checked locally: 14 real names seen with privacy off, none on screen or in page data with it on.
+## 2026-11-20 — Agreement versions: highest version wins, "v2 · Draft" first (Ummon)
+
+Tom: versions must be in the file name; on a phone folders are invisible and names get cut. Naming
+rule (All Thing `sops/sop-quote-and-contract.md`): `<date>_GSA_<Client-Slug>_v<N>_<DRAFT|FINAL|SIGNED>.pdf`.
+ripley `scripts/phone_intake.py`: version from `_v<N>` in the name, else the `v<N>` folder, else 0;
+GSA = "General-Services-Agreement" or a `GSA` token; GSA draft/signed = highest version, then date
+(SJ Equity's v1 and v2 had the same name and v1 was winning). List rows lead with a coloured
+"v2 · Draft" / "v2 · Final, ready to sign" / "Signed" line, then the file name and date.
+Checks: self-test ok (same name in v1/ and v2/ -> v2; `_v3_DRAFT` beats both; labels); installed on
+ripley; live SJ Equity list "v2 · Draft, v1 · Draft, Signed", View -> v2; 412px screenshot checked.
+
+## 2026-11-20 — `_FINAL` agreements: ready to sign, no DRAFT stamp (Ummon)
+
+ripley `scripts/phone_intake.py`: an unsigned agreement PDF with a FINAL token in its name
+(`..._FINAL.pdf`, `AGREEMENT_FINAL`) is the execution copy: served as is (no DRAFT stamp) and listed as
+"Final, ready to sign" (blue). Other unsigned PDFs are now labelled "Draft" (was "Unsigned"). GSA
+`draft` still resolves to the newest unsigned GSA file, so a FINAL copy shows on View once saved.
+Kassad's SJ Equity rewrite brief (`~/briefs/kassad-sj-equity-gsa-final.md`, board fa35063bba73) names
+the execution copy `_FINAL`. Checks: self-test ok (FINAL served unstamped and labelled; "Finalize" does
+not count); installed on ripley, live SJ Equity list shows Draft / Signed.
+
+## 2026-11-20 — Scorecard big numbers (Ummon)
+
+Tom: "how many total transactions we have categorized and recorded across all of our clients…
+maybe reports issued as well". Top of `/scorecard`: Transactions recorded, Reports issued,
+Client messages answered (all-time, this month, last month) and a per-month bar chart.
+New table `ScorecardMonthly` (migration `20261120211041_scorecard_monthly`, additive),
+`POST /api/scorecard/totals`, `src/lib/scorecard/totals.ts`, `TotalsChart.tsx`. Nightly
+`scripts/scorecard_totals.mjs` on ripley (systemd `swapp-scorecard-totals.*`) reads QuickBooks
+Transaction List with Created By / Last Modified By through bookbot-app's modules and counts
+our team's touches by month; reports from the client folders. Definitions: docs/scorecard.md
+§ Big numbers. First dry run 2026-11-20: 32,374 transactions (Dec 2025 – Nov 2026, 7 of 7
+client books), 136 reports (Jan 2019 – Nov 2026). Rodan's books are kept by their own staff
+(53 ours). Whole-book total including history before us is ~120k; deliberately not shown.
+The migration was made with `migrate dev` on a scratch database on the local Docker server
+(`swapp_ummon_scratch`): the shared dev DB has an unmerged `20261120230000_app_pin_lock`
+applied and migrate dev wanted to reset it.
+
+## 2026-11-20 — Reports follow SWapp's privacy switch (Ummon)
+
+ripley `scripts/phone_intake.py`: a valid signed `/reports...` link with `privacy=1|0` sets this
+host's `swapp_privacy` cookie (Path `/reports`, 1 year) and 302s to the same URL without the
+param. SWapp's `/reports` always sends it, so Reports match the app's one switch each time they
+are opened from SWapp. ripley's own header button still works for that tab. Forged/expired
+links still 403 with no cookie. Self-test covers both values and the forged case.
+## 2026-11-20 — One privacy switch for the whole app (Ummon)
+
+Tom: "make the privacy button one switch for the whole app". `PrivacyToggle` now lives in the
+shell: phone header (icon while off, "Privacy on" pill while on) and the desktop sidebar's
+profile row (icon-only when collapsed). The layout reads cookie `swapp_privacy` and passes
+`privacy` to `AppShell`. Pages listed in `PRIVACY_COVERED_PATHS` (`src/lib/privacy`) hide names
+themselves (today `/scorecard`, `/reports`); every other page is blurred (`inert`, `blur-xl`)
+under a "Privacy is on" card with a "Turn privacy off" button. To cover a page: hide names
+server-side, then add its path. Toggling reloads the page (no stale RSC payload). `/reports`
+adds `privacy=1|0` to the signed ripley link; ripley applying it to its own cookie is a
+separate phone_intake.py change (see below / next entry). Checked locally with Playwright.
+
+## 2026-11-20 — Agreement viewer (Reports-style), DRAFT stamp, test-proposal filter (Ummon)
+
+Tom: drafts must carry a DRAFT watermark; a way to download; a Refresh for updated drafts, like the
+Double reports viewer.
+- ripley `scripts/phone_intake.py`: `REPORT_VIEWER` reused (CFG `back`/`backSigned`/`noun`/`dl`).
+  `/agreements/<folder>/<doc>/view` and `/stat`, where doc is `gsa/draft|signed` (always the newest
+  GSA file) or a file path. Back = `?ret=` (https only, from SWapp) else the client's list. Download
+  adds `&dl=1` (attachment). List rows open the viewer.
+- Any agreement PDF without SIGNED in its name is served DRAFT-stamped (qpdf `--overlay` of a
+  generated one-page mark, cached in `~/.cache/swapp-phone-intake/drafts` by path+size+mtime;
+  filename `..._DRAFT.pdf`). The client-folder file is never changed. Stamp failure -> 500, never
+  the clean file.
+- SWapp: GSA panel View -> `/agreements/pdfs?doc=...&ret=/leads/<id>#gsa` -> viewer. Strip and
+  panels skip proposals whose contact email is at example.com/.net/.org (old "Automated Proposal
+  Test", $1, 2026-09-04, had no isTestProposal flag).
+- Checks: self-test ok (stamp present after qpdf --qdf, folder copy unchanged, dl attachment, viewer
+  CFG, ret rejects javascript:, stat); tsc, lint 0 errors, vitest; installed on ripley, live: SJ
+  Equity draft download 148,749 bytes, 13 pages, stamped; Rodan signed served clean; viewer at 412px
+  renders 13 stamped pages, Back/Refresh/Download in one row.
+- Incident while checking the test proposal (mine): `set default_transaction_read_only=on` through
+  the 6543 pooler made prod writes fail 14:37-14:46 CST. Reset, verified; rule 6 in
+  `docs/deployment/database-migrations.md`, All Thing troubleshooting row 2da77ff.
+- Also: the main checkout's `node_modules` was found empty at 14:33 (likely after removing a
+  worktree whose node_modules was a `cp -al` hard-link copy); restored with `npm ci`. Use `npm ci`
+  in worktrees, not hard links.
 ## 2026-11-20 — Billing calendar: double-tap to today, past days grayed (#194, shipped)
 
 `BillingCalendarStrip.tsx`: double-tap (touch, counted in `onPointerUp`) or
