@@ -31,13 +31,19 @@ export async function POST(request: Request) {
   catch { return NextResponse.json({ error: "Staff access required." }, { status: 403 }); }
   const settings = parseGridSettings(await request.json().catch(() => null));
   if (!settings) return NextResponse.json({ error: "The scan settings are invalid." }, { status: 400 });
-  const estimate = estimateScanCost(settings, "live");
+  // Standard queue, not Live: DataForSEO's Maps Live endpoint answers one task per request,
+  // so a batched Live scan saved only the first grid point (2026-11-21). Standard takes 100 per
+  // task_post and the "Refresh queued results" button / daily cron collect the results.
+  const estimate = estimateScanCost(settings, "standard");
   if (estimate.totalUsd > SCAN_HARD_CAP_USD) {
     return NextResponse.json({ error: `Estimated cost $${estimate.totalUsd.toFixed(2)} exceeds the $${SCAN_HARD_CAP_USD.toFixed(2)} hard cap.` }, { status: 400 });
   }
   if (!process.env.DATAFORSEO_LOGIN || !process.env.DATAFORSEO_PASSWORD) {
     return NextResponse.json({ error: "DataForSEO credentials are not configured yet." }, { status: 503 });
   }
+  // A queued scan takes minutes to finish; refuse a second press instead of paying twice.
+  const queued = await prisma.localSeoScan.findFirst({ where: { brandId: brand.id, status: "queued" }, select: { id: true } });
+  if (queued) return NextResponse.json({ error: "A scan is already queued. Press Refresh queued results in a few minutes." }, { status: 409 });
   await prisma.localSeoConfig.upsert({
     where: { brandId: brand.id },
     create: { brandId: brand.id, ...settings },
@@ -50,9 +56,9 @@ export async function POST(request: Request) {
       settings,
       points: createGrid(settings.gridSize, settings.spacingMiles),
       estimatedCostUsd: estimate.totalUsd,
-      method: "live",
+      method: "standard",
     });
-    return NextResponse.json({ scanId: scan.id, status: "complete", estimatedCostUsd: estimate.totalUsd });
+    return NextResponse.json({ scanId: scan.id, status: "queued", estimatedCostUsd: estimate.totalUsd });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "The scan failed." }, { status: 502 });
   }
