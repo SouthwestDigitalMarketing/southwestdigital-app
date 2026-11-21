@@ -1,5 +1,10 @@
 # SWapp handoff
 
+## 2026-11-21 — All videos opens Condensed by default (Ummon)
+
+Tom: "make condensed the default view". `/youtube/videos` opens Condensed unless the
+`swapp_videos_view` cookie says `detailed`.
+
 ## 2026-11-21 — All videos: Condensed view, search and sort (Ummon)
 
 Tom: a condensed mode (small thumbnail + title, one row) and a filter. `/youtube/videos` now has a

@@ -56,7 +56,7 @@ async function loadVideos(brandId: string, slug: string): Promise<{ videos: Vide
 export default async function AllVideosPage() {
   const { brand } = await requireAppBrand();
   const result = await loadVideos(brand.id, brand.slug);
-  const view = (await cookies()).get(VIEW_COOKIE)?.value === "condensed" ? "condensed" : "detailed";
+  const view = (await cookies()).get(VIEW_COOKIE)?.value === "detailed" ? "detailed" : "condensed"; // Condensed by default (Tom, 2026-11-21)
 
   return (
     <div className="p-4 sm:p-8">
