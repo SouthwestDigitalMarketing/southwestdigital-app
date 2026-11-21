@@ -15,7 +15,8 @@ describe("local SEO grid", () => {
     expect(parseGridSettings({ gridSize: 7, spacingMiles: 0.5, keywords: [" bookkeeping  Conroe ", "bookkeeping Conroe"] }))
       .toEqual({ gridSize: 7, spacingMiles: 0.5, keywords: ["bookkeeping Conroe"] });
     expect(parseGridSettings({ gridSize: 8, spacingMiles: 1, keywords: ["a keyword"] })).toBeNull();
-    expect(parseGridSettings({ gridSize: 7, spacingMiles: 3, keywords: ["a keyword"] })).toBeNull();
+    expect(parseGridSettings({ gridSize: 9, spacingMiles: 4, keywords: ["a keyword"] })).toEqual({ gridSize: 9, spacingMiles: 4, keywords: ["a keyword"] });
+    expect(parseGridSettings({ gridSize: 7, spacingMiles: 7, keywords: ["a keyword"] })).toBeNull();
   });
 
   it("estimates weekly and live request costs before running", () => {

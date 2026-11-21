@@ -1,11 +1,11 @@
 import { requireStaffBrand } from "@/lib/brands/staff";
 import { prisma } from "@/lib/prisma";
-import { DEFAULT_KEYWORDS, type GridSettings } from "@/lib/localSeo/grid";
+import { DEFAULT_GRID, DEFAULT_KEYWORDS, type GridSettings } from "@/lib/localSeo/grid";
 import { LocalSeoDashboard } from "./LocalSeoDashboard";
 
 export const dynamic = "force-dynamic";
 
-const defaults: GridSettings = { gridSize: 7, spacingMiles: 1, keywords: DEFAULT_KEYWORDS };
+const defaults: GridSettings = { ...DEFAULT_GRID, keywords: DEFAULT_KEYWORDS };
 
 function isMissingLocalSeoStorage(error: unknown) {
   return Boolean(error && typeof error === "object" && "code" in error && (error.code === "P2021" || error.code === "P2022"));

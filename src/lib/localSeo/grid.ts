@@ -1,5 +1,6 @@
 export const OFFICE = { latitude: 30.354404, longitude: -95.58152 } as const;
 export const DEFAULT_KEYWORDS = [
+  "bookkeeper",
   "bookkeeper near me",
   "bookkeeping Conroe",
   "bookkeeping services",
@@ -12,6 +13,10 @@ export const DEFAULT_KEYWORDS = [
 export const STANDARD_PRICE_PER_SERP = 0.0006;
 export const LIVE_PRICE_PER_SERP = 0.002;
 export const SCAN_HARD_CAP_USD = 2;
+// Chris Palmer reads a geo grid over ~20 miles and tracks how far the top-3 "proximity" reaches
+// (All Thing concepts/seo-strategy-chris-palmer.md). Wider spacing lets a 9x9 grid reach our towns.
+export const SPACING_OPTIONS = [0.5, 1, 2, 3, 4, 5] as const;
+export const DEFAULT_GRID = { gridSize: 9, spacingMiles: 4 } as const;
 
 export type GridSettings = { gridSize: number; spacingMiles: number; keywords: string[] };
 export type GridPoint = { row: number; column: number; latitude: number; longitude: number };
@@ -22,7 +27,7 @@ export function parseGridSettings(input: unknown): GridSettings | null {
   const gridSize = Number(value.gridSize);
   const spacingMiles = Number(value.spacingMiles);
   if (!Number.isInteger(gridSize) || gridSize < 3 || gridSize > 9 || gridSize % 2 === 0) return null;
-  if (![0.5, 1, 2].includes(spacingMiles)) return null;
+  if (!(SPACING_OPTIONS as readonly number[]).includes(spacingMiles)) return null;
   if (!Array.isArray(value.keywords)) return null;
   const keywords = [...new Set(value.keywords
     .filter((keyword): keyword is string => typeof keyword === "string")
