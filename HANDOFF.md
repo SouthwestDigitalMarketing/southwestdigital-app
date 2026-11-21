@@ -1,5 +1,13 @@
 # SWapp handoff
 
+## 2026-11-21 — Section tabs; YouTube first (Ummon)
+
+Tom: big menu sections get their own tab row instead of back links ("flat hierarchy").
+`src/components/SectionTabs.tsx` (client; active = exact or path prefix; scrolls sideways; theme
+tokens). `src/app/(app)/youtube/layout.tsx`: Overview · Videos · New video. The All videos /
+Create new video buttons and both "Back to YouTube" links are gone; `InProgress` keeps Videos in
+progress on Overview. Next: Agreements and Settings.
+
 ## 2026-11-21 — All videos opens Condensed by default (Ummon)
 
 Tom: "make condensed the default view". `/youtube/videos` opens Condensed unless the
