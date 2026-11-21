@@ -6,6 +6,18 @@
 are green and it is checked (preview or render), squash-merge it and report; do not stop to ask.
 Still ask first for anything outside SWapp code (production data, outbound sends, secrets).
 
+## 2026-11-21 — Videos in progress: full width, title, thumbnail, details (Ummon)
+
+Brief from showrunner-app (w33, Showrunner PR #186 adds the fields to queue.json). Migration
+`20261121180000_showrunner_video_card`: `ShowrunnerVideoStatus.title` (text), `thumbnail` (text,
+inline `data:image/jpeg;base64,` ≤200 KB, base64 charset only), `details` (jsonb: lengthSeconds,
+graphics, quickbooksScreens; integers only). `VideosInProgress`: full width; md+ two columns
+(steps + bars left; thumbnail, "21:39 long · 22 graphics · 0 QuickBooks screens", Watch on
+YouTube right; dashed "Thumbnail not made yet" on wide screens); phones stack thumbnail under the
+steps. Heading = YouTube title, project name small under it. Checks: tsc, lint, vitest 1255
+passed, `next build` ok; local preview with three rows pushed through the real API (4 steps in;
+TREB 261121 with thumbnail; published) at 1280 and 412 px.
+
 ## 2026-11-21 — Video status: per-step unit and current item (Ummon)
 
 Tom wants to see which show graphic is being added. `render` in queue.json / `POST

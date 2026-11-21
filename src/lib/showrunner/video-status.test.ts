@@ -8,6 +8,30 @@ const steps = [
 ];
 
 describe("parseVideoStatus", () => {
+  it("keeps the YouTube title, an inline JPEG thumbnail and numeric details", () => {
+    const thumbnail = "data:image/jpeg;base64,/9j/4AAQSkZJRg==";
+    const row = parseVideoStatus({
+      batch: "b4",
+      state: "episode",
+      title: "  How We Landed a New Bookkeeping Client  ",
+      thumbnail,
+      details: { lengthSeconds: 1299, graphics: 22, quickbooksScreens: 0, extra: "x" },
+    });
+    expect(row?.title).toBe("How We Landed a New Bookkeeping Client");
+    expect(row?.thumbnail).toBe(thumbnail);
+    expect(row?.details).toEqual({ lengthSeconds: 1299, graphics: 22, quickbooksScreens: 0 });
+  });
+
+  it("drops thumbnails that are not small inline JPEGs and details that are not numbers", () => {
+    const big = "data:image/jpeg;base64," + "A".repeat(210 * 1024);
+    for (const thumbnail of ["https://x/y.jpg", "data:image/png;base64,AAAA", "data:image/jpeg;base64,<script>", big]) {
+      expect(parseVideoStatus({ batch: "b5", state: "episode", thumbnail })?.thumbnail).toBeNull();
+    }
+    const row = parseVideoStatus({ batch: "b5", state: "episode", title: "x".repeat(300), details: { graphics: "22", lengthSeconds: -1 } });
+    expect(row?.title).toHaveLength(200);
+    expect(row?.details).toBeNull();
+  });
+
   it("keeps the graphics step's unit and current graphic", () => {
     const row = parseVideoStatus({
       batch: "b3",

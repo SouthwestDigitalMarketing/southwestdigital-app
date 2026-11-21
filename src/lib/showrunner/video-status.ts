@@ -17,6 +17,13 @@ export type VideoRender = {
   pieceName?: string;
 };
 
+/** Facts about the episode, filled in as the autopilot learns them. */
+export type VideoDetails = { lengthSeconds?: number; graphics?: number; quickbooksScreens?: number };
+
+/** A JPEG thumbnail sent inline by ripley. */
+export const THUMBNAIL_PREFIX = "data:image/jpeg;base64,";
+const THUMBNAIL_MAX = 200 * 1024;
+
 export type VideoStatusInput = {
   batch: string;
   project: string | null;
@@ -25,6 +32,9 @@ export type VideoStatusInput = {
   steps: VideoStep[] | null;
   render: VideoRender | null;
   url: string | null;
+  title: string | null;
+  thumbnail: string | null;
+  details: VideoDetails | null;
   sentAt: Date | null;
 };
 
@@ -77,6 +87,20 @@ export function parseVideoStatus(raw: unknown): VideoStatusInput | null {
     if (render.total === undefined) render = null;
   }
   const url = typeof row.url === "string" && row.url.startsWith("https://") ? row.url.slice(0, 300) : null;
+  const thumbnail =
+    typeof row.thumbnail === "string" &&
+    row.thumbnail.startsWith(THUMBNAIL_PREFIX) &&
+    row.thumbnail.length <= THUMBNAIL_MAX &&
+    /^[A-Za-z0-9+/=]+$/.test(row.thumbnail.slice(THUMBNAIL_PREFIX.length))
+      ? row.thumbnail
+      : null;
+  let details: VideoDetails | null = null;
+  if (row.details && typeof row.details === "object") {
+    const d = row.details as Record<string, unknown>;
+    const picked = { lengthSeconds: count(d.lengthSeconds), graphics: count(d.graphics), quickbooksScreens: count(d.quickbooksScreens) };
+    const kept = Object.fromEntries(Object.entries(picked).filter(([, value]) => value !== undefined)) as VideoDetails;
+    details = Object.keys(kept).length > 0 ? kept : null;
+  }
   const created = typeof row.created === "number" && row.created > 0 ? new Date(row.created * 1000) : null;
   return {
     batch,
@@ -86,6 +110,9 @@ export function parseVideoStatus(raw: unknown): VideoStatusInput | null {
     steps: steps && steps.length > 0 ? steps : null,
     render,
     url,
+    title: text(row.title, 200),
+    thumbnail,
+    details,
     sentAt: created && !Number.isNaN(created.getTime()) ? created : null,
   };
 }

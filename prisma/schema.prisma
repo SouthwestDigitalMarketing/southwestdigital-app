@@ -2035,6 +2035,10 @@ model ShowrunnerVideoStatus {
   steps     Json?
   render    Json?
   url       String?
+  title     String?   @db.Text
+  /// data:image/jpeg;base64 thumbnail from ripley, at most 200 KB.
+  thumbnail String?   @db.Text
+  details   Json?
   sentAt    DateTime?
   updatedAt DateTime  @default(now()) @updatedAt
   brand     Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)

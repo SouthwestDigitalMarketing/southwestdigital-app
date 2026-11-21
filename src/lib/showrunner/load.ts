@@ -4,7 +4,7 @@ import type { BrandDataContext } from "@/lib/tenancy/context";
 import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import type { VideoCard } from "@/components/showrunner/VideosInProgress";
 import { latestByTarget, type LatestFeedback } from "./feedback";
-import type { VideoRender, VideoStep } from "./video-status";
+import type { VideoDetails, VideoRender, VideoStep } from "./video-status";
 
 export async function loadFeedback(
   context: BrandDataContext,
@@ -29,6 +29,9 @@ export type VideoStatusRow = {
   steps: unknown;
   render: unknown;
   url: string | null;
+  title: string | null;
+  thumbnail: string | null;
+  details: unknown;
   updatedAt: Date;
 };
 
@@ -40,7 +43,7 @@ export async function loadVideoStatus(context: BrandDataContext): Promise<VideoS
       where: { brandId: context.brandId, OR: [{ url: null }, { updatedAt: { gte: since } }] },
       orderBy: { updatedAt: "desc" },
       take: 6,
-      select: { batch: true, project: true, state: true, stage: true, steps: true, render: true, url: true, updatedAt: true },
+      select: { batch: true, project: true, state: true, stage: true, steps: true, render: true, url: true, title: true, thumbnail: true, details: true, updatedAt: true },
     }),
   );
 }
@@ -55,5 +58,8 @@ export async function loadVideoCards(context: BrandDataContext): Promise<VideoCa
     steps: Array.isArray(row.steps) ? (row.steps as VideoStep[]) : null,
     render: row.render && typeof row.render === "object" ? (row.render as VideoRender) : null,
     url: row.url,
+    title: row.title,
+    thumbnail: row.thumbnail,
+    details: row.details && typeof row.details === "object" ? (row.details as VideoDetails) : null,
   }));
 }
