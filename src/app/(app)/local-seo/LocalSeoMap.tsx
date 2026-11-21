@@ -44,7 +44,7 @@ function badgeIcon(cell: MapCell) {
  * The rank grid drawn on a real Google map: each search point as a colored rank badge at its
  * own spot, the office pinned in the middle, so the grid has place and scale.
  */
-export function LocalSeoMap({ cells }: { cells: MapCell[] }) {
+export function LocalSeoMap({ cells, onUnavailable }: { cells: MapCell[]; onUnavailable?: () => void }) {
   const box = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
   const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
@@ -80,9 +80,9 @@ export function LocalSeoMap({ cells }: { cells: MapCell[] }) {
         markers.push(new g.maps.Marker({ map, position: { lat: OFFICE.latitude, lng: OFFICE.longitude }, title: "Bookkeeping Conroe office", zIndex: 2 }));
         map.fitBounds(bounds, 24);
       })
-      .catch(() => { if (!cancelled) setFailed(true); });
+      .catch(() => { if (!cancelled) { setFailed(true); onUnavailable?.(); } });
     return () => { cancelled = true; markers.forEach((marker) => marker.setMap(null)); };
-  }, [key, cells]);
+  }, [key, cells, onUnavailable]);
 
   if (!key || failed) return null;
   return <div ref={box} className="mt-6 h-[380px] w-full overflow-hidden rounded-xl border border-slate-200 sm:h-[460px]" aria-label="Map of rank by search point" />;
