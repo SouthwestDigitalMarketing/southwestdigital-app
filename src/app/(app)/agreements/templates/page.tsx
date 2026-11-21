@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { ensureDefaultAgreementTemplate } from "@/lib/agreements/repository";
 import { requireStaffBrand } from "@/lib/brands/staff";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
@@ -32,14 +31,7 @@ export default async function AgreementTemplatesPage() {
 
   return (
     <div className="agreements-readable p-5 sm:p-8">
-      <Link
-        href="/agreements"
-        className="inline-flex items-center rounded-lg px-2 py-1 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-      >
-        ← Back to Agreements
-      </Link>
-
-      <div className="mt-4">
+      <div>
         {agreementTemplates ? (
           <AgreementTemplatesManager
             templates={templates.map((template) => ({

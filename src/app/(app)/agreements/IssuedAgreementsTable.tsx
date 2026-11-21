@@ -180,19 +180,12 @@ export function IssuedAgreementsTable({ agreements }: { agreements: IssuedAgreem
     <section>
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div className="min-w-0 md:flex-1">
-          <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap">
+          <div className="flex flex-wrap gap-2">
             <Link
               href="/offers/contact"
               className="ui-action-primary inline-flex min-h-11 items-center justify-center rounded-lg border px-3 py-2 text-center text-sm font-semibold transition md:whitespace-nowrap md:px-4"
             >
               New agreement
-            </Link>
-            <Link
-              href="/agreements/templates"
-              className="ui-action-secondary inline-flex min-h-11 items-center justify-center rounded-lg border px-3 py-2 text-center text-sm font-semibold transition md:whitespace-nowrap md:px-4"
-            >
-              <span className="md:hidden">Templates</span>
-              <span className="hidden md:inline">Manage Agreement Templates</span>
             </Link>
           </div>
           <p className="mt-2 text-xs leading-snug text-amber-700">

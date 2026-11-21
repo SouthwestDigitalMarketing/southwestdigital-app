@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireStaffBrand } from "@/lib/brands/staff";
 import { ensureDefaultContactTags } from "@/lib/contacts/seed";
@@ -32,12 +31,9 @@ export default async function SettingsTagsPage() {
   ]);
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <div>
-        <Link href="/settings" className="text-xs text-slate-400 hover:underline">
-          ← Settings
-        </Link>
-        <h1 className="mt-1 text-2xl font-semibold text-slate-900">Tags</h1>
+        <h1 className="text-2xl font-semibold text-slate-900">Tags</h1>
         <p className="mt-1 text-sm text-slate-500">
           Shared tag list for {brand.name}. Contacts pick from this list; editing a tag updates it
           everywhere.
