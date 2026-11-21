@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { goalColors } from "../website/goal-colors";
-import { updateYouTubeGoal } from "./actions";
+import { updateYouTubeGoal } from "./goal-actions";
 
 type Field = "monthlyViewsGoal" | "youtubeWatchPercentageGoal";
 

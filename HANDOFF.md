@@ -1,5 +1,22 @@
 # SWapp handoff
 
+## Working agreement — SWapp merges (Tom, 2026-11-21)
+
+"You don't have to keep asking to merge. Just go ahead and merge." Once a change is built, checks
+are green and it is checked (preview or render), squash-merge it and report; do not stop to ask.
+Still ask first for anything outside SWapp code (production data, outbound sends, secrets).
+
+## 2026-11-21 — YouTube folded into Showrunner (Ummon)
+
+Tom: "combine showrunner and YouTube… one single process… it should be showrunner". One menu item,
+Showrunner, tabs Overview (channel stats + Videos in progress, was /youtube) · Videos · New video ·
+Series (graph, continue/new series; also active on /showrunner/new-series). Files moved from
+`src/app/(app)/youtube/` to `showrunner/` (goal action → `goal-actions.ts`); old Showrunner page →
+`showrunner/series`. `/youtube` and `/youtube/*` redirect to `/showrunner/*` (next.config.ts; the
+Android send app opens /youtube). Keyboard: Showrunner takes `g y`, alias "youtube". `SectionTabs`
+gains `also`. Checks: tsc clean, vitest 1252 passed, local preview: all tabs and both redirects 200
+with the right tab active.
+
 ## 2026-11-21 — Section tabs for Agreements and Settings (Ummon)
 
 Agreements: Agreements · Templates · Client PDFs (opens ripley's viewer, needs Tailscale); the PDFs
