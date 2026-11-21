@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { requireAppBrand } from "@/lib/brands/staff";
 import { ChannelGraph } from "@/components/showrunner/ChannelGraph";
-import { VideosInProgress, type VideoCard } from "@/components/showrunner/VideosInProgress";
-import { loadVideoStatus } from "@/lib/showrunner/load";
-import type { VideoRender, VideoStep } from "@/lib/showrunner/video-status";
+import { VideosInProgress } from "@/components/showrunner/VideosInProgress";
+import { loadVideoCards } from "@/lib/showrunner/load";
 import type { GraphData } from "@/lib/showrunner/graph-layout";
 import graphData from "@/lib/showrunner/channel-graph.json";
 
@@ -11,15 +10,7 @@ const card = "block rounded-2xl border border-slate-200 bg-white p-5 shadow-sm";
 
 export default async function ShowrunnerPage() {
   const { brand, dataContext } = await requireAppBrand();
-  const videos: VideoCard[] = (await loadVideoStatus(dataContext)).map((row) => ({
-    batch: row.batch,
-    project: row.project,
-    state: row.state,
-    stage: row.stage,
-    steps: Array.isArray(row.steps) ? (row.steps as VideoStep[]) : null,
-    render: row.render && typeof row.render === "object" ? (row.render as VideoRender) : null,
-    url: row.url,
-  }));
+  const videos = await loadVideoCards(dataContext);
 
   return (
     <main className="p-8">
