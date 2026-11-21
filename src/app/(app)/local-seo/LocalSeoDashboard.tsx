@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { DEFAULT_KEYWORDS, estimateScanCost, parseGridSettings, SPACING_OPTIONS, type GridSettings } from "@/lib/localSeo/grid";
 import { LocalSeoMap } from "./LocalSeoMap";
@@ -21,6 +21,9 @@ export function LocalSeoDashboard({ initialSettings, initialScans, storageMissin
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [confirmedCost, setConfirmedCost] = useState(false);
+  // The map is the view; the plain grid below it only shows when the map cannot load (no key or load error).
+  const [mapUnavailable, setMapUnavailable] = useState(!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY);
+  const markMapUnavailable = useCallback(() => setMapUnavailable(true), []);
   const settingsAreValid = Boolean(parseGridSettings(settings));
   const standardCost = settingsAreValid ? estimateScanCost(settings, "standard") : null;
   const latest = scans[0];
@@ -117,14 +120,14 @@ export function LocalSeoDashboard({ initialSettings, initialScans, storageMissin
               {(latest?.keywords ?? settings.keywords).map((keyword) => <option key={keyword} value={keyword}>{keyword}</option>)}
             </select>
           </div>
-          {latest && visibleCells.length > 0 ? <LocalSeoMap cells={visibleCells} /> : null}
-          {!latest || visibleCells.length === 0 ? <p className="mt-8 rounded-xl bg-slate-50 p-8 text-center text-sm text-slate-500">No results for this phrase yet.</p> : (
+          {latest && visibleCells.length > 0 ? <LocalSeoMap cells={visibleCells} onUnavailable={markMapUnavailable} /> : null}
+          {!latest || visibleCells.length === 0 ? <p className="mt-8 rounded-xl bg-slate-50 p-8 text-center text-sm text-slate-500">No results for this phrase yet.</p> : !mapUnavailable ? null : (
             <div className="mx-auto mt-6 grid max-w-[420px] gap-2" style={{ gridTemplateColumns: `repeat(${latest.gridSize}, minmax(0, 1fr))` }} aria-label={`Map rank grid for ${selectedKeyword}`}>
               {visibleCells.sort((a, b) => a.row - b.row || a.column - b.column).map((cell) => <div key={`${cell.row}-${cell.column}`} title={`${cell.latitude}, ${cell.longitude}`} className={`flex aspect-square flex-col items-center justify-center rounded-lg border text-xs font-semibold ${cell.status !== "complete" ? "border-slate-200 bg-slate-100 text-slate-400" : cell.rank === null ? "border-red-200 bg-red-100 text-red-900" : cell.rank <= 3 ? "border-emerald-300 bg-emerald-100 text-emerald-950" : cell.rank <= 10 ? "border-amber-300 bg-amber-100 text-amber-950" : "border-orange-300 bg-orange-100 text-orange-950"}`}><span>{cell.rank === null ? (cell.status === "complete" ? "—" : "…") : `#${cell.rank}`}</span><span className="mt-1 text-[9px] font-normal">{cell.row + 1},{cell.column + 1}</span></div>)}
             </div>
           )}
           <div className="mt-4 flex flex-wrap gap-4 text-xs text-slate-600"><Legend color="bg-emerald-200" label="Top 3" /><Legend color="bg-amber-200" label="4–10" /><Legend color="bg-orange-200" label="11–20" /><Legend color="bg-red-200" label="Not in top 20" /></div>
-          <p className="mt-3 text-xs text-slate-500">Cells are shown north at the top and west at the left. Ranks use the Google Maps listing order.</p>
+          <p className="mt-3 text-xs text-slate-500">{mapUnavailable ? "Cells are shown north at the top and west at the left." : "Each badge is one search point."} Ranks use the Google Maps listing order.</p>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
