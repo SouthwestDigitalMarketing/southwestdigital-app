@@ -1,5 +1,12 @@
 # SWapp handoff
 
+## 2026-11-21 — Section tabs for Agreements and Settings (Ummon)
+
+Agreements: Agreements · Templates · Client PDFs (opens ripley's viewer, needs Tailscale); the PDFs
+card, the Templates button and "Back to Agreements" are gone (New agreement stays). Settings:
+General · Security · Tags; the Security link on General and "← Settings" on Tags are gone. Checks:
+tsc clean, vitest 1252 passed, local preview 412 px: all five pages 200 with the right tab active.
+
 ## 2026-11-21 — Section tabs; YouTube first (Ummon)
 
 Tom: big menu sections get their own tab row instead of back links ("flat hierarchy").
