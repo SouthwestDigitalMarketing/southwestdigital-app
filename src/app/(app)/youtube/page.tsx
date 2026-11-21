@@ -17,6 +17,7 @@ import { getSourceTagVideos, type SourceTagVideo } from "@/lib/youtube/sourceTag
 import { DomainPurpose } from "@prisma/client";
 import { getYouTubeRefreshToken } from "@/lib/youtube/credentials";
 import { NewVideoEntry } from "./NewVideoEntry";
+import { VideoList } from "./VideoList";
 import { loadVideoCards } from "@/lib/showrunner/load";
 
 function YouTubeIcon({ className }: { className?: string }) {
@@ -35,7 +36,8 @@ function getYouTubeAnalyticsNow() {
 
 export default async function YouTubePage() {
   const { brand, dataContext } = await requireAppBrand();
-  const videos = await loadVideoCards(dataContext);
+  // Published videos live on /youtube/videos; only unfinished ones show here.
+  const videos = (await loadVideoCards(dataContext)).filter((video) => !video.url);
 
   const [theme, redirectDomainRecord] = await Promise.all([
     prisma.brandTheme.findUnique({
@@ -240,7 +242,7 @@ export default async function YouTubePage() {
       <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Top Videos</p>
         <h2 className="mt-1 text-lg font-semibold text-slate-900">Most viewed this period</h2>
-        <TopVideosTable videos={topVideos} />
+        <VideoList videos={topVideos} empty="No video data for this period." />
       </div>
 
       {/* Community link clicks */}
@@ -273,13 +275,6 @@ export default async function YouTubePage() {
   );
 }
 
-
-function fmtWatchTime(minutes: number): string {
-  if (minutes < 60) return `${Math.round(minutes)}m`;
-  const h = Math.floor(minutes / 60);
-  const m = Math.round(minutes % 60);
-  return m > 0 ? `${h}h ${m}m` : `${h}h`;
-}
 
 function LinkClicksTable({
   report,
@@ -333,53 +328,6 @@ function LinkClicksTable({
               </tr>
             );
           })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function TopVideosTable({ videos }: { videos: TopVideoRow[] }) {
-  if (videos.length === 0) {
-    return <p className="mt-3 text-sm text-slate-400">No video data for this period.</p>;
-  }
-  return (
-    <div className="mt-4 overflow-x-auto">
-      <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
-        <thead>
-          <tr>
-            <th className="px-3 py-2 text-sm font-semibold normal-case text-slate-700">Title</th>
-            <th className="whitespace-nowrap px-3 py-2 text-sm font-semibold normal-case text-slate-700">Views</th>
-            <th className="whitespace-nowrap px-3 py-2 text-sm font-semibold normal-case text-slate-700">Avg View %</th>
-            <th className="whitespace-nowrap px-3 py-2 text-sm font-semibold normal-case text-slate-700">Watch Time</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {videos.map((v) => (
-            <tr key={v.videoId}>
-              <td className="px-3 py-2">
-                <div className="flex items-center gap-3">
-                  <img
-                    src={v.thumbnailUrl}
-                    alt={v.title}
-                    width={96}
-                    height={54}
-                    className="shrink-0 rounded object-cover"
-                  />
-                  <span className="text-slate-700">{v.title}</span>
-                </div>
-              </td>
-              <td className="whitespace-nowrap px-3 py-2 text-slate-700">
-                {v.views.toLocaleString("en-US")}
-              </td>
-              <td className="whitespace-nowrap px-3 py-2 text-slate-700">
-                {v.averageViewPercentage.toFixed(1)}%
-              </td>
-              <td className="whitespace-nowrap px-3 py-2 text-slate-700">
-                {fmtWatchTime(v.estimatedMinutesWatched)}
-              </td>
-            </tr>
-          ))}
         </tbody>
       </table>
     </div>
