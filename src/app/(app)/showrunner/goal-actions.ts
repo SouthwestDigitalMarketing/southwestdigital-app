@@ -17,5 +17,5 @@ export async function updateYouTubeGoal(
     data: { [field]: value },
   });
 
-  revalidatePath("/youtube");
+  revalidatePath("/showrunner");
 }

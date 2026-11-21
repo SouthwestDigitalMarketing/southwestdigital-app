@@ -14,6 +14,9 @@ const nextConfig: NextConfig = {
       { source: "/offers/new", destination: "/offers/contact", permanent: false },
       { source: "/offers/pricing", destination: "/offers/complexity", permanent: false },
       { source: "/offers/calculator", destination: "/offers/adjustments", permanent: false },
+      // YouTube folded into Showrunner (2026-11-21); the Android send app still opens /youtube.
+      { source: "/youtube", destination: "/showrunner", permanent: false },
+      { source: "/youtube/:path*", destination: "/showrunner/:path*", permanent: false },
     ];
   },
   async headers() {

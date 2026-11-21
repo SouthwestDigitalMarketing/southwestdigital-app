@@ -3,13 +3,24 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-export type SectionTab = { label: string; href: string; exact?: boolean };
+export type SectionTab = {
+  label: string;
+  href: string;
+  exact?: boolean;
+  /** Other path prefixes that belong to this tab (Series also covers /showrunner/new-series). */
+  also?: string[];
+};
 
-function isActive(pathname: string, tab: SectionTab) {
-  return tab.exact ? pathname === tab.href : pathname === tab.href || pathname.startsWith(`${tab.href}/`);
+function underPath(pathname: string, href: string) {
+  return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-/** The tab row across the top of a menu section (YouTube: Overview · Videos · New video). Scrolls sideways on a phone. */
+function isActive(pathname: string, tab: SectionTab) {
+  if (tab.also?.some((href) => underPath(pathname, href))) return true;
+  return tab.exact ? pathname === tab.href : underPath(pathname, tab.href);
+}
+
+/** The tab row across the top of a menu section (Showrunner: Overview · Videos · New video · Series). Scrolls sideways on a phone. */
 export function SectionTabs({ tabs, label }: { tabs: SectionTab[]; label: string }) {
   const pathname = usePathname();
   return (

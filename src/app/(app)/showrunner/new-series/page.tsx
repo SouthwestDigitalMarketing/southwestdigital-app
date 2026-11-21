@@ -6,9 +6,8 @@ export default async function NewSeriesPage() {
   await requireAppBrand();
 
   return (
-    <main className="p-8">
-      <Link href="/showrunner" className="text-sm text-slate-600 underline">Back to Showrunner</Link>
-      <h1 className="mt-6 text-3xl font-semibold text-slate-900">New series</h1>
+    <div className="p-4 sm:p-8">
+      <h1 className="text-2xl font-semibold text-slate-900">New series</h1>
       <p className="mt-2 text-slate-600">Showrunner suggests these, from your channel and your business.</p>
       <div className="mt-6 flex max-w-xl flex-col gap-4">
         {SUGGESTIONS.map((s) => (
@@ -24,6 +23,6 @@ export default async function NewSeriesPage() {
           </Link>
         ))}
       </div>
-    </main>
+    </div>
   );
 }
