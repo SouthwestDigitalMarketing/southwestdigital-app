@@ -1,5 +1,19 @@
 # SWapp handoff
 
+## 2026-11-21 — App lock: PIN or Face ID / fingerprint, monthly change reminder (Ummon)
+
+Tom: a 6-digit PIN on SWapp with biometrics, reminded on the 1st of each month to change it;
+"just my accounts". Required for `PIN_REQUIRED_EMAILS` (`src/lib/app-lock/policy.ts`: Tom's 3
+accounts); others opt in at Settings → Security, after which the lock applies to them too.
+`requireActiveBrandContext` and platform admin auth call `requireUnlocked` → `/unlock?next=…`.
+Unlock: HMAC cookie `swapp_unlock`, 8 h, tied to user + `pinChangedAt` (a PIN change relocks other
+devices). PIN rules: 6 digits, no repeats or straight runs; scrypt; 5 wrong → 15 min. Forgot PIN →
+sign out → fresh Google sign-in (`signedInAt` in the JWT) → choose a new PIN. Passkeys:
+@simplewebauthn v9, per rpId, `UserPasskey` table. Banner from the 1st (firm month) until changed.
+Migration `20261120230000_app_pin_lock` (additive). Checks: vitest 1235 passed; local e2e 16/16.
+Not tested: passkeys (need HTTPS; first test on production). Agents driving SWapp as Tom must stop
+at `/unlock` and ask Tom (board 31f10796bffa).
+
 ## 2026-11-21 — YouTube screen shows Videos in progress (Ummon)
 
 Tom backed out of a phone upload and the YouTube screen only offered **Create new video**. The

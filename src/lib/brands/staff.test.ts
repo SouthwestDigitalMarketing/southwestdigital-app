@@ -2,14 +2,16 @@ import { BrandRole, MembershipStatus } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { canAdministerBrand, requireAdminBrandOrThrow, requireStaffBrandOrThrow } from "./staff";
 
-const mocks = vi.hoisted(() => ({ context: vi.fn(), resolve: vi.fn() }));
+const mocks = vi.hoisted(() => ({ context: vi.fn(), resolve: vi.fn(), unlocked: vi.fn() }));
 vi.mock("@/lib/tenancy/current", () => ({ requireActiveBrandContext: mocks.context }));
 vi.mock("@/lib/brands/resolve", () => ({ resolveBrandById: mocks.resolve }));
+vi.mock("@/lib/app-lock/server", () => ({ getAppLockState: mocks.unlocked }));
 vi.mock("next/navigation", () => ({ redirect: (path: string) => { throw new Error(`redirect:${path}`); } }));
 
 beforeEach(() => {
   mocks.context.mockResolvedValue({ session: { user: { id: "user", platformRole: "NONE" } }, activeBrand: { id: "brand" }, accessibleBrands: [], dataContext: { brandId: "brand", actorUserId: "user" } });
   mocks.resolve.mockResolvedValue({ brand: { id: "brand", status: "ACTIVE" }, membership: { role: "MEMBER", status: "ACTIVE" } });
+  mocks.unlocked.mockResolvedValue({ hasPin: true, pinChangedAt: new Date(), unlocked: true, changeDue: false });
 });
 
 describe("brand administrator permissions", () => {

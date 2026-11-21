@@ -270,6 +270,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (nextUser.platformRole) token.platformRole = nextUser.platformRole;
         if (nextUser.status) token.status = nextUser.status;
         if (nextUser.email) token.email = nextUser.email;
+        // A fresh sign-in; "Forgot PIN?" requires one after the reset request.
+        token.signedInAt = Date.now();
       }
 
       const email = typeof token.email === "string" ? token.email : null;
@@ -302,6 +304,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       session.user.id = token.sub;
       session.user.platformRole = (token.platformRole as PlatformRole | undefined) ?? PlatformRole.NONE;
       session.user.status = (token.status as UserStatus | undefined) ?? UserStatus.INVITED;
+      session.user.signedInAt = typeof token.signedInAt === "number" ? token.signedInAt : 0;
       return session;
     },
     async redirect({ url, baseUrl }) {

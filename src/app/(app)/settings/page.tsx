@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { IntegrationStatus } from "@prisma/client";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -135,6 +136,11 @@ export default async function SettingsPage({
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
         <p className="mt-2 text-sm text-muted-foreground">Connections, appearance, and shared tools for {brand.name}.</p>
+        <p className="mt-2 text-sm">
+          <Link href="/settings/security" className="font-semibold underline">
+            Security: PIN and Face ID / fingerprint
+          </Link>
+        </p>
       </div>
       <div className="grid gap-4">
         <section className="rounded-2xl border border-border bg-card p-5">
