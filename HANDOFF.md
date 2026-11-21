@@ -1,5 +1,13 @@
 # SWapp handoff
 
+## 2026-11-21 — All videos: Condensed view, search and sort (Ummon)
+
+Tom: a condensed mode (small thumbnail + title, one row) and a filter. `/youtube/videos` now has a
+Detailed / Condensed switch (cookie `swapp_videos_view`, path /youtube, read server-side so the page
+opens in the last view), a title search (all words must match) and a sort: Newest / Most viewed /
+Best % watched. `AllVideosBrowser` (client) wraps the shared `VideoList` (`condensed` prop).
+Checks: CI on the PR; 412 px sample renders of both views.
+
 ## 2026-11-21 — YouTube: All videos screen, roomier rows (Ummon)
 
 Tom: published videos don't belong in Videos in progress; Top videos too cramped. YouTube screen
