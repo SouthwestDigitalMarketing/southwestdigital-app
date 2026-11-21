@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireAppBrand } from "@/lib/brands/staff";
 import { prisma } from "@/lib/prisma";
 import { relyingParty } from "@/lib/app-lock/server";
@@ -15,6 +16,27 @@ function fmt(date: Date | null) {
 export default async function SecurityPage({ searchParams }: { searchParams: Promise<{ new?: string }> }) {
   const { session, appLock } = await requireAppBrand();
   const { new: isNew } = await searchParams;
+  if (!appLock.hasPin) {
+    // Only optional accounts get here: required ones are sent to /unlock first.
+    return (
+      <div className="w-full max-w-2xl space-y-6 p-4 sm:p-6 lg:p-8">
+        <h1 className="text-2xl font-semibold tracking-tight">Security</h1>
+        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+          <h2 className="text-base font-semibold text-slate-900">PIN lock is off</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Turn it on and SWapp asks for a 6-digit PIN or Face ID / fingerprint before it opens, and again after 8
+            hours. You will be reminded to change the PIN on the 1st of each month.
+          </p>
+          <Link
+            href="/unlock?next=%2Fsettings%2Fsecurity"
+            className="mt-4 inline-block rounded-full bg-[var(--theme-light)] px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90"
+          >
+            Turn on PIN lock
+          </Link>
+        </section>
+      </div>
+    );
+  }
   const { rpId } = await relyingParty();
   const passkeys = await prisma.userPasskey.findMany({
     where: { userId: session.user.id },

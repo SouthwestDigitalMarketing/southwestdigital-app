@@ -4,6 +4,7 @@ import { cache } from "react";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { pinRequired } from "./policy";
 import { pinChangeDue } from "./reminder";
 import { RESET_COOKIE, RESET_MINUTES, UNLOCK_COOKIE, UNLOCK_HOURS, resetAllowed, signReset, signUnlock, unlockIsValid } from "./token";
 
@@ -16,7 +17,11 @@ function secret(): string {
 export type AppLockState = {
   hasPin: boolean;
   pinChangedAt: Date | null;
+  /** This account must use the lock (see policy.ts); others opt in by setting a PIN. */
+  required: boolean;
   unlocked: boolean;
+  /** The lock applies to this account and this device has not unlocked. */
+  locked: boolean;
   /** Monthly PIN change is due (shown as a banner, does not block). */
   changeDue: boolean;
 };
@@ -25,15 +30,23 @@ export type AppLockState = {
 export const getAppLockState = cache(async (userId: string): Promise<AppLockState> => {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { pinHash: true, pinChangedAt: true },
+    select: { email: true, pinHash: true, pinChangedAt: true },
   });
   const pinChangedAt = user?.pinChangedAt ?? null;
   const hasPin = Boolean(user?.pinHash && pinChangedAt);
+  const required = pinRequired(user?.email);
   const jar = await cookies();
   const now = Date.now();
   const unlocked =
     hasPin && unlockIsValid(jar.get(UNLOCK_COOKIE)?.value, userId, pinChangedAt!.getTime(), now, secret());
-  return { hasPin, pinChangedAt, unlocked, changeDue: pinChangeDue(pinChangedAt, new Date(now)) };
+  return {
+    hasPin,
+    pinChangedAt,
+    required,
+    unlocked,
+    locked: (required || hasPin) && !unlocked,
+    changeDue: pinChangeDue(pinChangedAt, new Date(now)),
+  };
 });
 
 /** Path and query of the current request, set by src/proxy.ts. */
@@ -45,7 +58,7 @@ async function currentPath(): Promise<string> {
 /** Staff screens call this (via requireAppBrand); sends a locked device to /unlock. */
 export async function requireUnlocked(userId: string): Promise<AppLockState> {
   const state = await getAppLockState(userId);
-  if (!state.unlocked) redirect(`/unlock?next=${encodeURIComponent(await currentPath())}`);
+  if (state.locked) redirect(`/unlock?next=${encodeURIComponent(await currentPath())}`);
   return state;
 }
 

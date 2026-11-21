@@ -28,14 +28,16 @@ export default async function UnlockPage({ searchParams }: { searchParams: Promi
     <BrandShell brand={brand}>
       <section className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
         <h1 className="text-3xl font-semibold tracking-tight">
-          {mode === "unlock" ? "Unlock" : resetting ? "Choose a new PIN" : "Create your PIN"}
+          {mode === "unlock" ? "Unlock" : resetting ? "Choose a new PIN" : lock.required ? "Create your PIN" : "Turn on PIN lock"}
         </h1>
         <p className="mt-2 text-sm leading-6 text-slate-600">
           {resetting
             ? "You signed in again, so you can set a new 6-digit PIN."
             : mode === "unlock"
             ? `Signed in as ${session.user.email}. Enter your 6-digit PIN${passkeys > 0 ? " or use Face ID / fingerprint" : ""}.`
-            : "SWapp now asks for a 6-digit PIN before it opens. Choose one you will remember; you can add Face ID or fingerprint next."}
+            : lock.required
+            ? "SWapp now asks for a 6-digit PIN before it opens. Choose one you will remember; you can add Face ID or fingerprint next."
+            : "After this, SWapp asks for this 6-digit PIN before it opens on each device. Choose one you will remember; you can add Face ID or fingerprint next."}
         </p>
         <UnlockForm mode={mode} next={next} passkeys={passkeys > 0} />
       </section>

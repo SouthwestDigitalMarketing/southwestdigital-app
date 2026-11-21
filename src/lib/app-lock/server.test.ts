@@ -27,8 +27,18 @@ describe("requireUnlocked", () => {
     await expect(requireUnlocked("u1")).rejects.toThrow("redirect:/unlock?next=%2Fcontacts%3Ftab%3Dall");
   });
 
-  it("sends a user with no PIN yet to /unlock to create one", async () => {
-    mocks.user.mockResolvedValue({ pinHash: null, pinChangedAt: null });
+  it("sends a required account with no PIN yet to /unlock to create one", async () => {
+    mocks.user.mockResolvedValue({ email: "Thomas@BookkeepingConroe.com", pinHash: null, pinChangedAt: null });
+    await expect(requireUnlocked("u1")).rejects.toThrow("redirect:/unlock");
+  });
+
+  it("lets an optional account with no PIN through, unlocked or not", async () => {
+    mocks.user.mockResolvedValue({ email: "someone@example.com", pinHash: null, pinChangedAt: null });
+    await expect(requireUnlocked("u1")).resolves.toMatchObject({ required: false, hasPin: false, locked: false });
+  });
+
+  it("locks an optional account once it has turned on a PIN", async () => {
+    mocks.user.mockResolvedValue({ email: "someone@example.com", pinHash: "scrypt$x", pinChangedAt: changedAt });
     await expect(requireUnlocked("u1")).rejects.toThrow("redirect:/unlock");
   });
 

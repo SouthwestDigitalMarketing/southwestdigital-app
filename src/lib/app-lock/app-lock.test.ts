@@ -2,6 +2,17 @@ import { describe, expect, it } from "vitest";
 import { afterFailedPin, hashPin, pinProblem, verifyPin } from "./pin";
 import { readValue, signUnlock, signValue, unlockIsValid } from "./token";
 import { pinChangeDue } from "./reminder";
+import { pinRequired } from "./policy";
+
+describe("pinRequired", () => {
+  it("covers Tom's three accounts only, ignoring case and spaces", () => {
+    expect(pinRequired("tmacdonald7@gmail.com")).toBe(true);
+    expect(pinRequired(" Thomas@RealEstateBookkeeper.com ")).toBe(true);
+    expect(pinRequired("thomas@bookkeepingconroe.com")).toBe(true);
+    expect(pinRequired("dagnymotor@gmail.com")).toBe(false);
+    expect(pinRequired(null)).toBe(false);
+  });
+});
 
 describe("pinProblem", () => {
   it.each([
