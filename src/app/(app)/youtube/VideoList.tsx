@@ -25,15 +25,57 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** One video per row: thumbnail and full title, then labelled numbers underneath. Tapping opens YouTube. */
-export function VideoList({ videos, empty }: { videos: VideoListItem[]; empty: string }) {
-  if (videos.length === 0) return <p className="mt-3 text-sm text-slate-400">{empty}</p>;
+function watchUrl(videoId: string) {
+  return `https://www.youtube.com/watch?v=${videoId}`;
+}
+
+/**
+ * One video per row: thumbnail and full title, then labelled numbers underneath. Condensed: a small
+ * thumbnail and the title only. Tapping opens YouTube.
+ */
+export function VideoList({
+  videos,
+  empty,
+  condensed = false,
+}: {
+  videos: VideoListItem[];
+  empty: string;
+  condensed?: boolean;
+}) {
+  if (videos.length === 0) return <p className="my-3 text-sm text-slate-400">{empty}</p>;
+
+  if (condensed) {
+    return (
+      <ul className="divide-y divide-slate-100">
+        {videos.map((v) => (
+          <li key={v.videoId}>
+            <a
+              href={watchUrl(v.videoId)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 py-2.5 hover:bg-slate-50"
+            >
+              <img
+                src={v.thumbnailUrl}
+                alt=""
+                width={80}
+                height={45}
+                className="h-[45px] w-20 shrink-0 rounded object-cover"
+              />
+              <p className="min-w-0 text-sm font-medium leading-snug text-slate-900">{v.title}</p>
+            </a>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
   return (
     <ul className="mt-4 divide-y divide-slate-100">
       {videos.map((v) => (
         <li key={v.videoId}>
           <a
-            href={`https://www.youtube.com/watch?v=${v.videoId}`}
+            href={watchUrl(v.videoId)}
             target="_blank"
             rel="noopener noreferrer"
             className="block py-4 hover:bg-slate-50"
