@@ -1,5 +1,13 @@
 # SWapp handoff
 
+## 2026-11-21 — YouTube screen shows Videos in progress (Ummon)
+
+Tom backed out of a phone upload and the YouTube screen only offered **Create new video**. The
+Videos in progress cards (ripley pushes status every 10 s; they refresh themselves) lived only on
+`/showrunner`. `loadVideoCards` (`src/lib/showrunner/load.ts`) now feeds both pages; `NewVideoEntry`
+renders the cards under the button in all four YouTube page states (nothing shown when no video is
+in progress or published in the last 24 h). Checks: CI green on #204. Not seen with a live upload.
+
 ## 2026-11-20 — Agreement downloads always carry the version (Ummon)
 
 Tom's phone said "already downloaded" for SJ Equity v2 because v1 and v2 had the same file name (v2 only
