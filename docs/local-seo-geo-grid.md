@@ -15,16 +15,19 @@ searches. Chris Palmer reads grids over about 20 miles and tracks how far the
 top-3 "proximity" reaches (All Thing `concepts/seo-strategy-chris-palmer.md`,
 `sops/sop-local-seo-calendar.md`). A weekly Standard scan is 729 SERPs at
 $0.0006, or $0.4374 per scan and about $1.89 per month at 4.33 weeks per month.
-A manual Live scan costs $0.002 per SERP, or $1.458 with the defaults. The UI
-shows the estimate before a scan, requires a cost check for Live scans, and the
-server blocks runs above $2.00. Settings allow 3 × 3 through 9 × 9 grids,
+A manual scan uses the same Standard queue and price. The UI shows the
+estimate before a scan, requires a cost check, and the server blocks runs above
+$2.00. Settings allow 3 × 3 through 9 × 9 grids,
 0.5, 1, 2, 3, 4 or 5 mile spacing, and 1–12 phrases. A brand that already saved
 settings keeps them until they are re-saved on the Local SEO page.
 
 Vercel Cron runs once a day at 15:00 UTC. On Mondays it queues the weekly
 Standard scan; every day it checks for completed tasks and saves results. This
 single daily job also fits Vercel Hobby's once-a-day cron limit. Manual scans
-use the Live endpoint and finish in the staff request.
+are queued too; press "Refresh queued results" a few minutes later to collect
+them. They no longer use the Live endpoint: DataForSEO's Maps Live endpoint
+answers one task per request, so a batched Live scan saved only the first grid
+point (found 2026-11-21).
 
 ## Setup
 
