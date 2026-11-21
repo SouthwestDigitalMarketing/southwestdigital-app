@@ -1,5 +1,11 @@
 # SWapp handoff
 
+## Working agreement — SWapp merges (Tom, 2026-11-21)
+
+"You don't have to keep asking to merge. Just go ahead and merge." Once a change is built, checks
+are green and it is checked (preview or render), squash-merge it and report; do not stop to ask.
+Still ask first for anything outside SWapp code (production data, outbound sends, secrets).
+
 ## 2026-11-21 — YouTube folded into Showrunner (Ummon)
 
 Tom: "combine showrunner and YouTube… one single process… it should be showrunner". One menu item,
