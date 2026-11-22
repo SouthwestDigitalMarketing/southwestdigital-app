@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { draftWithAI, hasPrivacyLeak, regenerateBeat } from "./studio-ai";
+import { draftFromStoryline, draftWithAI, hasPrivacyLeak, regenerateBeat, storylineAnswers } from "./studio-ai";
 import type { Answers } from "./studio";
+import type { Storyline } from "./storylines";
 
 const answers: Answers = {
   happened: "A landlord had missing records for three properties.",
@@ -102,6 +103,27 @@ describe("draftWithAI", () => {
     expect(result.source).toBe("openai");
     expect(result.beat.talk[0]).toBe("Will they sign?");
     expect(result.beat.show).toEqual(["Tom to camera"]);
+  });
+
+  it("drafts a picked storyline with Tom's color line and the scoreboard number", async () => {
+    const storyline: Storyline = {
+      id: "proposal-waiting",
+      kind: "proposal-waiting",
+      headline: "A proposal is sitting with a client. Will they sign?",
+      metrics: ["2 proposals sent this week", "1 proposal viewed and awaiting an answer"],
+      hook: "Will they sign before next week?",
+      confirm: "Confirm whether they signed before filming.",
+      serviceLine: "Our firm-wide median reply was 1.5 h of business time.",
+    };
+    expect(storylineAnswers(storyline, "").outcome).toBe("Confirm whether they signed before filming.");
+    expect(storylineAnswers(storyline, "They asked about onboarding.").outcome).toBe("They asked about onboarding.");
+    expect(hasPrivacyLeak(storylineAnswers(storyline, ""), storylineAnswers(storyline, ""))).toBe(false);
+    delete process.env.OPENAI_API_KEY;
+    const result = await draftFromStoryline(storyline, "", "Can we onboard three sets of books at once?");
+    expect(result.source).toBe("guided");
+    expect(result.episode.carriedHook).toBe("Can we onboard three sets of books at once?");
+    expect(result.episode.serviceNumber).toMatch(/1\.5 h/);
+    expect(result.episode.beats.length).toBeGreaterThanOrEqual(4);
   });
 
   it("rejects a private name in a regenerated beat", async () => {

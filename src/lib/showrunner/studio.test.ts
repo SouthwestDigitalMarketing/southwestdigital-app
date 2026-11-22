@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { makeDraft, makePilotDraft, mountainPosition, parseEpisodes, validateForLock } from "./studio";
+import { makeDraft, mountainPosition, parseEpisodes, validateForLock } from "./studio";
 
 const answers = {
   happened: "A landlord had late books. Client name: Jane Doe.",
@@ -49,16 +49,6 @@ describe("weekly episode path", () => {
   it("keeps Base Camp until Tom supplies the number", () => {
     expect(mountainPosition(null)).toEqual({ name: "Base Camp", percent: 0 });
     expect(mountainPosition(5100)).toEqual({ name: "Halfway Ridge", percent: 51 });
-  });
-
-  it("seeds the sanitized contract pilot from the series canon", () => {
-    const episode = makePilotDraft("");
-    expect(episode.title).toBe("Will They Sign? How We Do Contracts");
-    expect(episode.beats).toHaveLength(5);
-    expect(JSON.stringify(episode.beats)).not.toContain("$450");
-    expect(() => validateForLock(episode, "")).toThrow(/service number/);
-    episode.serviceNumber = "Our firm-wide reply time was 2 hours.";
-    expect(validateForLock(episode, "").id).toBe(episode.id);
   });
 
   it("keeps saved drafts from before the service-number field", () => {

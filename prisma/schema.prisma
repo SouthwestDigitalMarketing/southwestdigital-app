@@ -2069,6 +2069,7 @@ model ShowrunnerStudio {
   mountainCurrent Int?
   showDollars     Boolean  @default(false)
   episodes        Json     @default("[]")
+  storylines      Json     @default("[]")
   updatedAt       DateTime @updatedAt
   brand           Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
 }
