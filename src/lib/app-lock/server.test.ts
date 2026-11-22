@@ -11,7 +11,7 @@ vi.mock("next/headers", () => ({
 }));
 vi.mock("next/navigation", () => ({ redirect: (to: string) => { throw new Error(`redirect:${to}`); } }));
 
-const { requireUnlocked } = await import("./server");
+const { requireUnlocked, devLockSkipped } = await import("./server");
 
 const changedAt = new Date("2026-11-20T12:00:00Z");
 
@@ -57,5 +57,13 @@ describe("requireUnlocked", () => {
   it("never redirects to another site", async () => {
     mocks.path.mockReturnValue("//evil.example");
     await expect(requireUnlocked("u1")).rejects.toThrow("redirect:/unlock?next=%2Fdashboard");
+  });
+});
+
+describe("devLockSkipped", () => {
+  it("only skips the lock in next dev with the flag set", () => {
+    expect(devLockSkipped({ NODE_ENV: "development", SWAPP_DEV_SKIP_LOCK: "1" } as NodeJS.ProcessEnv)).toBe(true);
+    expect(devLockSkipped({ NODE_ENV: "production", SWAPP_DEV_SKIP_LOCK: "1" } as NodeJS.ProcessEnv)).toBe(false);
+    expect(devLockSkipped({ NODE_ENV: "development" } as NodeJS.ProcessEnv)).toBe(false);
   });
 });
