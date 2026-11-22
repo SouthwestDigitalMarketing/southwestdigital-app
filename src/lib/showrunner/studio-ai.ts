@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { answersSchema, beatSchema, episodeSchema, makeDraft, type Answers, type Episode } from "./studio";
+import type { Storyline } from "./storylines";
 
 export type Beat = z.infer<typeof beatSchema>;
 
@@ -68,7 +69,7 @@ function privateNameCandidates(answers: Answers): string[] {
   const candidates = words.match(/\b(?:[A-Z][a-z]+|[A-Z]{2,})(?:\s+(?:[A-Z][a-z]+|[A-Z]{2,})){1,3}\b/g) ?? [];
   const companySuffixes = [...words.matchAll(/\b([A-Za-z][A-Za-z0-9-]+)\s+(LLC|Inc|Corp|Ltd)\b/gi)].map((match) => `${match[1]} ${match[2]}`);
   const namedPeople = [...words.matchAll(/\b(?:client|customer|named|called)\s+([a-z]{3,})\b/gi)].map((match) => match[1]);
-  const commonWords = /^(?:the|this|that|our|tom|firm|one|name|situation|had|has|was|were|did|does|is|needs|needed|sent|signed|wants|called|with|for|and|who|what|their|they|got|gets|asked|received|records|books)$/i;
+  const commonWords = /^(?:the|this|that|our|tom|firm|one|name|situation|had|has|was|were|did|does|is|needs|needed|sent|signed|wants|called|with|for|and|who|what|when|where|why|how|which|will|would|can|could|should|shall|may|might|must|names|their|they|got|gets|asked|received|records|books)$/i;
   return [...candidates.filter((candidate) => !/^(?:The|This|That|Our|We|A|An|One|Tom|Client|Firm)\b/i.test(candidate)), ...companySuffixes, ...namedPeople.filter((name) => !commonWords.test(name))];
 }
 
@@ -125,6 +126,26 @@ export async function draftWithAI(rawAnswers: Answers, previousHook: string): Pr
   } catch {
     return fallback("AI returned an invalid outline. A guided outline is ready to edit.");
   }
+}
+
+/** A storyline's firm-wide numbers become the draft's answers. Nothing else goes in. */
+export function storylineAnswers(storyline: Storyline, colorLine: string): Answers {
+  return answersSchema.parse({
+    happened: `${storyline.headline} ${storyline.metrics.join(". ")}.`,
+    handled: "Built from firm-wide numbers. No client names or prices.",
+    outcome: colorLine.trim() || storyline.confirm,
+    service: storyline.serviceLine,
+    next: storyline.hook,
+  });
+}
+
+/** Drafts a storyboard from a picked storyline plus Tom's optional color line. */
+export async function draftFromStoryline(
+  storyline: Storyline,
+  colorLine: string,
+  previousHook: string,
+): Promise<DraftResult> {
+  return draftWithAI(storylineAnswers(storyline, colorLine), previousHook);
 }
 
 export type BeatResult = { beat: Beat; source: "openai" | "guided"; warning?: string };

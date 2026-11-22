@@ -1,5 +1,9 @@
 # SWapp handoff
 
+## 2026-11-22 — Showrunner Studio tells-rework (Muse, branch `ummon/showrunner-studio-tells`)
+
+Tom's correction: Studio tells, not asks. Home screen now opens on "This week's story": `collectWeekSignals` counts the last 7 days from SWapp data only (quotes sent/viewed/accepted, new clients won, replies answered + median business reply time, ScorecardMonthly reports/transactions, videos live, CompanyRevenueMonth trend). `buildStorylines` turns them into 2-3 candidate storylines with metric bullets; a server refresh pre-drafts a 4-6 beat storyboard per candidate (Johnny, guided fallback). Tom picks one, optionally adds one line, or picks "none of these" and writes one line. The 5-question interview, its localStorage draft state, and the contract-pilot path are removed; edit/lock/shoot/publish flow unchanged. New `ShowrunnerStudio.storylines` column (migration `20261122220000_studio_storylines`). Privacy: headlines/metrics hold counts and the firm's own revenue position only; name filter widened for generic words (will/would/names/etc.) after a test proved "Will they sign?" blocked locking. No prod merge until Tom approves the preview.
+
 ## 2026-11-22 — Showrunner Studio (Ummon, branch `ummon/showrunner-studio`)
 
 Tom asked for a phone-first weekly episode planner for The $10K Month. This branch adds `/showrunner/studio` (five-question interview, OpenAI outline, beat edit/reorder/regenerate, privacy check, lock, one-clip-at-a-time shoot mode, manual YouTube publish log), plus entry points on Showrunner Overview and Series. The contract pilot is selectable as a sanitized draft. `src/lib/showrunner/canon.json` is a deliberately public-safe port of the title, goal, waypoints, and five-beat `the-contract` pilot from ripley's `showrunner-app/Data/series/the-10k-month.json` as of 2026-11-22. It omits client-specific material and example pricing. Future canon changes need an intentional sync; SWapp cannot read ripley at runtime.

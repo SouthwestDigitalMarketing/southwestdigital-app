@@ -87,35 +87,13 @@ export function makeDraft(answers: Answers, previousHook: string, id = crypto.ra
   });
 }
 
-export function makePilotDraft(previousHook: string): Episode {
-  const answers: Answers = {
-    happened: "Confirm the proposal story and real outcome before filming.",
-    handled: "Show the example proposal and the approved agreement pages only.",
-    outcome: "Tom to supply: did they sign?",
-    service: "Tom to supply: one firm-wide service number.",
-    next: canon.pilot.hook,
-  };
-  const base = makeDraft(answers, previousHook);
-  const beats = canon.pilot.beats.map((beat) => ({ name: beat.name, talk: [...beat.talk], show: [...beat.show] }));
-  if (previousHook) beats[0].talk[0] = previousHook.slice(0, 180);
-  return episodeSchema.parse({
-    ...base,
-    title: canon.pilot.title,
-    question: previousHook || canon.pilot.question,
-    payoff: canon.pilot.payoff,
-    hook: canon.pilot.hook,
-    beats,
-    done: beats.map(() => false),
-  });
-}
-
 function privateTermsFromAnswers(answers: Answers): string[] {
   const source = Object.values(answers).join("\n");
   const properNames = source.match(/\b(?:[A-Z][a-z]+|[A-Z]{2,})(?:\s+(?:[A-Z][a-z]+|[A-Z]{2,})){1,3}\b/g) ?? [];
   const organizations = source.match(/\b[a-z][a-z0-9 &'-]{2,50}\s+(?:llc|inc|ltd|corp)\b/gi) ?? [];
   const namedPeople = [...source.matchAll(/\b(?:client|customer|named|called)\s+([a-z]{3,})\b/gi)].map((match) => match[1]);
   const generic = /^(?:The|This|That|Our|We|A|An|One|Tom|Client|Firm)\b/i;
-  const commonWords = /^(?:name|situation|had|has|was|were|did|does|is|needs|needed|sent|signed|wants|called|with|for|and|who|what|their|they|got|gets|asked|received|records|books)$/i;
+  const commonWords = /^(?:name|situation|had|has|was|were|did|does|is|needs|needed|sent|signed|wants|called|with|for|and|who|what|when|where|why|how|which|will|would|can|could|should|shall|may|might|must|names|their|they|got|gets|asked|received|records|books)$/i;
   return [...properNames.filter((name) => !generic.test(name)), ...organizations, ...namedPeople.filter((name) => !commonWords.test(name))];
 }
 

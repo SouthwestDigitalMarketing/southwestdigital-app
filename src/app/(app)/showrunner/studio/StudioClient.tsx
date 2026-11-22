@@ -3,19 +3,12 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Check, ChevronDown, ChevronUp, Film, RotateCcw, Sparkles } from "lucide-react";
-import { SERIES, lastHook, mountainPosition, type Answers, type Episode } from "@/lib/showrunner/studio";
+import { SERIES, lastHook, mountainPosition, type Episode } from "@/lib/showrunner/studio";
+import type { StorylineDraft } from "@/lib/showrunner/storylines";
 import { changeStudio } from "./actions";
 
-type Props = { episodes: Episode[]; mountainCurrent: number | null; showDollars: boolean; interviewStorageKey: string };
-type Screen = "home" | "interview" | "draft" | "shoot";
-const QUESTIONS: { key: keyof Answers; title: string; help: string; placeholder: string }[] = [
-  { key: "happened", title: "What came up this week?", help: "Tell me one real client situation. Your answer stays in private planning notes.", placeholder: "A client had three sets of books to bring together…" },
-  { key: "handled", title: "How did we help?", help: "What did you or the team actually do?", placeholder: "We made a clear list, got access, and…" },
-  { key: "outcome", title: "What happened?", help: "A win, a snag, or something still open is fine.", placeholder: "The client signed. We are still waiting for…" },
-  { key: "service", title: "What can we show on the scoreboard?", help: "Choose one firm-wide service number, or say what you still need to measure. No client figures.", placeholder: "Our average reply time this week was…" },
-  { key: "next", title: "What should next week tease?", help: "Give people a reason to come back.", placeholder: "Can we onboard three sets of books at once?" },
-];
-const EMPTY: Answers = { happened: "", handled: "", outcome: "", service: "", next: "" };
+type Props = { episodes: Episode[]; storylines: StorylineDraft[]; mountainCurrent: number | null; showDollars: boolean };
+type Screen = "home" | "draft" | "shoot";
 const field = "w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base text-slate-950 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100";
 const primary = "inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-5 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto";
 const secondary = "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-400";
@@ -53,16 +46,11 @@ function MountainCard({ current, dollars }: { current: number | null; dollars: b
   );
 }
 
-export function StudioClient({ episodes, mountainCurrent, showDollars, interviewStorageKey }: Props) {
+export function StudioClient({ episodes, storylines, mountainCurrent, showDollars }: Props) {
   const router = useRouter();
   const active = [...episodes].reverse().find((episode) => episode.status === "draft" || episode.status === "locked");
   const previousHook = lastHook(episodes);
   const [screen, setScreen] = useState<Screen>(active?.status === "draft" ? "draft" : active?.status === "locked" ? "shoot" : "home");
-  const [answers, setAnswers] = useState<Answers>(() => {
-    if (typeof window === "undefined") return EMPTY;
-    try { return { ...EMPTY, ...JSON.parse(localStorage.getItem(interviewStorageKey) ?? "{}") }; } catch { return EMPTY; }
-  });
-  const [question, setQuestion] = useState(0);
   const [edited, setEdited] = useState<Episode | null>(active?.status === "draft" ? active : null);
   const [beatIndex, setBeatIndex] = useState(0);
   const [clipIndex, setClipIndex] = useState(0);
@@ -71,6 +59,10 @@ export function StudioClient({ episodes, mountainCurrent, showDollars, interview
   const [positionOpen, setPositionOpen] = useState(false);
   const [positionInput, setPositionInput] = useState(mountainCurrent === null ? "" : String(mountainCurrent));
   const [dollarsInput, setDollarsInput] = useState(showDollars);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [color, setColor] = useState("");
+  const [noneOpen, setNoneOpen] = useState(false);
+  const [noneLine, setNoneLine] = useState("");
   const [publishedUrl, setPublishedUrl] = useState("");
   const [error, setError] = useState("");
   const [busy, startTransition] = useTransition();
@@ -79,13 +71,6 @@ export function StudioClient({ episodes, mountainCurrent, showDollars, interview
     document.getElementById("main-content")?.scrollTo({ top: 0, behavior: "auto" });
   }, [screen]);
 
-  function updateAnswer(key: keyof Answers, value: string) {
-    setAnswers((old) => {
-      const next = { ...old, [key]: value };
-      try { localStorage.setItem(interviewStorageKey, JSON.stringify(next)); } catch { /* private browsing */ }
-      return next;
-    });
-  }
   function run(change: Parameters<typeof changeStudio>[0], onDone?: () => void) {
     setError("");
     startTransition(async () => {
@@ -143,36 +128,56 @@ export function StudioClient({ episodes, mountainCurrent, showDollars, interview
                 </div>}
               </div>
             </section>
-            <section className="flex flex-col justify-center rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-9">
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-600">This week&apos;s episode</p>
-              <h2 className="mt-4 max-w-md text-3xl font-bold leading-tight tracking-tight sm:text-4xl">Let&apos;s find the story worth telling.</h2>
-              <p className="mt-4 max-w-md text-slate-600">Five short questions. Then we shape one clip at a time.</p>
-              {previousHook ? <div className="mt-6 rounded-2xl bg-indigo-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-indigo-700">Last week&apos;s hook</p><p className="mt-1 text-slate-800">{previousHook}</p></div> : <p className="mt-6 text-sm text-slate-500">First episode? Start with the real story that mattered most this week.</p>}
-              <button type="button" className={`${primary} mt-8`} onClick={() => { setQuestion(0); setScreen("interview"); }}>Plan this week&apos;s episode <ArrowRight size={19} /></button>
-              {episodes.length === 0 && <button type="button" className="mt-3 text-left text-sm font-semibold text-indigo-700 underline underline-offset-4 disabled:opacity-50" disabled={busy} onClick={() => run({ kind: "pilot" })}>Use the contract pilot instead</button>}
+            <section className="flex flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-9">
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-600">This week&apos;s story</p>
+              <h2 className="mt-4 max-w-md text-3xl font-bold leading-tight tracking-tight sm:text-4xl">Here is what the numbers say.</h2>
+              <p className="mt-4 max-w-md text-slate-600">Built from this week&apos;s firm numbers. Pick one; add a line only if you want to.</p>
+              {previousHook && <div className="mt-6 rounded-2xl bg-indigo-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-indigo-700">Last week&apos;s hook</p><p className="mt-1 text-slate-800">{previousHook}</p></div>}
+              {storylines.length === 0 ? (
+                <button type="button" className={`${primary} mt-8`} disabled={busy} onClick={() => run({ kind: "refresh" })}>
+                  {busy ? "Reading the week…" : <><Sparkles size={19} /> Find this week&apos;s story</>}
+                </button>
+              ) : (
+                <div className="mt-8 space-y-4">
+                  {storylines.map((item) => (
+                    <div key={item.storyline.id} className="rounded-2xl border border-slate-200 p-5">
+                      <h3 className="text-lg font-bold leading-snug">{item.storyline.headline}</h3>
+                      <ul className="mt-3 space-y-1">{item.storyline.metrics.map((metric) => <li key={metric} className="text-sm text-slate-600">· {metric}</li>)}</ul>
+                      <p className="mt-3 text-xs font-semibold text-slate-500">{item.episode.beats.length} clips · {item.source === "openai" ? "Johnny draft" : "Guided draft"}</p>
+                      {selectedId === item.storyline.id ? (
+                        <div className="mt-4 space-y-3">
+                          <p className="text-sm text-slate-600">Confirm before filming: {item.storyline.confirm}</p>
+                          <input className={field} value={color} maxLength={500} onChange={(event) => setColor(event.target.value)} placeholder="One line of color, optional" aria-label="Optional color line" />
+                          <div className="flex gap-3">
+                            <button type="button" className={primary} disabled={busy} onClick={() => run({ kind: "pick", id: item.storyline.id, color })}>Draft this story</button>
+                            <button type="button" className={secondary} disabled={busy} onClick={() => { setSelectedId(null); setColor(""); }}>Back</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button type="button" className={`${secondary} mt-4`} disabled={busy} onClick={() => { setSelectedId(item.storyline.id); setColor(""); setNoneOpen(false); }}>Use this story <ArrowRight size={17} /></button>
+                      )}
+                    </div>
+                  ))}
+                  <div className="flex flex-wrap items-center gap-3 pt-1">
+                    <button type="button" className="text-sm font-semibold text-indigo-700 underline underline-offset-4 disabled:opacity-50" disabled={busy} onClick={() => run({ kind: "refresh" })}>Re-read the week</button>
+                    <button type="button" className="text-sm font-semibold text-slate-500 underline underline-offset-4" onClick={() => setNoneOpen(!noneOpen)}>None of these</button>
+                  </div>
+                  {noneOpen && (
+                    <div className="space-y-3 rounded-2xl bg-slate-50 p-4">
+                      <input className={field} value={noneLine} maxLength={500} onChange={(event) => setNoneLine(event.target.value)} placeholder="One line about the real story" aria-label="Your story in one line" />
+                      <button type="button" className={primary} disabled={busy || !noneLine.trim()} onClick={() => run({ kind: "custom", color: noneLine })}>Draft from my line</button>
+                    </div>
+                  )}
+                </div>
+              )}
               {latestPublished && <a className="mt-6 text-sm font-semibold text-indigo-700 underline underline-offset-4" href={latestPublished.publishedUrl ?? "#"} target="_blank" rel="noopener noreferrer">Watch the last episode</a>}
               {latestPublished && <p className="mt-3 text-sm text-slate-500">Last episode: {latestPublished.title}</p>}
             </section>
           </div>
         )}
 
-        {screen === "interview" && <div className="mx-auto max-w-2xl">
-          <div className="mb-6 flex items-center justify-between"><button type="button" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-slate-900" onClick={() => question === 0 ? setScreen("home") : setQuestion(question - 1)}><ArrowLeft size={18} /> Back</button><span className="text-sm font-semibold text-slate-500">{question + 1} of {QUESTIONS.length}</span></div>
-          <div className="mb-8 flex gap-2" aria-hidden="true">{QUESTIONS.map((item, index) => <div key={item.key} className={`h-1.5 flex-1 rounded-full ${index <= question ? "bg-indigo-600" : "bg-slate-200"}`} />)}</div>
-          <section className="rounded-3xl bg-white p-6 shadow-sm sm:p-10">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-600">Your story, your words</p>
-            <h2 className="mt-4 text-3xl font-bold leading-tight tracking-tight sm:text-4xl">{QUESTIONS[question].title}</h2>
-            <p className="mt-3 text-slate-600">{QUESTIONS[question].help}</p>
-            <textarea autoFocus className={`${field} mt-8 min-h-48 resize-y text-lg leading-relaxed`} maxLength={QUESTIONS[question].key === "next" || QUESTIONS[question].key === "service" ? 500 : 1500} value={answers[QUESTIONS[question].key]} onChange={(event) => updateAnswer(QUESTIONS[question].key, event.target.value)} placeholder={QUESTIONS[question].placeholder} aria-label={QUESTIONS[question].title} />
-            <p className="mt-2 text-xs text-slate-400">You can dictate here. These notes are private; review all on-screen text before filming.</p>
-            <button type="button" disabled={busy || !answers[QUESTIONS[question].key].trim()} className={`${primary} mt-7`} onClick={() => { if (question < QUESTIONS.length - 1) setQuestion(question + 1); else run({ kind: "draft", answers }, () => { try { localStorage.removeItem(interviewStorageKey); } catch {} setAnswers(EMPTY); }); }}>
-              {question === QUESTIONS.length - 1 ? <><Sparkles size={19} /> Draft episode</> : <>Next question <ArrowRight size={19} /></>}
-            </button>
-          </section>
-        </div>}
-
         {screen === "draft" && edited && <div className="mx-auto max-w-3xl space-y-5">
-          <div className="rounded-3xl bg-[#101933] p-6 text-white sm:p-8"><p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-200">Episode draft · {edited.draftSource === "openai" ? "AI draft" : "Guided draft"}</p><h2 className="mt-3 text-3xl font-bold tracking-tight">{edited.title}</h2><p className="mt-3 text-slate-300">One clip per beat. These are talking points, not a script.</p></div>
+          <div className="rounded-3xl bg-[#101933] p-6 text-white sm:p-8"><p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-200">Episode draft · {edited.draftSource === "openai" ? "Johnny draft" : "Guided draft"}</p><h2 className="mt-3 text-3xl font-bold tracking-tight">{edited.title}</h2><p className="mt-3 text-slate-300">One clip per beat. These are talking points, not a script.</p></div>
           {edited.draftWarning && <p role="status" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{edited.draftWarning}</p>}
           <section className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-7">
             <button type="button" className="flex w-full items-center justify-between text-left font-semibold" onClick={() => setEditingIdea(!editingIdea)}>Episode idea {editingIdea ? <ChevronUp size={19} /> : <ChevronDown size={19} />}</button>

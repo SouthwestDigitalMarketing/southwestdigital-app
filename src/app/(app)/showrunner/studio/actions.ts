@@ -5,12 +5,21 @@ import { revalidatePath } from "next/cache";
 import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
 import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { checkRateLimit } from "@/lib/simpleRateLimit";
-import { draftWithAI, regenerateBeat } from "@/lib/showrunner/studio-ai";
-import { answersSchema, episodeSchema, lastHook, makePilotDraft, parseEpisodes, validateForLock } from "@/lib/showrunner/studio";
+import { draftFromStoryline, regenerateBeat } from "@/lib/showrunner/studio-ai";
+import { episodeSchema, lastHook, parseEpisodes, validateForLock } from "@/lib/showrunner/studio";
+import {
+  buildStorylines,
+  collectWeekSignals,
+  parseStorylineDrafts,
+  signalMetrics,
+  wordsForBusinessSeconds,
+  type Storyline,
+} from "@/lib/showrunner/storylines";
 
 type Change =
-  | { kind: "draft"; answers: unknown }
-  | { kind: "pilot" }
+  | { kind: "refresh" }
+  | { kind: "pick"; id: string; color: string }
+  | { kind: "custom"; color: string }
   | { kind: "edit"; episode: unknown }
   | { kind: "lock"; episode: unknown; privacyChecked: boolean }
   | { kind: "regenerate"; episode: unknown; index: number }
@@ -18,25 +27,16 @@ type Change =
   | { kind: "publish"; id: string; url: string }
   | { kind: "mountain"; current: number | null; showDollars: boolean };
 
+function limitTells(userId: string) {
+  if (!checkRateLimit(`showrunner-tells:${userId}`, 10, 60 * 60_000).allowed) {
+    throw new Error("Too many story builds this hour. Pick a story or try later.");
+  }
+}
+
 export async function changeStudio(change: Change) {
   const { dataContext } = await requireStaffBrandOrThrow();
-  let drafted: Awaited<ReturnType<typeof draftWithAI>> | null = null;
   let regenerated: Awaited<ReturnType<typeof regenerateBeat>> | null = null;
-  let draftedAfterHook = "";
-  if (change.kind === "draft") {
-    if (!checkRateLimit(`showrunner-draft:${dataContext.actorUserId}`, 5, 60 * 60_000).allowed) {
-      throw new Error("Too many drafts this hour. Edit the current plan or try later.");
-    }
-    const answers = answersSchema.parse(change.answers);
-    const existing = await withBrandDataTransaction(dataContext, (tx) =>
-      tx.showrunnerStudio.findUnique({ where: { brandId: dataContext.brandId }, select: { episodes: true } }),
-    );
-    const episodes = parseEpisodes(existing?.episodes ?? []);
-    if (episodes.some((episode) => episode.status === "locked")) throw new Error("Finish the locked episode first.");
-    draftedAfterHook = lastHook(episodes);
-    // The network request happens outside the database transaction.
-    drafted = await draftWithAI(answers, draftedAfterHook);
-  } else if (change.kind === "regenerate") {
+  if (change.kind === "regenerate") {
     if (!checkRateLimit(`showrunner-beat:${dataContext.actorUserId}`, 15, 60 * 60_000).allowed) {
       throw new Error("Too many beat drafts this hour. Edit this beat or try later.");
     }
@@ -51,16 +51,62 @@ export async function changeStudio(change: Change) {
     await tx.$queryRaw`SELECT "id" FROM "ShowrunnerStudio" WHERE "brandId" = ${dataContext.brandId} FOR UPDATE`;
     const row = await tx.showrunnerStudio.findUniqueOrThrow({ where: { brandId: dataContext.brandId } });
     let episodes = parseEpisodes(row.episodes);
+    let storylines = parseStorylineDrafts(row.storylines);
     let mountainCurrent = row.mountainCurrent;
     let showDollars = row.showDollars;
-    if (change.kind === "draft") {
+    if (change.kind === "refresh") {
+      limitTells(dataContext.actorUserId);
       if (episodes.some((episode) => episode.status === "locked")) throw new Error("Finish the locked episode first.");
-      if (lastHook(episodes) !== draftedAfterHook || !drafted) throw new Error("The series changed while drafting. Try again.");
-      const episode = { ...drafted.episode, draftSource: drafted.source, ...(drafted.warning ? { draftWarning: drafted.warning } : {}) };
+      const signals = await collectWeekSignals(tx, dataContext.brandId);
+      const hook = lastHook(episodes);
+      const picked = buildStorylines(signals, hook);
+      storylines = await Promise.all(
+        picked.map(async (storyline) => {
+          const drafted = await draftFromStoryline(storyline, "", hook);
+          return {
+            storyline,
+            episode: drafted.episode,
+            source: drafted.source,
+            ...(drafted.warning ? { warning: drafted.warning } : {}),
+          };
+        }),
+      );
+    } else if (change.kind === "pick") {
+      limitTells(dataContext.actorUserId);
+      const found = storylines.find((item) => item.storyline.id === change.id);
+      if (!found) throw new Error("That story is no longer available. Refresh the week.");
+      if (episodes.some((episode) => episode.status === "locked")) throw new Error("Finish the locked episode first.");
+      const color = change.color.trim().slice(0, 500);
+      const drafted = color ? await draftFromStoryline(found.storyline, color, lastHook(episodes)) : null;
+      const episode = drafted
+        ? { ...drafted.episode, draftSource: drafted.source, ...(drafted.warning ? { draftWarning: drafted.warning } : {}) }
+        : found.episode;
       episodes = [...episodes.filter((item) => item.status !== "draft"), episode];
-    } else if (change.kind === "pilot") {
+      storylines = [];
+    } else if (change.kind === "custom") {
+      limitTells(dataContext.actorUserId);
+      const color = change.color.trim();
+      if (!color) throw new Error("Add one line about the story first.");
       if (episodes.some((episode) => episode.status === "locked")) throw new Error("Finish the locked episode first.");
-      episodes = [...episodes.filter((item) => item.status !== "draft"), makePilotDraft(lastHook(episodes))];
+      const signals = await collectWeekSignals(tx, dataContext.brandId);
+      const storyline: Storyline = {
+        id: "custom",
+        kind: "custom",
+        headline: color.slice(0, 220),
+        metrics: signalMetrics(signals).length > 0 ? signalMetrics(signals) : ["A quiet week in the numbers"],
+        hook: lastHook(episodes) || "What happens next?",
+        confirm: "Confirm every fact on screen before filming.",
+        serviceLine:
+          signals.replyMedianBusinessSeconds !== null
+            ? `Our firm-wide median reply was ${wordsForBusinessSeconds(signals.replyMedianBusinessSeconds)} of business time.`
+            : "Our week in numbers is above; add 1 firm-wide service number before locking.",
+      };
+      const drafted = await draftFromStoryline(storyline, color, lastHook(episodes));
+      episodes = [
+        ...episodes.filter((item) => item.status !== "draft"),
+        { ...drafted.episode, draftSource: drafted.source, ...(drafted.warning ? { draftWarning: drafted.warning } : {}) },
+      ];
+      storylines = [];
     } else if (change.kind === "edit" || change.kind === "lock" || change.kind === "regenerate") {
       const edited = episodeSchema.parse(change.episode);
       const index = episodes.findIndex((episode) => episode.id === edited.id && episode.status === "draft");
@@ -104,6 +150,7 @@ export async function changeStudio(change: Change) {
       episodes[index].mountainAtPublish = mountainCurrent;
       episodes[index].showDollarsAtPublish = showDollars;
       episodes[index].serviceAtPublish = episodes[index].serviceNumber;
+      storylines = [];
     } else {
       if (change.current !== null && (!Number.isInteger(change.current) || change.current < 0 || change.current > 1000000)) throw new Error("Enter a whole-dollar number.");
       mountainCurrent = change.current;
@@ -111,7 +158,12 @@ export async function changeStudio(change: Change) {
     }
     await tx.showrunnerStudio.update({
       where: { brandId: dataContext.brandId },
-      data: { episodes: episodes as unknown as Prisma.InputJsonValue, mountainCurrent, showDollars },
+      data: {
+        episodes: episodes as unknown as Prisma.InputJsonValue,
+        storylines: storylines as unknown as Prisma.InputJsonValue,
+        mountainCurrent,
+        showDollars,
+      },
     });
     return change.kind === "regenerate" ? episodes.find((episode) => episode.id === episodeSchema.parse(change.episode).id) : undefined;
   });
