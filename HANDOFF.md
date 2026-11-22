@@ -12,7 +12,7 @@ FCF storage is additive `CompanyCashFlowMonth` (migration `20261122221000_compan
 
 Phase 2 plan (not built): add an explicit brand label to lead, client and offer records, with a migration/backfill mapping the current two brand IDs to labels. Update all writes and filters to use that label inside one Lochside tenant, then reconcile counts and access. Keep the brand switcher until every settings and integration path has a company-level home, then remove it in a later release.
 
-Checks: local Prisma migration applied; typecheck passed; lint 0 errors (11 existing warnings); 1,288 tests passed, 5 skipped, including new cross-brand and FCF tests. Build, Vercel preview and visual checks are recorded below when complete. No production merge before Tom reviews preview and says yes.
+Checks: local Prisma migration applied; typecheck passed; lint 0 errors (11 existing warnings); 1,288 tests passed, 5 skipped, including new cross-brand and FCF tests; production build passed. PR #226 CI and Vercel deployment are green: `https://swapp-git-ummon-lochside-view-lochside-llc.vercel.app/dashboard`. A temporary local mock route (removed before commit) was viewed at desktop and 390 px phone widths; all three slide controls worked after using `localhost` so Next.js allowed its dev resources. The phone check led to moving position dots above the cards. **Pending:** Vercel preview itself redirects to Vercel login in this Codex browser; Tom must sign in before actual phone/desktop preview screenshots. `/unlock`, if reached, also belongs to Tom. No production merge before Tom reviews preview and says yes.
 
 ## 2026-11-22 — Showrunner Studio season update (Muse, branch `ummon/showrunner-studio-season`)
 
