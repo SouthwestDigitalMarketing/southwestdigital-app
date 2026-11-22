@@ -6,6 +6,20 @@
 are green and it is checked (preview or render), squash-merge it and report; do not stop to ask.
 Still ask first for anything outside SWapp code (production data, outbound sends, secrets).
 
+## Lessons and open follow-ups (Ummon, 2026-11-22 wrapup)
+
+- Before telling Tom a video is stuck, re-read live status (production `ShowrunnerVideoStatus`
+  read-only, or ripley `~/swapp-phone-intake/queue.json` now). On 2026-11-21 I reported TREB 261121
+  "stuck at Uploading to YouTube" from a queue.json copy taken before Tom re-signed at 12:33; it
+  had published 12:39. Correction posted (board ce96990adf85) and told Tom.
+- Each preview worktree needs its own `npm ci` + `prisma generate`; a symlinked shared
+  node_modules carried a stale Prisma client and missed packages (2026-11-21).
+- Waiting on CI/deploys: use an until-loop; the harness blocks `sleep N && ...` (2026-11-21).
+- **Open bug:** `showrunner/videos/AllVideosBrowser.tsx` writes the view cookie with
+  `path=/youtube`; after the move to `/showrunner` the Detailed/Condensed choice does not persist.
+  Change it to `path=/showrunner`.
+- Parked by Tom: Zoho calendar on the dashboard strip. Do not start.
+
 ## 2026-11-21 — Videos in progress: full width, title, thumbnail, details (Ummon)
 
 Brief from showrunner-app (w33, Showrunner PR #186 adds the fields to queue.json). Migration
