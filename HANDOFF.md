@@ -1,5 +1,18 @@
 # SWapp handoff
 
+## 2026-11-22 — Ummon session close (agreements / GSA work)
+
+- Shipped this session: #185 #186 #187 #189 #190 #192 #195 #199 #201 #203 (agreement PDFs from ripley,
+  phone layout, GSA alarm strip + panel, DRAFT stamp, versioned names). ripley receiver installed copy ==
+  origin/main `scripts/phone_intake.py`.
+- SJ Equity: GSA v4 FINAL sent 2026-11-20 via QBO (0/1 signed at last check, 11/21). When Derek signs:
+  save `~/projects/clients/sj-equity-llc/agreements/v4/2026-11-20_GSA_SJ-Equity-LLC_v4_SIGNED.pdf` and
+  POST `/api/operations/gsa` step `signed` (strip then clears).
+- Open: Sales PRs #84/#85 (builder changes, Kassad merges); Tom's idea 3 (payment = "Paid, GSA needed",
+  only GSA signed = Won, needs Kassad); idea 4 (pre-fill Exhibit A from the proposal). Ummon's Zoho draft
+  UID 478 (heads-up email) is stale: a version was sent 11/20 per the client diary; trash it, do not send.
+- Lesson: run `npm run lint` before every PR (#185 merged with a lint error and failed main CI).
+
 ## Working agreement — SWapp merges (Tom, 2026-11-21)
 
 "You don't have to keep asking to merge. Just go ahead and merge." Once a change is built, checks
