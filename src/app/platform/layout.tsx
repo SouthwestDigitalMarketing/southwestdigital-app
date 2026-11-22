@@ -28,6 +28,9 @@ export default async function PlatformLayout({ children }: { children: ReactNode
             </form>
           </div>
           <nav className="order-last flex w-full gap-2 text-sm font-semibold md:order-none md:w-auto md:items-center">
+            <Link href="/dashboard" className="flex-1 rounded-full border border-white/40 px-4 py-2.5 text-center text-white hover:bg-white/10 md:flex-none md:py-2">
+              Back to SWapp
+            </Link>
             <Link href="/platform/brands" className="flex-1 rounded-full bg-slate-100 px-4 py-2.5 text-center text-slate-950 hover:bg-white md:flex-none md:py-2">
               Brands
             </Link>

@@ -1,5 +1,11 @@
 # SWapp handoff
 
+## 2026-11-22 — Lochside login and Contigo guard (Ummon, PR #226)
+
+Tom's update makes Lochside Total the post-login destination for platform operators. `/auth/complete` now chooses the active Bookkeeping Conroe brand as the underlying data scope and redirects to `/dashboard` on the platform host, including the bare-IP local host. The dashboard names Lochside LLC in its shell and hides the brand picker there. Platform administration is a menu link; its page has a return link. The brand picker remains on other pages for settings. A brand-only user still cannot enter the platform host. A Contigo hostname retains its own brand after login, and the company carousel appears only when the active brand is Bookkeeping Conroe or The Real Estate Bookkeeper. Four new post-login route tests cover platform, bare IP, Contigo and access denial.
+
+Local real-data review at `http://100.98.89.93:3101/dashboard`: a signed-in bare-IP `/auth/complete` opened Total directly; the sidebar showed Lochside LLC and the Platform admin link. I opened Platform admin and used its return link. Privacy mode was on during visual review. Tom's approval of the updated local view is pending; do not merge before he says it looks right.
+
 ## 2026-11-22 — Lochside real-data local review (Ummon, PR #226)
 
 Rebased `ummon/lochside-view` onto `origin/main` after #227 added `SWAPP_DEV_SKIP_LOCK`. `swapp-live serve /home/tom/projects/worktrees/swapp-lochside-view 3101` runs as a persistent user systemd unit at `http://100.98.89.93:3101/dashboard`. It reads `swapp_live`, a local production copy made at 2026-11-22 16:17 CST. We reused that copy rather than running `swapp-live refresh`, which would forcibly drop the database while Tom's separate port 3100 server uses it. Additive migration `20261122221000_company_cash_flow` was applied to `swapp_live` only. Production was not changed.

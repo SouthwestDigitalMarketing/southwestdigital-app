@@ -6,7 +6,7 @@ import { requireUnlocked } from "@/lib/app-lock/server";
 import { auth } from "@/auth";
 import { selectCurrentBrand } from "@/lib/brands/access";
 import { ACTIVE_BRAND_COOKIE } from "@/lib/brands/active-brand";
-import { getAccessibleBrands, getBrandAccessDecision } from "@/lib/brands/repository";
+import { getAccessibleBrands, getBrandAccessDecision, getCompanyHomeBrand } from "@/lib/brands/repository";
 import { isPlatformAdministrator } from "@/lib/platform/access";
 import { createBrandDataContext } from "./context";
 import { requireTrustedPortalHost } from "./request-host";
@@ -23,6 +23,12 @@ export async function requireActiveBrandContext(options?: { minimumRole?: BrandR
   ]);
 
   const accessibleBrands = [...membershipBrands];
+  const companyHome = requestEntry.isPlatformEntry && isPlatformAdministrator(session.user.platformRole)
+    ? await getCompanyHomeBrand()
+    : null;
+  if (companyHome && !accessibleBrands.some(({ id }) => id === companyHome.id)) {
+    accessibleBrands.push(companyHome);
+  }
   if (
     isPlatformAdministrator(session.user.platformRole) &&
     requestEntry.entryBrand &&
@@ -34,7 +40,7 @@ export async function requireActiveBrandContext(options?: { minimumRole?: BrandR
   const activeBrandId = selectCurrentBrand({
     accessibleBrandIds: accessibleBrands.map(({ id }) => id),
     activeBrandId: cookieStore.get(ACTIVE_BRAND_COOKIE)?.value,
-    entryBrandId: requestEntry.entryBrand?.id,
+    entryBrandId: requestEntry.entryBrand?.id ?? companyHome?.id,
   });
   if (!activeBrandId) redirect("/select-brand");
 

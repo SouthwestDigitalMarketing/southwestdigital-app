@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { selectBrand } from "@/app/select-brand/actions";
 import { useBrand } from "@/lib/brands/context";
+import { isLochsideBrandSlug } from "@/lib/brands/active-brand";
 import {
   appCanvasGradient,
   appThemeCssVariables,
@@ -185,6 +186,8 @@ export function AppShell({
   accessibleBrands,
   activeBrandId,
   privacy,
+  isPlatformOperator,
+  platformAdminHref,
 }: {
   children: React.ReactNode;
   user: { name?: string | null; email?: string | null };
@@ -192,6 +195,8 @@ export function AppShell({
   activeBrandId: string;
   /** Privacy mode (cookie, read by the layout): covered pages hide names, the rest are blurred. */
   privacy: boolean;
+  isPlatformOperator: boolean;
+  platformAdminHref: string;
 }) {
   const { brand } = useBrand();
   const [deviceTheme, setDeviceTheme] = useState<"light" | "dark" | null>(null);
@@ -199,6 +204,7 @@ export function AppShell({
   // The phone menu closes when the route actually changes (Tom, 2026-11-20: closing it on tap
   // showed the previous page, usually the Dashboard, until the new one loaded).
   const pathname = usePathname();
+  const companyDashboard = isPlatformOperator && isLochsideBrandSlug(brand.slug) && pathname === "/dashboard";
   const [menuPath, setMenuPath] = useState(pathname);
   if (menuPath !== pathname) {
     setMenuPath(pathname);
@@ -256,7 +262,7 @@ export function AppShell({
   const sidebarMarkLogo = isLight
     ? (brand.theme?.logoMarkUrl ?? brand.theme?.logoMarkDarkUrl)
     : (brand.theme?.logoMarkDarkUrl ?? brand.theme?.logoMarkUrl);
-  const sidebarLogo = collapsed ? (sidebarMarkLogo ?? sidebarDisplayLogo) : sidebarDisplayLogo;
+  const sidebarLogo = companyDashboard ? null : collapsed ? (sidebarMarkLogo ?? sidebarDisplayLogo) : sidebarDisplayLogo;
   const sidebarLogoClass =
     !collapsed && sidebarLogoType === "logo"
       ? "brand-asset-fit brand-asset-fit-left"
@@ -336,11 +342,11 @@ export function AppShell({
           ) : null}
           {!sidebarLogo ? (
             <span className="text-sm font-bold uppercase tracking-widest" style={{ color: navTextColor }}>
-              {brand.name}
+              {companyDashboard ? "Lochside LLC" : brand.name}
             </span>
           ) : null}
         </div>
-        {accessibleBrands.length > 1 && !collapsed ? (
+        {accessibleBrands.length > 1 && !collapsed && !companyDashboard ? (
           <form action={selectBrand} className="mt-3">
             <label className="sr-only" htmlFor="active-brand">
               Switch brand
@@ -395,6 +401,7 @@ export function AppShell({
             ) : null}
           </div>
         ))}
+        {isPlatformOperator ? <NavItem href={platformAdminHref} icon={Building2} label="Platform admin" isLight={isLight} navTextColor={navTextColor} collapsed={collapsed} onNavigate={() => setOpen(false)} /> : null}
         {(brand.toolLinks ?? []).map((link) => (
           <ExternalNavItem
             key={link.key}
@@ -552,7 +559,7 @@ export function AppShell({
           >
             <Menu size={20} />
           </button>
-          <span className="ml-3 min-w-0 truncate text-sm font-semibold text-slate-900">{brand.name}</span>
+          <span className="ml-3 min-w-0 truncate text-sm font-semibold text-slate-900">{companyDashboard ? "Lochside LLC" : brand.name}</span>
           <span className="ml-auto pl-2">
             <PrivacyToggle on={privacy} compact />
           </span>

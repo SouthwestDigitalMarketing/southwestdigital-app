@@ -6,7 +6,7 @@ import { selectInitialBrand } from "@/lib/brands/access";
 import { isPlatformHostname } from "@/lib/brands/active-brand";
 import { activeBrandCookie } from "@/lib/brands/cookie";
 import { effectiveRequestHostname, safeRequestOrigin } from "@/lib/brands/request";
-import { getAccessibleBrands, resolveAppBrandByHostname } from "@/lib/brands/repository";
+import { getAccessibleBrands, getCompanyHomeBrand, resolveAppBrandByHostname } from "@/lib/brands/repository";
 import { isPlatformAdministrator } from "@/lib/platform/access";
 
 export async function GET(request: NextRequest) {
@@ -30,10 +30,14 @@ export async function GET(request: NextRequest) {
   });
   const isPlatformEntry = isPlatformHostname(hostname, process.env.PLATFORM_BASE_URL);
   if (isPlatformEntry) {
-    const destination = isPlatformAdministrator(session.user.platformRole)
-      ? "/platform/brands"
-      : "/access-denied";
-    return NextResponse.redirect(new URL(destination, requestOrigin));
+    if (!isPlatformAdministrator(session.user.platformRole)) {
+      return NextResponse.redirect(new URL("/access-denied", requestOrigin));
+    }
+    const companyHome = await getCompanyHomeBrand();
+    if (!companyHome) return NextResponse.redirect(new URL("/access-denied", requestOrigin));
+    const response = NextResponse.redirect(new URL("/dashboard", requestOrigin));
+    response.cookies.set(activeBrandCookie(companyHome.id));
+    return response;
   }
 
   const [entryBrand, accessibleBrands] = await Promise.all([

@@ -33,6 +33,7 @@ import { BigNumbers, HowWeMeasure, LiveStrip, ResponseTimes } from "./_scorecard
 import { LiveRefresh } from "./_scorecard/LiveRefresh";
 import { parseRange } from "./_scorecard/format";
 import { getCompanyMetrics } from "@/lib/companyMetrics";
+import { isLochsideBrandSlug } from "@/lib/brands/active-brand";
 import { CompanyCarousel } from "./CompanyCarousel";
 
 export const dynamic = "force-dynamic";
@@ -273,7 +274,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const previous = getPreviousDashboardPeriod(range, windowEnd, selectedPeriod);
   const responseRange = parseRange(params.rt);
   const privacy = privacyOn((await cookies()).get(PRIVACY_COOKIE)?.value);
-  const companyMetrics = isPlatformOperator ? await getCompanyMetrics({
+  const companyMetrics = isPlatformOperator && isLochsideBrandSlug(brand.slug) ? await getCompanyMetrics({
     actorUserId: session.user.id,
     isPlatformOperator,
     from: periodInstants(selectedPeriod).gte,
