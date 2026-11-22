@@ -39,7 +39,7 @@ describe("draftWithAI", () => {
     const result = await draftWithAI(answers, "Can the firm handle three sets of books?");
     expect(result.source).toBe("openai");
     expect(result.episode.carriedHook).toBe("Can the firm handle three sets of books?");
-    expect(result.episode.beats[0].talk[0]).toBe("Can the firm handle three sets of books?");
+    expect(result.episode.beats[0].talk[0]).toContain("turning it into the national real estate bookkeeper");
     expect(result.episode.beats).toHaveLength(5);
     expect(result.episode.beats.every((beat) => beat.talk.length >= 2 && beat.talk.length <= 4)).toBe(true);
     expect(result.episode.done).toEqual([false, false, false, false, false]);
@@ -101,7 +101,9 @@ describe("draftWithAI", () => {
     const drafted = await draftWithAI(answers, "Will they sign?");
     const result = await regenerateBeat(drafted.episode, 0);
     expect(result.source).toBe("openai");
-    expect(result.beat.talk[0]).toBe("Will they sign?");
+    expect(result.beat.name).toBe("The logline");
+    expect(result.beat.talk[0]).toContain("turning it into the national real estate bookkeeper");
+    expect(result.beat.talk.some((point) => point.includes("Will they sign?"))).toBe(true);
     expect(result.beat.show).toEqual(["Tom to camera"]);
   });
 

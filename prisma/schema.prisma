@@ -2070,6 +2070,7 @@ model ShowrunnerStudio {
   showDollars     Boolean  @default(false)
   episodes        Json     @default("[]")
   storylines      Json     @default("[]")
+  milestoneOverrides Json @default("{}")
   updatedAt       DateTime @updatedAt
   brand           Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
 }

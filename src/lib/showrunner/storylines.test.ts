@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildStorylines, type WeekSignals } from "./storylines";
+import {
+  buildStorylines,
+  parseMilestoneOverrides,
+  resolveMilestones,
+  type WeekSignals,
+} from "./storylines";
 
 const empty: WeekSignals = {
   proposalsSent: 0,
@@ -76,6 +81,26 @@ describe("buildStorylines", () => {
       expect(text).not.toMatch(/llc|inc\.|corp\b/i);
       expect(text).not.toMatch(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i);
     }
+  });
+
+  it("flags the national side when an episode ships", () => {
+    const lines = buildStorylines({ ...empty, videosLive: 1 }, "");
+    const shipped = lines.find((line) => line.kind === "national-shipped");
+    expect(shipped).toBeDefined();
+    expect(shipped!.metrics.join(" ")).toMatch(/1 episode went live/);
+  });
+
+  it("merges spotted milestones with manual ticks, manual wins", () => {
+    const auto = new Map([["youtube-client", { done: true, at: "2026-11-20T00:00:00.000Z" }]]);
+    const resolved = resolveMilestones(auto, { "outside-texas": { done: true, at: null } });
+    expect(resolved).toHaveLength(3);
+    expect(resolved.find((milestone) => milestone.key === "youtube-client")).toMatchObject({ done: true, source: "auto" });
+    expect(resolved.find((milestone) => milestone.key === "outside-texas")).toMatchObject({ done: true, source: "manual" });
+    expect(resolved.find((milestone) => milestone.key === "toll-free")).toMatchObject({ done: false });
+    const overridden = resolveMilestones(auto, { "youtube-client": { done: false } });
+    expect(overridden.find((milestone) => milestone.key === "youtube-client")).toMatchObject({ done: false, source: "manual" });
+    expect(parseMilestoneOverrides(undefined)).toEqual({});
+    expect(() => parseMilestoneOverrides({ "x": { done: "yes" } })).toThrow();
   });
 
   it("carries the mountain position and trend into the climb fallback", () => {

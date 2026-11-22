@@ -2,6 +2,8 @@
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { median } from "../scorecard/stats";
+import { isBookkeepingConroe } from "../brands/slugs";
+import { prisma } from "../prisma";
 import canon from "./canon.json";
 import { episodeSchema } from "./studio";
 
@@ -10,6 +12,7 @@ export const storylineSchema = z.object({
   kind: z.enum([
     "proposal-waiting",
     "client-won",
+    "national-shipped",
     "proposals-out",
     "fast-replies",
     "close-week",
@@ -93,13 +96,19 @@ function currentMonthKey(now: Date): string {
   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-/** Counts and firm-wide aggregates only. Never selects a name, price, or body. */
+/**
+ * Counts and firm-wide aggregates only. Never selects a name, price, or body.
+ * Week metrics come from the metrics brand (Bookkeeping Conroe); videos live
+ * under the show brand (The Real Estate Bookkeeper).
+ */
 export async function collectWeekSignals(
   tx: Prisma.TransactionClient,
-  brandId: string,
+  metricsBrandId: string,
+  showBrandId: string,
   now: Date = new Date(),
 ): Promise<WeekSignals> {
   const weekAgo = new Date(now.getTime() - 7 * 24 * 3600_000);
+  const brandId = metricsBrandId;
   const [proposalsSent, proposalsViewed, proposalsAccepted, newClients, videosLive] =
     await Promise.all([
       tx.quote.count({ where: { brandId, firstSentAt: { gte: weekAgo } } }),
@@ -109,7 +118,7 @@ export async function collectWeekSignals(
       tx.quote.count({ where: { brandId, status: "accepted", updatedAt: { gte: weekAgo } } }),
       tx.operationsClient.count({ where: { brandId, wonOn: { gte: weekAgo } } }),
       tx.showrunnerVideoStatus.count({
-        where: { brandId, url: { not: null }, updatedAt: { gte: weekAgo } },
+        where: { brandId: showBrandId, url: { not: null }, updatedAt: { gte: weekAgo } },
       }),
     ]);
   const replies = await tx.scorecardEvent.findMany({
@@ -183,6 +192,20 @@ export function buildStorylines(signals: WeekSignals, previousHook: string): Sto
       serviceLine: replyServiceLine(signals),
     });
   }
+  if (signals.videosLive > 0) {
+    candidates.push({
+      id: "national-shipped",
+      kind: "national-shipped",
+      headline: "The national brand shipped this week.",
+      metrics: [
+        `${plural(signals.videosLive, "episode")} went live this week`,
+        "Conroe does the work; the channel carries it nationwide",
+      ],
+      hook: "Who finds us because of this episode?",
+      confirm: "Confirm the episode link before filming.",
+      serviceLine: replyServiceLine(signals),
+    });
+  }
   if (signals.proposalsSent > 0 && signals.proposalsViewed === 0 && signals.proposalsAccepted === 0) {
     candidates.push({
       id: "proposals-out",
@@ -247,6 +270,104 @@ export function buildStorylines(signals: WeekSignals, previousHook: string): Sto
     picked.push(fallback);
   }
   return picked;
+}
+
+export const milestoneOverridesSchema = z.record(
+  z.string(),
+  z.object({ done: z.boolean(), at: z.string().datetime().nullable().optional() }),
+);
+export type MilestoneOverrides = z.infer<typeof milestoneOverridesSchema>;
+
+export type MilestoneState = {
+  key: string;
+  name: string;
+  done: boolean;
+  /** ISO date the milestone was reached, when known. */
+  at: string | null;
+  /** "auto" was spotted in the data; "manual" was ticked by Tom. */
+  source: "auto" | "manual";
+};
+
+function milestoneCanon(): { key: string; name: string; auto: boolean }[] {
+  return canon.mountain.milestones;
+}
+
+/** Spots the YouTube milestone in converted leads. The other two are ticked by hand. */
+export async function detectMilestones(
+  tx: Prisma.TransactionClient,
+  metricsBrandId: string,
+): Promise<MilestoneState[]> {
+  const youtubeLead = await tx.lead.findFirst({
+    where: {
+      brandId: metricsBrandId,
+      OR: [
+        { status: "WON" },
+        { convertedCustomerId: { not: null } },
+      ],
+      AND: [
+        {
+          OR: [
+            { source: { contains: "youtube", mode: "insensitive" } },
+            {
+              attributionTouches: {
+                some: { source: { contains: "youtube", mode: "insensitive" } },
+              },
+            },
+          ],
+        },
+      ],
+    },
+    orderBy: { updatedAt: "asc" },
+    select: { updatedAt: true },
+  });
+  const auto = new Map<string, { done: boolean; at: string | null }>();
+  auto.set("youtube-client", {
+    done: youtubeLead !== null,
+    at: youtubeLead ? youtubeLead.updatedAt.toISOString() : null,
+  });
+  return resolveMilestones(auto, {});
+}
+
+/**
+ * The brand whose week feeds the storylines: Bookkeeping Conroe when it
+ * exists, otherwise the show brand. Reads outside the brand transaction so
+ * row-level scoping can never hide the Conroe row.
+ */
+export async function resolveMetricsBrand(showBrand: {
+  id: string;
+  name: string;
+  slug: string;
+}): Promise<{ id: string; name: string; slug: string }> {
+  for (const slug of ["bookkeeping-conroe", "bc"]) {
+    const brand = await prisma.brand.findUnique({
+      where: { slug },
+      select: { id: true, name: true, slug: true },
+    });
+    if (brand && isBookkeepingConroe(brand.slug)) return brand;
+  }
+  return showBrand;
+}
+
+/** Merges spotted milestones with Tom's manual ticks. Manual wins. */
+export function resolveMilestones(
+  auto: Map<string, { done: boolean; at: string | null }>,
+  overrides: MilestoneOverrides,
+): MilestoneState[] {
+  return milestoneCanon().map((milestone) => {
+    const manual = overrides[milestone.key];
+    if (manual) {
+      return { key: milestone.key, name: milestone.name, done: manual.done, at: manual.at ?? null, source: "manual" as const };
+    }
+    const spotted = auto.get(milestone.key);
+    if (spotted) {
+      return { key: milestone.key, name: milestone.name, done: spotted.done, at: spotted.at, source: "auto" as const };
+    }
+    return { key: milestone.key, name: milestone.name, done: false, at: null, source: milestone.auto ? ("auto" as const) : ("manual" as const) };
+  });
+}
+
+export function parseMilestoneOverrides(value: unknown): MilestoneOverrides {
+  return milestoneOverridesSchema.parse(value ?? {});
 }
 
 function climbMetrics(signals: WeekSignals, previousHook: string): string[] {
