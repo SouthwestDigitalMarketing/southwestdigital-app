@@ -1,5 +1,13 @@
 # SWapp handoff
 
+## 2026-11-22 — Lochside real-data local review (Ummon, PR #226)
+
+Rebased `ummon/lochside-view` onto `origin/main` after #227 added `SWAPP_DEV_SKIP_LOCK`. `swapp-live serve /home/tom/projects/worktrees/swapp-lochside-view 3101` runs as a persistent user systemd unit at `http://100.98.89.93:3101/dashboard`. It reads `swapp_live`, a local production copy made at 2026-11-22 16:17 CST. We reused that copy rather than running `swapp-live refresh`, which would forcibly drop the database while Tom's separate port 3100 server uses it. Additive migration `20261122221000_company_cash_flow` was applied to `swapp_live` only. Production was not changed.
+
+For visual review, dev-bypass created `ummon-local-qa@example.invalid` as a local-only owner and gave it one active Bookkeeping Conroe membership in `swapp_live`. The browser's privacy mode is on. Real-data Total and BKC show $3,105 MRR / 5 active clients, 4 new leads and 8 offers sent in the last 30 days (4 awaiting now), and a 24-minute median business response time. TREB shows $0 / 0 clients, 0 leads, 0 offers and no replies. FCF says Awaiting closed books, as designed. Desktop and 390 px phone views were inspected, including switching to the TREB slide; no client names were in the inspected screenshots. The active-brand GSA alert is still present and uses privacy aliases. Tom's visual verdict on the live local link is pending; do not merge until he says it looks right.
+
+Post-rebase checks: typecheck passed; lint 0 errors and 11 existing warnings; 1,289 tests passed and 5 skipped. Vercel/CI checks will rerun after the rebased branch is pushed.
+
 ## 2026-11-22 — Lochside company view (Ummon, branch `ummon/lochside-view`)
 
 Tom asked for one calm company view with Bookkeeping Conroe and The Real Estate Bookkeeper as two front doors. `/dashboard` now opens for platform operators on a three-screen carousel: Lochside total, BKC, TREB. Each view keeps MRR/active clients, new leads, offers sent/awaiting and median response time in the same card positions; the total adds free cash flow. Public website links sit under each brand. Phone swipe, desktop tabs/arrows and phone dots navigate it. The previous active-brand dashboard stays in a collapsed Detailed dashboard panel; the brand switcher still governs settings and other pages. Single-brand users see only the previous dashboard.
