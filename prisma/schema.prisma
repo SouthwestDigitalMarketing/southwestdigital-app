@@ -2812,6 +2812,20 @@ model CompanyRevenueMonth {
   @@index([brandId])
 }
 
+/// Lochside's own QuickBooks cash-basis P&L and verified owner cash outflows.
+/// A row is written only for a month explicitly confirmed closed.
+model CompanyCashFlowMonth {
+  id             String   @id @default(cuid())
+  month          String   @unique
+  incomeUsd      Decimal  @db.Decimal(12, 2)
+  expensesUsd    Decimal  @db.Decimal(12, 2)
+  ownerDrawUsd   Decimal  @db.Decimal(12, 2)
+  taxSetAsideUsd Decimal  @db.Decimal(12, 2)
+  sourceAccounts Json
+  closedAt       DateTime
+  syncedAt       DateTime @default(now())
+}
+
 model BrandFeature {
   id         String    @id @default(cuid())
   brandId    String
