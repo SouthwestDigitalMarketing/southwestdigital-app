@@ -9,11 +9,13 @@ export function WebsiteGoalCard({
   value,
   goal,
   periodLabel,
+  editable = true,
 }: {
   brandId: string;
   value: number;
   goal: number;
   periodLabel: string;
+  editable?: boolean;
 }) {
   const pct = goal > 0 ? (value / goal) * 100 : 0;
   const capped = Math.min(100, pct);
@@ -45,7 +47,7 @@ export function WebsiteGoalCard({
 
   return (
     <div className="relative rounded-xl border border-slate-200 bg-white p-6">
-      {!editing && (
+      {editable && !editing && (
         <button
           onClick={() => {
             setDraft(String(goal));

@@ -204,7 +204,7 @@ export function AppShell({
   // The phone menu closes when the route actually changes (Tom, 2026-11-20: closing it on tap
   // showed the previous page, usually the Dashboard, until the new one loaded).
   const pathname = usePathname();
-  const companyDashboard = isPlatformOperator && isLochsideBrandSlug(brand.slug) && pathname === "/dashboard";
+  const companyDashboard = isPlatformOperator && isLochsideBrandSlug(brand.slug) && (pathname === "/dashboard" || pathname === "/website");
   const [menuPath, setMenuPath] = useState(pathname);
   if (menuPath !== pathname) {
     setMenuPath(pathname);

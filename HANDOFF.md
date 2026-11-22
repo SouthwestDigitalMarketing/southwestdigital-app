@@ -1,5 +1,13 @@
 # SWapp handoff
 
+## 2026-11-22 — Website three-view swipe (Ummon, PR #226)
+
+Tom's 5:36 PM update adds the same Combined / Bookkeeping Conroe / The Real Estate Bookkeeper swipe pattern to `/website` for platform operators in Lochside. Desktop gets tabs and arrows; phone gets horizontal swipe and position dots. `BrandSwipe` is a reusable shell for other per-brand pages. The Website page keeps its period controls, cards, graph and tables in the same positions on all three views. Contigo continues to use its single-brand Website report. The app shell calls the combined Website view Lochside LLC and hides the settings brand picker there.
+
+Both GA4 properties load in parallel from their saved brand themes (BKC `501531577`, TREB `543546215` in the local copy). Combined adds counts, trend points, goal targets and matching acquisition/landing/geography rows. Engagement and bounce rates are weighted by sessions, and comparisons are recomputed from the combined current and prior periods. Combined goal editing is disabled; each brand goal remains editable on its own view. If either property fails, Combined shows a clear unavailable message while the other brand view remains usable.
+
+Real-data local review at `http://100.98.89.93:3101/website`: last 30 days showed 157 sessions combined = 140 BKC + 17 TREB, and 66 engaged sessions combined = 59 + 7. Desktop view showed the tabs and graph; a 390 px viewport showed position dots and switching to TREB. No client names appeared in the Website report. Tom's verdict on this updated local view is pending; merge only after his yes and green checks.
+
 ## 2026-11-22 — Lochside login and Contigo guard (Ummon, PR #226)
 
 Tom's update makes Lochside Total the post-login destination for platform operators. `/auth/complete` now chooses the active Bookkeeping Conroe brand as the underlying data scope and redirects to `/dashboard` on the platform host, including the bare-IP local host. The dashboard names Lochside LLC in its shell and hides the brand picker there. Platform administration is a menu link; its page has a return link. The brand picker remains on other pages for settings. A brand-only user still cannot enter the platform host. A Contigo hostname retains its own brand after login, and the company carousel appears only when the active brand is Bookkeeping Conroe or The Real Estate Bookkeeper. Four new post-login route tests cover platform, bare IP, Contigo and access denial.
