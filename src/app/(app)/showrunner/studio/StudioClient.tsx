@@ -4,16 +4,22 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Check, ChevronDown, ChevronUp, Film, RotateCcw, Sparkles } from "lucide-react";
 import { SERIES, lastHook, mountainPosition, type Episode } from "@/lib/showrunner/studio";
-import type { StorylineDraft } from "@/lib/showrunner/storylines";
+import type { MilestoneState, StorylineDraft } from "@/lib/showrunner/storylines";
 import { changeStudio } from "./actions";
 
-type Props = { episodes: Episode[]; storylines: StorylineDraft[]; mountainCurrent: number | null; showDollars: boolean };
+type Props = { episodes: Episode[]; storylines: StorylineDraft[]; milestones: MilestoneState[]; metricsBrandName: string; mountainCurrent: number | null; showDollars: boolean };
 type Screen = "home" | "draft" | "shoot";
 const field = "w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base text-slate-950 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100";
 const primary = "inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-5 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto";
 const secondary = "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-400";
 
-function MountainCard({ current, dollars }: { current: number | null; dollars: boolean }) {
+function MountainCard({ current, dollars, milestones, onToggle, disabled }: {
+  current: number | null;
+  dollars: boolean;
+  milestones: MilestoneState[];
+  onToggle: (key: string, done: boolean) => void;
+  disabled: boolean;
+}) {
   const position = mountainPosition(current);
   const label = current === null ? "Position not set" : dollars ? `$${current.toLocaleString("en-US")} this month` : `${position.percent}% of the climb`;
   return (
@@ -42,11 +48,32 @@ function MountainCard({ current, dollars }: { current: number | null; dollars: b
       <div className="relative z-10 mt-2 flex justify-between gap-2 text-[10px] font-bold uppercase tracking-wide text-slate-300 sm:text-xs">
         <span>Base Camp</span><span>Camp One</span><span>Halfway</span><span>High Camp</span><span>Summit</span>
       </div>
+      <div className="relative z-10 mt-6 border-t border-white/10 pt-4">
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-200">Milestones</p>
+        <ul className="mt-2 space-y-2">
+          {milestones.map((milestone) => (
+            <li key={milestone.key} className="flex items-center justify-between gap-3 text-sm">
+              <span className="flex items-center gap-2">
+                <span className={`flex h-5 w-5 items-center justify-center rounded-full text-xs ${milestone.done ? "bg-emerald-400 text-[#101933]" : "border border-slate-400 text-transparent"}`}>✓</span>
+                <span className={milestone.done ? "text-slate-200" : "text-slate-300"}>{milestone.name}</span>
+              </span>
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => onToggle(milestone.key, !milestone.done)}
+                className="shrink-0 text-xs font-semibold text-indigo-200 underline underline-offset-4 disabled:opacity-50"
+              >
+                {milestone.done ? "Not yet" : "Mark done"}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
 
-export function StudioClient({ episodes, storylines, mountainCurrent, showDollars }: Props) {
+export function StudioClient({ episodes, storylines, milestones, metricsBrandName, mountainCurrent, showDollars }: Props) {
   const router = useRouter();
   const active = [...episodes].reverse().find((episode) => episode.status === "draft" || episode.status === "locked");
   const previousHook = lastHook(episodes);
@@ -116,7 +143,13 @@ export function StudioClient({ episodes, storylines, mountainCurrent, showDollar
         {screen === "home" && (
           <div className="grid gap-6 lg:grid-cols-[1.05fr_.95fr]">
             <section className="space-y-6">
-              <MountainCard current={mountainCurrent} dollars={showDollars} />
+              <MountainCard
+                current={mountainCurrent}
+                dollars={showDollars}
+                milestones={milestones}
+                disabled={busy}
+                onToggle={(key, done) => run({ kind: "milestone", key, done })}
+              />
               <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
                 <button type="button" onClick={() => setPositionOpen(!positionOpen)} className="flex w-full items-center justify-between text-left text-sm font-semibold text-slate-700">
                   Set mountain position {positionOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
@@ -131,7 +164,7 @@ export function StudioClient({ episodes, storylines, mountainCurrent, showDollar
             <section className="flex flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-9">
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-600">This week&apos;s story</p>
               <h2 className="mt-4 max-w-md text-3xl font-bold leading-tight tracking-tight sm:text-4xl">Here is what the numbers say.</h2>
-              <p className="mt-4 max-w-md text-slate-600">Built from this week&apos;s firm numbers. Pick one; add a line only if you want to.</p>
+              <p className="mt-4 max-w-md text-slate-600">Read from {metricsBrandName}&apos;s week. Pick one; add a line only if you want to.</p>
               {previousHook && <div className="mt-6 rounded-2xl bg-indigo-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-indigo-700">Last week&apos;s hook</p><p className="mt-1 text-slate-800">{previousHook}</p></div>}
               {storylines.length === 0 ? (
                 <button type="button" className={`${primary} mt-8`} disabled={busy} onClick={() => run({ kind: "refresh" })}>

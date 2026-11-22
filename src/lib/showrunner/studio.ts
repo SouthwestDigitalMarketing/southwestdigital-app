@@ -8,6 +8,9 @@ export const SERIES = {
   starter: canon.pilot.title,
 } as const;
 
+/** Said the same way at the top of every episode. Always clip 1. */
+export const LOGLINE: string = canon.logline;
+
 const short = (max: number) => z.string().trim().min(1).max(max);
 export const answersSchema = z.object({
   happened: short(1500),
@@ -73,7 +76,7 @@ export function makeDraft(answers: Answers, previousHook: string, id = crypto.ra
     carriedHook,
     answers: a,
     beats: [
-      { name: "The question", talk: [carriedHook ? "Pick up last week's question" : "Set up this week's client situation", "Say what made it matter"], show: ["Tom to camera", "A simple, anonymized setup graphic"] },
+      { name: "The logline", talk: [LOGLINE, carriedHook ? "Pick up last week's question" : "Say why this week's story matters"], show: ["Tom to camera"] },
       { name: "What came up", talk: ["Describe the problem without naming a client", "Explain what the client needed"], show: ["Tom to camera", "A safe, made-up example if a screen helps"] },
       { name: "How we helped", talk: ["Walk through the steps we took", "Show how easy the process was for the client"], show: ["Anonymized process or example screen", "Tom to camera"] },
       { name: "The result", talk: ["Say what actually happened", "Say what is still unknown"], show: ["Tom to camera", "A result graphic with no client figures"] },
@@ -104,6 +107,9 @@ export function validateForLock(episode: Episode, previousHook: string, knownPri
     throw new Error("Add one real firm-wide service number before locking.");
   }
   if (previousHook && parsed.carriedHook !== previousHook) throw new Error("Last week's hook changed. Start a fresh plan.");
+  if (!parsed.beats[0].talk.some((line) => line.includes(LOGLINE))) {
+    throw new Error("Clip 1 is the logline, said the same way every time.");
+  }
   if (previousHook && ![parsed.question, ...parsed.beats[0].talk].some((line) => line.includes(previousHook))) {
     throw new Error("Put last week's hook in the question or first clip.");
   }

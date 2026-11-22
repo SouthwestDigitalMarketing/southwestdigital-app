@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { answersSchema, beatSchema, episodeSchema, makeDraft, type Answers, type Episode } from "./studio";
+import { LOGLINE, answersSchema, beatSchema, episodeSchema, makeDraft, type Answers, type Episode } from "./studio";
 import type { Storyline } from "./storylines";
 
 export type Beat = z.infer<typeof beatSchema>;
@@ -37,9 +37,9 @@ const outlineJsonSchema = {
   },
 } as const;
 
-const INSTRUCTIONS = `You are Johnny, planning a weekly episode of The $10K Month for real estate investors and landlords who may hire the firm. The season asks whether the firm can climb to $10,000 per month. Help Tom pick a true story about serving clients and show how easy it is to work with the firm.
+const INSTRUCTIONS = `You are Johnny, planning a weekly episode of The $10K Month for real estate investors and landlords who may hire the firm. The season asks whether a small local Conroe firm can become the national real estate bookkeeper; $10K a month is the scoreboard. Bookkeeping Conroe is where the firm is now, The Real Estate Bookkeeper is where it is going, and the gap between them is the story. Help Tom tell one true story about serving clients and show how easy it is to work with the firm.
 
-Return an episode outline, never a script. Make 4 to 6 beats in this order: what came up, how we handled it, what happened, the scoreboard (mountain and one FIRM-WIDE service number), and a hook for next week. Give each beat 2 to 4 short talking topics and 1 to 3 things to show. One beat is one clip, filmed in order. The first beat picks up last week's hook when present; the last beat tees up next week. Use Tom's answers for specific substance and chronology.
+Return an episode outline, never a script. Make 4 to 6 beats in this order: the logline, what came up, how we handled it, what happened, the scoreboard (mountain and one FIRM-WIDE service number), and a hook for next week. Clip 1 is always this logline, said exactly this way, as the first talking point: "${LOGLINE}". Give each beat 2 to 4 short talking topics and 1 to 3 things to show. One beat is one clip, filmed in order. The first beat also picks up last week's hook when present; the last beat tees up next week. Use Tom's answers for specific substance and chronology.
 
 Privacy is absolute: no client name, company, person, identifying detail, client payment, client-specific financial figure, or real client screen. Do not copy a name from the notes. Use generic phrases such as “a landlord” or “a client”. Only firm-wide numbers may appear, and only if Tom explicitly supplied them as firm-wide. Do not invent facts, outcomes, numbers, a service metric, or a screen that is safe to show. If a fact is missing, use a talking topic such as “Confirm the result before filming” or “Tom to supply a firm-wide reply time”. Never say or imply Thomas answers the phone; a callback can be mentioned only when true in the answers. If the input includes a previousHook, repeat it VERBATIM in the first beat's first talking point and answer it in this episode. The next hook must be an open question, not a promised outcome. Return only the requested JSON.`;
 
@@ -120,6 +120,7 @@ export async function draftWithAI(rawAnswers: Answers, previousHook: string): Pr
       else outline.question = hook;
     }
     if (hasPrivacyLeak(outline, answers)) return fallback("AI included a private detail. A guided outline is ready to edit.");
+    outline.beats[0].talk[0] = LOGLINE;
     const base = makeDraft(answers, previousHook);
     const episode = episodeSchema.parse({ ...base, ...outline, done: outline.beats.map(() => false) });
     return { episode, source: "openai" };
@@ -157,9 +158,9 @@ export async function regenerateBeat(episode: Episode, index: number): Promise<B
     throw new Error("Choose a beat from the current draft.");
   }
   const guidedBeat: Beat = {
-    name: "Another angle",
-    talk: index === 0 && current.carriedHook.length <= 180 && current.carriedHook
-      ? [current.carriedHook, "Explain why this question matters to a landlord"]
+    name: index === 0 ? "The logline" : "Another angle",
+    talk: index === 0
+      ? [LOGLINE, current.carriedHook || "Say why this week's story matters"]
       : ["Tell the real part of this story in your own words", "Say what you still need to confirm"],
     show: ["Tom to camera", "A safe example with no real client details"],
   };
@@ -176,7 +177,7 @@ export async function regenerateBeat(episode: Episode, index: number): Promise<B
         model: process.env.SHOWRUNNER_OPENAI_MODEL || "gpt-4.1-mini",
         store: false,
         max_output_tokens: 700,
-        instructions: `You are Johnny, planning one clip of The $10K Month for real estate investors and landlords. Regenerate exactly ONE storyboard beat, never a script. Return 2 to 4 short talking topics and 1 to 3 things to show. Keep this beat's job in the episode, but find a fresh, concrete angle using only Tom's answers. Never invent facts, outcomes, numbers, people or safe screens. No client name, company, people, identifying detail, client payment or client-specific figure. A firm-wide number is allowed only if explicitly marked firm-wide in Tom's answers. Never promise Thomas answers the phone. For beat 1, include the previous hook verbatim in a talking point when provided. Return only the requested JSON.`,
+        instructions: `You are Johnny, planning one clip of The $10K Month for real estate investors and landlords. Regenerate exactly ONE storyboard beat, never a script. Return 2 to 4 short talking topics and 1 to 3 things to show. Keep this beat's job in the episode, but find a fresh, concrete angle using only Tom's answers. Never invent facts, outcomes, numbers, people or safe screens. No client name, company, people, identifying detail, client payment or client-specific figure. A firm-wide number is allowed only if explicitly marked firm-wide in Tom's answers. Never promise Thomas answers the phone. For beat 1, keep this logline as the first talking point, said exactly this way: "${LOGLINE}". Include the previous hook verbatim in a talking point when provided. Return only the requested JSON.`,
         input: JSON.stringify({
           title: current.title,
           question: current.question,
@@ -202,8 +203,13 @@ export async function regenerateBeat(episode: Episode, index: number): Promise<B
     const text = outputText(await response.json());
     if (!text) return fallback("AI returned no usable beat. A guided beat is ready to edit.");
     const beat = beatSchema.parse(JSON.parse(text));
-    if (index === 0 && current.carriedHook && !beat.talk.some((point) => point.includes(current.carriedHook))) {
-      if (current.carriedHook.length <= 180) beat.talk[0] = current.carriedHook;
+    if (index === 0) {
+      beat.name = "The logline";
+      beat.talk[0] = LOGLINE;
+      if (current.carriedHook && !beat.talk.some((point) => point.includes(current.carriedHook))) {
+        if (beat.talk.length < 4) beat.talk.push(current.carriedHook.slice(0, 180));
+        else beat.talk[1] = current.carriedHook.slice(0, 180);
+      }
     }
     if (hasPrivacyLeak(beat, current.answers)) return fallback("AI included a private detail. A guided beat is ready to edit.");
     return { beat, source: "openai" };

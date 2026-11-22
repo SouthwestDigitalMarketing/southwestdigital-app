@@ -1,6 +1,9 @@
 {
-  "source": "showrunner-app/Data/series/the-10k-month.json (2026-11-22)",
+  "source": "showrunner-app/Data/series/the-10k-month.json (2026-11-22, season update)",
   "title": "The $10K Month",
+  "logline": "I'm taking my small bookkeeping firm in Conroe, Texas, and turning it into the national real estate bookkeeper, one client at a time.",
+  "seasonQuestion": "Can a small local Conroe firm become the national real estate bookkeeper? $10K a month is the scoreboard.",
+  "brands": "Bookkeeping Conroe is where the firm is now; The Real Estate Bookkeeper is where it is going. The gap is the story.",
   "goal": { "metric": "monthly_free_cash_flow_usd", "target": 10000 },
   "mountain": {
     "waypoints": [
@@ -9,6 +12,11 @@
       { "at": 5000, "name": "Halfway Ridge" },
       { "at": 7500, "name": "High Camp" },
       { "at": 10000, "name": "The Summit" }
+    ],
+    "milestones": [
+      { "key": "youtube-client", "name": "First client who found us on YouTube", "auto": true },
+      { "key": "outside-texas", "name": "First client outside Texas", "auto": false },
+      { "key": "toll-free", "name": "Toll-free line live", "auto": false }
     ]
   },
   "pilot": {

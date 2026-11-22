@@ -3,6 +3,7 @@
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
+import { prisma } from "@/lib/prisma";
 import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { checkRateLimit } from "@/lib/simpleRateLimit";
 import { draftFromStoryline, regenerateBeat } from "@/lib/showrunner/studio-ai";
@@ -10,7 +11,9 @@ import { episodeSchema, lastHook, parseEpisodes, validateForLock } from "@/lib/s
 import {
   buildStorylines,
   collectWeekSignals,
+  parseMilestoneOverrides,
   parseStorylineDrafts,
+  resolveMetricsBrand,
   signalMetrics,
   wordsForBusinessSeconds,
   type Storyline,
@@ -20,6 +23,7 @@ type Change =
   | { kind: "refresh" }
   | { kind: "pick"; id: string; color: string }
   | { kind: "custom"; color: string }
+  | { kind: "milestone"; key: string; done: boolean }
   | { kind: "edit"; episode: unknown }
   | { kind: "lock"; episode: unknown; privacyChecked: boolean }
   | { kind: "regenerate"; episode: unknown; index: number }
@@ -35,6 +39,13 @@ function limitTells(userId: string) {
 
 export async function changeStudio(change: Change) {
   const { dataContext } = await requireStaffBrandOrThrow();
+  const showBrandRow = await prisma.brand.findUnique({
+    where: { id: dataContext.brandId },
+    select: { id: true, name: true, slug: true },
+  });
+  const metricsBrand = await resolveMetricsBrand(
+    showBrandRow ?? { id: dataContext.brandId, name: "this firm", slug: "" },
+  );
   let regenerated: Awaited<ReturnType<typeof regenerateBeat>> | null = null;
   if (change.kind === "regenerate") {
     if (!checkRateLimit(`showrunner-beat:${dataContext.actorUserId}`, 15, 60 * 60_000).allowed) {
@@ -52,12 +63,13 @@ export async function changeStudio(change: Change) {
     const row = await tx.showrunnerStudio.findUniqueOrThrow({ where: { brandId: dataContext.brandId } });
     let episodes = parseEpisodes(row.episodes);
     let storylines = parseStorylineDrafts(row.storylines);
+    let milestoneOverrides = parseMilestoneOverrides(row.milestoneOverrides);
     let mountainCurrent = row.mountainCurrent;
     let showDollars = row.showDollars;
     if (change.kind === "refresh") {
       limitTells(dataContext.actorUserId);
       if (episodes.some((episode) => episode.status === "locked")) throw new Error("Finish the locked episode first.");
-      const signals = await collectWeekSignals(tx, dataContext.brandId);
+      const signals = await collectWeekSignals(tx, metricsBrand.id, dataContext.brandId);
       const hook = lastHook(episodes);
       const picked = buildStorylines(signals, hook);
       storylines = await Promise.all(
@@ -88,7 +100,7 @@ export async function changeStudio(change: Change) {
       const color = change.color.trim();
       if (!color) throw new Error("Add one line about the story first.");
       if (episodes.some((episode) => episode.status === "locked")) throw new Error("Finish the locked episode first.");
-      const signals = await collectWeekSignals(tx, dataContext.brandId);
+      const signals = await collectWeekSignals(tx, metricsBrand.id, dataContext.brandId);
       const storyline: Storyline = {
         id: "custom",
         kind: "custom",
@@ -107,6 +119,12 @@ export async function changeStudio(change: Change) {
         { ...drafted.episode, draftSource: drafted.source, ...(drafted.warning ? { draftWarning: drafted.warning } : {}) },
       ];
       storylines = [];
+    } else if (change.kind === "milestone") {
+      if (!/^[a-z][a-z0-9-]{2,40}$/.test(change.key)) throw new Error("Unknown milestone.");
+      milestoneOverrides = {
+        ...milestoneOverrides,
+        [change.key]: { done: change.done, at: change.done ? new Date().toISOString() : null },
+      };
     } else if (change.kind === "edit" || change.kind === "lock" || change.kind === "regenerate") {
       const edited = episodeSchema.parse(change.episode);
       const index = episodes.findIndex((episode) => episode.id === edited.id && episode.status === "draft");
@@ -161,6 +179,7 @@ export async function changeStudio(change: Change) {
       data: {
         episodes: episodes as unknown as Prisma.InputJsonValue,
         storylines: storylines as unknown as Prisma.InputJsonValue,
+        milestoneOverrides: milestoneOverrides as unknown as Prisma.InputJsonValue,
         mountainCurrent,
         showDollars,
       },

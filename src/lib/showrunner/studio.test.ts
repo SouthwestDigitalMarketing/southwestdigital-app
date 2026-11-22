@@ -12,6 +12,8 @@ const answers = {
 describe("weekly episode path", () => {
   it("carries the published hook into a five-clip draft without echoing private answers", () => {
     const episode = makeDraft(answers, "Can we get the missing records?");
+    expect(episode.beats[0].name).toBe("The logline");
+    expect(episode.beats[0].talk[0]).toContain("turning it into the national real estate bookkeeper");
     expect(episode.carriedHook).toBe("Can we get the missing records?");
     expect(episode.question).toBe(episode.carriedHook);
     expect(episode.beats).toHaveLength(5);
@@ -34,9 +36,9 @@ describe("weekly episode path", () => {
     episode.question = "What happened this week?";
     expect(() => validateForLock(episode, "Earlier hook")).toThrow(/Put last week's hook/);
     episode.question = "Earlier hook";
-    episode.beats[0].talk[0] = "Jane Doe sent her records";
+    episode.beats[1].talk[0] = "Jane Doe sent her records";
     expect(() => validateForLock(episode, "Earlier hook")).toThrow(/Remove names/);
-    episode.beats[0].talk[0] = "Email jane@example.com for the records";
+    episode.beats[1].talk[0] = "Email jane@example.com for the records";
     expect(() => validateForLock(episode, "Earlier hook")).toThrow(/Remove names/);
   });
 
@@ -49,6 +51,12 @@ describe("weekly episode path", () => {
   it("keeps Base Camp until Tom supplies the number", () => {
     expect(mountainPosition(null)).toEqual({ name: "Base Camp", percent: 0 });
     expect(mountainPosition(5100)).toEqual({ name: "Halfway Ridge", percent: 51 });
+  });
+
+  it("requires the logline as clip 1", () => {
+    const episode = makeDraft(answers, "Earlier hook");
+    episode.beats[0].talk = ["Something else entirely", "And another thing"];
+    expect(() => validateForLock(episode, "Earlier hook")).toThrow(/logline/);
   });
 
   it("keeps saved drafts from before the service-number field", () => {
