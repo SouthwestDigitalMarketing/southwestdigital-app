@@ -26,6 +26,10 @@ export type AppLockState = {
   changeDue: boolean;
 };
 
+export function devLockSkipped(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.NODE_ENV === "development" && env.SWAPP_DEV_SKIP_LOCK === "1";
+}
+
 /** Once per request: whether this signed-in user has unlocked this device. */
 export const getAppLockState = cache(async (userId: string): Promise<AppLockState> => {
   const user = await prisma.user.findUnique({
@@ -44,7 +48,8 @@ export const getAppLockState = cache(async (userId: string): Promise<AppLockStat
     pinChangedAt,
     required,
     unlocked,
-    locked: (required || hasPin) && !unlocked,
+    // Local copy on ripley only (Tom, 2026-11-22): `next dev` with SWAPP_DEV_SKIP_LOCK=1 skips the PIN screen.
+    locked: (required || hasPin) && !unlocked && !devLockSkipped(),
     changeDue: pinChangeDue(pinChangedAt, new Date(now)),
   };
 });
