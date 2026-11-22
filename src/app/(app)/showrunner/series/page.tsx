@@ -17,10 +17,10 @@ export default async function SeriesPage() {
         <ChannelGraph data={graphData as GraphData} />
       </div>
       <div className="mt-6 flex max-w-xl flex-col gap-4">
-        <div className={`${card} opacity-60`} aria-disabled="true">
-          <p className="text-lg font-semibold text-slate-900">Continue a series</p>
-          <p className="mt-1 text-sm text-slate-600">No series yet. Start one below.</p>
-        </div>
+        <Link href="/showrunner/studio" className={`${card} hover:border-indigo-400`}>
+          <p className="text-lg font-semibold text-slate-900">The $10K Month · Studio</p>
+          <p className="mt-1 text-sm text-slate-600">Plan this week&apos;s episode, then shoot one clip at a time.</p>
+        </Link>
         <Link href="/showrunner/new-series" className={`${card} hover:border-slate-400`}>
           <p className="text-lg font-semibold text-slate-900">New series</p>
           <p className="mt-1 text-sm text-slate-600">Showrunner suggests a series from your channel and business.</p>

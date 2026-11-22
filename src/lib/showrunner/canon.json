@@ -1,0 +1,27 @@
+{
+  "source": "showrunner-app/Data/series/the-10k-month.json (2026-11-22)",
+  "title": "The $10K Month",
+  "goal": { "metric": "monthly_free_cash_flow_usd", "target": 10000 },
+  "mountain": {
+    "waypoints": [
+      { "at": 0, "name": "Base Camp" },
+      { "at": 2500, "name": "Camp One" },
+      { "at": 5000, "name": "Halfway Ridge" },
+      { "at": 7500, "name": "High Camp" },
+      { "at": 10000, "name": "The Summit" }
+    ]
+  },
+  "pilot": {
+    "title": "Will They Sign? How We Do Contracts",
+    "question": "Will the biggest proposal we have sent turn into a client?",
+    "payoff": "Show the real outcome and how easy the proposal and agreement are to use.",
+    "hook": "Can we onboard three sets of books at once?",
+    "beats": [
+      { "name": "The question", "talk": ["A big proposal went out", "Why it matters for the climb to $10K", "Will they sign?"], "show": ["Tom to camera", "Mountain graphic"] },
+      { "name": "One link", "talk": ["The client gets one proposal link", "They choose a plan and any add-ons", "The price updates as they choose"], "show": ["Made-up example proposal only"] },
+      { "name": "One clear agreement", "talk": ["Everyone gets the same standard agreement", "The scope page reflects what they chose", "We say plainly how we work and use AI"], "show": ["Approved, redacted agreement pages only", "Never show signatures or certificate pages"] },
+      { "name": "Sign and start", "talk": ["They can sign and pay in one place", "Work starts after signing, payment, and access"], "show": ["Made-up example sign step", "Tom to camera"] },
+      { "name": "The answer", "talk": ["Confirm whether they signed before filming", "Show the mountain and one firm-wide service number", "Tease onboarding three sets of books"], "show": ["Tom to camera", "Mountain graphic", "End card"] }
+    ]
+  }
+}
