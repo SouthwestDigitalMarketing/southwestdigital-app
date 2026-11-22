@@ -366,6 +366,27 @@ Deploy: copy `phone_intake.py` and `pdfjs/` to `~/.local/share/swapp-phone-intak
 restart `swapp-phone-intake.service`. Not embedded: PDF.js standard fonts and cmaps
 (Double PDFs embed their fonts; check if a report ever shows missing text).
 
+## 2026-11-19 — Sidebar Website link; service check skips invoice rows; Sales cutover landed (Ummon, shipped)
+
+- #172, #173, #174, #176: sidebar **Website** tool link (new tab, after Skool). Default URL per brand
+  slug in `BRAND_WEBSITES` (`src/lib/brands/tools.ts`): bookkeeping-conroe, southwest-digital-marketing,
+  real-estate-bookkeeper, contigo-accounting. melbourne-cfo has none (hidden until set in Settings >
+  Sidebar tools; a stored URL always wins). No schema change.
+- #177: Sales files one pipe-prospects row per Bookkeeping Conroe QBO invoice (`MeetingLead.amountKind =
+  "invoice"`). `NOT_INVOICE_LEAD` (`src/lib/operations/deals.ts`) keeps them out of `markOpenDealsWon`
+  and the service check's duplicate-won/open-lead query. Before this, AAA/Bayou/SJ showed as duplicate
+  won deals. Live check after deploy: 1 item (Contigo billed, no agreement; Tom's), 0 duplicates.
+- Sales: `ummon/sales-live-cutover` merged to main as LochsideLLC/sales #83 (563eb5a); `~/projects/sales`
+  is on `main`; live `pipe mrr` reads service records ($1,230/mo, 4 clients on 2026-11-19).
+- Checks each PR: tsc clean, vitest 1115 passed / 5 skipped (1106 before #176), `npm run build` ok, CI green.
+- Quirk: `psql` rejects the prod URLs' query string (`pgbouncer`, `connection_limit`). For read-only
+  checks take `DIRECT_DATABASE_URL` from `~/.config/swapp/prod-db.env`, strip everything after `?`,
+  use port 5432, and wrap in `begin read only; ... commit;`.
+- Open: Sales unittest has 12 pre-existing failures (8 F + 4 E, pull/push sync tests plus 3 known), same
+  on main before #83: Kassad's. Kassad's side note: Rodan's kept deal also sits in Prospects Pipeline /
+  Education + Interest Confirmation from the 11-18 client-won backfill; undecided. mailroom-app #82
+  (scan review entry) still waits on Donna.
+
 ## 2026-11-19 — Website traffic card phone layout (#175, shipped)
 
 `/website` Daily Engaged Sessions card below `sm` (640 px) only; desktop
