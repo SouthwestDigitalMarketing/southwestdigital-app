@@ -6,6 +6,30 @@
 are green and it is checked (preview or render), squash-merge it and report; do not stop to ask.
 Still ask first for anything outside SWapp code (production data, outbound sends, secrets).
 
+## 2026-11-22 — Reports (client list, why-card, statements, bank feeds): how it works (Ummon)
+
+Home for this work was Herdr workspace "Client Reports" (w2N, closed 2026-11-22). Pages are served by
+ripley's receiver, not Vercel: SWapp `/reports` signs a link (`src/lib/phone-intake/ticket.ts`) and
+redirects to `http://100.98.89.93:8932/reports` (tailnet only). Installed copies live in
+`~/.local/share/swapp-phone-intake/` (copy from `scripts/` after each merge; restart
+`swapp-phone-intake.service`; backups `phone_intake.py.bak-*`).
+- **Status job**: `scripts/report_status.py`, unit `swapp-report-status.{service,timer}` (hourly) writes
+  `report-status.json`. Double API: `/api/clients/<id>/end-closes`, `/api/tasks/?endCloseId=` (no
+  client-questions endpoint exists). Tags: done / on-track (to 5th business day) / waiting / late /
+  catching-up (no close for the due month).
+- **Statements** (`scripts/statements.py`): owed = Double reconciliation tasks with 4 digits (dead ones
+  skipped; per-client `~/.config/swapp-phone-intake/report-statements.json` {skip, add}); arrived = every
+  PDF under `~/projects/clients/<folder>` (filed names first, else period + digits from text; cache
+  `~/.cache/swapp-reports/statements.json`). Card: in / missing / not issued yet / none on file,
+  covers-through, estimated next end, overdue ends; report months say "Built without".
+  Scanned statements (Bayou WF x6823) need OCR: not built.
+- **Bank feeds** (`scripts/bank_feeds.py`): QBO API has no feed status; Sol records each account from the
+  Banking page (`bank_feeds.py set ...`) into `bank-feeds.json`. Disconnected/error -> waiting.
+  Cadence: All Thing `sops/sop-bank-feed-review.md` § Checking bank connections.
+- **Waiting by hand**: `~/.config/swapp-phone-intake/report-waiting.json` {"<folder>": "reason"}.
+- Open: Sol to curate owed-account lists for all 8 clients; AAA Woodforest feeds disconnected since
+  2026-08-29 (2 emails, no text yet); BnB LOC x4335 no statement after 2026-04-17.
+
 ## 2026-11-21 — Videos in progress: full width, title, thumbnail, details (Ummon)
 
 Brief from showrunner-app (w33, Showrunner PR #186 adds the fields to queue.json). Migration
