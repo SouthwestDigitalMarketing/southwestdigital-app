@@ -1,0 +1,455 @@
+#!/usr/bin/env python3
+"""SWapp header Scan button, ripley side (sop-money-playbook).
+
+Tom presses Scan (or the 15-minute auto run fires) and SWapp records a
+"scan requested" row. This poller runs on ripley every minute: it claims the
+run, gathers what changed, and pushes the findings back to SWapp, which
+creates the leads and closes the run. SWapp on Vercel cannot reach ripley,
+so ripley reports — the same pattern as scripts/push_video_status.py.
+
+Sources (v1): Quo texts/calls/voicemails, Zoho mail (forms + signed hints),
+SWapp itself and GA4 (both computed server-side when the run closes).
+
+Config, ~/.config/swapp-scan/env (mode 600):
+  SWAPP_URL=https://admin.southwestdigital.io   (local demo: http://100.98.89.93:3101)
+  SCAN_STATUS_TOKEN=<same value as SWapp's env>
+
+State, ~/.local/share/swapp-scan/state.json: seen message ids per source.
+Reads only: never sends texts or emails (nothing outbound, per the brief).
+"""
+
+import json
+import os
+import re
+import sqlite3
+import datetime
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+
+CONFIG = os.path.expanduser("~/.config/swapp-scan/env")
+STATE = os.path.expanduser("~/.local/share/swapp-scan/state.json")
+SALES_DB = os.path.expanduser("~/.local/share/lochside-sales/sales.db")
+AUTO_MINUTES = 15
+RECENT_DAYS = 7
+
+FORM_SUBJECT = re.compile(r"new form submission from (\S+)", re.I)
+FORM_DOMAIN_BRAND = {
+    "realestatebookkeeper.com": "real-estate-bookkeeper",
+    "bookkeepingconroe.com": "bookkeeping-conroe",
+}
+SIGNED_WORDS = re.compile(r"sign|docusign|execut|countersign|sent\s+(it\s+)?back|\bdone\b", re.I)
+AGREEMENT_WORDS = re.compile(r"sign|gsa|agreement|contract|paperwork|docusign|proposal|quote|engagement|done", re.I)
+SKIP_SENDERS = re.compile(
+    r"mailer-daemon|noreply|no-reply|calendar|dun\s*&\s*bradstreet|quickbooks|appleid|dataforseo|"
+    r"localboard|hotfrog|doublehq|zoho",
+    re.I,
+)
+SKIP_EMAILS = re.compile(r"@example\.com$|@test\.|test@", re.I)
+# Our own addresses never become leads (Tom testing the website form, etc.).
+OWN_EMAILS = {
+    "thomas@bookkeepingconroe.com",
+    "hello@bookkeepingconroe.com",
+    "tmacdonald7@gmail.com",
+}
+# System texts, not people: 2FA codes and the like.
+SKIP_SMS = re.compile(r"code is|verification code|security code|one-time|don't share|do not share", re.I)
+
+
+def load_config():
+    values = {}
+    with open(CONFIG) as handle:
+        for line in handle:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, _, val = line.partition("=")
+                values[key.strip()] = val.strip()
+    return values["SWAPP_URL"].rstrip("/"), values["SCAN_STATUS_TOKEN"]
+
+
+def load_state():
+    try:
+        with open(STATE) as handle:
+            return json.load(handle)
+    except (OSError, ValueError):
+        return {}
+
+
+def save_state(state):
+    os.makedirs(os.path.dirname(STATE), exist_ok=True)
+    tmp = STATE + ".tmp"
+    with open(tmp, "w") as handle:
+        json.dump(state, handle)
+    os.replace(tmp, STATE)
+
+
+RECENT_CUTOFF = None
+
+def recent(iso):
+    """True when an ISO timestamp is within the backfill window."""
+    global RECENT_CUTOFF
+    if RECENT_CUTOFF is None:
+        RECENT_CUTOFF = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=RECENT_DAYS)
+    try:
+        return datetime.datetime.fromisoformat(str(iso).replace("Z", "+00:00")) >= RECENT_CUTOFF
+    except ValueError:
+        return True
+
+
+def api(url, token, method="GET", body=None):
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(body).encode() if body is not None else None,
+        method=method,
+        headers={"Authorization": "Bearer " + token, "Content-Type": "application/json",
+                "User-Agent": "swapp-scan/1"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return response.status, json.loads(response.read() or b"{}")
+    except urllib.error.HTTPError as error:
+        return error.code, {}
+
+
+def run(cmd, timeout=180):
+    try:
+        done = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        return done.returncode, (done.stdout or "")[:200000]
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return 1, "scan: command failed: %s" % error
+
+
+def quo_sms(state):
+    """New incoming texts since the last scan."""
+    leads, findings = [], []
+    seen = set(state.get("sms_ids", []))
+    code, out = run(["quo", "list", "--incoming", "--limit", "25", "--json"], timeout=60)
+    if code != 0:
+        return leads, findings, {"error": "quo list failed"}
+    try:
+        messages = json.loads(out or "[]")
+    except ValueError:
+        return leads, findings, {"error": "quo list was not JSON"}
+    fresh = [m for m in messages
+             if m.get("direction") == "incoming" and m.get("id") not in seen and recent(m.get("created_at"))
+             and not SKIP_SMS.search(m.get("body") or "")]
+    for message in messages:
+        if message.get("id"):
+            seen.add(message.get("id"))
+    for message in fresh:
+        sender = message.get("from_number") or ""
+        leads.append({
+            "brand": "bookkeeping-conroe",
+            "name": sender,
+            "phone": sender,
+            "source": "quo",
+            "sourceDetail": "sms",
+            "note": (message.get("body") or "")[:200],
+        })
+    if fresh:
+        findings.append({"kind": "quo", "text": "%d new text%s" % (len(fresh), "" if len(fresh) == 1 else "s")})
+    state["sms_ids"] = sorted(seen)[-200:]
+    return leads, findings, {"new": len(fresh)}
+
+
+def quo_calls(state):
+    """New Quo calls since the last scan, read from the sales database (read-only)."""
+    leads, findings = [], []
+    try:
+        seen = set(state.get("call_ids", []))
+        conn = sqlite3.connect("file:%s?mode=ro" % SALES_DB, uri=True)
+        rows = conn.execute(
+            "SELECT call_number, phone, direction, duration, completed_at, created_at, raw_json"
+            " FROM calls WHERE provider = 'quo' ORDER BY call_number DESC LIMIT 40"
+        ).fetchall()
+        conn.close()
+    except sqlite3.Error as error:
+        return leads, findings, {"error": "sales db unreadable: %s" % error}
+    fresh = [r for r in rows if r[0] not in seen and recent(r[4] or r[5])]
+    for row in rows:
+        seen.add(row[0])
+    own = set()
+    missed = []
+    for _, _, _, _, _, _, raw in rows:
+        try:
+            data = json.loads(raw or "{}")
+        except ValueError:
+            data = {}
+        for number in data.get("to", []) or []:
+            own.add(number)
+    answered = 0
+    for number, phone, direction, duration, _, _, raw in fresh:
+        if direction == "incoming" and (duration or 0) > 0:
+            answered += 1
+        try:
+            data = json.loads(raw or "{}")
+        except ValueError:
+            data = {}
+        callers = [p for p in (data.get("participants") or []) if p not in own and p != phone]
+        caller = phone or (callers[0] if callers else "")
+        if caller and direction == "incoming" and (duration or 0) > 0:
+            leads.append({
+                "brand": "bookkeeping-conroe",
+                "name": caller,
+                "phone": caller,
+                "source": "quo",
+                "sourceDetail": "call (%ds)" % (duration or 0),
+                "note": "Recorded call; transcript follows via intake.",
+            })
+    for number, phone, direction, duration, _, _, raw in fresh:
+        if direction == "incoming" and not (duration or 0):
+            try:
+                callers = [p for p in (json.loads(raw or "{}").get("participants") or []) if p not in own]
+            except ValueError:
+                callers = []
+            if phone and phone not in missed:
+                missed.append(phone)
+            for caller in callers:
+                if caller not in missed:
+                    missed.append(caller)
+    if fresh:
+        text = "%d new call%s (%d answered)" % (len(fresh), "" if len(fresh) == 1 else "s", answered)
+        if missed:
+            text += ": %s" % ", ".join(missed[:3])
+        findings.append({"kind": "quo", "text": text})
+    state["call_ids"] = sorted(seen)[-200:]
+    return leads, findings, {"new": len(fresh), "answered": answered}
+
+
+VOICEMAIL_ROW = re.compile(
+    r"^(?P<at>[^|]+)\|\s*(?P<brand>[^|]+?)\s*\|\s*(?P<phone>\S+)\s*\|\s*(?P<name>[^|]*?)\s*\|"
+    r"\s*(?P<topic>[^|]*?)\s*\|\s*(?P<summary>.*?)\s*\|\s*(?P<verdict>\w+)\s*$"
+)
+VOICEMAIL_BRAND = {"Bookkeeping Conroe": "bookkeeping-conroe", "The Real Estate Bookkeeper": "real-estate-bookkeeper"}
+
+
+def quo_voicemail(state):
+    """Trigger the intake (contacts + callback tasks), then read what is new."""
+    leads, findings = [], []
+    run(["voicemail-intake", "run"], timeout=180)
+    code, out = run(["voicemail-intake", "ls", "-n", "15"], timeout=60)
+    if code != 0:
+        return leads, findings, {"error": "voicemail-intake ls failed"}
+    seen = set(state.get("voicemail_keys", []))
+    genuine = spam = 0
+    for line in out.splitlines():
+        match = VOICEMAIL_ROW.match(line.strip())
+        if not match:
+            continue
+        key = "%s|%s" % (match.group("at").strip(), match.group("phone").strip())
+        if key not in seen and not recent(match.group("at").strip()):
+            seen.add(key)
+            continue
+        is_new = key not in seen
+        seen.add(key)
+        if not is_new:
+            continue
+        if match.group("verdict").strip().upper() == "SPAM":
+            spam += 1
+            continue
+        genuine += 1
+        brand = VOICEMAIL_BRAND.get(match.group("brand").strip(), "bookkeeping-conroe")
+        name = match.group("name").strip() or match.group("phone").strip()
+        leads.append({
+            "brand": brand,
+            "name": name,
+            "phone": match.group("phone").strip(),
+            "source": "quo",
+            "sourceDetail": "voicemail",
+            "note": match.group("summary").strip()[:200],
+        })
+    if genuine or spam:
+        findings.append({"kind": "quo", "text": "%d new voicemail%s (%d spam)" % (
+            genuine + spam, "" if genuine + spam == 1 else "s", spam)})
+    state["voicemail_keys"] = sorted(seen)[-200:]
+    return leads, findings, {"genuine": genuine, "spam": spam}
+
+
+def zoho_mail(state):
+    """New Zoho mail: website forms become leads, signed-hint replies are flagged."""
+    leads, findings, hints = [], [], []
+    seen = set(state.get("mail_uids", []))
+    code, out = run(["mail", "ls", "zoho", "-n", "25", "--no-interactive"], timeout=120)
+    if code != 0:
+        return leads, findings, hints, {"error": "mail ls failed"}
+    fresh = []
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) < 5 or not parts[0].isdigit() or not parts[1].isdigit():
+            continue
+        number, uid = parts[0], parts[1]
+        if uid not in seen:
+            fresh.append((number, uid))
+        seen.add(uid)
+    forms = 0
+    for number, uid in sorted(fresh):
+        code, out = run(["mail", "read", number], timeout=60)
+        if code != 0:
+            continue
+        try:
+            from email.utils import parsedate_to_datetime
+            stamp = next((l[5:].strip() for l in out.splitlines() if l.startswith("Date:")), "")
+            if stamp and parsedate_to_datetime(stamp).replace(tzinfo=None) < (
+                    datetime.datetime.now() - datetime.timedelta(days=RECENT_DAYS)):
+                continue
+        except (ValueError, TypeError):
+            pass
+        sender = subject = reply_to = ""
+        body_lines = []
+        in_body = False
+        for line in out.splitlines():
+            if not in_body:
+                if line.startswith("From:"):
+                    sender = line[5:].strip()
+                elif line.startswith("Subject:"):
+                    subject = line[8:].strip()
+                elif line.startswith("Reply-To:"):
+                    reply_to = line[9:].strip()
+                elif line.startswith("---"):
+                    in_body = True
+            elif line.strip():
+                body_lines.append(line.strip())
+        form = FORM_SUBJECT.search(subject)
+        fields = {}
+        for line in body_lines:
+            if ":" in line:
+                key, _, val = line.partition(":")
+                fields[key.strip().lower()] = val.strip()
+        if form:
+            domain = form.group(1).strip().lower().rstrip(".")
+            brand = FORM_DOMAIN_BRAND.get(domain)
+            email = reply_to or fields.get("email", "")
+            if not brand or SKIP_EMAILS.search(email) or email.lower() in OWN_EMAILS:
+                continue
+            forms += 1
+            name = fields.get("name") or (email.split("@")[0] if "@" in email else "Website visitor")
+            leads.append({
+                "brand": brand,
+                "name": name[:200],
+                "email": email or None,
+                "phone": fields.get("phone"),
+                "source": "zoho",
+                "sourceDetail": "form:%s" % fields.get("form", "website")[:60],
+                "note": "Form submission from %s" % domain,
+            })
+            continue
+        if SKIP_SENDERS.search(sender) or SKIP_EMAILS.search(sender):
+            continue
+        text = "%s %s" % (subject, " ".join(body_lines[:6]))
+        if AGREEMENT_WORDS.search(text) and SIGNED_WORDS.search(text):
+            address = re.search(r"[\w.+-]+@[\w-]+\.[\w.]+", sender)
+            if address:
+                hints.append({
+                    "fromEmail": address.group(0).lower(),
+                    "fromName": sender[:200],
+                    "subject": subject[:200],
+                    "snippet": " ".join(body_lines[:3])[:500],
+                })
+    if fresh:
+        findings.append({"kind": "zoho", "text": "%d new email%s (%d form%s)" % (
+            len(fresh), "" if len(fresh) == 1 else "s", forms, "" if forms == 1 else "s")})
+    state["mail_uids"] = sorted(seen)[-200:]
+    return leads, findings, hints, {"new": len(fresh), "forms": forms, "hints": len(hints)}
+
+
+def gather(state):
+    all_leads, all_findings, all_hints = [], [], []
+    summary = {}
+    for name, func in (("quo_sms", quo_sms), ("quo_calls", quo_calls),
+                       ("quo_voicemail", quo_voicemail)):
+        try:
+            leads, findings, stats = func(state)
+        except Exception as error:  # keep scanning: one source never blocks the rest
+            leads, findings, stats = [], [], {"error": str(error)[:200]}
+        all_leads.extend(leads)
+        all_findings.extend(findings)
+        summary[name] = stats
+    try:
+        leads, findings, hints, stats = zoho_mail(state)
+    except Exception as error:
+        leads, findings, hints, stats = [], [], [], {"error": str(error)[:200]}
+    all_leads.extend(leads)
+    all_findings.extend(findings)
+    all_hints.extend(hints)
+    summary["zoho"] = stats
+    return all_leads, all_findings, all_hints, summary
+
+
+def scan_once(swapp_url, token):
+    status, pending = api(swapp_url + "/api/scan/pending", token)
+    if status == 503:
+        print("SWapp has no SCAN_STATUS_TOKEN yet.", flush=True)
+        return False
+    if status != 200:
+        print("pending check failed: HTTP %d" % status, flush=True)
+        return False
+    state = load_state()
+    run_id = since = None
+    if pending.get("requested"):
+        status, claimed = api(swapp_url + "/api/scan/claim", token, "POST", body={})
+        if status == 409:
+            print("another poller claimed the run.", flush=True)
+            return True
+        if status != 200:
+            print("claim failed: HTTP %d" % status, flush=True)
+            return False
+        run_id, since = claimed.get("runId"), claimed.get("since")
+    else:
+        last = pending.get("lastFinishedAt")
+        due = True
+        if last:
+            try:
+                import datetime
+                finished = datetime.datetime.fromisoformat(last.replace("Z", "+00:00"))
+                now = datetime.datetime.now(datetime.timezone.utc)
+                due = (now - finished).total_seconds() >= AUTO_MINUTES * 60
+            except ValueError:
+                due = True
+        if not due:
+            return True
+        status, claimed = api(swapp_url + "/api/scan/claim", token, "POST", body={"auto": True})
+        if status != 200:
+            print("auto claim failed: HTTP %d" % status, flush=True)
+            return False
+        run_id, since = claimed.get("runId"), claimed.get("since")
+        if not run_id:
+            return False
+    print("scanning run %s (since %s) ..." % (run_id, since), flush=True)
+    run(["sales", "sync", "all"], timeout=240)
+    leads, findings, hints, summary = gather(state)
+    status, done = api(swapp_url + "/api/scan/complete", token, "POST", body={
+        "runId": run_id,
+        "summary": summary,
+        "changes": findings,
+        "leads": leads,
+        "signedHints": hints,
+    })
+    if status != 200:
+        print("complete failed: HTTP %d" % status, flush=True)
+        return False
+    save_state(state)
+    print("scan done: %d change(s), %d lead(s) created." % (done.get("saved", 0), done.get("leadsCreated", 0)),
+          flush=True)
+    return True
+
+
+def main():
+    try:
+        swapp_url, token = load_config()
+    except (OSError, KeyError) as error:
+        print("scan: %s (%s)" % (error, CONFIG), flush=True)
+        return 2
+    if "--once" in sys.argv:
+        return 0 if scan_once(swapp_url, token) else 1
+    while True:
+        try:
+            scan_once(swapp_url, token)
+        except Exception as error:  # keep polling: SWapp or the network may be down
+            print("scan failed: %s" % error, flush=True)
+        time.sleep(60)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

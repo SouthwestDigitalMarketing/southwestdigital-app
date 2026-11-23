@@ -3374,6 +3374,26 @@ model ScorecardSync {
   @@unique([brandId, source])
 }
 
+/// One run of the header Scan button (sops/sop-money-playbook.md): Tom presses
+/// Scan (or the 15-minute auto run fires), ripley gathers Quo, Zoho, SWapp and
+/// GA4 changes and pushes them back here. `changes` is a JSON array of
+/// { kind, text } shown under "Updated N min ago". No client financial records.
+model ScanRun {
+  id          String    @id @default(cuid())
+  status      String    @default("requested")
+  auto        Boolean   @default(false)
+  requestedBy String?
+  requestedAt DateTime  @default(now())
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  summary     Json?
+  changes     Json?
+  error       String?
+
+  @@index([status, requestedAt])
+  @@map("scan_runs")
+}
+
 /// Monthly totals behind the Scorecard's big numbers (docs/scorecard.md § Big numbers).
 /// Aggregates only: no client, transaction or report detail. The nightly totals job on
 /// ripley replaces every month of a metric on each run.
