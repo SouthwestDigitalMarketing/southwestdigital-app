@@ -45,6 +45,7 @@ const token = { authorization: `Bearer ${"x".repeat(32)}` };
 const { GET: pending } = await import("./pending/route");
 const { POST: claim } = await import("./claim/route");
 const { POST: complete } = await import("./complete/route");
+const { POST: progress } = await import("./progress/route");
 
 beforeEach(() => {
   Object.values(mocks).forEach((fn) => fn.mockReset());
@@ -181,6 +182,36 @@ describe("POST /api/scan/complete", () => {
     expect(mocks.update).toHaveBeenCalledWith({
       where: { id: "c1" },
       data: { notes: expect.stringContaining("verify in QuickBooks") },
+    });
+  });
+});
+
+describe("POST /api/scan/progress", () => {
+  const post = (body: unknown) =>
+    new Request("http://x/api/scan/progress", { method: "POST", headers: token, body: JSON.stringify(body) });
+  it("validates runId, source and run state", async () => {
+    expect((await progress(post({}))).status).toBe(400);
+    expect((await progress(post({ runId: "r1", source: "nope", status: "done" }))).status).toBe(400);
+    mocks.findUnique.mockResolvedValue(null);
+    expect((await progress(post({ runId: "nope", source: "zoho", status: "done" }))).status).toBe(404);
+    mocks.findUnique.mockResolvedValue({ id: "r1", status: "done", sources: [] });
+    expect((await progress(post({ runId: "r1", source: "zoho", status: "done" }))).status).toBe(409);
+  });
+  it("merges per-source progress into the run", async () => {
+    mocks.findUnique.mockResolvedValue({
+      id: "r1",
+      status: "running",
+      sources: [{ source: "zoho", label: "Email (Zoho)", status: "waiting" }],
+    });
+    const response = await progress(
+      post({ runId: "r1", source: "zoho", status: "scanning", detail: "Reading inbox" }),
+    );
+    expect(response.status).toBe(200);
+    expect(mocks.update).toHaveBeenCalledWith({
+      where: { id: "r1" },
+      data: {
+        sources: [{ source: "zoho", label: "Email (Zoho)", status: "scanning", detail: "Reading inbox" }],
+      },
     });
   });
 });

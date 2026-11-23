@@ -3388,6 +3388,7 @@ model ScanRun {
   finishedAt  DateTime?
   summary     Json?
   changes     Json?
+  sources     Json?
   error       String?
 
   @@index([status, requestedAt])

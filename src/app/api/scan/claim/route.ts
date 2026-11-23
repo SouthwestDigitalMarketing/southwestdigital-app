@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/simpleRateLimit";
 import { checkScanToken } from "@/lib/scan/auth";
+import { initialSources } from "@/lib/scan/sources";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,7 @@ export async function POST(request: Request) {
   if (body?.auto === true) {
     const lastDone = await prisma.scanRun.findFirst({ where: { status: "done" }, orderBy: { finishedAt: "desc" } });
     const run = await prisma.scanRun.create({
-      data: { status: "running", auto: true, requestedBy: auth.actorUserId, startedAt },
+      data: { status: "running", auto: true, requestedBy: auth.actorUserId, startedAt, sources: initialSources() },
     });
     return NextResponse.json({
       runId: run.id,
@@ -37,6 +38,9 @@ export async function POST(request: Request) {
     data: { status: "running", startedAt },
   });
   if (claimed.count === 0) return NextResponse.json({ error: "Scan already claimed." }, { status: 409 });
+  if (!requested.sources) {
+    await prisma.scanRun.update({ where: { id: requested.id }, data: { sources: initialSources() } });
+  }
   const lastDone = await prisma.scanRun.findFirst({ where: { status: "done" }, orderBy: { finishedAt: "desc" } });
   return NextResponse.json({ runId: requested.id, since: lastDone?.finishedAt?.toISOString() ?? null });
 }

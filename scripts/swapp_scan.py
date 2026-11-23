@@ -121,10 +121,10 @@ def run(cmd, timeout=180):
         return 1, "scan: command failed: %s" % error
 
 
-def quo_sms(state):
+def quo_sms(seen):
     """New incoming texts since the last scan."""
     leads, findings = [], []
-    seen = set(state.get("sms_ids", []))
+    seen = set(seen)
     code, out = run(["quo", "list", "--incoming", "--limit", "25", "--json"], timeout=60)
     if code != 0:
         return leads, findings, {"error": "quo list failed"}
@@ -150,15 +150,14 @@ def quo_sms(state):
         })
     if fresh:
         findings.append({"kind": "quo", "text": "%d new text%s" % (len(fresh), "" if len(fresh) == 1 else "s")})
-    state["sms_ids"] = sorted(seen)[-200:]
-    return leads, findings, {"new": len(fresh)}
+    return leads, findings, {"new": len(fresh)}, sorted(seen)[-200:]
 
 
-def quo_calls(state):
+def quo_calls(seen):
     """New Quo calls since the last scan, read from the sales database (read-only)."""
     leads, findings = [], []
     try:
-        seen = set(state.get("call_ids", []))
+        seen = set(seen)
         conn = sqlite3.connect("file:%s?mode=ro" % SALES_DB, uri=True)
         rows = conn.execute(
             "SELECT call_number, phone, direction, duration, completed_at, created_at, raw_json"
@@ -166,7 +165,7 @@ def quo_calls(state):
         ).fetchall()
         conn.close()
     except sqlite3.Error as error:
-        return leads, findings, {"error": "sales db unreadable: %s" % error}
+        return leads, findings, {"error": "sales db unreadable: %s" % error}, []
     fresh = [r for r in rows if r[0] not in seen and recent(r[4] or r[5])]
     for row in rows:
         seen.add(row[0])
@@ -214,8 +213,7 @@ def quo_calls(state):
         if missed:
             text += ": %s" % ", ".join(missed[:3])
         findings.append({"kind": "quo", "text": text})
-    state["call_ids"] = sorted(seen)[-200:]
-    return leads, findings, {"new": len(fresh), "answered": answered}
+    return leads, findings, {"new": len(fresh), "answered": answered}, sorted(seen)[-200:]
 
 
 VOICEMAIL_ROW = re.compile(
@@ -225,14 +223,13 @@ VOICEMAIL_ROW = re.compile(
 VOICEMAIL_BRAND = {"Bookkeeping Conroe": "bookkeeping-conroe", "The Real Estate Bookkeeper": "real-estate-bookkeeper"}
 
 
-def quo_voicemail(state):
-    """Trigger the intake (contacts + callback tasks), then read what is new."""
+def quo_voicemail(seen):
+    """Read new voicemails. The intake run itself is a login-check trigger in main."""
     leads, findings = [], []
-    run(["voicemail-intake", "run"], timeout=180)
     code, out = run(["voicemail-intake", "ls", "-n", "15"], timeout=60)
     if code != 0:
-        return leads, findings, {"error": "voicemail-intake ls failed"}
-    seen = set(state.get("voicemail_keys", []))
+        return leads, findings, {"error": "voicemail-intake ls failed"}, []
+    seen = set(seen)
     genuine = spam = 0
     for line in out.splitlines():
         match = VOICEMAIL_ROW.match(line.strip())
@@ -263,17 +260,16 @@ def quo_voicemail(state):
     if genuine or spam:
         findings.append({"kind": "quo", "text": "%d new voicemail%s (%d spam)" % (
             genuine + spam, "" if genuine + spam == 1 else "s", spam)})
-    state["voicemail_keys"] = sorted(seen)[-200:]
-    return leads, findings, {"genuine": genuine, "spam": spam}
+    return leads, findings, {"genuine": genuine, "spam": spam}, sorted(seen)[-200:]
 
 
-def zoho_mail(state):
+def zoho_mail(seen):
     """New Zoho mail: website forms become leads, signed-hint replies are flagged."""
     leads, findings, hints = [], [], []
-    seen = set(state.get("mail_uids", []))
+    seen = set(seen)
     code, out = run(["mail", "ls", "zoho", "-n", "25", "--no-interactive"], timeout=120)
     if code != 0:
-        return leads, findings, hints, {"error": "mail ls failed"}
+        return leads, findings, hints, {"error": "mail ls failed"}, []
     fresh = []
     for line in out.splitlines():
         parts = line.split()
@@ -350,30 +346,47 @@ def zoho_mail(state):
     if fresh:
         findings.append({"kind": "zoho", "text": "%d new email%s (%d form%s)" % (
             len(fresh), "" if len(fresh) == 1 else "s", forms, "" if forms == 1 else "s")})
-    state["mail_uids"] = sorted(seen)[-200:]
-    return leads, findings, hints, {"new": len(fresh), "forms": forms, "hints": len(hints)}
+    return leads, findings, hints, {"new": len(fresh), "forms": forms, "hints": len(hints)}, sorted(seen)[-200:]
 
 
-def gather(state):
+def gather(state, post):
+    """Read the external sources in parallel. Nothing waits on anything else:
+    each source posts its own progress, and one failure never blocks the rest."""
+    import concurrent.futures
     all_leads, all_findings, all_hints = [], [], []
     summary = {}
-    for name, func in (("quo_sms", quo_sms), ("quo_calls", quo_calls),
-                       ("quo_voicemail", quo_voicemail)):
-        try:
-            leads, findings, stats = func(state)
-        except Exception as error:  # keep scanning: one source never blocks the rest
-            leads, findings, stats = [], [], {"error": str(error)[:200]}
-        all_leads.extend(leads)
-        all_findings.extend(findings)
-        summary[name] = stats
-    try:
-        leads, findings, hints, stats = zoho_mail(state)
-    except Exception as error:
-        leads, findings, hints, stats = [], [], [], {"error": str(error)[:200]}
-    all_leads.extend(leads)
-    all_findings.extend(findings)
-    all_hints.extend(hints)
-    summary["zoho"] = stats
+    jobs = {
+        "quo-sms": ("quo_sms", quo_sms, state.get("sms_ids", [])),
+        "quo-calls": ("quo_calls", quo_calls, state.get("call_ids", [])),
+        "quo-voicemail": ("quo_voicemail", quo_voicemail, state.get("voicemail_keys", [])),
+        "zoho": ("zoho", zoho_mail, state.get("mail_uids", [])),
+    }
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        running = {pool.submit(func, seen): key for key, (_, func, seen) in jobs.items()}
+        for done in concurrent.futures.as_completed(running):
+            key = running[done]
+            name = jobs[key][0]
+            try:
+                out = done.result()
+            except Exception as error:
+                summary[name] = {"error": str(error)[:200]}
+                post(key, "needs-you", "Scan hit an error: %s" % str(error)[:150])
+                continue
+            if key == "zoho":
+                leads, findings, hints, stats, seen = out
+                all_hints.extend(hints)
+                state["mail_uids"] = seen
+            else:
+                leads, findings, stats, seen = out
+                state[{"quo-sms": "sms_ids", "quo-calls": "call_ids",
+                       "quo-voicemail": "voicemail_keys"}[key]] = seen
+            all_leads.extend(leads)
+            all_findings.extend(findings)
+            summary[name] = stats
+            if stats.get("error"):
+                post(key, "needs-you", stats["error"][:200])
+            else:
+                post(key, "done", (findings[0]["text"] if findings else "No changes"))
     return all_leads, all_findings, all_hints, summary
 
 
@@ -417,8 +430,30 @@ def scan_once(swapp_url, token):
         if not run_id:
             return False
     print("scanning run %s (since %s) ..." % (run_id, since), flush=True)
-    run(["sales", "sync", "all"], timeout=240)
-    leads, findings, hints, summary = gather(state)
+
+    def post(source, status, detail=None):
+        try:
+            api(swapp_url + "/api/scan/progress", token, "POST",
+                body={"runId": run_id, "source": source, "status": status, "detail": detail})
+        except Exception:
+            pass
+
+    # Login-gated sources are checked FIRST: sync triggers that fail pin their
+    # rows at the top as needs-you, while everything else keeps scanning.
+    blocked = set()
+    sync_code, _ = run(["sales", "sync", "all"], timeout=240)
+    if sync_code != 0:
+        for key in ("quo-sms", "quo-calls"):
+            post(key, "needs-you", "Quo sync failed — check the Quo session, then Scan again")
+            blocked.add(key)
+    intake_code, _ = run(["voicemail-intake", "run"], timeout=180)
+    if intake_code != 0:
+        post("quo-voicemail", "needs-you", "Voicemail intake failed — check it, then Scan again")
+        blocked.add("quo-voicemail")
+    for key in ("quo-sms", "quo-calls", "quo-voicemail", "zoho", "swapp", "ga4"):
+        if key not in blocked:
+            post(key, "scanning")
+    leads, findings, hints, summary = gather(state, post)
     status, done = api(swapp_url + "/api/scan/complete", token, "POST", body={
         "runId": run_id,
         "summary": summary,

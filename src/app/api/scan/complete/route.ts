@@ -13,6 +13,15 @@ import {
   parseSignedHint,
   type ScanChange,
 } from "@/lib/scan/scan";
+import { initialSources, type ScanSourceState } from "@/lib/scan/sources";
+
+/** Which source rows a change kind belongs to on the modal. */
+const KIND_SOURCES: Record<string, string[]> = {
+  quo: ["quo-sms", "quo-calls", "quo-voicemail"],
+  zoho: ["zoho"],
+  swapp: ["swapp"],
+  ga4: ["ga4"],
+};
 
 /** Quotes that went out but show no acceptance: a "signed" hint is worth flagging. */
 const OPEN_QUOTE_STATUSES = ["sent", "completed"];
@@ -156,6 +165,30 @@ export async function POST(request: Request) {
   const internal = await computeInternalChanges(prisma, previousDone?.finishedAt ?? null);
   changes.push(...internal.changes);
 
+  const currentSources: ScanSourceState[] = Array.isArray(run.sources)
+    ? (run.sources as ScanSourceState[])
+    : initialSources();
+  const bySource = new Map<string, string[]>();
+  for (const change of changes) {
+    for (const key of KIND_SOURCES[change.kind] ?? []) {
+      const list = bySource.get(key) ?? [];
+      list.push(change.text);
+      bySource.set(key, list);
+    }
+  }
+  if (internal.ga4NeedsLogin) {
+    const ga4 = currentSources.find((row) => row.source === "ga4");
+    if (ga4) {
+      ga4.status = "needs-you";
+      ga4.detail = "Traffic refresh needs the GA key on the server";
+    }
+  }
+  const sources = currentSources.map((row) => {
+    if (row.status === "needs-you") return row;
+    const detail = bySource.get(row.source);
+    return { ...row, status: "done" as const, detail: detail ? detail.join("; ").slice(0, 280) : "No changes" };
+  });
+
   const finishedAt = new Date();
   await prisma.scanRun.update({
     where: { id: run.id },
@@ -164,6 +197,7 @@ export async function POST(request: Request) {
       finishedAt,
       summary: { sources: sourceSummary, leadsCreated, signedHints: hints.length, ga4: internal.ga4 },
       changes: changes.slice(0, 30),
+      sources,
     },
   });
   return NextResponse.json({ saved: changes.length, leadsCreated });

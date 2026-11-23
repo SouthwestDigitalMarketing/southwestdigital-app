@@ -3,12 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { getScanStatus, requestScan, type ScanStatus } from "@/app/(app)/scanActions";
+import { ScanModal } from "@/components/ScanModal";
 
 /** Header Scan button (sop-money-playbook): one press refreshes everything
  * that can be refreshed. Shows when the last scan landed and what changed. */
 export function ScanButton({ compact = false }: { compact?: boolean }) {
   const [status, setStatus] = useState<ScanStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refresh = useCallback(async () => {
@@ -36,16 +38,11 @@ export function ScanButton({ compact = false }: { compact?: boolean }) {
   const scan = useCallback(async () => {
     if (busy) return;
     setBusy(true);
+    setModalOpen(true);
     try {
       await requestScan();
-      for (let attempt = 0; attempt < 30; attempt += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 10_000));
-        const next = await getScanStatus();
-        setStatus(next);
-        if (!next.running) break;
-      }
     } catch {
-      // A failed press just leaves the last status in place.
+      // A failed press just leaves the last status in place; the modal shows it.
     } finally {
       setBusy(false);
       refresh();
@@ -54,6 +51,8 @@ export function ScanButton({ compact = false }: { compact?: boolean }) {
 
   const running = busy || status?.running === true;
   return (
+    <>
+    <ScanModal open={modalOpen} onClose={() => setModalOpen(false)} />
     <div className={compact ? "flex items-center gap-2" : "w-full"}>
       <button
         type="button"
@@ -84,5 +83,6 @@ export function ScanButton({ compact = false }: { compact?: boolean }) {
         </details>
       ) : null}
     </div>
+    </>
   );
 }

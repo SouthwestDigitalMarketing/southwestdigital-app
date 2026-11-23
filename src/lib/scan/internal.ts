@@ -6,6 +6,8 @@ import type { ScanChange } from "./scan";
 export type InternalScanResult = {
   changes: ScanChange[];
   ga4: { bkc: number; treb: number; combined: number } | null;
+  /** No GA key on the server: the GA4 row needs a human, not a retry. */
+  ga4NeedsLogin: boolean;
 };
 
 function day(offset: number): string {
@@ -54,6 +56,7 @@ export async function computeInternalChanges(db: PrismaClient, since: Date | nul
   for (const engagement of paid) changes.push({ kind: "swapp", text: `${engagement.clientName}: first month paid` });
 
   let ga4: InternalScanResult["ga4"] = null;
+  const ga4NeedsLogin = !hasGA4Credentials();
   if (hasGA4Credentials()) {
     try {
       const brands = await db.brand.findMany({
@@ -74,6 +77,8 @@ export async function computeInternalChanges(db: PrismaClient, since: Date | nul
     } catch {
       changes.push({ kind: "ga4", text: "Traffic refresh failed; will retry next scan" });
     }
+  } else {
+    changes.push({ kind: "ga4", text: "Traffic refresh needs the GA key on the server" });
   }
-  return { changes, ga4 };
+  return { changes, ga4, ga4NeedsLogin };
 }
