@@ -32,6 +32,11 @@ import type { ScorecardRange } from "@/lib/scorecard/types";
 import { BigNumbers, HowWeMeasure, LiveStrip, ResponseTimes } from "./_scorecard/sections";
 import { LiveRefresh } from "./_scorecard/LiveRefresh";
 import { parseRange } from "./_scorecard/format";
+import { getCompanyMetrics } from "@/lib/companyMetrics";
+import { isLochsideBrandSlug } from "@/lib/brands/active-brand";
+import { CompanyCarousel } from "./CompanyCarousel";
+import { brandSwipePalette } from "@/lib/brands/swipePalette";
+import { COMPANY_BRANDS } from "@/lib/companyMetrics";
 
 export const dynamic = "force-dynamic";
 
@@ -263,7 +268,7 @@ type PageProps = {
 };
 
 export default async function DashboardPage({ searchParams }: PageProps) {
-  const { brand, dataContext } = await requireAppBrand();
+  const { brand, dataContext, session, isPlatformOperator } = await requireAppBrand();
   const params = await searchParams;
   const range = getDashboardRange(params.range);
   const windowEnd = new Date();
@@ -271,6 +276,19 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const previous = getPreviousDashboardPeriod(range, windowEnd, selectedPeriod);
   const responseRange = parseRange(params.rt);
   const privacy = privacyOn((await cookies()).get(PRIVACY_COOKIE)?.value);
+  const companyMetrics = isPlatformOperator && isLochsideBrandSlug(brand.slug) ? await getCompanyMetrics({
+    actorUserId: session.user.id,
+    isPlatformOperator,
+    from: periodInstants(selectedPeriod).gte,
+    to: periodInstants(selectedPeriod).lt,
+    now: windowEnd,
+  }) : null;
+
+  const companyPaletteRows = companyMetrics ? await prisma.brand.findMany({
+    where: { slug: { in: [...COMPANY_BRANDS] }, status: "ACTIVE" },
+    select: { slug: true, theme: { select: { themePreset: true, lightColor: true, darkColor: true, accentColor: true } } },
+  }) : [];
+  const companyPalettes = Object.fromEntries(companyPaletteRows.map(({ slug, theme }) => [slug, brandSwipePalette(theme)]));
 
   const [awaitingGsaRaw, pipelineRows, recordMrr, [theme, mrrGoals], [currentOffers, previousOffers], [currentReviews, previousReviews], [scorecardRaw, totals]] = await Promise.all([
     paidAwaitingGsa(dataContext),
@@ -506,6 +524,9 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       <LiveRefresh seconds={300} />
       <h1 className="sr-only">Dashboard</h1>
       <GsaAlarm proposals={awaitingGsa} now={windowEnd} />
+      {companyMetrics && <CompanyCarousel {...companyMetrics} period={selectedPeriod.label} palettes={companyPalettes} />}
+      <details className="mt-8" open={!companyMetrics}>
+      <summary className="cursor-pointer text-sm font-medium text-slate-600">Detailed {brand.name} dashboard</summary>
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-4">
         <h2 className="text-lg font-semibold text-slate-900">Performance overview</h2>
         <DashboardControls
@@ -623,6 +644,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       </DashboardSection>
 
       <HowWeMeasure businessHours={scorecard.businessHours.label} />
+      </details>
     </div>
   );
 }

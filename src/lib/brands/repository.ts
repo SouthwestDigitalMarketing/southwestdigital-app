@@ -11,6 +11,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { authorizeBrandAccess } from "./access";
 import { normalizeHostname } from "./hostname";
+import { COMPANY_HOME_BRAND_SLUG } from "./active-brand";
 
 const brandSummarySelect = {
   id: true,
@@ -79,6 +80,14 @@ export async function getAccessibleBrands(userId: string): Promise<BrandSummary[
   });
 
   return memberships.map(({ brand }) => brand);
+}
+
+/** Platform-host entry uses BKC as its underlying data scope; the dashboard shows Lochside totals. */
+export async function getCompanyHomeBrand(): Promise<BrandSummary | null> {
+  return prisma.brand.findFirst({
+    where: { slug: COMPANY_HOME_BRAND_SLUG, status: BrandStatus.ACTIVE },
+    select: brandSummarySelect,
+  });
 }
 
 export async function getBrandAccessDecision(input: {

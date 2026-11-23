@@ -478,6 +478,31 @@ body {
   --action-danger-border: #7f1d1d;
 }
 
+/* Lochside's company views keep each brand's accents inside its own slide. */
+.brand-swipe {
+  --swipe-ink: var(--swipe-light-ink, #334155);
+  --swipe-accent: var(--swipe-light-accent, #64748b);
+  --swipe-tab: var(--swipe-light-tab, #334155);
+  --swipe-tab-text: var(--swipe-light-tab-text, #ffffff);
+  --chart-series-1: color-mix(in srgb, var(--swipe-ink) 82%, var(--swipe-accent));
+  --chart-series-2: color-mix(in srgb, var(--swipe-ink) 66%, var(--swipe-accent));
+  --chart-series-3: color-mix(in srgb, var(--swipe-ink) 50%, var(--swipe-accent));
+  --chart-series-4: color-mix(in srgb, var(--swipe-ink) 34%, var(--swipe-accent));
+  --chart-series-5: var(--swipe-accent);
+}
+
+[data-theme="dark"] .brand-swipe {
+  --swipe-ink: var(--swipe-dark-ink, #cbd5e1);
+  --swipe-accent: var(--swipe-dark-accent, #94a3b8);
+  --swipe-tab: var(--swipe-dark-tab, #334155);
+  --swipe-tab-text: var(--swipe-dark-tab-text, #ffffff);
+}
+
+.brand-swipe__heading { color: var(--swipe-ink); }
+.brand-swipe__tab[aria-selected="true"] { background: var(--swipe-tab); color: var(--swipe-tab-text); }
+.brand-swipe__dot[aria-current="true"] { background: var(--swipe-accent); }
+.brand-swipe .brand-swipe__card { border-top: 3px solid var(--swipe-accent); }
+
 /* Fixed light proposal surfaces are explicit theme boundaries. Their text,
    controls, and borders stay readable even inside a dark proposal theme. */
 [data-proposal-surface="light"] {

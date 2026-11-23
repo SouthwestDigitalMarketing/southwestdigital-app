@@ -5,6 +5,11 @@ import { PeriodSelector } from "./PeriodSelector";
 import { SiteTrafficGraph, type TrafficComparisonRow } from "./SiteTrafficGraph";
 import { LandingPagesTable, type ProcessedLandingRow } from "./LandingPagesTable";
 import { WebsiteGoalCard } from "./WebsiteGoalCard";
+import { COMPANY_BRANDS } from "@/lib/companyMetrics";
+import { isLochsideBrandSlug } from "@/lib/brands/active-brand";
+import { BrandSwipe } from "@/components/BrandSwipe";
+import { combineSiteHealth, combineTrafficTrends } from "./combine";
+import { brandSwipePalette, NEUTRAL_SWIPE_PALETTE } from "@/lib/brands/swipePalette";
 
 export const dynamic = "force-dynamic";
 
@@ -26,34 +31,39 @@ function getAnalyticsNow() {
   return Date.now();
 }
 
-export default async function WebsitePage({
-  searchParams,
-}: {
-  searchParams: Promise<{ period?: string }>;
-}) {
+type WebsiteReportData = { health: SiteHealth | null; trendRows: TrafficComparisonRow[]; error: string | null };
+
+export default async function WebsitePage({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
   const { period: rawPeriod } = await searchParams;
   const period = rawPeriod && rawPeriod in PERIOD_CONFIG ? rawPeriod : "30d";
   const config = PERIOD_CONFIG[period];
-
-  const { brand } = await requireAppBrand();
-
-  const theme = await prisma.brandTheme.findUnique({
-    where: { brandId: brand.id },
-    select: { ga4PropertyId: true, ga4HostName: true, lightColor: true, websiteEngagedSessionsGoal: true },
-  });
-
-  if (!theme?.ga4PropertyId) {
-    return (
-      <div className="p-8">
-        <h1 className="sr-only">Website</h1>
-        <h2 className="text-lg font-semibold text-slate-900">Website analytics</h2>
-        <p className="mt-2 text-sm text-slate-400">GA4 property not configured for this brand.</p>
-      </div>
-    );
+  const { brand, isPlatformOperator } = await requireAppBrand();
+  const companyView = isPlatformOperator && isLochsideBrandSlug(brand.slug);
+  if (!companyView) {
+    const theme = await prisma.brandTheme.findUnique({ where: { brandId: brand.id }, select: { ga4PropertyId: true, ga4HostName: true, websiteEngagedSessionsGoal: true } });
+    const data = theme?.ga4PropertyId ? await loadReport(theme.ga4PropertyId, theme.ga4HostName, period, config) : { health: null, trendRows: [], error: "GA4 property not configured for this brand." };
+    return <div className="p-8"><h1 className="sr-only">Website</h1><div className="mb-5"><h2 className="text-lg font-semibold text-slate-900">Traffic overview</h2><div className="mt-3 w-fit max-w-full overflow-x-auto"><PeriodSelector current={period} /></div></div><WebsiteReport brandId={brand.id} goal={theme?.websiteEngagedSessionsGoal ?? 500} editable data={data} config={config} /></div>;
   }
+  const brands = await prisma.brand.findMany({
+    where: { slug: { in: [...COMPANY_BRANDS] }, status: "ACTIVE" },
+    select: { id: true, slug: true, name: true, theme: { select: { ga4PropertyId: true, ga4HostName: true, websiteEngagedSessionsGoal: true, themePreset: true, lightColor: true, darkColor: true, accentColor: true } } },
+  });
+  const ordered = COMPANY_BRANDS.map((slug) => brands.find((item) => item.slug === slug));
+  const reports = await Promise.all(ordered.map((item): Promise<WebsiteReportData> => item?.theme?.ga4PropertyId
+    ? loadReport(item.theme.ga4PropertyId, item.theme.ga4HostName, period, config)
+    : Promise.resolve({ health: null, trendRows: [], error: `${item?.name ?? "Brand"} GA4 property not configured.` })));
+  const combined: WebsiteReportData = reports[0].health && reports[1].health
+    ? { health: combineSiteHealth([reports[0].health, reports[1].health]), trendRows: combineTrafficTrends([reports[0].trendRows, reports[1].trendRows]), error: null }
+    : { health: null, trendRows: [], error: "Combined traffic needs both brand reports. Check the individual views." };
+  const goal = ordered.reduce((total, item) => total + (item?.theme?.websiteEngagedSessionsGoal ?? 500), 0);
+  const views = [
+    { key: "combined", name: "Combined", palette: NEUTRAL_SWIPE_PALETTE, content: <WebsiteReport brandId={null} goal={goal} editable={false} data={combined} config={config} /> },
+    ...ordered.map((item, index) => ({ key: item?.slug ?? COMPANY_BRANDS[index], name: item?.name ?? COMPANY_BRANDS[index], palette: brandSwipePalette(item?.theme), content: <WebsiteReport brandId={item?.id ?? null} goal={item?.theme?.websiteEngagedSessionsGoal ?? 500} editable={Boolean(item)} data={reports[index]} config={config} /> })),
+  ];
+  return <div className="p-8"><h1 className="sr-only">Website</h1><div className="mb-5"><h2 className="text-lg font-semibold text-slate-900">Traffic overview</h2><div className="mt-3 w-fit max-w-full overflow-x-auto"><PeriodSelector current={period} /></div></div><BrandSwipe label="Website traffic" views={views} /></div>;
+}
 
-  const propertyId = theme.ga4PropertyId;
-  const hostname = theme.ga4HostName;
+async function loadReport(propertyId: string, hostname: string | null, period: string, config: PeriodConfig): Promise<WebsiteReportData> {
   const now = getAnalyticsNow();
 
   const todayStr = new Date(now).toISOString().slice(0, 10);
@@ -162,26 +172,20 @@ export default async function WebsitePage({
       }));
     }
   } catch (err) {
-    console.error("[website] GA4 error:", JSON.stringify(err, Object.getOwnPropertyNames(err instanceof Error ? err : {})));
+    console.warn("[website] GA4 error:", JSON.stringify(err, Object.getOwnPropertyNames(err instanceof Error ? err : {})));
     error = err instanceof Error ? err.message : String(err);
   }
 
-  if (error || !health) {
-    return (
-      <div className="p-8">
-        <h1 className="sr-only">Website</h1>
-        <h2 className="text-lg font-semibold text-slate-900">Website analytics</h2>
-        <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          {error ?? "Analytics unavailable."}
-        </div>
-      </div>
-    );
-  }
+  return { health, trendRows, error };
+}
 
+function WebsiteReport({ brandId, goal, editable, data, config }: { brandId: string | null; goal: number; editable: boolean; data: WebsiteReportData; config: PeriodConfig }) {
+  const { health, trendRows, error } = data;
+  if (error || !health) return <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{error ?? "Analytics unavailable."}</div>;
   const { headline, acquisition, landingPages, geographicTraffic } = health;
   const c = headline.current;
   const cmp = headline.comparison;
-  const engagedSessionsGoal = theme.websiteEngagedSessionsGoal ?? 500;
+  const engagedSessionsGoal = goal;
 
   const processedLandingPages = (() => {
     const merged = new Map<string, ProcessedLandingRow>();
@@ -210,19 +214,12 @@ export default async function WebsitePage({
   })();
 
   return (
-    <div className="p-8">
-      <h1 className="sr-only">Website</h1>
-      <div>
-        <h2 className="text-lg font-semibold text-slate-900">Traffic overview</h2>
-        <div className="mt-3 w-fit max-w-full overflow-x-auto">
-          <PeriodSelector current={period} />
-        </div>
-      </div>
-
+    <div>
       {/* Goal card */}
       <div className="mt-4">
         <WebsiteGoalCard
-          brandId={brand.id}
+          brandId={brandId ?? ""}
+          editable={editable}
           value={c.engagedSessions ?? 0}
           goal={engagedSessionsGoal}
           periodLabel={config.label.toLowerCase()}
@@ -250,12 +247,12 @@ export default async function WebsitePage({
 
       {/* Acquisition + Landing pages */}
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="brand-swipe__card rounded-xl border border-slate-200 bg-white p-5">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Acquisition</p>
           <h2 className="mt-1 text-lg font-semibold text-slate-900">How visitors arrived</h2>
           <ReportTable report={acquisition} />
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="brand-swipe__card rounded-xl border border-slate-200 bg-white p-5">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Entry points</p>
           <h2 className="mt-1 text-lg font-semibold text-slate-900">Top landing pages</h2>
           <LandingPagesTable rows={processedLandingPages} />
@@ -263,7 +260,7 @@ export default async function WebsitePage({
       </div>
 
       {/* Geography */}
-      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5">
+      <div className="brand-swipe__card mt-6 rounded-xl border border-slate-200 bg-white p-5">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Geography</p>
         <h2 className="mt-1 text-lg font-semibold text-slate-900">Where visitors are located</h2>
         <ReportTable report={geographicTraffic} />
@@ -305,7 +302,7 @@ function MetricCard({ label, value, comparison }: { label: string; value: string
         : `${Math.abs(comparison.percentageChange).toFixed(1)}% ${comparison.direction} vs. prev. period`;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="brand-swipe__card rounded-xl border border-slate-200 bg-white p-4">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-2 text-3xl font-semibold text-slate-900">{value}</p>
       {changeText && <p className={`mt-1 text-xs font-medium ${color}`}>{changeText}</p>}
