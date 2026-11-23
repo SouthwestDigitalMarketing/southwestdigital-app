@@ -1,5 +1,9 @@
 # SWapp handoff
 
+## 2026-11-23 — Overview spacing
+
+Tom requested matching nav/card edges and less inner padding. All four Showrunner Overview paths now use the same 16 px phone / 32 px desktop gutters as SectionTabs (previously 32 px on phones). Season card inner horizontal padding is 12 px phone / 16 px desktop (previously 16 / 24). No shared nav or other pages changed.
+
 ## 2026-11-23 — Showrunner season release calendar
 
 Tom approved six weekly Sunday releases at 17:00 America/Chicago: Nov 29, Dec 6/13/20/27, Jan 3 (2027). Source: `src/lib/showrunner/release-schedule.json`. Overview replaces the Open Studio promo with a six-episode timeline, live minute-updated countdown and swipeable calendar (also visible when analytics is unavailable). Dashboard billing strip shows episode markers alongside its existing dates. Dates are planned deadlines; elapsed dates do not imply publication. Schedule edits in the app do not sync to Zoho automatically.
