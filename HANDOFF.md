@@ -1,5 +1,9 @@
 # SWapp handoff
 
+## 2026-11-23 morning — QB one-liner + tick proof (Ummon, PR #228)
+
+Tom's 8:47 AM update: QuickBooks line is now just `1. ! QuickBooks — Log in ↗` (explanation text removed from initial rows, legacy folds, and finalization). His screenshot still showed the old card + all waiting — diagnosis: his browser holds stale JS. The tall card has served on 3101 since 08:19 and his presses (14:14, 14:18, 14:46 UTC) all completed with correct rows; every dev-server restart invalidates the bundle, so his tab needs a manual refresh (HMR can't reach a slept/backgrounded phone tab). Proof run `prove-847-1`, timer-driven, no manual trigger: pressed 14:49:26 → running+all-scanning 14:49:34 → done 14:49:38, QuickBooks needs-you on top, rest done. Gates: typecheck clean, eslint clean, full suite 1318 passed / 5 skipped, PR #228 all green. Tom: refresh the 3101 tab, press Scan, rows tick within ~10s. Merge on his yes.
+
 ## 2026-11-23 morning — Full-screen sheet + proven pickup (Ummon, PR #228)
 
 Tom's 8:09 AM update: modal fills the whole screen top-aligned (not a bottom sheet); long lines wrap so the Log in link never hides; scan still showed Waiting — fix and prove with a real run. `ScanModal` is now a full page (`fixed inset-0 bg-white`, `max-w-2xl`, `pt-6`), rows wrap (`break-words`, no truncate). Modal also refreshes on tab focus/visibility (backgrounded phone browsers throttle intervals — likely why his sheet looked frozen). Timer tightened to 10s (`OnCalendar=*:*:0/10`; idle fires are one cheap status check).
