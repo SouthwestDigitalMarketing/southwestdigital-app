@@ -5,9 +5,9 @@ import { Loader2, X } from "lucide-react";
 import { getScanStatus, type ScanStatus } from "@/app/(app)/scanActions";
 import type { ScanSourceState } from "@/lib/scan/sources";
 
-/** Compact numbered checklist (Tom 2026-11-23): one line per source, small
- * status mark, short result on the same line. Login items pin at the top
- * with an inline text link. Closing never stops the scan. */
+/** Full-screen scan sheet (Tom 2026-11-23): title then the numbered checklist,
+ * top-aligned on phone and desktop. Long lines wrap so the Log in link is
+ * never cut off. Closing never stops the scan. */
 export function ScanModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [status, setStatus] = useState<ScanStatus | null>(null);
 
@@ -15,7 +15,7 @@ export function ScanModal({ open, onClose }: { open: boolean; onClose: () => voi
     try {
       setStatus(await getScanStatus());
     } catch {
-      // The modal keeps its last view when the tables are not migrated yet.
+      // The sheet keeps its last view when the tables are not migrated yet.
     }
   }, []);
 
@@ -28,9 +28,17 @@ export function ScanModal({ open, onClose }: { open: boolean; onClose: () => voi
       })
       .catch(() => {});
     const timer = setInterval(refresh, 4000);
+    // A backgrounded phone browser throttles intervals: refresh on return.
+    const wake = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", wake);
+    window.addEventListener("focus", wake);
     return () => {
       cancelled = true;
       clearInterval(timer);
+      document.removeEventListener("visibilitychange", wake);
+      window.removeEventListener("focus", wake);
     };
   }, [open, refresh]);
 
@@ -46,35 +54,26 @@ export function ScanModal({ open, onClose }: { open: boolean; onClose: () => voi
   if (!open) return null;
   const rows = foldQuickBooks(status?.sources ?? []);
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Scan progress"
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-4 sm:items-center"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl"
-        onClick={(event) => event.stopPropagation()}
-      >
+    <div role="dialog" aria-modal="true" aria-label="Scan progress" className="fixed inset-0 z-50 bg-white">
+      <div className="mx-auto max-w-2xl px-4 pb-10 pt-6 sm:pt-10">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold text-slate-900">Scan{status?.running ? " — running" : ""}</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Scan{status?.running ? " — running" : ""}</h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close scan progress"
-            className="rounded-full p-1.5 text-slate-500 hover:bg-slate-100"
+            className="rounded-full p-2 text-slate-500 hover:bg-slate-100"
           >
-            <X size={16} />
+            <X size={20} />
           </button>
         </div>
         {rows.length > 0 ? (
-          <ol className="mt-2 space-y-1 text-sm">
+          <ol className="mt-4 space-y-2 text-sm">
             {rows.map((row, index) => (
-              <li key={row.source} className="flex min-w-0 items-baseline gap-1.5">
+              <li key={row.source} className="flex min-w-0 items-baseline gap-2">
                 <span className="shrink-0 tabular-nums text-slate-400">{index + 1}.</span>
                 <Glyph status={row.status} />
-                <span className="min-w-0 flex-1 truncate text-slate-800">
+                <span className="min-w-0 flex-1 break-words text-slate-800">
                   {row.label}
                   {row.detail ? <span className="text-slate-500"> — {row.detail}</span> : null}
                   {row.status === "needs-you" && row.loginUrl ? (
@@ -92,11 +91,9 @@ export function ScanModal({ open, onClose }: { open: boolean; onClose: () => voi
             ))}
           </ol>
         ) : (
-          <p className="mt-2 text-sm text-slate-500">
-            {status?.running ? "Starting…" : "No source detail yet."}
-          </p>
+          <p className="mt-4 text-sm text-slate-500">{status?.running ? "Starting…" : "No source detail yet."}</p>
         )}
-        <p className="mt-3 text-xs text-slate-500">
+        <p className="mt-6 text-xs text-slate-500">
           {status?.running
             ? "Closing this keeps the scan running."
             : `Finished ${status?.updatedAgo.toLowerCase() ?? ""}. Press Scan for a fresh pass.`}
