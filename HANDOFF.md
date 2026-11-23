@@ -1,5 +1,11 @@
 # SWapp handoff
 
+## 2026-11-23 — Scan progress modal + logins first (Ummon, PR #228)
+
+Tom's update: pressing Scan opens a modal with every source and live progress; login-needing sources are checked first and pinned at the top with a Log in button while everything else scans in parallel; closing never stops the scan. New migration `20261123050000_scan_sources` (`scan_runs.sources` JSON). `src/lib/scan/sources.ts` (8 sources, initial states, progress validation, needs-you-first sort) + tests. New token route `POST /api/scan/progress`; claim/request init sources; complete finalizes per-source detail (preserves needs-you; GA4 without a server key goes needs-you). Poller: login-check triggers first (`sales sync`, `voicemail-intake run` failures pin needs-you), then 4 sources read in parallel via threads, each posting progress; swapp/ga4 marked scanning until the server closes them. New `ScanModal` (polls 4s, Esc/backdrop close, Log in opens the sign-in page in a new tab — agents never sign in); `ScanButton` opens it on press, header icon still spins while running.
+
+QBO Accountant + QBO Contracts rows are login-gated placeholders (status check only — the QBO sync itself stays later per the brief; no QBO session checker exists yet). Verified live on 3101: forced run wrote and finalized all 8 source rows (QBO needs-you on top, GA4 "Traffic refreshed: 199 sessions"). Gates: typecheck clean, eslint clean, full suite 1318 passed / 5 skipped, PR #228 all green. Not eyeballed by me (no login); Tom reviews the modal on 3101, merge on his yes.
+
 ## 2026-11-22 evening — Scan button v1 (Ummon, PR #228)
 
 Tom's scan brief (`~/swapp-scan-brief.md`, money playbook `sops/sop-money-playbook.md`): one Scan button in the header; everything refreshable refreshes. Decisions Tom made: demo on local 3101 first (production wiring later), full auto-create into SWapp. Branch `ummon/scan-v1`, worktree `swapp-scan-v1`, demo `swapp-live serve <worktree> 3101` (swapp_live has migration `20261123040000_scan_runs`).
