@@ -1,5 +1,11 @@
 # SWapp handoff
 
+## 2026-11-23 morning — Full-screen sheet + proven pickup (Ummon, PR #228)
+
+Tom's 8:09 AM update: modal fills the whole screen top-aligned (not a bottom sheet); long lines wrap so the Log in link never hides; scan still showed Waiting — fix and prove with a real run. `ScanModal` is now a full page (`fixed inset-0 bg-white`, `max-w-2xl`, `pt-6`), rows wrap (`break-words`, no truncate). Modal also refreshes on tab focus/visibility (backgrounded phone browsers throttle intervals — likely why his sheet looked frozen). Timer tightened to 10s (`OnCalendar=*:*:0/10`; idle fires are one cheap status check).
+
+Diagnosis of his 8:09 screenshot: the backend was fine — his 8:09:04 press was claimed at 8:09:31 and done at 8:09:37 with correct rows. He was seeing the ≤60s minute-timer dead air (plus a possibly background-throttled modal). Proof run `prove-810-1` (row inserted exactly as requestScan writes it, timer left to claim it): pressed 14:11:12 UTC → claimed 14:11:18 → done 14:11:23, QuickBooks needs-you on top, rest done. Gates: typecheck clean, eslint clean, full suite 1318 passed / 5 skipped, PR #228 all green. Not eyeballed by me (no login); Tom reviews on 3101, merge on his yes.
+
 ## 2026-11-23 morning — Compact checklist + fast pickup (Ummon, PR #228)
 
 Tom's 7:51 AM update: modal rows took too much space, and his screenshot showed every source stuck on Waiting. Two fixes. (1) Compact numbered checklist: one line per source (`1. ✓ Texts (Quo) — 2 new`), small glyphs (○ waiting, spinning scanning, ✓ done, ! needs-you), short result on the same line, no cards/pills/borders; login items stay on top with an inline `Log in ↗` text link; the two QBO rows merged into one QuickBooks line (access + Contracts share one sign-in; legacy two-row runs fold in the modal). (2) Stuck Waiting was real: the minute-timer left up to 60s of dead air after a press (his screenshot was ~8s after pressing, before the first poll). Timer now fires every 20s (`OnCalendar=*:*:0/20`; the 15-min auto decision still lives in the poller), and the poller posts scanning rows before the slow sync triggers.
