@@ -1,0 +1,12 @@
+[Unit]
+Description=SWapp Scan button poller timer (every minute)
+
+[Timer]
+# Every 10 seconds: a pressed Scan must move off "Waiting" fast. Each idle
+# fire is one cheap status check; the 15-minute auto scan is decided by the
+# poller itself, so cadence changes don't affect it.
+OnCalendar=*:*:0/10
+Persistent=true
+
+[Install]
+WantedBy=timers.target

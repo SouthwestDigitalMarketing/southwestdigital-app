@@ -144,8 +144,11 @@ describe("the page groups", () => {
 });
 
 describe("the schema SQL", () => {
-  // Scanner tables live in the 2026-11-18 baseline migration.
-  const sql = readFileSync("prisma/migrations/0_init/migration.sql", "utf8");
+  // Scanner tables live in the 2026-11-18 baseline migration; later rooms are
+  // added by their own migrations (20261123070000_scan_pipeline_room).
+  const sql =
+    readFileSync("prisma/migrations/0_init/migration.sql", "utf8") +
+    readFileSync("prisma/migrations/20261123070000_scan_pipeline_room/migration.sql", "utf8");
   it("forces brand row-level security and checks every room and role", () => {
     expect(sql).toContain('ALTER TABLE "ScanFinding" FORCE ROW LEVEL SECURITY');
     expect(sql).toContain('ALTER TABLE "ScanRole" FORCE ROW LEVEL SECURITY');

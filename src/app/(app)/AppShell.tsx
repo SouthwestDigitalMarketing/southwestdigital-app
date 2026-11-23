@@ -49,6 +49,7 @@ import { signOutAction } from "./actions";
 import { Modal } from "@/components/Modal";
 import { KeyboardProvider } from "@/components/keyboard/KeyboardProvider";
 import { PrivacyToggle } from "@/components/PrivacyToggle";
+import { ScanButton } from "@/components/ScanButton";
 import { privacyCovers } from "@/lib/privacy";
 import { APP_COMMANDS } from "@/lib/keyboard/commands";
 
@@ -205,6 +206,9 @@ export function AppShell({
   // showed the previous page, usually the Dashboard, until the new one loaded).
   const pathname = usePathname();
   const companyDashboard = isPlatformOperator && isLochsideBrandSlug(brand.slug) && (pathname === "/dashboard" || pathname === "/website");
+  // Header Scan button (sop-money-playbook): Lochside operators only. Contigo
+  // is a separate tenant and the scan sources are Lochside's.
+  const showScan = isPlatformOperator && isLochsideBrandSlug(brand.slug);
   const [menuPath, setMenuPath] = useState(pathname);
   if (menuPath !== pathname) {
     setMenuPath(pathname);
@@ -379,6 +383,18 @@ export function AppShell({
           </form>
         ) : null}
       </div>
+
+      {showScan ? (
+        <div className={`${collapsed ? "px-1" : "px-5"} py-3`} style={{ borderBottom: `1px solid ${dividerColor}` }}>
+          {collapsed ? (
+            <div className="flex justify-center">
+              <ScanButton compact />
+            </div>
+          ) : (
+            <ScanButton />
+          )}
+        </div>
+      ) : null}
 
       <nav className={`flex-1 space-y-0.5 py-4 ${collapsed ? "px-2" : "px-3"}`}>
         {NAV.map(({ href, icon, label, exact, dividerAfter }) => (
@@ -560,7 +576,9 @@ export function AppShell({
             <Menu size={20} />
           </button>
           <span className="ml-3 min-w-0 truncate text-sm font-semibold text-slate-900">{companyDashboard ? "Lochside LLC" : brand.name}</span>
-          <span className="ml-auto pl-2">
+          <span className="ml-auto" />
+          {showScan ? <ScanButton compact /> : null}
+          <span className="pl-2">
             <PrivacyToggle on={privacy} compact />
           </span>
           <button

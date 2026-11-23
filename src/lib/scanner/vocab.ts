@@ -8,6 +8,7 @@ export const SCAN_ROOMS = [
   { key: "payments", label: "Payments" },
   { key: "contracts", label: "Contracts" },
   { key: "non-inbox", label: "Email, not inbox" },
+  { key: "pipeline", label: "Sales pipeline" },
 ] as const;
 
 export const SCAN_ROLES = [
