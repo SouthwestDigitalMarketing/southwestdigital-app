@@ -1,5 +1,9 @@
 # SWapp handoff
 
+## 2026-11-23 — Stuck scans explain themselves (Ummon, PR #229)
+
+Tom: "why is the live SWapp spinning?" Diagnosis: his press on production created a requested run no poller picks up (the ripley poller watches 3101 only), so the icon spun forever and the sheet sat on Waiting. Same class of bug as a poller dying mid-run. Fix: `scanRunStaleness` (requested >4 min, running >30 min). requestScan supersedes stale runs with a fresh one; the claim endpoint reaps stale runs before claiming; getScanStatus reports `stuck` and the sheet says plainly the scan may never start and to tap Scan again. Verified live on 3101: planted a 10-minute-old requested run, poller run errored it ("Superseded...") instead of hanging; fresh presses still claim and finish. Gates: full suite 1332 passed / 5 skipped, PR #229 green. Production still has no poller and no SCAN_STATUS_TOKEN — that cutover is the follow-up.
+
 ## 2026-11-23 — Scan phone fixes (Ummon, PR #229)
 
 Tom's phone review of production: the QuickBooks login screen came out of nowhere, the sheet vanished after switching apps, and the spinning icon ignored taps. Three small fixes, no data changes. (1) Scan button opens the sheet on every tap, even mid-scan (it was `disabled` while running — that was the dead tap); fresh scans still only requested when idle. (2) Sheet writes `#scan` to the URL while open and reopens from it after a reload, so a backgrounded phone tab no longer loses it; closing clears the hash. (3) One short line under the title explains the Log in link (opens QuickBooks in a new tab; the scan keeps running here). Note: 3101's `swapp-live serve` rewrites `.env.development.local`, wiping the appended SCAN_STATUS_TOKEN — re-append + restart after every serve. Gates: typecheck clean, eslint clean, full suite 1330 passed / 5 skipped, PR #229 all green. Demo on 3101 (fixes worktree); merge on Tom's yes.
