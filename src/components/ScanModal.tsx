@@ -54,21 +54,30 @@ export function ScanModal({ open, onClose }: { open: boolean; onClose: () => voi
   if (!open) return null;
   const rows = foldQuickBooks(status?.sources ?? []);
   return (
-    <div role="dialog" aria-modal="true" aria-label="Scan progress" className="fixed inset-0 z-50 bg-white">
-      <div className="mx-auto max-w-2xl px-4 pb-10 pt-6 sm:pt-10">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-slate-900">Scan{status?.running ? " — running" : ""}</h2>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Scan progress"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[calc(100dvh-2rem)] w-full max-w-2xl flex-col rounded-2xl bg-white p-4 shadow-xl sm:p-5"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex shrink-0 items-center justify-between gap-3">
+          <h2 className="text-base font-semibold text-slate-900">Scan{status?.running ? " — running" : ""}</h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close scan progress"
-            className="rounded-full p-2 text-slate-500 hover:bg-slate-100"
+            className="rounded-full p-1.5 text-slate-500 hover:bg-slate-100"
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
         {rows.length > 0 ? (
-          <ol className="mt-4 space-y-2 text-sm">
+          <ol className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto text-sm">
             {rows.map((row, index) => (
               <li key={row.source} className="flex min-w-0 items-baseline gap-2">
                 <span className="shrink-0 tabular-nums text-slate-400">{index + 1}.</span>
@@ -93,7 +102,7 @@ export function ScanModal({ open, onClose }: { open: boolean; onClose: () => voi
         ) : (
           <p className="mt-4 text-sm text-slate-500">{status?.running ? "Starting…" : "No source detail yet."}</p>
         )}
-        <p className="mt-6 text-xs text-slate-500">
+        <p className="mt-3 shrink-0 text-xs text-slate-500">
           {status?.running
             ? "Closing this keeps the scan running."
             : `Finished ${status?.updatedAgo.toLowerCase() ?? ""}. Press Scan for a fresh pass.`}
