@@ -611,6 +611,8 @@ model Brand {
   quoteRevisions          QuoteRevision[]
   emailConnections        EmailConnection[]
   scanRoles               ScanRole[]
+  scanRules               ScanRule[]
+  scanQuestions           ScanQuestion[]
   scanFindings            ScanFinding[]
   showrunnerVideoStatuses ShowrunnerVideoStatus[]
   showrunnerFeedback      ShowrunnerFeedback[]
@@ -3410,4 +3412,46 @@ model ScorecardMonthly {
   updatedAt DateTime @updatedAt
 
   @@unique([brandId, metric, month])
+}
+
+/// SCAN PART 2 (Tom 2026-11-23): every tap answer saved as a rule the scan
+/// applies next time. Matcher/action shapes depend on kind (see
+/// src/lib/scan/questions.ts). Never money/contract sends: those stay Tom's.
+model ScanRule {
+  id          String   @id @default(cuid())
+  brandId     String
+  kind        String
+  matcher     Json
+  action      Json?
+  active      Boolean  @default(true)
+  createdFrom String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  brand       Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId, active])
+  @@map("ScanRule")
+}
+
+/// SCAN PART 2: tap-answer questions drawn from open review findings (max 5
+/// per scan; the rest wait). Undo describes how to reverse the answer.
+model ScanQuestion {
+  id         String    @id @default(cuid())
+  brandId    String
+  kind       String
+  ref        Json?
+  findingId  String?
+  what       String
+  options    Json
+  status     String    @default("open")
+  answerKey  String?
+  ruleId     String?
+  undo       Json?
+  severity   String    @default("normal")
+  createdAt  DateTime  @default(now())
+  answeredAt DateTime?
+  brand      Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId, status])
+  @@map("ScanQuestion")
 }

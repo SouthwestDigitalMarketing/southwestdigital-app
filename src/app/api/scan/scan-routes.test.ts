@@ -40,6 +40,12 @@ vi.mock("@/lib/pipe/contacts", () => ({
 }));
 vi.mock("@/lib/scan/internal", () => ({ computeInternalChanges: mocks.internal }));
 vi.mock("@/lib/scan/tags", () => ({ applyTagEvidence: mocks.tags }));
+vi.mock("@/lib/scan/questions", () => ({
+  syncQuestions: vi.fn(async () => ({ created: 0, retired: 0 })),
+  proposeBroaderRules: vi.fn(async () => ({ created: 0 })),
+  MAX_OPEN_QUESTIONS: 5,
+  QUESTION_OPTIONS: { "sms-lead": [{ key: "create-lead", label: "Create lead" }] },
+}));
 vi.mock("@/lib/scanner/post", () => ({ postScanFinding: mocks.finding }));
 vi.mock("@/lib/simpleRateLimit", () => ({ checkRateLimit: () => ({ allowed: true, remaining: 1 }) }));
 

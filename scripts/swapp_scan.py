@@ -121,9 +121,24 @@ def run(cmd, timeout=180):
         return 1, "scan: command failed: %s" % error
 
 
-def quo_sms(seen):
-    """New incoming texts since the last scan. Email-only bodies are too
-    thin for a lead; they go to the review list instead."""
+def rule_match(rules, kind, **attrs):
+    """A stored tap-answer rule matches when every matcher key it names
+    equals the item's value."""
+    for rule in rules:
+        if rule.get("kind") != kind:
+            continue
+        matcher = rule.get("matcher") or {}
+        if not matcher:
+            continue
+        if all(attrs.get(key) == value for key, value in matcher.items()):
+            return rule
+    return None
+
+
+def quo_sms(seen, rules):
+    """New incoming texts since the last scan. Email-only bodies are too thin
+    for a lead; they go to the review list instead. Tap answers teach: kept
+    senders are skipped, chosen ones become leads on their own."""
     leads, findings, review = [], [], []
     seen = set(seen)
     code, out = run(["quo", "list", "--incoming", "--limit", "25", "--json"], timeout=60)
@@ -133,6 +148,7 @@ def quo_sms(seen):
         messages = json.loads(out or "[]")
     except ValueError:
         return leads, findings, {"error": "quo list was not JSON"}, [], []
+    kept = auto = 0
     fresh = [m for m in messages
              if m.get("direction") == "incoming" and m.get("id") not in seen and recent(m.get("created_at"))
              and not SKIP_SMS.search(m.get("body") or "")]
@@ -141,30 +157,37 @@ def quo_sms(seen):
             seen.add(message.get("id"))
     for message in fresh:
         sender = message.get("from_number") or ""
+        if rule_match(rules, "sms-ignore", number=sender):
+            kept += 1
+            continue
         body = (message.get("body") or "").strip()
-        if EMAIL_ONLY_SMS.match(body):
+        auto_rule = rule_match(rules, "sms-lead", number=sender)
+        if EMAIL_ONLY_SMS.match(body) and not auto_rule:
             review.append({
                 "brand": "bookkeeping-conroe",
                 "room": "phone",
                 "key": "scan-cleanup:sms:%s" % message.get("id"),
                 "what": "Text from %s is only an email address (%s) — lead or spam?" % (sender, body),
                 "evidence": "SMS %s from %s: %s" % (message.get("id"), sender, body[:200]),
+                "ref": {"number": sender, "body": body[:200]},
             })
             continue
+        if auto_rule:
+            auto += 1
         leads.append({
             "brand": "bookkeeping-conroe",
             "name": sender,
             "phone": sender,
             "source": "quo",
-            "sourceDetail": "sms",
+            "sourceDetail": "sms%s" % (" (per rule)" if auto_rule else ""),
             "note": (message.get("body") or "")[:200],
         })
     if fresh:
         findings.append({"kind": "quo", "text": "%d new text%s" % (len(fresh), "" if len(fresh) == 1 else "s")})
-    return leads, findings, {"new": len(fresh), "review": len(review)}, sorted(seen)[-200:], review
+    return leads, findings, {"new": len(fresh), "review": len(review), "kept": kept, "auto": auto}, sorted(seen)[-200:], review
 
 
-def quo_calls(seen):
+def quo_calls(seen, rules=None):
     """New Quo calls since the last scan, read from the sales database (read-only)."""
     leads, findings = [], []
     try:
@@ -234,7 +257,7 @@ VOICEMAIL_ROW = re.compile(
 VOICEMAIL_BRAND = {"Bookkeeping Conroe": "bookkeeping-conroe", "The Real Estate Bookkeeper": "real-estate-bookkeeper"}
 
 
-def quo_voicemail(seen):
+def quo_voicemail(seen, rules=None):
     """Read new voicemails. The intake run itself is a login-check trigger in main."""
     leads, findings = [], []
     code, out = run(["voicemail-intake", "ls", "-n", "15"], timeout=60)
@@ -274,7 +297,7 @@ def quo_voicemail(seen):
     return leads, findings, {"genuine": genuine, "spam": spam}, sorted(seen)[-200:], []
 
 
-def zoho_mail(seen):
+def zoho_mail(seen, rules):
     """New Zoho mail: website forms become leads, signed-hint replies are
     flagged, and real forms from unknown domains go to the review list."""
     leads, findings, hints, review = [], [], [], []
@@ -291,7 +314,7 @@ def zoho_mail(seen):
         if uid not in seen:
             fresh.append((number, uid))
         seen.add(uid)
-    forms = 0
+    forms = ignored = ruled_filed = 0
     for number, uid in sorted(fresh):
         code, out = run(["mail", "read", number], timeout=60)
         if code != 0:
@@ -331,17 +354,35 @@ def zoho_mail(seen):
             email = reply_to or fields.get("email", "")
             if SKIP_EMAILS.search(email) or email.lower() in OWN_EMAILS:
                 continue
+            ruled = rule_match(rules, "form-ignore", domain=domain)
+            if ruled:
+                ignored += 1
+                continue
+            auto_rule = rule_match(rules, "form-brand", domain=domain)
+            if auto_rule and isinstance(auto_rule.get("action"), dict):
+                brand = auto_rule["action"].get("brand", brand)
+                if brand:
+                    ruled_filed += 1
             if not brand:
+                name = fields.get("name") or (email.split("@")[0] if "@" in email else "Website visitor")
                 review.append({
-                    "brand": brand,
+                    "brand": "bookkeeping-conroe",
                     "room": "inbox",
                     "key": "scan-cleanup:form:%s" % uid,
                     "what": "Form submission from %s — which brand?" % domain,
                     "evidence": "%s from %s: %s" % (subject[:150], sender[:150], " ".join(body_lines[:2])[:300]),
+                    "ref": {
+                        "domain": domain,
+                        "email": email or None,
+                        "name": (fields.get("name") or "")[:200],
+                        "phone": (fields.get("phone") or "")[:64],
+                        "form": (fields.get("form") or "website")[:60],
+                    },
                 })
                 continue
             forms += 1
             name = fields.get("name") or (email.split("@")[0] if "@" in email else "Website visitor")
+            ruled_note = " (per rule)" if brand and brand not in FORM_DOMAIN_BRAND.values() else ""
             leads.append({
                 "brand": brand,
                 "name": name[:200],
@@ -349,7 +390,7 @@ def zoho_mail(seen):
                 "phone": fields.get("phone"),
                 "source": "zoho",
                 "sourceDetail": "form:%s" % fields.get("form", "website")[:60],
-                "note": "Form submission from %s" % domain,
+                "note": "Form submission from %s%s" % (domain, ruled_note),
             })
             continue
         if SKIP_SENDERS.search(sender) or SKIP_EMAILS.search(sender):
@@ -364,6 +405,9 @@ def zoho_mail(seen):
                     "subject": subject[:200],
                     "snippet": " ".join(body_lines[:3])[:500],
                 })
+    if ignored or ruled_filed:
+        findings.append({"kind": "zoho", "text": "%d handled by rule%s" % (
+            ignored + ruled_filed, "" if ignored + ruled_filed == 1 else "s")})
     if fresh:
         findings.append({"kind": "zoho", "text": "%d new email%s (%d form%s)" % (
             len(fresh), "" if len(fresh) == 1 else "s", forms, "" if forms == 1 else "s")})
@@ -375,6 +419,49 @@ EMAIL_ONLY_SMS = re.compile(r"^[\w.+-]+@[\w-]+\.[\w.]+$")
 
 
 MAIL_SPAM_PATROL = os.path.expanduser("~/projects/mailroom-app/bin/mail-spam-patrol")
+
+
+SHARED_PROVIDERS = {"gmail.com", "outlook.com", "hotmail.com", "yahoo.com", "aol.com", "icloud.com", "proton.me", "zoho.com"}
+
+ALWAYS_BLOCK_PATH = os.path.expanduser("~/.local/state/mailroom/spam-always-block.json")
+
+
+def sync_always_spam(rules):
+    """Push tap-answer spam rules into the existing always-block list, so the
+    regular sweep enforces them. Never removes anything; undo deactivates the
+    rule (list entries stay as Tom's own history)."""
+    auto = []
+    try:
+        wanted = set()
+        for rule in rules:
+            if rule.get("kind") != "always-spam":
+                continue
+            matcher = rule.get("matcher") or {}
+            sender = str(matcher.get("sender") or "").lower()
+            domain = str(matcher.get("domain") or matcher.get("sender", "")).lower()
+            if "@" in domain:
+                domain = domain.split("@", 1)[1]
+            if sender and "@" in sender:
+                wanted.add(sender)
+            if domain and domain not in SHARED_PROVIDERS:
+                wanted.add(domain)
+        if not wanted:
+            return auto
+        with open(ALWAYS_BLOCK_PATH) as handle:
+            data = json.load(handle)
+        senders = data.get("senders", [])
+        missing = [s for s in sorted(wanted) if s not in senders]
+        if missing:
+            data["senders"] = senders + missing
+            tmp = ALWAYS_BLOCK_PATH + ".tmp"
+            with open(tmp, "w") as handle:
+                json.dump(data, handle, indent=2)
+                handle.write("\n")
+            os.replace(tmp, ALWAYS_BLOCK_PATH)
+            auto.append("added %d sender%s to always-spam" % (len(missing), "" if len(missing) == 1 else "s"))
+    except (OSError, ValueError) as error:
+        auto.append("always-spam sync skipped (%s)" % str(error)[:80])
+    return auto
 
 
 def housekeeping(manual):
@@ -421,11 +508,11 @@ def housekeeping(manual):
     return findings, stats
 
 
-def gather(state, post):
+def gather(state, post, rules):
     """Read the external sources in parallel. Nothing waits on anything else:
     each source posts its own progress, and one failure never blocks the rest."""
     import concurrent.futures
-    all_leads, all_findings, all_hints, all_review = [], [], [], []
+    all_leads, all_findings, all_hints, all_review, auto = [], [], [], [], []
     summary = {}
     jobs = {
         "quo-sms": ("quo_sms", quo_sms, state.get("sms_ids", [])),
@@ -434,7 +521,7 @@ def gather(state, post):
         "zoho": ("zoho", zoho_mail, state.get("mail_uids", [])),
     }
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-        running = {pool.submit(func, seen): key for key, (_, func, seen) in jobs.items()}
+        running = {pool.submit(func, seen, rules): key for key, (_, func, seen) in jobs.items()}
         for done in concurrent.futures.as_completed(running):
             key = running[done]
             name = jobs[key][0]
@@ -460,7 +547,7 @@ def gather(state, post):
                 post(key, "needs-you", stats["error"][:200])
             else:
                 post(key, "done", (findings[0]["text"] if findings else "No changes"))
-    return all_leads, all_findings, all_hints, all_review, summary
+    return all_leads, all_findings, all_hints, all_review, summary, auto
 
 
 def scan_once(swapp_url, token):
@@ -507,6 +594,12 @@ def scan_once(swapp_url, token):
         if not run_id:
             return False
     print("scanning run %s (since %s) ..." % (run_id, since), flush=True)
+    try:
+        _, fetched = api(swapp_url + "/api/scan/rules", token)
+        scan_rules = fetched.get("rules", []) if isinstance(fetched, dict) else []
+    except Exception:
+        scan_rules = []
+    auto_labels = sync_always_spam(scan_rules)
 
     def post(source, status, detail=None):
         try:
@@ -526,7 +619,8 @@ def scan_once(swapp_url, token):
     intake_code, _ = run(["voicemail-intake", "run"], timeout=180)
     if intake_code != 0:
         post("quo-voicemail", "needs-you", "Voicemail intake failed — check it, then Scan again")
-    leads, findings, hints, review, summary = gather(state, post)
+    leads, findings, hints, review, summary, auto = gather(state, post, scan_rules)
+    auto_labels.extend(auto)
     clean_findings, clean_stats = housekeeping(manual)
     findings.extend(clean_findings)
     summary["cleanup"] = clean_stats
@@ -537,6 +631,7 @@ def scan_once(swapp_url, token):
         "leads": leads,
         "signedHints": hints,
         "reviewItems": review,
+        "autoApplied": auto_labels + auto,
     })
     if status != 200:
         print("complete failed: HTTP %d" % status, flush=True)

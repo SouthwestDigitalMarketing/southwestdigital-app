@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/simpleRateLimit";
@@ -7,6 +8,7 @@ import { createBrandDataContext, withBrandDataTransaction } from "@/lib/tenancy/
 import { checkScanToken } from "@/lib/scan/auth";
 import { computeInternalChanges } from "@/lib/scan/internal";
 import { applyTagEvidence } from "@/lib/scan/tags";
+import { MAX_OPEN_QUESTIONS, QUESTION_OPTIONS, proposeBroaderRules, syncQuestions, type QuestionKind } from "@/lib/scan/questions";
 import { postScanFinding } from "@/lib/scanner/post";
 import { isScanRoom, type ScanRoom } from "@/lib/scanner/vocab";
 import {
@@ -26,7 +28,13 @@ const KIND_SOURCES: Record<string, string[]> = {
   ga4: ["ga4"],
 };
 
-type ReviewItem = { brand: string; room: ScanRoom; key: string; what: string; evidence: string };
+type ReviewItem = { brand: string; room: ScanRoom; key: string; what: string; evidence: string; ref: Record<string, unknown> | null };
+
+function questionKindForReview(item: ReviewItem): QuestionKind | null {
+  if (item.room === "phone" && item.key.startsWith("scan-cleanup:sms:")) return "sms-lead";
+  if (item.room === "inbox" && item.key.startsWith("scan-cleanup:form:")) return "form-brand";
+  return null;
+}
 
 function cleanCapped(value: unknown, max: number): string | null {
   if (typeof value !== "string") return null;
@@ -43,7 +51,8 @@ function parseReviewItem(raw: unknown): ReviewItem | null {
   const what = cleanCapped(row.what, 500);
   const evidence = cleanCapped(row.evidence, 4000);
   if (!brand || !room || !key || !what || !evidence || !isScanRoom(room)) return null;
-  return { brand, room, key, what, evidence };
+  const ref = row.ref && typeof row.ref === "object" && !Array.isArray(row.ref) ? (row.ref as Record<string, unknown>) : null;
+  return { brand, room, key, what, evidence, ref };
 }
 
 /** Uncertain cleanup items become review-list findings, never the bin. */
@@ -191,6 +200,11 @@ export async function POST(request: Request) {
     }
   }
 
+  const brandList = [...brandBySlug.entries()].map(([slug, id]) => ({ id, slug }));
+  const synced = await syncQuestions(prisma, brandList.map((brand) => brand.id));
+  const proposed = await proposeBroaderRules(prisma, brandList);
+  const autoApplied = Array.isArray(body?.autoApplied) ? body.autoApplied.filter((item): item is string => typeof item === "string").slice(0, 10) : [];
+
   const previousDone = await prisma.scanRun.findFirst({
     where: { status: "done" },
     orderBy: { finishedAt: "desc" },
@@ -234,7 +248,32 @@ export async function POST(request: Request) {
     });
     reviewFiled += 1;
     changes.push({ kind: REVIEW_KIND[item.room], text: item.what });
+    const kind = questionKindForReview(item);
+    if (kind && item.ref) {
+      const openCount = await prisma.scanQuestion.count({ where: { brandId, status: "open" } });
+      if (openCount < MAX_OPEN_QUESTIONS) {
+        const dup = await prisma.scanQuestion.findFirst({
+          where: { brandId, kind, status: "open" },
+          select: { id: true, ref: true },
+        });
+        const sameRef = dup && JSON.stringify((dup.ref ?? {}) as object) === JSON.stringify(item.ref);
+        if (!sameRef) {
+          await prisma.scanQuestion.create({
+            data: {
+              brandId,
+              kind,
+              ref: item.ref as Prisma.InputJsonValue,
+              findingId: null,
+              what: item.what,
+              options: QUESTION_OPTIONS[kind] as unknown as Prisma.InputJsonValue,
+              severity: "normal",
+            },
+          });
+        }
+      }
+    }
   }
+
 
   const currentSources: ScanSourceState[] = Array.isArray(run.sources)
     ? (run.sources as ScanSourceState[])
@@ -266,7 +305,7 @@ export async function POST(request: Request) {
     data: {
       status: "done",
       finishedAt,
-      summary: { sources: sourceSummary, leadsCreated, signedHints: hints.length, ga4: internal.ga4, tags: { fixed: tags.fixed, judgments: tags.judgments }, review: reviewFiled },
+      summary: { sources: sourceSummary, leadsCreated, signedHints: hints.length, ga4: internal.ga4, tags: { fixed: tags.fixed, judgments: tags.judgments }, review: reviewFiled, questions: synced, proposed: proposed.created, autoApplied },
       changes: changes.slice(0, 30),
       sources,
     },

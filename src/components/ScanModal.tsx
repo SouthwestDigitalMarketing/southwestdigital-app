@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, X } from "lucide-react";
-import { getScanStatus, type ScanStatus } from "@/app/(app)/scanActions";
+import { answerScanQuestion, getScanStatus, undoScanQuestion, type ScanStatus } from "@/app/(app)/scanActions";
 import type { ScanSourceState } from "@/lib/scan/sources";
 
 /** Full-screen scan sheet (Tom 2026-11-23): title then the numbered checklist,
@@ -10,6 +10,8 @@ import type { ScanSourceState } from "@/lib/scan/sources";
  * never cut off. Closing never stops the scan. */
 export function ScanModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [status, setStatus] = useState<ScanStatus | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [answering, setAnswering] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -102,6 +104,83 @@ export function ScanModal({ open, onClose }: { open: boolean; onClose: () => voi
         ) : (
           <p className="mt-4 text-sm text-slate-500">{status?.running ? "Starting…" : "No source detail yet."}</p>
         )}
+        {(status?.questions.length ?? 0) > 0 || (status?.recentlyAnswered.length ?? 0) > 0 ? (
+          <div className="mt-4 shrink-0 border-t border-slate-200 pt-3">
+            <h3 className="text-sm font-semibold text-slate-900">
+              Needs your call{status && status.questions.length > 0 ? ` (${status.questions.length})` : ""}
+            </h3>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Questions this week: {status?.scoreboard.askedWeek ?? 0} asked ·{" "}
+              {status?.scoreboard.answeredWeek ?? 0} answered · {status?.scoreboard.open ?? 0 } open — trending to zero.
+            </p>
+            {notice ? <p className="mt-1 text-xs font-medium text-emerald-700">{notice}</p> : null}
+            <ol className="mt-2 space-y-2 text-sm">
+              {status?.questions.map((question, index) => (
+                <li key={question.id}>
+                  <p className="text-slate-800">
+                    <span className="mr-1 tabular-nums text-slate-400">{index + 1}.</span>
+                    {question.what}
+                  </p>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {question.options.map((option) => (
+                      <button
+                        key={option.key}
+                        type="button"
+                        disabled={answering}
+                        onClick={async () => {
+                          setAnswering(true);
+                          try {
+                            const result = await answerScanQuestion(question.id, option.key);
+                            setNotice(result.message);
+                            setStatus(await getScanStatus());
+                          } catch {
+                            setNotice("That tap did not go through — try again.");
+                          } finally {
+                            setAnswering(false);
+                          }
+                        }}
+                        className="rounded-full border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </li>
+              ))}
+            </ol>
+            {status && status.recentlyAnswered.length > 0 ? (
+              <ul className="mt-2 space-y-1 text-xs text-slate-500">
+                {status.recentlyAnswered.map((item) => (
+                  <li key={item.id} className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 truncate">✓ {item.what}</span>
+                    <button
+                      type="button"
+                      disabled={answering}
+                      onClick={async () => {
+                        setAnswering(true);
+                        try {
+                          const result = await undoScanQuestion(item.id);
+                          setNotice(result.message);
+                          setStatus(await getScanStatus());
+                        } catch {
+                          setNotice("Undo did not go through — try again.");
+                        } finally {
+                          setAnswering(false);
+                        }
+                      }}
+                      className="shrink-0 underline decoration-slate-300 underline-offset-2 hover:text-slate-800 disabled:opacity-50"
+                    >
+                      Undo
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {status && status.autoApplied.length > 0 ? (
+              <p className="mt-2 text-xs text-slate-500">Handled automatically: {status.autoApplied.join("; ")}.</p>
+            ) : null}
+          </div>
+        ) : null}
         <p className="mt-3 shrink-0 text-xs text-slate-500">
           {status?.running
             ? "Closing this keeps the scan running."
