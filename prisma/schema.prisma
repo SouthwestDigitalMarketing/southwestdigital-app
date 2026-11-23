@@ -3449,6 +3449,7 @@ model ScanQuestion {
   undo       Json?
   severity   String    @default("normal")
   createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
   answeredAt DateTime?
   brand      Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
 

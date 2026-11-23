@@ -1,4 +1,4 @@
--- SCAN PART 2: questions that teach the team (Tom 2026-11-23).
+-- SCAN PART 2 (Tom 2026-11-23): questions that teach the team.
 -- ScanRule: every tap answer saved as a rule the scan applies next time.
 -- ScanQuestion: max-5 tap-answer items drawn from open review findings.
 -- Additive: two new tables only.
@@ -31,6 +31,7 @@ CREATE TABLE "ScanQuestion" (
   "undo" JSONB,
   "severity" TEXT NOT NULL DEFAULT 'normal',
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "answeredAt" TIMESTAMP(3),
   CONSTRAINT "ScanQuestion_pkey" PRIMARY KEY ("id")
 );
