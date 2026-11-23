@@ -29,8 +29,8 @@ import time
 import urllib.error
 import urllib.request
 
-CONFIG = os.path.expanduser("~/.config/swapp-scan/env")
-STATE = os.path.expanduser("~/.local/share/swapp-scan/state.json")
+CONFIG = os.environ.get("SWAPP_SCAN_CONFIG") or os.path.expanduser("~/.config/swapp-scan/env")
+STATE = os.environ.get("SWAPP_SCAN_STATE") or os.path.expanduser("~/.local/share/swapp-scan/state.json")
 SALES_DB = os.path.expanduser("~/.local/share/lochside-sales/sales.db")
 AUTO_MINUTES = 15
 RECENT_DAYS = 7

@@ -19,16 +19,11 @@ export async function POST(request: Request) {
   }
   const body = (await request.json().catch(() => null)) as { auto?: unknown } | null;
   const startedAt = new Date();
-  // Reap runs no poller will ever finish: a requested run the poller never
-  // picked up, or a running run whose poller died mid-scan. Without this one
-  // dead run pins the header spinner forever.
+  // Reap running runs whose poller died mid-scan: they can never finish, and
+  // one dead run pins the header spinner forever. Stale *requested* runs are
+  // simply claimed below and run now — a late scan beats none.
   await prisma.scanRun.updateMany({
-    where: {
-      OR: [
-        { status: "requested", requestedAt: { lt: new Date(startedAt.getTime() - 4 * 60 * 1000) } },
-        { status: "running", startedAt: { lt: new Date(startedAt.getTime() - 30 * 60 * 1000) } },
-      ],
-    },
+    where: { status: "running", startedAt: { lt: new Date(startedAt.getTime() - 30 * 60 * 1000) } },
     data: { status: "error", error: "Superseded: no poller finished this run in time." },
   });
 
