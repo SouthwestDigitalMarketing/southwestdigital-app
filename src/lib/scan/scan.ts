@@ -94,3 +94,31 @@ export function looksLikeSignedReply(subject: string | null, snippet: string | n
   if (!/(sign|gsa|agreement|contract|paperwork|docusign|proposal|quote|engagement|done)/.test(text)) return false;
   return SIGNED_HINT.test(text);
 }
+
+/** A scan nobody picked up. The poller fires every few seconds, so a
+ * requested run older than this has no poller watching; a running run older
+ * than its own bound means the poller died mid-run. */
+export const STALE_REQUESTED_MS = 4 * 60 * 1000;
+export const STALE_RUNNING_MS = 30 * 60 * 1000;
+
+export type ScanRunState = {
+  status: string;
+  requestedAt: Date | string | null;
+  startedAt: Date | string | null;
+};
+
+function asTime(value: Date | string | null): number {
+  if (!value) return Number.NaN;
+  const time = value instanceof Date ? value.getTime() : Date.parse(value);
+  return Number.isFinite(time) ? time : Number.NaN;
+}
+
+/** "stale" means the spinner would otherwise spin forever: request/claim
+ * mark it errored and move on instead of stacking behind it. */
+export function scanRunStaleness(run: ScanRunState | null, now: Date = new Date()): "fresh" | "stale" | "none" {
+  if (!run || (run.status !== "requested" && run.status !== "running")) return "none";
+  const base = run.status === "running" ? asTime(run.startedAt) || asTime(run.requestedAt) : asTime(run.requestedAt);
+  if (Number.isNaN(base)) return "fresh";
+  const limit = run.status === "running" ? STALE_RUNNING_MS : STALE_REQUESTED_MS;
+  return now.getTime() - base > limit ? "stale" : "fresh";
+}
