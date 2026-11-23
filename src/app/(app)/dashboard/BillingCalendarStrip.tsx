@@ -104,7 +104,7 @@ export function BillingLegendButton() {
  * Opens with yesterday at the left edge; both edges fade out. A double-tap
  * (double-click on desktop) scrolls back there. Past days are dimmed.
  */
-export function BillingCalendarStrip({ days }: { days: BillingCalendarDay[] }) {
+export function BillingCalendarStrip({ days, releases = {} }: { days: BillingCalendarDay[]; releases?: Record<string, number> }) {
   const scroller = useRef<HTMLDivElement>(null);
   const yesterday = useRef<HTMLDivElement>(null);
 
@@ -146,7 +146,8 @@ export function BillingCalendarStrip({ days }: { days: BillingCalendarDay[] }) {
         }}
       >
         {days.map((d) => {
-          const event = d.event ? EVENT_STYLE[d.event] : null;
+          const episode = releases[d.date];
+          const event = d.event ? EVENT_STYLE[d.event] : episode ? { dot: "bg-indigo-600 text-white", text: "text-indigo-700", label: `Episode ${episode} · 5 p.m. Central` } : null;
           const isToday = d.offset === 0;
           return (
             <div
@@ -155,7 +156,7 @@ export function BillingCalendarStrip({ days }: { days: BillingCalendarDay[] }) {
               className={`flex snap-start flex-col items-center gap-1 py-1 ${d.payWindow ? "bg-emerald-50" : ""} ${
                 d.offset < 0 ? "opacity-40 grayscale" : ""
               }`}
-              title={`${monthOf(d.date)} ${d.day}${event ? ` · ${event.label}` : ""}`}
+              title={`${monthOf(d.date)} ${d.day}${event ? ` · ${event.label}` : ""}${episode && d.event ? ` · Episode ${episode} · 5 p.m. Central` : ""}`}
             >
               <span className={`h-3.5 text-[11px] font-bold leading-3.5 tabular-nums ${event?.text ?? ""}`}>
                 {event && d.offset >= 0 ? countdown(d.offset) : ""}
@@ -173,7 +174,7 @@ export function BillingCalendarStrip({ days }: { days: BillingCalendarDay[] }) {
                 {d.day}
               </span>
               <span className="h-3 text-[10px] font-semibold uppercase leading-3 text-slate-500">
-                {d.day === 1 ? monthOf(d.date) : ""}
+                {episode ? `E${episode}` : d.day === 1 ? monthOf(d.date) : ""}
               </span>
             </div>
           );

@@ -1,5 +1,11 @@
 # SWapp handoff
 
+## 2026-11-23 — Showrunner season release calendar
+
+Tom approved six weekly Sunday releases at 17:00 America/Chicago: Nov 29, Dec 6/13/20/27, Jan 3 (2027). Source: `src/lib/showrunner/release-schedule.json`. Overview replaces the Open Studio promo with a six-episode timeline, live minute-updated countdown and swipeable calendar (also visible when analytics is unavailable). Dashboard billing strip shows episode markers alongside its existing dates. Dates are planned deadlines; elapsed dates do not imply publication. Schedule edits in the app do not sync to Zoho automatically.
+
+Created all six 15-minute release markers in the connected Zoho Thomas calendar (`thomas@bookkeepingconroe.com`), each verified by CalDAV readback; no invitations. UID receipts: `~/.local/share/showrunner/season-calendar-2026.json`. No duplicate pre-existing release events found. Phone preview at 390 px inspected: countdown, all six dates, calendar positioned at today, no page overflow. Temporary unauthenticated fixture route removed. Checks: typecheck/lint pass, 1332 tests passed / 5 skipped; production build and PR CI tracked in this job's board completion record.
+
 ## 2026-11-23 — SCAN PART 2: questions that teach (Ummon, PR #228)
 
 Tap-answer questions, max 5 per scan (rest wait). New tables `ScanRule` (kind/matcher/action/active) and `ScanQuestion` (kind/ref/findingId/what/options/undo/answered), plus `pipeline` scan room (additive migration; baseline untouched). Kinds: sms-lead, form-brand, stale-lead, paid-verify, won-verify, no-contact, broaden. Answers apply immediately + save a rule + record undo (tags, leads, deals, contacts, rules all reversible); money/contract sends and deletes are never offered — those stay Tom's. `GET /api/scan/rules` feeds the poller; the poller consults keep/lead/form rules, syncs always-spam answers into the existing block list, and reports auto-applied items. Sync turns open fixLevel-2 findings into questions (domain-grouped broaden proposals after 3 similar answers; shared providers excluded; declines block re-proposals). Modal shows Needs-your-call with tap buttons, scoreboard (asked/answered/open this week, trending to zero), handled-automatically list, and Undo on recent answers. Rulebook seeded at All Thing `sops/scan-rulebook.md` (committed + pushed on main); agents add learned rows each scan session.
