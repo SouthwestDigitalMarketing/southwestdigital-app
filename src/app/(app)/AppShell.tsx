@@ -576,8 +576,9 @@ export function AppShell({
             <Menu size={20} />
           </button>
           <span className="ml-3 min-w-0 truncate text-sm font-semibold text-slate-900">{companyDashboard ? "Lochside LLC" : brand.name}</span>
+          <span className="ml-auto" />
           {showScan ? <ScanButton compact /> : null}
-          <span className="ml-auto pl-2">
+          <span className="pl-2">
             <PrivacyToggle on={privacy} compact />
           </span>
           <button
