@@ -19,20 +19,7 @@ import { getYouTubeRefreshToken } from "@/lib/youtube/credentials";
 import { InProgress } from "./InProgress";
 import { VideoList } from "./VideoList";
 import { loadVideoCards } from "@/lib/showrunner/load";
-import Link from "next/link";
-
-function StudioEntry() {
-  return (
-    <section className="mb-7 flex flex-col gap-5 rounded-3xl bg-[#101933] p-6 text-white shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-8">
-      <div>
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-200">The $10K Month</p>
-        <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">This week&apos;s episode</h2>
-        <p className="mt-2 max-w-xl text-sm text-slate-300">Find the story, shape the beats, then shoot one clip at a time.</p>
-      </div>
-      <Link href="/showrunner/studio" className="inline-flex min-h-12 shrink-0 items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-bold text-slate-950 hover:bg-indigo-50">Open Studio →</Link>
-    </section>
-  );
-}
+import { ReleaseCalendar } from "./ReleaseCalendar";
 
 function YouTubeIcon({ className }: { className?: string }) {
   return (
@@ -74,7 +61,7 @@ export default async function ShowrunnerPage() {
     return (
       <div className="p-8">
         <h1 className="sr-only">Showrunner</h1>
-        <StudioEntry />
+        <ReleaseCalendar initialNow={new Date().toISOString()} />
         <InProgress videos={videos} />
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
         <p className="mt-2 text-sm text-slate-400">YouTube channel not configured for this brand. <a className="font-semibold underline" href="/api/youtube/connect">Connect YouTube</a>.</p>
@@ -88,7 +75,7 @@ export default async function ShowrunnerPage() {
     return (
       <div className="p-8">
         <h1 className="sr-only">Showrunner</h1>
-        <StudioEntry />
+        <ReleaseCalendar initialNow={new Date().toISOString()} />
         <InProgress videos={videos} />
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
         <p className="mt-2 text-sm text-slate-600">Channel data is unavailable because the saved YouTube connection could not be read here. <a className="font-semibold underline" href="/api/youtube/connect">Connect YouTube</a>.</p>
@@ -152,7 +139,7 @@ export default async function ShowrunnerPage() {
     return (
       <div className="p-8">
         <h1 className="sr-only">Showrunner</h1>
-        <StudioEntry />
+        <ReleaseCalendar initialNow={new Date().toISOString()} />
         <InProgress videos={videos} />
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
         <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -201,7 +188,7 @@ export default async function ShowrunnerPage() {
   return (
     <div className="p-8">
       <h1 className="sr-only">Showrunner</h1>
-      <StudioEntry />
+      <ReleaseCalendar initialNow={new Date().toISOString()} />
       <InProgress videos={videos} />
       <div>
         <h2 className="text-lg font-semibold text-slate-900">Channel performance</h2>

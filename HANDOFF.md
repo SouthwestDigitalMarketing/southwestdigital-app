@@ -1,5 +1,10 @@
 # SWapp handoff
 
+## 2026-11-23 — Showrunner season release calendar
+
+Tom approved six weekly Sunday releases at 17:00 America/Chicago: Nov 29, Dec 6/13/20/27, Jan 3 (2027). Source: `src/lib/showrunner/release-schedule.json`. Overview replaces the Open Studio promo with a six-episode timeline, live minute-updated countdown and swipeable calendar (also visible when analytics is unavailable). Dashboard billing strip shows episode markers alongside its existing dates. Dates are planned deadlines; elapsed dates do not imply publication. Schedule edits in the app do not sync to Zoho automatically.
+
+Created all six 15-minute release markers in the connected Zoho Thomas calendar (`thomas@bookkeepingconroe.com`), each verified by CalDAV readback; no invitations. UID receipts: `~/.local/share/showrunner/season-calendar-2026.json`. No duplicate pre-existing release events found. Phone preview at 390 px inspected: countdown, all six dates, calendar positioned at today, no page overflow. Temporary unauthenticated fixture route removed. Checks: typecheck/lint pass, 1332 tests passed / 5 skipped; production build and PR CI tracked in this job's board completion record.
 ## 2026-11-23 — Stuck scans explain themselves (Ummon, PR #229)
 
 Tom: "why is the live SWapp spinning?" Diagnosis: his press on production created a requested run no poller picks up (the ripley poller watches 3101 only), so the icon spun forever and the sheet sat on Waiting. Same class of bug as a poller dying mid-run. Fix: `scanRunStaleness` (requested >4 min, running >30 min). requestScan supersedes stale runs with a fresh one; the claim endpoint reaps stale runs before claiming; getScanStatus reports `stuck` and the sheet says plainly the scan may never start and to tap Scan again. Verified live on 3101: planted a 10-minute-old requested run, poller run errored it ("Superseded...") instead of hanging; fresh presses still claim and finish. Gates: full suite 1332 passed / 5 skipped, PR #229 green. Production still has no poller and no SCAN_STATUS_TOKEN — that cutover is the follow-up.
