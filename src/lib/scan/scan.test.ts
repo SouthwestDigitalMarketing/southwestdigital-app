@@ -1,6 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { checkScanToken } from "./auth";
-import { formatUpdatedAgo, looksLikeSignedReply, parseScanChange, parseScanLead, parseSignedHint } from "./scan";
+import { formatUpdatedAgo, looksLikeSignedReply, parseScanChange, parseScanLead, parseSignedHint, scanRunStaleness } from "./scan";
+
+describe("scanRunStaleness", () => {
+  const now = new Date("2026-11-23T12:00:00Z");
+  const minutes = (n: number) => new Date(now.getTime() - n * 60_000).toISOString();
+  it("calls a scan stale only when no poller could still take it", () => {
+    expect(scanRunStaleness(null, now)).toBe("none");
+    expect(scanRunStaleness({ status: "done", requestedAt: minutes(99), startedAt: minutes(99) }, now)).toBe("none");
+    expect(scanRunStaleness({ status: "requested", requestedAt: minutes(1), startedAt: null }, now)).toBe("fresh");
+    expect(scanRunStaleness({ status: "requested", requestedAt: minutes(10), startedAt: null }, now)).toBe("stale");
+    expect(scanRunStaleness({ status: "running", requestedAt: minutes(40), startedAt: minutes(10) }, now)).toBe("fresh");
+    expect(scanRunStaleness({ status: "running", requestedAt: minutes(90), startedAt: minutes(40) }, now)).toBe("stale");
+    expect(scanRunStaleness({ status: "running", requestedAt: minutes(90), startedAt: null }, now)).toBe("stale");
+  });
+});
 
 describe("checkScanToken", () => {
   const env = { SCAN_STATUS_TOKEN: "x".repeat(32) };

@@ -122,6 +122,13 @@ describe("POST /api/scan/claim", () => {
     );
     expect(await response.json()).toMatchObject({ runId: "auto1", since: null });
   });
+  it("reaps runs no poller will ever finish before claiming", async () => {
+    mocks.findFirst.mockResolvedValue(null);
+    await claim(new Request("http://x/api/scan/claim", { method: "POST", headers: token, body: "{}" }));
+    expect(mocks.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "error" }) }),
+    );
+  });
 });
 
 describe("POST /api/scan/complete", () => {

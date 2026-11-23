@@ -78,6 +78,15 @@ export function ScanModal({ open, onClose }: { open: boolean; onClose: () => voi
             <X size={18} />
           </button>
         </div>
+        <p className="mt-1 shrink-0 text-xs text-slate-500">
+          The Log in link opens QuickBooks in a new tab — sign in there, then come back here. Your scan keeps
+          running.
+        </p>
+        {status?.stuck ? (
+          <p className="mt-2 shrink-0 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            This scan has been waiting a while and may never start — tap Scan for a fresh one.
+          </p>
+        ) : null}
         {rows.length > 0 ? (
           <ol className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto text-sm">
             {rows.map((row, index) => (
