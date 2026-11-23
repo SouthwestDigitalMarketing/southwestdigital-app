@@ -15,7 +15,10 @@ const ALLOWED_KEYS = new Set([
 ]);
 
 export type ScanIngest = {
-  brand: typeof SCANNER_BRAND_SLUG;
+  // Plain string (not the BKC literal): the scan files other brands'
+  // findings server-side. The HTTP layer still only accepts Bookkeeping
+  // Conroe (see parseScanIngest below).
+  brand: string;
   room: ScanRoom;
   key: string;
   what: string;

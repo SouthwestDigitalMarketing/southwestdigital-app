@@ -6,6 +6,9 @@ import { parsePipeContactInput, toE164, upsertPipeContact } from "@/lib/pipe/con
 import { createBrandDataContext, withBrandDataTransaction } from "@/lib/tenancy/context";
 import { checkScanToken } from "@/lib/scan/auth";
 import { computeInternalChanges } from "@/lib/scan/internal";
+import { applyTagEvidence } from "@/lib/scan/tags";
+import { postScanFinding } from "@/lib/scanner/post";
+import { isScanRoom, type ScanRoom } from "@/lib/scanner/vocab";
 import {
   looksLikeSignedReply,
   parseScanChange,
@@ -21,6 +24,36 @@ const KIND_SOURCES: Record<string, string[]> = {
   zoho: ["zoho"],
   swapp: ["swapp"],
   ga4: ["ga4"],
+};
+
+type ReviewItem = { brand: string; room: ScanRoom; key: string; what: string; evidence: string };
+
+function cleanCapped(value: unknown, max: number): string | null {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  return text ? text.slice(0, max) : null;
+}
+
+function parseReviewItem(raw: unknown): ReviewItem | null {
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as Record<string, unknown>;
+  const brand = cleanCapped(row.brand, 80);
+  const room = cleanCapped(row.room, 40);
+  const key = cleanCapped(row.key, 200);
+  const what = cleanCapped(row.what, 500);
+  const evidence = cleanCapped(row.evidence, 4000);
+  if (!brand || !room || !key || !what || !evidence || !isScanRoom(room)) return null;
+  return { brand, room, key, what, evidence };
+}
+
+/** Uncertain cleanup items become review-list findings, never the bin. */
+const REVIEW_KIND: Record<ScanRoom, string> = {
+  phone: "quo",
+  inbox: "zoho",
+  payments: "swapp",
+  contracts: "swapp",
+  "non-inbox": "zoho",
+  pipeline: "swapp",
 };
 
 /** Quotes that went out but show no acceptance: a "signed" hint is worth flagging. */
@@ -165,6 +198,44 @@ export async function POST(request: Request) {
   const internal = await computeInternalChanges(prisma, previousDone?.finishedAt ?? null);
   changes.push(...internal.changes);
 
+  const tags = await applyTagEvidence({
+    db: prisma,
+    actorUserId: auth.actorUserId,
+    brands: [...brandBySlug.entries()].map(([slug, id]) => ({ id, slug })),
+    since: previousDone?.finishedAt ?? null,
+  });
+  changes.push(...tags.changes);
+  if (tags.judgments > 0) {
+    changes.push({ kind: "swapp", text: `${tags.judgments} need${tags.judgments === 1 ? "s" : ""} your call (review list)` });
+  }
+
+  const reviewItems = Array.isArray(body?.reviewItems)
+    ? body.reviewItems.map(parseReviewItem).filter((item): item is ReviewItem => item !== null).slice(0, 20)
+    : [];
+  let reviewFiled = 0;
+  for (const item of reviewItems) {
+    const brandId = brandBySlug.get(item.brand);
+    if (!brandId) continue;
+    await postScanFinding({
+      brandId,
+      actorUserId: auth.actorUserId,
+      input: {
+        brand: item.brand,
+        room: item.room,
+        key: item.key,
+        what: item.what,
+        severity: "normal",
+        evidence: item.evidence,
+        fixLevel: 2,
+        role: item.room === "inbox" ? "mail-desk" : "sales-pipeline",
+        presence: "open",
+        doneNote: null,
+      },
+    });
+    reviewFiled += 1;
+    changes.push({ kind: REVIEW_KIND[item.room], text: item.what });
+  }
+
   const currentSources: ScanSourceState[] = Array.isArray(run.sources)
     ? (run.sources as ScanSourceState[])
     : initialSources();
@@ -195,7 +266,7 @@ export async function POST(request: Request) {
     data: {
       status: "done",
       finishedAt,
-      summary: { sources: sourceSummary, leadsCreated, signedHints: hints.length, ga4: internal.ga4 },
+      summary: { sources: sourceSummary, leadsCreated, signedHints: hints.length, ga4: internal.ga4, tags: { fixed: tags.fixed, judgments: tags.judgments }, review: reviewFiled },
       changes: changes.slice(0, 30),
       sources,
     },

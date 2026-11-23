@@ -122,16 +122,17 @@ def run(cmd, timeout=180):
 
 
 def quo_sms(seen):
-    """New incoming texts since the last scan."""
-    leads, findings = [], []
+    """New incoming texts since the last scan. Email-only bodies are too
+    thin for a lead; they go to the review list instead."""
+    leads, findings, review = [], [], []
     seen = set(seen)
     code, out = run(["quo", "list", "--incoming", "--limit", "25", "--json"], timeout=60)
     if code != 0:
-        return leads, findings, {"error": "quo list failed"}
+        return leads, findings, {"error": "quo list failed"}, [], []
     try:
         messages = json.loads(out or "[]")
     except ValueError:
-        return leads, findings, {"error": "quo list was not JSON"}
+        return leads, findings, {"error": "quo list was not JSON"}, [], []
     fresh = [m for m in messages
              if m.get("direction") == "incoming" and m.get("id") not in seen and recent(m.get("created_at"))
              and not SKIP_SMS.search(m.get("body") or "")]
@@ -140,6 +141,16 @@ def quo_sms(seen):
             seen.add(message.get("id"))
     for message in fresh:
         sender = message.get("from_number") or ""
+        body = (message.get("body") or "").strip()
+        if EMAIL_ONLY_SMS.match(body):
+            review.append({
+                "brand": "bookkeeping-conroe",
+                "room": "phone",
+                "key": "scan-cleanup:sms:%s" % message.get("id"),
+                "what": "Text from %s is only an email address (%s) — lead or spam?" % (sender, body),
+                "evidence": "SMS %s from %s: %s" % (message.get("id"), sender, body[:200]),
+            })
+            continue
         leads.append({
             "brand": "bookkeeping-conroe",
             "name": sender,
@@ -150,7 +161,7 @@ def quo_sms(seen):
         })
     if fresh:
         findings.append({"kind": "quo", "text": "%d new text%s" % (len(fresh), "" if len(fresh) == 1 else "s")})
-    return leads, findings, {"new": len(fresh)}, sorted(seen)[-200:]
+    return leads, findings, {"new": len(fresh), "review": len(review)}, sorted(seen)[-200:], review
 
 
 def quo_calls(seen):
@@ -165,7 +176,7 @@ def quo_calls(seen):
         ).fetchall()
         conn.close()
     except sqlite3.Error as error:
-        return leads, findings, {"error": "sales db unreadable: %s" % error}, []
+        return leads, findings, {"error": "sales db unreadable: %s" % error}, [], []
     fresh = [r for r in rows if r[0] not in seen and recent(r[4] or r[5])]
     for row in rows:
         seen.add(row[0])
@@ -213,7 +224,7 @@ def quo_calls(seen):
         if missed:
             text += ": %s" % ", ".join(missed[:3])
         findings.append({"kind": "quo", "text": text})
-    return leads, findings, {"new": len(fresh), "answered": answered}, sorted(seen)[-200:]
+    return leads, findings, {"new": len(fresh), "answered": answered}, sorted(seen)[-200:], []
 
 
 VOICEMAIL_ROW = re.compile(
@@ -228,7 +239,7 @@ def quo_voicemail(seen):
     leads, findings = [], []
     code, out = run(["voicemail-intake", "ls", "-n", "15"], timeout=60)
     if code != 0:
-        return leads, findings, {"error": "voicemail-intake ls failed"}, []
+        return leads, findings, {"error": "voicemail-intake ls failed"}, [], []
     seen = set(seen)
     genuine = spam = 0
     for line in out.splitlines():
@@ -260,16 +271,17 @@ def quo_voicemail(seen):
     if genuine or spam:
         findings.append({"kind": "quo", "text": "%d new voicemail%s (%d spam)" % (
             genuine + spam, "" if genuine + spam == 1 else "s", spam)})
-    return leads, findings, {"genuine": genuine, "spam": spam}, sorted(seen)[-200:]
+    return leads, findings, {"genuine": genuine, "spam": spam}, sorted(seen)[-200:], []
 
 
 def zoho_mail(seen):
-    """New Zoho mail: website forms become leads, signed-hint replies are flagged."""
-    leads, findings, hints = [], [], []
+    """New Zoho mail: website forms become leads, signed-hint replies are
+    flagged, and real forms from unknown domains go to the review list."""
+    leads, findings, hints, review = [], [], [], []
     seen = set(seen)
     code, out = run(["mail", "ls", "zoho", "-n", "25", "--no-interactive"], timeout=120)
     if code != 0:
-        return leads, findings, hints, {"error": "mail ls failed"}, []
+        return leads, findings, hints, {"error": "mail ls failed"}, [], []
     fresh = []
     for line in out.splitlines():
         parts = line.split()
@@ -317,7 +329,16 @@ def zoho_mail(seen):
             domain = form.group(1).strip().lower().rstrip(".")
             brand = FORM_DOMAIN_BRAND.get(domain)
             email = reply_to or fields.get("email", "")
-            if not brand or SKIP_EMAILS.search(email) or email.lower() in OWN_EMAILS:
+            if SKIP_EMAILS.search(email) or email.lower() in OWN_EMAILS:
+                continue
+            if not brand:
+                review.append({
+                    "brand": brand,
+                    "room": "inbox",
+                    "key": "scan-cleanup:form:%s" % uid,
+                    "what": "Form submission from %s — which brand?" % domain,
+                    "evidence": "%s from %s: %s" % (subject[:150], sender[:150], " ".join(body_lines[:2])[:300]),
+                })
                 continue
             forms += 1
             name = fields.get("name") or (email.split("@")[0] if "@" in email else "Website visitor")
@@ -346,14 +367,65 @@ def zoho_mail(seen):
     if fresh:
         findings.append({"kind": "zoho", "text": "%d new email%s (%d form%s)" % (
             len(fresh), "" if len(fresh) == 1 else "s", forms, "" if forms == 1 else "s")})
-    return leads, findings, hints, {"new": len(fresh), "forms": forms, "hints": len(hints)}, sorted(seen)[-200:]
+    return leads, findings, hints, {"new": len(fresh), "forms": forms, "hints": len(hints),
+                                      "review": len(review)}, sorted(seen)[-200:], review
+
+
+EMAIL_ONLY_SMS = re.compile(r"^[\w.+-]+@[\w-]+\.[\w.]+$")
+
+
+MAIL_SPAM_PATROL = os.path.expanduser("~/projects/mailroom-app/bin/mail-spam-patrol")
+
+
+def housekeeping(manual):
+    """Clean house with ripley's existing tools — never anything new, never
+    a permanent delete. mail-sort moves between folders (undoable); sweep
+    moves always-spam to Spam (Tom's hourly review decides). The AI patrol
+    costs a model call, so it runs on manual scans only; its hourly timer
+    covers the rest."""
+    findings = []
+    stats = {}
+    try:
+        code, out = run(["mail-sort", "--apply"], timeout=180)
+        moved = re.search(r"moved (\d+)", out or "")
+        stats["mail_sort"] = {"moved": int(moved.group(1)) if moved else 0, "exit": code}
+        if moved and int(moved.group(1)) > 0:
+            findings.append({"kind": "zoho", "text": "Inbox cleanup — %s sorted (folders only, undo with mail-sort --undo)" % moved.group(1)})
+    except Exception as error:
+        stats["mail_sort"] = {"error": str(error)[:200]}
+    try:
+        code, out = run([MAIL_SPAM_PATROL, "sweep"], timeout=120)
+        moved = re.search(r"swept (\d+)", out or "")
+        stats["sweep"] = {"moved": int(moved.group(1)) if moved else 0, "exit": code}
+        if moved and int(moved.group(1)) > 0:
+            findings.append({"kind": "zoho", "text": "Inbox cleanup — %s to Spam (waiting in Tom's review)" % moved.group(1)})
+    except Exception as error:
+        stats["sweep"] = {"error": str(error)[:200]}
+    if manual:
+        try:
+            code, out = run([MAIL_SPAM_PATROL, "run"], timeout=600)
+            judged = re.search(r"(\d+) to judge", out or "")
+            filed = re.search(r"ledgered (\d+)", out or "")
+            stats["patrol"] = {
+                "judged": int(judged.group(1)) if judged else 0,
+                "filed": int(filed.group(1)) if filed else 0,
+                "exit": code,
+            }
+            if filed and int(filed.group(1)) > 0:
+                findings.append({"kind": "zoho", "text": "Spam patrol judged %s, %s to Spam (waiting in Tom's review)" % (
+                    judged.group(1) if judged else "?", filed.group(1))})
+        except Exception as error:
+            stats["patrol"] = {"error": str(error)[:200]}
+    else:
+        stats["patrol"] = {"skipped": "hourly timer covers auto scans"}
+    return findings, stats
 
 
 def gather(state, post):
     """Read the external sources in parallel. Nothing waits on anything else:
     each source posts its own progress, and one failure never blocks the rest."""
     import concurrent.futures
-    all_leads, all_findings, all_hints = [], [], []
+    all_leads, all_findings, all_hints, all_review = [], [], [], []
     summary = {}
     jobs = {
         "quo-sms": ("quo_sms", quo_sms, state.get("sms_ids", [])),
@@ -373,21 +445,22 @@ def gather(state, post):
                 post(key, "needs-you", "Scan hit an error: %s" % str(error)[:150])
                 continue
             if key == "zoho":
-                leads, findings, hints, stats, seen = out
+                leads, findings, hints, stats, seen, review = out
                 all_hints.extend(hints)
                 state["mail_uids"] = seen
             else:
-                leads, findings, stats, seen = out
+                leads, findings, stats, seen, review = out
                 state[{"quo-sms": "sms_ids", "quo-calls": "call_ids",
                        "quo-voicemail": "voicemail_keys"}[key]] = seen
             all_leads.extend(leads)
             all_findings.extend(findings)
+            all_review.extend(review)
             summary[name] = stats
             if stats.get("error"):
                 post(key, "needs-you", stats["error"][:200])
             else:
                 post(key, "done", (findings[0]["text"] if findings else "No changes"))
-    return all_leads, all_findings, all_hints, summary
+    return all_leads, all_findings, all_hints, all_review, summary
 
 
 def scan_once(swapp_url, token):
@@ -400,6 +473,10 @@ def scan_once(swapp_url, token):
         return False
     state = load_state()
     run_id = since = None
+    # Only 'requested' runs come from Tom pressing Scan (auto runs claim
+    # straight to running). Manual scans get the full AI patrol; auto scans
+    # get the cheap sweep and the hourly timer covers the rest.
+    manual = pending.get("requested") is not None
     if pending.get("requested"):
         status, claimed = api(swapp_url + "/api/scan/claim", token, "POST", body={})
         if status == 409:
@@ -449,13 +526,17 @@ def scan_once(swapp_url, token):
     intake_code, _ = run(["voicemail-intake", "run"], timeout=180)
     if intake_code != 0:
         post("quo-voicemail", "needs-you", "Voicemail intake failed — check it, then Scan again")
-    leads, findings, hints, summary = gather(state, post)
+    leads, findings, hints, review, summary = gather(state, post)
+    clean_findings, clean_stats = housekeeping(manual)
+    findings.extend(clean_findings)
+    summary["cleanup"] = clean_stats
     status, done = api(swapp_url + "/api/scan/complete", token, "POST", body={
         "runId": run_id,
         "summary": summary,
         "changes": findings,
         "leads": leads,
         "signedHints": hints,
+        "reviewItems": review,
     })
     if status != 200:
         print("complete failed: HTTP %d" % status, flush=True)

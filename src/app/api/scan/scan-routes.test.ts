@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   leadCreate: vi.fn(),
   upsertContact: vi.fn(),
   internal: vi.fn(),
+  tags: vi.fn(),
+  finding: vi.fn(),
 }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -37,6 +39,8 @@ vi.mock("@/lib/pipe/contacts", () => ({
   upsertPipeContact: mocks.upsertContact,
 }));
 vi.mock("@/lib/scan/internal", () => ({ computeInternalChanges: mocks.internal }));
+vi.mock("@/lib/scan/tags", () => ({ applyTagEvidence: mocks.tags }));
+vi.mock("@/lib/scanner/post", () => ({ postScanFinding: mocks.finding }));
 vi.mock("@/lib/simpleRateLimit", () => ({ checkRateLimit: () => ({ allowed: true, remaining: 1 }) }));
 
 process.env.SCAN_STATUS_TOKEN = "x".repeat(32);
@@ -49,7 +53,8 @@ const { POST: progress } = await import("./progress/route");
 
 beforeEach(() => {
   Object.values(mocks).forEach((fn) => fn.mockReset());
-  mocks.internal.mockResolvedValue({ changes: [], ga4: null });
+  mocks.internal.mockResolvedValue({ changes: [], ga4: null, ga4NeedsLogin: false });
+  mocks.tags.mockResolvedValue({ changes: [], fixed: 0, judgments: 0 });
 });
 
 describe("scan token guard", () => {
@@ -150,6 +155,24 @@ describe("POST /api/scan/complete", () => {
       data: expect.objectContaining({ status: "done" }),
     });
   });
+  it("files uncertain items to the review list, never the bin", async () => {
+    mocks.findUnique.mockResolvedValue({ id: "r1", status: "running" });
+    mocks.findMany.mockResolvedValue([{ id: "b1", slug: "bookkeeping-conroe" }]);
+    mocks.findFirst.mockResolvedValue(null);
+    const response = await complete(
+      post({
+        runId: "r1",
+        reviewItems: [
+          { brand: "bookkeeping-conroe", room: "phone", key: "scan-cleanup:sms:x", what: "Text is only an email — lead or spam?", evidence: "SMS x" },
+          { brand: "nope", room: "inbox", key: "k", what: "w", evidence: "e" },
+          { room: "inbox", key: "k", what: "w", evidence: "e" },
+        ],
+      }),
+    );
+    expect(await response.json()).toEqual({ saved: 1, leadsCreated: 0 });
+    expect(mocks.finding).toHaveBeenCalledTimes(1);
+  });
+
   it("flags a signed hint when the company matches an open quote", async () => {
     mocks.findUnique.mockResolvedValue({ id: "r1", status: "running" });
     mocks.findMany
