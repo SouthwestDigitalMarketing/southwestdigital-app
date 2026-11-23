@@ -1,5 +1,11 @@
 # SWapp handoff
 
+## 2026-11-23 morning — Compact checklist + fast pickup (Ummon, PR #228)
+
+Tom's 7:51 AM update: modal rows took too much space, and his screenshot showed every source stuck on Waiting. Two fixes. (1) Compact numbered checklist: one line per source (`1. ✓ Texts (Quo) — 2 new`), small glyphs (○ waiting, spinning scanning, ✓ done, ! needs-you), short result on the same line, no cards/pills/borders; login items stay on top with an inline `Log in ↗` text link; the two QBO rows merged into one QuickBooks line (access + Contracts share one sign-in; legacy two-row runs fold in the modal). (2) Stuck Waiting was real: the minute-timer left up to 60s of dead air after a press (his screenshot was ~8s after pressing, before the first poll). Timer now fires every 20s (`OnCalendar=*:*:0/20`; the 15-min auto decision still lives in the poller), and the poller posts scanning rows before the slow sync triggers.
+
+Verified live on 3101: forced run claimed in seconds, closed with one `quickbooks` needs-you line on top and the rest done. Gates: typecheck clean, eslint clean, full suite 1318 passed / 5 skipped, PR #228 all green. Not eyeballed by me (no login); Tom reviews on 3101, merge on his yes.
+
 ## 2026-11-23 — Scan progress modal + logins first (Ummon, PR #228)
 
 Tom's update: pressing Scan opens a modal with every source and live progress; login-needing sources are checked first and pinned at the top with a Log in button while everything else scans in parallel; closing never stops the scan. New migration `20261123050000_scan_sources` (`scan_runs.sources` JSON). `src/lib/scan/sources.ts` (8 sources, initial states, progress validation, needs-you-first sort) + tests. New token route `POST /api/scan/progress`; claim/request init sources; complete finalizes per-source detail (preserves needs-you; GA4 without a server key goes needs-you). Poller: login-check triggers first (`sales sync`, `voicemail-intake run` failures pin needs-you), then 4 sources read in parallel via threads, each posting progress; swapp/ga4 marked scanning until the server closes them. New `ScanModal` (polls 4s, Esc/backdrop close, Log in opens the sign-in page in a new tab — agents never sign in); `ScanButton` opens it on press, header icon still spins while running.
