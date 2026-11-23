@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { Modal } from "@/components/Modal";
 import type { BillingCalendarDay, BillingEvent } from "@/lib/dashboard/billing-timers";
@@ -106,7 +106,26 @@ export function BillingLegendButton() {
  */
 export function BillingCalendarStrip({ days, releases = {} }: { days: BillingCalendarDay[]; releases?: Record<string, number> }) {
   const scroller = useRef<HTMLDivElement>(null);
-  const yesterday = useRef<HTMLDivElement>(null);
+  const yesterday = useRef<HTMLButtonElement>(null);
+  const container = useRef<HTMLDivElement>(null);
+  const popupId = useId();
+  const [selected, setSelected] = useState<BillingCalendarDay | null>(null);
+
+  useEffect(() => {
+    if (!selected) return;
+    function dismissOutside(event: PointerEvent) {
+      if (!container.current?.contains(event.target as Node)) setSelected(null);
+    }
+    function dismissEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setSelected(null);
+    }
+    document.addEventListener("pointerdown", dismissOutside);
+    document.addEventListener("keydown", dismissEscape);
+    return () => {
+      document.removeEventListener("pointerdown", dismissOutside);
+      document.removeEventListener("keydown", dismissEscape);
+    };
+  }, [selected]);
 
   const lastTap = useRef(0);
 
@@ -133,10 +152,11 @@ export function BillingCalendarStrip({ days, releases = {} }: { days: BillingCal
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white py-2 sm:py-3">
+    <div ref={container} className="relative rounded-xl border border-slate-200 bg-white py-2 sm:py-3">
       <div
         ref={scroller}
-        onDoubleClick={() => resetToToday("smooth")}
+        onDoubleClick={() => { setSelected(null); resetToToday("smooth"); }}
+        onScroll={() => setSelected(null)}
         onPointerUp={onPointerUp}
         className="relative grid snap-x auto-cols-[calc(100%/10)] grid-flow-col overflow-x-auto [scrollbar-width:none] sm:auto-cols-[calc(100%/14)] lg:auto-cols-[calc(100%/21)] [&::-webkit-scrollbar]:hidden"
         style={{
@@ -150,10 +170,15 @@ export function BillingCalendarStrip({ days, releases = {} }: { days: BillingCal
           const event = d.event ? EVENT_STYLE[d.event] : episode ? { dot: "bg-indigo-600 text-white", text: "text-indigo-700", label: `Episode ${episode} · 5 p.m. Central` } : null;
           const isToday = d.offset === 0;
           return (
-            <div
+            <button
+              type="button"
               key={d.date}
+              aria-label={`${monthOf(d.date)} ${d.day}${event ? ` · ${event.label}` : ""}${d.payWindow ? " · Pay window" : ""}`}
+              aria-expanded={selected?.date === d.date}
+              aria-controls={selected?.date === d.date ? popupId : undefined}
+              onClick={() => setSelected(current => current?.date === d.date ? null : d)}
               ref={d.offset === -1 ? yesterday : undefined}
-              className={`flex snap-start flex-col items-center gap-1 py-1 ${d.payWindow ? "bg-emerald-50" : ""} ${
+              className={`flex snap-start cursor-pointer flex-col items-center gap-1 py-1 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-indigo-600 ${d.payWindow ? "bg-emerald-50" : ""} ${
                 d.offset < 0 ? "opacity-40 grayscale" : ""
               }`}
               title={`${monthOf(d.date)} ${d.day}${event ? ` · ${event.label}` : ""}${episode && d.event ? ` · Episode ${episode} · 5 p.m. Central` : ""}`}
@@ -176,10 +201,24 @@ export function BillingCalendarStrip({ days, releases = {} }: { days: BillingCal
               <span className="h-3 text-[10px] font-semibold uppercase leading-3 text-slate-500">
                 {episode ? `E${episode}` : d.day === 1 ? monthOf(d.date) : ""}
               </span>
-            </div>
+            </button>
           );
         })}
       </div>
+      {selected && (
+        <div id={popupId} role="dialog" aria-label="Calendar date details" className="absolute inset-x-0 top-full z-30 mt-2 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-lg">
+          <div className="flex items-center justify-between gap-3">
+            <p className="font-semibold text-slate-900">{new Date(selected.date + "T12:00:00Z").toLocaleDateString("en-US", { timeZone: "UTC", weekday: "long", month: "long", day: "numeric", year: "numeric" })}</p>
+            <button type="button" aria-label="Close calendar details" onClick={() => setSelected(null)} className="-m-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"><X size={16} /></button>
+          </div>
+          <div className="mt-2 space-y-2">
+            {selected.event && <p><strong>{EVENT_STYLE[selected.event].label}.</strong> {EVENT_STYLE[selected.event].detail}</p>}
+            {selected.payWindow && <p><strong>Pay window.</strong> The 1st through the 7th. Clients can pay without a late fee.</p>}
+            {releases[selected.date] && <p><strong>Episode {releases[selected.date]} release.</strong> The $10K Month · 5 p.m. Central on YouTube.</p>}
+            {!selected.event && !selected.payWindow && !releases[selected.date] && <p>No billing or episode release scheduled for this date.</p>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
