@@ -1,5 +1,15 @@
 # SWapp handoff
 
+## 2026-11-22 evening — Scan button v1 (Ummon, PR #228)
+
+Tom's scan brief (`~/swapp-scan-brief.md`, money playbook `sops/sop-money-playbook.md`): one Scan button in the header; everything refreshable refreshes. Decisions Tom made: demo on local 3101 first (production wiring later), full auto-create into SWapp. Branch `ummon/scan-v1`, worktree `swapp-scan-v1`, demo `swapp-live serve <worktree> 3101` (swapp_live has migration `20261123040000_scan_runs`).
+
+New: `ScanRun` table (requested/running/done/error + summary/changes JSON); token routes `/api/scan/pending|claim|complete` (`SCAN_STATUS_TOKEN`, video-status pattern); server actions `requestScan`/`getScanStatus`; `ScanButton` in the sidebar (collapsed: compact) and the phone header, Lochside operators only (Contigo excluded); ripley poller `scripts/swapp_scan.py` + minute systemd timer `swapp-scan.timer` (config `~/.config/swapp-scan/env`, state `~/.local/share/swapp-scan/state.json`).
+
+Poller triggers `sales sync all` + `voicemail-intake run`, reads Quo SMS/DB-calls/voicemail (read-only sqlite), Zoho via `mail ls/read`; server creates Leads + contact cards (deduped) and matches signed-hints to open quotes by email or company name (statuses sent/completed, never auto-marks). Leads only for answered calls, genuine voicemails, real texts (2FA/system skipped), non-self forms; backfill bounded to 7 days.
+
+Verified live on 3101: Derek Potts "Done." → "Stephanie Weddington: client says signed — check QuickBooks"; David Johns text + BCH call + 2 forms created leads; BBB robocall correctly spam; 2FA text and Tom's own form test filtered. Gates: typecheck clean, eslint clean (1 pre-existing warning), full suite 1313 passed / 5 skipped, PR #228 all checks green. Timer installed and fired (idle when nothing due). Pending: Tom's local review (I cannot log in; button rendering not eyeballed by me); merge on his yes. Production cutover later: SCAN token in Vercel + timer pointed at main checkout.
+
 ## 2026-11-22 evening — Brand colours on the carousels (Ummon, PR #226)
 
 Tom's evening update: each carousel screen uses its brand's own BrandTheme colours for header, dots and card accents; Combined/Total gets a calm neutral. Readable in light and dark mode. New `src/lib/brands/swipePalette.ts` derives a light/dark palette from each brand's saved theme (contrast-adjusted, neutral fallback) with 2 unit tests. `BrandSwipe` accepts a per-view palette and paints the active slide's colours via CSS variables; the dashboard `CompanyCarousel` now rides on `BrandSwipe` (Total neutral, each brand themed) and the Website views pass their palettes through. Cards get a 3px accent top-border via `brand-swipe__card`. Gates: typecheck clean, eslint clean on touched files, full suite 1297 passed / 5 skipped, `git diff --check` clean, PR #226 commit `43f7c6c` all checks green (typecheck/lint/test, migrations, Vercel). Local review at `http://100.98.89.93:3101/website` and `/dashboard` is Tom's before merge; merge only on his yes.
