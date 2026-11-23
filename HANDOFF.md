@@ -1,5 +1,9 @@
 # SWapp handoff
 
+## 2026-11-23 — Shared calendar includes billing dates
+
+Tom clarified that the Showrunner calendar must keep the dashboard calendar’s business dates, including payday, invoice reminders, late fees and the payment window. ReleaseCalendar now preserves billingCalendarDays instead of clearing its events/payWindow and includes the existing billing legend. Episode markers remain additive; do not filter the calendar down to Showrunner releases.
+
 ## 2026-11-23 — Overview spacing
 
 Tom requested matching nav/card edges and less inner padding. All four Showrunner Overview paths now use the same 16 px phone / 32 px desktop gutters as SectionTabs (previously 32 px on phones). Season card inner horizontal padding is 12 px phone / 16 px desktop (previously 16 / 24). No shared nav or other pages changed.

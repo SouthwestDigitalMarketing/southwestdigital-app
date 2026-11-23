@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BillingCalendarStrip } from "../dashboard/BillingCalendarStrip";
+import { BillingCalendarStrip, BillingLegendButton } from "../dashboard/BillingCalendarStrip";
 import { billingCalendarDays } from "@/lib/dashboard/billing-timers";
 import { schedule, releaseCountdown, releaseEpisodes } from "@/lib/showrunner/release-schedule";
 
@@ -18,7 +18,7 @@ export function ReleaseCalendar({ initialNow }: { initialNow: string }) {
   const { next, label } = releaseCountdown(now);
   const today = dateKey(now);
   const seasonWeek = Math.max(1, Math.min(6, Math.floor((Date.parse(today) - Date.parse(schedule.startsOn)) / (7 * 86400000)) + 1));
-  const days = billingCalendarDays(today, 14, Math.max(60, Math.ceil((Date.parse("2027-01-04") - Date.parse(today)) / 86400000))).map(d => ({ ...d, event: null, payWindow: false }));
+  const days = billingCalendarDays(today, 14, Math.max(60, Math.ceil((Date.parse("2027-01-04") - Date.parse(today)) / 86400000)));
   return (
     <section className="mb-7 rounded-2xl border border-slate-200 bg-white px-3 py-4 sm:px-4 sm:py-6" aria-label="Season release calendar">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{schedule.season} · Six-episode season</p>
@@ -30,7 +30,8 @@ export function ReleaseCalendar({ initialNow }: { initialNow: string }) {
           <span className="mt-1 block text-[10px] sm:text-xs">{new Date(r.at).toLocaleDateString("en-US", { timeZone: schedule.timezone, month: "short", day: "numeric" })}</span>
         </li>)}
       </ol>
-      <p className="mb-2 text-xs text-slate-500">{today <= "2027-01-03" ? `Week ${seasonWeek} of 6 · ` : ""}Swipe for release dates. Purple marks an episode release.</p>
+      <p className="mb-2 text-xs text-slate-500">{today <= "2027-01-03" ? `Week ${seasonWeek} of 6 · ` : ""}Swipe for billing and release dates. E1–E6 marks an episode release.</p>
+      <div className="mb-2 flex items-center gap-2 text-xs text-slate-500"><span>Calendar colors</span><BillingLegendButton /></div>
       <BillingCalendarStrip days={days} releases={releaseEpisodes} />
     </section>
   );
