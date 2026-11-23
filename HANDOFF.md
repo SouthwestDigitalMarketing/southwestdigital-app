@@ -1,5 +1,9 @@
 # SWapp handoff
 
+## 2026-11-22 evening — Brand colours on the carousels (Ummon, PR #226)
+
+Tom's evening update: each carousel screen uses its brand's own BrandTheme colours for header, dots and card accents; Combined/Total gets a calm neutral. Readable in light and dark mode. New `src/lib/brands/swipePalette.ts` derives a light/dark palette from each brand's saved theme (contrast-adjusted, neutral fallback) with 2 unit tests. `BrandSwipe` accepts a per-view palette and paints the active slide's colours via CSS variables; the dashboard `CompanyCarousel` now rides on `BrandSwipe` (Total neutral, each brand themed) and the Website views pass their palettes through. Cards get a 3px accent top-border via `brand-swipe__card`. Gates: typecheck clean, eslint clean on touched files, full suite 1297 passed / 5 skipped, `git diff --check` clean, PR #226 commit `43f7c6c` all checks green (typecheck/lint/test, migrations, Vercel). Local review at `http://100.98.89.93:3101/website` and `/dashboard` is Tom's before merge; merge only on his yes.
+
 ## 2026-11-22 — Website three-view swipe (Ummon, PR #226)
 
 Tom's 5:36 PM update adds the same Combined / Bookkeeping Conroe / The Real Estate Bookkeeper swipe pattern to `/website` for platform operators in Lochside. Desktop gets tabs and arrows; phone gets horizontal swipe and position dots. `BrandSwipe` is a reusable shell for other per-brand pages. The Website page keeps its period controls, cards, graph and tables in the same positions on all three views. Contigo continues to use its single-brand Website report. The app shell calls the combined Website view Lochside LLC and hides the settings brand picker there.
