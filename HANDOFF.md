@@ -1,5 +1,9 @@
 # SWapp handoff
 
+## 2026-11-23 — Calendar popup above; remove guide clutter
+
+Tom wants the date popup above the calendar. Shared strip now anchors it with bottom-full. Tap details replace the legend: BillingLegendButton removed from both calendars; Showrunner Week N of 6 / swipe / calendar-colors guide and dashboard episode guide removed. Keep the countdown, release date and episode timeline. Do not reintroduce explanatory calendar chrome when the date popup already supplies it.
+
 ## 2026-11-23 — Tap calendar dates for details
 
 Shared BillingCalendarStrip dates are now keyboard-accessible buttons. Tapping opens a small popup beneath the strip with that date’s billing event, payment window and episode release (all applicable items, including overlaps). Tap again, tap outside, scroll, press Escape or use Close to dismiss. The popup sits outside the scroll mask so text stays readable on phones. Applies to Dashboard and Showrunner.
