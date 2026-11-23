@@ -2,7 +2,9 @@
 Description=SWapp Scan button poller timer (every minute)
 
 [Timer]
-OnCalendar=*:0/1
+# Every 20 seconds: a pressed Scan must move off "Waiting" fast. The 15-minute
+# auto scan is decided by the poller itself, so cadence changes don't affect it.
+OnCalendar=*:*:0/20
 Persistent=true
 
 [Install]

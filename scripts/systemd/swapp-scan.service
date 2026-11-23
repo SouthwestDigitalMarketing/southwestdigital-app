@@ -1,12 +1,13 @@
 # SWapp header Scan button, ripley poller (sop-money-playbook).
 # Install: cp scripts/systemd/swapp-scan.* ~/.config/systemd/user/
 #          systemctl --user daemon-reload && systemctl --user enable --now swapp-scan.timer
-# Runs scripts/swapp_scan.py from THIS checkout every minute: it claims scan
-# runs from SWapp (SWAPP_URL in ~/.config/swapp-scan/env), gathers Quo, Zoho,
-# SWapp and GA4 changes, and pushes them back. At the production cutover,
-# point the timer at the main checkout and set SWAPP_URL to production.
+# Runs scripts/swapp_scan.py from THIS checkout every 20 seconds: it claims
+# scan runs from SWapp (SWAPP_URL in ~/.config/swapp-scan/env), gathers Quo,
+# Zoho, SWapp and GA4 changes, and pushes them back. The 15-minute auto scan
+# is decided by the poller itself. At the production cutover, point the timer
+# at the main checkout and set SWAPP_URL to production.
 [Unit]
-Description=SWapp Scan button poller (every minute)
+Description=SWapp Scan button poller
 
 [Service]
 Type=oneshot

@@ -1,34 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ExternalLink, Loader2, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Loader2, X } from "lucide-react";
 import { getScanStatus, type ScanStatus } from "@/app/(app)/scanActions";
 import type { ScanSourceState } from "@/lib/scan/sources";
 
-/** Modal order: anything needing Tom first, then in-flight, waiting, done. */
-function sortRows(rows: ScanSourceState[]): ScanSourceState[] {
-  const rank = (status: ScanSourceState["status"]) =>
-    status === "needs-you" ? 0 : status === "scanning" ? 1 : status === "waiting" ? 2 : 3;
-  return [...rows].sort((a, b) => rank(a.status) - rank(b.status));
-}
-
-function Pill({ status }: { status: ScanSourceState["status"] }) {
-  if (status === "needs-you")
-    return <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">Needs you</span>;
-  if (status === "scanning")
-    return (
-      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-semibold text-sky-800">
-        <Loader2 size={12} className="animate-spin" /> Scanning
-      </span>
-    );
-  if (status === "done")
-    return <span className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">Done</span>;
-  return <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500">Waiting</span>;
-}
-
-/** Scan progress modal (Tom 2026-11-23): every source with live progress.
- * Login items pin at the top with a Log in button; everything else scans in
- * parallel and nothing waits on Tom. Closing never stops the scan. */
+/** Compact numbered checklist (Tom 2026-11-23): one line per source, small
+ * status mark, short result on the same line. Login items pin at the top
+ * with an inline text link. Closing never stops the scan. */
 export function ScanModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [status, setStatus] = useState<ScanStatus | null>(null);
 
@@ -40,18 +19,19 @@ export function ScanModal({ open, onClose }: { open: boolean; onClose: () => voi
     }
   }, []);
 
-  const first = useRef(true);
   useEffect(() => {
-    if (!open) {
-      first.current = true;
-      return;
-    }
-    if (first.current) {
-      first.current = false;
-      refresh();
-    }
+    if (!open) return;
+    let cancelled = false;
+    getScanStatus()
+      .then((next) => {
+        if (!cancelled) setStatus(next);
+      })
+      .catch(() => {});
     const timer = setInterval(refresh, 4000);
-    return () => clearInterval(timer);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
   }, [open, refresh]);
 
   useEffect(() => {
@@ -64,7 +44,7 @@ export function ScanModal({ open, onClose }: { open: boolean; onClose: () => voi
   }, [open, onClose]);
 
   if (!open) return null;
-  const rows = sortRows(status?.sources ?? []);
+  const rows = foldQuickBooks(status?.sources ?? []);
   return (
     <div
       role="dialog"
@@ -74,47 +54,85 @@ export function ScanModal({ open, onClose }: { open: boolean; onClose: () => voi
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl"
+        className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-base font-semibold text-slate-900">Scan{status?.running ? " — running" : ""}</h2>
+          <h2 className="text-sm font-semibold text-slate-900">Scan{status?.running ? " — running" : ""}</h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close scan progress"
             className="rounded-full p-1.5 text-slate-500 hover:bg-slate-100"
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
-        <ul className="mt-3 space-y-2">
-          {rows.map((row) => (
-            <li key={row.source} className="rounded-xl border border-slate-200 px-3 py-2.5">
-              <div className="flex items-center justify-between gap-2">
-                <p className="min-w-0 truncate text-sm font-medium text-slate-800">{row.label}</p>
-                <Pill status={row.status} />
-              </div>
-              {row.detail ? <p className="mt-1 text-xs text-slate-500">{row.detail}</p> : null}
-              {row.status === "needs-you" && row.loginUrl ? (
-                <a
-                  href={row.loginUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600"
-                >
-                  {row.loginLabel ?? "Log in"} <ExternalLink size={12} />
-                </a>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+        {rows.length > 0 ? (
+          <ol className="mt-2 space-y-1 text-sm">
+            {rows.map((row, index) => (
+              <li key={row.source} className="flex min-w-0 items-baseline gap-1.5">
+                <span className="shrink-0 tabular-nums text-slate-400">{index + 1}.</span>
+                <Glyph status={row.status} />
+                <span className="min-w-0 flex-1 truncate text-slate-800">
+                  {row.label}
+                  {row.detail ? <span className="text-slate-500"> — {row.detail}</span> : null}
+                  {row.status === "needs-you" && row.loginUrl ? (
+                    <a
+                      href={row.loginUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-1.5 whitespace-nowrap font-medium text-amber-700 underline decoration-amber-300 underline-offset-2 hover:text-amber-900"
+                    >
+                      {row.loginLabel ?? "Log in"} ↗
+                    </a>
+                  ) : null}
+                </span>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="mt-2 text-sm text-slate-500">
+            {status?.running ? "Starting…" : "No source detail yet."}
+          </p>
+        )}
         <p className="mt-3 text-xs text-slate-500">
           {status?.running
-            ? "Closing this keeps the scan running — the header icon spins until it lands."
+            ? "Closing this keeps the scan running."
             : `Finished ${status?.updatedAgo.toLowerCase() ?? ""}. Press Scan for a fresh pass.`}
         </p>
       </div>
     </div>
   );
+}
+
+function Glyph({ status }: { status: ScanSourceState["status"] }) {
+  if (status === "done") return <span className="shrink-0 font-bold text-emerald-600">✓</span>;
+  if (status === "needs-you") return <span className="shrink-0 font-bold text-amber-600">!</span>;
+  if (status === "scanning")
+    return <Loader2 size={13} className="shrink-0 translate-y-0.5 animate-spin text-sky-600" />;
+  return <span className="shrink-0 text-slate-300">○</span>;
+}
+
+/** Modal order: anything needing Tom first, then in-flight, waiting, done.
+ * Legacy runs stored two QBO rows (access + Contracts); they share one
+ * sign-in, so they fold into a single QuickBooks line. */
+function foldQuickBooks(rows: ScanSourceState[]): ScanSourceState[] {
+  const rank = (status: ScanSourceState["status"]) =>
+    status === "needs-you" ? 0 : status === "scanning" ? 1 : status === "waiting" ? 2 : 3;
+  const legacy = rows.filter((row) => row.source.startsWith("qbo-"));
+  const rest = rows.filter((row) => !row.source.startsWith("qbo-"));
+  if (legacy.length > 0 && !rest.some((row) => row.source === "quickbooks")) {
+    const worst = [...legacy].sort((a, b) => rank(a.status) - rank(b.status))[0];
+    const details = [...new Set(legacy.map((row) => row.detail).filter(Boolean))];
+    rest.unshift({
+      source: "quickbooks",
+      label: "QuickBooks",
+      status: worst.status,
+      detail: details.length > 0 ? details.join("; ") : worst.detail,
+      loginUrl: legacy.find((row) => row.loginUrl)?.loginUrl ?? null,
+      loginLabel: "Log in",
+    });
+  }
+  return [...rest].sort((a, b) => rank(a.status) - rank(b.status));
 }

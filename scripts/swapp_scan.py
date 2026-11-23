@@ -440,19 +440,15 @@ def scan_once(swapp_url, token):
 
     # Login-gated sources are checked FIRST: sync triggers that fail pin their
     # rows at the top as needs-you, while everything else keeps scanning.
-    blocked = set()
+    for key in ("quo-sms", "quo-calls", "quo-voicemail", "zoho", "swapp", "ga4"):
+        post(key, "scanning")
     sync_code, _ = run(["sales", "sync", "all"], timeout=240)
     if sync_code != 0:
         for key in ("quo-sms", "quo-calls"):
             post(key, "needs-you", "Quo sync failed — check the Quo session, then Scan again")
-            blocked.add(key)
     intake_code, _ = run(["voicemail-intake", "run"], timeout=180)
     if intake_code != 0:
         post("quo-voicemail", "needs-you", "Voicemail intake failed — check it, then Scan again")
-        blocked.add("quo-voicemail")
-    for key in ("quo-sms", "quo-calls", "quo-voicemail", "zoho", "swapp", "ga4"):
-        if key not in blocked:
-            post(key, "scanning")
     leads, findings, hints, summary = gather(state, post)
     status, done = api(swapp_url + "/api/scan/complete", token, "POST", body={
         "runId": run_id,

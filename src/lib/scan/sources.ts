@@ -16,8 +16,8 @@ export const QBO_LOGIN_URL = "https://app.qbo.intuit.com";
 const DEFS: { source: string; label: string; loginUrl?: string; loginLabel?: string; needsLogin?: boolean }[] = [
   // Human-login sources first: they pin at the top until Tom signs in.
   // v1 only checks their login state; the QBO sync itself comes later.
-  { source: "qbo-access", label: "QuickBooks Accountant access", loginUrl: QBO_LOGIN_URL, loginLabel: "Log in to QuickBooks", needsLogin: true },
-  { source: "qbo-contracts", label: "QBO Contracts + signed copies", loginUrl: QBO_LOGIN_URL, loginLabel: "Log in to QuickBooks", needsLogin: true },
+  // One QuickBooks line (access + Contracts share one sign-in).
+  { source: "quickbooks", label: "QuickBooks", loginUrl: QBO_LOGIN_URL, loginLabel: "Log in", needsLogin: true },
   { source: "quo-sms", label: "Texts (Quo)" },
   { source: "quo-calls", label: "Calls (Quo)" },
   { source: "quo-voicemail", label: "Voicemail (Quo)" },
