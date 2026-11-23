@@ -1,5 +1,9 @@
 # SWapp handoff
 
+## 2026-11-23 — Tap calendar dates for details
+
+Shared BillingCalendarStrip dates are now keyboard-accessible buttons. Tapping opens a small popup beneath the strip with that date’s billing event, payment window and episode release (all applicable items, including overlaps). Tap again, tap outside, scroll, press Escape or use Close to dismiss. The popup sits outside the scroll mask so text stays readable on phones. Applies to Dashboard and Showrunner.
+
 ## 2026-11-23 — Shared calendar includes billing dates
 
 Tom clarified that the Showrunner calendar must keep the dashboard calendar’s business dates, including payday, invoice reminders, late fees and the payment window. ReleaseCalendar now preserves billingCalendarDays instead of clearing its events/payWindow and includes the existing billing legend. Episode markers remain additive; do not filter the calendar down to Showrunner releases.
