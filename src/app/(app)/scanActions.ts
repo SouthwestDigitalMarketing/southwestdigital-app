@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
-import { formatUpdatedAgo, type ScanChange } from "@/lib/scan/scan";
+import { formatUpdatedAgo, scanRunStaleness, type ScanChange } from "@/lib/scan/scan";
 import { initialSources, type ScanSourceState } from "@/lib/scan/sources";
 import { answerQuestion, undoQuestion, type QuestionOption } from "@/lib/scan/questions";
 
@@ -17,6 +17,9 @@ export type ScanQuestionView = {
 
 export type ScanStatus = {
   running: boolean;
+  /** A scan was asked for but no poller picked it up (or the poller died).
+   * The sheet explains it; tapping Scan starts a fresh one. */
+  stuck: boolean;
   updatedAgo: string;
   changes: ScanChange[];
   sources: ScanSourceState[];
@@ -34,14 +37,23 @@ function readSources(raw: unknown): ScanSourceState[] {
   );
 }
 
-/** Tom presses Scan: record a requested run unless one is already waiting or running. */
+/** Tom presses Scan: record a requested run unless one is already waiting or running.
+ * A stale run (no poller picked it up, or the poller died) is marked errored
+ * so one dead scan can never pin the header spinner forever. */
 export async function requestScan(): Promise<{ runId: string; alreadyRunning: boolean }> {
   const { session } = await requireStaffBrandOrThrow();
   const active = await prisma.scanRun.findFirst({
     where: { status: { in: ["requested", "running"] } },
     orderBy: { requestedAt: "desc" },
   });
-  if (active) return { runId: active.id, alreadyRunning: true };
+  if (active && scanRunStaleness(active) === "stale") {
+    await prisma.scanRun.update({
+      where: { id: active.id },
+      data: { status: "error", error: "Superseded: no poller picked this run up in time." },
+    });
+  } else if (active) {
+    return { runId: active.id, alreadyRunning: true };
+  }
   const run = await prisma.scanRun.create({
     data: {
       status: "requested",
@@ -86,6 +98,7 @@ export async function getScanStatus(): Promise<ScanStatus> {
   const summary = (lastDone?.summary ?? {}) as { autoApplied?: unknown };
   return {
     running: active !== null,
+    stuck: active !== null && scanRunStaleness(active) === "stale",
     updatedAgo: formatUpdatedAgo(lastDone?.finishedAt ?? null),
     changes: changes.slice(0, 10),
     sources: readSources(shown?.sources),
