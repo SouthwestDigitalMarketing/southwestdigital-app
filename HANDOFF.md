@@ -1,5 +1,13 @@
 # SWapp handoff
 
+## 2026-11-23 — Scan tags engine + house-cleaning (Ummon, PR #228)
+
+Tom's update: tags are the engine + every scan cleans house. New `src/lib/scan/tags.ts`: SIGNED engagements → `contract-signed` tag (proof: engagement row); DEPOSIT_PAID/ONBOARDING_PAID → `paid` tag + open deals moved to won (deposit implies the agreement; SOP: won needs both tags); stale NEW/CONTACTED leads 21+ days → judgment findings; won deals missing money/contract tags → judgments (room payments); `paid` tag with no payment proof → judgments, never auto-removed; `lead` tag with nothing open → removed (clear-cut per SOP). Judgment calls become ScanFinding rows (fixLevel 2 ask-first, roles sales-pipeline/mail-desk) plus a "N need your call (review list)" change line. Money/contract tags only ever land on proof. Added `pipeline` room via migration `20261123070000_scan_pipeline_room` (baseline 0_init untouched; schema-SQL test reads both).
+
+House-cleaning in the poller: `mail-sort --apply` every scan (folders only, undoable); `mail-spam-patrol sweep` every scan (always-spam list → Spam, Tom's hourly review decides); full patrol `run` on manual scans only (AI cost; hourly timer covers auto). Never any permanent delete. Uncertain items file review findings instead: email-only texts, unknown-domain forms. Board note sent to Donna (cleanup rules owner) with what the scan runs.
+
+Verified live on 3101 (prove-part1-1, manual): sort 0 moved, sweep 0, patrol judged 13 filed 0, tags 0 fixed + 9 judgments (real ones: won deals missing tags incl. SJ Equity, paid tag without proof), changes show "9 need your call". Gates: typecheck clean, eslint clean, full suite 1323 passed / 5 skipped, PR #228 all green. Merge still on Tom's yes (he is reviewing the sheet + now these lines). PART 2 (tap-answer questions → rulebook) builds after this, per brief.
+
 ## 2026-11-23 morning — QB one-liner + tick proof (Ummon, PR #228)
 
 Tom's 8:47 AM update: QuickBooks line is now just `1. ! QuickBooks — Log in ↗` (explanation text removed from initial rows, legacy folds, and finalization). His screenshot still showed the old card + all waiting — diagnosis: his browser holds stale JS. The tall card has served on 3101 since 08:19 and his presses (14:14, 14:18, 14:46 UTC) all completed with correct rows; every dev-server restart invalidates the bundle, so his tab needs a manual refresh (HMR can't reach a slept/backgrounded phone tab). Proof run `prove-847-1`, timer-driven, no manual trigger: pressed 14:49:26 → running+all-scanning 14:49:34 → done 14:49:38, QuickBooks needs-you on top, rest done. Gates: typecheck clean, eslint clean, full suite 1318 passed / 5 skipped, PR #228 all green. Tom: refresh the 3101 tab, press Scan, rows tick within ~10s. Merge on his yes.
