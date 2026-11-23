@@ -9,6 +9,7 @@ import { COMPANY_BRANDS } from "@/lib/companyMetrics";
 import { isLochsideBrandSlug } from "@/lib/brands/active-brand";
 import { BrandSwipe } from "@/components/BrandSwipe";
 import { combineSiteHealth, combineTrafficTrends } from "./combine";
+import { brandSwipePalette, NEUTRAL_SWIPE_PALETTE } from "@/lib/brands/swipePalette";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +46,7 @@ export default async function WebsitePage({ searchParams }: { searchParams: Prom
   }
   const brands = await prisma.brand.findMany({
     where: { slug: { in: [...COMPANY_BRANDS] }, status: "ACTIVE" },
-    select: { id: true, slug: true, name: true, theme: { select: { ga4PropertyId: true, ga4HostName: true, websiteEngagedSessionsGoal: true } } },
+    select: { id: true, slug: true, name: true, theme: { select: { ga4PropertyId: true, ga4HostName: true, websiteEngagedSessionsGoal: true, themePreset: true, lightColor: true, darkColor: true, accentColor: true } } },
   });
   const ordered = COMPANY_BRANDS.map((slug) => brands.find((item) => item.slug === slug));
   const reports = await Promise.all(ordered.map((item): Promise<WebsiteReportData> => item?.theme?.ga4PropertyId
@@ -56,8 +57,8 @@ export default async function WebsitePage({ searchParams }: { searchParams: Prom
     : { health: null, trendRows: [], error: "Combined traffic needs both brand reports. Check the individual views." };
   const goal = ordered.reduce((total, item) => total + (item?.theme?.websiteEngagedSessionsGoal ?? 500), 0);
   const views = [
-    { key: "combined", name: "Combined", content: <WebsiteReport brandId={null} goal={goal} editable={false} data={combined} config={config} /> },
-    ...ordered.map((item, index) => ({ key: item?.slug ?? COMPANY_BRANDS[index], name: item?.name ?? COMPANY_BRANDS[index], content: <WebsiteReport brandId={item?.id ?? null} goal={item?.theme?.websiteEngagedSessionsGoal ?? 500} editable={Boolean(item)} data={reports[index]} config={config} /> })),
+    { key: "combined", name: "Combined", palette: NEUTRAL_SWIPE_PALETTE, content: <WebsiteReport brandId={null} goal={goal} editable={false} data={combined} config={config} /> },
+    ...ordered.map((item, index) => ({ key: item?.slug ?? COMPANY_BRANDS[index], name: item?.name ?? COMPANY_BRANDS[index], palette: brandSwipePalette(item?.theme), content: <WebsiteReport brandId={item?.id ?? null} goal={item?.theme?.websiteEngagedSessionsGoal ?? 500} editable={Boolean(item)} data={reports[index]} config={config} /> })),
   ];
   return <div className="p-8"><h1 className="sr-only">Website</h1><div className="mb-5"><h2 className="text-lg font-semibold text-slate-900">Traffic overview</h2><div className="mt-3 w-fit max-w-full overflow-x-auto"><PeriodSelector current={period} /></div></div><BrandSwipe label="Website traffic" views={views} /></div>;
 }
@@ -246,12 +247,12 @@ function WebsiteReport({ brandId, goal, editable, data, config }: { brandId: str
 
       {/* Acquisition + Landing pages */}
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="brand-swipe__card rounded-xl border border-slate-200 bg-white p-5">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Acquisition</p>
           <h2 className="mt-1 text-lg font-semibold text-slate-900">How visitors arrived</h2>
           <ReportTable report={acquisition} />
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="brand-swipe__card rounded-xl border border-slate-200 bg-white p-5">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Entry points</p>
           <h2 className="mt-1 text-lg font-semibold text-slate-900">Top landing pages</h2>
           <LandingPagesTable rows={processedLandingPages} />
@@ -259,7 +260,7 @@ function WebsiteReport({ brandId, goal, editable, data, config }: { brandId: str
       </div>
 
       {/* Geography */}
-      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5">
+      <div className="brand-swipe__card mt-6 rounded-xl border border-slate-200 bg-white p-5">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Geography</p>
         <h2 className="mt-1 text-lg font-semibold text-slate-900">Where visitors are located</h2>
         <ReportTable report={geographicTraffic} />
@@ -301,7 +302,7 @@ function MetricCard({ label, value, comparison }: { label: string; value: string
         : `${Math.abs(comparison.percentageChange).toFixed(1)}% ${comparison.direction} vs. prev. period`;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="brand-swipe__card rounded-xl border border-slate-200 bg-white p-4">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-2 text-3xl font-semibold text-slate-900">{value}</p>
       {changeText && <p className={`mt-1 text-xs font-medium ${color}`}>{changeText}</p>}

@@ -180,7 +180,7 @@ export function SiteTrafficGraph({ rows, goal, label, granularity }: Props) {
   }
 
   return (
-    <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6">
+    <div className="brand-swipe__card mt-6 rounded-xl border border-slate-200 bg-white p-6">
       <div className="mb-4 flex flex-col items-start gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{chartTitle}</p>

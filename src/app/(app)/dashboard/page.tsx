@@ -35,6 +35,8 @@ import { parseRange } from "./_scorecard/format";
 import { getCompanyMetrics } from "@/lib/companyMetrics";
 import { isLochsideBrandSlug } from "@/lib/brands/active-brand";
 import { CompanyCarousel } from "./CompanyCarousel";
+import { brandSwipePalette } from "@/lib/brands/swipePalette";
+import { COMPANY_BRANDS } from "@/lib/companyMetrics";
 
 export const dynamic = "force-dynamic";
 
@@ -282,6 +284,12 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     now: windowEnd,
   }) : null;
 
+  const companyPaletteRows = companyMetrics ? await prisma.brand.findMany({
+    where: { slug: { in: [...COMPANY_BRANDS] }, status: "ACTIVE" },
+    select: { slug: true, theme: { select: { themePreset: true, lightColor: true, darkColor: true, accentColor: true } } },
+  }) : [];
+  const companyPalettes = Object.fromEntries(companyPaletteRows.map(({ slug, theme }) => [slug, brandSwipePalette(theme)]));
+
   const [awaitingGsaRaw, pipelineRows, recordMrr, [theme, mrrGoals], [currentOffers, previousOffers], [currentReviews, previousReviews], [scorecardRaw, totals]] = await Promise.all([
     paidAwaitingGsa(dataContext),
     withBrandDataTransaction(dataContext, (transaction) => transaction.pipeline.findMany({
@@ -516,7 +524,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       <LiveRefresh seconds={300} />
       <h1 className="sr-only">Dashboard</h1>
       <GsaAlarm proposals={awaitingGsa} now={windowEnd} />
-      {companyMetrics && <CompanyCarousel {...companyMetrics} period={selectedPeriod.label} />}
+      {companyMetrics && <CompanyCarousel {...companyMetrics} period={selectedPeriod.label} palettes={companyPalettes} />}
       <details className="mt-8" open={!companyMetrics}>
       <summary className="cursor-pointer text-sm font-medium text-slate-600">Detailed {brand.name} dashboard</summary>
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-4">

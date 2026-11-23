@@ -46,7 +46,7 @@ export function WebsiteGoalCard({
   }
 
   return (
-    <div className="relative rounded-xl border border-slate-200 bg-white p-6">
+    <div className="brand-swipe__card relative rounded-xl border border-slate-200 bg-white p-6">
       {editable && !editing && (
         <button
           onClick={() => {
