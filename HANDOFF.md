@@ -1,5 +1,9 @@
 # SWapp handoff
 
+## 2026-11-23 — Production cutover (Ummon, PR #232)
+
+Tom: make the scan work on production. (1) Generated `SCAN_STATUS_TOKEN` (64 hex; lives only in Vercel as a production secret and `~/.config/swapp-scan-prod/token` on ripley — never in chat or the repo) and added it via `vercel env add`; redeployed production so functions pick it up; verified 200 with token / 401 without on `/api/scan/pending`. (2) New ripley timer `swapp-scan-prod.{service,timer}` (every 10s) running `scripts/swapp_scan.py --once` from the `swapp-scan-prod` worktree (tracks origin/main) with `SWAPP_SCAN_CONFIG`/`SWAPP_SCAN_STATE` overrides pointing at prod env + state. Separate state is critical — sharing seen-ids would blind one copy. First manual prod scan completed (10 changes, 1 lead). Tom's earlier prod press vanished from pending because the freshly enabled prod timer claimed and finished it — mystery solved. Fix for unclaimed presses: `requestScan` supersedes stale ones; claims run stale requested runs outright and only reap dead running runs. Broaden-rule proposals proven on swapp_live (3 seeded same-domain rules → "Always spam *@domain?" question; test rows cleaned). Left: merge #232 on Tom's yes, then refresh the prod worktree to new main.
+
 ## 2026-11-23 — Tap calendar dates for details
 
 Shared BillingCalendarStrip dates are now keyboard-accessible buttons. Tapping opens a small popup beneath the strip with that date’s billing event, payment window and episode release (all applicable items, including overlaps). Tap again, tap outside, scroll, press Escape or use Close to dismiss. The popup sits outside the scroll mask so text stays readable on phones. Applies to Dashboard and Showrunner.
