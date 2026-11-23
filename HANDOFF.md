@@ -1,5 +1,10 @@
 # SWapp handoff
 
+## Learned 2026-11-23 (Ummon) — do not re-learn these
+- `gh pr checks` empty + `mergeable: UNKNOWN` means the PR conflicts with main (it diverged while open): rebase first, then checks appear — do not chase CI ghosts.
+- Never edit an applied migration file, not even an unmerged branch's: verify with a scratch DB (`migrate deploy` + `migrate diff --to-schema --exit-code`, exactly what CI runs) before pushing.
+- Dictated machine names are guesses until `tailscale status` confirms them ("solverwings" was `silverwings`).
+
 ## 2026-11-23 — Production cutover (Ummon, PR #232)
 
 Tom: make the scan work on production. (1) Generated `SCAN_STATUS_TOKEN` (64 hex; lives only in Vercel as a production secret and `~/.config/swapp-scan-prod/token` on ripley — never in chat or the repo) and added it via `vercel env add`; redeployed production so functions pick it up; verified 200 with token / 401 without on `/api/scan/pending`. (2) New ripley timer `swapp-scan-prod.{service,timer}` (every 10s) running `scripts/swapp_scan.py --once` from the `swapp-scan-prod` worktree (tracks origin/main) with `SWAPP_SCAN_CONFIG`/`SWAPP_SCAN_STATE` overrides pointing at prod env + state. Separate state is critical — sharing seen-ids would blind one copy. First manual prod scan completed (10 changes, 1 lead). Tom's earlier prod press vanished from pending because the freshly enabled prod timer claimed and finished it — mystery solved. Fix for unclaimed presses: `requestScan` supersedes stale ones; claims run stale requested runs outright and only reap dead running runs. Broaden-rule proposals proven on swapp_live (3 seeded same-domain rules → "Always spam *@domain?" question; test rows cleaned). Left: merge #232 on Tom's yes, then refresh the prod worktree to new main.
