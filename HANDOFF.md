@@ -1,5 +1,16 @@
 # SWapp handoff
 
+## 2026-11-23 — Session wrapup / Silverwings transfer (Ummon)
+
+- Tom: focus this workspace on Showrunner only. Overview should lead with channel/season stats and business results, not an Open Studio promo or an old published-video checklist. Calendar work is delivered; the broader metrics-first Overview redesign remains an open follow-up, not completed.
+- Approved six-episode mini-season: week one starts Nov 23; release Sundays at 17:00 America/Chicago Nov 29, Dec 6/13/20/27, Jan 3 2027. SWapp shared schedule JSON is the source. Six Zoho Thomas calendar release markers created/read-back verified; receipts on Ripley `~/.local/share/showrunner/season-calendar-2026.json`. Future edits do not auto-sync; actual YouTube scheduled publishing was not built.
+- SWapp #230/#231/#233/#234/#235 all merged. Latest main/Live commit `7d32b0217c3013fe375a69ef548a0f706869e496`; Live http://100.98.89.93:3100/showrunner, worktree `/home/tom/projects/worktrees/swapp-live-main`. Countdown/timeline, matching gutters, business billing dates plus releases, tappable date popup above calendar; legends/week count/instruction clutter removed per Tom. Keep business dates and overlapping events. Build/CI/migration checks passed; phone previews inspected. Lint 11 existing warnings, no errors. Actual signed-in Overview not inspected. No unfinished application edits or owned application holds.
+- Showrunner #172 merged `5d58cb9`: Desktop Analytics sign-in separate from Publish credentials; integrated suite 326 JavaScript + 352 Python passed. No Google sign-in performed. Earlier series/pipeline work #187–191 and SWapp Studio #223–225 already merged; stale topic branch names are not proof of missing features.
+- Tom asked for Local on Silverwings. Merely selecting Ripley in the saved-machine sidebar was a mistake. Actual target-local workspace now exists: Silverwings `w2`, tab `w2:t1`, pane `w2:p1`, label Showrunner. Tom explicitly chose `cxd`, not Codex. `~/showrunner-start` on Silverwings runs cxd over SSH inside that LOCAL workspace; current Claude cannot run Catalina. Repos/services stay on Ripley. Source workspace `w33` remains for Tom to close per transfer SOP.
+- Claude launched but reports usage limit until 9pm; handoff prompt queued, no acknowledgment received. Concrete handoffs: Silverwings `~/showrunner-handoff.md`, Ripley `~/showrunner-silverwings-handoff.md`. Next: continue there once quota permits; stay on Showrunner. Do not restart finished work. No new agent spending or paid credits approved.
+- Startup fixes recorded in the All Thing troubleshooting: actual local workspace vs saved-machine view (`75ae29f`), standalone Codex `--no-daemon` reaches UI (`5e028ac`), SSH cxd needs `.local/bin` + mise shims PATH (`54515ca`). No-daemon Codex was stopped when Tom requested cxd. Guidance correction and cxd preference are in the transfer handoff.
+
+
 ## 2026-11-23 — Calendar popup above; remove guide clutter
 
 Tom wants the date popup above the calendar. Shared strip now anchors it with bottom-full. Tap details replace the legend: BillingLegendButton removed from both calendars; Showrunner Week N of 6 / swipe / calendar-colors guide and dashboard episode guide removed. Keep the countdown, release date and episode timeline. Do not reintroduce explanatory calendar chrome when the date popup already supplies it.
