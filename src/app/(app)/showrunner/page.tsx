@@ -59,7 +59,7 @@ export default async function ShowrunnerPage() {
 
   if (!theme?.youtubeChannelId) {
     return (
-      <div className="p-8">
+      <div className="px-4 py-5 sm:p-8">
         <h1 className="sr-only">Showrunner</h1>
         <ReleaseCalendar initialNow={new Date().toISOString()} />
         <InProgress videos={videos} />
@@ -73,7 +73,7 @@ export default async function ShowrunnerPage() {
 
   if (!refreshToken) {
     return (
-      <div className="p-8">
+      <div className="px-4 py-5 sm:p-8">
         <h1 className="sr-only">Showrunner</h1>
         <ReleaseCalendar initialNow={new Date().toISOString()} />
         <InProgress videos={videos} />
@@ -137,7 +137,7 @@ export default async function ShowrunnerPage() {
 
   if (error || !metrics) {
     return (
-      <div className="p-8">
+      <div className="px-4 py-5 sm:p-8">
         <h1 className="sr-only">Showrunner</h1>
         <ReleaseCalendar initialNow={new Date().toISOString()} />
         <InProgress videos={videos} />
@@ -186,7 +186,7 @@ export default async function ShowrunnerPage() {
       ];
 
   return (
-    <div className="p-8">
+    <div className="px-4 py-5 sm:p-8">
       <h1 className="sr-only">Showrunner</h1>
       <ReleaseCalendar initialNow={new Date().toISOString()} />
       <InProgress videos={videos} />

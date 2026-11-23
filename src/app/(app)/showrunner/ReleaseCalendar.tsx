@@ -20,7 +20,7 @@ export function ReleaseCalendar({ initialNow }: { initialNow: string }) {
   const seasonWeek = Math.max(1, Math.min(6, Math.floor((Date.parse(today) - Date.parse(schedule.startsOn)) / (7 * 86400000)) + 1));
   const days = billingCalendarDays(today, 14, Math.max(60, Math.ceil((Date.parse("2027-01-04") - Date.parse(today)) / 86400000))).map(d => ({ ...d, event: null, payWindow: false }));
   return (
-    <section className="mb-7 rounded-2xl border border-slate-200 bg-white p-4 sm:p-6" aria-label="Season release calendar">
+    <section className="mb-7 rounded-2xl border border-slate-200 bg-white px-3 py-4 sm:px-4 sm:py-6" aria-label="Season release calendar">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{schedule.season} · Six-episode season</p>
       <h2 className="mt-2 text-2xl font-bold text-slate-900" aria-live="polite">{label}</h2>
       <p className="mt-1 text-sm text-slate-500">{next ? `${new Date(next.at).toLocaleDateString("en-US", { timeZone: schedule.timezone, weekday: "long", month: "short", day: "numeric", year: "numeric" })} · 5 p.m. Central` : "Nov 29 – Jan 3 · Sundays at 5 p.m. Central"}</p>
