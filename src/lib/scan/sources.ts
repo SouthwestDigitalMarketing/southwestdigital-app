@@ -26,13 +26,14 @@ const DEFS: { source: string; label: string; loginUrl?: string; loginLabel?: str
   { source: "ga4", label: "Traffic (GA4)" },
 ];
 
-/** Fresh per-source rows for a new run: login items start needing Tom. */
+/** Fresh per-source rows for a new run: the QuickBooks line starts needing
+ * Tom with no explanation text, just the label and the Log in link. */
 export function initialSources(): ScanSourceState[] {
   return DEFS.map((def) => ({
     source: def.source,
     label: def.label,
     status: def.needsLogin ? "needs-you" : "waiting",
-    detail: def.needsLogin ? "Needs your QuickBooks sign-in (QBO sync comes later)" : null,
+    detail: null,
     loginUrl: def.loginUrl ?? null,
     loginLabel: def.loginLabel ?? null,
   }));

@@ -130,12 +130,11 @@ function foldQuickBooks(rows: ScanSourceState[]): ScanSourceState[] {
   const rest = rows.filter((row) => !row.source.startsWith("qbo-"));
   if (legacy.length > 0 && !rest.some((row) => row.source === "quickbooks")) {
     const worst = [...legacy].sort((a, b) => rank(a.status) - rank(b.status))[0];
-    const details = [...new Set(legacy.map((row) => row.detail).filter(Boolean))];
     rest.unshift({
       source: "quickbooks",
       label: "QuickBooks",
       status: worst.status,
-      detail: details.length > 0 ? details.join("; ") : worst.detail,
+      detail: null,
       loginUrl: legacy.find((row) => row.loginUrl)?.loginUrl ?? null,
       loginLabel: "Log in",
     });
