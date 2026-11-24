@@ -1,4 +1,11 @@
 # SWapp handoff
+## 2026-11-24 (night) — Scan button only on the Scanner page (Johnny, Tom's ask)
+
+- Tom: move Scan from the side menu to the Scanner page and drop the round refresh icon (the compact ScanButton) from
+  the phone top bar. AppShell no longer renders ScanButton; /scanner shows it beside the heading (platform operator
+  in a Lochside brand, same rule as before). The desktop sidebar keeps a privacy-switch row; the phone drawer's
+  close button floats top right over the first menu row.
+
 ## 2026-11-24 (night) — Company dashboard: one set of cards split by brand (Johnny, Tom's ask)
 
 - `/dashboard` (Lochside view): no BrandSwipe. `CompanyCarousel` shows one card per metric with the Lochside total
