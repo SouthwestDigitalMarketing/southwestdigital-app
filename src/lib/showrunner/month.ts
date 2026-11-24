@@ -61,3 +61,26 @@ export function thisWeek(now: Date) {
   const label = `Week of ${new Date(`${start}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric" })}`;
   return { month: today.slice(0, 7), label, start, today, analyticsEnd: settled >= start ? settled : null };
 }
+
+/** Midnight at the start of a Central calendar day, as an instant (handles daylight saving). */
+export function centralMidnight(date: string): Date {
+  for (const offset of ["-06:00", "-05:00"]) {
+    const t = new Date(`${date}T00:00:00${offset}`);
+    if (centralDate(t) === date && centralDate(new Date(t.getTime() - 1)) !== date) return t;
+  }
+  return new Date(`${date}T06:00:00Z`);
+}
+
+/** One report month: its days, the instants bounding it, and how much of it YouTube has settled. */
+export function monthRange(month: string, now: Date) {
+  const [y, m] = month.split("-").map(Number);
+  const start = `${month}-01`;
+  const last = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+  const nextStart = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
+  const today = centralDate(now);
+  const current = today.slice(0, 7) === month;
+  const settled = new Date(Date.parse(`${today}T12:00:00Z`) - ANALYTICS_LAG_DAYS * DAY).toISOString().slice(0, 10);
+  const analyticsEnd = settled < start ? null : settled < last ? settled : last;
+  return { month, label: monthLabel(month), start, last, current, analyticsEnd,
+    from: centralMidnight(start), to: current ? now : centralMidnight(nextStart) };
+}

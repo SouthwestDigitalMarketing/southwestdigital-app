@@ -1,7 +1,7 @@
 import { DomainPurpose } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAppBrand } from "@/lib/brands/staff";
-import { showChannelBrand } from "@/lib/showrunner/channel-brand";
+import { showChannelBrand, showLinksBrand } from "@/lib/showrunner/channel-brand";
 import { getCompanyMetrics } from "@/lib/companyMetrics";
 import { getSourceTagClicksCumulative, type SourceTagClickReport } from "@/lib/cloudflare/clickSnapshots";
 import { getChannelMetrics } from "@/lib/youtube/analytics";
@@ -28,6 +28,7 @@ type Step = { label: string; value: number | null; note: string };
 export default async function LeadsPage() {
   const { brand: active, session, isPlatformOperator } = await requireAppBrand();
   const brand = await showChannelBrand(active);
+  const links = await showLinksBrand(active);
   const now = requestNow();
   // YouTube Analytics lags ~3 days; the same 30 days as Metrics.
   const endDate = new Date(now - 3 * DAY).toISOString().slice(0, 10);
@@ -36,7 +37,7 @@ export default async function LeadsPage() {
   const [theme, domain] = await Promise.all([
     prisma.brandTheme.findUnique({ where: { brandId: brand.id }, select: { youtubeChannelId: true } }),
     prisma.brandDomain.findFirst({
-      where: { brandId: brand.id, purpose: DomainPurpose.WEBSITE, isPrimary: true },
+      where: { brandId: links.id, purpose: DomainPurpose.WEBSITE, isPrimary: true },
       select: { hostname: true },
     }),
   ]);
@@ -55,8 +56,8 @@ export default async function LeadsPage() {
     if (domain?.hostname) {
       try {
         [clickReport, sourceTagMap] = await Promise.all([
-          getSourceTagClicksCumulative(brand.id, brand.slug),
-          getSourceTagVideos(channelId, refreshToken, domain.hostname, brand.slug),
+          getSourceTagClicksCumulative(links.id, links.slug),
+          getSourceTagVideos(channelId, refreshToken, domain.hostname, links.slug),
         ]);
       } catch (error) {
         console.warn("[showrunner/leads] clicks skipped:", error instanceof Error ? error.message : error);

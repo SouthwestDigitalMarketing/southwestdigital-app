@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireAppBrand } from "@/lib/brands/staff";
-import { showChannelBrand } from "@/lib/showrunner/channel-brand";
+import { showChannelBrand, showLinksBrand } from "@/lib/showrunner/channel-brand";
 import { ANALYTICS_LAG_DAYS, daysBetween, thisMonth, thisWeek } from "@/lib/showrunner/month";
 import {
   getChannelMetrics,
@@ -43,6 +43,7 @@ export type Period = "month" | "week";
 export async function ChannelPeriod({ period }: { period: Period }) {
   const { brand: active } = await requireAppBrand();
   const brand = await showChannelBrand(active);
+  const links = await showLinksBrand(active);
 
   const [theme, redirectDomainRecord] = await Promise.all([
     prisma.brandTheme.findUnique({
@@ -56,7 +57,7 @@ export async function ChannelPeriod({ period }: { period: Period }) {
       },
     }),
     prisma.brandDomain.findFirst({
-      where: { brandId: brand.id, purpose: DomainPurpose.WEBSITE, isPrimary: true },
+      where: { brandId: links.id, purpose: DomainPurpose.WEBSITE, isPrimary: true },
       select: { hostname: true },
     }),
   ]);
@@ -132,8 +133,8 @@ export async function ChannelPeriod({ period }: { period: Period }) {
   if (redirectDomain) {
     try {
       [clickReport, sourceTagMap] = await Promise.all([
-        getSourceTagClicksCumulative(brand.id, brand.slug, month.start),
-        getSourceTagVideos(channelId, refreshToken, redirectDomain, brand.slug),
+        getSourceTagClicksCumulative(links.id, links.slug, month.start),
+        getSourceTagVideos(channelId, refreshToken, redirectDomain, links.slug),
       ]);
     } catch (err) {
       console.error("[youtube] click tracking error:", err);

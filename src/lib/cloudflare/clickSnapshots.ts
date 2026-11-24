@@ -54,15 +54,21 @@ async function ensureClickSnapshots(brandId: string, brandSlug: string): Promise
   await prisma.sourceTagClickDaily.createMany({ data: rows, skipDuplicates: true });
 }
 
-/** Clicks per tag from `since` (YYYY-MM-DD, default the start of tracking) through today. */
+/**
+ * Clicks per tag from `since` (YYYY-MM-DD, default the start of tracking) up to `until` (exclusive; default
+ * through today). Past days come from the daily snapshots; today is asked of Cloudflare live.
+ */
 export async function getSourceTagClicksCumulative(
   brandId: string,
   brandSlug: string,
   since: string = CLICK_TRACKING_EPOCH,
+  until?: string,
 ): Promise<SourceTagClickReport> {
-  if (youtubeSampleMode()) return sampleClickReport(new Date(), since);
+  if (youtubeSampleMode()) return sampleClickReport(new Date(), since, until);
   const from = since > CLICK_TRACKING_EPOCH ? since : CLICK_TRACKING_EPOCH;
   const today = utcDay(new Date());
+  const end = until && until <= today ? until : today;
+  const includeToday = end === today;
 
   await ensureClickSnapshots(brandId, brandSlug);
 
@@ -72,10 +78,10 @@ export async function getSourceTagClicksCumulative(
   const [snapshotSums, todayByDay] = await Promise.all([
     prisma.sourceTagClickDaily.groupBy({
       by: ["tag"],
-      where: { brandId, date: { gte: new Date(from), lt: new Date(today) } },
+      where: { brandId, date: { gte: new Date(from), lt: new Date(end) } },
       _sum: { clicks: true },
     }),
-    fetchClicksForDays([today], zoneId, token, paths),
+    includeToday ? fetchClicksForDays([today], zoneId, token, paths) : Promise.resolve(new Map<string, Map<string, number>>()),
   ]);
 
   const totals = new Map<string, number>();

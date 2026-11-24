@@ -1,4 +1,17 @@
 # SWapp handoff
+## 2026-11-24 (evening) — Monthly reports, first version (Johnny)
+
+- `REPORT_SECTIONS` (src/lib/showrunner/reports.ts) now holds three sections in
+  `src/app/(app)/showrunner/reports/sections/`: **YouTube** (views vs monthly goal, watch hours, avg view %, top 3),
+  **Video links** (clicks in the month by video: `getSourceTagClicksCumulative(..., since, until)` stops at the
+  month end, snapshots only), **Business** (platform operator: new leads and offers in the month via
+  getCompanyMetrics; clients and MRR at month end from service-record dates (`clientMrrOn`), because the live
+  count is driven by today's service tags; free cash flow from CompanyCashFlowMonth when that month is closed).
+  `monthRange()` bounds a month in Central time (DST-safe `centralMidnight`).
+- Fix (live since #242): clicks moved to TREB with the channel, but the short links are Bookkeeping Conroe's
+  (bookkeepingconroe.com/s?, /b?), so This Week/Month and Leads showed no clicks. `showLinksBrand()` points click
+  counts at Bookkeeping Conroe from either Lochside brand. The link column of the clicks table hides on phones.
+
 ## 2026-11-24 (evening) — Series as a streaming-style show page (Johnny)
 
 - Tom: make Series look like a Netflix series page. Dark page: banner = text-free key art `public/showrunner/series-banner.jpg` (gpt-image-2: lit small-town
