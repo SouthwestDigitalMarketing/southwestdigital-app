@@ -54,11 +54,14 @@ async function ensureClickSnapshots(brandId: string, brandSlug: string): Promise
   await prisma.sourceTagClickDaily.createMany({ data: rows, skipDuplicates: true });
 }
 
+/** Clicks per tag from `since` (YYYY-MM-DD, default the start of tracking) through today. */
 export async function getSourceTagClicksCumulative(
   brandId: string,
   brandSlug: string,
+  since: string = CLICK_TRACKING_EPOCH,
 ): Promise<SourceTagClickReport> {
-  if (youtubeSampleMode()) return sampleClickReport();
+  if (youtubeSampleMode()) return sampleClickReport(new Date(), since);
+  const from = since > CLICK_TRACKING_EPOCH ? since : CLICK_TRACKING_EPOCH;
   const today = utcDay(new Date());
 
   await ensureClickSnapshots(brandId, brandSlug);
@@ -69,7 +72,7 @@ export async function getSourceTagClicksCumulative(
   const [snapshotSums, todayByDay] = await Promise.all([
     prisma.sourceTagClickDaily.groupBy({
       by: ["tag"],
-      where: { brandId, date: { gte: new Date(CLICK_TRACKING_EPOCH), lt: new Date(today) } },
+      where: { brandId, date: { gte: new Date(from), lt: new Date(today) } },
       _sum: { clicks: true },
     }),
     fetchClicksForDays([today], zoneId, token, paths),
@@ -92,7 +95,7 @@ export async function getSourceTagClicksCumulative(
   return {
     totalClicks: byTag.reduce((s, e) => s + e.clicks, 0),
     byTag,
-    epochDate: CLICK_TRACKING_EPOCH,
+    epochDate: from,
     generatedAt: new Date().toISOString(),
   };
 }

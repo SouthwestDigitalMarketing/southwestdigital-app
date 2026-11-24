@@ -1,11 +1,37 @@
 # SWapp handoff
+## 2026-11-24 (evening) — Side menu: no brand logo or brand switcher (Johnny)
+
+- Tom: "Lochside LLC is what this whole thing is about"; no Bookkeeping Conroe logo and no selector at all.
+  AppShell's sidebar block with the brand logo and the `selectBrand` dropdown is removed for everyone; the menu
+  goes profile, Scan, nav. `/select-brand` and its action still exist (nothing links to them from the menu);
+  `accessibleBrands` is still passed to AppShell but unused. The top bar still shows the active brand's name.
+
+## 2026-11-24 (evening) — This Month and Reports (Johnny)
+
+- Tom: the first tab is **This Month**: every number on it counts from the 1st (Central) and resets monthly.
+  `src/lib/showrunner/month.ts` (`thisMonth`, 3-day YouTube lag; nothing settled on days 1-3 shows zeros);
+  `getSourceTagClicksCumulative(brandId, slug, since)` takes a start date ("Since Nov 1").
+- **This Week** tab (`/showrunner/week`): the same page (`ChannelPeriod.tsx`, period "week") from Sunday, the
+  Sunday wrap-up's week. Views goal = monthly goal x 7/30, not editable there. With the 3-day YouTube lag, views
+  are 0 Sunday-Tuesday; the page says from which day they show. Link clicks are live.
+- **Reports** tab: `/showrunner/reports` lists every month from 2026-08 (first tracked clicks) newest first;
+  `/showrunner/reports/YYYY-MM` renders `REPORT_SECTIONS` (src/lib/showrunner/reports.ts), empty for now: Tom asked
+  for the frame only. Add a report by appending a section there.
+
+## 2026-11-24 (evening) — Showrunner shows only The Real Estate Bookkeeper's YouTube (Johnny)
+
+- Tom: only TREB's YouTube numbers matter. `showChannelBrand()` (src/lib/showrunner/channel-brand.ts): from either
+  Lochside brand, Overview and Leads read TREB's theme, goals, YouTube connection and link clicks; other brands keep
+  their own. `updateYouTubeGoal` accepts the brand the page shows. Overview: no "Channel performance" title or date
+  line; goals are narrow rows; tighter gaps.
+
 ## 2026-11-24 (later) — Sample YouTube numbers on dev servers (Johnny)
 
 - Local SWapp cannot read the production YouTube connection (encrypted with production secrets Vercel will not
   hand out), so YouTube pages were blank in dev. `SWAPP_DEV_SAMPLE_YOUTUBE=1` under `next dev` (never production:
   `youtubeSampleMode()` needs NODE_ENV=development) makes `getYouTubeRefreshToken` return a sample token that the
   analytics, source-tag and click readers answer with made-up, steady numbers (`src/lib/youtube/devSample.ts`);
-  `SampleNumbersBanner` says so on Showrunner Overview and Leads.
+  no banner (Tom: he knows dev is fake data).
 - On ripley, `swapp-live serve` appends `~/.local/share/swapp-live/extra-<port>.env`; `extra-3110.env` turns it on
   for Johnny's dev server only.
 

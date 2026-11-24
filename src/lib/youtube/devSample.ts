@@ -72,7 +72,9 @@ export function sampleSourceTagVideos(): Map<string, SourceTagVideo> {
   return new Map(TAGS.map((tag, i) => [tag, { title: VIDEOS[i].title, videoId: VIDEOS[i].videoId, thumbnailUrl: thumb(VIDEOS[i].videoId) }]));
 }
 
-export function sampleClickReport(now = new Date()): SourceTagClickReport {
-  const byTag = TAGS.map((tag, i) => ({ tag, clicks: [96, 61, 38, 19][i] }));
-  return { totalClicks: byTag.reduce((n, t) => n + t.clicks, 0), byTag, epochDate: "2026-08-09", generatedAt: now.toISOString() };
+export function sampleClickReport(now = new Date(), since = "2026-08-09"): SourceTagClickReport {
+  // Fewer clicks for a shorter span, so a month reads smaller than all time.
+  const share = Math.min(1, Math.max(0.05, (now.getTime() - Date.parse(since + "T00:00:00Z")) / (107 * 86_400_000)));
+  const byTag = TAGS.map((tag, i) => ({ tag, clicks: Math.max(1, Math.round([96, 61, 38, 19][i] * share)) }));
+  return { totalClicks: byTag.reduce((n, t) => n + t.clicks, 0), byTag, epochDate: since, generatedAt: now.toISOString() };
 }
