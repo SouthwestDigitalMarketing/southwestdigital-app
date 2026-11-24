@@ -79,7 +79,7 @@ export function CompanyCarousel({ total, brands, cashFlow, expectedMonth, period
   const count = (n: number) => String(n);
   return <section className="mt-2">
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <Card label="monthly recurring revenue" value={money(total.mrrUsd)} note={`${total.clients} active client${total.clients === 1 ? "" : "s"}`} parts={parts((b) => b.mrrUsd, money)} />
+      <Card label="MRR" value={money(total.mrrUsd)} note={`${total.clients} active client${total.clients === 1 ? "" : "s"}`} parts={parts((b) => b.mrrUsd, money)} />
       <Card label="new leads" value={String(total.newLeads)} note={period} parts={parts((b) => b.newLeads, count)} />
       <Card label="offers" value={String(total.offersSent)} note={`${total.offersAwaiting} awaiting a reply`} parts={parts((b) => b.offersSent, count)} />
       <Card
