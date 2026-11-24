@@ -287,7 +287,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
   const companyPaletteRows = companyMetrics ? await prisma.brand.findMany({
     where: { slug: { in: [...COMPANY_BRANDS] }, status: "ACTIVE" },
-    select: { slug: true, theme: { select: { themePreset: true, lightColor: true, darkColor: true, accentColor: true } } },
+    select: { id: true, slug: true, theme: { select: { themePreset: true, lightColor: true, darkColor: true, accentColor: true } } },
   }) : [];
   // Each brand's colour on the company cards: Bookkeeping Conroe's navy, The Real Estate Bookkeeper's red (Tom, 2026-11-24).
   const companyColors: Record<string, string> = Object.fromEntries(companyPaletteRows.map(({ slug, theme }) => [
@@ -407,6 +407,10 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const hide = <T extends { name: string; company: string | null }>(row: T, kind: "Client" | "Lead" = "Client"): T =>
     privacy ? { ...row, name: alias(row.name, kind), company: null } : row;
   const mrrClients = recordMrr.clients.map((client) => hide(client));
+  // Every paying client of both Lochside brands, for the MRR card's list (Tom, 2026-11-24).
+  const companyClients = (await Promise.all(companyPaletteRows.map(async (row) =>
+    (row.id === brand.id ? recordMrr : await getRecordMrr(row.id)).clients.map((client) => ({ ...hide(client), slug: row.slug })),
+  ))).flat().sort((a, b) => b.mrr - a.mrr);
   const mrrStarting = recordMrr.starting.map((client) => hide(client));
   const pipelineOverview = pipelineOverviewRaw.map((pipeline) => ({
     ...pipeline,
@@ -541,7 +545,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       {/* The swipe calendar first: billing dates and episode releases (Tom, 2026-11-24). */}
       <div className="mb-3"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
       <GsaAlarm proposals={awaitingGsa} now={windowEnd} />
-      {companyMetrics && <CompanyCarousel {...companyMetrics} period={selectedPeriod.label} colors={companyColors} targets={companyTargets} />}
+      {companyMetrics && <CompanyCarousel {...companyMetrics} period={selectedPeriod.label} colors={companyColors} targets={companyTargets} clients={companyClients} />}
       <details className="mt-8" open={!companyMetrics}>
       <summary className="cursor-pointer text-sm font-medium text-slate-600">Detailed {brand.name} dashboard</summary>
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-4">

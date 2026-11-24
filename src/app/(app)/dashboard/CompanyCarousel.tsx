@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { MetricsView } from "@/lib/companyMetrics/summary";
 
@@ -86,31 +86,64 @@ function TargetBar({ value, target, lowerIsBetter = false, label }: { value: num
   );
 }
 
-/** A whole card is a link to the page about that number (Tom, 2026-11-24); the bar keeps its own tap. */
-function Card({ label, value, note, parts, href, target, bar }: { label: string; value: string; note: string; parts?: Part[]; href?: string; target?: number; bar?: React.ReactNode }) {
-  return <div className={`relative flex flex-col rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm ${href ? "transition-colors hover:border-slate-400" : ""}`}>
-    {href ? <Link href={href} aria-label={`${value} ${label}: open`} className="absolute inset-0 rounded-2xl" /> : null}
+/**
+ * A whole card is a link to the page about that number (Tom, 2026-11-24); the bar keeps its own tap. A card
+ * with `expand` opens in place instead (the MRR card lists the clients).
+ */
+function Card({ label, value, note, parts, href, target, bar, expand }: {
+  label: string; value: string; note: string; parts?: Part[]; href?: string; target?: number; bar?: React.ReactNode; expand?: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const tappable = Boolean(href || expand);
+  return <div className={`relative flex flex-col rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm ${tappable ? "transition-colors hover:border-slate-400" : ""}`}>
+    {expand ? (
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-label={`${value} ${label}: ${open ? "hide" : "show"} details`} className="absolute inset-0 rounded-2xl" />
+    ) : href ? <Link href={href} aria-label={`${value} ${label}: open`} className="absolute inset-0 rounded-2xl" /> : null}
     {/* The label follows the value on one line ("4 new leads") to save height. */}
     <p className="flex flex-wrap items-baseline gap-x-2 pr-6">
       <span className="text-3xl font-semibold tracking-tight text-slate-900 tabular-nums">{value}</span>
       <span className="text-base font-medium text-slate-600">{label}</span>
     </p>
-    {href ? <ChevronRight aria-hidden="true" size={18} className="absolute right-4 top-5 text-slate-400" /> : null}
+    {expand ? (
+      <ChevronDown aria-hidden="true" size={18} className={`absolute right-4 top-5 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+    ) : href ? <ChevronRight aria-hidden="true" size={18} className="absolute right-4 top-5 text-slate-400" /> : null}
     <p className="mt-0.5 text-sm text-slate-500">{note}</p>
     {parts ? <SplitBar parts={parts} label={label} target={target ?? 0} /> : null}
     {bar}
+    {expand && open ? <div className="relative z-10 mt-3 border-t border-slate-100 pt-3">{expand}</div> : null}
   </div>;
 }
 
-/**
- * Lochside's company numbers on one screen (Tom, 2026-11-24): each card shows the total, then a bar split by
- * brand in the brand's colour (Bookkeeping Conroe navy, The Real Estate Bookkeeper red) instead of a swipe per brand.
- */
+export type CompanyClient = { id: string; name: string; company: string | null; mrr: number; slug: string };
+
+/** The MRR card's list: each paying client with its brand's dot and monthly amount, then a link to the details. */
+function ClientList({ clients, colors, brands }: { clients: CompanyClient[]; colors: Record<string, string>; brands: MetricsView[] }) {
+  const brandName = (slug: string) => brands.find((b) => b.slug === slug)?.name ?? slug;
+  return (
+    <div>
+      {clients.length === 0 ? <p className="text-sm text-slate-500">No paying clients yet.</p> : (
+        <ul className="flex flex-col">
+          {clients.map((c) => (
+            <li key={`${c.slug}-${c.id}`} className="flex items-center gap-2 py-1 text-sm">
+              <span className="brand-split-seg h-2.5 w-2.5 shrink-0 rounded-full" title={brandName(c.slug)} style={{ ["--seg" as string]: colors[c.slug] ?? "#64748b" }} />
+              <span className="min-w-0 flex-1 truncate text-slate-800">{c.company || c.name}</span>
+              <span className="font-semibold tabular-nums text-slate-900">{money(c.mrr)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <Link href="/dashboard/revenue" className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-slate-700 underline underline-offset-4">
+        Details <ChevronRight size={14} aria-hidden="true" />
+      </Link>
+    </div>
+  );
+}
+
 export type CompanyTargets = { mrrUsd: number; newLeads: number; offersSent: number; responseSeconds: number; freeCashFlowUsd: number };
 
-export function CompanyCarousel({ total, brands, cashFlow, expectedMonth, period, colors, targets }: {
+export function CompanyCarousel({ total, brands, cashFlow, expectedMonth, period, colors, targets, clients }: {
   total: MetricsView; brands: MetricsView[]; cashFlow: CashFlow; expectedMonth: string; period: string;
-  colors: Record<string, string>; targets: CompanyTargets;
+  colors: Record<string, string>; targets: CompanyTargets; clients: CompanyClient[];
 }) {
   const pct = (value: number, target: number) => `${target > 0 ? Math.round((value / target) * 100) : 0}% of ${target.toLocaleString("en-US")}`;
   const parts = (pick: (b: MetricsView) => number, show: (n: number) => string): Part[] =>
@@ -118,7 +151,7 @@ export function CompanyCarousel({ total, brands, cashFlow, expectedMonth, period
   const count = (n: number) => String(n);
   return <section className="mt-2">
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <Card label="MRR" value={money(total.mrrUsd)} note={`${total.clients} active client${total.clients === 1 ? "" : "s"} · ${Math.round((total.mrrUsd / targets.mrrUsd) * 100)}% of ${money(targets.mrrUsd)}`} parts={parts((b) => b.mrrUsd, money)} target={targets.mrrUsd} href="/dashboard/revenue" />
+      <Card label="MRR" value={money(total.mrrUsd)} note={`${total.clients} active client${total.clients === 1 ? "" : "s"} · ${Math.round((total.mrrUsd / targets.mrrUsd) * 100)}% of ${money(targets.mrrUsd)}`} parts={parts((b) => b.mrrUsd, money)} target={targets.mrrUsd} expand={<ClientList clients={clients} colors={colors} brands={brands} />} />
       <Card label="new leads" value={String(total.newLeads)} note={`${period} · ${pct(total.newLeads, targets.newLeads)}`} parts={parts((b) => b.newLeads, count)} target={targets.newLeads} href="/pipeline" />
       <Card label="offers" value={String(total.offersSent)} note={`${total.offersAwaiting} awaiting a reply · ${pct(total.offersSent, targets.offersSent)}`} parts={parts((b) => b.offersSent, count)} target={targets.offersSent} href="/offers" />
       <Card
