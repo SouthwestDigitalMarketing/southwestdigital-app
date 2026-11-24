@@ -2073,6 +2073,8 @@ model ShowrunnerStudio {
   episodes        Json     @default("[]")
   storylines      Json     @default("[]")
   milestoneOverrides Json @default("{}")
+  /// The Sunday wrap-up week pushed from ripley (POST /api/showrunner/weekly).
+  weekly          Json?
   updatedAt       DateTime @updatedAt
   brand           Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
 }
