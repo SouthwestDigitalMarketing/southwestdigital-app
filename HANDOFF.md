@@ -1,4 +1,9 @@
 # SWapp handoff
+## 2026-11-24 (later) — Showrunner Overview = calendar strip + channel numbers (Johnny)
+
+- Tom: put the metrics on Overview. `/showrunner` is now the former Metrics page with the release calendar strip on
+  top (every branch, including "connect YouTube"); `/showrunner/metrics` redirects there. Tabs: Overview, Series, Leads.
+
 ## 2026-11-24 — Showrunner phone tabs: Overview, Series, Metrics, Leads (Johnny)
 
 - Tom chose (2026-11-24) to build the mock-up screens in SWapp. Tabs now Overview / Series / Metrics / Leads; Studio,
