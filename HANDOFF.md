@@ -1,8 +1,8 @@
 # SWapp handoff
 ## 2026-11-24 (evening) — Series as a streaming-style show page (Johnny)
 
-- Tom: make Series look like a Netflix series page. Dark page: banner = newest published video's YouTube picture
-  (`loadLatestPublishedVideoId`, i.ytimg maxresdefault) under a dark gradient; title, "New episodes Sundays ·
+- Tom: make Series look like a Netflix series page. Dark page: banner = text-free key art `public/showrunner/series-banner.jpg` (gpt-image-2: lit small-town
+  office on a pine road, city skyline far off) under a dark gradient; title, "New episodes Sundays ·
   Season 1 · 6 episodes", white Play (The $10K Month playlist PLV4Wps_g39RI), Next episode (Sunday wrap-up page),
   canon logline and season question; episode rows from release-schedule.json (16:9 number tile, red for next,
   title = the week's wrap-up title for the next one, else "Week of ..."). Studio, New series and the channel map

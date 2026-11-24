@@ -4,11 +4,9 @@ import { ChannelGraph } from "@/components/showrunner/ChannelGraph";
 import type { GraphData } from "@/lib/showrunner/graph-layout";
 import graphData from "@/lib/showrunner/channel-graph.json";
 import canon from "@/lib/showrunner/canon.json";
-import { showChannelBrand } from "@/lib/showrunner/channel-brand";
-import { loadLatestPublishedVideoId, loadWeek } from "@/lib/showrunner/load";
+import { loadWeek } from "@/lib/showrunner/load";
 import { schedule } from "@/lib/showrunner/release-schedule";
 import { releaseLabel } from "@/lib/showrunner/weekly";
-import { createBrandDataContext } from "@/lib/tenancy/context";
 
 export const dynamic = "force-dynamic";
 
@@ -30,17 +28,8 @@ function weekOf(releaseAt: string) {
  * premise, Play (the playlist) and the next episode, then the episode list. Each Sunday episode wraps up its week.
  */
 export default async function SeriesPage() {
-  const { brand, session, dataContext } = await requireAppBrand();
-  const channel = await showChannelBrand(brand);
-  const channelContext = channel.id === brand.id
-    ? dataContext
-    : createBrandDataContext({ brandId: channel.id, actorUserId: session.user.id });
-  const [week, latestVideoId] = await Promise.all([
-    loadWeek(dataContext),
-    loadLatestPublishedVideoId(channelContext).catch(() => null),
-  ]);
-  // The newest published video's YouTube picture is the banner.
-  const banner = latestVideoId ? `https://i.ytimg.com/vi/${latestVideoId}/maxresdefault.jpg` : null;
+  const { dataContext } = await requireAppBrand();
+  const week = await loadWeek(dataContext);
 
   const now = requestNow();
   const next = schedule.releases.find((release) => Date.parse(release.at) > now - 6 * 3600_000) ?? null;
@@ -49,12 +38,11 @@ export default async function SeriesPage() {
   return (
     <div className="min-h-full bg-neutral-950 pb-10 text-white">
       <section className="relative overflow-hidden">
-        {banner ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={banner} alt="" className="absolute inset-0 h-full w-full object-cover opacity-60" />
-        ) : null}
+        {/* Series key art, no text (gpt-image-2, 2026-11-24): a lit small-town office on a pine road, a city far off. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/showrunner/series-banner.jpg" alt="" className="absolute inset-0 h-full w-full object-cover object-[78%_center] opacity-80" />
         <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-neutral-950/70 to-neutral-950/10" />
-        <div className={`relative px-4 pb-6 sm:px-8 ${banner ? "pt-40 sm:pt-56" : "pt-8"}`}>
+        <div className="relative px-4 pt-40 pb-6 sm:px-8 sm:pt-56">
           <p className="text-xs font-bold uppercase tracking-[0.25em] text-red-500">Series</p>
           <h1 className="mt-1 text-4xl font-black tracking-tight sm:text-6xl">{canon.title}</h1>
           <p className="mt-2 text-sm text-neutral-300">
