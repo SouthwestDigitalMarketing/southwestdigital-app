@@ -1,9 +1,11 @@
 # SWapp handoff
-## 2026-11-24 — Showrunner phone tabs: Today, Series, Metrics, Leads (Johnny)
+## 2026-11-24 — Showrunner phone tabs: Overview, Series, Metrics, Leads (Johnny)
 
-- Tom chose (2026-11-24) to build the mock-up screens in SWapp. Tabs now Today / Series / Metrics / Leads; Studio,
-  Videos and New video stay as pages (Today covers /new and /videos, Series covers /studio and /new-series).
-- Today (`/showrunner`): New video button, videos in progress, This Sunday card, last 3 out, release calendar.
+- Tom chose (2026-11-24) to build the mock-up screens in SWapp. Tabs now Overview / Series / Metrics / Leads; Studio,
+  Videos and New video stay as pages (Overview covers /new and /videos, Series covers /studio and /new-series).
+- Overview (`/showrunner`): only the swipe calendar strip, no card, countdown or episode chips (Tom: rename Today to Overview, clear everything but the
+  calendar). The in-progress list, New video button and last-out list are no longer on any tab; `/showrunner/new`
+  and `/showrunner/videos` still exist and count as Overview.
   Metrics (`/showrunner/metrics`): the former Overview analytics, moved unchanged; `LinkClicksTable` is its own file.
   Leads (`/showrunner/leads`): views, link clicks, new leads and offers (getCompanyMetrics, platform operator), with
   a plain note that lead-to-video attribution is not recorded yet. Series: season list + Sunday card; channel map

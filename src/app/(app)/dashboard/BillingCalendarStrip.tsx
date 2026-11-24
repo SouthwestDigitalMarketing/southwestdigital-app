@@ -104,7 +104,7 @@ export function BillingCalendarStrip({ days, releases = {} }: { days: BillingCal
       >
         {days.map((d) => {
           const episode = releases[d.date];
-          const event = d.event ? EVENT_STYLE[d.event] : episode ? { dot: "bg-indigo-600 text-white", text: "text-indigo-700", label: `Episode ${episode} · 5 p.m. Central` } : null;
+          const event = d.event ? EVENT_STYLE[d.event] : episode ? { dot: "bg-[#ff0000] text-white", text: "text-[#cc0000]", label: `Episode ${episode} · 5 p.m. Central` } : null;
           const isToday = d.offset === 0;
           return (
             <button
