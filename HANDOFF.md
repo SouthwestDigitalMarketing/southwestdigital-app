@@ -1,4 +1,37 @@
 # SWapp handoff
+## 2026-11-24 (night) — Scan button only on the Scanner page (Johnny, Tom's ask)
+
+- Tom: move Scan from the side menu to the Scanner page and drop the round refresh icon (the compact ScanButton) from
+  the phone top bar. AppShell no longer renders ScanButton; /scanner shows it beside the heading (platform operator
+  in a Lochside brand, same rule as before). The desktop sidebar keeps a privacy-switch row; the phone drawer's
+  close button floats top right over the first menu row.
+
+## 2026-11-24 (night) — Company dashboard: one set of cards split by brand (Johnny, Tom's ask)
+
+- `/dashboard` (Lochside view): no BrandSwipe. `CompanyCarousel` shows one card per metric with the Lochside total
+  as the big number with its label beside it ("4 new leads", "$3,105 MRR") and a bar split by brand underneath
+  (MRR, new leads, offers). No legends: tapping the bar opens a small pop-up with each brand's amount and share
+  (closes on a second tap or a tap elsewhere). The MRR card opens in place: every paying client of both brands
+  (brand dot, name, monthly amount, largest first; privacy aliases apply) and a Details link to /dashboard/revenue.
+  The New leads card opens the same way: each lead counted in the period (both brands, newest first) with its
+  funnel stage (CRM pipeline stage, else pipe's lead step label), linking to /leads/[id]; Details -> /pipeline.
+  (A TREB lead's page needs the TREB brand active; TREB has no leads yet.)
+  The Offers card opens too: each offer sent in the period (client company or name, amount when the quote row has
+  totals, status chip: Sent / Viewed (firstViewedAt) / Accepted / Signed (completed) / Archived), linking to
+  /offers/[id]; Details -> /offers. The count includes archived TEST offers (getCompanyMetrics counts any sentAt).
+  The other cards are links (stretched, chevron):
+  response time -> /scorecard; free cash flow has no page yet.
+  Targets (Tom, 2026-11-24): each bar's track is the target and the brand pieces fill their share of the way;
+  the note says "21% of $15,000". MRR and offers from Settings > Dashboard goals (BC theme monthlyMrrGoal,
+  monthlyOffersSentGoal; Tom wants 15,000 and 10, production had 10,000 and none), leads 30 per 30 days
+  (no setting yet, constant), response time the Scorecard's 1-hour target (green under, red over), free cash
+  flow $10,000 (the series goal).
+  The swipe calendar strip (Showrunner's ReleaseCalendar: billing dates + episode releases) is the first thing on
+  /dashboard. Colours: Bookkeeping Conroe = its theme darkColor (navy #1b263b),
+  The Real Estate Bookkeeper = its theme accentColor (red #d70407); `.brand-split-seg` lightens them on dark.
+  Response time shows the median with each brand's in the note (medians do not add). Free cash flow is company-only.
+  The Website page still uses BrandSwipe.
+
 ## 2026-11-24 (evening) — Monthly reports, first version (Johnny)
 
 - `REPORT_SECTIONS` (src/lib/showrunner/reports.ts) now holds three sections in

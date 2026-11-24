@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ScanButton } from "@/components/ScanButton";
 import { requireStaffBrand } from "@/lib/brands/staff";
 import { isLochsideBrandSlug } from "@/lib/brands/active-brand";
 import { prisma } from "@/lib/prisma";
@@ -102,7 +103,11 @@ export default async function ScannerPage({ searchParams }: { searchParams: Sear
 
   return (
     <div className="p-4 sm:p-8">
-      <h1 className="text-lg font-semibold text-slate-900">Scanner</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-lg font-semibold text-slate-900">Scanner</h1>
+        {/* The Scan button moved here from the side menu and the top bar (Tom, 2026-11-24). */}
+        {mailReviews ? <div className="w-full sm:w-64"><ScanButton /></div> : null}
+      </div>
       <p className="mt-1 max-w-2xl text-sm text-slate-600">
         One place for everything the scan found. Findings close on their own when the problem is gone; the mail reviews wait for your answer.
       </p>

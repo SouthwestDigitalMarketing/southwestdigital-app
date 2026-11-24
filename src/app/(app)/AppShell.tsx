@@ -36,7 +36,6 @@ import {
   EyeOff,
 } from "lucide-react";
 import { useBrand } from "@/lib/brands/context";
-import { isLochsideBrandSlug } from "@/lib/brands/active-brand";
 import {
   appCanvasGradient,
   appThemeCssVariables,
@@ -47,7 +46,6 @@ import { signOutAction } from "./actions";
 import { Modal } from "@/components/Modal";
 import { KeyboardProvider } from "@/components/keyboard/KeyboardProvider";
 import { PrivacyToggle } from "@/components/PrivacyToggle";
-import { ScanButton } from "@/components/ScanButton";
 import { privacyCovers } from "@/lib/privacy";
 import { APP_COMMANDS } from "@/lib/keyboard/commands";
 
@@ -59,12 +57,12 @@ const NAV: Array<{
   dividerAfter?: boolean;
 }> = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, exact: true },
-  { label: "Operations", href: "/operations", icon: ListChecks },
+  { label: "Financial Reports", href: "/reports", icon: FileText },
   { label: "Scanner", href: "/scanner", icon: Radar },
+  { label: "Operations", href: "/operations", icon: ListChecks },
   { label: "Local SEO", href: "/local-seo", icon: MapPinned },
   { label: "Website", href: "/website", icon: Globe },
   { label: "Showrunner", href: "/showrunner", icon: Clapperboard },
-  { label: "Reports", href: "/reports", icon: FileText },
   { label: "Reviews", href: "/reviews", icon: Star, dividerAfter: true },
   { label: "Contacts", href: "/contacts", icon: Contact },
   { label: "CRM", href: "/pipeline", icon: TrendingUp },
@@ -203,7 +201,6 @@ export function AppShell({
   const pathname = usePathname();
   // Header Scan button (sop-money-playbook): Lochside operators only. Contigo
   // is a separate tenant and the scan sources are Lochside's.
-  const showScan = isPlatformOperator && isLochsideBrandSlug(brand.slug);
   const [menuPath, setMenuPath] = useState(pathname);
   if (menuPath !== pathname) {
     setMenuPath(pathname);
@@ -280,28 +277,10 @@ export function AppShell({
       {/* No profile row: one user (Tom, 2026-11-24). Sign out is the last item in the menu. */}
       {/* No brand logo or brand switcher: SWapp is Lochside LLC's one app (Tom, 2026-11-24). */}
 
-      {!showScan ? (
-        <div className={`flex ${collapsed ? "justify-center px-1" : "px-5"} py-3 max-lg:hidden`} style={{ borderBottom: `1px solid ${dividerColor}` }}>
-          <PrivacyToggle on={privacy} iconOnly={collapsed} />
-        </div>
-      ) : null}
-      {showScan ? (
-        // max-lg:pr-16 leaves room for the drawer's close button on this row.
-        <div className={`${collapsed ? "px-1" : "px-5"} py-3 max-lg:pr-16`} style={{ borderBottom: `1px solid ${dividerColor}` }}>
-          {collapsed ? (
-            <div className="flex flex-col items-center gap-2">
-              <ScanButton compact />
-              <span className="max-lg:hidden"><PrivacyToggle on={privacy} iconOnly /></span>
-            </div>
-          ) : (
-            <ScanButton>
-              <span className="hidden shrink-0 lg:inline-flex">
-                <PrivacyToggle on={privacy} sidebarAction />
-              </span>
-            </ScanButton>
-          )}
-        </div>
-      ) : null}
+      {/* Scan lives on the Scanner page now (Tom, 2026-11-24); on a computer the privacy switch keeps this row. */}
+      <div className={`flex ${collapsed ? "justify-center px-1" : "px-5"} py-3 max-lg:hidden`} style={{ borderBottom: `1px solid ${dividerColor}` }}>
+        <PrivacyToggle on={privacy} iconOnly={collapsed} />
+      </div>
 
       <nav className={`flex-1 space-y-0.5 py-4 ${collapsed ? "px-2" : "px-3"}`}>
         {NAV.map(({ href, icon, label, exact, dividerAfter }) => (
@@ -437,7 +416,7 @@ export function AppShell({
 
       {open && (
         <Modal onClose={() => setOpen(false)} label="Main navigation" className="ui-navigation-drawer">
-          {/* Close sits on the top row instead of a row of its own (Tom, 2026-11-24: save space at the top). */}
+          {/* Close floats at the top right instead of taking a row of its own (Tom, 2026-11-24: save space). */}
           <div className="relative">
             <button type="button" onClick={() => setOpen(false)} aria-label="Close navigation" className="absolute right-2 top-1.5 z-10 inline-flex h-11 w-11 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100"><X size={20} /></button>
             <aside>{sidebar}</aside>
@@ -460,7 +439,6 @@ export function AppShell({
             <Menu size={20} />
           </button>
           <span className="ml-auto" />
-          {showScan ? <ScanButton compact /> : null}
           <span className="pl-2">
             <PrivacyToggle on={privacy} compact />
           </span>

@@ -1,9 +1,9 @@
 "use client";
 
-import { ExternalLink } from "lucide-react";
+import Link from "next/link";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import type { MetricsView } from "@/lib/companyMetrics/summary";
-import { BrandSwipe } from "@/components/BrandSwipe";
-import { NEUTRAL_SWIPE_PALETTE, type SwipePalette } from "@/lib/brands/swipePalette";
 
 type CashFlow = { month: string; asOf: string; valueUsd: number; stale: boolean } | null;
 
@@ -17,35 +17,221 @@ function response(value: number | null) {
   return `${(value / 3600).toFixed(1)} hr`;
 }
 
-function Card({ label, value, note }: { label: string; value: string; note: string }) {
-  return <div className="brand-swipe__card flex min-h-32 flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-    <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">{label}</p>
-    <div><p className="text-3xl font-semibold tracking-tight text-slate-900 tabular-nums">{value}</p><p className="mt-1 text-sm text-slate-500">{note}</p></div>
+type Part = { slug: string; name: string; value: number; display: string; color: string };
+
+/**
+ * A thin bar split by brand, no legend (Tom, 2026-11-24). Tap the bar for what makes up the number: each brand's
+ * amount and share, in a small pop-up over the card; tap again or anywhere else to close it.
+ */
+function SplitBar({ parts, label, target }: { parts: Part[]; label: string; target: number }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: PointerEvent) => { if (!box.current?.contains(event.target as Node)) setOpen(false); };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [open]);
+  const total = parts.reduce((n, p) => n + Math.max(0, p.value), 0);
+  const share = (p: Part) => (total > 0 ? Math.round((Math.max(0, p.value) / total) * 100) : 0);
+  const summary = parts.map((p) => `${p.name} ${p.display} (${share(p)}%)`).join(", ");
+  // The track is the target; each brand's piece is its part of the way there (capped at the target).
+  const scale = Math.max(total, target);
+  return (
+    // z-10 keeps the bar tappable above the card's own link.
+    <div ref={box} className="relative z-10 mt-2.5">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-label={`${label} by brand: ${summary}`}
+        title={summary}
+        className="flex w-full py-1.5"
+      >
+        <span className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+          {total > 0
+            ? parts.filter((p) => p.value > 0).map((p) => (
+              <span key={p.slug} className="brand-split-seg h-full" style={{ width: `${(p.value / scale) * 100}%`, ["--seg" as string]: p.color }} />
+            ))
+            : null}
+        </span>
+      </button>
+      {open ? (
+        <div role="status" className="absolute left-0 right-0 top-full z-20 mt-1 rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-lg">
+          {parts.map((p) => (
+            <p key={p.slug} className="flex items-center gap-2 py-0.5">
+              <span className="brand-split-seg h-2.5 w-2.5 shrink-0 rounded-full" style={{ ["--seg" as string]: p.color }} />
+              <span className="min-w-0 flex-1 text-slate-700">{p.name}</span>
+              <span className="font-semibold tabular-nums text-slate-900">{p.display}</span>
+              <span className="w-10 text-right tabular-nums text-slate-500">{share(p)}%</span>
+            </p>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** One bar against a target. `lowerIsBetter` fills by time used and turns red past the target. */
+function TargetBar({ value, target, lowerIsBetter = false, label }: { value: number; target: number; lowerIsBetter?: boolean; label: string }) {
+  const pct = target > 0 ? Math.min(100, Math.max(0, (value / target) * 100)) : 0;
+  const good = lowerIsBetter ? value <= target : value >= target;
+  const color = lowerIsBetter ? (good ? "bg-emerald-600" : "bg-rose-600") : good ? "bg-emerald-600" : "bg-slate-700";
+  return (
+    <div className="relative z-10 mt-2.5 py-1.5" role="img" aria-label={label}>
+      <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A whole card is a link to the page about that number (Tom, 2026-11-24); the bar keeps its own tap. A card
+ * with `expand` opens in place instead (the MRR card lists the clients).
+ */
+function Card({ label, value, note, parts, href, target, bar, expand }: {
+  label: string; value: string; note: string; parts?: Part[]; href?: string; target?: number; bar?: React.ReactNode; expand?: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const tappable = Boolean(href || expand);
+  return <div className={`relative flex flex-col rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm ${tappable ? "transition-colors hover:border-slate-400" : ""}`}>
+    {expand ? (
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-label={`${value} ${label}: ${open ? "hide" : "show"} details`} className="absolute inset-0 rounded-2xl" />
+    ) : href ? <Link href={href} aria-label={`${value} ${label}: open`} className="absolute inset-0 rounded-2xl" /> : null}
+    {/* The label follows the value on one line ("4 new leads") to save height. */}
+    <p className="flex flex-wrap items-baseline gap-x-2 pr-6">
+      <span className="text-3xl font-semibold tracking-tight text-slate-900 tabular-nums">{value}</span>
+      <span className="text-base font-medium text-slate-600">{label}</span>
+    </p>
+    {expand ? (
+      <ChevronDown aria-hidden="true" size={18} className={`absolute right-4 top-5 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+    ) : href ? <ChevronRight aria-hidden="true" size={18} className="absolute right-4 top-5 text-slate-400" /> : null}
+    <p className="mt-0.5 text-sm text-slate-500">{note}</p>
+    {parts ? <SplitBar parts={parts} label={label} target={target ?? 0} /> : null}
+    {bar}
+    {expand && open ? <div className="relative z-10 mt-3 border-t border-slate-100 pt-3">{expand}</div> : null}
   </div>;
 }
 
-export function CompanyCarousel({ total, brands, cashFlow, expectedMonth, period, palettes }: {
+export type CompanyLead = { id: string; name: string; company: string | null; slug: string; stage: string; createdAt: string };
+
+/** The New leads card's list: each lead with its brand dot and funnel stage, linking to the lead; then the CRM. */
+function LeadList({ leads, colors }: { leads: CompanyLead[]; colors: Record<string, string> }) {
+  return (
+    <div>
+      {leads.length === 0 ? <p className="text-sm text-slate-500">No new leads in this period.</p> : (
+        <ul className="flex flex-col">
+          {leads.map((lead) => (
+            <li key={`${lead.slug}-${lead.id}`}>
+              <Link href={`/leads/${lead.id}`} className="flex items-center gap-2 py-1.5 text-sm hover:bg-slate-50">
+                <span className="brand-split-seg h-2.5 w-2.5 shrink-0 rounded-full" style={{ ["--seg" as string]: colors[lead.slug] ?? "#64748b" }} />
+                <span className="min-w-0 flex-1 truncate text-slate-800">{lead.company ? `${lead.name} · ${lead.company}` : lead.name}</span>
+                <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">{lead.stage}</span>
+                <ChevronRight size={14} aria-hidden="true" className="shrink-0 text-slate-400" />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+      <Link href="/pipeline" className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-slate-700 underline underline-offset-4">
+        Details <ChevronRight size={14} aria-hidden="true" />
+      </Link>
+    </div>
+  );
+}
+
+export type CompanyOffer = { id: string; name: string; company: string | null; slug: string; status: string; monthly: number; oneTime: number; sentAt: string };
+
+const OFFER_STATUS: Record<string, { label: string; tone: string }> = {
+  sent: { label: "Sent", tone: "bg-slate-100 text-slate-700" },
+  viewed: { label: "Viewed", tone: "bg-amber-50 text-amber-800" },
+  accepted: { label: "Accepted", tone: "bg-emerald-50 text-emerald-700" },
+  completed: { label: "Signed", tone: "bg-emerald-50 text-emerald-700" },
+  archived: { label: "Archived", tone: "bg-slate-100 text-slate-500" },
+  draft: { label: "Draft", tone: "bg-slate-100 text-slate-500" },
+};
+
+/** The Offers card's list: each offer sent in the period with its amount and status, linking to it; then all offers. */
+function OfferList({ offers, colors }: { offers: CompanyOffer[]; colors: Record<string, string> }) {
+  return (
+    <div>
+      {offers.length === 0 ? <p className="text-sm text-slate-500">No offers sent in this period.</p> : (
+        <ul className="flex flex-col">
+          {offers.map((offer) => {
+            const status = OFFER_STATUS[offer.status] ?? { label: offer.status, tone: "bg-slate-100 text-slate-700" };
+            const amount = offer.monthly > 0 ? `${money(offer.monthly)}/mo` : offer.oneTime > 0 ? money(offer.oneTime) : "";
+            return (
+              <li key={`${offer.slug}-${offer.id}`}>
+                <Link href={`/offers/${offer.id}`} className="flex items-center gap-2 py-1.5 text-sm hover:bg-slate-50">
+                  <span className="brand-split-seg h-2.5 w-2.5 shrink-0 rounded-full" style={{ ["--seg" as string]: colors[offer.slug] ?? "#64748b" }} />
+                  <span className="min-w-0 flex-1 truncate text-slate-800">{offer.company || offer.name}</span>
+                  {amount ? <span className="shrink-0 font-semibold tabular-nums text-slate-900">{amount}</span> : null}
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${status.tone}`}>{status.label}</span>
+                  <ChevronRight size={14} aria-hidden="true" className="shrink-0 text-slate-400" />
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <Link href="/offers" className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-slate-700 underline underline-offset-4">
+        Details <ChevronRight size={14} aria-hidden="true" />
+      </Link>
+    </div>
+  );
+}
+
+export type CompanyClient = { id: string; name: string; company: string | null; mrr: number; slug: string };
+
+/** The MRR card's list: each paying client with its brand's dot and monthly amount, then a link to the details. */
+function ClientList({ clients, colors, brands }: { clients: CompanyClient[]; colors: Record<string, string>; brands: MetricsView[] }) {
+  const brandName = (slug: string) => brands.find((b) => b.slug === slug)?.name ?? slug;
+  return (
+    <div>
+      {clients.length === 0 ? <p className="text-sm text-slate-500">No paying clients yet.</p> : (
+        <ul className="flex flex-col">
+          {clients.map((c) => (
+            <li key={`${c.slug}-${c.id}`} className="flex items-center gap-2 py-1 text-sm">
+              <span className="brand-split-seg h-2.5 w-2.5 shrink-0 rounded-full" title={brandName(c.slug)} style={{ ["--seg" as string]: colors[c.slug] ?? "#64748b" }} />
+              <span className="min-w-0 flex-1 truncate text-slate-800">{c.company || c.name}</span>
+              <span className="font-semibold tabular-nums text-slate-900">{money(c.mrr)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <Link href="/dashboard/revenue" className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-slate-700 underline underline-offset-4">
+        Details <ChevronRight size={14} aria-hidden="true" />
+      </Link>
+    </div>
+  );
+}
+
+export type CompanyTargets = { mrrUsd: number; newLeads: number; offersSent: number; responseSeconds: number; freeCashFlowUsd: number };
+
+export function CompanyCarousel({ total, brands, cashFlow, expectedMonth, period, colors, targets, clients, leads, offers }: {
   total: MetricsView; brands: MetricsView[]; cashFlow: CashFlow; expectedMonth: string; period: string;
-  palettes: Record<string, SwipePalette>;
+  colors: Record<string, string>; targets: CompanyTargets; clients: CompanyClient[]; leads: CompanyLead[]; offers: CompanyOffer[];
 }) {
-  const views = [total, ...brands].map((slide, index) => ({
-    key: slide.slug,
-    name: index === 0 ? "Total" : slide.name,
-    heading: slide.name,
-    palette: index === 0 ? NEUTRAL_SWIPE_PALETTE : palettes[slide.slug] ?? NEUTRAL_SWIPE_PALETTE,
-    content: <>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Card label="Monthly recurring revenue" value={money(slide.mrrUsd)} note={`${slide.clients} active client${slide.clients === 1 ? "" : "s"}`} />
-        <Card label="New leads" value={String(slide.newLeads)} note={period} />
-        <Card label="Offers" value={String(slide.offersSent)} note={`${slide.offersAwaiting} awaiting a reply`} />
-        <Card label="Response time" value={response(slide.medianResponseSeconds)} note={`Median business time · ${period.toLowerCase()}`} />
-        {index === 0 && <div className="sm:col-span-2 xl:col-span-4"><Card label="Free cash flow" value={cashFlow ? money(cashFlow.valueUsd) : "Awaiting closed books"} note={cashFlow ? `As of ${cashFlow.asOf}${cashFlow.stale ? ` · Books behind (${expectedMonth} expected)` : ""}` : `No verified closed month · ${expectedMonth} expected`} /></div>}
+  const pct = (value: number, target: number) => `${target > 0 ? Math.round((value / target) * 100) : 0}% of ${target.toLocaleString("en-US")}`;
+  const parts = (pick: (b: MetricsView) => number, show: (n: number) => string): Part[] =>
+    brands.map((b) => ({ slug: b.slug, name: b.name, value: pick(b), display: show(pick(b)), color: colors[b.slug] ?? "#64748b" }));
+  const count = (n: number) => String(n);
+  return <section className="mt-2">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <Card label="MRR" value={money(total.mrrUsd)} note={`${total.clients} active client${total.clients === 1 ? "" : "s"} · ${Math.round((total.mrrUsd / targets.mrrUsd) * 100)}% of ${money(targets.mrrUsd)}`} parts={parts((b) => b.mrrUsd, money)} target={targets.mrrUsd} expand={<ClientList clients={clients} colors={colors} brands={brands} />} />
+      <Card label="new leads" value={String(total.newLeads)} note={`${period} · ${pct(total.newLeads, targets.newLeads)}`} parts={parts((b) => b.newLeads, count)} target={targets.newLeads} expand={<LeadList leads={leads} colors={colors} />} />
+      <Card label="offers" value={String(total.offersSent)} note={`${total.offersAwaiting} awaiting a reply · ${pct(total.offersSent, targets.offersSent)}`} parts={parts((b) => b.offersSent, count)} target={targets.offersSent} expand={<OfferList offers={offers} colors={colors} />} />
+      <Card
+        label="response time"
+        value={response(total.medianResponseSeconds)}
+        note={`Median business time, target ${response(targets.responseSeconds)} · ${brands.map((b) => `${b.name} ${response(b.medianResponseSeconds)}`).join(" · ")}`}
+        href="/scorecard"
+        bar={total.medianResponseSeconds === null ? null : <TargetBar value={total.medianResponseSeconds} target={targets.responseSeconds} lowerIsBetter label={`Response time ${response(total.medianResponseSeconds)} against a ${response(targets.responseSeconds)} target`} />}
+      />
+      <div className="sm:col-span-2 xl:col-span-4">
+        <Card label="free cash flow" value={cashFlow ? money(cashFlow.valueUsd) : "Awaiting closed books"} note={cashFlow ? `As of ${cashFlow.asOf}${cashFlow.stale ? ` · Books behind (${expectedMonth} expected)` : ""} · goal ${money(targets.freeCashFlowUsd)}` : `No verified closed month · ${expectedMonth} expected · goal ${money(targets.freeCashFlowUsd)}`} bar={cashFlow ? <TargetBar value={cashFlow.valueUsd} target={targets.freeCashFlowUsd} label={`Free cash flow ${money(cashFlow.valueUsd)} against ${money(targets.freeCashFlowUsd)}`} /> : null} />
       </div>
-      <div className="mt-4 min-h-6 text-sm text-slate-500">{slide.website && <a href={slide.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline underline-offset-4">Visit {slide.name}&apos;s website <ExternalLink size={13}/></a>}</div>
-    </>,
-  }));
-  return <section className="mt-5">
-    <p className="mb-1 text-xs font-medium uppercase tracking-[0.16em] text-slate-500">One company · two brands</p>
-    <BrandSwipe label="Lochside company dashboard" views={views} />
+    </div>
   </section>;
 }

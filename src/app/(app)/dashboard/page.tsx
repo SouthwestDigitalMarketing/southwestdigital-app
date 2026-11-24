@@ -12,15 +12,16 @@ import { OffersStatCard } from "./OffersStatCard";
 import { MrrStatCard, PipelineMrrStatCard, type PipelineMrrPipeline } from "./MrrStatCard";
 import { DashboardControls } from "./DashboardControls";
 import { BillingTimers } from "./BillingTimers";
+import { ReleaseCalendar } from "../showrunner/ReleaseCalendar";
 import { BILLING_TIMERS_BRAND_SLUG, billingCalendarDays } from "@/lib/dashboard/billing-timers";
 import { funnelStepFor, hasYouTubeActivity, summarizeMrr } from "./utils";
 import { getPastDueByContact } from "@/lib/ar/pastDue";
 import { getMrrGoals } from "@/lib/dashboard/mrr-goals";
 import { getRecordMrr } from "@/lib/operations/serviceRecordsMrr";
 import { firmDateKey, firmInstant } from "@/lib/operations/schedule";
-import { withBrandDataTransaction } from "@/lib/tenancy/context";
+import { createBrandDataContext, withBrandDataTransaction } from "@/lib/tenancy/context";
 import { PIPE_PROSPECTS_KEY } from "@/lib/pipe/deals";
-import { LEAD_STEP_STAGE, LEAD_STEPS, type LeadStep } from "@/lib/pipe/lead-steps";
+import { LEAD_STEP_LABEL, LEAD_STEP_STAGE, LEAD_STEPS, type LeadStep } from "@/lib/pipe/lead-steps";
 import { paidAwaitingGsa } from "@/lib/gsa/store";
 import { GsaAlarm } from "@/components/gsa/GsaAlarm";
 import { PRIVACY_COOKIE, privacyOn } from "@/lib/privacy";
@@ -35,7 +36,7 @@ import { parseRange } from "./_scorecard/format";
 import { getCompanyMetrics } from "@/lib/companyMetrics";
 import { isLochsideBrandSlug } from "@/lib/brands/active-brand";
 import { CompanyCarousel } from "./CompanyCarousel";
-import { brandSwipePalette } from "@/lib/brands/swipePalette";
+import { TARGETS as SCORECARD_TARGETS } from "@/lib/scorecard/queries";
 import { COMPANY_BRANDS } from "@/lib/companyMetrics";
 
 export const dynamic = "force-dynamic";
@@ -60,6 +61,10 @@ type DashboardPeriod = {
   start: Date;
   endExclusive: Date;
 };
+
+function leadStepLabel(step: string | null): string {
+  return step && LEAD_STEPS.includes(step as LeadStep) ? LEAD_STEP_LABEL[step as LeadStep] : "New";
+}
 
 function goalPct(value: number, goal: number): number {
   if (!goal || goal <= 0 || !Number.isFinite(value)) return 0;
@@ -286,9 +291,13 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
   const companyPaletteRows = companyMetrics ? await prisma.brand.findMany({
     where: { slug: { in: [...COMPANY_BRANDS] }, status: "ACTIVE" },
-    select: { slug: true, theme: { select: { themePreset: true, lightColor: true, darkColor: true, accentColor: true } } },
+    select: { id: true, slug: true, theme: { select: { themePreset: true, lightColor: true, darkColor: true, accentColor: true } } },
   }) : [];
-  const companyPalettes = Object.fromEntries(companyPaletteRows.map(({ slug, theme }) => [slug, brandSwipePalette(theme)]));
+  // Each brand's colour on the company cards: Bookkeeping Conroe's navy, The Real Estate Bookkeeper's red (Tom, 2026-11-24).
+  const companyColors: Record<string, string> = Object.fromEntries(companyPaletteRows.map(({ slug, theme }) => [
+    slug,
+    (slug === "real-estate-bookkeeper" ? theme?.accentColor : theme?.darkColor) ?? "#64748b",
+  ]));
 
   const [awaitingGsaRaw, pipelineRows, recordMrr, [theme, mrrGoals], [currentOffers, previousOffers], [currentReviews, previousReviews], [scorecardRaw, totals]] = await Promise.all([
     paidAwaitingGsa(dataContext),
@@ -402,6 +411,53 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const hide = <T extends { name: string; company: string | null }>(row: T, kind: "Client" | "Lead" = "Client"): T =>
     privacy ? { ...row, name: alias(row.name, kind), company: null } : row;
   const mrrClients = recordMrr.clients.map((client) => hide(client));
+  // Every paying client of both Lochside brands, for the MRR card's list (Tom, 2026-11-24).
+  const companyClients = (await Promise.all(companyPaletteRows.map(async (row) =>
+    (row.id === brand.id ? recordMrr : await getRecordMrr(row.id)).clients.map((client) => ({ ...hide(client), slug: row.slug })),
+  ))).flat().sort((a, b) => b.mrr - a.mrr);
+  // The leads the New leads card counts (both Lochside brands, this period), newest first, with each one's
+  // funnel stage: its CRM pipeline stage, else pipe's lead step (Tom, 2026-11-24).
+  const leadWindow = periodInstants(selectedPeriod);
+  const companyLeads = (await Promise.all(companyPaletteRows.map((row) =>
+    withBrandDataTransaction(createBrandDataContext({ brandId: row.id, actorUserId: session.user.id }), (tx) =>
+      tx.meetingLead.findMany({
+        where: { brandId: row.id, isActive: true, kind: "LEAD", createdAt: { gte: leadWindow.gte, lt: leadWindow.lt } },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        select: {
+          id: true, name: true, company: true, leadStep: true, createdAt: true,
+          pipelineItems: { where: { isActive: true }, take: 1, select: { stage: { select: { name: true } } } },
+        },
+      }),
+    ).then((rows) => rows.map((lead) => ({
+      ...hide({ id: lead.id, name: lead.name, company: lead.company }, "Lead"),
+      slug: row.slug,
+      stage: lead.pipelineItems[0]?.stage.name ?? leadStepLabel(lead.leadStep),
+      createdAt: lead.createdAt.toISOString(),
+    }))),
+  ))).flat().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  // The offers the Offers card counts (sent this period, both brands), newest first (Tom, 2026-11-24).
+  const companyOffers = (await Promise.all(companyPaletteRows.map((row) =>
+    withBrandDataTransaction(createBrandDataContext({ brandId: row.id, actorUserId: session.user.id }), (tx) =>
+      tx.quote.findMany({
+        where: { brandId: row.id, sentAt: { gte: leadWindow.gte, lt: leadWindow.lt } },
+        orderBy: { sentAt: "desc" },
+        take: 50,
+        select: {
+          id: true, status: true, sentAt: true, firstViewedAt: true, totalRecurring: true, totalOneTime: true,
+          client: { select: { name: true, company: true } },
+        },
+      }),
+    ).then((rows) => rows.map((quote) => ({
+      id: quote.id,
+      ...hide({ name: quote.client.name, company: quote.client.company }),
+      slug: row.slug,
+      status: quote.status === "sent" && quote.firstViewedAt ? "viewed" : quote.status,
+      monthly: Number(quote.totalRecurring),
+      oneTime: Number(quote.totalOneTime),
+      sentAt: (quote.sentAt ?? new Date(0)).toISOString(),
+    }))),
+  ))).flat().sort((a, b) => b.sentAt.localeCompare(a.sentAt));
   const mrrStarting = recordMrr.starting.map((client) => hide(client));
   const pipelineOverview = pipelineOverviewRaw.map((pipeline) => ({
     ...pipeline,
@@ -518,13 +574,25 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     ? { label: ga4HostName, href: `https://${ga4HostName}` }
     : undefined;
 
+  // Targets on the company cards (Tom, 2026-11-24). MRR and offers come from Settings > Dashboard goals; leads have
+  // no setting yet (30 per 30 days); response time is the Scorecard's 1-hour text target; free cash flow is the
+  // $10K Month goal.
+  const companyTargets = {
+    mrrUsd: mrrGoals.monthlyMrrGoal ?? 15000,
+    newLeads: 30,
+    offersSent: theme?.monthlyOffersSentGoal ?? 10,
+    responseSeconds: SCORECARD_TARGETS.text,
+    freeCashFlowUsd: 10000,
+  };
   return (
     <div className="px-4 py-5 sm:p-8">
       {/* The collector posts every 5 minutes; refreshing faster only re-reads GA4 and YouTube. */}
       <LiveRefresh seconds={300} />
       <h1 className="sr-only">Dashboard</h1>
+      {/* The swipe calendar first: billing dates and episode releases (Tom, 2026-11-24). */}
+      <div className="mb-3"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
       <GsaAlarm proposals={awaitingGsa} now={windowEnd} />
-      {companyMetrics && <CompanyCarousel {...companyMetrics} period={selectedPeriod.label} palettes={companyPalettes} />}
+      {companyMetrics && <CompanyCarousel {...companyMetrics} period={selectedPeriod.label} colors={companyColors} targets={companyTargets} clients={companyClients} leads={companyLeads} offers={companyOffers} />}
       <details className="mt-8" open={!companyMetrics}>
       <summary className="cursor-pointer text-sm font-medium text-slate-600">Detailed {brand.name} dashboard</summary>
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-4">
