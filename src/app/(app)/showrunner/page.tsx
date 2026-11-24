@@ -192,7 +192,7 @@ export default async function OverviewPage() {
       </div>
 
       {/* Goal cards */}
-      <div className="mt-4 grid gap-6 lg:grid-cols-2">
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
         <YouTubeGoalCard
           brandId={brand.id}
           label="Views"
