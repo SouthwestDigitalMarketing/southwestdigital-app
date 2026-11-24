@@ -23,7 +23,7 @@ function SplitBar({ parts, label }: { parts: Part[]; label: string }) {
   const total = parts.reduce((n, p) => n + Math.max(0, p.value), 0);
   const shown = parts.find((p) => p.slug === picked);
   return (
-    <div className="mt-3">
+    <div className="mt-2.5">
       <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-100" role="img" aria-label={`${label} by brand: ${parts.map((p) => `${p.name} ${p.display}`).join(", ")}`}>
         {total > 0
           ? parts.filter((p) => p.value > 0).map((p) => (
@@ -55,10 +55,13 @@ function SplitBar({ parts, label }: { parts: Part[]; label: string }) {
 }
 
 function Card({ label, value, note, parts }: { label: string; value: string; note: string; parts?: Part[] }) {
-  return <div className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-    <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">{label}</p>
-    <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-900 tabular-nums">{value}</p>
-    <p className="mt-1 text-sm text-slate-500">{note}</p>
+  // The label follows the value on one line ("4 new leads") to save height (Tom, 2026-11-24).
+  return <div className="flex flex-col rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+    <p className="flex flex-wrap items-baseline gap-x-2">
+      <span className="text-3xl font-semibold tracking-tight text-slate-900 tabular-nums">{value}</span>
+      <span className="text-base font-medium text-slate-600">{label}</span>
+    </p>
+    <p className="mt-0.5 text-sm text-slate-500">{note}</p>
     {parts ? <SplitBar parts={parts} label={label} /> : null}
   </div>;
 }
@@ -76,16 +79,16 @@ export function CompanyCarousel({ total, brands, cashFlow, expectedMonth, period
   const count = (n: number) => String(n);
   return <section className="mt-2">
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <Card label="Monthly recurring revenue" value={money(total.mrrUsd)} note={`${total.clients} active client${total.clients === 1 ? "" : "s"}`} parts={parts((b) => b.mrrUsd, money)} />
-      <Card label="New leads" value={String(total.newLeads)} note={period} parts={parts((b) => b.newLeads, count)} />
-      <Card label="Offers" value={String(total.offersSent)} note={`${total.offersAwaiting} awaiting a reply`} parts={parts((b) => b.offersSent, count)} />
+      <Card label="monthly recurring revenue" value={money(total.mrrUsd)} note={`${total.clients} active client${total.clients === 1 ? "" : "s"}`} parts={parts((b) => b.mrrUsd, money)} />
+      <Card label="new leads" value={String(total.newLeads)} note={period} parts={parts((b) => b.newLeads, count)} />
+      <Card label="offers" value={String(total.offersSent)} note={`${total.offersAwaiting} awaiting a reply`} parts={parts((b) => b.offersSent, count)} />
       <Card
-        label="Response time"
+        label="response time"
         value={response(total.medianResponseSeconds)}
         note={`Median business time · ${brands.map((b) => `${b.name} ${response(b.medianResponseSeconds)}`).join(" · ")}`}
       />
       <div className="sm:col-span-2 xl:col-span-4">
-        <Card label="Free cash flow" value={cashFlow ? money(cashFlow.valueUsd) : "Awaiting closed books"} note={cashFlow ? `As of ${cashFlow.asOf}${cashFlow.stale ? ` · Books behind (${expectedMonth} expected)` : ""}` : `No verified closed month · ${expectedMonth} expected`} />
+        <Card label="free cash flow" value={cashFlow ? money(cashFlow.valueUsd) : "Awaiting closed books"} note={cashFlow ? `As of ${cashFlow.asOf}${cashFlow.stale ? ` · Books behind (${expectedMonth} expected)` : ""}` : `No verified closed month · ${expectedMonth} expected`} />
       </div>
     </div>
   </section>;
