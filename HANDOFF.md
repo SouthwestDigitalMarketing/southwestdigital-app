@@ -1,4 +1,118 @@
 # SWapp handoff
+## 2026-11-23 — Live Quo activity in the scan modal
+
+Intake now publishes activity from inside each operation through
+scripts/swapp_scan_progress.py. Events cover inventory, history/call reads,
+recording download/verification, local transcription, transcript saving,
+analysis, filing, hold creation and verified contact updates. These occur
+before/after the actual operations, rather than only when an MCP call ends.
+
+The progress endpoint validates structured stage/reviewed/total/remaining
+fields and retains six recent stages per source. Final plain status posts
+preserve this state. Scan step 1 shows current action, a reviewed-conversation
+progress bar, exact reviewed/pending counts and recent activity. Polling is
+two seconds. Counts describe reviewed conversations, including prior scans;
+pending holds and unresolved actions still prevent completion.
+
+Tests cover phase ordering, no false contact-verification event on failure,
+invalid counter rejection, retained activity and final counter preservation.
+Dev uses this worktree and hot reloads the UI. Verification run
+cmwu3ohlf0000jjdfpnr267wk retained real inventory stages and exact counters
+in its sources.progress JSON. Explicit MCP environment forwarding binds child
+activity to its run/source/config for both providers. Regression tests cover
+that handoff. UI is active on dev 3101; production has not been updated.
+
+## 2026-11-23 — Quo intake implemented and active on dev
+
+Native backend scripts/swapp_quo_intake.py now supports full inventory, per-thread
+media preparation, evidence-based classification, verified Quo contact updates,
+lead/client comms filing, durable event/export queues and 14-day caller holds.
+New MCP quo_intake tool is bounded to those operations. No sends, blocks or
+deletes. Native contact Role stores reversible SWapp status markers, preserving
+phone/email arrays, custom fields and prior role text. Silence is provisional,
+never confirmed spam; known contacts and established leads are protected.
+Hold starts when first flagged and survives retries. New genuine evidence
+cancels it. Due dates and verified actions display in scan steps 2 and 3.
+
+Dev 3101 runs this worktree. Its swapp-scan.service override uses this script
+and Codex gpt-6-luna, with SWAPP_SCAN_REVIEW_SOURCES=quo-sms for Tom's source-by-
+source rollout. That review includes cross-channel voicemail evidence. Other
+SOP sources remain pending. Production service/checkout has not been changed.
+The dev .env.development.local is a symlink to the existing scan-fixes env.
+
+Real verification: native inventory 394 conversations/two lines; real Luna
+review applied two provisional contact labels; patched Quo contact arrays
+include added server IDs, so compare name/value pairs when reading back.
+Retried label checks succeeded. Downloaded and verified a real voicemail and
+saved its provider transcript. Local transcription fallback passed after
+switching audio decoding to ffmpeg (installed PyAV rejects metadata_errors).
+Queue state is ~/.local/state/swapp-quo-intake/intake.sqlite; recording evidence
+is private under clients/_unfiled-calls/date and clients/_leads/lead/comms.
+
+Dev uses next dev --webpack because Turbopack rejects its shared node_modules
+symlink outside the project root. Typecheck, changed-file lint, 22 scan tests
+and 10 intake regression tests passed. Normal poller verification scan
+cmwu38bvd0000jj5tnktu1va1 finished successfully through the dev API. Its source
+remained needs-you (393 outstanding conversations), with three verified actions
+and five retained caller holds saved in the summary. Full backlog cleanup has
+not completed; each scan resumes the queue. Production has not been deployed.
+
+## 2026-11-23 — Recording and provisional-spam policy
+
+Tom specified voicemail download/transcription/analysis, filing on Ripley,
+lead folders and native Quo contact updates, plus a two-week provisional hold
+for unknown callers who leave no message (may be saving a sign's number).
+Captured in docs/scan-sops/quo-intake-policy.md and loaded into every Quo source
+review. Existing storage is clients/_leads/<lead>/comms and _unfiled-calls/date;
+All Thing lead pages/diaries link to those files. Existing clients and genuine
+non-sales contacts are protected. Age alone never confirms spam. Day 14
+raises a cleanup decision, with no automatic delete. Stable caller IDs and
+hold timestamps must survive retries. This is the policy definition; media
+download/transcription, native Quo labels/contact writes and the persisted
+14-day hold are not yet implemented in the bounded tool bridge.
+
+## 2026-11-23 — Temporary Codex Luna reviewer
+
+Tom requested Codex Luna until Sonnet is available. Default reviewer is now
+codex / gpt-6-luna; switch via SWAPP_SCAN_REVIEW_PROVIDER=claude and
+SWAPP_SCAN_REVIEW_MODEL=sonnet. Both providers share the bounded stdio MCP bridge
+in scripts/swapp_scan_tools.py, with no arbitrary shell execution or sends.
+Codex ignores user plugins/config and has shell tools disabled. Only this
+bridge tool is preapproved. Tool commands are argv arrays with a verb allowlist.
+
+Verified a real Luna call to quo status and ran the Texts SOP. Luna correctly
+reported incomplete native coverage, unknown remaining work and no completed
+actions. It found the cache had 177 conversation threads and 32 unread threads;
+initial lists covered 25 each. Native line inventory and spam/archive actions
+are still missing from the bridge. Added the read-only tasks alias and made
+the SOP explicit about --limit and the needs-reply category following the trial.
+Private trial report: ~/.local/state/swapp-source-review/luna-texts-trial.json.
+No live service or production deployment changed.
+
+## 2026-11-23 — Source SOP review draft
+
+Tom reported that green scan checks did not reflect native Quo spam and pending
+work. Added seven source SOPs in docs/scan-sops and a sequential Sonnet reviewer
+in scripts/swapp_scan_review.py. The collector now waits for SOP review, and
+the complete endpoint preserves per-source results instead of blanket checks.
+Only full coverage, zero remaining items, read-back evidence and no pending
+decisions earn a check. Native-account coverage must be verified separately
+from the capped Sales cache. Unsupported native Quo cleanup, browser access,
+proposal and GA4 queries remain explicit blockers with this runner's bounded
+CLI tool set. Live cleanup has NOT been demonstrated.
+
+The runner allows inspected read verbs and internal task/draft/folder work,
+excludes sends/permanent deletion, serializes demo/prod reviews, and records
+private evidence in ~/.local/state/swapp-source-review/reviews.jsonl. Max
+runtime is five minutes per source; the stale-running bound is one hour.
+No timer, service or production deployment has been changed for this draft.
+
+Checks: TypeScript, changed-file ESLint, Python compilation, 22 scan tests and
+six fixture review-status cases passed. Real Sonnet CLI check failed with
+HTTP 429 usage_limit_reached; account weekly limit resets 9pm Chicago.
+Next live verification requires available Sonnet quota. Keep this draft
+separate from the active swapp-scan-fixes poller until verified.
+
 
 ## 2026-11-23 — Calendar popup above; remove guide clutter
 

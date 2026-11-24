@@ -11,7 +11,7 @@ describe("scanRunStaleness", () => {
     expect(scanRunStaleness({ status: "requested", requestedAt: minutes(1), startedAt: null }, now)).toBe("fresh");
     expect(scanRunStaleness({ status: "requested", requestedAt: minutes(10), startedAt: null }, now)).toBe("stale");
     expect(scanRunStaleness({ status: "running", requestedAt: minutes(40), startedAt: minutes(10) }, now)).toBe("fresh");
-    expect(scanRunStaleness({ status: "running", requestedAt: minutes(90), startedAt: minutes(40) }, now)).toBe("stale");
+    expect(scanRunStaleness({ status: "running", requestedAt: minutes(90), startedAt: minutes(70) }, now)).toBe("stale");
     expect(scanRunStaleness({ status: "running", requestedAt: minutes(90), startedAt: null }, now)).toBe("stale");
   });
 });

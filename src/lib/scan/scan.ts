@@ -99,7 +99,7 @@ export function looksLikeSignedReply(subject: string | null, snippet: string | n
  * requested run older than this has no poller watching; a running run older
  * than its own bound means the poller died mid-run. */
 export const STALE_REQUESTED_MS = 4 * 60 * 1000;
-export const STALE_RUNNING_MS = 30 * 60 * 1000;
+export const STALE_RUNNING_MS = 60 * 60 * 1000;
 
 export type ScanRunState = {
   status: string;

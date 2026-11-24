@@ -1,5 +1,7 @@
 "use server";
 
+import { cookies } from "next/headers";
+import { PRIVACY_COOKIE, privacyOn } from "@/lib/privacy";
 import { prisma } from "@/lib/prisma";
 import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
 import { formatUpdatedAgo, scanRunStaleness, type ScanChange } from "@/lib/scan/scan";
@@ -28,6 +30,9 @@ export type ScanStatus = {
   recentlyAnswered: { id: string; what: string; answerKey: string | null; answerLabel: string | null }[];
   scoreboard: { askedWeek: number; answeredWeek: number; open: number };
   autoApplied: string[];
+  intakeHolds?: { key: string; number: string; reviewAfter: string; due: boolean; error: string | null }[];
+  reviewActions?: { sourceId: string; action: string; verification: string }[];
+  reviewPending?: { sourceId: string; reason: string; owner: string; nextAction: string }[];
 };
 
 function readSources(raw: unknown): ScanSourceState[] {
@@ -95,7 +100,32 @@ export async function getScanStatus(): Promise<ScanStatus> {
     prisma.scanQuestion.count({ where: { status: "answered", answeredAt: { gte: weekAgo } } }),
     prisma.scanQuestion.count({ where: { status: "open" } }),
   ]);
-  const summary = (lastDone?.summary ?? {}) as { autoApplied?: unknown };
+  const summary = (lastDone?.summary ?? {}) as { autoApplied?: unknown; sources?: { sourceReviews?: unknown } };
+  const reports = summary.sources?.sourceReviews;
+  const reviews = reports && typeof reports === "object" && !Array.isArray(reports)
+    ? Object.values(reports as Record<string, unknown>).filter(
+        (value): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value),
+      )
+    : [];
+  const hidePrivateDetails = privacyOn((await cookies()).get(PRIVACY_COOKIE)?.value);
+  const intakeHolds = reviews.flatMap((review) => Array.isArray(review.holds) ? review.holds : [])
+    .filter((hold): hold is { key: string; number: string; review_after: string; error?: string } =>
+      !!hold && typeof hold.key === "string" && typeof hold.number === "string" && typeof hold.review_after === "string",
+    ).map((hold) => ({ key: hold.key, number: hidePrivateDetails ? "Caller" : hold.number, reviewAfter: hold.review_after, due: new Date(hold.review_after).getTime() <= Date.now(), error: hold.error ?? null }));
+  const reviewActions = reviews.flatMap((review) => Array.isArray(review.actions) ? review.actions : [])
+    .filter((action): action is { source_id: string; action: string; verification: string } =>
+      !!action && typeof action.source_id === "string" && typeof action.action === "string" && typeof action.verification === "string",
+    ).map((action) => ({ sourceId: action.source_id, action: hidePrivateDetails ? "Quo review action verified" : action.action, verification: action.verification }));
+  const reviewPending = reviews.flatMap((review) => Array.isArray(review.pending) ? review.pending : [])
+    .filter((item): item is { source_id: string; reason: string; owner: string; next_action: string } =>
+      !!item && typeof item.source_id === "string" && typeof item.reason === "string"
+      && typeof item.owner === "string" && typeof item.next_action === "string",
+    ).map((item) => ({
+      sourceId: item.source_id,
+      reason: hidePrivateDetails ? "Conversation review needs attention" : item.reason,
+      owner: item.owner,
+      nextAction: hidePrivateDetails ? "Turn privacy off to see the details" : item.next_action,
+    }));
   return {
     running: active !== null,
     stuck: active !== null && scanRunStaleness(active) === "stale",
@@ -104,6 +134,9 @@ export async function getScanStatus(): Promise<ScanStatus> {
       : null,
     updatedAgo: formatUpdatedAgo(lastDone?.finishedAt ?? null),
     changes,
+    intakeHolds,
+    reviewActions,
+    reviewPending,
     sources: readSources(shown?.sources),
     questions: questions.map((row) => ({
       id: row.id,

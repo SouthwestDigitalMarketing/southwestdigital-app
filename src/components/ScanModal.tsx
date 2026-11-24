@@ -35,7 +35,7 @@ function ScanSteps({ onClose }: { onClose: () => void }) {
         if (!cancelled) setStatus(next);
       })
       .catch(() => {});
-    const timer = setInterval(refresh, 4000);
+    const timer = setInterval(refresh, 2000);
     // A backgrounded phone browser throttles intervals: refresh on return.
     const wake = () => {
       if (document.visibilityState === "visible") refresh();
@@ -150,10 +150,6 @@ function ScanSteps({ onClose }: { onClose: () => void }) {
         <div key={step} className="min-h-0 overflow-y-auto">
           {step === 1 ? (
             <>
-              <p className="mt-1 shrink-0 text-xs text-slate-500">
-                The Log in link opens QuickBooks in a new tab — sign in there, then come back here. Your scan keeps
-                running.
-              </p>
               {status?.stuck ? (
                 <p className="mt-2 shrink-0 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
                   This scan has been waiting a while and may never start — tap Scan for a fresh one.
@@ -167,7 +163,40 @@ function ScanSteps({ onClose }: { onClose: () => void }) {
                       <Glyph status={row.status} />
                       <span className="min-w-0 flex-1 break-words text-slate-800">
                         {row.label}
-                        {row.detail ? <span className="text-slate-500"> — {row.detail}</span> : null}
+                        {row.detail && !row.progress ? <span className="text-slate-500"> — {row.detail}</span> : null}
+                        {row.progress ? (
+                          <span className="mt-1 block">
+                            {row.status === "scanning" ? (
+                              <span className="block text-slate-700" role="status">{row.progress.stage}</span>
+                            ) : null}
+                            <span className="mt-1 block text-xs text-slate-500">
+                              {row.progress.reviewed} of {row.progress.total} conversations reviewed
+                              {" · "}{row.progress.remaining} pending
+                            </span>
+                            {row.progress.total > 0 ? (
+                              <span
+                                role="progressbar"
+                                aria-label={`${row.label} conversations reviewed`}
+                                aria-valuemin={0}
+                                aria-valuemax={row.progress.total}
+                                aria-valuenow={row.progress.reviewed}
+                                className="mt-2 block h-1.5 overflow-hidden rounded-full bg-slate-100"
+                              >
+                                <span className="block h-full rounded-full bg-slate-700 transition-[width]" style={{
+                                  width: `${(row.progress.reviewed / row.progress.total) * 100}%`,
+                                }} />
+                              </span>
+                            ) : null}
+                            {row.status === "scanning" && (row.progress.history?.length ?? 0) > 1 ? (
+                              <span className="mt-2 block space-y-0.5 text-xs text-slate-500">
+                                <span className="block font-medium">Recent activity</span>
+                                {row.progress.history?.slice(0, -1).slice(-3).map((activity, index) => (
+                                  <span key={index} className="block">{activity}</span>
+                                ))}
+                              </span>
+                            ) : null}
+                          </span>
+                        ) : null}
                         {row.status === "needs-you" && row.loginUrl ? (
                           <a
                             href={row.loginUrl}
@@ -193,7 +222,38 @@ function ScanSteps({ onClose }: { onClose: () => void }) {
             </>
           ) : step === 2 ? (
             <>
-              {!status || status.questions.length === 0 ? (
+              {status?.sources.filter((source) => source.status === "needs-you").map((source) => (
+                <div key={source.source} className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm">
+                  <p className="font-medium text-slate-900">{source.label}</p>
+                  <p className="mt-1 break-words text-slate-700">{source.detail ?? "SOP review needs attention."}</p>
+                </div>
+              ))}
+              {(status?.reviewPending?.length ?? 0) > 0 ? (
+                <ul className="mt-3 space-y-2 text-sm text-slate-700">
+                  {status?.reviewPending?.map((item, index) => (
+                    <li key={`${item.sourceId}-${index}`} className="rounded-lg border border-slate-200 px-3 py-2">
+                      <p>{item.reason}</p>
+                      <p className="mt-1 text-xs text-slate-500">{item.owner} · {item.nextAction}</p>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {(status?.intakeHolds?.length ?? 0) > 0 ? (
+                <section className="mt-3">
+                  <h3 className="text-sm font-semibold text-slate-900">Potential spam · 14-day hold</h3>
+                  <ul className="mt-2 space-y-2 text-sm text-slate-700">
+                    {status?.intakeHolds?.map((hold) => (
+                      <li key={hold.key}>
+                        <span className="font-medium">{hold.number}</span>
+                        {" · "}{hold.due ? "Review due" : "Review"}
+                        {" "}{new Date(hold.reviewAfter).toLocaleDateString()}
+                        {hold.error ? <p className="text-xs text-amber-700">{hold.error}</p> : null}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+              {!status || (status.questions.length === 0 && !status.sources.some((source) => source.status === "needs-you")) ? (
                 <p className="mt-3 text-sm text-slate-600" role="status">
                   {status ? "No items need your call." : "Loading decisions…"}
                 </p>
@@ -245,6 +305,19 @@ function ScanSteps({ onClose }: { onClose: () => void }) {
                 <>
                   {status.running ? (
                     <p className="mt-3 text-sm text-slate-500">Scan still running. Results update here as they become available.</p>
+                  ) : null}
+                  {(status.reviewActions?.length ?? 0) > 0 ? (
+                    <section className="mt-3">
+                      <h3 className="text-sm font-semibold text-slate-900">Verified review actions</h3>
+                      <ul className="mt-2 space-y-2 text-sm text-slate-700">
+                        {status.reviewActions?.map((action, index) => (
+                          <li key={`${action.sourceId}-${index}`}>
+                            <p className="break-words">{action.action}</p>
+                            <p className="text-xs text-slate-500">{action.verification}</p>
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
                   ) : null}
                   {status.changes.length > 0 ? (
                     <section className="mt-3">

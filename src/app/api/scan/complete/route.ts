@@ -20,14 +20,6 @@ import {
 } from "@/lib/scan/scan";
 import { initialSources, type ScanSourceState } from "@/lib/scan/sources";
 
-/** Which source rows a change kind belongs to on the modal. */
-const KIND_SOURCES: Record<string, string[]> = {
-  quo: ["quo-sms", "quo-calls", "quo-voicemail"],
-  zoho: ["zoho"],
-  swapp: ["swapp"],
-  ga4: ["ga4"],
-};
-
 type ReviewItem = { brand: string; room: ScanRoom; key: string; what: string; evidence: string; ref: Record<string, unknown> | null };
 
 function questionKindForReview(item: ReviewItem): QuestionKind | null {
@@ -278,14 +270,6 @@ export async function POST(request: Request) {
   const currentSources: ScanSourceState[] = Array.isArray(run.sources)
     ? (run.sources as ScanSourceState[])
     : initialSources();
-  const bySource = new Map<string, string[]>();
-  for (const change of changes) {
-    for (const key of KIND_SOURCES[change.kind] ?? []) {
-      const list = bySource.get(key) ?? [];
-      list.push(change.text);
-      bySource.set(key, list);
-    }
-  }
   if (internal.ga4NeedsLogin) {
     const ga4 = currentSources.find((row) => row.source === "ga4");
     if (ga4) {
@@ -293,10 +277,15 @@ export async function POST(request: Request) {
       ga4.detail = "Traffic refresh needs the GA key on the server";
     }
   }
+  // Only the per-source SOP reviewer can earn a checkmark. Completing the
+  // collector run does not prove that native inboxes and pending work are clear.
   const sources = currentSources.map((row) => {
-    if (row.status === "needs-you") return row;
-    const detail = bySource.get(row.source);
-    return { ...row, status: "done" as const, detail: detail ? detail.join("; ").slice(0, 280) : "No changes" };
+    if (row.status === "done" || row.status === "needs-you") return row;
+    return {
+      ...row,
+      status: "needs-you" as const,
+      detail: "SOP review has not verified this source; retry the review",
+    };
   });
 
   const finishedAt = new Date();

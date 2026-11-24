@@ -2,6 +2,14 @@
 
 export type ScanSourceStatus = "waiting" | "scanning" | "done" | "needs-you";
 
+export type ScanSourceProgress = {
+  stage: string;
+  reviewed: number;
+  total: number;
+  remaining: number;
+  history?: string[];
+};
+
 export type ScanSourceState = {
   source: string;
   label: string;
@@ -9,15 +17,14 @@ export type ScanSourceState = {
   detail?: string | null;
   loginUrl?: string | null;
   loginLabel?: string | null;
+  progress?: ScanSourceProgress;
 };
 
 export const QBO_LOGIN_URL = "https://app.qbo.intuit.com";
 
-const DEFS: { source: string; label: string; loginUrl?: string; loginLabel?: string; needsLogin?: boolean }[] = [
-  // Human-login sources first: they pin at the top until Tom signs in.
-  // v1 only checks their login state; the QBO sync itself comes later.
-  // One QuickBooks line (access + Contracts share one sign-in).
-  { source: "quickbooks", label: "QuickBooks", loginUrl: QBO_LOGIN_URL, loginLabel: "Log in", needsLogin: true },
+const DEFS: { source: string; label: string; loginUrl?: string; loginLabel?: string }[] = [
+  // Each source waits for an actual access check and SOP review.
+  { source: "quickbooks", label: "QuickBooks", loginUrl: QBO_LOGIN_URL, loginLabel: "Open QuickBooks" },
   { source: "quo-sms", label: "Texts (Quo)" },
   { source: "quo-calls", label: "Calls (Quo)" },
   { source: "quo-voicemail", label: "Voicemail (Quo)" },
@@ -26,13 +33,12 @@ const DEFS: { source: string; label: string; loginUrl?: string; loginLabel?: str
   { source: "ga4", label: "Traffic (GA4)" },
 ];
 
-/** Fresh per-source rows for a new run: the QuickBooks line starts needing
- * Tom with no explanation text, just the label and the Log in link. */
+/** Every source awaits a real access check; no synthetic login failures. */
 export function initialSources(): ScanSourceState[] {
   return DEFS.map((def) => ({
     source: def.source,
     label: def.label,
-    status: def.needsLogin ? "needs-you" : "waiting",
+    status: "waiting",
     detail: null,
     loginUrl: def.loginUrl ?? null,
     loginLabel: def.loginLabel ?? null,
@@ -57,6 +63,7 @@ export function parseSourceProgress(raw: unknown): {
   detail: string | null;
   loginUrl: string | null;
   loginLabel: string | null;
+  progress: ScanSourceProgress | null;
 } | null {
   if (!raw || typeof raw !== "object") return null;
   const row = raw as Record<string, unknown>;
@@ -66,9 +73,23 @@ export function parseSourceProgress(raw: unknown): {
   if (status !== "waiting" && status !== "scanning" && status !== "done" && status !== "needs-you") return null;
   const loginUrl = clean(row.loginUrl, 500);
   if (loginUrl && !/^https:\/\//.test(loginUrl)) return null;
+  let progress: ScanSourceProgress | null = null;
+  if (row.progress != null) {
+    if (typeof row.progress !== "object" || Array.isArray(row.progress)) return null;
+    const raw = row.progress as Record<string, unknown>;
+    const stage = clean(raw.stage, 160);
+    const counts = [raw.reviewed, raw.total, raw.remaining];
+    if (!stage || !counts.every((value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0)) return null;
+    const reviewed = raw.reviewed as number;
+    const total = raw.total as number;
+    const remaining = raw.remaining as number;
+    if (reviewed > total || remaining > total) return null;
+    progress = { stage, reviewed, total, remaining };
+  }
   return {
     source,
     status,
+    progress,
     detail: clean(row.detail, 280),
     loginUrl,
     loginLabel: clean(row.loginLabel, 80),
