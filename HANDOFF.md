@@ -1,4 +1,21 @@
 # SWapp handoff
+## 2026-11-24 — Showrunner phone tabs: Overview, Series, Metrics, Leads (Johnny)
+
+- Tom chose (2026-11-24) to build the mock-up screens in SWapp. Tabs now Overview / Series / Metrics / Leads; Studio,
+  Videos and New video stay as pages (Overview covers /new and /videos, Series covers /studio and /new-series).
+- Overview (`/showrunner`): only the swipe calendar strip, no card, countdown or episode chips (Tom: rename Today to Overview, clear everything but the
+  calendar). The in-progress list, New video button and last-out list are no longer on any tab; `/showrunner/new`
+  and `/showrunner/videos` still exist and count as Overview.
+  Metrics (`/showrunner/metrics`): the former Overview analytics, moved unchanged; `LinkClicksTable` is its own file.
+  Leads (`/showrunner/leads`): views, link clicks, new leads and offers (getCompanyMetrics, platform operator), with
+  a plain note that lead-to-video attribution is not recorded yet. Series: season list + Sunday card; channel map
+  folded into a details block. `/showrunner/series/sunday`: talking points, numbers, clips.
+- Data: `ShowrunnerStudio.weekly` (migration 20261124180000_showrunner_weekly) filled by
+  `POST /api/showrunner/weekly` (SHOWRUNNER_STATUS_TOKEN) from ripley's showrunner-app `showrunner_weekly.py prepare`.
+- Checks: tsc clean, lint 0 errors (11 existing warnings), vitest 1351 passed. Phone screenshots (412 px) of all five
+  pages on local dev :3110 with swapp_live: 200, no horizontal scroll, no page errors. Metrics/Leads YouTube numbers
+  show "—" locally because the saved YouTube connection cannot be read off production.
+
 ## 2026-11-23 — Live Quo activity in the scan modal
 
 Intake now publishes activity from inside each operation through

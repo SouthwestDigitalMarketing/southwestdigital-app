@@ -5,6 +5,7 @@ import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import type { VideoCard } from "@/components/showrunner/VideosInProgress";
 import { latestByTarget, type LatestFeedback } from "./feedback";
 import type { VideoDetails, VideoRender, VideoStep } from "./video-status";
+import { parseWeek, type Week } from "./weekly";
 
 export async function loadFeedback(
   context: BrandDataContext,
@@ -62,4 +63,12 @@ export async function loadVideoCards(context: BrandDataContext): Promise<VideoCa
     thumbnail: row.thumbnail,
     details: row.details && typeof row.details === "object" ? (row.details as VideoDetails) : null,
   }));
+}
+
+/** This Sunday's wrap-up week from ripley, or null before the first push. */
+export async function loadWeek(context: BrandDataContext): Promise<Week | null> {
+  const row = await withBrandDataTransaction(context, (tx) =>
+    tx.showrunnerStudio.findUnique({ where: { brandId: context.brandId }, select: { weekly: true } }),
+  );
+  return parseWeek(row?.weekly ?? null);
 }
