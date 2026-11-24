@@ -181,7 +181,6 @@ function ExternalNavItem({
 
 export function AppShell({
   children,
-  user,
   activeBrandId,
   privacy,
   isPlatformOperator,
@@ -212,7 +211,6 @@ export function AppShell({
   }
   const curtain = privacy && !privacyCovers(pathname);
   const [collapsed, setCollapsed] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(256);
   const [resizingSidebar, setResizingSidebar] = useState(false);
   const deviceThemeKey = `swapp-device-theme:${activeBrandId}`;
@@ -268,9 +266,6 @@ export function AppShell({
   const dividerColor = isLight ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.1)";
   const dividerNavColor = isLight ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.12)";
 
-  const displayName = user.name ?? user.email ?? "User";
-  const profileName = user.name?.trim().split(/\s+/)[0] || "User";
-  const initials = profileName.slice(0, 1).toUpperCase();
 
   const sidebar = (
     <div
@@ -282,41 +277,21 @@ export function AppShell({
         boxShadow: "var(--card-shadow)",
       }}
     >
-      <div
-        className={`py-1 ${collapsed ? "px-1" : "px-3"}`}
-        style={{ borderBottom: `1px solid ${dividerColor}` }}
-      >
-        <div className={`flex items-center py-1 ${collapsed ? "flex-col justify-center gap-2 px-0" : "gap-3 px-3"}`}>
-          <button
-            type="button"
-            aria-label="Open profile"
-            aria-expanded={profileOpen}
-            onClick={() => setProfileOpen((isOpen) => !isOpen)}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold"
-            style={{
-              backgroundColor: isLight ? darkColor : light,
-              color: isLight ? "#ffffff" : darkColor,
-            }}
-          >
-            {initials}
-          </button>
-          <div className={`min-w-0 flex-1 ${collapsed ? "hidden" : ""}`}>
-            <p className="truncate text-sm font-medium" style={{ color: navTextColor }}>{profileName}</p>
-          </div>
-          {(!showScan || collapsed) && (
-            <span className="max-lg:hidden">
-              <PrivacyToggle on={privacy} iconOnly={collapsed} />
-            </span>
-          )}
-        </div>
-      </div>
+      {/* No profile row: one user (Tom, 2026-11-24). Sign out is the last item in the menu. */}
       {/* No brand logo or brand switcher: SWapp is Lochside LLC's one app (Tom, 2026-11-24). */}
 
+      {!showScan ? (
+        <div className={`flex ${collapsed ? "justify-center px-1" : "px-5"} py-3 max-lg:hidden`} style={{ borderBottom: `1px solid ${dividerColor}` }}>
+          <PrivacyToggle on={privacy} iconOnly={collapsed} />
+        </div>
+      ) : null}
       {showScan ? (
-        <div className={`${collapsed ? "px-1" : "px-5"} py-3`} style={{ borderBottom: `1px solid ${dividerColor}` }}>
+        // max-lg:pr-16 leaves room for the drawer's close button on this row.
+        <div className={`${collapsed ? "px-1" : "px-5"} py-3 max-lg:pr-16`} style={{ borderBottom: `1px solid ${dividerColor}` }}>
           {collapsed ? (
-            <div className="flex justify-center">
+            <div className="flex flex-col items-center gap-2">
               <ScanButton compact />
+              <span className="max-lg:hidden"><PrivacyToggle on={privacy} iconOnly /></span>
             </div>
           ) : (
             <ScanButton>
@@ -362,6 +337,17 @@ export function AppShell({
             collapsed={collapsed}
           />
         ))}
+        <form action={signOutAction}>
+          <button
+            type="submit"
+            title={collapsed ? "Sign out" : undefined}
+            className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${collapsed ? "justify-center" : ""} ${isLight ? "hover:bg-black/5" : "hover:bg-white/10"}`}
+            style={{ color: navTextColor }}
+          >
+            <LogOut size={16} />
+            <span className={collapsed ? "hidden" : undefined}>Sign out</span>
+          </button>
+        </form>
       </nav>
 
       <div
@@ -449,46 +435,11 @@ export function AppShell({
 
       <aside className="hidden lg:flex">{sidebar}</aside>
 
-      {profileOpen ? (
-        <Modal onClose={() => setProfileOpen(false)} labelledBy="profile-dialog-title" className="max-w-sm">
-          <div
-            className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 id="profile-dialog-title" className="text-lg font-semibold text-slate-900">Profile</h2>
-                <p className="mt-1 text-sm text-slate-700">{displayName}</p>
-                {user.email ? <p className="text-sm text-slate-500">{user.email}</p> : null}
-              </div>
-              <button
-                type="button"
-                aria-label="Close profile"
-                title="Close profile"
-                onClick={() => setProfileOpen(false)}
-                className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <form action={signOutAction} className="mt-5">
-              <button
-                type="submit"
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                <LogOut size={15} />
-                Sign out
-              </button>
-            </form>
-          </div>
-        </Modal>
-      ) : null}
-
       {open && (
         <Modal onClose={() => setOpen(false)} label="Main navigation" className="ui-navigation-drawer">
-          {/* Close sits in the profile row instead of a row of its own (Tom, 2026-11-24: save space at the top). */}
+          {/* Close sits on the top row instead of a row of its own (Tom, 2026-11-24: save space at the top). */}
           <div className="relative">
-            <button type="button" onClick={() => setOpen(false)} aria-label="Close navigation" className="absolute right-2 top-0.5 z-10 inline-flex h-11 w-11 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100"><X size={20} /></button>
+            <button type="button" onClick={() => setOpen(false)} aria-label="Close navigation" className="absolute right-2 top-1.5 z-10 inline-flex h-11 w-11 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100"><X size={20} /></button>
             <aside>{sidebar}</aside>
           </div>
         </Modal>
