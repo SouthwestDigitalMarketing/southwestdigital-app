@@ -9,8 +9,11 @@
   The New leads card opens the same way: each lead counted in the period (both brands, newest first) with its
   funnel stage (CRM pipeline stage, else pipe's lead step label), linking to /leads/[id]; Details -> /pipeline.
   (A TREB lead's page needs the TREB brand active; TREB has no leads yet.)
+  The Offers card opens too: each offer sent in the period (client company or name, amount when the quote row has
+  totals, status chip: Sent / Viewed (firstViewedAt) / Accepted / Signed (completed) / Archived), linking to
+  /offers/[id]; Details -> /offers. The count includes archived TEST offers (getCompanyMetrics counts any sentAt).
   The other cards are links (stretched, chevron):
-  offers -> /offers, response time -> /scorecard; free cash flow has no page yet.
+  response time -> /scorecard; free cash flow has no page yet.
   Targets (Tom, 2026-11-24): each bar's track is the target and the brand pieces fill their share of the way;
   the note says "21% of $15,000". MRR and offers from Settings > Dashboard goals (BC theme monthlyMrrGoal,
   monthlyOffersSentGoal; Tom wants 15,000 and 10, production had 10,000 and none), leads 30 per 30 days

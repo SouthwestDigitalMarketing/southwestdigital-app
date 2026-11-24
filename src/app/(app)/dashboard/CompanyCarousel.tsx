@@ -141,6 +141,47 @@ function LeadList({ leads, colors }: { leads: CompanyLead[]; colors: Record<stri
   );
 }
 
+export type CompanyOffer = { id: string; name: string; company: string | null; slug: string; status: string; monthly: number; oneTime: number; sentAt: string };
+
+const OFFER_STATUS: Record<string, { label: string; tone: string }> = {
+  sent: { label: "Sent", tone: "bg-slate-100 text-slate-700" },
+  viewed: { label: "Viewed", tone: "bg-amber-50 text-amber-800" },
+  accepted: { label: "Accepted", tone: "bg-emerald-50 text-emerald-700" },
+  completed: { label: "Signed", tone: "bg-emerald-50 text-emerald-700" },
+  archived: { label: "Archived", tone: "bg-slate-100 text-slate-500" },
+  draft: { label: "Draft", tone: "bg-slate-100 text-slate-500" },
+};
+
+/** The Offers card's list: each offer sent in the period with its amount and status, linking to it; then all offers. */
+function OfferList({ offers, colors }: { offers: CompanyOffer[]; colors: Record<string, string> }) {
+  return (
+    <div>
+      {offers.length === 0 ? <p className="text-sm text-slate-500">No offers sent in this period.</p> : (
+        <ul className="flex flex-col">
+          {offers.map((offer) => {
+            const status = OFFER_STATUS[offer.status] ?? { label: offer.status, tone: "bg-slate-100 text-slate-700" };
+            const amount = offer.monthly > 0 ? `${money(offer.monthly)}/mo` : offer.oneTime > 0 ? money(offer.oneTime) : "";
+            return (
+              <li key={`${offer.slug}-${offer.id}`}>
+                <Link href={`/offers/${offer.id}`} className="flex items-center gap-2 py-1.5 text-sm hover:bg-slate-50">
+                  <span className="brand-split-seg h-2.5 w-2.5 shrink-0 rounded-full" style={{ ["--seg" as string]: colors[offer.slug] ?? "#64748b" }} />
+                  <span className="min-w-0 flex-1 truncate text-slate-800">{offer.company || offer.name}</span>
+                  {amount ? <span className="shrink-0 font-semibold tabular-nums text-slate-900">{amount}</span> : null}
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${status.tone}`}>{status.label}</span>
+                  <ChevronRight size={14} aria-hidden="true" className="shrink-0 text-slate-400" />
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <Link href="/offers" className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-slate-700 underline underline-offset-4">
+        Details <ChevronRight size={14} aria-hidden="true" />
+      </Link>
+    </div>
+  );
+}
+
 export type CompanyClient = { id: string; name: string; company: string | null; mrr: number; slug: string };
 
 /** The MRR card's list: each paying client with its brand's dot and monthly amount, then a link to the details. */
@@ -168,9 +209,9 @@ function ClientList({ clients, colors, brands }: { clients: CompanyClient[]; col
 
 export type CompanyTargets = { mrrUsd: number; newLeads: number; offersSent: number; responseSeconds: number; freeCashFlowUsd: number };
 
-export function CompanyCarousel({ total, brands, cashFlow, expectedMonth, period, colors, targets, clients, leads }: {
+export function CompanyCarousel({ total, brands, cashFlow, expectedMonth, period, colors, targets, clients, leads, offers }: {
   total: MetricsView; brands: MetricsView[]; cashFlow: CashFlow; expectedMonth: string; period: string;
-  colors: Record<string, string>; targets: CompanyTargets; clients: CompanyClient[]; leads: CompanyLead[];
+  colors: Record<string, string>; targets: CompanyTargets; clients: CompanyClient[]; leads: CompanyLead[]; offers: CompanyOffer[];
 }) {
   const pct = (value: number, target: number) => `${target > 0 ? Math.round((value / target) * 100) : 0}% of ${target.toLocaleString("en-US")}`;
   const parts = (pick: (b: MetricsView) => number, show: (n: number) => string): Part[] =>
@@ -180,7 +221,7 @@ export function CompanyCarousel({ total, brands, cashFlow, expectedMonth, period
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Card label="MRR" value={money(total.mrrUsd)} note={`${total.clients} active client${total.clients === 1 ? "" : "s"} · ${Math.round((total.mrrUsd / targets.mrrUsd) * 100)}% of ${money(targets.mrrUsd)}`} parts={parts((b) => b.mrrUsd, money)} target={targets.mrrUsd} expand={<ClientList clients={clients} colors={colors} brands={brands} />} />
       <Card label="new leads" value={String(total.newLeads)} note={`${period} · ${pct(total.newLeads, targets.newLeads)}`} parts={parts((b) => b.newLeads, count)} target={targets.newLeads} expand={<LeadList leads={leads} colors={colors} />} />
-      <Card label="offers" value={String(total.offersSent)} note={`${total.offersAwaiting} awaiting a reply · ${pct(total.offersSent, targets.offersSent)}`} parts={parts((b) => b.offersSent, count)} target={targets.offersSent} href="/offers" />
+      <Card label="offers" value={String(total.offersSent)} note={`${total.offersAwaiting} awaiting a reply · ${pct(total.offersSent, targets.offersSent)}`} parts={parts((b) => b.offersSent, count)} target={targets.offersSent} expand={<OfferList offers={offers} colors={colors} />} />
       <Card
         label="response time"
         value={response(total.medianResponseSeconds)}

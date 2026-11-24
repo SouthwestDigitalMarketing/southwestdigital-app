@@ -436,6 +436,28 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       createdAt: lead.createdAt.toISOString(),
     }))),
   ))).flat().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  // The offers the Offers card counts (sent this period, both brands), newest first (Tom, 2026-11-24).
+  const companyOffers = (await Promise.all(companyPaletteRows.map((row) =>
+    withBrandDataTransaction(createBrandDataContext({ brandId: row.id, actorUserId: session.user.id }), (tx) =>
+      tx.quote.findMany({
+        where: { brandId: row.id, sentAt: { gte: leadWindow.gte, lt: leadWindow.lt } },
+        orderBy: { sentAt: "desc" },
+        take: 50,
+        select: {
+          id: true, status: true, sentAt: true, firstViewedAt: true, totalRecurring: true, totalOneTime: true,
+          client: { select: { name: true, company: true } },
+        },
+      }),
+    ).then((rows) => rows.map((quote) => ({
+      id: quote.id,
+      ...hide({ name: quote.client.name, company: quote.client.company }),
+      slug: row.slug,
+      status: quote.status === "sent" && quote.firstViewedAt ? "viewed" : quote.status,
+      monthly: Number(quote.totalRecurring),
+      oneTime: Number(quote.totalOneTime),
+      sentAt: (quote.sentAt ?? new Date(0)).toISOString(),
+    }))),
+  ))).flat().sort((a, b) => b.sentAt.localeCompare(a.sentAt));
   const mrrStarting = recordMrr.starting.map((client) => hide(client));
   const pipelineOverview = pipelineOverviewRaw.map((pipeline) => ({
     ...pipeline,
@@ -570,7 +592,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       {/* The swipe calendar first: billing dates and episode releases (Tom, 2026-11-24). */}
       <div className="mb-3"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
       <GsaAlarm proposals={awaitingGsa} now={windowEnd} />
-      {companyMetrics && <CompanyCarousel {...companyMetrics} period={selectedPeriod.label} colors={companyColors} targets={companyTargets} clients={companyClients} leads={companyLeads} />}
+      {companyMetrics && <CompanyCarousel {...companyMetrics} period={selectedPeriod.label} colors={companyColors} targets={companyTargets} clients={companyClients} leads={companyLeads} offers={companyOffers} />}
       <details className="mt-8" open={!companyMetrics}>
       <summary className="cursor-pointer text-sm font-medium text-slate-600">Detailed {brand.name} dashboard</summary>
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-4">
