@@ -4,7 +4,8 @@
 - `/dashboard` (Lochside view): no BrandSwipe. `CompanyCarousel` shows one card per metric with the Lochside total
   as the big number with its label beside it ("4 new leads", "$3,105 MRR") and a bar split by brand underneath
   (MRR, new leads, offers). No legends: tapping the bar opens a small pop-up with each brand's amount and share
-  (closes on a second tap or a tap elsewhere). Colours: Bookkeeping Conroe = its theme darkColor (navy #1b263b),
+  (closes on a second tap or a tap elsewhere). Each card is a link (stretched, chevron): MRR -> /dashboard/revenue,
+  new leads -> /pipeline, offers -> /offers, response time -> /scorecard; free cash flow has no page yet. Colours: Bookkeeping Conroe = its theme darkColor (navy #1b263b),
   The Real Estate Bookkeeper = its theme accentColor (red #d70407); `.brand-split-seg` lightens them on dark.
   Response time shows the median with each brand's in the note (medians do not add). Free cash flow is company-only.
   The Website page still uses BrandSwipe.

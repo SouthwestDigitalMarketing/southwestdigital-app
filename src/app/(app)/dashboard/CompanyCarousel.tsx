@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { MetricsView } from "@/lib/companyMetrics/summary";
 
@@ -34,7 +36,8 @@ function SplitBar({ parts, label }: { parts: Part[]; label: string }) {
   const share = (p: Part) => (total > 0 ? Math.round((Math.max(0, p.value) / total) * 100) : 0);
   const summary = parts.map((p) => `${p.name} ${p.display} (${share(p)}%)`).join(", ");
   return (
-    <div ref={box} className="relative mt-2.5">
+    // z-10 keeps the bar tappable above the card's own link.
+    <div ref={box} className="relative z-10 mt-2.5">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -67,13 +70,16 @@ function SplitBar({ parts, label }: { parts: Part[]; label: string }) {
   );
 }
 
-function Card({ label, value, note, parts }: { label: string; value: string; note: string; parts?: Part[] }) {
-  // The label follows the value on one line ("4 new leads") to save height (Tom, 2026-11-24).
-  return <div className="flex flex-col rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-    <p className="flex flex-wrap items-baseline gap-x-2">
+/** A whole card is a link to the page about that number (Tom, 2026-11-24); the bar keeps its own tap. */
+function Card({ label, value, note, parts, href }: { label: string; value: string; note: string; parts?: Part[]; href?: string }) {
+  return <div className={`relative flex flex-col rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm ${href ? "transition-colors hover:border-slate-400" : ""}`}>
+    {href ? <Link href={href} aria-label={`${value} ${label}: open`} className="absolute inset-0 rounded-2xl" /> : null}
+    {/* The label follows the value on one line ("4 new leads") to save height. */}
+    <p className="flex flex-wrap items-baseline gap-x-2 pr-6">
       <span className="text-3xl font-semibold tracking-tight text-slate-900 tabular-nums">{value}</span>
       <span className="text-base font-medium text-slate-600">{label}</span>
     </p>
+    {href ? <ChevronRight aria-hidden="true" size={18} className="absolute right-4 top-5 text-slate-400" /> : null}
     <p className="mt-0.5 text-sm text-slate-500">{note}</p>
     {parts ? <SplitBar parts={parts} label={label} /> : null}
   </div>;
@@ -92,13 +98,14 @@ export function CompanyCarousel({ total, brands, cashFlow, expectedMonth, period
   const count = (n: number) => String(n);
   return <section className="mt-2">
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <Card label="MRR" value={money(total.mrrUsd)} note={`${total.clients} active client${total.clients === 1 ? "" : "s"}`} parts={parts((b) => b.mrrUsd, money)} />
-      <Card label="new leads" value={String(total.newLeads)} note={period} parts={parts((b) => b.newLeads, count)} />
-      <Card label="offers" value={String(total.offersSent)} note={`${total.offersAwaiting} awaiting a reply`} parts={parts((b) => b.offersSent, count)} />
+      <Card label="MRR" value={money(total.mrrUsd)} note={`${total.clients} active client${total.clients === 1 ? "" : "s"}`} parts={parts((b) => b.mrrUsd, money)} href="/dashboard/revenue" />
+      <Card label="new leads" value={String(total.newLeads)} note={period} parts={parts((b) => b.newLeads, count)} href="/pipeline" />
+      <Card label="offers" value={String(total.offersSent)} note={`${total.offersAwaiting} awaiting a reply`} parts={parts((b) => b.offersSent, count)} href="/offers" />
       <Card
         label="response time"
         value={response(total.medianResponseSeconds)}
         note={`Median business time · ${brands.map((b) => `${b.name} ${response(b.medianResponseSeconds)}`).join(" · ")}`}
+        href="/scorecard"
       />
       <div className="sm:col-span-2 xl:col-span-4">
         <Card label="free cash flow" value={cashFlow ? money(cashFlow.valueUsd) : "Awaiting closed books"} note={cashFlow ? `As of ${cashFlow.asOf}${cashFlow.stale ? ` · Books behind (${expectedMonth} expected)` : ""}` : `No verified closed month · ${expectedMonth} expected`} />
