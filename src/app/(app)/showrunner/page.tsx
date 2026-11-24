@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireAppBrand } from "@/lib/brands/staff";
 import { showChannelBrand } from "@/lib/showrunner/channel-brand";
+import { daysBetween, thisMonth } from "@/lib/showrunner/month";
 import {
   getChannelMetrics,
   getDailyViews,
@@ -35,7 +36,7 @@ function getYouTubeAnalyticsNow() {
   return Date.now();
 }
 
-/** Overview: the season calendar strip first, then the channel numbers (Tom, 2026-11-24). */
+/** This Month: the season calendar strip, then this month's channel numbers (Tom, 2026-11-24). */
 export default async function OverviewPage() {
   const { brand: active } = await requireAppBrand();
   const brand = await showChannelBrand(active);
@@ -60,7 +61,7 @@ export default async function OverviewPage() {
   if (!theme?.youtubeChannelId) {
     return (
       <div className="px-4 py-5 sm:p-8">
-        <h1 className="sr-only">Overview</h1>
+        <h1 className="sr-only">This month</h1>
         <div className="mb-3"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
         <p className="mt-2 text-sm text-slate-400">YouTube channel not configured for this brand. <a className="font-semibold underline" href="/api/youtube/connect">Connect YouTube</a>.</p>
@@ -73,7 +74,7 @@ export default async function OverviewPage() {
   if (!refreshToken) {
     return (
       <div className="px-4 py-5 sm:p-8">
-        <h1 className="sr-only">Overview</h1>
+        <h1 className="sr-only">This month</h1>
         <div className="mb-3"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
         <p className="mt-2 text-sm text-slate-600">Channel data is unavailable because the saved YouTube connection could not be read here. <a className="font-semibold underline" href="/api/youtube/connect">Connect YouTube</a>.</p>
@@ -87,17 +88,19 @@ export default async function OverviewPage() {
   const clicksGoal = theme.monthlyClicksGoal ?? null;
   const redirectDomain = redirectDomainRecord?.hostname ?? null;
 
-  const now = getYouTubeAnalyticsNow();
-  // YouTube Analytics has a ~3-day reporting lag; clip endDate so trailing days aren't empty
-  const endDate = new Date(now - 3 * 86400000).toISOString().slice(0, 10);
-  const startDate = new Date(now - 32 * 86400000).toISOString().slice(0, 10);
+  // This month only, from the 1st (Central); it resets each month (Tom, 2026-11-24). YouTube Analytics lags
+  // ~3 days, so the first days of a month have nothing settled yet.
+  const month = thisMonth(new Date(getYouTubeAnalyticsNow()));
+  const startDate = month.start;
+  const endDate = month.analyticsEnd ?? month.start;
 
   let metrics: ChannelMetrics | null = null;
   let dailyByVideo: DailyViewByVideoRow[] = [];
   let topVideos: TopVideoRow[] = [];
   let error: string | null = null;
 
-  try {
+  if (!month.analyticsEnd) metrics = { views: 0, estimatedMinutesWatched: 0, averageViewPercentage: 0 };
+  else try {
     // First: headline metrics + top videos in parallel
     [metrics, topVideos] = await Promise.all([
       getChannelMetrics(channelId, refreshToken, startDate, endDate),
@@ -124,7 +127,7 @@ export default async function OverviewPage() {
   if (redirectDomain) {
     try {
       [clickReport, sourceTagMap] = await Promise.all([
-        getSourceTagClicksCumulative(brand.id, brand.slug),
+        getSourceTagClicksCumulative(brand.id, brand.slug, month.start),
         getSourceTagVideos(channelId, refreshToken, redirectDomain, brand.slug),
       ]);
     } catch (err) {
@@ -135,7 +138,7 @@ export default async function OverviewPage() {
   if (error || !metrics) {
     return (
       <div className="px-4 py-5 sm:p-8">
-        <h1 className="sr-only">Overview</h1>
+        <h1 className="sr-only">This month</h1>
         <div className="mb-3"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
         <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -151,9 +154,7 @@ export default async function OverviewPage() {
   const watchPct = watchPctGoal > 0 ? (metrics.averageViewPercentage / watchPctGoal) * 100 : 0;
 
   // Build stacked chart data — top N videos, everything else as "other"
-  const allDates = Array.from({ length: 30 }, (_, i) =>
-    new Date(now - (32 - i) * 86400000).toISOString().slice(0, 10),
-  );
+  const allDates = month.analyticsEnd ? daysBetween(startDate, endDate) : [];
   const topVideoIds = topVideos.slice(0, TOP_N).map((v) => v.videoId);
   const isFallbackMode = dailyByVideo.length > 0 && dailyByVideo[0].videoId === "__total";
   const dateMap = new Map<string, Record<string, number>>();
@@ -183,7 +184,7 @@ export default async function OverviewPage() {
 
   return (
     <div className="px-4 py-5 sm:p-8">
-      <h1 className="sr-only">Overview</h1>
+      <h1 className="sr-only">This month</h1>
       <div className="mb-3"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
 
       {/* Goal cards */}
@@ -249,7 +250,7 @@ export default async function OverviewPage() {
                 {clickReport.totalClicks.toLocaleString("en-US")} total clicks
               </p>
               <p className="text-xs text-slate-400">
-                All time since {new Date(clickReport.epochDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                Since {new Date(clickReport.epochDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
               </p>
             </div>
             {clicksGoal && (

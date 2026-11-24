@@ -1,4 +1,13 @@
 # SWapp handoff
+## 2026-11-24 (evening) — This Month and Reports (Johnny)
+
+- Tom: the first tab is **This Month**: every number on it counts from the 1st (Central) and resets monthly.
+  `src/lib/showrunner/month.ts` (`thisMonth`, 3-day YouTube lag; nothing settled on days 1-3 shows zeros);
+  `getSourceTagClicksCumulative(brandId, slug, since)` takes a start date ("Since Nov 1").
+- **Reports** tab: `/showrunner/reports` lists every month from 2026-08 (first tracked clicks) newest first;
+  `/showrunner/reports/YYYY-MM` renders `REPORT_SECTIONS` (src/lib/showrunner/reports.ts), empty for now: Tom asked
+  for the frame only. Add a report by appending a section there.
+
 ## 2026-11-24 (evening) — Showrunner shows only The Real Estate Bookkeeper's YouTube (Johnny)
 
 - Tom: only TREB's YouTube numbers matter. `showChannelBrand()` (src/lib/showrunner/channel-brand.ts): from either
