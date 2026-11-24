@@ -57,12 +57,12 @@ const NAV: Array<{
   dividerAfter?: boolean;
 }> = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, exact: true },
+  { label: "Financial Reports", href: "/reports", icon: FileText },
   { label: "Operations", href: "/operations", icon: ListChecks },
   { label: "Scanner", href: "/scanner", icon: Radar },
   { label: "Local SEO", href: "/local-seo", icon: MapPinned },
   { label: "Website", href: "/website", icon: Globe },
   { label: "Showrunner", href: "/showrunner", icon: Clapperboard },
-  { label: "Financial Reports", href: "/reports", icon: FileText },
   { label: "Reviews", href: "/reviews", icon: Star, dividerAfter: true },
   { label: "Contacts", href: "/contacts", icon: Contact },
   { label: "CRM", href: "/pipeline", icon: TrendingUp },
