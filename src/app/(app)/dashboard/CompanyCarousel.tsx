@@ -114,6 +114,33 @@ function Card({ label, value, note, parts, href, target, bar, expand }: {
   </div>;
 }
 
+export type CompanyLead = { id: string; name: string; company: string | null; slug: string; stage: string; createdAt: string };
+
+/** The New leads card's list: each lead with its brand dot and funnel stage, linking to the lead; then the CRM. */
+function LeadList({ leads, colors }: { leads: CompanyLead[]; colors: Record<string, string> }) {
+  return (
+    <div>
+      {leads.length === 0 ? <p className="text-sm text-slate-500">No new leads in this period.</p> : (
+        <ul className="flex flex-col">
+          {leads.map((lead) => (
+            <li key={`${lead.slug}-${lead.id}`}>
+              <Link href={`/leads/${lead.id}`} className="flex items-center gap-2 py-1.5 text-sm hover:bg-slate-50">
+                <span className="brand-split-seg h-2.5 w-2.5 shrink-0 rounded-full" style={{ ["--seg" as string]: colors[lead.slug] ?? "#64748b" }} />
+                <span className="min-w-0 flex-1 truncate text-slate-800">{lead.company ? `${lead.name} · ${lead.company}` : lead.name}</span>
+                <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">{lead.stage}</span>
+                <ChevronRight size={14} aria-hidden="true" className="shrink-0 text-slate-400" />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+      <Link href="/pipeline" className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-slate-700 underline underline-offset-4">
+        Details <ChevronRight size={14} aria-hidden="true" />
+      </Link>
+    </div>
+  );
+}
+
 export type CompanyClient = { id: string; name: string; company: string | null; mrr: number; slug: string };
 
 /** The MRR card's list: each paying client with its brand's dot and monthly amount, then a link to the details. */
@@ -141,9 +168,9 @@ function ClientList({ clients, colors, brands }: { clients: CompanyClient[]; col
 
 export type CompanyTargets = { mrrUsd: number; newLeads: number; offersSent: number; responseSeconds: number; freeCashFlowUsd: number };
 
-export function CompanyCarousel({ total, brands, cashFlow, expectedMonth, period, colors, targets, clients }: {
+export function CompanyCarousel({ total, brands, cashFlow, expectedMonth, period, colors, targets, clients, leads }: {
   total: MetricsView; brands: MetricsView[]; cashFlow: CashFlow; expectedMonth: string; period: string;
-  colors: Record<string, string>; targets: CompanyTargets; clients: CompanyClient[];
+  colors: Record<string, string>; targets: CompanyTargets; clients: CompanyClient[]; leads: CompanyLead[];
 }) {
   const pct = (value: number, target: number) => `${target > 0 ? Math.round((value / target) * 100) : 0}% of ${target.toLocaleString("en-US")}`;
   const parts = (pick: (b: MetricsView) => number, show: (n: number) => string): Part[] =>
@@ -152,7 +179,7 @@ export function CompanyCarousel({ total, brands, cashFlow, expectedMonth, period
   return <section className="mt-2">
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Card label="MRR" value={money(total.mrrUsd)} note={`${total.clients} active client${total.clients === 1 ? "" : "s"} · ${Math.round((total.mrrUsd / targets.mrrUsd) * 100)}% of ${money(targets.mrrUsd)}`} parts={parts((b) => b.mrrUsd, money)} target={targets.mrrUsd} expand={<ClientList clients={clients} colors={colors} brands={brands} />} />
-      <Card label="new leads" value={String(total.newLeads)} note={`${period} · ${pct(total.newLeads, targets.newLeads)}`} parts={parts((b) => b.newLeads, count)} target={targets.newLeads} href="/pipeline" />
+      <Card label="new leads" value={String(total.newLeads)} note={`${period} · ${pct(total.newLeads, targets.newLeads)}`} parts={parts((b) => b.newLeads, count)} target={targets.newLeads} expand={<LeadList leads={leads} colors={colors} />} />
       <Card label="offers" value={String(total.offersSent)} note={`${total.offersAwaiting} awaiting a reply · ${pct(total.offersSent, targets.offersSent)}`} parts={parts((b) => b.offersSent, count)} target={targets.offersSent} href="/offers" />
       <Card
         label="response time"

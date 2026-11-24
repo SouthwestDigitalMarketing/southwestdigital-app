@@ -19,9 +19,9 @@ import { getPastDueByContact } from "@/lib/ar/pastDue";
 import { getMrrGoals } from "@/lib/dashboard/mrr-goals";
 import { getRecordMrr } from "@/lib/operations/serviceRecordsMrr";
 import { firmDateKey, firmInstant } from "@/lib/operations/schedule";
-import { withBrandDataTransaction } from "@/lib/tenancy/context";
+import { createBrandDataContext, withBrandDataTransaction } from "@/lib/tenancy/context";
 import { PIPE_PROSPECTS_KEY } from "@/lib/pipe/deals";
-import { LEAD_STEP_STAGE, LEAD_STEPS, type LeadStep } from "@/lib/pipe/lead-steps";
+import { LEAD_STEP_LABEL, LEAD_STEP_STAGE, LEAD_STEPS, type LeadStep } from "@/lib/pipe/lead-steps";
 import { paidAwaitingGsa } from "@/lib/gsa/store";
 import { GsaAlarm } from "@/components/gsa/GsaAlarm";
 import { PRIVACY_COOKIE, privacyOn } from "@/lib/privacy";
@@ -61,6 +61,10 @@ type DashboardPeriod = {
   start: Date;
   endExclusive: Date;
 };
+
+function leadStepLabel(step: string | null): string {
+  return step && LEAD_STEPS.includes(step as LeadStep) ? LEAD_STEP_LABEL[step as LeadStep] : "New";
+}
 
 function goalPct(value: number, goal: number): number {
   if (!goal || goal <= 0 || !Number.isFinite(value)) return 0;
@@ -411,6 +415,27 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const companyClients = (await Promise.all(companyPaletteRows.map(async (row) =>
     (row.id === brand.id ? recordMrr : await getRecordMrr(row.id)).clients.map((client) => ({ ...hide(client), slug: row.slug })),
   ))).flat().sort((a, b) => b.mrr - a.mrr);
+  // The leads the New leads card counts (both Lochside brands, this period), newest first, with each one's
+  // funnel stage: its CRM pipeline stage, else pipe's lead step (Tom, 2026-11-24).
+  const leadWindow = periodInstants(selectedPeriod);
+  const companyLeads = (await Promise.all(companyPaletteRows.map((row) =>
+    withBrandDataTransaction(createBrandDataContext({ brandId: row.id, actorUserId: session.user.id }), (tx) =>
+      tx.meetingLead.findMany({
+        where: { brandId: row.id, isActive: true, kind: "LEAD", createdAt: { gte: leadWindow.gte, lt: leadWindow.lt } },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        select: {
+          id: true, name: true, company: true, leadStep: true, createdAt: true,
+          pipelineItems: { where: { isActive: true }, take: 1, select: { stage: { select: { name: true } } } },
+        },
+      }),
+    ).then((rows) => rows.map((lead) => ({
+      ...hide({ id: lead.id, name: lead.name, company: lead.company }, "Lead"),
+      slug: row.slug,
+      stage: lead.pipelineItems[0]?.stage.name ?? leadStepLabel(lead.leadStep),
+      createdAt: lead.createdAt.toISOString(),
+    }))),
+  ))).flat().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const mrrStarting = recordMrr.starting.map((client) => hide(client));
   const pipelineOverview = pipelineOverviewRaw.map((pipeline) => ({
     ...pipeline,
@@ -545,7 +570,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       {/* The swipe calendar first: billing dates and episode releases (Tom, 2026-11-24). */}
       <div className="mb-3"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
       <GsaAlarm proposals={awaitingGsa} now={windowEnd} />
-      {companyMetrics && <CompanyCarousel {...companyMetrics} period={selectedPeriod.label} colors={companyColors} targets={companyTargets} clients={companyClients} />}
+      {companyMetrics && <CompanyCarousel {...companyMetrics} period={selectedPeriod.label} colors={companyColors} targets={companyTargets} clients={companyClients} leads={companyLeads} />}
       <details className="mt-8" open={!companyMetrics}>
       <summary className="cursor-pointer text-sm font-medium text-slate-600">Detailed {brand.name} dashboard</summary>
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-4">
