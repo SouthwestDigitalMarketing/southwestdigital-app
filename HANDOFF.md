@@ -31,7 +31,8 @@
   (A TREB lead's page needs the TREB brand active; TREB has no leads yet.)
   The Offers card opens too: each offer sent in the period (client company or name, amount when the quote row has
   totals, status chip: Sent / Viewed (firstViewedAt) / Accepted / Signed (completed) / Archived), linking to
-  /offers/[id]; Details -> /offers. The count includes archived TEST offers (getCompanyMetrics counts any sentAt).
+  /offers/[id]; Details -> /offers. The list hides signed (completed) and archived offers; getCompanyMetrics no
+  longer counts archived offers as sent (dashboard, Showrunner Leads, monthly reports).
   The other cards are links (stretched, chevron):
   response time -> /scorecard; free cash flow has no page yet.
   Targets (Tom, 2026-11-24): each bar's track is the target and the brand pieces fill their share of the way;

@@ -37,7 +37,8 @@ export async function getCompanyMetrics(input: {
       withBrandDataTransaction(context, async (tx) => {
         const [newLeads, sent, awaiting, replies] = await Promise.all([
           tx.meetingLead.count({ where: { brandId: brand.id, isActive: true, kind: "LEAD", createdAt: { gte: input.from, lt: input.to } } }),
-          tx.quote.count({ where: { brandId: brand.id, sentAt: { gte: input.from, lt: input.to } } }),
+          // Archived offers (tests, superseded versions) do not count as sent (Tom, 2026-11-24).
+          tx.quote.count({ where: { brandId: brand.id, sentAt: { gte: input.from, lt: input.to }, status: { not: "archived" } } }),
           tx.quote.count({ where: { brandId: brand.id, status: "sent" } }),
           tx.scorecardEvent.findMany({ where: { brandId: brand.id, startedAt: { gte: input.from, lt: input.to }, respondedAt: { not: null }, businessSeconds: { not: null }, channel: { in: ["text", "call", "email"] } }, select: { businessSeconds: true } }),
         ]);
