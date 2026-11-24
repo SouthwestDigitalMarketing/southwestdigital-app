@@ -1300,3 +1300,7 @@ body {
 tr.ui-row-cursor[data-keyboard-active="true"] > *:first-child {
   box-shadow: inset 3px 0 0 0 var(--theme-accent);
 }
+
+/* Brand pieces of the company dashboard's split bars (CompanyCarousel); lighter on dark so navy still shows. */
+.brand-split-seg { background: var(--seg); }
+[data-theme="dark"] .brand-split-seg { background: color-mix(in srgb, var(--seg) 55%, #ffffff); }

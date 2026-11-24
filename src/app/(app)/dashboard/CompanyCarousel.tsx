@@ -1,9 +1,7 @@
 "use client";
 
-import { ExternalLink } from "lucide-react";
+import { useState } from "react";
 import type { MetricsView } from "@/lib/companyMetrics/summary";
-import { BrandSwipe } from "@/components/BrandSwipe";
-import { NEUTRAL_SWIPE_PALETTE, type SwipePalette } from "@/lib/brands/swipePalette";
 
 type CashFlow = { month: string; asOf: string; valueUsd: number; stale: boolean } | null;
 
@@ -17,35 +15,79 @@ function response(value: number | null) {
   return `${(value / 3600).toFixed(1)} hr`;
 }
 
-function Card({ label, value, note }: { label: string; value: string; note: string }) {
-  return <div className="brand-swipe__card flex min-h-32 flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+type Part = { slug: string; name: string; value: number; display: string; color: string };
+
+/** A thin bar split by brand; tap a piece (or hover) to read it. Pieces are drawn only for amounts above zero. */
+function SplitBar({ parts, label }: { parts: Part[]; label: string }) {
+  const [picked, setPicked] = useState<string | null>(null);
+  const total = parts.reduce((n, p) => n + Math.max(0, p.value), 0);
+  const shown = parts.find((p) => p.slug === picked);
+  return (
+    <div className="mt-3">
+      <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-100" role="img" aria-label={`${label} by brand: ${parts.map((p) => `${p.name} ${p.display}`).join(", ")}`}>
+        {total > 0
+          ? parts.filter((p) => p.value > 0).map((p) => (
+            <button
+              key={p.slug}
+              type="button"
+              title={`${p.name}: ${p.display}`}
+              onClick={() => setPicked(picked === p.slug ? null : p.slug)}
+              className="brand-split-seg h-full"
+              style={{ width: `${(p.value / total) * 100}%`, ["--seg" as string]: p.color }}
+            />
+          ))
+          : null}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+        {parts.map((p) => (
+          <button key={p.slug} type="button" onClick={() => setPicked(picked === p.slug ? null : p.slug)} className="inline-flex items-center gap-1.5">
+            <span className="brand-split-seg h-2.5 w-2.5 rounded-full" style={{ ["--seg" as string]: p.color }} />
+            <span className={picked === p.slug ? "font-semibold text-slate-900" : undefined}>{p.name}</span>
+            <span className="font-semibold tabular-nums text-slate-900">{p.display}</span>
+          </button>
+        ))}
+      </div>
+      {shown && total > 0 ? (
+        <p className="mt-1 text-xs text-slate-500">{shown.name}: {Math.round((Math.max(0, shown.value) / total) * 100)}% of the total</p>
+      ) : null}
+    </div>
+  );
+}
+
+function Card({ label, value, note, parts }: { label: string; value: string; note: string; parts?: Part[] }) {
+  return <div className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
     <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">{label}</p>
-    <div><p className="text-3xl font-semibold tracking-tight text-slate-900 tabular-nums">{value}</p><p className="mt-1 text-sm text-slate-500">{note}</p></div>
+    <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-900 tabular-nums">{value}</p>
+    <p className="mt-1 text-sm text-slate-500">{note}</p>
+    {parts ? <SplitBar parts={parts} label={label} /> : null}
   </div>;
 }
 
-export function CompanyCarousel({ total, brands, cashFlow, expectedMonth, period, palettes }: {
+/**
+ * Lochside's company numbers on one screen (Tom, 2026-11-24): each card shows the total, then a bar split by
+ * brand in the brand's colour (Bookkeeping Conroe navy, The Real Estate Bookkeeper red) instead of a swipe per brand.
+ */
+export function CompanyCarousel({ total, brands, cashFlow, expectedMonth, period, colors }: {
   total: MetricsView; brands: MetricsView[]; cashFlow: CashFlow; expectedMonth: string; period: string;
-  palettes: Record<string, SwipePalette>;
+  colors: Record<string, string>;
 }) {
-  const views = [total, ...brands].map((slide, index) => ({
-    key: slide.slug,
-    name: index === 0 ? "Total" : slide.name,
-    heading: slide.name,
-    palette: index === 0 ? NEUTRAL_SWIPE_PALETTE : palettes[slide.slug] ?? NEUTRAL_SWIPE_PALETTE,
-    content: <>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Card label="Monthly recurring revenue" value={money(slide.mrrUsd)} note={`${slide.clients} active client${slide.clients === 1 ? "" : "s"}`} />
-        <Card label="New leads" value={String(slide.newLeads)} note={period} />
-        <Card label="Offers" value={String(slide.offersSent)} note={`${slide.offersAwaiting} awaiting a reply`} />
-        <Card label="Response time" value={response(slide.medianResponseSeconds)} note={`Median business time · ${period.toLowerCase()}`} />
-        {index === 0 && <div className="sm:col-span-2 xl:col-span-4"><Card label="Free cash flow" value={cashFlow ? money(cashFlow.valueUsd) : "Awaiting closed books"} note={cashFlow ? `As of ${cashFlow.asOf}${cashFlow.stale ? ` · Books behind (${expectedMonth} expected)` : ""}` : `No verified closed month · ${expectedMonth} expected`} /></div>}
-      </div>
-      <div className="mt-4 min-h-6 text-sm text-slate-500">{slide.website && <a href={slide.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline underline-offset-4">Visit {slide.name}&apos;s website <ExternalLink size={13}/></a>}</div>
-    </>,
-  }));
+  const parts = (pick: (b: MetricsView) => number, show: (n: number) => string): Part[] =>
+    brands.map((b) => ({ slug: b.slug, name: b.name, value: pick(b), display: show(pick(b)), color: colors[b.slug] ?? "#64748b" }));
+  const count = (n: number) => String(n);
   return <section className="mt-5">
-    <p className="mb-1 text-xs font-medium uppercase tracking-[0.16em] text-slate-500">One company · two brands</p>
-    <BrandSwipe label="Lochside company dashboard" views={views} />
+    <p className="mb-3 text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Lochside LLC · {period}</p>
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <Card label="Monthly recurring revenue" value={money(total.mrrUsd)} note={`${total.clients} active client${total.clients === 1 ? "" : "s"}`} parts={parts((b) => b.mrrUsd, money)} />
+      <Card label="New leads" value={String(total.newLeads)} note={period} parts={parts((b) => b.newLeads, count)} />
+      <Card label="Offers" value={String(total.offersSent)} note={`${total.offersAwaiting} awaiting a reply`} parts={parts((b) => b.offersSent, count)} />
+      <Card
+        label="Response time"
+        value={response(total.medianResponseSeconds)}
+        note={`Median business time · ${brands.map((b) => `${b.name} ${response(b.medianResponseSeconds)}`).join(" · ")}`}
+      />
+      <div className="sm:col-span-2 xl:col-span-4">
+        <Card label="Free cash flow" value={cashFlow ? money(cashFlow.valueUsd) : "Awaiting closed books"} note={cashFlow ? `As of ${cashFlow.asOf}${cashFlow.stale ? ` · Books behind (${expectedMonth} expected)` : ""}` : `No verified closed month · ${expectedMonth} expected`} />
+      </div>
+    </div>
   </section>;
 }
