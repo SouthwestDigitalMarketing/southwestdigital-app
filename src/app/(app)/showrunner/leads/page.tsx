@@ -1,6 +1,7 @@
 import { DomainPurpose } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAppBrand } from "@/lib/brands/staff";
+import { showChannelBrand } from "@/lib/showrunner/channel-brand";
 import { getCompanyMetrics } from "@/lib/companyMetrics";
 import { getSourceTagClicksCumulative, type SourceTagClickReport } from "@/lib/cloudflare/clickSnapshots";
 import { getChannelMetrics } from "@/lib/youtube/analytics";
@@ -25,7 +26,8 @@ type Step = { label: string; value: number | null; note: string };
  * the lead and offer steps count every source and say so.
  */
 export default async function LeadsPage() {
-  const { brand, session, isPlatformOperator } = await requireAppBrand();
+  const { brand: active, session, isPlatformOperator } = await requireAppBrand();
+  const brand = await showChannelBrand(active);
   const now = requestNow();
   // YouTube Analytics lags ~3 days; the same 30 days as Metrics.
   const endDate = new Date(now - 3 * DAY).toISOString().slice(0, 10);

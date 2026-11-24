@@ -1,4 +1,11 @@
 # SWapp handoff
+## 2026-11-24 (evening) — Showrunner shows only The Real Estate Bookkeeper's YouTube (Johnny)
+
+- Tom: only TREB's YouTube numbers matter. `showChannelBrand()` (src/lib/showrunner/channel-brand.ts): from either
+  Lochside brand, Overview and Leads read TREB's theme, goals, YouTube connection and link clicks; other brands keep
+  their own. `updateYouTubeGoal` accepts the brand the page shows. Overview: no "Channel performance" title or date
+  line; goals are narrow rows; tighter gaps.
+
 ## 2026-11-24 (later) — Sample YouTube numbers on dev servers (Johnny)
 
 - Local SWapp cannot read the production YouTube connection (encrypted with production secrets Vercel will not

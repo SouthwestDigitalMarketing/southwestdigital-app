@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireAppBrand } from "@/lib/brands/staff";
+import { showChannelBrand } from "@/lib/showrunner/channel-brand";
 import {
   getChannelMetrics,
   getDailyViews,
@@ -36,7 +37,8 @@ function getYouTubeAnalyticsNow() {
 
 /** Overview: the season calendar strip first, then the channel numbers (Tom, 2026-11-24). */
 export default async function OverviewPage() {
-  const { brand } = await requireAppBrand();
+  const { brand: active } = await requireAppBrand();
+  const brand = await showChannelBrand(active);
 
   const [theme, redirectDomainRecord] = await Promise.all([
     prisma.brandTheme.findUnique({
@@ -59,7 +61,7 @@ export default async function OverviewPage() {
     return (
       <div className="px-4 py-5 sm:p-8">
         <h1 className="sr-only">Overview</h1>
-        <div className="mb-6"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
+        <div className="mb-3"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
         <p className="mt-2 text-sm text-slate-400">YouTube channel not configured for this brand. <a className="font-semibold underline" href="/api/youtube/connect">Connect YouTube</a>.</p>
       </div>
@@ -72,7 +74,7 @@ export default async function OverviewPage() {
     return (
       <div className="px-4 py-5 sm:p-8">
         <h1 className="sr-only">Overview</h1>
-        <div className="mb-6"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
+        <div className="mb-3"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
         <p className="mt-2 text-sm text-slate-600">Channel data is unavailable because the saved YouTube connection could not be read here. <a className="font-semibold underline" href="/api/youtube/connect">Connect YouTube</a>.</p>
       </div>
@@ -89,7 +91,6 @@ export default async function OverviewPage() {
   // YouTube Analytics has a ~3-day reporting lag; clip endDate so trailing days aren't empty
   const endDate = new Date(now - 3 * 86400000).toISOString().slice(0, 10);
   const startDate = new Date(now - 32 * 86400000).toISOString().slice(0, 10);
-  const rangeLabel = `${new Date(startDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${new Date(endDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
 
   let metrics: ChannelMetrics | null = null;
   let dailyByVideo: DailyViewByVideoRow[] = [];
@@ -135,7 +136,7 @@ export default async function OverviewPage() {
     return (
       <div className="px-4 py-5 sm:p-8">
         <h1 className="sr-only">Overview</h1>
-        <div className="mb-6"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
+        <div className="mb-3"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
         <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           {/refresh token (expired|revoked)/i.test(error ?? "") ? (
@@ -183,16 +184,10 @@ export default async function OverviewPage() {
   return (
     <div className="px-4 py-5 sm:p-8">
       <h1 className="sr-only">Overview</h1>
-      <div className="mb-6"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
-      <div>
-        <h2 className="text-lg font-semibold text-slate-900">Channel performance</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          {rangeLabel} · Analytics data typically lags 2–3 days
-        </p>
-      </div>
+      <div className="mb-3"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
 
       {/* Goal cards */}
-      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+      <div className="grid gap-3 lg:grid-cols-2">
         <YouTubeGoalCard
           brandId={brand.id}
           label="Views"
@@ -215,7 +210,7 @@ export default async function OverviewPage() {
       </div>
 
       {/* Daily trend */}
-      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6">
+      <div className="mt-3 rounded-xl border border-slate-200 bg-white p-6">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Daily Views</p>
         <p className="mt-1 text-lg font-semibold text-slate-900">
           {metrics.views.toLocaleString("en-US")} total views
@@ -238,7 +233,7 @@ export default async function OverviewPage() {
       </div>
 
       {/* Top videos */}
-      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5">
+      <div className="mt-3 rounded-xl border border-slate-200 bg-white p-5">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Top Videos</p>
         <h2 className="mt-1 text-lg font-semibold text-slate-900">Most viewed this period</h2>
         <VideoList videos={topVideos} empty="No video data for this period." />
@@ -246,7 +241,7 @@ export default async function OverviewPage() {
 
       {/* Community link clicks */}
       {clickReport && (
-        <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5">
+        <div className="mt-3 rounded-xl border border-slate-200 bg-white p-5">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Community Link Clicks</p>
