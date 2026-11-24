@@ -31,6 +31,7 @@ import urllib.request
 
 from swapp_scan_review import run_reviews
 from swapp_quo_intake import execute as quo_intake
+import swapp_scan_mailreviews as mailreviews
 
 CONFIG = os.environ.get("SWAPP_SCAN_CONFIG") or os.path.expanduser("~/.config/swapp-scan/env")
 STATE = os.environ.get("SWAPP_SCAN_STATE") or os.path.expanduser("~/.local/share/swapp-scan/state.json")
@@ -562,6 +563,12 @@ def scan_once(swapp_url, token):
     if status != 200:
         print("pending check failed: HTTP %d" % status, flush=True)
         return False
+    # Tom's answers from the Scanner's mail reviews apply on every poll (10 s),
+    # not only when a scan is due.
+    try:
+        mailreviews.apply_answers(swapp_url, token, api, run)
+    except Exception as error:
+        print("mail review apply failed: %s" % error, flush=True)
     state = load_state()
     run_id = since = None
     # Only 'requested' runs come from Tom pressing Scan (auto runs claim
@@ -625,6 +632,18 @@ def scan_once(swapp_url, token):
     clean_findings, clean_stats = housekeeping(manual)
     findings.extend(clean_findings)
     summary["cleanup"] = clean_stats
+    try:
+        waiting = mailreviews.push_lists(swapp_url, token, api, run)
+    except Exception as error:
+        waiting = {"error": str(error)[:200]}
+    summary["mailReviews"] = waiting
+    parts = []
+    if isinstance(waiting.get("spam"), int) and waiting["spam"]:
+        parts.append("%d spam" % waiting["spam"])
+    if isinstance(waiting.get("newsletter"), int) and waiting["newsletter"]:
+        parts.append("%d newsletter sender%s" % (waiting["newsletter"], "" if waiting["newsletter"] == 1 else "s"))
+    if parts:
+        findings.append({"kind": "zoho", "text": "Mail reviews — %s waiting (Scanner)" % ", ".join(parts)})
     source_reviews, review_changes = run_reviews(run_id, summary, post)
     native_leads = quo_intake("lead_exports", destination=swapp_url)[:max(0, 20 - len(leads))]
     leads = [*leads, *native_leads]
