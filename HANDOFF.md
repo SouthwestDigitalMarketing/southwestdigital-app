@@ -1,4 +1,11 @@
 # SWapp handoff
+## 2026-11-24 (evening) — Side menu: no brand logo or brand switcher (Johnny)
+
+- Tom: "Lochside LLC is what this whole thing is about"; no Bookkeeping Conroe logo and no selector at all.
+  AppShell's sidebar block with the brand logo and the `selectBrand` dropdown is removed for everyone; the menu
+  goes profile, Scan, nav. `/select-brand` and its action still exist (nothing links to them from the menu);
+  `accessibleBrands` is still passed to AppShell but unused. The top bar still shows the active brand's name.
+
 ## 2026-11-24 (evening) — This Month and Reports (Johnny)
 
 - Tom: the first tab is **This Month**: every number on it counts from the 1st (Central) and resets monthly.

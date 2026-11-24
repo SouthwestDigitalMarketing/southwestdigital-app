@@ -27,7 +27,6 @@ import {
   Package,
   Tag,
   BadgePercent,
-  ChevronDown,
   Radar,
   MapPinned,
   ScrollText,
@@ -36,7 +35,6 @@ import {
   FileText,
   EyeOff,
 } from "lucide-react";
-import { selectBrand } from "@/app/select-brand/actions";
 import { useBrand } from "@/lib/brands/context";
 import { isLochsideBrandSlug } from "@/lib/brands/active-brand";
 import {
@@ -184,7 +182,6 @@ function ExternalNavItem({
 export function AppShell({
   children,
   user,
-  accessibleBrands,
   activeBrandId,
   privacy,
   isPlatformOperator,
@@ -244,7 +241,6 @@ export function AppShell({
   const accent = effective.accentColor;
   const mode = deviceTheme ?? effective.mode;
   const isLight = mode === "light";
-  const sidebarLogoType = brand.theme?.sidebarLogoType === "logo" ? "logo" : "mark";
   const appearance = themePreset === "grok" ? "grok" : "standard";
 
   function toggleDeviceTheme() {
@@ -256,21 +252,6 @@ export function AppShell({
       // Keep the current view usable when browser storage is unavailable.
     }
   }
-
-  const sidebarLightLogo = sidebarLogoType === "logo" ? brand.theme?.logoUrl : brand.theme?.logoMarkUrl;
-  const sidebarDarkLogo = sidebarLogoType === "logo" ? brand.theme?.logoDarkUrl : brand.theme?.logoMarkDarkUrl;
-  // Light mode: prefer light logo; dark mode: prefer dark logo; fall back to the other variant
-  const sidebarDisplayLogo = isLight
-    ? (sidebarLightLogo ?? sidebarDarkLogo)
-    : (sidebarDarkLogo ?? sidebarLightLogo);
-  const sidebarMarkLogo = isLight
-    ? (brand.theme?.logoMarkUrl ?? brand.theme?.logoMarkDarkUrl)
-    : (brand.theme?.logoMarkDarkUrl ?? brand.theme?.logoMarkUrl);
-  const sidebarLogo = companyDashboard ? null : collapsed ? (sidebarMarkLogo ?? sidebarDisplayLogo) : sidebarDisplayLogo;
-  const sidebarLogoClass =
-    !collapsed && sidebarLogoType === "logo"
-      ? "brand-asset-fit brand-asset-fit-left"
-      : "h-8 w-8 rounded object-contain";
 
   const darkColor = effective.darkColor;
   const themeVariables = appThemeCssVariables({
@@ -284,7 +265,6 @@ export function AppShell({
   });
   const mainPanelBackground = appCanvasGradient(mode);
   const navTextColor = isLight ? darkColor : "rgba(255,255,255,0.7)";
-  const navMutedColor = isLight ? `${darkColor}80` : "rgba(255,255,255,0.5)";
   const sidebarBg = isLight ? "#ffffff" : "var(--app-canvas)";
   const dividerColor = isLight ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.1)";
   const dividerNavColor = isLight ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.12)";
@@ -331,59 +311,7 @@ export function AppShell({
           )}
         </div>
       </div>
-      <div
-        className={`w-full min-w-0 pb-3 pt-4 ${collapsed ? "px-1" : "px-5"}`}
-        style={{ borderBottom: `1px solid ${dividerColor}` }}
-      >
-        <div className={`flex h-8 w-full min-w-0 items-center ${collapsed ? "justify-center" : ""}`}>
-          {sidebarLogo ? (
-            <div className={!collapsed && sidebarLogoType === "logo" ? "h-8 min-w-0 w-full" : "h-8 w-8 shrink-0"}>
-              <img
-                src={sidebarLogo}
-                alt={!collapsed && sidebarLogoType === "logo" ? brand.name : ""}
-                className={sidebarLogoClass}
-              />
-            </div>
-          ) : null}
-          {!sidebarLogo ? (
-            <span className="text-sm font-bold uppercase tracking-widest" style={{ color: navTextColor }}>
-              {companyDashboard ? "Lochside LLC" : brand.name}
-            </span>
-          ) : null}
-        </div>
-        {accessibleBrands.length > 1 && !collapsed && !companyDashboard ? (
-          <form action={selectBrand} className="mt-3">
-            <label className="sr-only" htmlFor="active-brand">
-              Switch brand
-            </label>
-            <div className="relative">
-              <select
-                id="active-brand"
-                name="brandId"
-                defaultValue={activeBrandId}
-                onChange={(event) => event.currentTarget.form?.requestSubmit()}
-                className="w-full appearance-none rounded-lg border py-2 pl-3 pr-10 text-sm"
-                style={{
-                  color: navTextColor,
-                  backgroundColor: isLight ? "#ffffff" : "transparent",
-                  borderColor: dividerColor,
-                }}
-              >
-                {accessibleBrands.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown
-                aria-hidden="true"
-                className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2"
-                style={{ color: navMutedColor }}
-              />
-            </div>
-          </form>
-        ) : null}
-      </div>
+      {/* No brand logo or brand switcher: SWapp is Lochside LLC's one app (Tom, 2026-11-24). */}
 
       {showScan ? (
         <div className={`${collapsed ? "px-1" : "px-5"} py-3`} style={{ borderBottom: `1px solid ${dividerColor}` }}>
