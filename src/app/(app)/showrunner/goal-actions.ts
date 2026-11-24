@@ -20,4 +20,5 @@ export async function updateYouTubeGoal(
   });
 
   revalidatePath("/showrunner");
+  revalidatePath("/showrunner/month");
 }

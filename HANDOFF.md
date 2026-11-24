@@ -22,6 +22,8 @@
 - Tom: the first tab is **This Month**: every number on it counts from the 1st (Central) and resets monthly.
   `src/lib/showrunner/month.ts` (`thisMonth`, 3-day YouTube lag; nothing settled on days 1-3 shows zeros);
   `getSourceTagClicksCumulative(brandId, slug, since)` takes a start date ("Since Nov 1").
+- **This Week** is the first tab and the landing page (`/showrunner`; `/showrunner/week` redirects there); This Month
+  moved to `/showrunner/month` (`/showrunner/metrics` redirects there). Originally:
 - **This Week** tab (`/showrunner/week`): the same page (`ChannelPeriod.tsx`, period "week") from Sunday, the
   Sunday wrap-up's week. Views goal = monthly goal x 7/30, not editable there. With the 3-day YouTube lag, views
   are 0 Sunday-Tuesday; the page says from which day they show. Link clicks are live.
