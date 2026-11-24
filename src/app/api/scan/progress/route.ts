@@ -40,13 +40,22 @@ export async function POST(request: Request) {
           ? {
               ...row,
               status: progress.status,
+              progress: progress.progress ? {
+                ...progress.progress,
+                history: [
+                  ...(Array.isArray(row.progress?.history) ? row.progress.history : []),
+                  ...(row.progress?.stage === progress.progress.stage ? [] : [progress.progress.stage]),
+                ].slice(-6),
+              } : row.progress,
               detail: progress.detail ?? row.detail,
               loginUrl: progress.loginUrl ?? row.loginUrl,
               loginLabel: progress.loginLabel ?? row.loginLabel,
             }
           : row,
       )
-    : [...sources, { source: progress.source, label: progress.source, status: progress.status, detail: progress.detail }];
+    : [...sources, { source: progress.source, label: progress.source, status: progress.status, detail: progress.detail,
+        ...(progress.progress ? { progress: { ...progress.progress, history: [progress.progress.stage] } } : {}),
+      }];
   await prisma.scanRun.update({ where: { id: run.id }, data: { sources: next } });
   return NextResponse.json({ saved: true });
 }

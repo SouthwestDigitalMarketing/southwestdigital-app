@@ -75,3 +75,12 @@ SWAPP_SCAN_REVIEW_SOURCES=quo-sms while Tom reviews the source steps individuall
 This step reviews cross-channel Quo evidence, including voicemail. Other source
 SOP execution remains pending. All configured sources can be enabled later by
 removing the override. The production poller still uses its existing checkout.
+
+## Live scan progress
+
+Each native intake phase publishes its current action and real queue counts
+while running. The scan modal refreshes every two seconds and retains recent
+activity so phases completed between refreshes remain visible. Recording,
+transcription and filing activity is emitted from the backend operation itself.
+The progress bar tracks reviewed conversations across the saved queue; pending
+holds and unfinished actions remain pending after a review pass ends.

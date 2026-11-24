@@ -35,7 +35,7 @@ function ScanSteps({ onClose }: { onClose: () => void }) {
         if (!cancelled) setStatus(next);
       })
       .catch(() => {});
-    const timer = setInterval(refresh, 4000);
+    const timer = setInterval(refresh, 2000);
     // A backgrounded phone browser throttles intervals: refresh on return.
     const wake = () => {
       if (document.visibilityState === "visible") refresh();
@@ -163,7 +163,40 @@ function ScanSteps({ onClose }: { onClose: () => void }) {
                       <Glyph status={row.status} />
                       <span className="min-w-0 flex-1 break-words text-slate-800">
                         {row.label}
-                        {row.detail ? <span className="text-slate-500"> — {row.detail}</span> : null}
+                        {row.detail && !row.progress ? <span className="text-slate-500"> — {row.detail}</span> : null}
+                        {row.progress ? (
+                          <span className="mt-1 block">
+                            {row.status === "scanning" ? (
+                              <span className="block text-slate-700" role="status">{row.progress.stage}</span>
+                            ) : null}
+                            <span className="mt-1 block text-xs text-slate-500">
+                              {row.progress.reviewed} of {row.progress.total} conversations reviewed
+                              {" · "}{row.progress.remaining} pending
+                            </span>
+                            {row.progress.total > 0 ? (
+                              <span
+                                role="progressbar"
+                                aria-label={`${row.label} conversations reviewed`}
+                                aria-valuemin={0}
+                                aria-valuemax={row.progress.total}
+                                aria-valuenow={row.progress.reviewed}
+                                className="mt-2 block h-1.5 overflow-hidden rounded-full bg-slate-100"
+                              >
+                                <span className="block h-full rounded-full bg-slate-700 transition-[width]" style={{
+                                  width: `${(row.progress.reviewed / row.progress.total) * 100}%`,
+                                }} />
+                              </span>
+                            ) : null}
+                            {row.status === "scanning" && (row.progress.history?.length ?? 0) > 1 ? (
+                              <span className="mt-2 block space-y-0.5 text-xs text-slate-500">
+                                <span className="block font-medium">Recent activity</span>
+                                {row.progress.history?.slice(0, -1).slice(-3).map((activity, index) => (
+                                  <span key={index} className="block">{activity}</span>
+                                ))}
+                              </span>
+                            ) : null}
+                          </span>
+                        ) : null}
                         {row.status === "needs-you" && row.loginUrl ? (
                           <a
                             href={row.loginUrl}

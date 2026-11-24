@@ -1,7 +1,5 @@
 """Bounded stdio MCP bridge for source-review CLIs, shared by Codex and Claude."""
 import json
-import os
-import urllib.request
 from pathlib import Path
 import swapp_quo_intake
 import subprocess
@@ -64,26 +62,6 @@ INTAKE_TOOL = {
     }, "required": ["operation"], "additionalProperties": False},
 }
 
-def publish_intake_progress(data):
-    run_id = os.environ.get("SWAPP_SCAN_RUN_ID")
-    source = os.environ.get("SWAPP_SCAN_PROGRESS_SOURCE")
-    if not run_id or source not in ("quo-sms", "quo-calls", "quo-voicemail") or "total" not in data:
-        return
-    try:
-        config = Path(os.environ.get("SWAPP_SCAN_CONFIG") or str(Path.home()/".config/swapp-scan/env"))
-        values = dict(line.strip().split("=", 1) for line in config.read_text().splitlines()
-                      if line.strip() and not line.startswith("#") and "=" in line)
-        detail = "%d/%d conversations reviewed; %d pending; %d hold reviews due" % (
-            data["reviewed"], data["total"], data["remaining"], data["review_due"])
-        payload = {"runId": run_id, "source": source, "status": "scanning", "detail": detail}
-        request = urllib.request.Request(values["SWAPP_URL"].rstrip("/") + "/api/scan/progress",
-            data=json.dumps(payload).encode(), method="POST",
-            headers={"Authorization": "Bearer " + values["SCAN_STATUS_TOKEN"], "Content-Type": "application/json"})
-        with urllib.request.urlopen(request, timeout=10):
-            pass
-    except (OSError, KeyError, ValueError):
-        pass
-
 
 def serve():
     for line in sys.stdin:
@@ -106,8 +84,6 @@ def serve():
                     if params["arguments"].get("operation") not in {"inventory", "next", "inspect", "apply", "status", "holds"}:
                         raise ValueError("This intake operation is internal")
                     data = swapp_quo_intake.execute(**params["arguments"])
-                    if isinstance(data, dict):
-                        publish_intake_progress(data)
                     output = {"exit_code": 0, "data": data}
                 else:
                     raise ValueError("Unknown tool")

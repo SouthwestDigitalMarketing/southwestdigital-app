@@ -250,4 +250,20 @@ describe("POST /api/scan/progress", () => {
       },
     });
   });
+  it("retains bounded activity history and preserves counters when the pass finishes", async () => {
+    const row = {
+      source: "quo-sms", label: "Texts (Quo)", status: "scanning",
+      progress: { stage: "Analyzing", reviewed: 2, total: 10, remaining: 9,
+        history: ["Inventory", "Reading", "Calls", "Downloading", "Transcribing", "Analyzing"] },
+    };
+    mocks.findUnique.mockResolvedValue({ id: "r1", status: "running", sources: [row] });
+    await progress(post({ runId: "r1", source: "quo-sms", status: "scanning",
+      progress: { stage: "Updating contact", reviewed: 2, total: 10, remaining: 9 } }));
+    const updated = mocks.update.mock.lastCall?.[0].data.sources[0];
+    expect(updated.progress.history).toEqual(["Reading", "Calls", "Downloading", "Transcribing", "Analyzing", "Updating contact"]);
+    mocks.findUnique.mockResolvedValue({ id: "r1", status: "running", sources: [updated] });
+    await progress(post({ runId: "r1", source: "quo-sms", status: "needs-you", detail: "9 pending" }));
+    expect(mocks.update.mock.lastCall?.[0].data.sources[0].progress).toEqual(updated.progress);
+  });
+
 });

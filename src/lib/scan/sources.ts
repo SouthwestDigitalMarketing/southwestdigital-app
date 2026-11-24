@@ -2,6 +2,14 @@
 
 export type ScanSourceStatus = "waiting" | "scanning" | "done" | "needs-you";
 
+export type ScanSourceProgress = {
+  stage: string;
+  reviewed: number;
+  total: number;
+  remaining: number;
+  history?: string[];
+};
+
 export type ScanSourceState = {
   source: string;
   label: string;
@@ -9,6 +17,7 @@ export type ScanSourceState = {
   detail?: string | null;
   loginUrl?: string | null;
   loginLabel?: string | null;
+  progress?: ScanSourceProgress;
 };
 
 export const QBO_LOGIN_URL = "https://app.qbo.intuit.com";
@@ -54,6 +63,7 @@ export function parseSourceProgress(raw: unknown): {
   detail: string | null;
   loginUrl: string | null;
   loginLabel: string | null;
+  progress: ScanSourceProgress | null;
 } | null {
   if (!raw || typeof raw !== "object") return null;
   const row = raw as Record<string, unknown>;
@@ -63,9 +73,23 @@ export function parseSourceProgress(raw: unknown): {
   if (status !== "waiting" && status !== "scanning" && status !== "done" && status !== "needs-you") return null;
   const loginUrl = clean(row.loginUrl, 500);
   if (loginUrl && !/^https:\/\//.test(loginUrl)) return null;
+  let progress: ScanSourceProgress | null = null;
+  if (row.progress != null) {
+    if (typeof row.progress !== "object" || Array.isArray(row.progress)) return null;
+    const raw = row.progress as Record<string, unknown>;
+    const stage = clean(raw.stage, 160);
+    const counts = [raw.reviewed, raw.total, raw.remaining];
+    if (!stage || !counts.every((value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0)) return null;
+    const reviewed = raw.reviewed as number;
+    const total = raw.total as number;
+    const remaining = raw.remaining as number;
+    if (reviewed > total || remaining > total) return null;
+    progress = { stage, reviewed, total, remaining };
+  }
   return {
     source,
     status,
+    progress,
     detail: clean(row.detail, 280),
     loginUrl,
     loginLabel: clean(row.loginLabel, 80),

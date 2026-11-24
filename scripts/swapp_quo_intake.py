@@ -14,6 +14,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from swapp_scan_progress import publish
 
 STATE = Path.home() / ".local/state/swapp-quo-intake"
 CLIENTS = Path.home() / "projects/clients"
@@ -45,8 +46,9 @@ def atomic(path, value):
     os.replace(temp, path)
 
 class Intake:
-    def __init__(self, state=STATE, clients=CLIENTS, client=None):
+    def __init__(self, state=STATE, clients=CLIENTS, client=None, progress=None):
         self.state, self.clients = Path(state), Path(clients)
+        self.progress = progress or publish
         self.state.mkdir(mode=0o700, parents=True, exist_ok=True)
         if client is None:
             sys.path.insert(0, str(Path.home() / "projects/sales/src"))
@@ -89,6 +91,9 @@ class Intake:
             self.db.execute("ALTER TABLE threads ADD COLUMN attempted_at TEXT")
             self.db.commit()
 
+    def report(self, stage):
+        self.progress(stage, self.status())
+
     def close(self):
         self.db.close()
 
@@ -99,7 +104,9 @@ class Intake:
         return dict(row)
 
     def inventory(self):
+        self.report("Checking Quo phone lines")
         lines = self.client.list_phone_numbers()
+        self.report("Reading the full conversation backlog")
         conversations = self.client.list_conversations(None, [line["id"] for line in lines])
         by_line = {line["id"]: line for line in lines}
         stamp = iso()
@@ -125,6 +132,7 @@ class Intake:
                   number, signature, conversation.get("lastActivityAt") or conversation.get("createdAt"), stamp))
         self.db.execute("INSERT OR REPLACE INTO settings VALUES('inventory',?)", (stamp,))
         self.db.commit()
+        self.report("Conversation inventory updated")
         return {**self.status(), "lines": [{"name": x.get("name"), "id": x["id"]} for x in lines],
                 "inventoried": len(conversations)}
 
@@ -197,12 +205,15 @@ class Intake:
         return transcript.read_text()
 
     def prepare(self, key):
+        self.report("Reading conversation history")
         row = self.row(key)
         conversation = json.loads(row["conversation"])
         if not row["number"] or not row["brand"]:
             raise ValueError("Unknown brand or group conversation needs identity review")
         messages = self.client.list_messages(conversation, None)
+        self.report("Checking calls and voicemails")
         calls = self.client.list_calls(conversation["phoneNumberId"], row["number"], None)
+        self.report("Matching the caller to existing contacts")
         matches = self.contacts(row["number"])
         if len(matches) > 1:
             raise ValueError("Multiple native contacts match this number; review identity")
@@ -226,13 +237,17 @@ class Intake:
             audio = directory / (name + ".mp3")
             text_path = directory / ("transcript-" + name + ".txt")
             try:
+                self.report("Checking saved voicemail recording" if audio.is_file() else "Downloading voicemail recording")
                 self.download(voicemail["recordingUrl"], audio)
+                self.report("Voicemail recording verified")
                 text = (voicemail.get("transcript") or "").strip()
                 origin = "Quo"
                 if not text:
+                    self.report("Transcribing voicemail audio")
                     text = self.transcribe(audio, text_path)
                     origin = "faster-whisper"
                 text = text.strip() or "[No intelligible speech detected]"
+                self.report("Saving voicemail transcript")
                 atomic(text_path, text + "\n")
                 recordings.append({"call_id": call_id, "audio": str(audio),
                                    "transcript": str(text_path), "transcript_source": origin,
@@ -240,6 +255,7 @@ class Intake:
                 transcripts.append({"call_id": call_id, "text": text})
             except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired, urllib.error.URLError):
                 errors.append(call_id + ": recording download or transcription failed")
+                self.report("Voicemail download or transcription needs attention")
         evidence = {"key": key, "brand": row["brand"], "number": row["number"],
                     "conversation_id": conversation["id"],
                     "messages": messages, "calls": calls, "transcripts": transcripts,
@@ -252,6 +268,7 @@ class Intake:
         self.db.commit()
         if not evidence["context_complete"]:
             return {"key": key, "error": errors[-1], "context_complete": False}
+        self.report("Analyzing conversation and voicemail")
         return evidence
 
     def next_item(self):
@@ -271,6 +288,7 @@ class Intake:
         except Exception as error:
             self.db.execute("UPDATE threads SET error=? WHERE key=?", (str(error)[:280], row["key"]))
             self.db.commit()
+            self.report("Conversation needs attention")
             return {"item": {"key": row["key"], "error": str(error)[:280]}, **self.status()}
 
     def write_contact(self, existing, number, facts, verdict, review_after):
@@ -358,6 +376,7 @@ class Intake:
         return self.clients / "_leads" / ((slug(label) or "caller") + "-" + row["number"][1:])
 
     def apply(self, key, verdict, facts, summary, evidence_ids):
+        self.report("Verifying the conversation analysis")
         if verdict not in VERDICTS or not isinstance(facts, dict) or not summary.strip():
             raise ValueError("Disposition, facts and summary are required")
         if any(k not in ("firstName", "lastName", "company", "email") or not isinstance(v, str)
@@ -404,6 +423,7 @@ class Intake:
             verdict = "uncertain"
         first_seen, review_after = row["first_seen_at"], row["review_after"]
         if verdict in ("potential-spam", "spam"):
+            self.report("Recording a 14-day potential-spam hold")
             hold = self.db.execute(
                 "SELECT * FROM caller_holds WHERE brand=? AND number=?",
                 (row["brand"], row["number"])).fetchone()
@@ -429,6 +449,7 @@ class Intake:
             errors.append("Conversation requires an identity or intent decision")
         folder = None
         if verdict == "lead" or (known and verdict == "known"):
+            self.report("Filing conversation evidence on Ripley")
             folder_facts = {k: v for k, v in ((contact or {}).get("defaultFields") or {}).items()
                             if k in ("firstName", "lastName", "company") and v}
             folder_facts.update({k: v for k, v in facts.items() if v})
@@ -458,7 +479,9 @@ class Intake:
         if verdict in ("lead", "potential-spam", "spam") or (
                 contact and "[SWapp:" in ((contact.get("defaultFields") or {}).get("role") or "")):
             try:
+                self.report("Updating Quo contact fields")
                 contact = self.write_contact(contact, row["number"], facts, verdict, review_after)
+                self.report("Quo contact update verified")
                 actions.append("Verified native Quo contact and disposition")
             except RuntimeError as error:
                 errors.append(str(error))
@@ -471,6 +494,7 @@ class Intake:
             self.db.execute("INSERT INTO events(thread_key,at,action,verification) VALUES(?,?,?,?)",
                             (key, iso(), action, "Read-back and/or local checksum verified"))
         self.db.commit()
+        self.report("Conversation review saved" if not errors else "Conversation saved with work still pending")
         return {"key": key, "verdict": verdict, "actions": actions, "errors": errors,
                 "review_after": review_after, "folder": str(folder) if folder else None, **self.status()}
 

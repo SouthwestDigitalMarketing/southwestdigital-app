@@ -20,6 +20,19 @@ describe("scan sources", () => {
     expect(isKnownSource("ga4")).toBe(true);
     expect(isKnownSource("qb")).toBe(false);
   });
+  it("accepts actual counters and rejects impossible progress", () => {
+    const base = { source: "quo-sms", status: "scanning" };
+    expect(parseSourceProgress({ ...base, progress: { stage: "Downloading voicemail", reviewed: 2, total: 10, remaining: 9 } })?.progress)
+      .toEqual({ stage: "Downloading voicemail", reviewed: 2, total: 10, remaining: 9 });
+    for (const counts of [
+      { reviewed: -1, total: 10, remaining: 10 },
+      { reviewed: 11, total: 10, remaining: 0 },
+      { reviewed: 1.5, total: 10, remaining: 9 },
+      { reviewed: 1, total: 10, remaining: 11 },
+    ]) {
+      expect(parseSourceProgress({ ...base, progress: { stage: "Reading", ...counts } })).toBeNull();
+    }
+  });
   it("sorts needs-you first and done last", () => {
     const sorted = sortSources([
       { source: "a", label: "a", status: "done" },

@@ -151,6 +151,45 @@ class IntakeTests(unittest.TestCase):
         self.assertIn("Director", fields["role"])
         self.assertIn("[SWapp: Lead]", fields["role"])
 
+    def test_activity_is_reported_during_work_and_counts_update_after_save(self):
+        activity = []
+        self.service.progress = lambda stage, counts: activity.append((stage, counts))
+        self.classify()
+        stages = [stage for stage, _ in activity]
+        self.assertLess(stages.index("Reading conversation history"), stages.index("Analyzing conversation and voicemail"))
+        self.assertLess(stages.index("Recording a 14-day potential-spam hold"), stages.index("Updating Quo contact fields"))
+        self.assertLess(stages.index("Updating Quo contact fields"), stages.index("Quo contact update verified"))
+        self.assertEqual(activity[-1][0], "Conversation review saved")
+        self.assertEqual(activity[-1][1]["reviewed"], 1)
+        self.assertEqual(activity[-1][1]["remaining"], 1)
+
+    def test_failed_contact_write_never_reports_a_verified_update(self):
+        activity = []
+        self.service.progress = lambda stage, counts: activity.append(stage)
+        self.service.prepare("CV1")
+        with patch.object(self.service, "write_contact", side_effect=RuntimeError("Write failed")):
+            result = self.service.apply("CV1", "potential-spam", {}, "No message", ["AC1"])
+        self.assertTrue(result["errors"])
+        self.assertNotIn("Quo contact update verified", activity)
+        self.assertEqual(activity[-1], "Conversation saved with work still pending")
+
+    def test_reviewer_bridge_receives_progress_context_explicitly(self):
+        import subprocess
+        import swapp_scan_review as review
+        calls = []
+        def fake_model(command, prompt, environment):
+            calls.append(command)
+            output = Path(command[command.index("--output-last-message") + 1])
+            output.write_text(json.dumps({"coverage_complete": False, "remaining": None,
+                                         "evidence": [], "actions": [], "pending": []}))
+            return subprocess.CompletedProcess(command, 0, "", "")
+        with patch.object(review, "STATE", self.root), patch.object(review, "PROVIDER", "codex"), patch.object(review, "run_model", side_effect=fake_model):
+            review.invoke_reviewer("fixture", run_id="run-123", source="quo-sms")
+        command = calls[0]
+        self.assertIn('mcp_servers.scan_source.env.SWAPP_SCAN_RUN_ID="run-123"', command)
+        self.assertIn('mcp_servers.scan_source.env.SWAPP_SCAN_PROGRESS_SOURCE="quo-sms"', command)
+        self.assertEqual(command[-1], "-")
+
     def test_exports_acknowledged_only_after_server_acceptance(self):
         self.q.messages = [{"id": "M1", "direction": "incoming", "text": "Need bookkeeping"}]
         self.classify("lead")

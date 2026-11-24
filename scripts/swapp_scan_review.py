@@ -58,9 +58,14 @@ def invoke_reviewer(prompt, run_id=None, source=None):
     bridge = str(ROOT / "scripts/swapp_scan_tools.py")
     environment = os.environ.copy()
     environment.pop("CLAUDECODE", None)
+    progress_env = {}
     if run_id and source:
-        environment["SWAPP_SCAN_RUN_ID"] = run_id
-        environment["SWAPP_SCAN_PROGRESS_SOURCE"] = source
+        progress_env = {
+            "SWAPP_SCAN_RUN_ID": run_id,
+            "SWAPP_SCAN_PROGRESS_SOURCE": source,
+            "SWAPP_SCAN_CONFIG": os.environ.get("SWAPP_SCAN_CONFIG") or str(Path.home()/".config/swapp-scan/env"),
+        }
+        environment.update(progress_env)
     if PROVIDER == "codex":
         with tempfile.TemporaryDirectory(dir=STATE) as directory:
             schema_path = Path(directory) / "schema.json"
@@ -77,8 +82,11 @@ def invoke_reviewer(prompt, run_id=None, source=None):
                 "-c", 'mcp_servers.scan_source.tools.source_command.approval_mode="approve"',
                 "-c", 'mcp_servers.scan_source.tools.quo_intake.approval_mode="approve"',
                 "--model", MODEL, "--output-schema", str(schema_path),
-                "--output-last-message", str(output_path), "-",
+                "--output-last-message", str(output_path),
             ]
+            for key, value in progress_env.items():
+                command.extend(["-c", "mcp_servers.scan_source.env." + key + "=" + json.dumps(value)])
+            command.append("-")
             result = run_model(command, prompt, environment)
             log = STATE / "last-codex-log.txt"
             descriptor = os.open(log, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -89,7 +97,7 @@ def invoke_reviewer(prompt, run_id=None, source=None):
             return validate_report(json.loads(output_path.read_text()))
     if PROVIDER != "claude":
         raise RuntimeError("Unknown review provider; configure codex or claude")
-    mcp = {"mcpServers": {"scan_source": {"command": "/usr/bin/python3", "args": [bridge]}}}
+    mcp = {"mcpServers": {"scan_source": {"command": "/usr/bin/python3", "args": [bridge], "env": progress_env}}}
     result = subprocess.run(
         [str(Path.home() / ".local/bin/claude"), "-p", "--model", MODEL,
          "--tools", "", "--allowedTools", "mcp__scan_source__source_command", "mcp__scan_source__quo_intake",

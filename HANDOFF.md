@@ -1,4 +1,27 @@
 # SWapp handoff
+## 2026-11-23 — Live Quo activity in the scan modal
+
+Intake now publishes activity from inside each operation through
+scripts/swapp_scan_progress.py. Events cover inventory, history/call reads,
+recording download/verification, local transcription, transcript saving,
+analysis, filing, hold creation and verified contact updates. These occur
+before/after the actual operations, rather than only when an MCP call ends.
+
+The progress endpoint validates structured stage/reviewed/total/remaining
+fields and retains six recent stages per source. Final plain status posts
+preserve this state. Scan step 1 shows current action, a reviewed-conversation
+progress bar, exact reviewed/pending counts and recent activity. Polling is
+two seconds. Counts describe reviewed conversations, including prior scans;
+pending holds and unresolved actions still prevent completion.
+
+Tests cover phase ordering, no false contact-verification event on failure,
+invalid counter rejection, retained activity and final counter preservation.
+Dev uses this worktree and hot reloads the UI. Verification run
+cmwu3ohlf0000jjdfpnr267wk retained real inventory stages and exact counters
+in its sources.progress JSON. Explicit MCP environment forwarding binds child
+activity to its run/source/config for both providers. Regression tests cover
+that handoff. UI is active on dev 3101; production has not been updated.
+
 ## 2026-11-23 — Quo intake implemented and active on dev
 
 Native backend scripts/swapp_quo_intake.py now supports full inventory, per-thread
