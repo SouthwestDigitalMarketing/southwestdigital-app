@@ -51,3 +51,13 @@ export function reportMonths(now: Date, first = FIRST_REPORT_MONTH): string[] {
 export function isReportMonth(value: string, now: Date): boolean {
   return /^\d{4}-(0[1-9]|1[0-2])$/.test(value) && reportMonths(now).includes(value);
 }
+
+/** This week so far, Sunday through today (the Sunday wrap-up's week), same shape as thisMonth. */
+export function thisWeek(now: Date) {
+  const today = centralDate(now);
+  const weekday = new Date(`${today}T12:00:00Z`).getUTCDay(); // 0 = Sunday
+  const start = new Date(Date.parse(`${today}T12:00:00Z`) - weekday * DAY).toISOString().slice(0, 10);
+  const settled = new Date(Date.parse(`${today}T12:00:00Z`) - ANALYTICS_LAG_DAYS * DAY).toISOString().slice(0, 10);
+  const label = `Week of ${new Date(`${start}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric" })}`;
+  return { month: today.slice(0, 7), label, start, today, analyticsEnd: settled >= start ? settled : null };
+}

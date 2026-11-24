@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { daysBetween, isReportMonth, monthLabel, reportMonths, thisMonth } from "./month";
+import { daysBetween, isReportMonth, monthLabel, reportMonths, thisMonth, thisWeek } from "./month";
 
 describe("Showrunner months", () => {
   it("counts this month from the 1st in Central time, with YouTube's 3-day lag", () => {
@@ -23,5 +23,11 @@ describe("Showrunner months", () => {
   it("labels months and walks days", () => {
     expect(monthLabel("2026-08")).toBe("August 2026");
     expect(daysBetween("2026-11-29", "2026-12-01")).toEqual(["2026-11-29", "2026-11-30", "2026-12-01"]);
+  });
+
+  it("counts this week from Sunday; YouTube settles only from Wednesday", () => {
+    expect(thisWeek(new Date("2026-11-24T18:00:00Z"))).toMatchObject({ start: "2026-11-22", today: "2026-11-24", analyticsEnd: null, label: "Week of Nov 22" });
+    expect(thisWeek(new Date("2026-11-27T18:00:00Z")).analyticsEnd).toBe("2026-11-24");
+    expect(thisWeek(new Date("2026-11-22T18:00:00Z")).start).toBe("2026-11-22");
   });
 });

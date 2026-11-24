@@ -15,6 +15,7 @@ export function YouTubeGoalCard({
   pct,
   field,
   description,
+  editable = true,
 }: {
   brandId: string;
   label: string;
@@ -24,6 +25,8 @@ export function YouTubeGoalCard({
   pct: number;
   field: Field;
   description?: string;
+  /** False where the goal is derived (This Week) and edited elsewhere. */
+  editable?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(String(goal));
@@ -115,7 +118,7 @@ export function YouTubeGoalCard({
         <p className="shrink-0 text-lg font-bold tabular-nums text-slate-900">
           {Math.round(pct)}%{met ? <span className="ml-1 text-xs font-semibold text-emerald-700">met</span> : null}
         </p>
-        {!editing && (
+        {!editing && editable && (
           <button
             onClick={() => {
               setDraft(String(goal));
