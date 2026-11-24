@@ -1,4 +1,22 @@
 # SWapp handoff
+## 2026-11-23 — Temporary Codex Luna reviewer
+
+Tom requested Codex Luna until Sonnet is available. Default reviewer is now
+codex / gpt-6-luna; switch via SWAPP_SCAN_REVIEW_PROVIDER=claude and
+SWAPP_SCAN_REVIEW_MODEL=sonnet. Both providers share the bounded stdio MCP bridge
+in scripts/swapp_scan_tools.py, with no arbitrary shell execution or sends.
+Codex ignores user plugins/config and has shell tools disabled. Only this
+bridge tool is preapproved. Tool commands are argv arrays with a verb allowlist.
+
+Verified a real Luna call to quo status and ran the Texts SOP. Luna correctly
+reported incomplete native coverage, unknown remaining work and no completed
+actions. It found the cache had 177 conversation threads and 32 unread threads;
+initial lists covered 25 each. Native line inventory and spam/archive actions
+are still missing from the bridge. Added the read-only tasks alias and made
+the SOP explicit about --limit and the needs-reply category following the trial.
+Private trial report: ~/.local/state/swapp-source-review/luna-texts-trial.json.
+No live service or production deployment changed.
+
 ## 2026-11-23 — Source SOP review draft
 
 Tom reported that green scan checks did not reflect native Quo spam and pending

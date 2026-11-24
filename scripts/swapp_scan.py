@@ -548,7 +548,7 @@ def gather(state, post, rules):
             if stats.get("error"):
                 post(key, "needs-you", stats["error"][:200])
             else:
-                post(key, "scanning", "Data collected; Sonnet SOP review pending")
+                post(key, "scanning", "Data collected; Source SOP review pending")
     return all_leads, all_findings, all_hints, all_review, summary, auto
 
 
