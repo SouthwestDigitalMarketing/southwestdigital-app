@@ -72,3 +72,15 @@ export async function loadWeek(context: BrandDataContext): Promise<Week | null> 
   );
   return parseWeek(row?.weekly ?? null);
 }
+
+/** The newest published video's YouTube id, for the Series banner picture. */
+export async function loadLatestPublishedVideoId(context: BrandDataContext): Promise<string | null> {
+  const row = await withBrandDataTransaction(context, (tx) =>
+    tx.showrunnerVideoStatus.findFirst({
+      where: { brandId: context.brandId, url: { not: null } },
+      orderBy: { updatedAt: "desc" },
+      select: { url: true },
+    }),
+  );
+  return row?.url?.match(/[?&]v=([\w-]{6,20})/)?.[1] ?? null;
+}
