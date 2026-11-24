@@ -1,13 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
 import { getScanStatus, requestScan, type ScanStatus } from "@/app/(app)/scanActions";
 import { ScanModal } from "@/components/ScanModal";
 
 /** Header Scan button (sop-money-playbook): one press refreshes everything
- * that can be refreshed. Shows when the last scan landed and what changed. */
-export function ScanButton({ compact = false }: { compact?: boolean }) {
+ * that can be refreshed. Shows minutes since the last completed scan. */
+export function ScanButton({ compact = false, children }: { compact?: boolean; children?: ReactNode }) {
   const [status, setStatus] = useState<ScanStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -91,37 +91,34 @@ export function ScanButton({ compact = false }: { compact?: boolean }) {
   const running = busy || status?.running === true;
   return (
     <>
-    <ScanModal open={modalOpen} onClose={() => setModal(false)} />
-    <div className={compact ? "flex items-center gap-2" : "w-full"}>
-      <button
-        type="button"
-        onClick={scan}
-        disabled={busy}
-        aria-label="Scan for updates"
-        title={running ? "Scanning — tap to watch" : "Scan for updates"}
-        className={
-          compact
-            ? "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 disabled:opacity-50"
-            : "inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-        }
-      >
-        <RefreshCw size={compact ? 20 : 15} className={running ? "animate-spin" : undefined} />
-        {compact ? null : running ? "Scanning…" : "Scan"}
-      </button>
-      {compact ? null : (
-        <p className="mt-1 text-center text-xs text-slate-500">{status?.updatedAgo ?? "Never scanned"}</p>
-      )}
-      {!compact && status && !status.running && status.changes.length > 0 ? (
-        <details className="mt-1 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
-          <summary className="cursor-pointer font-medium">What changed</summary>
-          <ul className="mt-1 list-disc space-y-0.5 pl-4">
-            {status.changes.map((change, index) => (
-              <li key={`${change.kind}-${index}`}>{change.text}</li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
-    </div>
+      <ScanModal open={modalOpen} onClose={() => setModal(false)} />
+      <div className={compact ? "flex items-center" : "flex w-full items-center gap-2"}>
+        <button
+          type="button"
+          onClick={scan}
+          disabled={busy}
+          aria-label={status ? `Scan for updates. ${status.updatedAgo}` : "Scan for updates"}
+          title={running ? "Scanning — tap to watch" : "Scan for updates"}
+          className={
+            compact
+              ? "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 disabled:opacity-50"
+              : "inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          }
+        >
+          <RefreshCw size={compact ? 20 : 15} className={running ? "animate-spin" : undefined} />
+          {compact ? null : "Scan"}
+          {!compact && status?.minutesSinceUpdate != null && (
+            <span
+              className={`text-xs tabular-nums ${
+                status.minutesSinceUpdate < 30 ? "opacity-70" : status.minutesSinceUpdate > 60 ? "text-red-600" : ""
+              }`}
+            >
+              {status.minutesSinceUpdate}
+            </span>
+          )}
+        </button>
+        {children}
+      </div>
     </>
   );
 }
