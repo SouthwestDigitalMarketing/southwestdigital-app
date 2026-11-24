@@ -202,7 +202,6 @@ export function AppShell({
   // The phone menu closes when the route actually changes (Tom, 2026-11-20: closing it on tap
   // showed the previous page, usually the Dashboard, until the new one loaded).
   const pathname = usePathname();
-  const companyDashboard = isPlatformOperator && isLochsideBrandSlug(brand.slug) && (pathname === "/dashboard" || pathname === "/website");
   // Header Scan button (sop-money-playbook): Lochside operators only. Contigo
   // is a separate tenant and the scan sources are Lochside's.
   const showScan = isPlatformOperator && isLochsideBrandSlug(brand.slug);
@@ -508,7 +507,7 @@ export function AppShell({
           >
             <Menu size={20} />
           </button>
-          <span className="ml-3 min-w-0 truncate text-sm font-semibold text-slate-900">{companyDashboard ? "Lochside LLC" : brand.name}</span>
+          <span className="ml-3 min-w-0 truncate text-sm font-semibold text-slate-900">{isLochsideBrandSlug(brand.slug) ? "Lochside LLC" : brand.name}</span>
           <span className="ml-auto" />
           {showScan ? <ScanButton compact /> : null}
           <span className="pl-2">
