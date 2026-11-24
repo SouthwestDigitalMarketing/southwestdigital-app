@@ -1,4 +1,24 @@
 # SWapp handoff
+## 2026-11-24 (evening) — Series as a streaming-style show page (Johnny)
+
+- Tom: make Series look like a Netflix series page. Dark page: banner = text-free key art `public/showrunner/series-banner.jpg` (gpt-image-2: lit small-town
+  office on a pine road, city skyline far off) under a dark gradient; title, "New episodes Sundays ·
+  Season 1 · 6 episodes", white Play (The $10K Month playlist PLV4Wps_g39RI), Next episode (Sunday wrap-up page),
+  canon logline and season question; episode rows from release-schedule.json (16:9 number tile, red for next,
+  title = the week's wrap-up title for the next one, else "Week of ..."). Studio, New series and the channel map
+  stay at the bottom.
+
+## 2026-11-24 (evening) — Swipe between Showrunner tabs (Johnny)
+
+- `SwipeBetweenTabs` (src/components/SectionTabs.tsx) wraps the Showrunner pages: a sideways swipe (>= 70 px, mostly
+  horizontal, < 0.8 s) goes to the next/previous tab with `router.replace` (Back leaves the section). Touches that
+  start in something that scrolls sideways (calendar strip, tables), a field, or `data-no-swipe` are ignored.
+  While mounted it sets `overscroll-behavior-x: none` on <html>: in Chrome's mobile emulation a right swipe also
+  fired the browser's swipe-back, which skips history entries made without a user activation and landed on
+  /dashboard. `SectionTabs` now scrolls the current tab into view.
+- Verified with CDP touch events at 412 px: month->week->series, series->week->month, no move on the calendar strip
+  or past the last tab.
+
 ## 2026-11-24 (evening) — Side menu: no brand logo or brand switcher (Johnny)
 
 - Tom: "Lochside LLC is what this whole thing is about"; no Bookkeeping Conroe logo and no selector at all.
@@ -11,6 +31,8 @@
 - Tom: the first tab is **This Month**: every number on it counts from the 1st (Central) and resets monthly.
   `src/lib/showrunner/month.ts` (`thisMonth`, 3-day YouTube lag; nothing settled on days 1-3 shows zeros);
   `getSourceTagClicksCumulative(brandId, slug, since)` takes a start date ("Since Nov 1").
+- **This Week** is the first tab and the landing page (`/showrunner`; `/showrunner/week` redirects there); This Month
+  moved to `/showrunner/month` (`/showrunner/metrics` redirects there). Originally:
 - **This Week** tab (`/showrunner/week`): the same page (`ChannelPeriod.tsx`, period "week") from Sunday, the
   Sunday wrap-up's week. Views goal = monthly goal x 7/30, not editable there. With the 3-day YouTube lag, views
   are 0 Sunday-Tuesday; the page says from which day they show. Link clicks are live.

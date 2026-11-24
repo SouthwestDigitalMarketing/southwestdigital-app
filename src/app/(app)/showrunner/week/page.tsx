@@ -1,7 +1,6 @@
-import { ChannelPeriod } from "../ChannelPeriod";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
+/** This Week moved to the Showrunner landing page (Tom, 2026-11-24). */
 export default function ThisWeekPage() {
-  return <ChannelPeriod period="week" />;
+  redirect("/showrunner");
 }

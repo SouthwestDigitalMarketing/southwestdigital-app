@@ -72,3 +72,4 @@ export async function loadWeek(context: BrandDataContext): Promise<Week | null> 
   );
   return parseWeek(row?.weekly ?? null);
 }
+

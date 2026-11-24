@@ -3,76 +3,133 @@ import { requireAppBrand } from "@/lib/brands/staff";
 import { ChannelGraph } from "@/components/showrunner/ChannelGraph";
 import type { GraphData } from "@/lib/showrunner/graph-layout";
 import graphData from "@/lib/showrunner/channel-graph.json";
+import canon from "@/lib/showrunner/canon.json";
 import { loadWeek } from "@/lib/showrunner/load";
 import { schedule } from "@/lib/showrunner/release-schedule";
 import { releaseLabel } from "@/lib/showrunner/weekly";
-import { SundayCard } from "../SundayCard";
 
 export const dynamic = "force-dynamic";
 
-const card = "block rounded-2xl border border-slate-200 bg-white p-5 shadow-sm";
+// The $10K Month playlist on The Real Estate Bookkeeper channel (created in Studio 2026-11-19).
+const PLAYLIST_URL = "https://www.youtube.com/playlist?list=PLV4Wps_g39RI";
 
 /** Read once per request; the purity lint rejects Date.now() inside a component. */
 function requestNow() {
   return Date.now();
 }
 
-/** The season: each Sunday's wrap-up is built from that week's daily videos (Tom, 2026-11-24). */
+function weekOf(releaseAt: string) {
+  const start = new Date(Date.parse(releaseAt) - 7 * 86_400_000);
+  return `Week of ${start.toLocaleDateString("en-US", { timeZone: schedule.timezone, month: "short", day: "numeric" })}`;
+}
+
+/**
+ * The series as a streaming-style show page (Tom, 2026-11-24): a dark banner with the title, season line and
+ * premise, Play (the playlist) and the next episode, then the episode list. Each Sunday episode wraps up its week.
+ */
 export default async function SeriesPage() {
   const { dataContext } = await requireAppBrand();
   const week = await loadWeek(dataContext);
+
   const now = requestNow();
-  const next = schedule.releases.find((release) => Date.parse(release.at) > now - 6 * 3600_000);
+  const next = schedule.releases.find((release) => Date.parse(release.at) > now - 6 * 3600_000) ?? null;
+  const nextWeek = week && next && week.release.slice(0, 10) === next.at.slice(0, 10) ? week : null;
 
   return (
-    <div className="p-4 sm:p-8">
-      <h1 className="text-2xl font-semibold text-slate-900">{schedule.season}</h1>
-      <p className="mt-1 text-slate-600">
-        Season 1 · {schedule.releases.length} episodes · Sundays 5 PM. Each one wraps up that week, with clips from the daily videos.
-      </p>
-      <div className="mt-5 max-w-xl">
-        <SundayCard week={week} />
-        <ol className="flex flex-col gap-2">
+    <div className="min-h-full bg-neutral-950 pb-10 text-white">
+      <section className="relative overflow-hidden">
+        {/* Series key art, no text (gpt-image-2, 2026-11-24): a lit small-town office on a pine road, a city far off. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/showrunner/series-banner.jpg" alt="" className="absolute inset-0 h-full w-full object-cover object-[78%_center] opacity-80" />
+        <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-neutral-950/70 to-neutral-950/10" />
+        <div className="relative px-4 pt-40 pb-6 sm:px-8 sm:pt-56">
+          <p className="text-xs font-bold uppercase tracking-[0.25em] text-red-500">Series</p>
+          <h1 className="mt-1 text-4xl font-black tracking-tight sm:text-6xl">{canon.title}</h1>
+          <p className="mt-2 text-sm text-neutral-300">
+            <span className="font-semibold text-emerald-400">New episodes Sundays</span> · Season 1 · {schedule.releases.length} episodes
+          </p>
+          <div className="mt-4 flex max-w-xl flex-col gap-2 sm:flex-row">
+            <a
+              href={PLAYLIST_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 rounded-md bg-white px-5 py-3 text-base font-bold text-black hover:bg-neutral-200"
+            >
+              <span aria-hidden="true">▶</span> Play
+            </a>
+            <Link
+              href="/showrunner/series/sunday"
+              className="flex items-center justify-center rounded-md bg-neutral-700/80 px-5 py-3 text-base font-semibold text-white hover:bg-neutral-600"
+            >
+              Next episode{next ? ` · ${releaseLabel(next.at).replace(/^\w+, /, "")}` : ""}
+            </Link>
+          </div>
+          <p className="mt-4 max-w-xl text-sm leading-relaxed text-neutral-200">{canon.logline}</p>
+          <p className="mt-2 max-w-xl text-xs text-neutral-400">{canon.seasonQuestion}</p>
+        </div>
+      </section>
+
+      <section className="px-4 sm:px-8">
+        <div className="flex items-baseline justify-between border-t border-neutral-800 pt-4">
+          <h2 className="text-lg font-bold">Episodes</h2>
+          <span className="text-sm text-neutral-400">Season 1</span>
+        </div>
+        <ol className="mt-3 flex max-w-3xl flex-col">
           {schedule.releases.map((release) => {
             const aired = Date.parse(release.at) < now;
             const isNext = release === next;
-            return (
-              <li
-                key={release.episode}
-                className={`flex items-center justify-between rounded-xl border px-4 py-3 ${
-                  isNext ? "border-rose-300 bg-rose-50" : "border-slate-200 bg-white"
-                }`}
-              >
-                <span className="text-sm font-semibold text-slate-900">Episode {release.episode}</span>
-                <span className="text-sm text-slate-600">{releaseLabel(release.at)}</span>
-                <span
-                  className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                    aired ? "bg-emerald-50 text-emerald-700" : isNext ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-500"
+            const title = isNext && nextWeek?.title ? nextWeek.title : weekOf(release.at);
+            const blurb = isNext
+              ? nextWeek?.question || "This week's wrap-up: the numbers, the work and clips from the daily videos."
+              : aired
+                ? "The week's wrap-up."
+                : "Wraps up the week before it airs.";
+            const inner = (
+              <div className="flex gap-3 py-3">
+                <div
+                  className={`relative flex aspect-video w-32 shrink-0 items-center justify-center overflow-hidden rounded-md sm:w-44 ${
+                    isNext ? "bg-red-700" : "bg-neutral-800"
                   }`}
                 >
-                  {aired ? "Aired" : isNext ? "Next" : "Planned"}
-                </span>
+                  <span className="text-3xl font-black text-white/90">{release.episode}</span>
+                  {isNext ? (
+                    <span className="absolute bottom-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-bold uppercase">Next</span>
+                  ) : null}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold leading-snug">
+                    {release.episode}. {title}
+                  </p>
+                  <p className="mt-0.5 text-xs text-neutral-400">
+                    {releaseLabel(release.at)} · {aired ? "Aired" : isNext ? "Up next" : "Coming"}
+                  </p>
+                  <p className="mt-1 line-clamp-2 text-xs text-neutral-300">{blurb}</p>
+                </div>
+              </div>
+            );
+            return (
+              <li key={release.episode} className="border-b border-neutral-800/80">
+                {isNext ? <Link href="/showrunner/series/sunday" className="block hover:bg-neutral-900">{inner}</Link> : inner}
               </li>
             );
           })}
         </ol>
-      </div>
-      <div className="mt-6 flex max-w-xl flex-col gap-4">
-        <Link href="/showrunner/studio" className={`${card} hover:border-indigo-400`}>
-          <p className="text-lg font-semibold text-slate-900">Studio · the mountain to $10K</p>
-          <p className="mt-1 text-sm text-slate-600">Where the business stands and the storylines Showrunner sees.</p>
-        </Link>
-        <Link href="/showrunner/new-series" className={`${card} hover:border-slate-400`}>
-          <p className="text-lg font-semibold text-slate-900">New series</p>
-          <p className="mt-1 text-sm text-slate-600">Showrunner suggests a series from your channel and business.</p>
-        </Link>
-      </div>
-      <details className="mt-6 max-w-3xl">
-        <summary className="cursor-pointer text-sm font-semibold text-slate-600">Channel map</summary>
-        <div className="mt-3">
-          <ChannelGraph data={graphData as GraphData} />
+
+        <div className="mt-6 flex max-w-3xl flex-col gap-2 text-sm">
+          <Link href="/showrunner/studio" className="rounded-md bg-neutral-900 px-4 py-3 font-semibold hover:bg-neutral-800">
+            Studio · the mountain to $10K
+          </Link>
+          <Link href="/showrunner/new-series" className="rounded-md bg-neutral-900 px-4 py-3 font-semibold hover:bg-neutral-800">
+            New series
+          </Link>
         </div>
-      </details>
+        <details className="mt-6 max-w-3xl">
+          <summary className="cursor-pointer text-sm font-semibold text-neutral-400">Channel map</summary>
+          <div className="mt-3 rounded-xl bg-white p-2">
+            <ChannelGraph data={graphData as GraphData} />
+          </div>
+        </details>
+      </section>
     </div>
   );
 }
