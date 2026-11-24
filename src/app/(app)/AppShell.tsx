@@ -58,8 +58,8 @@ const NAV: Array<{
 }> = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, exact: true },
   { label: "Financial Reports", href: "/reports", icon: FileText },
-  { label: "Operations", href: "/operations", icon: ListChecks },
   { label: "Scanner", href: "/scanner", icon: Radar },
+  { label: "Operations", href: "/operations", icon: ListChecks },
   { label: "Local SEO", href: "/local-seo", icon: MapPinned },
   { label: "Website", href: "/website", icon: Globe },
   { label: "Showrunner", href: "/showrunner", icon: Clapperboard },
