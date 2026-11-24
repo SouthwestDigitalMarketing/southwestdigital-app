@@ -37,7 +37,10 @@
 - Tom: "Lochside LLC is what this whole thing is about"; no Bookkeeping Conroe logo and no selector at all.
   AppShell's sidebar block with the brand logo and the `selectBrand` dropdown is removed for everyone; the menu
   goes profile, Scan, nav. `/select-brand` and its action still exist (nothing links to them from the menu);
-  `accessibleBrands` is still passed to AppShell but unused. The top bar still shows the active brand's name.
+  `accessibleBrands` is still passed to AppShell but unused. Later the same evening: the phone top bar shows no
+  brand name at all; the profile row (initial, name, profile popup) is gone too (one user): Sign out is the last
+  menu item, the drawer's close button sits on the Scan row, and the privacy toggle moved to the Scan row (or its
+  own row when there is no Scan).
 
 ## 2026-11-24 (evening) — This Month and Reports (Johnny)
 
