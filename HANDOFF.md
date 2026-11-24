@@ -1,4 +1,15 @@
 # SWapp handoff
+## 2026-11-24 (evening) — Swipe between Showrunner tabs (Johnny)
+
+- `SwipeBetweenTabs` (src/components/SectionTabs.tsx) wraps the Showrunner pages: a sideways swipe (>= 70 px, mostly
+  horizontal, < 0.8 s) goes to the next/previous tab with `router.replace` (Back leaves the section). Touches that
+  start in something that scrolls sideways (calendar strip, tables), a field, or `data-no-swipe` are ignored.
+  While mounted it sets `overscroll-behavior-x: none` on <html>: in Chrome's mobile emulation a right swipe also
+  fired the browser's swipe-back, which skips history entries made without a user activation and landed on
+  /dashboard. `SectionTabs` now scrolls the current tab into view.
+- Verified with CDP touch events at 412 px: month->week->series, series->week->month, no move on the calendar strip
+  or past the last tab.
+
 ## 2026-11-24 (evening) — Side menu: no brand logo or brand switcher (Johnny)
 
 - Tom: "Lochside LLC is what this whole thing is about"; no Bookkeeping Conroe logo and no selector at all.
