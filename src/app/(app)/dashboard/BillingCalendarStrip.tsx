@@ -15,8 +15,9 @@ const EVENT_STYLE: Record<BillingEvent, { dot: string; text: string; label: stri
     detail: "The 1st. Clients pay their invoice.",
   },
   reminders: {
-    dot: "bg-blue-600 text-white",
-    text: "text-blue-700",
+    // Light green with the payday green as its border (Tom, 2026-11-24).
+    dot: "border-2 border-emerald-600 bg-emerald-50 text-emerald-800",
+    text: "text-emerald-700",
     label: "Invoice reminders go out",
     detail: "3 days before the last day of the month. Clients hear their invoice is coming.",
   },
