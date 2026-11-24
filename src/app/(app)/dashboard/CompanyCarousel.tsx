@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { MetricsView } from "@/lib/companyMetrics/summary";
 
 type CashFlow = { month: string; asOf: string; valueUsd: number; stale: boolean } | null;
@@ -17,38 +17,51 @@ function response(value: number | null) {
 
 type Part = { slug: string; name: string; value: number; display: string; color: string };
 
-/** A thin bar split by brand; tap a piece (or hover) to read it. Pieces are drawn only for amounts above zero. */
+/**
+ * A thin bar split by brand, no legend (Tom, 2026-11-24). Tap the bar for what makes up the number: each brand's
+ * amount and share, in a small pop-up over the card; tap again or anywhere else to close it.
+ */
 function SplitBar({ parts, label }: { parts: Part[]; label: string }) {
-  const [picked, setPicked] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: PointerEvent) => { if (!box.current?.contains(event.target as Node)) setOpen(false); };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [open]);
   const total = parts.reduce((n, p) => n + Math.max(0, p.value), 0);
-  const shown = parts.find((p) => p.slug === picked);
+  const share = (p: Part) => (total > 0 ? Math.round((Math.max(0, p.value) / total) * 100) : 0);
+  const summary = parts.map((p) => `${p.name} ${p.display} (${share(p)}%)`).join(", ");
   return (
-    <div className="mt-2.5">
-      <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-100" role="img" aria-label={`${label} by brand: ${parts.map((p) => `${p.name} ${p.display}`).join(", ")}`}>
-        {total > 0
-          ? parts.filter((p) => p.value > 0).map((p) => (
-            <button
-              key={p.slug}
-              type="button"
-              title={`${p.name}: ${p.display}`}
-              onClick={() => setPicked(picked === p.slug ? null : p.slug)}
-              className="brand-split-seg h-full"
-              style={{ width: `${(p.value / total) * 100}%`, ["--seg" as string]: p.color }}
-            />
-          ))
-          : null}
-      </div>
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
-        {parts.map((p) => (
-          <button key={p.slug} type="button" onClick={() => setPicked(picked === p.slug ? null : p.slug)} className="inline-flex items-center gap-1.5">
-            <span className="brand-split-seg h-2.5 w-2.5 rounded-full" style={{ ["--seg" as string]: p.color }} />
-            <span className={picked === p.slug ? "font-semibold text-slate-900" : undefined}>{p.name}</span>
-            <span className="font-semibold tabular-nums text-slate-900">{p.display}</span>
-          </button>
-        ))}
-      </div>
-      {shown && total > 0 ? (
-        <p className="mt-1 text-xs text-slate-500">{shown.name}: {Math.round((Math.max(0, shown.value) / total) * 100)}% of the total</p>
+    <div ref={box} className="relative mt-2.5">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-label={`${label} by brand: ${summary}`}
+        title={summary}
+        className="flex w-full py-1.5"
+      >
+        <span className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+          {total > 0
+            ? parts.filter((p) => p.value > 0).map((p) => (
+              <span key={p.slug} className="brand-split-seg h-full" style={{ width: `${(p.value / total) * 100}%`, ["--seg" as string]: p.color }} />
+            ))
+            : null}
+        </span>
+      </button>
+      {open ? (
+        <div role="status" className="absolute left-0 right-0 top-full z-20 mt-1 rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-lg">
+          {parts.map((p) => (
+            <p key={p.slug} className="flex items-center gap-2 py-0.5">
+              <span className="brand-split-seg h-2.5 w-2.5 shrink-0 rounded-full" style={{ ["--seg" as string]: p.color }} />
+              <span className="min-w-0 flex-1 text-slate-700">{p.name}</span>
+              <span className="font-semibold tabular-nums text-slate-900">{p.display}</span>
+              <span className="w-10 text-right tabular-nums text-slate-500">{share(p)}%</span>
+            </p>
+          ))}
+        </div>
       ) : null}
     </div>
   );
