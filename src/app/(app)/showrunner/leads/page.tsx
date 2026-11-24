@@ -7,6 +7,7 @@ import { getChannelMetrics } from "@/lib/youtube/analytics";
 import { getYouTubeRefreshToken } from "@/lib/youtube/credentials";
 import { getSourceTagVideos, type SourceTagVideo } from "@/lib/youtube/sourceTagVideos";
 import { LinkClicksTable } from "../LinkClicksTable";
+import { SampleNumbersBanner } from "@/components/showrunner/SampleNumbersBanner";
 
 export const dynamic = "force-dynamic";
 
@@ -85,6 +86,7 @@ export default async function LeadsPage() {
 
   return (
     <div className="px-4 py-5 sm:p-8">
+      <SampleNumbersBanner />
       <h1 className="text-2xl font-semibold text-slate-900">From videos to clients</h1>
       <div className="mt-4 grid max-w-3xl grid-cols-2 gap-3 sm:grid-cols-4">
         {steps.map((step, i) => (

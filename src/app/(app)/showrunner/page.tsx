@@ -19,6 +19,7 @@ import { LinkClicksTable } from "./LinkClicksTable";
 import { ReleaseCalendar } from "./ReleaseCalendar";
 import { getYouTubeRefreshToken } from "@/lib/youtube/credentials";
 import { VideoList } from "./VideoList";
+import { SampleNumbersBanner } from "@/components/showrunner/SampleNumbersBanner";
 
 function YouTubeIcon({ className }: { className?: string }) {
   return (
@@ -58,6 +59,7 @@ export default async function OverviewPage() {
   if (!theme?.youtubeChannelId) {
     return (
       <div className="px-4 py-5 sm:p-8">
+        <SampleNumbersBanner />
         <h1 className="sr-only">Overview</h1>
         <div className="mb-6"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
@@ -71,6 +73,7 @@ export default async function OverviewPage() {
   if (!refreshToken) {
     return (
       <div className="px-4 py-5 sm:p-8">
+        <SampleNumbersBanner />
         <h1 className="sr-only">Overview</h1>
         <div className="mb-6"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
@@ -134,6 +137,7 @@ export default async function OverviewPage() {
   if (error || !metrics) {
     return (
       <div className="px-4 py-5 sm:p-8">
+        <SampleNumbersBanner />
         <h1 className="sr-only">Overview</h1>
         <div className="mb-6"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
@@ -182,6 +186,7 @@ export default async function OverviewPage() {
 
   return (
     <div className="px-4 py-5 sm:p-8">
+      <SampleNumbersBanner />
       <h1 className="sr-only">Overview</h1>
       <div className="mb-6"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
       <div>
