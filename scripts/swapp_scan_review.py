@@ -112,6 +112,8 @@ def validate_report(report):
 def review_source(source, context):
     contract = (ROOT / "docs/scan-sops/README.md").read_text()
     procedure = (ROOT / ("docs/scan-sops/" + source + ".md")).read_text()
+    if source.startswith("quo-"):
+        procedure += "\n" + (ROOT / "docs/scan-sops/quo-intake-policy.md").read_text()
     vault = Path.home() / "vaults/all-thing/sops"
     related = []
     for name in sorted(set(re.findall(r"\b(?:sop-[a-z-]+|scan-rulebook)\b", procedure))):

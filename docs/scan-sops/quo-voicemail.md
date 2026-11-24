@@ -1,9 +1,13 @@
 # Voicemail (Quo)
 
+Follow [Quo intake, recordings and provisional spam](quo-intake-policy.md)
+for cross-channel recording/transcript filing, lead folders, live Quo contact
+updates and the 14-day Potential spam hold.
+
 1. Follow All Thing sop-voicemail-intake. Inventory every line and every pending
    voicemail, including older and previously seen IDs. Compare native Quo with
    intake logs; a log of the last 15 entries does not prove full coverage.
-2. Read transcript and caller context. Pending transcription or missing recording
+2. Download and verify the recording, save its transcript, and analyze caller context. Pending transcription or missing recording
    is a blocker. Reuse the contact and callback task by voicemail/call ID.
 3. Genuine callers need supported identity/need, correct brand, owner, due date,
    and callback task. Existing clients get follow-up without duplicate leads.

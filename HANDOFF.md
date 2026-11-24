@@ -1,4 +1,18 @@
 # SWapp handoff
+## 2026-11-23 — Recording and provisional-spam policy
+
+Tom specified voicemail download/transcription/analysis, filing on Ripley,
+lead folders and native Quo contact updates, plus a two-week provisional hold
+for unknown callers who leave no message (may be saving a sign's number).
+Captured in docs/scan-sops/quo-intake-policy.md and loaded into every Quo source
+review. Existing storage is clients/_leads/<lead>/comms and _unfiled-calls/date;
+All Thing lead pages/diaries link to those files. Existing clients and genuine
+non-sales contacts are protected. Age alone never confirms spam. Day 14
+raises a cleanup decision, with no automatic delete. Stable caller IDs and
+hold timestamps must survive retries. This is the policy definition; media
+download/transcription, native Quo labels/contact writes and the persisted
+14-day hold are not yet implemented in the bounded tool bridge.
+
 ## 2026-11-23 — Temporary Codex Luna reviewer
 
 Tom requested Codex Luna until Sonnet is available. Default reviewer is now

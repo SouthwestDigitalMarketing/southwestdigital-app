@@ -1,5 +1,9 @@
 # Texts (Quo)
 
+Follow [Quo intake, recordings and provisional spam](quo-intake-policy.md)
+for cross-channel recording/transcript filing, lead folders, live Quo contact
+updates and the 14-day Potential spam hold.
+
 1. Discover every phone line with quo status. Inspect the native Quo backlog and
    the local sms unread, needs-reply, incoming and starred views across all time.
    Inspect CLI help before using unfamiliar commands. Compare native and cached
