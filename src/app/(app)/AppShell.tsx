@@ -486,10 +486,11 @@ export function AppShell({
 
       {open && (
         <Modal onClose={() => setOpen(false)} label="Main navigation" className="ui-navigation-drawer">
-          <div className="flex justify-end border-b border-slate-200 bg-white p-2">
-            <button type="button" onClick={() => setOpen(false)} aria-label="Close navigation" className="inline-flex h-11 w-11 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100"><X size={20} /></button>
+          {/* Close sits in the profile row instead of a row of its own (Tom, 2026-11-24: save space at the top). */}
+          <div className="relative">
+            <button type="button" onClick={() => setOpen(false)} aria-label="Close navigation" className="absolute right-2 top-0.5 z-10 inline-flex h-11 w-11 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100"><X size={20} /></button>
+            <aside>{sidebar}</aside>
           </div>
-          <aside>{sidebar}</aside>
         </Modal>
       )}
 
@@ -507,7 +508,6 @@ export function AppShell({
           >
             <Menu size={20} />
           </button>
-          <span className="ml-3 min-w-0 truncate text-sm font-semibold text-slate-900">{isLochsideBrandSlug(brand.slug) ? "Lochside LLC" : brand.name}</span>
           <span className="ml-auto" />
           {showScan ? <ScanButton compact /> : null}
           <span className="pl-2">
