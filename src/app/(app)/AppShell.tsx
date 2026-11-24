@@ -324,10 +324,11 @@ export function AppShell({
           <div className={`min-w-0 flex-1 ${collapsed ? "hidden" : ""}`}>
             <p className="truncate text-sm font-medium" style={{ color: navTextColor }}>{profileName}</p>
           </div>
-          {/* The phone header has its own switch; this one is for the desktop sidebar. */}
-          <span className="max-lg:hidden">
-            <PrivacyToggle on={privacy} iconOnly={collapsed} />
-          </span>
+          {(!showScan || collapsed) && (
+            <span className="max-lg:hidden">
+              <PrivacyToggle on={privacy} iconOnly={collapsed} />
+            </span>
+          )}
         </div>
       </div>
       <div
@@ -391,7 +392,11 @@ export function AppShell({
               <ScanButton compact />
             </div>
           ) : (
-            <ScanButton />
+            <ScanButton>
+              <span className="hidden shrink-0 lg:inline-flex">
+                <PrivacyToggle on={privacy} sidebarAction />
+              </span>
+            </ScanButton>
           )}
         </div>
       ) : null}

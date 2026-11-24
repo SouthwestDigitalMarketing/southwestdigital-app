@@ -21,10 +21,11 @@ export type ScanStatus = {
    * The sheet explains it; tapping Scan starts a fresh one. */
   stuck: boolean;
   updatedAgo: string;
+  minutesSinceUpdate: number | null;
   changes: ScanChange[];
   sources: ScanSourceState[];
   questions: ScanQuestionView[];
-  recentlyAnswered: { id: string; what: string; answerKey: string | null }[];
+  recentlyAnswered: { id: string; what: string; answerKey: string | null; answerLabel: string | null }[];
   scoreboard: { askedWeek: number; answeredWeek: number; open: number };
   autoApplied: string[];
 };
@@ -86,8 +87,7 @@ export async function getScanStatus(): Promise<ScanStatus> {
   const recentlyAnswered = await prisma.scanQuestion.findMany({
     where: { status: "answered", answeredAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
     orderBy: { answeredAt: "desc" },
-    take: 3,
-    select: { id: true, what: true, answerKey: true },
+    select: { id: true, what: true, answerKey: true, options: true },
   });
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const [askedWeek, answeredWeek, open] = await Promise.all([
@@ -99,8 +99,11 @@ export async function getScanStatus(): Promise<ScanStatus> {
   return {
     running: active !== null,
     stuck: active !== null && scanRunStaleness(active) === "stale",
+    minutesSinceUpdate: lastDone?.finishedAt
+      ? Math.max(0, Math.floor((Date.now() - lastDone.finishedAt.getTime()) / 60_000))
+      : null,
     updatedAgo: formatUpdatedAgo(lastDone?.finishedAt ?? null),
-    changes: changes.slice(0, 10),
+    changes,
     sources: readSources(shown?.sources),
     questions: questions.map((row) => ({
       id: row.id,
@@ -110,9 +113,15 @@ export async function getScanStatus(): Promise<ScanStatus> {
       answered: false,
       answerKey: null,
     })),
-    recentlyAnswered: recentlyAnswered.map((row) => ({ id: row.id, what: row.what, answerKey: row.answerKey })),
+    recentlyAnswered: recentlyAnswered.map((row) => ({
+      id: row.id,
+      what: row.what,
+      answerKey: row.answerKey,
+      answerLabel: (Array.isArray(row.options) ? row.options as QuestionOption[] : [])
+        .find((option) => option.key === row.answerKey)?.label ?? row.answerKey,
+    })),
     scoreboard: { askedWeek, answeredWeek, open },
-    autoApplied: Array.isArray(summary.autoApplied) ? (summary.autoApplied as string[]).slice(0, 6) : [],
+    autoApplied: Array.isArray(summary.autoApplied) ? (summary.autoApplied as string[]) : [],
   };
 }
 
