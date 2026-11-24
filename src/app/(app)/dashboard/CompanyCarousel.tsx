@@ -184,10 +184,12 @@ const OFFER_STATUS: Record<string, { label: string; tone: string }> = {
 };
 
 /** The Offers card's list: each offer sent in the period with its amount and status, linking to it; then all offers. */
-function OfferList({ offers, colors }: { offers: CompanyOffer[]; colors: Record<string, string> }) {
+function OfferList({ offers: all, colors }: { offers: CompanyOffer[]; colors: Record<string, string> }) {
+  // Signed offers are done; the list shows only those still in play (Tom, 2026-11-24). The count keeps them.
+  const offers = all.filter((offer) => offer.status !== "completed");
   return (
     <div>
-      {offers.length === 0 ? <p className="text-sm text-slate-500">No offers sent in this period.</p> : (
+      {offers.length === 0 ? <p className="text-sm text-slate-500">No open offers in this period.</p> : (
         <ul className="flex flex-col">
           {offers.map((offer) => {
             const status = OFFER_STATUS[offer.status] ?? { label: offer.status, tone: "bg-slate-100 text-slate-700" };
