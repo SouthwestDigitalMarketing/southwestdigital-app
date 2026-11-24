@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { initialSources, isKnownSource, parseSourceProgress, sortSources } from "./sources";
 
 describe("scan sources", () => {
-  it("starts the QuickBooks line needing Tom and everything else waiting", () => {
+  it("starts every source waiting for an actual SOP access check", () => {
     const sources = initialSources();
     expect(sources).toHaveLength(7);
-    expect(sources[0]).toMatchObject({ source: "quickbooks", label: "QuickBooks", status: "needs-you" });
+    expect(sources[0]).toMatchObject({ source: "quickbooks", label: "QuickBooks", status: "waiting" });
     expect(sources.slice(1).every((row) => row.status === "waiting")).toBe(true);
     expect(sources[0].loginUrl).toBe("https://app.qbo.intuit.com");
   });

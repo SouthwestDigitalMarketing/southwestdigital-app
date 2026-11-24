@@ -150,10 +150,6 @@ function ScanSteps({ onClose }: { onClose: () => void }) {
         <div key={step} className="min-h-0 overflow-y-auto">
           {step === 1 ? (
             <>
-              <p className="mt-1 shrink-0 text-xs text-slate-500">
-                The Log in link opens QuickBooks in a new tab — sign in there, then come back here. Your scan keeps
-                running.
-              </p>
               {status?.stuck ? (
                 <p className="mt-2 shrink-0 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
                   This scan has been waiting a while and may never start — tap Scan for a fresh one.
@@ -193,7 +189,13 @@ function ScanSteps({ onClose }: { onClose: () => void }) {
             </>
           ) : step === 2 ? (
             <>
-              {!status || status.questions.length === 0 ? (
+              {status?.sources.filter((source) => source.status === "needs-you").map((source) => (
+                <div key={source.source} className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm">
+                  <p className="font-medium text-slate-900">{source.label}</p>
+                  <p className="mt-1 break-words text-slate-700">{source.detail ?? "SOP review needs attention."}</p>
+                </div>
+              ))}
+              {!status || (status.questions.length === 0 && !status.sources.some((source) => source.status === "needs-you")) ? (
                 <p className="mt-3 text-sm text-slate-600" role="status">
                   {status ? "No items need your call." : "Loading decisions…"}
                 </p>

@@ -13,11 +13,9 @@ export type ScanSourceState = {
 
 export const QBO_LOGIN_URL = "https://app.qbo.intuit.com";
 
-const DEFS: { source: string; label: string; loginUrl?: string; loginLabel?: string; needsLogin?: boolean }[] = [
-  // Human-login sources first: they pin at the top until Tom signs in.
-  // v1 only checks their login state; the QBO sync itself comes later.
-  // One QuickBooks line (access + Contracts share one sign-in).
-  { source: "quickbooks", label: "QuickBooks", loginUrl: QBO_LOGIN_URL, loginLabel: "Log in", needsLogin: true },
+const DEFS: { source: string; label: string; loginUrl?: string; loginLabel?: string }[] = [
+  // Each source waits for an actual access check and SOP review.
+  { source: "quickbooks", label: "QuickBooks", loginUrl: QBO_LOGIN_URL, loginLabel: "Open QuickBooks" },
   { source: "quo-sms", label: "Texts (Quo)" },
   { source: "quo-calls", label: "Calls (Quo)" },
   { source: "quo-voicemail", label: "Voicemail (Quo)" },
@@ -26,13 +24,12 @@ const DEFS: { source: string; label: string; loginUrl?: string; loginLabel?: str
   { source: "ga4", label: "Traffic (GA4)" },
 ];
 
-/** Fresh per-source rows for a new run: the QuickBooks line starts needing
- * Tom with no explanation text, just the label and the Log in link. */
+/** Every source awaits a real access check; no synthetic login failures. */
 export function initialSources(): ScanSourceState[] {
   return DEFS.map((def) => ({
     source: def.source,
     label: def.label,
-    status: def.needsLogin ? "needs-you" : "waiting",
+    status: "waiting",
     detail: null,
     loginUrl: def.loginUrl ?? null,
     loginLabel: def.loginLabel ?? null,

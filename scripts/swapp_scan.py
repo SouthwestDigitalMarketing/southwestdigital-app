@@ -29,6 +29,8 @@ import time
 import urllib.error
 import urllib.request
 
+from swapp_scan_review import run_reviews
+
 CONFIG = os.environ.get("SWAPP_SCAN_CONFIG") or os.path.expanduser("~/.config/swapp-scan/env")
 STATE = os.environ.get("SWAPP_SCAN_STATE") or os.path.expanduser("~/.local/share/swapp-scan/state.json")
 SALES_DB = os.path.expanduser("~/.local/share/lochside-sales/sales.db")
@@ -546,7 +548,7 @@ def gather(state, post, rules):
             if stats.get("error"):
                 post(key, "needs-you", stats["error"][:200])
             else:
-                post(key, "done", (findings[0]["text"] if findings else "No changes"))
+                post(key, "scanning", "Data collected; Sonnet SOP review pending")
     return all_leads, all_findings, all_hints, all_review, summary, auto
 
 
@@ -624,6 +626,9 @@ def scan_once(swapp_url, token):
     clean_findings, clean_stats = housekeeping(manual)
     findings.extend(clean_findings)
     summary["cleanup"] = clean_stats
+    source_reviews, review_changes = run_reviews(run_id, summary, post)
+    summary["sourceReviews"] = source_reviews
+    findings.extend(review_changes)
     status, done = api(swapp_url + "/api/scan/complete", token, "POST", body={
         "runId": run_id,
         "summary": summary,

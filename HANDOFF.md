@@ -1,4 +1,28 @@
 # SWapp handoff
+## 2026-11-23 — Source SOP review draft
+
+Tom reported that green scan checks did not reflect native Quo spam and pending
+work. Added seven source SOPs in docs/scan-sops and a sequential Sonnet reviewer
+in scripts/swapp_scan_review.py. The collector now waits for SOP review, and
+the complete endpoint preserves per-source results instead of blanket checks.
+Only full coverage, zero remaining items, read-back evidence and no pending
+decisions earn a check. Native-account coverage must be verified separately
+from the capped Sales cache. Unsupported native Quo cleanup, browser access,
+proposal and GA4 queries remain explicit blockers with this runner's bounded
+CLI tool set. Live cleanup has NOT been demonstrated.
+
+The runner allows inspected read verbs and internal task/draft/folder work,
+excludes sends/permanent deletion, serializes demo/prod reviews, and records
+private evidence in ~/.local/state/swapp-source-review/reviews.jsonl. Max
+runtime is five minutes per source; the stale-running bound is one hour.
+No timer, service or production deployment has been changed for this draft.
+
+Checks: TypeScript, changed-file ESLint, Python compilation, 22 scan tests and
+six fixture review-status cases passed. Real Sonnet CLI check failed with
+HTTP 429 usage_limit_reached; account weekly limit resets 9pm Chicago.
+Next live verification requires available Sonnet quota. Keep this draft
+separate from the active swapp-scan-fixes poller until verified.
+
 
 ## 2026-11-23 — Calendar popup above; remove guide clutter
 
