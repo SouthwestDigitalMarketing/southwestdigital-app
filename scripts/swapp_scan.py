@@ -30,6 +30,7 @@ import urllib.error
 import urllib.request
 
 from swapp_scan_review import run_reviews
+from swapp_quo_intake import execute as quo_intake
 
 CONFIG = os.environ.get("SWAPP_SCAN_CONFIG") or os.path.expanduser("~/.config/swapp-scan/env")
 STATE = os.environ.get("SWAPP_SCAN_STATE") or os.path.expanduser("~/.local/share/swapp-scan/state.json")
@@ -541,7 +542,8 @@ def gather(state, post, rules):
                 leads, findings, stats, seen, review = out
                 state[{"quo-sms": "sms_ids", "quo-calls": "call_ids",
                        "quo-voicemail": "voicemail_keys"}[key]] = seen
-            all_leads.extend(leads)
+            if key == "zoho":
+                all_leads.extend(leads)
             all_findings.extend(findings)
             all_review.extend(review)
             summary[name] = stats
@@ -618,15 +620,14 @@ def scan_once(swapp_url, token):
     if sync_code != 0:
         for key in ("quo-sms", "quo-calls"):
             post(key, "needs-you", "Quo sync failed — check the Quo session, then Scan again")
-    intake_code, _ = run(["voicemail-intake", "run"], timeout=180)
-    if intake_code != 0:
-        post("quo-voicemail", "needs-you", "Voicemail intake failed — check it, then Scan again")
     leads, findings, hints, review, summary, auto = gather(state, post, scan_rules)
     auto_labels.extend(auto)
     clean_findings, clean_stats = housekeeping(manual)
     findings.extend(clean_findings)
     summary["cleanup"] = clean_stats
     source_reviews, review_changes = run_reviews(run_id, summary, post)
+    native_leads = quo_intake("lead_exports", destination=swapp_url)[:max(0, 20 - len(leads))]
+    leads = [*leads, *native_leads]
     summary["sourceReviews"] = source_reviews
     findings.extend(review_changes)
     status, done = api(swapp_url + "/api/scan/complete", token, "POST", body={
@@ -641,6 +642,7 @@ def scan_once(swapp_url, token):
     if status != 200:
         print("complete failed: HTTP %d" % status, flush=True)
         return False
+    quo_intake("acknowledge_exports", keys=[lead["key"] for lead in native_leads], destination=swapp_url)
     save_state(state)
     print("scan done: %d change(s), %d lead(s) created." % (done.get("saved", 0), done.get("leadsCreated", 0)),
           flush=True)

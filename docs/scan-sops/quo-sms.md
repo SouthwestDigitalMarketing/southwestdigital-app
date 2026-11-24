@@ -4,14 +4,12 @@ Follow [Quo intake, recordings and provisional spam](quo-intake-policy.md)
 for cross-channel recording/transcript filing, lead folders, live Quo contact
 updates and the 14-day Potential spam hold.
 
-1. Discover every phone line with quo status. Inspect the native Quo backlog and
-   the local sms unread, needs-reply, incoming and starred views across all time.
-   Inspect CLI help before using unfamiliar commands. Compare native and cached
-   coverage. A single configured line or the latest 25 messages is incomplete.
-   The SMS CLI accepts --limit. After reading its total count, increase --limit
-   to cover that total and verify that the returned count matches. Use the
-   explicit needs-reply category (sms ls needs-reply all). Read task lists
-   through pipe task ls. These checks still establish only local-cache coverage.
+1. Run quo_intake inventory to enumerate the complete native conversation
+   backlog and phone lines. Use next to read and prepare the next thread and
+   apply to record its evidence-based disposition and verified actions.
+   Continue through the queue within the review budget. It saves progress so
+   the next scan resumes. Use status for exact totals, not the limited Sales
+   cache or an assumed successful command.
 2. Read entire conversations, including outgoing replies, before deciding what
    is still pending. Apply confirmed sender rules first. Separate genuine
    enquiries, existing-client work, spam, verification codes and uncertainty.

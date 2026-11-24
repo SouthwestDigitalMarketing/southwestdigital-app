@@ -1,4 +1,39 @@
 # SWapp handoff
+## 2026-11-23 — Quo intake implemented and active on dev
+
+Native backend scripts/swapp_quo_intake.py now supports full inventory, per-thread
+media preparation, evidence-based classification, verified Quo contact updates,
+lead/client comms filing, durable event/export queues and 14-day caller holds.
+New MCP quo_intake tool is bounded to those operations. No sends, blocks or
+deletes. Native contact Role stores reversible SWapp status markers, preserving
+phone/email arrays, custom fields and prior role text. Silence is provisional,
+never confirmed spam; known contacts and established leads are protected.
+Hold starts when first flagged and survives retries. New genuine evidence
+cancels it. Due dates and verified actions display in scan steps 2 and 3.
+
+Dev 3101 runs this worktree. Its swapp-scan.service override uses this script
+and Codex gpt-6-luna, with SWAPP_SCAN_REVIEW_SOURCES=quo-sms for Tom's source-by-
+source rollout. That review includes cross-channel voicemail evidence. Other
+SOP sources remain pending. Production service/checkout has not been changed.
+The dev .env.development.local is a symlink to the existing scan-fixes env.
+
+Real verification: native inventory 394 conversations/two lines; real Luna
+review applied two provisional contact labels; patched Quo contact arrays
+include added server IDs, so compare name/value pairs when reading back.
+Retried label checks succeeded. Downloaded and verified a real voicemail and
+saved its provider transcript. Local transcription fallback passed after
+switching audio decoding to ffmpeg (installed PyAV rejects metadata_errors).
+Queue state is ~/.local/state/swapp-quo-intake/intake.sqlite; recording evidence
+is private under clients/_unfiled-calls/date and clients/_leads/lead/comms.
+
+Dev uses next dev --webpack because Turbopack rejects its shared node_modules
+symlink outside the project root. Typecheck, changed-file lint, 22 scan tests
+and 10 intake regression tests passed. Normal poller verification scan
+cmwu38bvd0000jj5tnktu1va1 finished successfully through the dev API. Its source
+remained needs-you (393 outstanding conversations), with three verified actions
+and five retained caller holds saved in the summary. Full backlog cleanup has
+not completed; each scan resumes the queue. Production has not been deployed.
+
 ## 2026-11-23 — Recording and provisional-spam policy
 
 Tom specified voicemail download/transcription/analysis, filing on Ripley,

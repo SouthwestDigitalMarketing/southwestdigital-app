@@ -47,10 +47,10 @@ sop-caller-contact-from-transcript.
   to the right caller and recording. Redownloads/retries reuse the same ID.
   Move the same evidence into the resolved lead/client folder and update
   pointers when provisional identity is resolved.
-- For an active lead create/update its existing All Thing leads/<lead>/
-  lead page and diary, and its leads hub entry. The diary points to Ripley media
-  paths; audio and private transcripts stay on Ripley. Follow vault schema
-  and update rules, using confirmed identity and source evidence.
+- Save the analysis and source manifest in the lead's comms folder. Export
+  the evidence-reviewed lead to SWapp through the existing completion endpoint.
+  Existing All Thing lead pages/diaries remain governed by sop-lead-file;
+  the intake records canonical media paths for those notes.
 
 ## Decide the relationship
 
@@ -79,8 +79,8 @@ Use stated facts only. Preserve correct existing fields. An unknown identity
 keeps the established placeholder until it is learned. Reuse the existing
 contact and preserve phone-line/brand context.
 
-For unknown/no-message callers, apply a reversible Potential spam label or a
-clearly identified provisional note using a supported native Quo field. Keep
+For unknown/no-message callers, apply a reversible Potential spam marker in the native Quo contact Role field,
+with the review date; preserve any existing role text. Keep
 the telephone number and original record intact; do not overwrite a real
 person's name with a spam label. Verify native changes through a live read.
 A local task or cache marker is not proof that Quo was updated. If contact or
@@ -89,7 +89,8 @@ that action pending.
 
 ## Two-week holding period
 
-Start a 14-day hold from the first qualifying no-message event. Persist
+Start a 14-day hold when intake first flags the caller as Potential spam.
+Previously unreviewed historical callers receive the full retention period. Persist
 first_seen_at, last_contact_at, review_after, disposition and evidence by brand
 and normalized caller number, with original call IDs. Re-running a scan does
 not reset or expire a hold early.

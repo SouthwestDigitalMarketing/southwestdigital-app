@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/simpleRateLimit";
 import { checkScanToken } from "@/lib/scan/auth";
+import { STALE_RUNNING_MS } from "@/lib/scan/scan";
 import { initialSources } from "@/lib/scan/sources";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +24,7 @@ export async function POST(request: Request) {
   // one dead run pins the header spinner forever. Stale *requested* runs are
   // simply claimed below and run now — a late scan beats none.
   await prisma.scanRun.updateMany({
-    where: { status: "running", startedAt: { lt: new Date(startedAt.getTime() - 30 * 60 * 1000) } },
+    where: { status: "running", startedAt: { lt: new Date(startedAt.getTime() - STALE_RUNNING_MS) } },
     data: { status: "error", error: "Superseded: no poller finished this run in time." },
   });
 

@@ -48,3 +48,30 @@ SWAPP_SCAN_REVIEW_PROVIDER=claude and SWAPP_SCAN_REVIEW_MODEL=sonnet in the
 poller service environment. Both use the same SOPs, report schema and bounded
 source_command MCP tool. Codex has a read-only shell sandbox with shell tools
 disabled. The bridge only executes enumerated CLI verbs without a shell.
+
+## Implemented Quo intake
+
+The quo_intake tool uses the native Quo API and a durable SQLite queue under
+~/.local/state/swapp-quo-intake/. It inventories all lines and conversations,
+then processes full threads individually. Recorded voicemail is downloaded
+and audio-verified. Provider transcripts are saved, with local faster-whisper
+fallback through scripts/swapp_transcribe.py when needed. All actions and
+remaining work survive reviewer timeouts and subsequent scans.
+
+Supported operations are inventory, next, inspect, apply, status and holds.
+The backend validates source IDs, protects known contacts and established
+leads, prevents silence from becoming confirmed spam, files lead media,
+preserves native contact arrays/custom fields, and verifies each write.
+Potential spam uses a reversible marker in Quo's native contact Role field.
+No send, block, archive or delete endpoint is exposed.
+
+Hold dates start when this intake first flags a caller, giving previously
+unreviewed historical callers a full 14-day retention period. The date is shared
+by brand and normalized number and cannot reset on scan retries. A supported
+lead or legitimate relationship cancels the hold. Due holds remain review work.
+
+The dev service at port 3101 currently enables only quo-sms through
+SWAPP_SCAN_REVIEW_SOURCES=quo-sms while Tom reviews the source steps individually.
+This step reviews cross-channel Quo evidence, including voicemail. Other source
+SOP execution remains pending. All configured sources can be enabled later by
+removing the override. The production poller still uses its existing checkout.

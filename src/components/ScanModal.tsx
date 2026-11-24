@@ -195,6 +195,31 @@ function ScanSteps({ onClose }: { onClose: () => void }) {
                   <p className="mt-1 break-words text-slate-700">{source.detail ?? "SOP review needs attention."}</p>
                 </div>
               ))}
+              {(status?.reviewPending?.length ?? 0) > 0 ? (
+                <ul className="mt-3 space-y-2 text-sm text-slate-700">
+                  {status?.reviewPending?.map((item, index) => (
+                    <li key={`${item.sourceId}-${index}`} className="rounded-lg border border-slate-200 px-3 py-2">
+                      <p>{item.reason}</p>
+                      <p className="mt-1 text-xs text-slate-500">{item.owner} · {item.nextAction}</p>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {(status?.intakeHolds?.length ?? 0) > 0 ? (
+                <section className="mt-3">
+                  <h3 className="text-sm font-semibold text-slate-900">Potential spam · 14-day hold</h3>
+                  <ul className="mt-2 space-y-2 text-sm text-slate-700">
+                    {status?.intakeHolds?.map((hold) => (
+                      <li key={hold.key}>
+                        <span className="font-medium">{hold.number}</span>
+                        {" · "}{hold.due ? "Review due" : "Review"}
+                        {" "}{new Date(hold.reviewAfter).toLocaleDateString()}
+                        {hold.error ? <p className="text-xs text-amber-700">{hold.error}</p> : null}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
               {!status || (status.questions.length === 0 && !status.sources.some((source) => source.status === "needs-you")) ? (
                 <p className="mt-3 text-sm text-slate-600" role="status">
                   {status ? "No items need your call." : "Loading decisions…"}
@@ -247,6 +272,19 @@ function ScanSteps({ onClose }: { onClose: () => void }) {
                 <>
                   {status.running ? (
                     <p className="mt-3 text-sm text-slate-500">Scan still running. Results update here as they become available.</p>
+                  ) : null}
+                  {(status.reviewActions?.length ?? 0) > 0 ? (
+                    <section className="mt-3">
+                      <h3 className="text-sm font-semibold text-slate-900">Verified review actions</h3>
+                      <ul className="mt-2 space-y-2 text-sm text-slate-700">
+                        {status.reviewActions?.map((action, index) => (
+                          <li key={`${action.sourceId}-${index}`}>
+                            <p className="break-words">{action.action}</p>
+                            <p className="text-xs text-slate-500">{action.verification}</p>
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
                   ) : null}
                   {status.changes.length > 0 ? (
                     <section className="mt-3">
