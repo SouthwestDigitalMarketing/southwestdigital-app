@@ -12,6 +12,7 @@ import { OffersStatCard } from "./OffersStatCard";
 import { MrrStatCard, PipelineMrrStatCard, type PipelineMrrPipeline } from "./MrrStatCard";
 import { DashboardControls } from "./DashboardControls";
 import { BillingTimers } from "./BillingTimers";
+import { ReleaseCalendar } from "../showrunner/ReleaseCalendar";
 import { BILLING_TIMERS_BRAND_SLUG, billingCalendarDays } from "@/lib/dashboard/billing-timers";
 import { funnelStepFor, hasYouTubeActivity, summarizeMrr } from "./utils";
 import { getPastDueByContact } from "@/lib/ar/pastDue";
@@ -526,6 +527,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       {/* The collector posts every 5 minutes; refreshing faster only re-reads GA4 and YouTube. */}
       <LiveRefresh seconds={300} />
       <h1 className="sr-only">Dashboard</h1>
+      {/* The swipe calendar first: billing dates and episode releases (Tom, 2026-11-24). */}
+      <div className="mb-3"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
       <GsaAlarm proposals={awaitingGsa} now={windowEnd} />
       {companyMetrics && <CompanyCarousel {...companyMetrics} period={selectedPeriod.label} colors={companyColors} />}
       <details className="mt-8" open={!companyMetrics}>
