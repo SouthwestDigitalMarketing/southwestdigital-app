@@ -36,6 +36,7 @@ import { parseRange } from "./_scorecard/format";
 import { getCompanyMetrics } from "@/lib/companyMetrics";
 import { isLochsideBrandSlug } from "@/lib/brands/active-brand";
 import { CompanyCarousel } from "./CompanyCarousel";
+import { TARGETS as SCORECARD_TARGETS } from "@/lib/scorecard/queries";
 import { COMPANY_BRANDS } from "@/lib/companyMetrics";
 
 export const dynamic = "force-dynamic";
@@ -522,6 +523,16 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     ? { label: ga4HostName, href: `https://${ga4HostName}` }
     : undefined;
 
+  // Targets on the company cards (Tom, 2026-11-24). MRR and offers come from Settings > Dashboard goals; leads have
+  // no setting yet (30 per 30 days); response time is the Scorecard's 1-hour text target; free cash flow is the
+  // $10K Month goal.
+  const companyTargets = {
+    mrrUsd: mrrGoals.monthlyMrrGoal ?? 15000,
+    newLeads: 30,
+    offersSent: theme?.monthlyOffersSentGoal ?? 10,
+    responseSeconds: SCORECARD_TARGETS.text,
+    freeCashFlowUsd: 10000,
+  };
   return (
     <div className="px-4 py-5 sm:p-8">
       {/* The collector posts every 5 minutes; refreshing faster only re-reads GA4 and YouTube. */}
@@ -530,7 +541,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       {/* The swipe calendar first: billing dates and episode releases (Tom, 2026-11-24). */}
       <div className="mb-3"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
       <GsaAlarm proposals={awaitingGsa} now={windowEnd} />
-      {companyMetrics && <CompanyCarousel {...companyMetrics} period={selectedPeriod.label} colors={companyColors} />}
+      {companyMetrics && <CompanyCarousel {...companyMetrics} period={selectedPeriod.label} colors={companyColors} targets={companyTargets} />}
       <details className="mt-8" open={!companyMetrics}>
       <summary className="cursor-pointer text-sm font-medium text-slate-600">Detailed {brand.name} dashboard</summary>
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-4">

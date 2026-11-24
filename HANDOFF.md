@@ -6,6 +6,11 @@
   (MRR, new leads, offers). No legends: tapping the bar opens a small pop-up with each brand's amount and share
   (closes on a second tap or a tap elsewhere). Each card is a link (stretched, chevron): MRR -> /dashboard/revenue,
   new leads -> /pipeline, offers -> /offers, response time -> /scorecard; free cash flow has no page yet.
+  Targets (Tom, 2026-11-24): each bar's track is the target and the brand pieces fill their share of the way;
+  the note says "21% of $15,000". MRR and offers from Settings > Dashboard goals (BC theme monthlyMrrGoal,
+  monthlyOffersSentGoal; Tom wants 15,000 and 10, production had 10,000 and none), leads 30 per 30 days
+  (no setting yet, constant), response time the Scorecard's 1-hour target (green under, red over), free cash
+  flow $10,000 (the series goal).
   The swipe calendar strip (Showrunner's ReleaseCalendar: billing dates + episode releases) is the first thing on
   /dashboard. Colours: Bookkeeping Conroe = its theme darkColor (navy #1b263b),
   The Real Estate Bookkeeper = its theme accentColor (red #d70407); `.brand-split-seg` lightens them on dark.
