@@ -1,4 +1,14 @@
 # SWapp handoff
+## 2026-11-24 (later) — Sample YouTube numbers on dev servers (Johnny)
+
+- Local SWapp cannot read the production YouTube connection (encrypted with production secrets Vercel will not
+  hand out), so YouTube pages were blank in dev. `SWAPP_DEV_SAMPLE_YOUTUBE=1` under `next dev` (never production:
+  `youtubeSampleMode()` needs NODE_ENV=development) makes `getYouTubeRefreshToken` return a sample token that the
+  analytics, source-tag and click readers answer with made-up, steady numbers (`src/lib/youtube/devSample.ts`);
+  `SampleNumbersBanner` says so on Showrunner Overview and Leads.
+- On ripley, `swapp-live serve` appends `~/.local/share/swapp-live/extra-<port>.env`; `extra-3110.env` turns it on
+  for Johnny's dev server only.
+
 ## 2026-11-24 (later) — Showrunner Overview = calendar strip + channel numbers (Johnny)
 
 - Tom: put the metrics on Overview. `/showrunner` is now the former Metrics page with the release calendar strip on

@@ -4,6 +4,7 @@ import { IntegrationProvider, IntegrationStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { decryptSecret } from "@/lib/secrets/encryption";
 import { brandEnvKey } from "@/lib/brands/slugs";
+import { SAMPLE_REFRESH_TOKEN, youtubeSampleMode } from "./devSample";
 
 export const YOUTUBE_INTEGRATION_KEY = "youtube";
 
@@ -12,6 +13,7 @@ export function youtubeRefreshTokenEnvKey(slug: string) {
 }
 
 export async function getYouTubeRefreshToken(brandId: string, slug: string) {
+  if (youtubeSampleMode()) return SAMPLE_REFRESH_TOKEN;
   const integration = await prisma.brandIntegration.findUnique({
     where: { brandId_key: { brandId, key: YOUTUBE_INTEGRATION_KEY } },
     select: { secretCiphertext: true },

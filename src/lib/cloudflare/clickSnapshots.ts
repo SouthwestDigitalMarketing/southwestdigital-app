@@ -7,6 +7,7 @@ import {
   SOURCE_TAG_CHARS,
   type SourceTagClickReport,
 } from "./redirectClicks";
+import { sampleClickReport, youtubeSampleMode } from "@/lib/youtube/devSample";
 export type { SourceTagClickReport };
 
 const CLICK_TRACKING_EPOCH = "2026-08-09";
@@ -57,6 +58,7 @@ export async function getSourceTagClicksCumulative(
   brandId: string,
   brandSlug: string,
 ): Promise<SourceTagClickReport> {
+  if (youtubeSampleMode()) return sampleClickReport();
   const today = utcDay(new Date());
 
   await ensureClickSnapshots(brandId, brandSlug);

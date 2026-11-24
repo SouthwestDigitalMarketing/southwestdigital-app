@@ -1,4 +1,11 @@
 import "server-only";
+import {
+  SAMPLE_REFRESH_TOKEN,
+  sampleChannelMetrics,
+  sampleDailyViews,
+  sampleDailyViewsForVideos,
+  sampleTopVideos,
+} from "./devSample";
 
 export type DailyViewRow = { date: string; views: number };
 
@@ -76,6 +83,7 @@ export async function getDailyViews(
   startDate: string,
   endDate: string,
 ): Promise<DailyViewRow[]> {
+  if (refreshToken === SAMPLE_REFRESH_TOKEN) return sampleDailyViews(startDate, endDate);
   const accessToken = await getAccessToken(refreshToken);
 
   const params = new URLSearchParams({
@@ -108,6 +116,7 @@ export async function getChannelMetrics(
   startDate: string,
   endDate: string,
 ): Promise<ChannelMetrics> {
+  if (refreshToken === SAMPLE_REFRESH_TOKEN) return sampleChannelMetrics(startDate, endDate);
   const accessToken = await getAccessToken(refreshToken);
 
   const params = new URLSearchParams({
@@ -140,6 +149,7 @@ export async function getTopVideos(
   endDate: string,
   limit = 10,
 ): Promise<TopVideoRow[]> {
+  if (refreshToken === SAMPLE_REFRESH_TOKEN) return sampleTopVideos(startDate, endDate);
   const accessToken = await getAccessToken(refreshToken);
 
   const params = new URLSearchParams({
@@ -198,6 +208,7 @@ export async function getAverageWatchDuration(
   startDate: string,
   endDate: string,
 ): Promise<number> {
+  if (refreshToken === SAMPLE_REFRESH_TOKEN) return 174;
   const accessToken = await getAccessToken(refreshToken);
 
   const params = new URLSearchParams({
@@ -225,6 +236,7 @@ export async function getDailyViewsForVideos(
   endDate: string,
   videoIds: string[],
 ): Promise<DailyViewByVideoRow[]> {
+  if (refreshToken === SAMPLE_REFRESH_TOKEN) return sampleDailyViewsForVideos(startDate, endDate, videoIds);
   if (videoIds.length === 0) return [];
   const accessToken = await getAccessToken(refreshToken);
 

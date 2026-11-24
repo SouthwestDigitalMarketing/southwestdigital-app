@@ -1,6 +1,7 @@
 import "server-only";
 import { getAccessToken } from "./analytics";
 import { isBookkeepingConroe } from "@/lib/brands/slugs";
+import { SAMPLE_REFRESH_TOKEN, sampleSourceTagVideos } from "./devSample";
 
 export type SourceTagVideo = { title: string; videoId: string; thumbnailUrl: string };
 
@@ -34,6 +35,7 @@ export async function getSourceTagVideos(
   brandSlug: string,
   limit = 100,
 ): Promise<Map<string, SourceTagVideo>> {
+  if (refreshToken === SAMPLE_REFRESH_TOKEN) return sampleSourceTagVideos();
   const accessToken = await getAccessToken(refreshToken);
 
   // Resolve the uploads playlist ID
