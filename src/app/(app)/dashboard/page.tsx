@@ -23,7 +23,8 @@ import { createBrandDataContext, withBrandDataTransaction } from "@/lib/tenancy/
 import { PIPE_PROSPECTS_KEY } from "@/lib/pipe/deals";
 import { LEAD_STEP_LABEL, LEAD_STEP_STAGE, LEAD_STEPS, type LeadStep } from "@/lib/pipe/lead-steps";
 import { paidAwaitingGsa } from "@/lib/gsa/store";
-import { GsaAlarm } from "@/components/gsa/GsaAlarm";
+import { GsaAlarm, gsaHref } from "@/components/gsa/GsaAlarm";
+import { formatWaiting, hoursSincePaid } from "@/lib/gsa/progress";
 import { PRIVACY_COOKIE, privacyOn } from "@/lib/privacy";
 import { createAliaser } from "@/lib/privacy/alias";
 import { getScorecardData } from "@/lib/scorecard/queries";
@@ -574,6 +575,17 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     ? { label: ga4HostName, href: `https://${ga4HostName}` }
     : undefined;
 
+  // Lead actions that cannot wait, shown on the New leads card in red (Tom, 2026-11-24): today, paid proposals
+  // whose service agreement is not signed (the old "Paid, GSA not signed" card).
+  const leadAlerts = awaitingGsa.map((proposal) => {
+    const hours = hoursSincePaid(proposal.paid.paidAt, windowEnd);
+    return {
+      key: proposal.engagementId,
+      name: proposal.clientName,
+      action: `Paid ${proposal.paid.paidAt ? proposal.paid.paidAt.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" }) : ""}, agreement not signed · ${formatWaiting(hours)}`,
+      href: gsaHref(proposal),
+    };
+  });
   // Targets on the company cards (Tom, 2026-11-24). MRR and offers come from Settings > Dashboard goals; leads have
   // no setting yet (30 per 30 days); response time is the Scorecard's 1-hour text target; free cash flow is the
   // $10K Month goal.
@@ -591,8 +603,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       <h1 className="sr-only">Dashboard</h1>
       {/* The swipe calendar first: billing dates and episode releases (Tom, 2026-11-24). */}
       <div className="mb-3"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
-      <GsaAlarm proposals={awaitingGsa} now={windowEnd} />
-      {companyMetrics && <CompanyCarousel {...companyMetrics} period={selectedPeriod.label} colors={companyColors} targets={companyTargets} clients={companyClients} leads={companyLeads} offers={companyOffers} />}
+      {companyMetrics ? null : <GsaAlarm proposals={awaitingGsa} now={windowEnd} />}
+      {companyMetrics && <CompanyCarousel {...companyMetrics} period={selectedPeriod.label} colors={companyColors} targets={companyTargets} clients={companyClients} leads={companyLeads} offers={companyOffers} leadAlerts={leadAlerts} />}
       <details className="mt-8" open={!companyMetrics}>
       <summary className="cursor-pointer text-sm font-medium text-slate-600">Detailed {brand.name} dashboard</summary>
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-4">

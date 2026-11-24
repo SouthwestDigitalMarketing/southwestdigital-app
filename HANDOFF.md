@@ -1,4 +1,17 @@
 # SWapp handoff
+## 2026-11-24 (night) — Urgent lead actions live on the New leads card (Johnny, Tom's ask)
+
+- The separate "Paid, GSA not signed" card (GsaAlarm) no longer shows on the Lochside dashboard (other brands keep
+  it). Its items become `leadAlerts`: the New leads card turns red (rose border) and shows "N lead(s) need action
+  now" with each item linking to the lead's #gsa, whether the card is open or closed. Card arrows moved onto the
+  value row so the strip cannot hide them.
+- Data fixed on production the same night (Tom: "they have signed it"; documented in the All Thing SJ Equity diary:
+  QBO Contracts GSA v5 Completed 11/22, Derek's "Done." 1:22 PM CT): Engagement cmw0upoyy0002jv07b3qr2g4u
+  gsaSignedAt 2026-11-22 19:22Z, linked leads' serviceAgreementSignedAt (same) and firstPaymentReceivedAt (paidAt,
+  2026-11-20), as setGsaStep would. Contact cmw9tyw5k0001l208zv48urd4 (Dan Ruiz) company "Rental properties
+  (Bryan / Willis)" -> "Rodan Properties, LLC" (signed agreement, All Thing client page). Both by direct SQL on
+  the production database, read back.
+
 ## 2026-11-24 (night) — Scan button only on the Scanner page (Johnny, Tom's ask)
 
 - Tom: move Scan from the side menu to the Scanner page and drop the round refresh icon (the compact ScanButton) from
