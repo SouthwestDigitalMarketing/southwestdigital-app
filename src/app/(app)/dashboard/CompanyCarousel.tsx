@@ -90,28 +90,59 @@ function TargetBar({ value, target, lowerIsBetter = false, label }: { value: num
  * A whole card is a link to the page about that number (Tom, 2026-11-24); the bar keeps its own tap. A card
  * with `expand` opens in place instead (the MRR card lists the clients).
  */
-function Card({ label, value, note, parts, href, target, bar, expand }: {
+function Card({ label, value, note, parts, href, target, bar, expand, alert }: {
   label: string; value: string; note: string; parts?: Part[]; href?: string; target?: number; bar?: React.ReactNode; expand?: React.ReactNode;
+  /** Something that cannot wait: the card turns red and shows it on top, open or closed. */
+  alert?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const tappable = Boolean(href || expand);
-  return <div className={`relative flex flex-col rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm ${tappable ? "transition-colors hover:border-slate-400" : ""}`}>
+  return <div className={`relative flex flex-col overflow-hidden rounded-2xl border bg-white px-5 py-4 shadow-sm ${alert ? "border-rose-300 ring-1 ring-rose-200" : "border-slate-200"} ${tappable && !alert ? "transition-colors hover:border-slate-400" : ""}`}>
+    {alert ? <div className="relative z-10 -mx-5 -mt-4 mb-3">{alert}</div> : null}
     {expand ? (
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-label={`${value} ${label}: ${open ? "hide" : "show"} details`} className="absolute inset-0 rounded-2xl" />
     ) : href ? <Link href={href} aria-label={`${value} ${label}: open`} className="absolute inset-0 rounded-2xl" /> : null}
     {/* The label follows the value on one line ("4 new leads") to save height. */}
-    <p className="flex flex-wrap items-baseline gap-x-2 pr-6">
-      <span className="text-3xl font-semibold tracking-tight text-slate-900 tabular-nums">{value}</span>
-      <span className="text-base font-medium text-slate-600">{label}</span>
-    </p>
-    {expand ? (
-      <ChevronDown aria-hidden="true" size={18} className={`absolute right-4 top-5 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
-    ) : href ? <ChevronRight aria-hidden="true" size={18} className="absolute right-4 top-5 text-slate-400" /> : null}
+    <div className="flex items-start gap-2">
+      <p className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
+        <span className="text-3xl font-semibold tracking-tight text-slate-900 tabular-nums">{value}</span>
+        <span className="text-base font-medium text-slate-600">{label}</span>
+      </p>
+      {expand ? (
+        <ChevronDown aria-hidden="true" size={18} className={`mt-1.5 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+      ) : href ? <ChevronRight aria-hidden="true" size={18} className="mt-1.5 shrink-0 text-slate-400" /> : null}
+    </div>
     <p className="mt-0.5 text-sm text-slate-500">{note}</p>
     {parts ? <SplitBar parts={parts} label={label} target={target ?? 0} /> : null}
     {bar}
     {expand && open ? <div className="relative z-10 mt-3 border-t border-slate-100 pt-3">{expand}</div> : null}
   </div>;
+}
+
+export type LeadAlert = { key: string; name: string; action: string; href: string };
+
+/** Red strip on the New leads card: each lead action that cannot wait, linking to it. */
+function LeadAlerts({ alerts }: { alerts: LeadAlert[] }) {
+  return (
+    <div>
+      <p className="bg-rose-600 px-5 py-2 text-sm font-semibold text-white">
+        {alerts.length === 1 ? "1 lead needs action now" : `${alerts.length} leads need action now`}
+      </p>
+      <ul className="divide-y divide-rose-100 bg-rose-50">
+        {alerts.map((a) => (
+          <li key={a.key}>
+            <Link href={a.href} className="flex items-center gap-2 px-5 py-2.5 hover:bg-rose-100">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-slate-900">{a.name}</span>
+                <span className="block text-xs text-rose-800">{a.action}</span>
+              </span>
+              <ChevronRight size={14} aria-hidden="true" className="shrink-0 text-rose-400" />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 export type CompanyLead = { id: string; name: string; company: string | null; slug: string; stage: string; createdAt: string };
@@ -209,9 +240,9 @@ function ClientList({ clients, colors, brands }: { clients: CompanyClient[]; col
 
 export type CompanyTargets = { mrrUsd: number; newLeads: number; offersSent: number; responseSeconds: number; freeCashFlowUsd: number };
 
-export function CompanyCarousel({ total, brands, cashFlow, expectedMonth, period, colors, targets, clients, leads, offers }: {
+export function CompanyCarousel({ total, brands, cashFlow, expectedMonth, period, colors, targets, clients, leads, offers, leadAlerts }: {
   total: MetricsView; brands: MetricsView[]; cashFlow: CashFlow; expectedMonth: string; period: string;
-  colors: Record<string, string>; targets: CompanyTargets; clients: CompanyClient[]; leads: CompanyLead[]; offers: CompanyOffer[];
+  colors: Record<string, string>; targets: CompanyTargets; clients: CompanyClient[]; leads: CompanyLead[]; offers: CompanyOffer[]; leadAlerts: LeadAlert[];
 }) {
   const pct = (value: number, target: number) => `${target > 0 ? Math.round((value / target) * 100) : 0}% of ${target.toLocaleString("en-US")}`;
   const parts = (pick: (b: MetricsView) => number, show: (n: number) => string): Part[] =>
@@ -220,7 +251,7 @@ export function CompanyCarousel({ total, brands, cashFlow, expectedMonth, period
   return <section className="mt-2">
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Card label="MRR" value={money(total.mrrUsd)} note={`${total.clients} active client${total.clients === 1 ? "" : "s"} · ${Math.round((total.mrrUsd / targets.mrrUsd) * 100)}% of ${money(targets.mrrUsd)}`} parts={parts((b) => b.mrrUsd, money)} target={targets.mrrUsd} expand={<ClientList clients={clients} colors={colors} brands={brands} />} />
-      <Card label="new leads" value={String(total.newLeads)} note={`${period} · ${pct(total.newLeads, targets.newLeads)}`} parts={parts((b) => b.newLeads, count)} target={targets.newLeads} expand={<LeadList leads={leads} colors={colors} />} />
+      <Card label="new leads" value={String(total.newLeads)} note={`${period} · ${pct(total.newLeads, targets.newLeads)}`} parts={parts((b) => b.newLeads, count)} target={targets.newLeads} expand={<LeadList leads={leads} colors={colors} />} alert={leadAlerts.length ? <LeadAlerts alerts={leadAlerts} /> : undefined} />
       <Card label="offers" value={String(total.offersSent)} note={`${total.offersAwaiting} awaiting a reply · ${pct(total.offersSent, targets.offersSent)}`} parts={parts((b) => b.offersSent, count)} target={targets.offersSent} expand={<OfferList offers={offers} colors={colors} />} />
       <Card
         label="response time"
