@@ -62,7 +62,7 @@ const NAV: Array<{
   { label: "Local SEO", href: "/local-seo", icon: MapPinned },
   { label: "Website", href: "/website", icon: Globe },
   { label: "Showrunner", href: "/showrunner", icon: Clapperboard },
-  { label: "Reports", href: "/reports", icon: FileText },
+  { label: "Financial Reports", href: "/reports", icon: FileText },
   { label: "Reviews", href: "/reviews", icon: Star, dividerAfter: true },
   { label: "Contacts", href: "/contacts", icon: Contact },
   { label: "CRM", href: "/pipeline", icon: TrendingUp },
