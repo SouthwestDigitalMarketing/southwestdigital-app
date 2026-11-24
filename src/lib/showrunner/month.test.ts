@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { daysBetween, isReportMonth, monthLabel, reportMonths, thisMonth, thisWeek } from "./month";
+import { daysBetween, isReportMonth, monthLabel, reportMonths, thisMonth, thisWeek, monthRange, centralMidnight } from "./month";
 
 describe("Showrunner months", () => {
   it("counts this month from the 1st in Central time, with YouTube's 3-day lag", () => {
@@ -29,5 +29,15 @@ describe("Showrunner months", () => {
     expect(thisWeek(new Date("2026-11-24T18:00:00Z"))).toMatchObject({ start: "2026-11-22", today: "2026-11-24", analyticsEnd: null, label: "Week of Nov 22" });
     expect(thisWeek(new Date("2026-11-27T18:00:00Z")).analyticsEnd).toBe("2026-11-24");
     expect(thisWeek(new Date("2026-11-22T18:00:00Z")).start).toBe("2026-11-22");
+  });
+
+  it("bounds a report month in Central time, daylight saving included", () => {
+    expect(centralMidnight("2026-11-01").toISOString()).toBe("2026-11-01T05:00:00.000Z"); // still CDT
+    expect(centralMidnight("2026-12-01").toISOString()).toBe("2026-12-01T06:00:00.000Z");
+    const past = monthRange("2026-10", new Date("2026-11-24T18:00:00Z"));
+    expect(past).toMatchObject({ start: "2026-10-01", last: "2026-10-31", current: false, analyticsEnd: "2026-10-31" });
+    expect(past.to.toISOString()).toBe("2026-11-01T05:00:00.000Z");
+    const now = new Date("2026-11-24T18:00:00Z");
+    expect(monthRange("2026-11", now)).toMatchObject({ current: true, analyticsEnd: "2026-11-21", to: now });
   });
 });

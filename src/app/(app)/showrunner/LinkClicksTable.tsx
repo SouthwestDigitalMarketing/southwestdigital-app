@@ -1,7 +1,7 @@
 import type { SourceTagClickReport } from "@/lib/cloudflare/clickSnapshots";
 import type { SourceTagVideo } from "@/lib/youtube/sourceTagVideos";
 
-/** Clicks on each video's short link (Cloudflare), shown on Metrics and Leads. */
+/** Clicks on each video's short link (Cloudflare). The link column hides on phones so the counts fit. */
 export function LinkClicksTable({
   report,
   sourceTagMap,
@@ -20,7 +20,7 @@ export function LinkClicksTable({
         <thead>
           <tr>
             <th className="px-3 py-2 text-sm font-semibold normal-case text-slate-700">Video</th>
-            <th className="whitespace-nowrap px-3 py-2 text-sm font-semibold normal-case text-slate-700">Link</th>
+            <th className="hidden whitespace-nowrap px-3 py-2 text-sm font-semibold normal-case text-slate-700 sm:table-cell">Link</th>
             <th className="whitespace-nowrap px-3 py-2 text-sm font-semibold normal-case text-slate-700">Clicks</th>
           </tr>
         </thead>
@@ -45,7 +45,7 @@ export function LinkClicksTable({
                     <span className="text-slate-400 italic">No active video — link may be from a deleted or unlisted video</span>
                   )}
                 </td>
-                <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-slate-500">
+                <td className="hidden whitespace-nowrap px-3 py-2 font-mono text-xs text-slate-500 sm:table-cell">
                   {redirectDomain}/{tag}
                 </td>
                 <td className="whitespace-nowrap px-3 py-2 font-semibold text-slate-700">
