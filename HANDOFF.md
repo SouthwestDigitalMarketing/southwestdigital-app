@@ -275,6 +275,38 @@ Tom asked for a phone-first weekly episode planner for The $10K Month. This bran
 are green and it is checked (preview or render), squash-merge it and report; do not stop to ask.
 Still ask first for anything outside SWapp code (production data, outbound sends, secrets).
 
+## 2026-11-24 — Scanner is the one place: spam and newsletter reviews in /scanner (Ummon)
+
+Tom (2026-11-24): fold the `/scan` slash command's reviews (mailroom-app `bin/scan`: spam,
+newsletters) into SWapp's Scanner; `/patrol` was removed from every machine the same day.
+- `/scanner`: "Mail reviews" lines on top (Lochside platform operators only, like the Scan button):
+  `1. ! Spam — 27 emails to check  Open`, `2. ! Newsletters — 80 senders to check  Open`. Findings are
+  compact lines now, not cards.
+- `/scanner/spam`: numbered list, every line starts as Spam, tap = Not spam. Done → ripley runs
+  mailroom-app `mail-spam-patrol confirm` (mail STAYS in Spam, senders onto always-spam; Tom
+  2026-11-24: no permanent delete from the app) and `restore` for the tapped ones.
+- `/scanner/newsletters`: plan prefilled (Keep = payment/receipt mail, never-block list, people
+  replying; Clear = the rest), tap flips, Apply → `mail-newsletter-review decide --keep/--clear
+  --yes` (unsubscribe, exact address to always-spam, mail to Trash). "Undo last clear" → `undo`.
+- Table `ScanReviewItem` (migration `20261124100000_scan_review_items`, additive). Routes (poller
+  token): `GET /api/scan/reviews` (answered rows), `POST /api/scan/reviews` (`{lists:{spam,newsletter}}`),
+  `POST /api/scan/reviews/applied`. `scripts/swapp_scan_mailreviews.py`: answers applied on every
+  poll (10 s); lists pushed on every scan and after applying. Mailroom bin = `SWAPP_MAILROOM_BIN` or
+  `~/projects/mailroom-app/bin` (needs mailroom-app PR #83).
+- Production poller repointed 2026-11-24: `swapp-scan-prod.service` drop-in `main.conf` runs
+  `~/projects/worktrees/swapp-scan-prod` (detached at origin/main; move it forward after each scan
+  merge), reviewer codex/gpt-6-luna on quo-sms only (same as the tested 3101 setup). First run on
+  main 09:57: 14 changes, 8 leads (Quo intake's first export to production).
+- Local test copy: 3101 serves this worktree on `swapp_live`; `swapp-scan.timer` is stopped (run
+  `systemctl --user start swapp-scan.service` for one pass). Its drop-in points answers at a stub
+  mailroom in the session scratchpad that only logs; delete `SWAPP_MAILROOM_BIN` there before
+  using it for real.
+- Checks: tsc clean, lint 0 errors, vitest 1348 passed, python tests OK, migrate diff vs scratch DB
+  "No difference". Local 3101 with real lists (27 spam / 80 senders): pages rendered at 412 px;
+  tapped 1 not-spam + 1 flip + undo → poller ran restore/confirm/decide/undo (stub) and reported back.
+- Open: confirm Zoho empties Spam on its own (oldest Spam mail 31 Oct on 2026-11-24); texts from
+  Tom's Pixel (Google Messages for Web, ripley agent Chrome) as a Scanner source — next.
+
 ## Lessons and open follow-ups (Ummon, 2026-11-22 wrapup)
 
 - Before telling Tom a video is stuck, re-read live status (production `ShowrunnerVideoStatus`

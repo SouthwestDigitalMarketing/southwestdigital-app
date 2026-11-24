@@ -3456,3 +3456,31 @@ model ScanQuestion {
   @@index([brandId, status])
   @@map("ScanQuestion")
 }
+
+/// Scanner reviews (Tom 2026-11-24): the spam and newsletter reviews moved out
+/// of the terminal into /scanner. Ripley's poller pushes what waits (review
+/// "spam": one row per ledger number; "newsletter": one row per sender
+/// address); Tom's answers wait here until the poller runs mailroom-app's
+/// commands and reports back. review "newsletter-undo" rows are undo requests.
+/// Nothing here deletes mail for good: confirmed spam stays in Spam.
+model ScanReviewItem {
+  id          String    @id @default(cuid())
+  review      String
+  itemKey     String
+  data        Json
+  /// pending (waiting for Tom) | answered (waiting for ripley) | applied | failed | gone
+  status      String    @default("pending")
+  /// spam: "spam" | "not-spam"; newsletter: "keep" | "clear"; undo: "undo"
+  answer      String?
+  answeredBy  String?
+  answeredAt  DateTime?
+  appliedAt   DateTime?
+  result      String?
+  lastSeenAt  DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([review, itemKey])
+  @@index([review, status])
+  @@map("ScanReviewItem")
+}

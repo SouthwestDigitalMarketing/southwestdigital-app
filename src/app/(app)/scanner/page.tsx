@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { requireStaffBrand } from "@/lib/brands/staff";
+import { isLochsideBrandSlug } from "@/lib/brands/active-brand";
+import { prisma } from "@/lib/prisma";
+import { loadReviewCounts, type ReviewCounts, type ReviewKind } from "@/lib/scan/reviews";
 import { isScanStorageMissing } from "@/lib/scanner/post";
 import { loadScanFindings } from "@/lib/scanner/load";
 import { formatWhen, groupOpenByRoom, recentClosed, sortNeedsYou, type ScanListRow } from "@/lib/scanner/view";
@@ -17,27 +20,64 @@ function one(value: string | string[] | undefined): string | null {
 function FindingCard({ row, roles }: { row: ScanListRow; roles: Map<string, string> }) {
   const who = roles.get(row.roleKey) ?? roleLabel(row.roleKey);
   return (
-    <article className="rounded-xl border border-slate-200 bg-white px-5 py-4">
-      <h3 className="text-sm font-semibold text-slate-900">{row.what}</h3>
-      <p className="mt-1 text-xs text-slate-500">
+    <li className="min-w-0 break-words text-sm">
+      <span className="text-slate-900">{row.severity === "urgent" ? "! " : ""}{row.what}</span>
+      <span className="block text-xs text-slate-500">
         {roomLabel(row.room)}
         {" · "}
         {who}
         {" · "}
         {fixLevelLabel(row.fixLevel)}
-        {row.severity === "urgent" ? " · Urgent" : ""}
         {" · "}
         last seen {formatWhen(row.lastSeenAt)}
-      </p>
-      <p className="mt-3 whitespace-pre-wrap break-words text-sm text-slate-700">{row.evidence}</p>
-      {row.doneNote ? <p className="mt-3 text-sm text-slate-600">Done: {row.doneNote}</p> : null}
-    </article>
+      </span>
+      <span className="mt-0.5 block whitespace-pre-wrap text-xs text-slate-600">{row.evidence}</span>
+      {row.doneNote ? <span className="block text-xs text-slate-600">Done: {row.doneNote}</span> : null}
+    </li>
+  );
+}
+
+const MAIL_REVIEWS: { review: ReviewKind; label: string; href: string; unit: [string, string] }[] = [
+  { review: "spam", label: "Spam", href: "/scanner/spam", unit: ["email", "emails"] },
+  { review: "newsletter", label: "Newsletters", href: "/scanner/newsletters", unit: ["sender", "senders"] },
+];
+
+/** One line per mail review (was `/scan` in the terminal, Tom 2026-11-24). */
+function MailReviewLines({ counts }: { counts: Record<ReviewKind, ReviewCounts> }) {
+  return (
+    <ol className="mt-3 space-y-1.5 text-sm">
+      {MAIL_REVIEWS.map((item, index) => {
+        const c = counts[item.review];
+        const word = c.pending === 1 ? item.unit[0] : item.unit[1];
+        return (
+          <li key={item.review} className="flex min-w-0 items-baseline gap-2">
+            <span className="w-5 shrink-0 text-right tabular-nums text-slate-400">{index + 1}.</span>
+            <span className={c.pending > 0 || c.failed > 0 ? "text-amber-700" : "text-emerald-700"}>{c.pending > 0 || c.failed > 0 ? "!" : "✓"}</span>
+            <span className="min-w-0 flex-1 break-words text-slate-800">
+              {item.label}
+              <span className="text-slate-500">
+                {" — "}
+                {c.pending > 0 ? `${c.pending} ${word} to check` : "all clear"}
+                {c.answered > 0 ? ` · ${c.answered} being applied` : ""}
+                {c.failed > 0 ? ` · ${c.failed} failed` : ""}
+              </span>
+              {c.pending > 0 || c.failed > 0 ? (
+                <Link href={item.href} className="ml-1.5 whitespace-nowrap font-medium text-slate-900 underline decoration-slate-300 underline-offset-2">
+                  Open
+                </Link>
+              ) : null}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
 export default async function ScannerPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
-  const { brand, dataContext } = await requireStaffBrand();
+  const { brand, dataContext, isPlatformOperator } = await requireStaffBrand();
+  const mailReviews = isPlatformOperator && isLochsideBrandSlug(brand.slug) ? await loadReviewCounts(prisma) : null;
   const askedRole = one(params.role);
   let storageMissing = false;
   let roles: Array<{ key: string; label: string; holderLabel: string | null }> = [];
@@ -61,10 +101,10 @@ export default async function ScannerPage({ searchParams }: { searchParams: Sear
   const onThisBrand = brand.slug === SCANNER_BRAND_SLUG;
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <h1 className="text-lg font-semibold text-slate-900">Scanner</h1>
       <p className="mt-1 max-w-2xl text-sm text-slate-600">
-        Log only. Nothing is fixed or sent from this page. Findings show up here when a worker posts them, and they close when the problem is gone.
+        One place for everything the scan found. Findings close on their own when the problem is gone; the mail reviews wait for your answer.
       </p>
       {onThisBrand ? null : (
         <p className="mt-3 text-sm text-slate-600">Scanner runs for Bookkeeping Conroe. This brand is {brand.name}.</p>
@@ -82,6 +122,13 @@ export default async function ScannerPage({ searchParams }: { searchParams: Sear
         ))}
       </nav>
 
+      {mailReviews ? (
+        <section className="mt-6">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Mail reviews</h2>
+          <MailReviewLines counts={mailReviews} />
+        </section>
+      ) : null}
+
       {storageMissing ? (
         <p className="mt-8 rounded-xl border border-slate-200 bg-white px-5 py-8 text-sm text-slate-600">
           The Scanner tables are not in the database yet. The SQL is written and waiting for a yes before it runs.
@@ -95,9 +142,9 @@ export default async function ScannerPage({ searchParams }: { searchParams: Sear
             {needsYou.length === 0 ? (
               <p className="mt-3 text-sm text-slate-500">Nothing needs you right now.</p>
             ) : (
-              <div className="mt-3 space-y-3">
+              <ol className="mt-3 space-y-3">
                 {needsYou.map((row) => <FindingCard key={row.id} row={row} roles={roleNames} />)}
-              </div>
+              </ol>
             )}
           </section>
 
@@ -109,9 +156,9 @@ export default async function ScannerPage({ searchParams }: { searchParams: Sear
               byRoom.map((group) => (
                 <div key={group.room} className="mt-4">
                   <h3 className="text-sm font-semibold text-slate-800">{group.label}</h3>
-                  <div className="mt-2 space-y-3">
+                  <ol className="mt-2 space-y-3">
                     {group.items.map((row) => <FindingCard key={row.id} row={row} roles={roleNames} />)}
-                  </div>
+                  </ol>
                 </div>
               ))
             )}
@@ -123,9 +170,9 @@ export default async function ScannerPage({ searchParams }: { searchParams: Sear
             {closed.length === 0 ? (
               <p className="mt-3 text-sm text-slate-500">Nothing closed yet.</p>
             ) : (
-              <div className="mt-3 space-y-3">
+              <ol className="mt-3 space-y-3">
                 {closed.map((row) => <FindingCard key={row.id} row={row} roles={roleNames} />)}
-              </div>
+              </ol>
             )}
           </section>
         </>
