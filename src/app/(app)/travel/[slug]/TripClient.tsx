@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import {
+  AUTO_PHOTO_SECTIONS,
   SECTIONS,
   TRIP_STATUSES,
   TRIP_STATUS_LABELS,
@@ -10,6 +11,7 @@ import {
   documentWarnings,
   documentsReady,
   formatMoney,
+  itemsWithoutPhoto,
   type Field,
   type ItemValue,
   type Section,
@@ -124,7 +126,13 @@ export function TripClient({
       </nav>
 
       {SECTIONS.map((section) => (
-        <SectionBlock key={section.key} slug={slug} section={section} items={plan.sections[section.key]} />
+        <SectionBlock
+          key={section.key}
+          slug={slug}
+          section={section}
+          items={plan.sections[section.key]}
+          missingPhotos={AUTO_PHOTO_SECTIONS.has(section.key) ? itemsWithoutPhoto(plan, section.key).length : 0}
+        />
       ))}
 
       <DeleteTrip slug={slug} />
@@ -233,7 +241,17 @@ function newId() {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-function SectionBlock({ slug, section, items }: { slug: string; section: Section; items: TripItem[] }) {
+function SectionBlock({
+  slug,
+  section,
+  items,
+  missingPhotos,
+}: {
+  slug: string;
+  section: Section;
+  items: TripItem[];
+  missingPhotos: number;
+}) {
   const [adding, setAdding] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const { pending, error, run } = useChange(slug);
@@ -254,11 +272,23 @@ function SectionBlock({ slug, section, items }: { slug: string; section: Section
           </h2>
           <p className="text-sm text-slate-500">{section.blurb}</p>
         </div>
-        {adding ? null : (
-          <button type="button" className={ghost} onClick={() => { setEditing(null); setAdding(newId()); }}>
-            Add {section.itemLabel}
-          </button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {missingPhotos > 0 ? (
+            <button
+              type="button"
+              className={ghost}
+              disabled={pending}
+              onClick={() => run({ kind: "photos", section: section.key })}
+            >
+              {pending ? "Finding photos…" : "Find photos"}
+            </button>
+          ) : null}
+          {adding ? null : (
+            <button type="button" className={ghost} onClick={() => { setEditing(null); setAdding(newId()); }}>
+              Add {section.itemLabel}
+            </button>
+          )}
+        </div>
       </div>
       {totals ? (
         <p className="mt-2 text-sm text-slate-700">
@@ -355,70 +385,100 @@ function ItemCard({
 }) {
   const [confirming, setConfirming] = useState(false);
   const [ticked, setTicked] = useState<Record<string, boolean>>({});
-  const rest = section.fields.filter((field) => field.key !== section.heading && field.type !== "check");
+  const rest = section.fields.filter(
+    (field) => field.key !== section.heading && field.type !== "check" && field.type !== "photo",
+  );
   const checks = section.fields.filter((field) => field.type === "check");
+  const photo = typeof item.photo === "string" && item.photo ? item.photo : null;
   return (
-    <div className={`${card} p-4`}>
-      <div className="flex items-start justify-between gap-2">
-        <p className="font-semibold text-slate-900">{String(item[section.heading] ?? "")}</p>
-        <div className="flex shrink-0 gap-1">
-          <button type="button" aria-label="Move up" disabled={pending || first} className={ghost} onClick={() => onMove(-1)}>
-            ↑
-          </button>
-          <button type="button" aria-label="Move down" disabled={pending || last} className={ghost} onClick={() => onMove(1)}>
-            ↓
-          </button>
+    <div className={`${card} overflow-hidden`}>
+      {photo ? (
+        <div className="relative">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={photo}
+            alt={String(item[section.heading] ?? "")}
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            className="aspect-[16/9] w-full bg-slate-100 object-cover"
+          />
+          {/wikimedia\.org$/.test(hostOf(photo)) ? (
+            <span className="absolute bottom-1 right-2 rounded bg-black/50 px-1.5 py-0.5 text-[10px] text-white">
+              Wikimedia Commons
+            </span>
+          ) : null}
         </div>
-      </div>
-      <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
-        {rest.map((field) => {
-          const shown = shownValue(field, item[field.key] ?? null);
-          if (shown === null) return null;
-          return (
-            <div key={field.key} className={field.type === "long" ? "sm:col-span-2" : undefined}>
-              <dt className="inline text-slate-500">{field.label}: </dt>
-              <dd className={`inline text-slate-800 ${field.type === "long" ? "whitespace-pre-line" : ""}`}>{shown}</dd>
-            </div>
-          );
-        })}
-      </dl>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        {checks.map((field) => (
-          <label key={field.key} className="flex items-center gap-1.5 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={ticked[field.key] ?? item[field.key] === true}
-              disabled={pending}
-              onChange={(event) => {
-                const value = event.target.checked;
-                setTicked((current) => ({ ...current, [field.key]: value }));
-                onToggle(field.key, value);
-              }}
-            />
-            {field.label}
-          </label>
-        ))}
-        <span className="flex-1" />
-        <button type="button" className={ghost} disabled={pending} onClick={onEdit}>
-          Edit
-        </button>
-        {confirming ? (
-          <>
-            <button type="button" className={danger} disabled={pending} onClick={onRemove}>
-              Really remove
+      ) : null}
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-2">
+          <p className="font-semibold text-slate-900">{String(item[section.heading] ?? "")}</p>
+          <div className="flex shrink-0 gap-1">
+            <button type="button" aria-label="Move up" disabled={pending || first} className={ghost} onClick={() => onMove(-1)}>
+              ↑
             </button>
-            <button type="button" className={ghost} onClick={() => setConfirming(false)}>
-              Keep
+            <button type="button" aria-label="Move down" disabled={pending || last} className={ghost} onClick={() => onMove(1)}>
+              ↓
             </button>
-          </>
-        ) : (
-          <button type="button" className={ghost} disabled={pending} onClick={() => setConfirming(true)}>
-            Remove
+          </div>
+        </div>
+        <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
+          {rest.map((field) => {
+            const shown = shownValue(field, item[field.key] ?? null);
+            if (shown === null) return null;
+            return (
+              <div key={field.key} className={field.type === "long" ? "sm:col-span-2" : undefined}>
+                <dt className="inline text-slate-500">{field.label}: </dt>
+                <dd className={`inline text-slate-800 ${field.type === "long" ? "whitespace-pre-line" : ""}`}>{shown}</dd>
+              </div>
+            );
+          })}
+        </dl>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {checks.map((field) => (
+            <label key={field.key} className="flex items-center gap-1.5 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={ticked[field.key] ?? item[field.key] === true}
+                disabled={pending}
+                onChange={(event) => {
+                  const value = event.target.checked;
+                  setTicked((current) => ({ ...current, [field.key]: value }));
+                  onToggle(field.key, value);
+                }}
+              />
+              {field.label}
+            </label>
+          ))}
+          <span className="flex-1" />
+          <button type="button" className={ghost} disabled={pending} onClick={onEdit}>
+            Edit
           </button>
-        )}
+          {confirming ? (
+            <>
+              <button type="button" className={danger} disabled={pending} onClick={onRemove}>
+                Really remove
+              </button>
+              <button type="button" className={ghost} onClick={() => setConfirming(false)}>
+                Keep
+              </button>
+            </>
+          ) : (
+            <button type="button" className={ghost} disabled={pending} onClick={() => setConfirming(true)}>
+              Remove
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
+}
+
+function hostOf(url: string) {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "";
+  }
 }
 
 function ItemForm({
@@ -510,6 +570,11 @@ function FieldInput({ field, value, required }: { field: Field; value: ItemValue
       break;
     case "url":
       control = <input type="url" name={field.key} placeholder="https://" defaultValue={text} className={inputClass} />;
+      break;
+    case "photo":
+      control = (
+        <input type="url" name={field.key} placeholder="Leave blank to find one" defaultValue={text} className={inputClass} />
+      );
       break;
     default:
       control = <input name={field.key} required={required} maxLength={200} defaultValue={text} className={inputClass} />;
