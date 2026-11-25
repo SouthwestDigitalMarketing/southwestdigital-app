@@ -69,8 +69,22 @@ export default async function EmailPage() {
   return (
     <DonnaFrame active="email">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold">Email</h2>
-        <div className="flex items-center gap-2">
+        {m ? (
+          <p
+            className="min-w-0 truncate text-sm text-slate-500"
+            title={m.address}
+          >
+            {m.address}
+          </p>
+        ) : (
+          <Link
+            href="/donna/settings"
+            className="inline-block rounded-lg bg-slate-900 px-4 py-3 text-sm text-white"
+          >
+            Connect email
+          </Link>
+        )}
+        <div className="flex shrink-0 items-center gap-2">
           <Link
             href="/donna/email/work"
             className="text-xs text-slate-500 underline decoration-slate-300"
@@ -88,18 +102,6 @@ export default async function EmailPage() {
           </span>
         </div>
       </div>
-      {m ? (
-        <p className="truncate text-sm text-slate-500" title={m.address}>
-          {m.address}
-        </p>
-      ) : (
-        <Link
-          href="/donna/settings"
-          className="inline-block rounded-lg bg-slate-900 px-4 py-3 text-sm text-white"
-        >
-          Connect email
-        </Link>
-      )}
       {folders.zoho.length || folders.custom.length ? (
         <>
           <FolderTable title="Zoho folders" folders={folders.zoho} />

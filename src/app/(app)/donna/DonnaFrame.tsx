@@ -16,12 +16,7 @@ export function DonnaFrame({
     <div className="w-full min-w-0 break-words space-y-4 px-4 py-5 text-slate-900 sm:p-8">
       {live ? <RefreshDonna /> : null}
       <header className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold">Donna</h1>
-          <span className="rounded-full bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
-            Read-only pilot
-          </span>
-        </div>
+        <h1 className="text-xl font-semibold">Donna</h1>
         <Link
           href="/donna/settings"
           aria-label="Donna settings"
