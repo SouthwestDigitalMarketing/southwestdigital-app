@@ -148,22 +148,41 @@ export async function POST(request: Request) {
               leaseUntil: null,
             },
           });
+          const box = await tx.donnaMailbox.findUniqueOrThrow({
+            where: { id: job.mailboxId },
+          });
+          const previous =
+            box.coverage &&
+            typeof box.coverage === "object" &&
+            !Array.isArray(box.coverage)
+              ? (box.coverage as Record<string, unknown>)
+              : {};
+          const incoming = (input.coverage ?? {}) as Record<string, unknown>;
+          const coverage = { ...previous, ...incoming };
+          if (job.kind === "clean") {
+            if (typeof previous.remaining_threads === "number")
+              coverage.remaining_threads = previous.remaining_threads;
+            if ("coverage_complete" in previous)
+              coverage.coverage_complete = previous.coverage_complete;
+          }
           await tx.donnaMailbox.update({
             where: { id: job.mailboxId },
             data: {
               lastCheckedAt: new Date(),
               heartbeatAt: new Date(),
               lastError:
-                Number(input.coverage?.deferred_threads ?? 0) > 0
-                  ? `${Number(input.coverage?.deferred_threads)} conversations could not be assessed; retries are queued.`
+                Number(coverage.deferred_threads ?? 0) > 0
+                  ? `${Number(coverage.deferred_threads)} conversations could not be assessed; retries are queued.`
                   : null,
-              coverage: (input.coverage ??
-                {}) as import("@prisma/client").Prisma.InputJsonObject,
+              coverage:
+                coverage as import("@prisma/client").Prisma.InputJsonObject,
             },
           });
           if (
-            Number(input.coverage?.remaining_threads ?? 0) > 0 ||
-            input.coverage?.coverage_complete === false
+            job.kind !== "clean" &&
+            !box.paused &&
+            (Number(coverage.remaining_threads ?? 0) > 0 ||
+              coverage.coverage_complete === false)
           ) {
             const next = await enqueue(
               tx,
@@ -172,10 +191,9 @@ export async function POST(request: Request) {
               `backlog:${job.id}`,
             );
             if (
-              (Array.isArray(input.coverage?.gaps) &&
-                input.coverage.gaps.length) ||
-              (Number(input.coverage?.deferred_threads ?? 0) > 0 &&
-                Number(input.coverage?.ready_threads ?? 0) === 0)
+              (Array.isArray(coverage.gaps) && coverage.gaps.length) ||
+              (Number(coverage.deferred_threads ?? 0) > 0 &&
+                Number(coverage.ready_threads ?? 0) === 0)
             )
               await tx.donnaJob.update({
                 where: { id: next.id },

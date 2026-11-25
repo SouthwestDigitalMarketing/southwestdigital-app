@@ -7,7 +7,12 @@ import {
   withBrandDataTransaction,
   type BrandDataContext,
 } from "@/lib/tenancy/context";
-import { activityCounts, requestSchema, activitySchema } from "./domain";
+import {
+  activityCounts,
+  donnaActionCounts,
+  requestSchema,
+  activitySchema,
+} from "./domain";
 import { z } from "zod";
 
 export function storageMissing(error: unknown) {
@@ -51,6 +56,35 @@ export async function enqueue(
   });
 }
 
+export async function loadDonnaAction(context: BrandDataContext) {
+  return withBrandDataTransaction(context, async (tx) => {
+    const mailbox = await tx.donnaMailbox.findFirst({
+      where: { brandId: context.brandId },
+      orderBy: { address: "asc" },
+      select: { id: true, coverage: true },
+    });
+    if (!mailbox)
+      return {
+        mailboxId: null as string | null,
+        cleaning: false,
+        counts: donnaActionCounts({}),
+      };
+    const cleaning = await tx.donnaJob.findFirst({
+      where: {
+        mailboxId: mailbox.id,
+        kind: "clean",
+        status: { in: ["pending", "leased"] },
+      },
+      select: { id: true },
+    });
+    return {
+      mailboxId: mailbox.id,
+      cleaning: Boolean(cleaning),
+      counts: donnaActionCounts(mailbox.coverage),
+    };
+  });
+}
+
 export async function loadDesk(
   context: BrandDataContext,
   state: string,
@@ -59,7 +93,7 @@ export async function loadDesk(
 ) {
   return withBrandDataTransaction(context, async (tx) => {
     const scope = { mailbox: { brandId: context.brandId } };
-    const [mailboxes, groups, rows] = await Promise.all([
+    const [mailboxes, groups, rows, cleaning] = await Promise.all([
       tx.donnaMailbox.findMany({
         where: { brandId: context.brandId },
         orderBy: { address: "asc" },
@@ -76,8 +110,21 @@ export async function loadDesk(
         take: pageSize,
         include: { mailbox: { select: { address: true } } },
       }),
+      tx.donnaJob.findMany({
+        where: {
+          mailbox: { brandId: context.brandId },
+          kind: "clean",
+          status: { in: ["pending", "leased"] },
+        },
+        select: { mailboxId: true },
+      }),
     ]);
-    return { mailboxes, groups, rows };
+    return {
+      mailboxes,
+      groups,
+      rows,
+      cleaning: cleaning.map((job) => job.mailboxId),
+    };
   });
 }
 
@@ -85,11 +132,12 @@ export async function claimJob(context: BrandDataContext) {
   return withBrandDataTransaction(context, async (tx) => {
     // A mailbox lock serializes workers, including leases reclaimed after a crash.
     const candidates = await tx.$queryRaw<{ id: string }[]>`
-      SELECT m.id FROM "DonnaMailbox" m WHERE m."brandId" = ${context.brandId} AND NOT m.paused
+      SELECT m.id FROM "DonnaMailbox" m WHERE m."brandId" = ${context.brandId}
       AND NOT EXISTS (SELECT 1 FROM "DonnaJob" j WHERE j."mailboxId"=m.id
         AND j.status='leased' AND j."leaseUntil">now())
       AND EXISTS (SELECT 1 FROM "DonnaJob" j WHERE j."mailboxId"=m.id AND j.status<>'done'
-        AND j."nextAttemptAt"<=now() AND (j."leaseUntil" IS NULL OR j."leaseUntil"<=now()))
+        AND j."nextAttemptAt"<=now() AND (j."leaseUntil" IS NULL OR j."leaseUntil"<=now())
+        AND (NOT m.paused OR j.kind='clean'))
       ORDER BY m."createdAt" LIMIT 1 FOR UPDATE SKIP LOCKED`;
     if (!candidates[0]) return null;
     const mailbox = await tx.donnaMailbox.findUniqueOrThrow({
@@ -101,6 +149,7 @@ export async function claimJob(context: BrandDataContext) {
         status: { not: "done" },
         nextAttemptAt: { lte: new Date() },
         OR: [{ leaseUntil: null }, { leaseUntil: { lte: new Date() } }],
+        ...(mailbox.paused ? { kind: "clean" } : {}),
       },
       orderBy: { receivedAt: "asc" },
     });
@@ -261,9 +310,10 @@ export async function lockLease(
   >`SELECT j.id FROM "DonnaJob" j
     JOIN "DonnaMailbox" m ON m.id=j."mailboxId"
     WHERE j.id=${id} AND j."leaseToken"=${token} AND j.status='leased'
-    AND j."leaseUntil">now() AND m."brandId"=${context.brandId} AND NOT m.paused FOR UPDATE OF j, m`;
+    AND j."leaseUntil">now() AND m."brandId"=${context.brandId}
+    AND (NOT m.paused OR j.kind='clean') FOR UPDATE OF j, m`;
   if (!rows.length)
-    throw new Error("Lease expired or mailbox paused; reacquire the job.");
+    throw new Error("Lease expired or mailbox unavailable; reacquire the job.");
   return tx.donnaJob.findUniqueOrThrow({ where: { id } });
 }
 

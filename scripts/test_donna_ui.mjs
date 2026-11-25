@@ -170,13 +170,50 @@ try {
           ": " +
           JSON.stringify(size),
       );
-      if (route.startsWith("/donna"))
+      if (route.startsWith("/donna")) {
         assert.deepEqual(
           await page
             .locator('nav[aria-label="Donna sections"] a')
             .allTextContents(),
           ["Overview", "Email"],
         );
+        const donna = page.getByRole("button", { name: "Donna", exact: true });
+        await expect(donna).toBeVisible();
+        const chrome = await page.evaluate(() => {
+          const btn = [...document.querySelectorAll("button")].find(
+            (b) => b.textContent.trim() === "Donna",
+          );
+          const nav = document.querySelector(
+            'nav[aria-label="Donna sections"]',
+          );
+          const frame = document.querySelector("#main-content > div");
+          if (!btn || !nav || !frame) return null;
+          const buttonBox = btn.getBoundingClientRect();
+          const navBox = nav.getBoundingClientRect();
+          const frameBox = frame.getBoundingClientRect();
+          const pad = parseFloat(getComputedStyle(frame).paddingLeft) || 0;
+          const contentWidth =
+            frame.clientWidth -
+            pad -
+            (parseFloat(getComputedStyle(frame).paddingRight) || 0);
+          return {
+            aboveTabs: buttonBox.bottom <= navBox.top + 1,
+            left: Math.abs(buttonBox.left - (frameBox.left + pad)) <= 1,
+            fullWidth: Math.abs(buttonBox.width - contentWidth) <= 2,
+          };
+        });
+        assert.ok(
+          chrome?.aboveTabs,
+          route + " Donna button is not above the tabs",
+        );
+        assert.ok(chrome?.left, route + " Donna button is not top left");
+        if (viewport.width <= 412)
+          assert.ok(
+            chrome?.fullWidth,
+            route + " Donna button is not full width on the phone",
+          );
+        else assert.equal(chrome?.fullWidth, false);
+      }
       if (route === "/donna/email") {
         await page
           .getByRole("heading", { name: "Zoho folders", exact: true })
@@ -238,6 +275,66 @@ try {
     );
   }
   await page.setViewportSize({ width: 412, height: 915 });
+  await page.goto(base + "/donna");
+  await page.getByRole("button", { name: "Donna", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(
+    dialog.getByRole("heading", { name: "Donna", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    dialog.getByRole("button", { name: /Clean inbox/ }),
+  ).toBeEnabled();
+  await expect(
+    dialog.getByRole("button", { name: /Clean inbox/ }),
+  ).toContainText("73");
+  await expect(
+    dialog.getByRole("button", { name: /Empty spam/ }),
+  ).toBeDisabled();
+  await expect(
+    dialog.getByRole("button", { name: /Empty spam/ }),
+  ).toContainText("209");
+  await expect(
+    dialog.getByRole("button", { name: /Clear notifications/ }),
+  ).toBeDisabled();
+  await expect(
+    dialog.getByRole("button", { name: /Clear notifications/ }),
+  ).toContainText("445");
+  await expect(
+    dialog.getByRole("button", { name: /Empty trash/ }),
+  ).toBeDisabled();
+  await expect(
+    dialog.getByRole("button", { name: /Empty trash/ }),
+  ).toContainText("406");
+  await expect(
+    dialog.getByRole("button", { name: /Clean drafts/ }),
+  ).toBeDisabled();
+  await expect(
+    dialog.getByRole("button", { name: /Clean drafts/ }),
+  ).toContainText("19");
+  await expect(
+    dialog.getByRole("button", { name: /Do it all/ }),
+  ).toBeDisabled();
+  await expect(dialog.getByRole("button", { name: /Do it all/ })).toContainText(
+    "1,152",
+  );
+  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.goto(base + "/donna/email");
+  await page.getByRole("button", { name: "Donna", exact: true }).click();
+  await page.getByRole("button", { name: /Clean inbox/ }).click();
+  await expect
+    .poll(async () =>
+      db.donnaJob.count({
+        where: { mailboxId: box.id, kind: "clean" },
+      }),
+    )
+    .toBe(1);
+  await page.goto(base + "/donna/email/work");
+  await page.getByRole("button", { name: "Donna", exact: true }).click();
+  await expect(
+    page.getByRole("dialog").getByRole("button", { name: /Cleaning/ }),
+  ).toBeDisabled();
   await page.goto(base + "/donna/requests/" + request.id + "?section=reply");
   await page
     .getByLabel("Edit reply", { exact: true })

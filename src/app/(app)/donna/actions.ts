@@ -86,6 +86,49 @@ export async function mailboxAction(form: FormData) {
   refresh();
 }
 
+export async function startCleanInbox(
+  form: FormData,
+): Promise<{ ok: boolean; message: string }> {
+  try {
+    const { dataContext, session } = await requireDonna();
+    const id = z.string().min(1).parse(form.get("mailboxId"));
+    await withBrandDataTransaction(dataContext, async (tx) => {
+      const box = await tx.donnaMailbox.findFirstOrThrow({
+        where: { id, brandId: dataContext.brandId },
+      });
+      const existing = await tx.donnaJob.findFirst({
+        where: {
+          mailboxId: box.id,
+          kind: "clean",
+          status: { in: ["pending", "leased"] },
+        },
+      });
+      if (!existing)
+        await enqueue(tx, box.id, "clean", `clean:${randomUUID()}`);
+      await tx.donnaActivity.create({
+        data: {
+          mailboxId: box.id,
+          eventKey: `control:${randomUUID()}`,
+          kind: "control",
+          detail: existing
+            ? "Inbox clean already in progress."
+            : "Inbox clean requested.",
+          actor: session.user.id,
+          evidence: "Authenticated operator action",
+          occurredAt: new Date(),
+        },
+      });
+    });
+    refresh();
+    return { ok: true, message: "Cleaning inbox." };
+  } catch {
+    return {
+      ok: false,
+      message: "Could not start Clean. Reload and try again.",
+    };
+  }
+}
+
 async function performRequestAction(form: FormData) {
   const { dataContext, session } = await requireDonna();
   const id = z.string().parse(form.get("requestId"));

@@ -211,6 +211,65 @@ try {
     data: { paused: true },
   });
   assert.equal((await (await worker({ op: "claim" })).json()).work, null);
+  await db.donnaJob.create({
+    data: {
+      mailboxId: box.id,
+      kind: "clean",
+      eventKey: "clean:" + suffix,
+    },
+  });
+  const cleanClaim = await (await worker({ op: "claim" })).json();
+  assert.equal(cleanClaim.work?.job?.kind, "clean");
+  assert.equal(
+    (
+      await worker({
+        op: "heartbeat",
+        jobId: cleanClaim.work.job.id,
+        leaseToken: cleanClaim.work.job.leaseToken,
+      })
+    ).status,
+    200,
+    "A Clean lease must stay alive on a paused mailbox.",
+  );
+  const pendingBeforeClean = await db.donnaJob.count({
+    where: { mailboxId: box.id, status: "pending" },
+  });
+  assert.equal(
+    (
+      await worker({
+        op: "complete",
+        result: {
+          jobId: cleanClaim.work.job.id,
+          leaseToken: cleanClaim.work.job.leaseToken,
+          coverage: {
+            remaining_threads: 9,
+            coverage_complete: false,
+            clean: {
+              at: "2026-11-25T18:00:00Z",
+              reviewed: 1,
+              remaining: 9,
+              filed: [],
+              waiting: [],
+              needsYou: [],
+              skipped: [],
+            },
+          },
+        },
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    await db.donnaJob.count({
+      where: { mailboxId: box.id, status: "pending" },
+    }),
+    pendingBeforeClean,
+    "Clean must not queue a backlog pass while the mailbox is paused.",
+  );
+  const boxAfterClean = await db.donnaMailbox.findUniqueOrThrow({
+    where: { id: box.id },
+  });
+  assert.equal(boxAfterClean.coverage.clean.reviewed, 1);
 
   const role = "donna_rls_" + suffix;
   await db.$executeRawUnsafe(`CREATE ROLE ${role} NOLOGIN`);

@@ -227,6 +227,111 @@ export function mailboxFolderTables(value: unknown) {
   };
 }
 
+export type DonnaActionCounts = {
+  inbox: number;
+  spam: number;
+  notifications: number;
+  trash: number;
+  drafts: number;
+  all: number;
+};
+
+export function donnaActionCounts(value: unknown): DonnaActionCounts {
+  const folders = mailboxFolders(value);
+  const count = (name: string) =>
+    folders.find((folder) => folder.folder.toLowerCase() === name)?.messages ??
+    0;
+  const inbox = count("inbox");
+  const spam = count("spam");
+  const notifications = count("notification");
+  const trash = count("trash");
+  const drafts = count("drafts");
+  return {
+    inbox,
+    spam,
+    notifications,
+    trash,
+    drafts,
+    all: inbox + spam + notifications + trash + drafts,
+  };
+}
+
+export type CleanReportItem = {
+  subject: string;
+  from: string;
+  folder?: string;
+  waitingOn?: string;
+  nextAction?: string;
+  reason?: string;
+};
+
+export type CleanReport = {
+  at: string;
+  reviewed: number;
+  remaining: number;
+  filed: CleanReportItem[];
+  waiting: CleanReportItem[];
+  needsYou: CleanReportItem[];
+  skipped: CleanReportItem[];
+};
+
+function cleanItems(value: unknown): CleanReportItem[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const raw = item as Record<string, unknown>;
+    const subject = typeof raw.subject === "string" ? raw.subject : "";
+    const title = typeof raw.title === "string" ? raw.title : "";
+    const from = typeof raw.from === "string" ? raw.from : "";
+    const text = (subject || title).trim();
+    if (!text) return [];
+    return [
+      {
+        subject: text.slice(0, 200),
+        from: from.slice(0, 200),
+        folder:
+          typeof raw.folder === "string" ? raw.folder.slice(0, 80) : undefined,
+        waitingOn:
+          typeof raw.waitingOn === "string"
+            ? raw.waitingOn.slice(0, 200)
+            : undefined,
+        nextAction:
+          typeof raw.nextAction === "string"
+            ? raw.nextAction.slice(0, 200)
+            : undefined,
+        reason:
+          typeof raw.reason === "string" ? raw.reason.slice(0, 200) : undefined,
+      },
+    ];
+  });
+}
+
+export function mailboxCleanReport(value: unknown): CleanReport | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = (value as { clean?: unknown }).clean;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const c = raw as Record<string, unknown>;
+  const at = typeof c.at === "string" ? c.at : "";
+  const reviewed =
+    typeof c.reviewed === "number" && Number.isFinite(c.reviewed)
+      ? Math.max(0, Math.trunc(c.reviewed))
+      : 0;
+  const remaining =
+    typeof c.remaining === "number" && Number.isFinite(c.remaining)
+      ? Math.max(0, Math.trunc(c.remaining))
+      : 0;
+  if (!at && !reviewed && !remaining && !Array.isArray(c.filed)) return null;
+  return {
+    at,
+    reviewed,
+    remaining,
+    filed: cleanItems(c.filed).slice(0, 50),
+    waiting: cleanItems(c.waiting).slice(0, 50),
+    needsYou: cleanItems(c.needsYou).slice(0, 50),
+    skipped: cleanItems(c.skipped).slice(0, 50),
+  };
+}
+
 export function coverageLabel(value: unknown): string {
   if (!value || typeof value !== "object" || Array.isArray(value))
     return "Coverage not verified yet.";

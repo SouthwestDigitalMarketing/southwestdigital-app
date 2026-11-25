@@ -1,4 +1,21 @@
 # SWapp handoff
+## 2026-11-25 — Clean inbox (Tom: implement the four-step list)
+
+- A **Donna** button sits top left above the Overview/Email tabs (full width on
+  the phone). The modal has no extra title. It lists Clean inbox, Empty spam,
+  Clear notifications, Empty trash, Clean drafts, and Do it all, each with the
+  folder count from the Email tables. Only Clean inbox is enabled. That starts
+  a `kind=clean` job.
+  Inbox only: read, file allowlisted folders on Zoho (verified copy, never
+  Trash), draft replies (never send), write `coverage.clean` (filed / waiting /
+  needs you / still in Inbox).
+- Paused mailboxes still claim/lock **clean** jobs; other jobs stay blocked.
+  Clean does not enqueue a backlog pass.
+- Known contacts, client/sales mail, drafts, and attachment gaps stay in Inbox.
+- Preview still `http://100.98.89.93:3130/donna` on `swapp_donna`. Worker is not
+  a standing service; start `donna_worker.py` against 3130 to process Clean.
+- Other modal options later. No merge, deploy, or send.
+
 ## 2026-11-25 — Compact Donna screens and separate Scorecard (Tom's correction)
 
 - Donna now opens Overview, with only a brief status and Email card. Its other

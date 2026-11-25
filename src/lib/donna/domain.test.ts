@@ -6,6 +6,8 @@ import {
   coverageLabel,
   mailboxFolders,
   mailboxFolderTables,
+  donnaActionCounts,
+  mailboxCleanReport,
   requestSchema,
   verifyHook,
 } from "./domain";
@@ -154,6 +156,75 @@ describe("honest health and counts", () => {
     hookSecret: "encrypted",
   };
   const now = new Date("2026-11-25T18:00:30Z");
+  it("reads action counts from the same folder table", () => {
+    expect(
+      donnaActionCounts({
+        folders: [
+          { folder: "INBOX", messages: 73 },
+          { folder: "Spam", messages: 209 },
+          { folder: "Notification", messages: 445 },
+          { folder: "Trash", messages: 406 },
+          { folder: "Drafts", messages: 19 },
+          { folder: "Newsletter", messages: 451 },
+        ],
+      }),
+    ).toEqual({
+      inbox: 73,
+      spam: 209,
+      notifications: 445,
+      trash: 406,
+      drafts: 19,
+      all: 1152,
+    });
+  });
+  it("reads a compact clean report from coverage", () => {
+    expect(mailboxCleanReport({})).toBeNull();
+    expect(
+      mailboxCleanReport({
+        clean: {
+          at: "2026-11-25T18:00:00Z",
+          reviewed: 3,
+          remaining: 67,
+          filed: [
+            {
+              subject: "Weekly digest",
+              from: "news@example.com",
+              folder: "Newsletter",
+            },
+          ],
+          waiting: [{ title: "Bank login", waitingOn: "Client" }],
+          needsYou: [{ title: "Fee question", nextAction: "Review draft" }],
+          skipped: [{ subject: "From a client", reason: "known contact" }],
+        },
+      }),
+    ).toEqual({
+      at: "2026-11-25T18:00:00Z",
+      reviewed: 3,
+      remaining: 67,
+      filed: [
+        {
+          subject: "Weekly digest",
+          from: "news@example.com",
+          folder: "Newsletter",
+        },
+      ],
+      waiting: [{ subject: "Bank login", from: "", waitingOn: "Client" }],
+      needsYou: [
+        {
+          subject: "Fee question",
+          from: "",
+          nextAction: "Review draft",
+        },
+      ],
+      skipped: [
+        {
+          subject: "From a client",
+          from: "",
+          reason: "known contact",
+        },
+      ],
+    });
+  });
   it("does not confuse offline, paused or unconfigured with an empty desk", () => {
     expect(mailboxHealth(box, now)).toBe("Listening for email");
     expect(mailboxHealth({ ...box, paused: true }, now)).toBe("Paused");

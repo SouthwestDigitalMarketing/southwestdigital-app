@@ -1,17 +1,22 @@
 # Donna email pilot
 
-Donna's first build is a read-only email desk. It inventories Zoho, reads full
+Donna's first build is an email desk. It inventories Zoho, reads full
 conversations including Sent and Drafts, prepares recommendations and reply text,
-and records verifiable work in SWapp. It does not move, tag, delete, send or write
-CRM/bookkeeping records. The broader build sequence is in
+and records verifiable work in SWapp. Reconcile jobs stay read-only. **Clean**
+files allowlisted Inbox mail on Zoho after a verified copy, drafts replies, and
+never sends. It does not use Trash, and it does not file known contacts or
+client/sales mail. The broader build sequence is in
 [the build plan](design/donna-email-build-plan.md).
 
 ## Pages
 
 - `/donna`: Overview with a short status and one Email card.
 - `/donna/email`: mailbox status, Zoho default folders and custom folders with
-  message counts. No request list or setup details. Work queues stay at
-  `/donna/email/work`.
+  message counts, and the last Clean report. No request list or setup details.
+  Work queues stay at `/donna/email/work`. A **Donna** button in the Donna
+  chrome (every Donna view) opens Clean inbox, Empty spam, Clear
+  notifications, Empty trash, Clean drafts, and Do it all, with folder
+  counts; only Clean inbox is enabled.
 - `/donna/email/work`: two requests per page; Needs you, Working, Waiting and
   Handled are filters here, not top-level Donna tabs.
 - `/donna/requests/[id]`: Summary, Reply, Source and Activity views; separate
@@ -54,14 +59,17 @@ mailbox every two seconds. A fifteen-minute recovery reconciliation observes
 missed pushes, changes in other folders and manually sent replies.
 
 Mailbox locks serialize claims; jobs carry expiring, renewable leases. Publishing
-and completion require the current lease and an unpaused mailbox. Failed work
-remains pending with exponential retry delay. A partial pass queues its remaining
-backlog. Individual failed/oversized conversations are deferred for five minutes
+and completion require the current lease. A paused mailbox still accepts a
+Clean job so the operator can work Inbox without turning the rest of the desk
+on. Failed work remains pending with exponential retry delay. A partial
+reconcile pass queues its remaining backlog. Clean does not. Individual failed/oversized conversations are deferred for five minutes
 without blocking other mail; ready and deferred counts stay in the coverage
 report. Restarting never turns an incomplete queue into a successful result.
 
-The native reader inventories all selectable folders and all UIDs. It uses
-read-only SELECT and BODY.PEEK. Trash is counted but not made into new requests;
+The native reader inventories all selectable folders and all UIDs. Reconcile
+uses read-only SELECT and BODY.PEEK. Clean uses a writable Inbox select only
+to copy an allowlisted message and expunge the Inbox copy after the destination
+copy is verified. Trash is counted but not made into new requests;
 unsent Drafts never count as sent answers. Raw mail stays in a private local
 SQLite/cache directory on Ripley. Supported PDF and text attachments are read;
 unsupported or oversized content remains an explicit request-level gap.
@@ -97,8 +105,8 @@ Worker environment in `~/.config/swapp-donna/env`, mode 600:
 Reuses `~/projects/mailroom-app/bin/mail` for its existing Zoho credentials. The
 configured address must match that account. No new mail password is requested.
 The reviewer runs without shell, apps, plugins, code mode or web search. Incoming
-mail is evidence, not authority to change rules. No model output has an execution
-path for mailbox writes or sending in this pilot.
+mail is evidence, not authority to change rules. No model output can send mail. Clean may file Inbox mail only through the
+allowlisted, verified copy path.
 
 Each pass assesses up to ten threads by default (`--max-threads`, 1–50).
 `--daily-reviews` defaults to fifty model review attempts per UTC day, persisted

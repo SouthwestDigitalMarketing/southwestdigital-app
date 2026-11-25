@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireDonna } from "@/lib/donna/access";
 import { loadDesk, storageMissing } from "@/lib/donna/store";
 import {
+  mailboxCleanReport,
   mailboxFolderTables,
   mailboxHealth,
   type MailboxFolder,
@@ -66,6 +67,7 @@ export default async function EmailPage() {
     0,
   );
   const health = m ? mailboxHealth(m) : "Not connected";
+  const clean = mailboxCleanReport(m?.coverage);
   return (
     <DonnaFrame active="email">
       <div className="flex items-center justify-between gap-3">
@@ -133,6 +135,21 @@ export default async function EmailPage() {
           <p role="alert" className="line-clamp-2 text-xs text-rose-700">
             {m.lastError}
           </p>
+        ) : null}
+        {clean ? (
+          <div aria-label="Last clean">
+            <div className="flex justify-between gap-3">
+              <span className="text-slate-500">Last clean</span>
+              <span>
+                Filed {clean.filed.length} · Waiting {clean.waiting.length} ·
+                Needs you {clean.needsYou.length}
+              </span>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-slate-500">Still in Inbox</span>
+              <span>{clean.remaining.toLocaleString("en-US")}</span>
+            </div>
+          </div>
         ) : null}
       </section>
       <Link
