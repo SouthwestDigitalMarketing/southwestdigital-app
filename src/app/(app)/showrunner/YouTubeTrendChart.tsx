@@ -18,11 +18,11 @@ function formatK(n: number) {
   return String(n);
 }
 
-function DateTick({ x, y, payload }: { x?: number; y?: number; payload?: { value: string } }) {
+function DateTick({ x, y, payload, monthly }: { x?: number; y?: number; payload?: { value: string }; monthly?: boolean }) {
   if (!payload?.value) return null;
   const date = new Date(String(payload.value) + "T00:00:00");
-  const isMonday = date.getDay() === 1;
-  const label = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const isMonday = !monthly && date.getDay() === 1;
+  const label = date.toLocaleDateString("en-US", monthly ? { month: "short" } : { month: "short", day: "numeric" });
   return (
     <g transform={`translate(${x},${y})`}>
       <text
@@ -45,15 +45,13 @@ function truncate(s: string, n: number) {
   return s.length > n ? s.slice(0, n - 1) + "…" : s;
 }
 
-function makeTooltip(segments: VideoSegment[]) {
+function makeTooltip(segments: VideoSegment[], monthly: boolean) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return function TooltipContent({ active, payload, label }: any) {
     if (!active || !payload?.length) return null;
-    const dateLabel = new Date(String(label) + "T00:00:00").toLocaleDateString("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-    });
+    const dateLabel = new Date(String(label) + "T00:00:00").toLocaleDateString("en-US", monthly
+      ? { month: "long", year: "numeric" }
+      : { weekday: "short", month: "short", day: "numeric" });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const entries = (payload as any[]).filter((p: any) => Number(p.value) > 0);
     if (!entries.length) return null;
@@ -86,9 +84,12 @@ function makeTooltip(segments: VideoSegment[]) {
 export function YouTubeTrendChart({
   stackedRows,
   segments,
+  monthly = false,
 }: {
   stackedRows: StackedDayRow[];
   segments: VideoSegment[];
+  /** One bar per month, each row dated the 1st (the Year view, Tom 2026-11-25). */
+  monthly?: boolean;
 }) {
   if (stackedRows.length === 0) {
     return <p className="py-8 text-center text-sm text-slate-400">No data for this period.</p>;
@@ -105,7 +106,7 @@ export function YouTubeTrendChart({
         <BarChart data={chartRows} margin={{ top: 24, right: 4, left: 4, bottom: 28 }} barCategoryGap="25%">
           <XAxis
             dataKey="date"
-            tick={<DateTick />}
+            tick={<DateTick monthly={monthly} />}
             tickLine={false}
             axisLine={false}
             interval={0}
@@ -117,7 +118,7 @@ export function YouTubeTrendChart({
             axisLine={false}
             width={36}
           />
-          <Tooltip content={makeTooltip(segments)} cursor={{ fill: "var(--chart-cursor)" }} />
+          <Tooltip content={makeTooltip(segments, monthly)} cursor={{ fill: "var(--chart-cursor)" }} />
           {segments.map((seg, i) => (
             <Bar
               key={seg.videoId}
@@ -130,6 +131,7 @@ export function YouTubeTrendChart({
                 <LabelList
                   dataKey="dailyTotal"
                   position="top"
+                  formatter={(value: unknown) => formatK(Number(value))}
                   fill="var(--text-secondary)"
                   fontSize={9}
                 />
