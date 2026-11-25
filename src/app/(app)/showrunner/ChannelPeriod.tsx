@@ -23,15 +23,12 @@ import { getYouTubeRefreshToken } from "@/lib/youtube/credentials";
 import { VideoList } from "./VideoList";
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { VideosInProgress, type VideoCard } from "@/components/showrunner/VideosInProgress";
-import { loadVideoCards } from "@/lib/showrunner/load";
-import { createBrandDataContext } from "@/lib/tenancy/context";
 
 /**
- * The top of both tabs: on This Week a New video button (Tom, 2026-11-24: "where's the button to make a video?") and
- * the videos being edited (Tom, 2026-11-25), then the calendar.
+ * The top of both tabs: on This Week a New video button (Tom, 2026-11-24: "where's the button to make a video?"),
+ * then the calendar. Videos being made show in the production bar on every page.
  */
-function PeriodTop({ period, videos }: { period: Period; videos: VideoCard[] }) {
+function PeriodTop({ period }: { period: Period }) {
   return (
     <>
       {period === "week" ? (
@@ -39,8 +36,6 @@ function PeriodTop({ period, videos }: { period: Period; videos: VideoCard[] }) 
           <Plus size={18} aria-hidden="true" /> New video
         </Link>
       ) : null}
-      {/* Only mounted when there is something: it refreshes the page every 10 seconds while shown. */}
-      {videos.length > 0 ? <div className="mb-3 [&>section]:mt-0"><VideosInProgress videos={videos} /></div> : null}
       <div className="mb-3"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
     </>
   );
@@ -65,14 +60,9 @@ export type Period = "month" | "week";
  * period so far. The month counts from the 1st, the week from Sunday (the Sunday wrap-up's week); each resets.
  */
 export async function ChannelPeriod({ period }: { period: Period }) {
-  const { brand: active, dataContext } = await requireAppBrand();
+  const { brand: active } = await requireAppBrand();
   const brand = await showChannelBrand(active);
   const links = await showLinksBrand(active);
-  // Videos ripley is editing now, on the channel brand (Tom, 2026-11-25). Published ones are left out: ripley re-sends
-  // every row at least every 5 minutes, so a days-old upload still looks "updated in the last day".
-  const videos = period === "week"
-    ? (await loadVideoCards(createBrandDataContext({ brandId: brand.id, actorUserId: dataContext.actorUserId }))).filter((video) => !video.url)
-    : [];
 
   const [theme, redirectDomainRecord] = await Promise.all([
     prisma.brandTheme.findUnique({
@@ -95,7 +85,7 @@ export async function ChannelPeriod({ period }: { period: Period }) {
     return (
       <div className="px-4 py-5 sm:p-8">
         <h1 className="sr-only">{period === "week" ? "This week" : "This month"}</h1>
-        <PeriodTop period={period} videos={videos} />
+        <PeriodTop period={period} />
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
         <p className="mt-2 text-sm text-slate-400">YouTube channel not configured for this brand. <a className="font-semibold underline" href="/api/youtube/connect">Connect YouTube</a>.</p>
       </div>
@@ -108,7 +98,7 @@ export async function ChannelPeriod({ period }: { period: Period }) {
     return (
       <div className="px-4 py-5 sm:p-8">
         <h1 className="sr-only">{period === "week" ? "This week" : "This month"}</h1>
-        <PeriodTop period={period} videos={videos} />
+        <PeriodTop period={period} />
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
         <p className="mt-2 text-sm text-slate-600">Channel data is unavailable because the saved YouTube connection could not be read here. <a className="font-semibold underline" href="/api/youtube/connect">Connect YouTube</a>.</p>
       </div>
@@ -174,7 +164,7 @@ export async function ChannelPeriod({ period }: { period: Period }) {
     return (
       <div className="px-4 py-5 sm:p-8">
         <h1 className="sr-only">{period === "week" ? "This week" : "This month"}</h1>
-        <PeriodTop period={period} videos={videos} />
+        <PeriodTop period={period} />
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
         <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           {/refresh token (expired|revoked)/i.test(error ?? "") ? (
@@ -220,7 +210,7 @@ export async function ChannelPeriod({ period }: { period: Period }) {
   return (
     <div className="px-4 py-5 sm:p-8">
       <h1 className="sr-only">{period === "week" ? "This week" : "This month"}</h1>
-      <PeriodTop period={period} videos={videos} />
+      <PeriodTop period={period} />
 
       {/* Goal cards */}
       <div className="grid gap-3 lg:grid-cols-2">

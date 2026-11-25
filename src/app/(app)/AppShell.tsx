@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ProductionBar } from "@/components/showrunner/ProductionBar";
 import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -453,6 +454,7 @@ export function AppShell({
             {mode === "dark" ? <Sun size={20} /> : <Moon size={20} />}
           </button>
         </header>
+        <ProductionBar />
 
         <main
           id="main-content"
