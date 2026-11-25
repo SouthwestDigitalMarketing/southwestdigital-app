@@ -512,6 +512,18 @@ newsletters) into SWapp's Scanner; `/patrol` was removed from every machine the 
 - Open: confirm Zoho empties Spam on its own (oldest Spam mail 31 Oct on 2026-11-24); texts from
   Tom's Pixel (Google Messages for Web, ripley agent Chrome) as a Scanner source — next.
 
+## 2026-11-25 — Travel: Daily needs on every trip (Ummon)
+
+Tom: gym for Olympic lifts, protein shakes twice a day (recipe in `src/lib/travel/needs.ts`),
+BJJ/Muay Thai, fast internet, guitar and blues gigs, "for any travel". New list **Daily needs**
+(need, how we cover it here, where, cost per month, link, covered); every new trip starts with the
+five standing needs, older trips get an "Add my usual needs" button; tile "Needs covered". Options
+gain gym, shakes per month, BJJ/Muay Thai, internet, guitar and blues. The starter trip fills them
+for the five places from 2026-11-25 research (sources: ripley ~/Documents/travel/
+2026-11-25-needs-research.md), adds budget lines for shakes and gym, and a home task to freeze or
+confirm Anytime Fitness. Checks: tsc, eslint, vitest (17 travel tests); phone preview rebuilt the
+starter: 5 photos, 5 needs, no page errors.
+
 ## 2026-11-25 — Travel: photos on options, places and stays (Ummon)
 
 Tom: "add photos to these options". New field type `photo` (https link) on Options, Places to go

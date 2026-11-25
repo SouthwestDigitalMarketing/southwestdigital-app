@@ -23,6 +23,7 @@ export type Field = { key: string; label: string; type: FieldType; options?: rea
 export type SectionKey =
   | "options"
   | "documents"
+  | "needs"
   | "budget"
   | "travel"
   | "stays"
@@ -58,6 +59,11 @@ export const SECTIONS: readonly Section[] = [
       { key: "visaFree", label: "Visa-free stay", type: "text" },
       { key: "timeGap", label: "Time vs Conroe", type: "text" },
       { key: "safety", label: "Safety", type: "text" },
+      { key: "gym", label: "Gym (Olympic lifts)", type: "long" },
+      { key: "shakes", label: "Protein shakes per month", type: "money" },
+      { key: "martialArts", label: "BJJ / Muay Thai", type: "long" },
+      { key: "internet", label: "Internet", type: "long" },
+      { key: "music", label: "Guitar and blues", type: "long" },
       { key: "notes", label: "Notes", type: "long" },
       { key: "source", label: "Source", type: "url" },
     ],
@@ -77,6 +83,21 @@ export const SECTIONS: readonly Section[] = [
       { key: "cost", label: "Cost", type: "money" },
       { key: "how", label: "How to get it", type: "long" },
       { key: "link", label: "Link", type: "url" },
+    ],
+  },
+  {
+    key: "needs",
+    title: "Daily needs",
+    blurb: "What every trip has to cover: training, food, internet, music.",
+    itemLabel: "need",
+    heading: "need",
+    fields: [
+      { key: "need", label: "Need", type: "text" },
+      { key: "plan", label: "How we cover it here", type: "long" },
+      { key: "where", label: "Where", type: "text" },
+      { key: "cost", label: "Cost per month", type: "money" },
+      { key: "link", label: "Link", type: "url" },
+      { key: "covered", label: "Covered", type: "check" },
     ],
   },
   {

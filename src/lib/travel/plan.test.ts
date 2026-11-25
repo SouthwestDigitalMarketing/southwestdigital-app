@@ -17,6 +17,7 @@ import {
   upsertItem,
 } from "./plan";
 import { remoteMonthsPlan } from "./starter";
+import { SHAKE_RECIPE, standingNeeds } from "./needs";
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
@@ -123,5 +124,19 @@ describe("travel plan", () => {
     expect(hasPhotos("stays")).toBe(true);
     expect(hasPhotos("budget")).toBe(false);
     expect(itemsWithoutPhoto(plan, "budget")).toEqual([]);
+  });
+
+  it("starts every trip's needs from the standing list", () => {
+    let n = 0;
+    const needs = standingNeeds(() => id(++n));
+    expect(needs.map((item) => item.need)).toEqual([
+      "Gym with Olympic lifting",
+      "Protein shakes, 2 a day",
+      "BJJ or Muay Thai",
+      "Fast, reliable internet",
+      "Guitar and blues gigs",
+    ]);
+    expect(needs[1].plan).toBe(SHAKE_RECIPE);
+    expect(needs.every((item) => item.covered === false && item.cost === null)).toBe(true);
   });
 });

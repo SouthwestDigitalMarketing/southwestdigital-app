@@ -78,6 +78,10 @@ export function TripClient({
     { label: "Booked legs and stays", value: formatMoney(totals.booked) || "$0" },
     { label: "Documents ready", value: `${docs.ready} of ${docs.total}` },
     {
+      label: "Needs covered",
+      value: `${plan.sections.needs.filter((item) => item.covered === true).length} of ${counts("needs")}`,
+    },
+    {
       label: "Home checklist",
       value: `${plan.sections.home.filter((item) => item.done === true).length} of ${counts("home")} done`,
     },
@@ -104,7 +108,7 @@ export function TripClient({
         </div>
       ) : null}
 
-      <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+      <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         {tiles.map((tile) => (
           <div key={tile.label} className={`${card} p-4`}>
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{tile.label}</p>
@@ -273,6 +277,11 @@ function SectionBlock({
           <p className="text-sm text-slate-500">{section.blurb}</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {section.key === "needs" && items.length === 0 ? (
+            <button type="button" className={ghost} disabled={pending} onClick={() => run({ kind: "standingNeeds" })}>
+              Add my usual needs
+            </button>
+          ) : null}
           {missingPhotos > 0 ? (
             <button
               type="button"
