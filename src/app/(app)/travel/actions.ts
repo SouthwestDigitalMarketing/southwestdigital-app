@@ -27,8 +27,9 @@ import {
   type TripPlan,
 } from "@/lib/travel/plan";
 import { REMOTE_MONTHS_TITLE, remoteMonthsPlan } from "@/lib/travel/starter";
-import { geocode, lookupPlace } from "@/lib/travel/photos";
+import { geocode, lookupPlace, pagePhoto } from "@/lib/travel/photos";
 import { standingNeeds } from "@/lib/travel/needs";
+import { suggestionsFor } from "@/lib/travel/spots";
 
 const titleSchema = z.string().trim().min(1, "Give the trip a name.").max(120);
 
@@ -71,7 +72,9 @@ const detailsSchema = z
   })
   .refine((d) => !d.startsOn || !d.endsOn || d.startsOn <= d.endsOn, "The trip ends before it starts.");
 
-const MAP_SECTIONS: ReadonlySet<SectionKey> = new Set(["options", "stays", "places"]);
+const MAP_SECTIONS: ReadonlySet<SectionKey> = new Set(["options", "stays", "places", "spots"]);
+/** Spot kinds that are public things with Wikipedia articles; businesses use their own page's photo. */
+const WIKI_SPOT_KINDS = new Set(["Neighborhood to stay", "Getting around"]);
 
 function located(item: TripItem) {
   return typeof item.lat === "number" && typeof item.lng === "number";
@@ -103,19 +106,30 @@ async function enrich(
     }
     const wantPhoto = AUTO_PHOTO_SECTIONS.has(section) && !item.photo;
     const wantPin = !located(item);
-    if ((wantPhoto || wantPin) && section !== "stays") {
+    // A spot belongs to an option ("Mexico City"); that is its place, not the trip's destination.
+    const where = section === "spots" ? String(item.option ?? "") : destination;
+    const link = typeof item.link === "string" ? item.link : "";
+    const wiki = section !== "stays" && (section !== "spots" || WIKI_SPOT_KINDS.has(String(item.kind)));
+    if (wantPhoto && section === "spots" && link) {
+      const photo = await pagePhoto(link);
+      if (photo) item = { ...item, photo };
+    }
+    if (wiki && ((wantPhoto && !item.photo) || wantPin)) {
       const found =
-        destination && section === "places"
-          ? await lookupPlace(`${name} ${destination}`).then(async (hit) => (hit.photo || hit.lat !== null ? hit : lookupPlace(name)))
+        where && section !== "options"
+          ? await lookupPlace(`${name} ${where}`).then(async (hit) => (hit.photo || hit.lat !== null ? hit : lookupPlace(name)))
           : await lookupPlace(name);
-      if (wantPhoto && found.photo) item = { ...item, photo: found.photo };
+      if (wantPhoto && !item.photo && found.photo) item = { ...item, photo: found.photo };
       if (wantPin && found.lat !== null && found.lng !== null) item = { ...item, lat: found.lat, lng: found.lng };
     }
-    if (!located(item)) {
+    if (!located(item) && !(section === "spots" && item.kind === "Getting around")) {
+      // "Condesa (Tamaulipas 60)": try the street address, then the plain neighbourhood.
+      const address = /\(([^)]*\d[^)]*)\)/.exec(area)?.[1] ?? "";
+      const plainArea = area.replace(/\([^)]*\)/g, "").split(/[,;/]| and /)[0].trim();
       const queries =
         section === "stays"
-          ? [[area, destination], [destination]]
-          : [[name, area, destination], [area, destination]];
+          ? [[plainArea, where], [where]]
+          : [[name, plainArea, where], [address, where], [plainArea, where]];
       for (const parts of queries) {
         const text = parts.filter(Boolean).join(", ");
         if (!text) continue;
@@ -135,6 +149,7 @@ type Change =
   | { kind: "details"; details: unknown }
   | { kind: "fill"; section: string }
   | { kind: "standingNeeds" }
+  | { kind: "suggestSpots"; option: string }
   | { kind: "save"; section: string; item: unknown }
   | { kind: "remove"; section: string; id: string }
   | { kind: "move"; section: string; id: string; direction: -1 | 1 };
@@ -163,10 +178,25 @@ export async function changeTripAction(slug: string, change: Change): Promise<{ 
 
 type Context = Awaited<ReturnType<typeof requireStaffBrandOrThrow>>["dataContext"];
 type Found = { photo?: string; lat?: number; lng?: number };
-type Prepared = Change | { kind: "setFound"; section: SectionKey; found: Record<string, Found> };
+type Prepared =
+  | Change
+  | { kind: "setFound"; section: SectionKey; found: Record<string, Found> }
+  | { kind: "addSpots"; items: TripItem[] };
 
 /** Photo and pin lookups are network calls, so they run before the locked transaction, never inside it. */
 async function prepare(dataContext: Context, slug: string, change: Change): Promise<Prepared> {
+  if (change.kind === "suggestSpots") {
+    const option = z.string().trim().min(1).max(200).parse(change.option);
+    const trip = await withBrandDataTransaction(dataContext, (tx) =>
+      tx.trip.findUnique({ where: { brandId_slug: { brandId: dataContext.brandId, slug } }, select: { plan: true } }),
+    );
+    if (!trip) throw new Error("That trip no longer exists.");
+    const existing = parsePlan(trip.plan).sections.spots.filter((spot) => String(spot.option ?? "").toLowerCase() === option.toLowerCase());
+    const fresh = suggestionsFor(option, existing.map((spot) => String(spot.name ?? "")));
+    if (fresh.length === 0) throw new Error(`No new suggestions for ${option}.`);
+    const items = fresh.map((spot) => parseItem("spots", { id: randomUUID(), ...spot, option }));
+    return { kind: "addSpots", items: await enrich("spots", items, "", new Map()) };
+  }
   if (change.kind !== "save" && change.kind !== "fill") return change;
   const section = sectionSchema.parse(change.section);
   if (!MAP_SECTIONS.has(section)) return change;
@@ -221,6 +251,18 @@ async function applyChange(dataContext: Context, slug: string, change: Prepared)
         break;
       }
       case "fill":
+        break;
+      case "suggestSpots":
+        break;
+      case "addSpots":
+        for (const item of change.items) {
+          const taken = plan.sections.spots.some(
+            (spot) =>
+              String(spot.option ?? "").toLowerCase() === String(item.option ?? "").toLowerCase() &&
+              String(spot.name ?? "").toLowerCase() === String(item.name ?? "").toLowerCase(),
+          );
+          if (!taken) plan = upsertItem(plan, "spots", item);
+        }
         break;
       case "standingNeeds":
         if (plan.sections.needs.length === 0) plan = { ...plan, sections: { ...plan.sections, needs: standingNeeds(randomUUID) } };

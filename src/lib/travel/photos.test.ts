@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { findPlacePhoto, geocode, lookupPlace } from "./photos";
+import { findPlacePhoto, geocode, lookupPlace, pagePhoto } from "./photos";
 
 function answer(body: unknown, ok = true) {
   return vi.fn().mockResolvedValue({ ok, json: async () => body });
@@ -56,5 +56,47 @@ describe("geocode", () => {
     vi.stubGlobal("fetch", answer([{ lat: "abc", lon: "1" }]));
     expect(await geocode("Nowhere")).toBeNull();
     expect(await geocode(" ")).toBeNull();
+  });
+});
+
+function htmlPage(html: string, url = "https://gym.example.com/", contentType = "text/html; charset=utf-8") {
+  return vi.fn().mockResolvedValue({
+    ok: true,
+    url,
+    headers: new Headers({ "content-type": contentType }),
+    body: new Response(html).body,
+  });
+}
+
+describe("pagePhoto", () => {
+  it("reads og:image, resolving relative links", async () => {
+    vi.stubGlobal("fetch", htmlPage('<head><meta property="og:image" content="/img/box.jpg?a=1&amp;b=2"></head>'));
+    expect(await pagePhoto("https://gym.example.com/")).toBe("https://gym.example.com/img/box.jpg?a=1&b=2");
+  });
+
+  it("falls back to twitter:image and ignores non-https images", async () => {
+    vi.stubGlobal(
+      "fetch",
+      htmlPage('<meta property="og:image" content="http://x.example.com/a.jpg"><meta name="twitter:image" content="https://cdn.example.com/b.jpg">'),
+    );
+    expect(await pagePhoto("https://cafe.example.com/")).toBe("https://cdn.example.com/b.jpg");
+  });
+
+  it("never fetches private or odd addresses", async () => {
+    const fetch = htmlPage("<meta property='og:image' content='https://a.example.com/x.jpg'>");
+    vi.stubGlobal("fetch", fetch);
+    for (const link of ["http://gym.example.com/", "https://localhost/", "https://127.0.0.1/", "https://[::1]/", "https://intranet/", "not a url"]) {
+      expect(await pagePhoto(link)).toBeNull();
+    }
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("returns null for non-HTML pages, redirects to private hosts, or no image", async () => {
+    vi.stubGlobal("fetch", htmlPage("{}", "https://gym.example.com/", "application/json"));
+    expect(await pagePhoto("https://gym.example.com/")).toBeNull();
+    vi.stubGlobal("fetch", htmlPage("<meta property='og:image' content='https://a.example.com/x.jpg'>", "https://10.0.0.5/"));
+    expect(await pagePhoto("https://gym.example.com/")).toBeNull();
+    vi.stubGlobal("fetch", htmlPage("<p>hello</p>"));
+    expect(await pagePhoto("https://gym.example.com/")).toBeNull();
   });
 });

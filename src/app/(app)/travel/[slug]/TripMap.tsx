@@ -12,8 +12,14 @@ export const PIN_COLORS: Partial<Record<SectionKey, string>> = {
   options: "#2563eb",
   stays: "#059669",
   places: "#d97706",
+  spots: "#7c3aed",
 };
-const PIN_LABELS: Partial<Record<SectionKey, string>> = { options: "Option", stays: "Stay", places: "Place to go" };
+const PIN_LABELS: Partial<Record<SectionKey, string>> = {
+  options: "Option",
+  stays: "Stay",
+  places: "Place to go",
+  spots: "Day-to-day spot",
+};
 
 function escapeHtml(text: string) {
   return text.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);

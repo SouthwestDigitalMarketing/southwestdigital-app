@@ -512,6 +512,22 @@ newsletters) into SWapp's Scanner; `/patrol` was removed from every machine the 
 - Open: confirm Zoho empties Spam on its own (oldest Spam mail 31 Oct on 2026-11-24); texts from
   Tom's Pixel (Google Messages for Web, ripley agent Chrome) as a Scanner source — next.
 
+## 2026-11-25 — Travel: Day-to-day life on each option (Ummon)
+
+Tom: "show me like Airbnb options ... the coffee shops I'd work from ... images of the public
+transportation and the clubs ... what day-to-day life would be". New list **Day-to-day spots**
+(`spots`: name, photo, kind from `SPOT_KINDS`, for option, area, why, link, lat/lng). An option's
+page shows **Day-to-day life**: Airbnb monthly-search buttons per neighbourhood (links to Airbnb's
+own search; nothing scraped), photo rows per kind (swipe on phones), a map of the option and its
+spots, Add a spot, and **Add suggested spots (N)** from `src/lib/travel/spots.ts` (66 researched
+spots for the five starter options; sources ripley ~/Documents/travel/2026-11-25-spots-research.md).
+Photos: a spot's own page og:image (`pagePhoto`: https, public hostnames only, no IP literals,
+4 s, first 512 KB; Instagram/Facebook usually give none), Wikipedia for neighbourhoods and transit.
+Pins: Wikipedia coords, then Nominatim with name+area, the street address in brackets, then the
+plain neighbourhood (approximate); transit spots get no pin by design. Trip page spots list has a
+"Show" filter by option; a spot's page links back to its option. Checks: tsc, eslint, vitest (30
+travel tests); preview: Mexico City suggestions added (14 spots, 11 photos, 13 pins), no errors.
+
 ## 2026-11-25 — Travel: option totals, round trips only, sort by price or time zone (Ummon)
 
 Tom: "keep these to round trips for now"; "on the cards we need to have the total"; sort by
