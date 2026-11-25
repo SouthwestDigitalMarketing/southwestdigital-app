@@ -512,6 +512,27 @@ newsletters) into SWapp's Scanner; `/patrol` was removed from every machine the 
 - Open: confirm Zoho empties Spam on its own (oldest Spam mail 31 Oct on 2026-11-24); texts from
   Tom's Pixel (Google Messages for Web, ripley agent Chrome) as a Scanner source — next.
 
+## 2026-11-25 — Travel menu: one page per trip (Ummon)
+
+Tom: "click on travel and select one of the items for our trips ... the Bible for that trip"; later
+"there may be other documents necessary for travel". New sidebar item **Travel** (`/travel`, Plane
+icon, command-menu aliases trip/itinerary/budget, no chord). Table `Trip` (migration
+`20261125180000_travel_trips`, brand-scoped, forced RLS like ShowrunnerStudio): title, slug
+(unique per brand), status (idea/planning/booked/underway/done), destination, startsOn/endsOn
+(`YYYY-MM-DD` text), `plan` jsonb. The plan's lists are defined once in `src/lib/travel/plan.ts`
+(`SECTIONS`): Options, Documents, Budget, Getting there, Stays, Places to go, Itinerary, Entry rules,
+Home checklist, Videos. Adding a list = one entry there; saved plans need no migration
+(`parsePlan` fills missing lists, skips bad items). Documents warn at the top of the trip when one
+has expired or expires before the trip ends (Chicago date). `/travel` with no trips offers
+"Start from the two-months-abroad research" (`src/lib/travel/starter.ts`, Donna's 2026-11-25
+research; prices are snapshots, not live fares). Edits go through `changeTripAction`, which
+returns `{ error }` (production hides thrown server-action messages).
+Checks: tsc, eslint, vitest (12 travel tests, full suite passed); headless click-through on a
+private local DB (`swapp_travel`, port 3120): starter, add budget line, tick a checklist item
+(survives reload), edit dates, passport expiry warning, bad link rejected with a plain reason,
+delete trip; 1280 and 412 px, no page errors, no sideways scroll.
+Open: Showrunner tie-in (trip videos to a series) is Johnny's call; not built.
+
 ## Lessons and open follow-ups (Ummon, 2026-11-22 wrapup)
 
 - Before telling Tom a video is stuck, re-read live status (production `ShowrunnerVideoStatus`
