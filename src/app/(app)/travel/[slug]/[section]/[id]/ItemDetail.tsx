@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { formatMoney, pinFor, sectionFor, visibleFields, type SectionKey, type TripItem } from "@/lib/travel/plan";
+import { formatMoney, pinFor, sectionFor, visibleFields, type MapPin, type SectionKey, type TripItem } from "@/lib/travel/plan";
 import { ItemForm, ItemPhoto, card, danger, ghost, shownValue, useChange } from "../../parts";
 import { TripMap } from "../../TripMap";
+import { DayLife } from "./DayLife";
 
 export function ItemDetail({
   slug,
@@ -17,6 +18,8 @@ export function ItemDetail({
   nextId,
   position,
   total,
+  parent,
+  dayLife,
 }: {
   slug: string;
   tripTitle: string;
@@ -27,6 +30,13 @@ export function ItemDetail({
   nextId: string | null;
   position: string;
   total: { days: number; amount: number | null } | null;
+  parent: { href: string; label: string } | null;
+  dayLife: {
+    option: string;
+    optionPin: MapPin | null;
+    groups: Array<{ kind: string; spots: TripItem[] }>;
+    suggestions: number;
+  } | null;
 }) {
   const section = sectionFor(sectionKey);
   const router = useRouter();
@@ -69,6 +79,14 @@ export function ItemDetail({
         <Link href={back} className="hover:text-slate-800">
           {sectionTitle}
         </Link>
+        {parent ? (
+          <>
+            <span aria-hidden="true">·</span>
+            <Link href={parent.href} className="font-semibold text-slate-700 hover:text-slate-900">
+              Back to {parent.label}
+            </Link>
+          </>
+        ) : null}
       </nav>
 
       <div className={`${card} mt-3 overflow-hidden`}>
@@ -170,7 +188,9 @@ export function ItemDetail({
         </div>
       </div>
 
-      {section.fields.some((field) => field.type === "coordinate") ? (
+      {dayLife ? <DayLife slug={slug} {...dayLife} /> : null}
+
+      {!dayLife && section.fields.some((field) => field.type === "coordinate") ? (
         <section className="mt-6" aria-label="Where it is">
           <TripMap pins={pins} className="h-56 sm:h-72" zoom={11} />
         </section>

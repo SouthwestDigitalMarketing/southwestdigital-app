@@ -5,6 +5,8 @@ import { TRIP_STATUSES, parsePlan, type TripStatus } from "@/lib/travel/plan";
 import { TripClient } from "./TripClient";
 
 export const dynamic = "force-dynamic";
+// "Add suggested spots" / "Find photos and pins" fetch photos and pins one by one (about 30-60 s).
+export const maxDuration = 120;
 
 type PageProps = { params: Promise<{ slug: string }> };
 

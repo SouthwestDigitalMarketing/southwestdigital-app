@@ -85,3 +85,62 @@ export async function geocode(query: string): Promise<{ lat: number; lng: number
     return null;
   }
 }
+
+/** Hosts a staff-entered link must never make the server fetch (loopback, private, link-local). */
+function isPublicHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (!host.includes(".") || host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) return false;
+  if (/^[\d.]+$/.test(host) || host.includes(":")) return false; // IP literals: names only
+  return true;
+}
+
+const MAX_PAGE_BYTES = 512_000;
+
+/**
+ * The preview image a web page declares for itself (og:image / twitter:image), for spots such as
+ * a gym or café whose own site has a photo. https pages on public hostnames only, 4 s, first 512 KB.
+ */
+export async function pagePhoto(link: string): Promise<string | null> {
+  let page: URL;
+  try {
+    page = new URL(link);
+  } catch {
+    return null;
+  }
+  if (page.protocol !== "https:" || !isPublicHost(page.hostname)) return null;
+  try {
+    const response = await fetch(page, {
+      headers: { "User-Agent": USER_AGENT, Accept: "text/html" },
+      signal: AbortSignal.timeout(4000),
+      redirect: "follow",
+      cache: "no-store",
+    });
+    if (!response.ok || !response.body || !(response.headers.get("content-type") ?? "").includes("html")) return null;
+    const finalUrl = new URL(response.url || page.toString());
+    if (finalUrl.protocol !== "https:" || !isPublicHost(finalUrl.hostname)) return null;
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    while (size < MAX_PAGE_BYTES) {
+      const { done, value } = await reader.read();
+      if (done || !value) break;
+      chunks.push(value);
+      size += value.length;
+    }
+    await reader.cancel().catch(() => undefined);
+    const html = new TextDecoder().decode(Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))));
+    const tags = html.match(/<meta\b[^>]*>/gi) ?? [];
+    for (const wanted of ["og:image:secure_url", "og:image", "twitter:image"]) {
+      for (const tag of tags) {
+        const name = /\b(?:property|name)\s*=\s*["']([^"']+)["']/i.exec(tag)?.[1]?.toLowerCase();
+        const content = /\bcontent\s*=\s*["']([^"']+)["']/i.exec(tag)?.[1];
+        if (name !== wanted || !content) continue;
+        const image = new URL(content.replace(/&amp;/g, "&"), finalUrl);
+        if (image.protocol === "https:" && isPublicHost(image.hostname)) return image.toString();
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}

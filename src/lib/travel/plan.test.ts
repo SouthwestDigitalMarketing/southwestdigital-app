@@ -6,7 +6,9 @@ import {
   documentWarnings,
   documentsReady,
   emptyPlan,
+  airbnbSearchUrl,
   formatHours,
+  spotsFor,
   hasPhotos,
   optionTotal,
   sortOptions,
@@ -198,5 +200,25 @@ describe("travel plan", () => {
     expect(formatHours(0)).toBe("Same time");
     expect(formatHours(-1)).toBe("1 hour behind");
     expect(formatHours(15)).toBe("15 hours ahead");
+  });
+
+  it("groups an option's spots by kind and links Airbnb monthly searches", () => {
+    let plan = emptyPlan();
+    const spot = (n: number, name: string, kind: string, option: string) =>
+      (plan = upsertItem(plan, "spots", parseItem("spots", { id: id(n), name, kind, option })));
+    spot(1, "Café Toscano", "Work spot", "Mexico City");
+    spot(2, "Roma Norte", "Neighborhood to stay", "mexico city");
+    spot(3, "Metro", "Getting around", "Mexico City");
+    spot(4, "Nimman", "Neighborhood to stay", "Chiang Mai, Thailand");
+    spot(5, "Mystery", "", "Mexico City");
+    expect(spotsFor(plan, "Mexico City").map((group) => [group.kind, group.spots.map((item) => item.name)])).toEqual([
+      ["Neighborhood to stay", ["Roma Norte"]],
+      ["Work spot", ["Café Toscano"]],
+      ["Getting around", ["Metro"]],
+      ["Other", ["Mystery"]],
+    ]);
+    expect(itemsWithoutPin(plan, "spots").map((item) => item.name)).not.toContain("Metro");
+    expect(airbnbSearchUrl("Roma Norte, Mexico City")).toBe("https://www.airbnb.com/s/Roma-Norte--Mexico-City/homes?monthly_stay=true");
+    expect(airbnbSearchUrl("Mérida, Mexico")).toBe("https://www.airbnb.com/s/M%C3%A9rida--Mexico/homes?monthly_stay=true");
   });
 });

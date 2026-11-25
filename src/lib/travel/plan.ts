@@ -16,6 +16,19 @@ export const TRIP_STATUS_LABELS: Record<TripStatus, string> = {
   done: "Done",
 };
 
+/** Kinds of day-to-day spots, in the order an option's page shows them. */
+export const SPOT_KINDS = [
+  "Neighborhood to stay",
+  "Rental",
+  "Work spot",
+  "Gym",
+  "Martial arts",
+  "Getting around",
+  "Music",
+  "Groceries",
+  "Other",
+] as const;
+
 export const DOCUMENT_STATUSES = ["Need it", "Applied", "Have it", "Not needed"] as const;
 
 /** "coordinate" fields (lat/lng) are looked up on save and never shown in forms or on cards. */
@@ -23,6 +36,7 @@ export type FieldType = "text" | "long" | "money" | "hours" | "date" | "url" | "
 export type Field = { key: string; label: string; type: FieldType; options?: readonly string[] };
 export type SectionKey =
   | "options"
+  | "spots"
   | "documents"
   | "needs"
   | "budget"
@@ -70,6 +84,25 @@ export const SECTIONS: readonly Section[] = [
       { key: "music", label: "Guitar and blues", type: "long" },
       { key: "notes", label: "Notes", type: "long" },
       { key: "source", label: "Source", type: "url" },
+      { key: "lat", label: "Latitude", type: "coordinate" },
+      { key: "lng", label: "Longitude", type: "coordinate" },
+    ],
+  },
+  {
+    key: "spots",
+    title: "Day-to-day spots",
+    blurb: "Where we would live, work, train, eat and play in each option.",
+    itemLabel: "spot",
+    heading: "name",
+    summary: ["kind", "option", "area"],
+    fields: [
+      { key: "name", label: "Name", type: "text" },
+      { key: "photo", label: "Photo link", type: "photo" },
+      { key: "kind", label: "Kind", type: "choice", options: SPOT_KINDS },
+      { key: "option", label: "For option", type: "text" },
+      { key: "area", label: "Area", type: "text" },
+      { key: "why", label: "Why", type: "long" },
+      { key: "link", label: "Link", type: "url" },
       { key: "lat", label: "Latitude", type: "coordinate" },
       { key: "lng", label: "Longitude", type: "coordinate" },
     ],
@@ -376,7 +409,12 @@ export function mapPins(plan: TripPlan): MapPin[] {
 /** Items that can sit on the map but have no pin yet. */
 export function itemsWithoutPin(plan: TripPlan, sectionKey: SectionKey): TripItem[] {
   return sectionFor(sectionKey).fields.some((field) => field.type === "coordinate")
-    ? plan.sections[sectionKey].filter((item) => typeof item.lat !== "number" || typeof item.lng !== "number")
+    ? plan.sections[sectionKey].filter(
+        (item) =>
+          (typeof item.lat !== "number" || typeof item.lng !== "number") &&
+          // A transit system is a whole network, not a point on the map.
+          !(sectionKey === "spots" && item.kind === "Getting around"),
+      )
     : [];
 }
 
@@ -385,8 +423,31 @@ export function hasPhotos(sectionKey: SectionKey): boolean {
   return sectionFor(sectionKey).fields.some((field) => field.type === "photo");
 }
 
-/** Options and places get a Wikipedia photo when saved without one; stays are usually rentals, so no guess. */
-export const AUTO_PHOTO_SECTIONS: ReadonlySet<SectionKey> = new Set(["options", "places"]);
+/**
+ * Options, places and spots get a photo when saved without one (Wikipedia, or the spot's own web
+ * page); stays are usually rentals, so no guess.
+ */
+export const AUTO_PHOTO_SECTIONS: ReadonlySet<SectionKey> = new Set(["options", "places", "spots"]);
+
+/** Spots that belong to an option, grouped by kind in SPOT_KINDS order. */
+export function spotsFor(plan: TripPlan, optionName: string): Array<{ kind: string; spots: TripItem[] }> {
+  const name = optionName.trim().toLowerCase();
+  const mine = plan.sections.spots.filter((spot) => String(spot.option ?? "").trim().toLowerCase() === name);
+  return SPOT_KINDS.flatMap((kind) => {
+    const spots = mine.filter((spot) => (spot.kind || "Other") === kind);
+    return spots.length ? [{ kind, spots }] : [];
+  });
+}
+
+/** An Airbnb search for monthly stays in an area (Airbnb's own search page; we never scrape it). */
+export function airbnbSearchUrl(place: string): string {
+  const path = place
+    .split(",")
+    .map((part) => part.trim().replace(/\s+/g, "-"))
+    .filter(Boolean)
+    .join("--");
+  return `https://www.airbnb.com/s/${encodeURIComponent(path)}/homes?monthly_stay=true`;
+}
 
 /** Items in a photo list that still have no photo. */
 export function itemsWithoutPhoto(plan: TripPlan, sectionKey: SectionKey): TripItem[] {

@@ -32,7 +32,7 @@ import { MapLegend, TripMap } from "./TripMap";
 
 type Details = { title: string; status: TripStatus; destination: string; startsOn: string; endsOn: string };
 
-const MAP_KEYS: SectionKey[] = ["options", "stays", "places"];
+const MAP_KEYS: SectionKey[] = ["options", "spots", "stays", "places"];
 
 export function itemHref(slug: string, section: SectionKey, id: string) {
   return `/travel/${slug}/${section}/${id}`;
@@ -264,8 +264,15 @@ function SectionBlock({
 }) {
   const [adding, setAdding] = useState<string | null>(null);
   const [sort, setSort] = useState<OptionSort>("mine");
+  const [only, setOnly] = useState("");
   const isOptions = section.key === "options";
-  const shown = isOptions ? sortOptions(items, sort, days) : items;
+  const isSpots = section.key === "spots";
+  const spotOptions = isSpots ? [...new Set(items.map((item) => String(item.option ?? "")).filter(Boolean))] : [];
+  const shown = isOptions
+    ? sortOptions(items, sort, days)
+    : isSpots && only
+      ? items.filter((item) => item.option === only)
+      : items;
   const { pending, error, run } = useChange(slug);
   const totals =
     section.key === "budget"
@@ -315,6 +322,19 @@ function SectionBlock({
             {(Object.keys(OPTION_SORTS) as OptionSort[]).map((key) => (
               <option key={key} value={key}>
                 {OPTION_SORTS[key]}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+      {isSpots && spotOptions.length > 1 ? (
+        <label className="mt-2 flex items-center gap-2 text-sm text-slate-700">
+          Show
+          <select value={only} onChange={(event) => setOnly(event.target.value)} className={`${inputClass} w-auto`}>
+            <option value="">All options</option>
+            {spotOptions.map((name) => (
+              <option key={name} value={name}>
+                {name}
               </option>
             ))}
           </select>
