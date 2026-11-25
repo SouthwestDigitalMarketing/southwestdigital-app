@@ -80,13 +80,38 @@ def write_json(path, value):
     os.replace(tmp, path)
 
 
-def note_batch_file(folder, expected, name, size):
+def batch_options(query):
+    """What the send app says about a new batch (Tom, 2026-11-25): addTo, the batch whose video these clips join
+    (Add more clips), and auto, the Full auto switch ("1" or "0")."""
+    options = {}
+    add_to = query.get("addTo", [""])[0]
+    if add_to and BATCH.match(add_to):
+        options["addTo"] = add_to
+    auto = query.get("auto", [""])[0]
+    if auto in ("0", "1"):
+        options["auto"] = auto == "1"
+    return options
+
+
+def note_batch_file(folder, expected, name, size, options=None):
     with BATCH_LOCK:
         meta_path = os.path.join(folder, ".batch.json")
         meta = read_json(meta_path, None) or {"created": int(time.time()), "expected": expected, "files": {}}
         meta["expected"] = max(int(meta.get("expected") or 0), expected)
         meta["files"][name] = size
+        for key, value in (options or {}).items():
+            meta.setdefault(key, value)
         write_json(meta_path, meta)
+
+
+def request_finish(inbox, batch, note):
+    """Finish (Tom, 2026-11-25): leave done/<batch>/.finish.json for Showrunner's inbox run, which records the
+    go-ahead and the note and starts the waiting video's build."""
+    folder = os.path.join(inbox, "done", batch)
+    if not os.path.isdir(folder):
+        return 404, {"error": "That video is not on ripley yet. Wait for every file to arrive."}
+    write_json(os.path.join(folder, ".finish.json"), {"note": str(note or "").strip()[:2000], "at": int(time.time())})
+    return 200, {"ok": True}
 
 
 def live_batches(inbox):
@@ -245,7 +270,7 @@ def known_copy(inbox, name, size, batch, head=""):
     return None
 
 
-def reuse_copy(folder, name, size, expected, found):
+def reuse_copy(folder, name, size, expected, found, options=None):
     """Put the copy ripley already has into this batch instead of sending it again."""
     media, receipt = found
     os.makedirs(folder, exist_ok=True)
@@ -258,7 +283,7 @@ def reuse_copy(folder, name, size, expected, found):
     except OSError:
         shutil.copy2(media, final)
     write_json(final + ".receipt.json", {**receipt, "reusedFrom": os.path.relpath(media, INBOX)})
-    note_batch_file(folder, expected, name, size)
+    note_batch_file(folder, expected, name, size, options)
     return {"received": size, "done": True, "reused": True}
 
 
@@ -1279,7 +1304,7 @@ class Handler(BaseHTTPRequestHandler):
                     expected = int(query.get("count", ["1"])[0])
                 except ValueError:
                     expected = 1
-                state = reuse_copy(folder, name, size, expected, found)
+                state = reuse_copy(folder, name, size, expected, found, batch_options(query))
             self._json(200, state)
             return
         if path == "/app/version":
@@ -1543,7 +1568,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
-        if parsed.path != "/cancel":
+        if parsed.path not in ("/cancel", "/finish"):
             self._json(404, {"error": "Not found."})
             return
         query = urllib.parse.parse_qs(parsed.query)
@@ -1558,6 +1583,9 @@ class Handler(BaseHTTPRequestHandler):
         batch = query.get("batch", [""])[0]
         if not BATCH.match(batch):
             self._json(400, {"error": "The batch is not valid."})
+            return
+        if parsed.path == "/finish":
+            self._json(*request_finish(INBOX, batch, query.get("note", [""])[0]))
             return
         self._json(*cancel_batch(INBOX, batch))
 
@@ -1630,7 +1658,7 @@ class Handler(BaseHTTPRequestHandler):
                 expected = max(1, min(int(query.get("count", ["1"])[0]), 200))
             except ValueError:
                 expected = 1
-            note_batch_file(folder, expected, name, size)
+            note_batch_file(folder, expected, name, size, batch_options(query))
         digest = hashlib.sha256()
         left = size
         try:
@@ -1678,7 +1706,7 @@ def put_chunk(handler, query, secret, name, size, length):
         return
     folder = os.path.join(INBOX, batch)
     os.makedirs(folder, exist_ok=True)
-    note_batch_file(folder, expected, name, size)
+    note_batch_file(folder, expected, name, size, batch_options(query))
     current = upload_state(folder, name, size)
     if current["done"]:
         handler._json(200, current)
@@ -1826,6 +1854,17 @@ def self_test():
     assert post(cancel + "b4")[0] == 409 and os.path.isdir(os.path.join(INBOX, "b4"))
     assert post(cancel + "nope") == (200, {"cancelled": False})
     assert post(cancel.replace("ssig=", "ssig=00") + "b4")[0] == 403
+    # Add more clips and the Full auto switch ride on the first piece; Finish leaves a request for Showrunner.
+    more = "http://%s:%d/upload?sexp=%d&ssig=%s&size=4&name=d.mp4&batch=b8&count=1&addTo=b2&auto=0&offset=0" % (
+        host, port, sexp, ssig)
+    with urllib.request.urlopen(urllib.request.Request(more, data=body, method="PUT")):
+        pass
+    meta = read_json(os.path.join(INBOX, "b8", ".batch.json"), {})
+    assert meta["addTo"] == "b2" and meta["auto"] is False, meta
+    finish = "http://%s:%d/finish?sexp=%d&ssig=%s&note=%s&batch=" % (host, port, sexp, ssig, urllib.parse.quote("open on the coffee"))
+    assert post(finish + "b2") == (200, {"ok": True})
+    assert read_json(os.path.join(INBOX, "done", "b2", ".finish.json"), {})["note"] == "open on the coffee"
+    assert post(finish + "b8")[0] == 404
     # The app download needs the signed link.
     global APK
     APK = os.path.join(INBOX, "app.apk")

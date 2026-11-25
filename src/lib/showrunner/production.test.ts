@@ -28,6 +28,14 @@ describe("productionItem", () => {
     expect(item).toMatchObject({ label: "Upload", step: 2, stopped: true, progress: 0.5 });
   });
 
+  it("marks a video waiting for Tom's go-ahead", () => {
+    const item = productionItem({
+      ...base,
+      steps: [{ label: "Making the cut", state: "done" }, { label: "Waiting for you: add clips or finish", state: "now" }, { label: "Rendering", state: "todo" }],
+    });
+    expect(item).toMatchObject({ waiting: true, stopped: false, step: 2 });
+  });
+
   it("uses the stage line before ripley sends steps", () => {
     expect(productionItem({ ...base, stage: "Sending 1 of 1 — 40%" })).toMatchObject({ label: "Sending 1 of 1 — 40%", step: null, progress: 0 });
   });

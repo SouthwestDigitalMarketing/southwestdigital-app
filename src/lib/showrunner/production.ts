@@ -9,6 +9,8 @@ export type ProductionItem = {
   steps: number | null;
   progress: number;
   stopped: boolean;
+  /** Full auto off and the prep done: ripley waits for more clips or Finish in the send app (Tom, 2026-11-25). */
+  waiting: boolean;
 };
 
 /**
@@ -20,7 +22,7 @@ export function productionItem(video: VideoCard): ProductionItem | null {
   const name = video.title ?? video.project ?? "New video";
   const steps = video.steps ?? [];
   if (steps.length === 0) {
-    return { batch: video.batch, name, label: video.stage ?? "On its way to ripley", step: null, steps: null, progress: 0, stopped: false };
+    return { batch: video.batch, name, label: video.stage ?? "On its way to ripley", step: null, steps: null, progress: 0, stopped: false, waiting: false };
   }
   const stopped = steps.find((step) => step.state === "stopped");
   const current = stopped ?? steps.find((step) => step.state === "now") ?? steps.find((step) => step.state === "todo") ?? steps[steps.length - 1];
@@ -34,5 +36,6 @@ export function productionItem(video: VideoCard): ProductionItem | null {
     steps: steps.length,
     progress: Math.min(1, (done + share) / steps.length),
     stopped: Boolean(stopped),
+    waiting: !stopped && current.state === "now" && current.label.startsWith("Waiting for you"),
   };
 }
