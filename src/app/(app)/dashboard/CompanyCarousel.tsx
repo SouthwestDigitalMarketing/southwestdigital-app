@@ -253,7 +253,7 @@ export function CompanyCarousel({ total, brands, cashFlow, expectedMonth, period
     brands.map((b) => ({ slug: b.slug, name: b.name, value: pick(b), display: show(pick(b)), color: colors[b.slug] ?? "#64748b" }));
   const count = (n: number) => String(n);
   return <section className="mt-2">
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <Card label="MRR" value={money(total.mrrUsd)} note={`${total.clients} active client${total.clients === 1 ? "" : "s"} · ${Math.round((total.mrrUsd / targets.mrrUsd) * 100)}% of ${money(targets.mrrUsd)}`} parts={parts((b) => b.mrrUsd, money)} target={targets.mrrUsd} expand={<ClientList clients={clients} colors={colors} brands={brands} />} />
       <Card label="new leads" value={String(total.newLeads)} note={`${period} · ${pct(total.newLeads, targets.newLeads)}`} parts={parts((b) => b.newLeads, count)} target={targets.newLeads} expand={<LeadList leads={leads} colors={colors} />} alert={leadAlerts.length ? <LeadAlerts alerts={leadAlerts} /> : undefined} />
       {funnel ? <div className="flex flex-col">{funnel}</div> : null}
@@ -265,7 +265,7 @@ export function CompanyCarousel({ total, brands, cashFlow, expectedMonth, period
         href="/scorecard"
         bar={total.medianResponseSeconds === null ? null : <TargetBar value={total.medianResponseSeconds} target={targets.responseSeconds} lowerIsBetter label={`Response time ${response(total.medianResponseSeconds)} against a ${response(targets.responseSeconds)} target`} />}
       />
-      <div className="sm:col-span-2 xl:col-span-4">
+      <div className="sm:col-span-2">
         <Card label="free cash flow" value={cashFlow ? money(cashFlow.valueUsd) : "Awaiting closed books"} note={cashFlow ? `As of ${cashFlow.asOf}${cashFlow.stale ? ` · Books behind (${expectedMonth} expected)` : ""} · goal ${money(targets.freeCashFlowUsd)}` : `No verified closed month · ${expectedMonth} expected · goal ${money(targets.freeCashFlowUsd)}`} bar={cashFlow ? <TargetBar value={cashFlow.valueUsd} target={targets.freeCashFlowUsd} label={`Free cash flow ${money(cashFlow.valueUsd)} against ${money(targets.freeCashFlowUsd)}`} /> : null} />
       </div>
     </div>
