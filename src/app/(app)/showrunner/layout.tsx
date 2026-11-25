@@ -8,6 +8,8 @@ const TABS: SectionTab[] = [
   { label: "Series", href: "/showrunner/series", also: ["/showrunner/new-series", "/showrunner/studio"] },
   { label: "Leads", href: "/showrunner/leads" },
   { label: "Reports", href: "/showrunner/reports" },
+  // Editor (Tom, 2026-11-25): pick an episode to change; the editing tools come later.
+  { label: "Editor", href: "/showrunner/editor" },
 ];
 
 export default function ShowrunnerLayout({ children }: { children: React.ReactNode }) {
