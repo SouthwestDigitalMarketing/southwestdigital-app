@@ -15,13 +15,21 @@ function filmedOn(project: string | null): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" });
 }
 
+/** "TREB 261113 New Video 2" → "261113 2", for sorting by film date and order that day. */
+function filmKey(project: string | null): string {
+  const match = project?.match(/\b(\d{6})\b(?:.*?(\d+)\s*$)?/);
+  return match ? `${match[1]} ${match[2] ?? "1"}` : "";
+}
+
 /** Editor tab (Tom, 2026-11-25): choose the episode to change, newest first. */
 export default async function EditorPage() {
   const { brand: active, dataContext } = await requireAppBrand();
   const brand = await showChannelBrand(active);
   // A phone upload that never got a project (no title, no project) is not an episode yet.
   const episodes = (await loadEpisodes(createBrandDataContext({ brandId: brand.id, actorUserId: dataContext.actorUserId })))
-    .filter((episode) => episode.title || episode.project);
+    .filter((episode) => episode.title || episode.project)
+    // Newest film date first (the project name carries it); batch ids come in two styles, so they cannot order it.
+    .sort((a, b) => filmKey(b.project).localeCompare(filmKey(a.project)) || b.updatedAt.getTime() - a.updatedAt.getTime());
   return (
     <div className="px-4 py-5 sm:p-8">
       <h1 className="text-lg font-semibold text-slate-900">Videos</h1>
