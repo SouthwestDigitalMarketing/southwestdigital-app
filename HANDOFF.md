@@ -2,8 +2,9 @@
 ## 2026-11-25 — Compact Donna screens and separate Scorecard (Tom's correction)
 
 - Donna now opens Overview, with only a brief status and Email card. Its other
-  top-level tab is Email: mailbox health, each folder with its message count,
-  last checked and history remaining. Scorecard is a separate main-menu item
+  top-level tab is Email: mailbox health, Zoho folders and custom folders with
+  message counts, last checked and history remaining. Scorecard is a separate
+  main-menu item
   and compact hub. Work queues remain on `/donna/email/work`.
 - Work states are filters on `/donna/email/work`, two requests per page. Request
   summary/reply/source/activity, direction and management are separate views;

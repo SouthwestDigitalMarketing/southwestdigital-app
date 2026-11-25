@@ -143,17 +143,50 @@ export function mailboxHealth(
       : "Webhook setup needed";
 }
 
-const FOLDER_ORDER = [
+const ZOHO_DEFAULT_FOLDERS = new Set([
+  "inbox",
+  "drafts",
+  "templates",
+  "snoozed",
+  "sent",
+  "spam",
+  "junk",
+  "trash",
+  "outbox",
+  "archive",
+]);
+const ZOHO_FOLDER_ORDER = [
   "INBOX",
   "Spam",
   "Sent",
   "Drafts",
   "Trash",
   "Archive",
-  "Newsletter",
+  "Snoozed",
+  "Templates",
+  "Outbox",
+  "Junk",
 ];
 
-export function mailboxFolders(value: unknown) {
+export type MailboxFolder = {
+  folder: string;
+  label: string;
+  messages: number;
+  zohoDefault: boolean;
+};
+
+function folderRank(name: string) {
+  const i = ZOHO_FOLDER_ORDER.findIndex(
+    (item) => item.toLowerCase() === name.toLowerCase(),
+  );
+  return i === -1 ? ZOHO_FOLDER_ORDER.length : i;
+}
+
+export function isZohoDefaultFolder(name: string) {
+  return ZOHO_DEFAULT_FOLDERS.has(name.trim().toLowerCase());
+}
+
+export function mailboxFolders(value: unknown): MailboxFolder[] {
   if (!value || typeof value !== "object" || Array.isArray(value)) return [];
   const folders = (value as { folders?: unknown }).folders;
   if (!Array.isArray(folders)) return [];
@@ -171,18 +204,27 @@ export function mailboxFolders(value: unknown) {
         folder,
         label: folder.toUpperCase() === "INBOX" ? "Inbox" : folder,
         messages,
+        zohoDefault: isZohoDefaultFolder(folder),
       },
     ];
   });
-  const rank = (name: string) => {
-    const i = FOLDER_ORDER.findIndex(
-      (item) => item.toLowerCase() === name.toLowerCase(),
-    );
-    return i === -1 ? FOLDER_ORDER.length : i;
+  return rows.sort((a, b) => {
+    if (a.zohoDefault !== b.zohoDefault) return a.zohoDefault ? -1 : 1;
+    if (a.zohoDefault)
+      return (
+        folderRank(a.folder) - folderRank(b.folder) ||
+        a.label.localeCompare(b.label)
+      );
+    return a.label.localeCompare(b.label);
+  });
+}
+
+export function mailboxFolderTables(value: unknown) {
+  const folders = mailboxFolders(value);
+  return {
+    zoho: folders.filter((folder) => folder.zohoDefault),
+    custom: folders.filter((folder) => !folder.zohoDefault),
   };
-  return rows.sort(
-    (a, b) => rank(a.folder) - rank(b.folder) || a.label.localeCompare(b.label),
-  );
 }
 
 export function coverageLabel(value: unknown): string {

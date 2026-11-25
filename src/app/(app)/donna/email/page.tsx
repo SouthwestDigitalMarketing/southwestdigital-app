@@ -1,8 +1,45 @@
 import Link from "next/link";
 import { requireDonna } from "@/lib/donna/access";
 import { loadDesk, storageMissing } from "@/lib/donna/store";
-import { mailboxFolders, mailboxHealth } from "@/lib/donna/domain";
+import {
+  mailboxFolderTables,
+  mailboxHealth,
+  type MailboxFolder,
+} from "@/lib/donna/domain";
 import { DonnaFrame, shortTime } from "../DonnaFrame";
+
+function FolderTable({
+  title,
+  folders,
+}: {
+  title: string;
+  folders: MailboxFolder[];
+}) {
+  if (!folders.length) return null;
+  return (
+    <section
+      aria-label={title}
+      className="overflow-hidden rounded-xl border border-slate-200"
+    >
+      <h3 className="bg-white px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {title}
+      </h3>
+      <ul className="grid grid-cols-2 gap-px bg-slate-100 lg:grid-cols-4">
+        {folders.map((folder) => (
+          <li
+            key={folder.folder}
+            className="flex min-w-0 items-baseline justify-between gap-2 bg-white px-3 py-2"
+          >
+            <span className="truncate text-sm">{folder.label}</span>
+            <span className="tabular-nums text-sm font-semibold">
+              {folder.messages.toLocaleString("en-US")}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 export const dynamic = "force-dynamic";
 export default async function EmailPage() {
@@ -19,7 +56,7 @@ export default async function EmailPage() {
     );
   }
   const m = data.mailboxes[0];
-  const folders = mailboxFolders(m?.coverage);
+  const folders = mailboxFolderTables(m?.coverage);
   const remaining = data.mailboxes.reduce(
     (n, b) =>
       n +
@@ -63,30 +100,16 @@ export default async function EmailPage() {
           Connect email
         </Link>
       )}
-      <section
-        aria-label="Mailbox folders"
-        className="overflow-hidden rounded-xl border border-slate-200"
-      >
-        {folders.length ? (
-          <ul className="grid grid-cols-2 gap-px bg-slate-100 lg:grid-cols-4">
-            {folders.map((folder) => (
-              <li
-                key={folder.folder}
-                className="flex min-w-0 items-baseline justify-between gap-2 bg-white px-3 py-2"
-              >
-                <span className="truncate text-sm">{folder.label}</span>
-                <span className="tabular-nums text-sm font-semibold">
-                  {folder.messages.toLocaleString("en-US")}
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="bg-white p-4 text-sm text-slate-500">
-            Folder counts appear after Donna checks the mailbox.
-          </p>
-        )}
-      </section>
+      {folders.zoho.length || folders.custom.length ? (
+        <>
+          <FolderTable title="Zoho folders" folders={folders.zoho} />
+          <FolderTable title="Custom folders" folders={folders.custom} />
+        </>
+      ) : (
+        <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
+          Folder counts appear after Donna checks the mailbox.
+        </p>
+      )}
       <section
         aria-label="Email status"
         className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 text-sm"

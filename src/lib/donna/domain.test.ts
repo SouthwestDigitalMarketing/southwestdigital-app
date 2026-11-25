@@ -5,6 +5,7 @@ import {
   mailboxHealth,
   coverageLabel,
   mailboxFolders,
+  mailboxFolderTables,
   requestSchema,
   verifyHook,
 } from "./domain";
@@ -78,11 +79,72 @@ describe("honest health and counts", () => {
         ],
       }),
     ).toEqual([
-      { folder: "INBOX", label: "Inbox", messages: 73 },
-      { folder: "Spam", label: "Spam", messages: 209 },
-      { folder: "Newsletter", label: "Newsletter", messages: 451 },
-      { folder: "Bills", label: "Bills", messages: 7 },
+      {
+        folder: "INBOX",
+        label: "Inbox",
+        messages: 73,
+        zohoDefault: true,
+      },
+      {
+        folder: "Spam",
+        label: "Spam",
+        messages: 209,
+        zohoDefault: true,
+      },
+      {
+        folder: "Bills",
+        label: "Bills",
+        messages: 7,
+        zohoDefault: false,
+      },
+      {
+        folder: "Newsletter",
+        label: "Newsletter",
+        messages: 451,
+        zohoDefault: false,
+      },
     ]);
+  });
+  it("splits Zoho default folders from custom folders", () => {
+    expect(
+      mailboxFolderTables({
+        folders: [
+          { folder: "Cold Outreach", messages: 226 },
+          { folder: "Archive", messages: 634 },
+          { folder: "INBOX", messages: 73 },
+          { folder: "Newsletter", messages: 451 },
+        ],
+      }),
+    ).toEqual({
+      zoho: [
+        {
+          folder: "INBOX",
+          label: "Inbox",
+          messages: 73,
+          zohoDefault: true,
+        },
+        {
+          folder: "Archive",
+          label: "Archive",
+          messages: 634,
+          zohoDefault: true,
+        },
+      ],
+      custom: [
+        {
+          folder: "Cold Outreach",
+          label: "Cold Outreach",
+          messages: 226,
+          zohoDefault: false,
+        },
+        {
+          folder: "Newsletter",
+          label: "Newsletter",
+          messages: 451,
+          zohoDefault: false,
+        },
+      ],
+    });
   });
   const box = {
     paused: false,

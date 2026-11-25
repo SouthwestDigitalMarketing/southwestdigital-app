@@ -177,14 +177,22 @@ try {
             .allTextContents(),
           ["Overview", "Email"],
         );
-      if (route === "/donna/email")
-        await page.getByLabel("Mailbox folders", { exact: true }).waitFor();
+      if (route === "/donna/email") {
+        await page
+          .getByRole("heading", { name: "Zoho folders", exact: true })
+          .waitFor();
+        await page
+          .getByRole("heading", { name: "Custom folders", exact: true })
+          .waitFor();
+      }
     }
   }
   await page.setViewportSize({ width: 1280, height: 800 });
   async function pageBox(route, headingName) {
     await page.goto(base + route);
-    await page.getByRole("heading", { name: headingName, exact: true }).waitFor();
+    await page
+      .getByRole("heading", { name: headingName, exact: true })
+      .waitFor();
     return page.evaluate((name) => {
       const main = document.getElementById("main-content");
       const heading = [...(main?.querySelectorAll("h1, h2") ?? [])].find(

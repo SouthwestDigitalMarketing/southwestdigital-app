@@ -9,8 +9,9 @@ CRM/bookkeeping records. The broader build sequence is in
 ## Pages
 
 - `/donna`: Overview with a short status and one Email card.
-- `/donna/email`: mailbox status and each folder’s message count. No request list
-  or setup details. Work queues stay at `/donna/email/work`.
+- `/donna/email`: mailbox status, Zoho default folders and custom folders with
+  message counts. No request list or setup details. Work queues stay at
+  `/donna/email/work`.
 - `/donna/email/work`: two requests per page; Needs you, Working, Waiting and
   Handled are filters here, not top-level Donna tabs.
 - `/donna/requests/[id]`: Summary, Reply, Source and Activity views; separate
