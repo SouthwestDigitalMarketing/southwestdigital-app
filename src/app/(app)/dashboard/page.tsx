@@ -63,21 +63,6 @@ type DashboardPeriod = {
   endExclusive: Date;
 };
 
-// Heat for the New leads card's thermometers, the old lead card's scale (Tom, 2026-11-24): 1 Cold, 2 Cool, 3 Warm,
-// 4 Hot (quote out or payment due; the icon shakes), 5 Secured (won or onboarding). The hotter of stage and step wins.
-const STAGE_HEAT: Record<string, number> = {
-  prospect: 1, lead: 1, "education-interest": 1,
-  talking: 2, "qbo-invite-requested": 2, "qbo-access-received": 2,
-  "scope-assessment": 3,
-  proposed: 4, "phase1-quote-sent": 4, "phase1-paid": 4,
-  won: 5, welcome: 5, "agreement-signed": 5, "client-converted": 5,
-};
-const STEP_HEAT: Record<string, number> = { reach: 1, nurture: 1, qb: 2, book: 2, call: 3, quote: 3, session: 3, payment: 4, agreement: 4 };
-function leadHeat(stage: { key: string; isTerminal: boolean } | null, step: string | null): number {
-  const fromStage = stage ? (stage.isTerminal ? 5 : STAGE_HEAT[stage.key] ?? 1) : 1;
-  return Math.max(fromStage, step ? STEP_HEAT[step] ?? 1 : 1);
-}
-
 function leadStepLabel(step: string | null): string {
   return step && LEAD_STEPS.includes(step as LeadStep) ? LEAD_STEP_LABEL[step as LeadStep] : "New";
 }
@@ -442,14 +427,13 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         take: 50,
         select: {
           id: true, name: true, company: true, leadStep: true, createdAt: true,
-          pipelineItems: { where: { isActive: true }, take: 1, select: { stage: { select: { key: true, name: true, isTerminal: true } } } },
+          pipelineItems: { where: { isActive: true }, take: 1, select: { stage: { select: { name: true } } } },
         },
       }),
     ).then((rows) => rows.map((lead) => ({
       ...hide({ id: lead.id, name: lead.name, company: lead.company }, "Lead"),
       slug: row.slug,
       stage: lead.pipelineItems[0]?.stage.name ?? leadStepLabel(lead.leadStep),
-      heat: leadHeat(lead.pipelineItems[0]?.stage ?? null, lead.leadStep),
       createdAt: lead.createdAt.toISOString(),
     }))),
   ))).flat().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -621,6 +605,12 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       <div className="mb-3"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
       {companyMetrics ? null : <GsaAlarm proposals={awaitingGsa} now={windowEnd} />}
       {companyMetrics && <CompanyCarousel {...companyMetrics} period={selectedPeriod.label} colors={companyColors} targets={companyTargets} clients={companyClients} leads={companyLeads} offers={companyOffers} leadAlerts={leadAlerts} />}
+      {/* The lead heat card (Cold to Secured thermometers, Hot one shakes) back on the main view (Tom, 2026-11-24). */}
+      {companyMetrics && (
+        <div className="mt-3 flex flex-col">
+          <PipelineMrrStatCard pipelineKey={PIPE_PROSPECTS_KEY} stages={pipelineOverview[0]?.stages ?? []} goal={mrrGoals.leadMrrGoal} />
+        </div>
+      )}
       <details className="mt-8" open={!companyMetrics}>
       <summary className="cursor-pointer text-sm font-medium text-slate-600">Detailed {brand.name} dashboard</summary>
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-4">
