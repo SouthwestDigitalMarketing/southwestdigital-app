@@ -16,6 +16,7 @@ import {
   parseItem,
   parsePlan,
   removeItem,
+  sectionFor,
   slugify,
   tripDateSchema,
   uniqueSlug,
@@ -25,7 +26,7 @@ import {
   type TripPlan,
 } from "@/lib/travel/plan";
 import { REMOTE_MONTHS_TITLE, remoteMonthsPlan } from "@/lib/travel/starter";
-import { findPlacePhoto } from "@/lib/travel/photos";
+import { geocode, lookupPlace } from "@/lib/travel/photos";
 import { standingNeeds } from "@/lib/travel/needs";
 
 const titleSchema = z.string().trim().min(1, "Give the trip a name.").max(120);
@@ -35,7 +36,7 @@ export async function createTripAction(formData: FormData) {
   const starter = formData.get("starter") === "remote-months";
   const title = starter ? REMOTE_MONTHS_TITLE : titleSchema.parse(formData.get("title"));
   const plan = starter ? remoteMonthsPlan() : emptyPlan();
-  if (starter) plan.sections.options = await withPhotos("options", plan.sections.options, "");
+  if (starter) plan.sections.options = await enrich("options", plan.sections.options, "", new Map());
   // Every trip starts with Tom's standing needs (gym, shakes, martial arts, internet, guitar).
   plan.sections.needs = standingNeeds(randomUUID);
   const slug = await withBrandDataTransaction(dataContext, async (tx) => {
@@ -67,23 +68,69 @@ const detailsSchema = z
   })
   .refine((d) => !d.startsOn || !d.endsOn || d.startsOn <= d.endsOn, "The trip ends before it starts.");
 
-async function withPhotos(section: SectionKey, items: TripItem[], destination: string): Promise<TripItem[]> {
-  if (!AUTO_PHOTO_SECTIONS.has(section)) return items;
-  return Promise.all(
-    items.map(async (item) => {
-      if (item.photo) return item;
-      const name = String(item[section === "options" ? "place" : "name"] ?? "");
-      const photo =
-        (destination && section === "places" ? await findPlacePhoto(`${name} ${destination}`) : null) ??
-        (await findPlacePhoto(name));
-      return photo ? { ...item, photo } : item;
-    }),
-  );
+const MAP_SECTIONS: ReadonlySet<SectionKey> = new Set(["options", "stays", "places"]);
+
+function located(item: TripItem) {
+  return typeof item.lat === "number" && typeof item.lng === "number";
+}
+
+/**
+ * Adds what an item can get from the web: a photo (options and places, when blank) and a map pin
+ * (options, stays and places). A pin is kept while the name and area stay the same and looked up
+ * again when they change. Runs one item at a time: OpenStreetMap asks for at most one request a second.
+ */
+async function enrich(
+  section: SectionKey,
+  items: TripItem[],
+  destination: string,
+  previous: Map<string, TripItem>,
+): Promise<TripItem[]> {
+  if (!MAP_SECTIONS.has(section)) return items;
+  const heading = sectionFor(section).heading;
+  const out: TripItem[] = [];
+  for (const original of items) {
+    let item = original;
+    const before = previous.get(item.id);
+    const name = String(item[heading] ?? "");
+    const area = typeof item.area === "string" ? item.area : "";
+    if (before && before[heading] === item[heading] && (before.area ?? "") === (item.area ?? "") && located(before)) {
+      item = { ...item, lat: before.lat, lng: before.lng };
+    } else if (before) {
+      item = { ...item, lat: null, lng: null };
+    }
+    const wantPhoto = AUTO_PHOTO_SECTIONS.has(section) && !item.photo;
+    const wantPin = !located(item);
+    if ((wantPhoto || wantPin) && section !== "stays") {
+      const found =
+        destination && section === "places"
+          ? await lookupPlace(`${name} ${destination}`).then(async (hit) => (hit.photo || hit.lat !== null ? hit : lookupPlace(name)))
+          : await lookupPlace(name);
+      if (wantPhoto && found.photo) item = { ...item, photo: found.photo };
+      if (wantPin && found.lat !== null && found.lng !== null) item = { ...item, lat: found.lat, lng: found.lng };
+    }
+    if (!located(item)) {
+      const queries =
+        section === "stays"
+          ? [[area, destination], [destination]]
+          : [[name, area, destination], [area, destination]];
+      for (const parts of queries) {
+        const text = parts.filter(Boolean).join(", ");
+        if (!text) continue;
+        const pin = await geocode(text);
+        if (pin) {
+          item = { ...item, lat: pin.lat, lng: pin.lng };
+          break;
+        }
+      }
+    }
+    out.push(item);
+  }
+  return out;
 }
 
 type Change =
   | { kind: "details"; details: unknown }
-  | { kind: "photos"; section: string }
+  | { kind: "fill"; section: string }
   | { kind: "standingNeeds" }
   | { kind: "save"; section: string; item: unknown }
   | { kind: "remove"; section: string; id: string }
@@ -112,26 +159,38 @@ export async function changeTripAction(slug: string, change: Change): Promise<{ 
 }
 
 type Context = Awaited<ReturnType<typeof requireStaffBrandOrThrow>>["dataContext"];
-type Prepared = Change | { kind: "setPhotos"; section: SectionKey; photos: Record<string, string> };
+type Found = { photo?: string; lat?: number; lng?: number };
+type Prepared = Change | { kind: "setFound"; section: SectionKey; found: Record<string, Found> };
 
-/** Photo lookups are network calls, so they run before the locked transaction, never inside it. */
+/** Photo and pin lookups are network calls, so they run before the locked transaction, never inside it. */
 async function prepare(dataContext: Context, slug: string, change: Change): Promise<Prepared> {
-  if (change.kind !== "save" && change.kind !== "photos") return change;
+  if (change.kind !== "save" && change.kind !== "fill") return change;
   const section = sectionSchema.parse(change.section);
-  if (!AUTO_PHOTO_SECTIONS.has(section)) return change;
+  if (!MAP_SECTIONS.has(section)) return change;
   const trip = await withBrandDataTransaction(dataContext, (tx) =>
     tx.trip.findUnique({ where: { brandId_slug: { brandId: dataContext.brandId, slug } }, select: { destination: true, plan: true } }),
   );
   if (!trip) throw new Error("That trip no longer exists.");
+  const stored = parsePlan(trip.plan).sections[section];
+  const previous = new Map(stored.map((item) => [item.id, item]));
   if (change.kind === "save") {
-    const [item] = await withPhotos(section, [parseItem(section, change.item)], trip.destination);
+    const [item] = await enrich(section, [parseItem(section, change.item)], trip.destination, previous);
     return { ...change, item };
   }
-  const missing = parsePlan(trip.plan).sections[section].filter((item) => !item.photo);
-  const found = await withPhotos(section, missing, trip.destination);
-  const photos = Object.fromEntries(found.filter((item) => item.photo).map((item) => [item.id, String(item.photo)]));
-  if (Object.keys(photos).length === 0) throw new Error("No photos found. Paste a photo link with Edit.");
-  return { kind: "setPhotos", section, photos };
+  const missing = stored.filter((item) => (AUTO_PHOTO_SECTIONS.has(section) && !item.photo) || !located(item));
+  const filled = await enrich(section, missing, trip.destination, new Map());
+  const found: Record<string, Found> = {};
+  for (const item of filled) {
+    const entry: Found = {};
+    if (typeof item.photo === "string" && item.photo) entry.photo = item.photo;
+    if (located(item)) {
+      entry.lat = item.lat as number;
+      entry.lng = item.lng as number;
+    }
+    if (Object.keys(entry).length) found[item.id] = entry;
+  }
+  if (Object.keys(found).length === 0) throw new Error("Nothing found. Add an area, or paste a photo link with Edit.");
+  return { kind: "setFound", section, found };
 }
 
 async function applyChange(dataContext: Context, slug: string, change: Prepared) {
@@ -158,19 +217,26 @@ async function applyChange(dataContext: Context, slug: string, change: Prepared)
         plan = upsertItem(plan, section, parseItem(section, change.item));
         break;
       }
-      case "photos":
+      case "fill":
         break;
       case "standingNeeds":
         if (plan.sections.needs.length === 0) plan = { ...plan, sections: { ...plan.sections, needs: standingNeeds(randomUUID) } };
         break;
-      case "setPhotos":
+      case "setFound":
         plan = {
           ...plan,
           sections: {
             ...plan.sections,
-            [change.section]: plan.sections[change.section].map((item) =>
-              !item.photo && change.photos[item.id] ? { ...item, photo: change.photos[item.id] } : item,
-            ),
+            [change.section]: plan.sections[change.section].map((item) => {
+              const found = change.found[item.id];
+              if (!found) return item;
+              return {
+                ...item,
+                photo: item.photo || found.photo || "",
+                lat: located(item) ? item.lat : (found.lat ?? null),
+                lng: located(item) ? item.lng : (found.lng ?? null),
+              };
+            }),
           },
         };
         break;

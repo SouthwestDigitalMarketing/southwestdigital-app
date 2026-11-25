@@ -18,7 +18,8 @@ export const TRIP_STATUS_LABELS: Record<TripStatus, string> = {
 
 export const DOCUMENT_STATUSES = ["Need it", "Applied", "Have it", "Not needed"] as const;
 
-export type FieldType = "text" | "long" | "money" | "date" | "url" | "photo" | "check" | "choice";
+/** "coordinate" fields (lat/lng) are looked up on save and never shown in forms or on cards. */
+export type FieldType = "text" | "long" | "money" | "date" | "url" | "photo" | "check" | "choice" | "coordinate";
 export type Field = { key: string; label: string; type: FieldType; options?: readonly string[] };
 export type SectionKey =
   | "options"
@@ -40,6 +41,8 @@ export type Section = {
   itemLabel: string;
   /** The field shown as the item's heading. */
   heading: string;
+  /** The few fields a card shows; the item's own page shows everything. */
+  summary: readonly string[];
   fields: readonly Field[];
 };
 
@@ -50,6 +53,7 @@ export const SECTIONS: readonly Section[] = [
     blurb: "Places we are weighing before we pick one.",
     itemLabel: "option",
     heading: "place",
+    summary: ["monthly", "roundTrip", "timeGap"],
     fields: [
       { key: "place", label: "Place", type: "text" },
       { key: "photo", label: "Photo link", type: "photo" },
@@ -66,6 +70,8 @@ export const SECTIONS: readonly Section[] = [
       { key: "music", label: "Guitar and blues", type: "long" },
       { key: "notes", label: "Notes", type: "long" },
       { key: "source", label: "Source", type: "url" },
+      { key: "lat", label: "Latitude", type: "coordinate" },
+      { key: "lng", label: "Longitude", type: "coordinate" },
     ],
   },
   {
@@ -74,6 +80,7 @@ export const SECTIONS: readonly Section[] = [
     blurb: "Passports, visas, arrival forms and anything else we must carry. Depends on where we go.",
     itemLabel: "document",
     heading: "document",
+    summary: ["status", "expires"],
     fields: [
       { key: "document", label: "Document", type: "text" },
       { key: "who", label: "For", type: "text" },
@@ -91,6 +98,7 @@ export const SECTIONS: readonly Section[] = [
     blurb: "What every trip has to cover: training, food, internet, music.",
     itemLabel: "need",
     heading: "need",
+    summary: ["where", "cost"],
     fields: [
       { key: "need", label: "Need", type: "text" },
       { key: "plan", label: "How we cover it here", type: "long" },
@@ -106,6 +114,7 @@ export const SECTIONS: readonly Section[] = [
     blurb: "What we plan to spend and what we actually spent.",
     itemLabel: "budget line",
     heading: "item",
+    summary: ["category", "planned", "actual"],
     fields: [
       { key: "item", label: "Item", type: "text" },
       { key: "category", label: "Category", type: "choice", options: ["Getting there", "Lodging", "Food", "Local transit", "Phone and internet", "Gear", "Fees and documents", "Insurance", "Fun", "Other"] },
@@ -120,6 +129,7 @@ export const SECTIONS: readonly Section[] = [
     blurb: "Flights, buses and rides between places.",
     itemLabel: "leg",
     heading: "route",
+    summary: ["date", "carrier", "cost"],
     fields: [
       { key: "route", label: "From and to", type: "text" },
       { key: "mode", label: "How", type: "choice", options: ["Flight", "Bus", "Train", "Ride", "Ferry", "Other"] },
@@ -137,6 +147,7 @@ export const SECTIONS: readonly Section[] = [
     blurb: "Where we sleep and work.",
     itemLabel: "stay",
     heading: "name",
+    summary: ["area", "checkIn", "cost"],
     fields: [
       { key: "name", label: "Name", type: "text" },
       { key: "photo", label: "Photo link", type: "photo" },
@@ -148,6 +159,8 @@ export const SECTIONS: readonly Section[] = [
       { key: "booked", label: "Booked", type: "check" },
       { key: "link", label: "Link", type: "url" },
       { key: "notes", label: "Notes", type: "long" },
+      { key: "lat", label: "Latitude", type: "coordinate" },
+      { key: "lng", label: "Longitude", type: "coordinate" },
     ],
   },
   {
@@ -156,6 +169,7 @@ export const SECTIONS: readonly Section[] = [
     blurb: "What we want to see, eat and film.",
     itemLabel: "place",
     heading: "name",
+    summary: ["area"],
     fields: [
       { key: "name", label: "Name", type: "text" },
       { key: "photo", label: "Photo link", type: "photo" },
@@ -164,6 +178,8 @@ export const SECTIONS: readonly Section[] = [
       { key: "link", label: "Link", type: "url" },
       { key: "visited", label: "Been there", type: "check" },
       { key: "filmed", label: "Filmed", type: "check" },
+      { key: "lat", label: "Latitude", type: "coordinate" },
+      { key: "lng", label: "Longitude", type: "coordinate" },
     ],
   },
   {
@@ -172,6 +188,7 @@ export const SECTIONS: readonly Section[] = [
     blurb: "Day by day.",
     itemLabel: "day",
     heading: "title",
+    summary: ["date"],
     fields: [
       { key: "date", label: "Date", type: "date" },
       { key: "title", label: "Title", type: "text" },
@@ -185,6 +202,7 @@ export const SECTIONS: readonly Section[] = [
     blurb: "Passport, visas, forms and what is allowed.",
     itemLabel: "rule",
     heading: "rule",
+    summary: ["checked"],
     fields: [
       { key: "rule", label: "Rule", type: "text" },
       { key: "detail", label: "Detail", type: "long" },
@@ -198,6 +216,7 @@ export const SECTIONS: readonly Section[] = [
     blurb: "What has to happen at home before and while we are gone.",
     itemLabel: "task",
     heading: "task",
+    summary: ["who", "due"],
     fields: [
       { key: "task", label: "Task", type: "text" },
       { key: "who", label: "Who", type: "text" },
@@ -212,6 +231,7 @@ export const SECTIONS: readonly Section[] = [
     blurb: "Episodes for The Real Estate Bookkeeper series.",
     itemLabel: "video",
     heading: "title",
+    summary: ["place"],
     fields: [
       { key: "title", label: "Title", type: "text" },
       { key: "idea", label: "Idea", type: "long" },
@@ -245,6 +265,8 @@ function fieldSchema(field: Field): z.ZodType<ItemValue> {
         .transform((value) => (value === null ? null : Math.round(value * 100) / 100));
     case "check":
       return z.boolean();
+    case "coordinate":
+      return z.union([z.number().finite().min(-180).max(180), z.null()]);
     case "date":
       return tripDateSchema;
     case "url":
@@ -267,7 +289,7 @@ function fieldSchema(field: Field): z.ZodType<ItemValue> {
 }
 
 function blankValue(field: Field): ItemValue {
-  if (field.type === "money") return null;
+  if (field.type === "money" || field.type === "coordinate") return null;
   if (field.type === "check") return false;
   return "";
 }
@@ -307,6 +329,45 @@ export function parsePlan(raw: unknown): TripPlan {
     });
   }
   return { summary: typeof object.summary === "string" ? object.summary : "", sections };
+}
+
+/** Fields people see and edit (coordinates are looked up, not typed). */
+export function visibleFields(section: Section): Field[] {
+  return section.fields.filter((field) => field.type !== "coordinate");
+}
+
+export type MapPin = { section: SectionKey; id: string; name: string; lat: number; lng: number; photo: string | null };
+
+/** The map pin for one item, or null when it has no location (or its list is not mappable). */
+export function pinFor(sectionKey: SectionKey, item: TripItem): MapPin | null {
+  const section = sectionFor(sectionKey);
+  if (!section.fields.some((field) => field.type === "coordinate")) return null;
+  if (typeof item.lat !== "number" || typeof item.lng !== "number") return null;
+  return {
+    section: sectionKey,
+    id: item.id,
+    name: String(item[section.heading] ?? ""),
+    lat: item.lat,
+    lng: item.lng,
+    photo: typeof item.photo === "string" && item.photo ? item.photo : null,
+  };
+}
+
+/** Every located option, stay and place on the trip, for the map. */
+export function mapPins(plan: TripPlan): MapPin[] {
+  return SECTIONS.flatMap((section) =>
+    plan.sections[section.key].flatMap((item) => {
+      const pin = pinFor(section.key, item);
+      return pin ? [pin] : [];
+    }),
+  );
+}
+
+/** Items that can sit on the map but have no pin yet. */
+export function itemsWithoutPin(plan: TripPlan, sectionKey: SectionKey): TripItem[] {
+  return sectionFor(sectionKey).fields.some((field) => field.type === "coordinate")
+    ? plan.sections[sectionKey].filter((item) => typeof item.lat !== "number" || typeof item.lng !== "number")
+    : [];
 }
 
 /** Lists whose items carry a photo (filled from Wikipedia when left blank). */
