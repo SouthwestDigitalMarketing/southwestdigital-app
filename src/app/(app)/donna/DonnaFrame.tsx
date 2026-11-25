@@ -15,34 +15,31 @@ export function DonnaFrame({
   return (
     <div className="w-full min-w-0 break-words space-y-4 px-4 py-5 text-slate-900 sm:p-8">
       {live ? <RefreshDonna /> : null}
-      <header className="flex items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold">Donna</h1>
+      <h1 className="sr-only">Donna</h1>
+      <div className="flex items-center gap-6 border-b border-slate-200">
+        <nav aria-label="Donna sections" className="flex gap-6">
+          {[
+            { label: "Overview", href: "/donna", key: "overview" },
+            { label: "Email", href: "/donna/email", key: "email" },
+          ].map((t) => (
+            <Link
+              key={t.key}
+              href={t.href}
+              aria-current={active === t.key ? "page" : undefined}
+              className={`border-b-2 px-1 pb-3 pt-1 text-sm font-medium ${active === t.key ? "border-slate-900 text-slate-900" : "border-transparent text-slate-500"}`}
+            >
+              {t.label}
+            </Link>
+          ))}
+        </nav>
         <Link
           href="/donna/settings"
           aria-label="Donna settings"
-          className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+          className="-mr-2 ml-auto rounded-lg p-2 text-slate-500 hover:bg-slate-100"
         >
           <Settings size={18} />
         </Link>
-      </header>
-      <nav
-        aria-label="Donna sections"
-        className="flex gap-6 border-b border-slate-200"
-      >
-        {[
-          { label: "Overview", href: "/donna", key: "overview" },
-          { label: "Email", href: "/donna/email", key: "email" },
-        ].map((t) => (
-          <Link
-            key={t.key}
-            href={t.href}
-            aria-current={active === t.key ? "page" : undefined}
-            className={`border-b-2 px-1 pb-3 pt-1 text-sm font-medium ${active === t.key ? "border-slate-900 text-slate-900" : "border-transparent text-slate-500"}`}
-          >
-            {t.label}
-          </Link>
-        ))}
-      </nav>
+      </div>
       {children}
     </div>
   );
