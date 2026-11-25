@@ -13,7 +13,7 @@ export function DonnaFrame({
   live?: boolean;
 }) {
   return (
-    <main className="mx-auto min-h-[calc(100dvh-3.5rem)] max-w-4xl break-words space-y-4 bg-slate-50 p-4 text-slate-900 sm:p-6">
+    <div className="w-full min-w-0 break-words space-y-4 px-4 py-5 text-slate-900 sm:p-8">
       {live ? <RefreshDonna /> : null}
       <header className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -49,7 +49,7 @@ export function DonnaFrame({
         ))}
       </nav>
       {children}
-    </main>
+    </div>
   );
 }
 

@@ -59,12 +59,12 @@ export default async function ActivityPage({
     ]);
   } catch (e) {
     if (!storageMissing(e)) throw e;
-    return <main className="p-5">Email statistics are being set up.</main>;
+    return <div className="p-8">Email statistics are being set up.</div>;
   }
   const path = (r = range, g = group, k: string | null = kind ?? null, n = 1) =>
     `/scorecard/email?range=${r}&group=${g}${k ? `&kind=${k}&page=${n}` : ""}`;
   return (
-    <main className="mx-auto min-h-[calc(100dvh-3.5rem)] max-w-4xl space-y-3 bg-slate-50 p-4 text-slate-900 sm:p-6">
+    <div className="w-full min-w-0 space-y-3 px-4 py-5 text-slate-900 sm:p-8">
       <header className="space-y-2">
         <Link href="/scorecard" className="text-xs text-slate-500 underline">
           ← Scorecard
@@ -224,6 +224,6 @@ export default async function ActivityPage({
           Privacy mode: counts only. Email details are hidden.
         </p>
       ) : null}
-    </main>
+    </div>
   );
 }

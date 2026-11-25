@@ -157,6 +157,54 @@ try {
         );
     }
   }
+  await page.setViewportSize({ width: 1280, height: 800 });
+  async function pageBox(route, headingName) {
+    await page.goto(base + route);
+    await page.getByRole("heading", { name: headingName, exact: true }).waitFor();
+    return page.evaluate((name) => {
+      const main = document.getElementById("main-content");
+      const heading = [...(main?.querySelectorAll("h1, h2") ?? [])].find(
+        (h) => h.textContent.trim() === name,
+      );
+      let box = heading;
+      while (
+        box &&
+        box.parentElement &&
+        box.parentElement.id !== "main-content"
+      ) {
+        box = box.parentElement;
+      }
+      return {
+        main: main?.clientWidth ?? 0,
+        box: box?.clientWidth ?? 0,
+        maxWidth: box ? getComputedStyle(box).maxWidth : "",
+        className: typeof box?.className === "string" ? box.className : "",
+      };
+    }, headingName);
+  }
+  const clientsWidth = await pageBox("/clients", "Client directory");
+  for (const [route, heading] of [
+    ["/donna", "Donna"],
+    ["/donna/email", "Donna"],
+    ["/scorecard", "Scorecard"],
+  ]) {
+    const measure = await pageBox(route, heading);
+    assert.equal(
+      measure.maxWidth,
+      "none",
+      route + " still has a max-width: " + JSON.stringify(measure),
+    );
+    assert.ok(
+      Math.abs(measure.box - measure.main) <= 2,
+      route + " does not fill the shell: " + JSON.stringify(measure),
+    );
+    assert.ok(
+      Math.abs(measure.box - clientsWidth.box) <= 2,
+      route +
+        " width differs from Clients: " +
+        JSON.stringify({ measure, clientsWidth }),
+    );
+  }
   await page.setViewportSize({ width: 412, height: 915 });
   await page.goto(base + "/donna/requests/" + request.id + "?section=reply");
   await page

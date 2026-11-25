@@ -10,7 +10,7 @@ export default async function ScorecardPage({
   const { isPlatformOperator, brand } = await requireAppBrand();
   const range = parseRange((await searchParams).range);
   return (
-    <main className="mx-auto min-h-[calc(100dvh-3.5rem)] max-w-4xl space-y-5 bg-slate-50 p-4 text-slate-900 sm:p-6">
+    <div className="w-full min-w-0 space-y-5 px-4 py-5 text-slate-900 sm:p-8">
       <h1 className="text-xl font-semibold">Scorecard</h1>
       <p className="text-sm text-slate-500">
         Service, speed and work completed.
@@ -37,6 +37,6 @@ export default async function ScorecardPage({
           </p>
         </Link>
       </div>
-    </main>
+    </div>
   );
 }

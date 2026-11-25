@@ -25,6 +25,9 @@
   still reports 132 existing findings, none on the updated decision page.
 - Production build passed with `PLATFORM_BASE_URL=http://localhost:3130` after
   the first build correctly rejected the development-only HTTP tailnet URL.
+- Tom: Donna and Scorecard page containers now fill the AppShell width like
+  Clients/Dashboard (`w-full`, no `max-w-4xl`). Nested `<main>` removed; padding
+  matches `px-4 py-5 sm:p-8`. UI checks still pass at 360x640 / 412x915 / 1280x800.
 
 ## 2026-11-25 — Donna read-only email pilot built (Ummon, Tom)
 
