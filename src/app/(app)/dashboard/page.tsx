@@ -618,13 +618,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       {/* The swipe calendar first: billing dates and episode releases (Tom, 2026-11-24). */}
       <div className="mb-3"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
       {companyMetrics ? null : <GsaAlarm proposals={awaitingGsa} now={windowEnd} />}
-      {companyMetrics && <CompanyCarousel {...companyMetrics} period={selectedPeriod.label} colors={companyColors} targets={companyTargets} clients={companyClients} leads={companyLeads} offers={companyOffers} leadAlerts={leadAlerts} />}
-      {/* The lead funnel card (Cold to Secured thermometers, Hot one shakes), both brands, beside New leads (Tom, 2026-11-24). */}
-      {companyMetrics && (
-        <div className="mt-3 flex flex-col">
-          <PipelineMrrStatCard pipelineKey={PIPE_PROSPECTS_KEY} stages={companyFunnel} goal={mrrGoals.leadMrrGoal} />
-        </div>
-      )}
+      {companyMetrics && <CompanyCarousel {...companyMetrics} period={selectedPeriod.label} colors={companyColors} targets={companyTargets} clients={companyClients} leads={companyLeads} offers={companyOffers} leadAlerts={leadAlerts}
+        funnel={<PipelineMrrStatCard pipelineKey={PIPE_PROSPECTS_KEY} stages={companyFunnel} goal={mrrGoals.leadMrrGoal} />} />}
       <details className="mt-8" open={!companyMetrics}>
       <summary className="cursor-pointer text-sm font-medium text-slate-600">Detailed {brand.name} dashboard</summary>
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-4">
