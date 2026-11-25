@@ -172,8 +172,9 @@ def live_batches(inbox):
     return out
 
 
-def queue_status(inbox):
-    """Live inbox batches merged with what Showrunner reports in queue.json."""
+def queue_status(inbox, limit=6):
+    """Live inbox batches merged with what Showrunner reports in queue.json, newest first. The phone list shows
+    the newest 6; the SWapp push sends them all (limit=None) so older videos keep their titles and thumbnails."""
     merged = {item["batch"]: item for item in live_batches(inbox)}
     for item in read_json(os.path.join(inbox, "queue.json"), {}).get("batches", []):
         if isinstance(item, dict) and BATCH.match(str(item.get("batch", ""))):
@@ -182,7 +183,7 @@ def queue_status(inbox):
                 continue
             merged[item["batch"]] = {**current, **item}
     videos = sorted(merged.values(), key=lambda item: item.get("created") or 0, reverse=True)
-    return {"videos": videos[:6]}
+    return {"videos": videos[:limit] if limit else videos}
 
 
 def safe_name(raw):

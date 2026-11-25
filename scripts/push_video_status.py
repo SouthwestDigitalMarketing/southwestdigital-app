@@ -38,7 +38,9 @@ def sending_stage(row):
 
 def payload(brand):
     videos = []
-    for row in phone_intake.queue_status(phone_intake.INBOX)["videos"]:
+    # Every video, not the phone list's newest 6 (Tom, 2026-11-25: older videos had no title or thumbnail in
+    # SWapp). The route takes 50.
+    for row in phone_intake.queue_status(phone_intake.INBOX, limit=50)["videos"]:
         row = dict(row)
         row.pop("files", None)
         if not row.get("stage"):
