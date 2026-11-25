@@ -605,6 +605,12 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       <div className="mb-3"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
       {companyMetrics ? null : <GsaAlarm proposals={awaitingGsa} now={windowEnd} />}
       {companyMetrics && <CompanyCarousel {...companyMetrics} period={selectedPeriod.label} colors={companyColors} targets={companyTargets} clients={companyClients} leads={companyLeads} offers={companyOffers} leadAlerts={leadAlerts} />}
+      {/* The lead heat card (Cold to Secured thermometers, Hot one shakes) back on the main view (Tom, 2026-11-24). */}
+      {companyMetrics && (
+        <div className="mt-3 flex flex-col">
+          <PipelineMrrStatCard pipelineKey={PIPE_PROSPECTS_KEY} stages={pipelineOverview[0]?.stages ?? []} goal={mrrGoals.leadMrrGoal} />
+        </div>
+      )}
       <details className="mt-8" open={!companyMetrics}>
       <summary className="cursor-pointer text-sm font-medium text-slate-600">Detailed {brand.name} dashboard</summary>
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-4">
