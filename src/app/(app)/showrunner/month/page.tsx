@@ -1,7 +1,6 @@
-import { ChannelPeriod } from "../ChannelPeriod";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
+/** This Month is the Month setting on Overview (Tom, 2026-11-25). */
 export default function ThisMonthPage() {
-  return <ChannelPeriod period="month" />;
+  redirect("/showrunner?period=month");
 }

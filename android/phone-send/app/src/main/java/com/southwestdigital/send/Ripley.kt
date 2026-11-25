@@ -46,14 +46,25 @@ object Ripley {
      * How much of this file ripley has. ripley reuses a copy it already has (reused=true), matched by
      * size and [head], the SHA-256 of the first MiB, so a file renamed elsewhere is still recognised.
      */
-    fun status(batch: String, name: String, size: Long, count: Int, head: String): JSONObject =
+    fun status(batch: String, name: String, size: Long, count: Int, head: String, options: Map<String, Any> = emptyMap()): JSONObject =
         call("GET", url("/upload-status", mapOf("batch" to batch, "name" to name, "size" to size, "count" to count,
-            "head" to head))).second
+            "head" to head) + options)).second
 
     /** Send one piece; returns how many bytes ripley now has and whether the file is done. */
-    fun piece(batch: String, name: String, size: Long, count: Int, offset: Long, data: ByteArray, length: Int): JSONObject {
-        val params = mapOf("batch" to batch, "name" to name, "size" to size, "count" to count, "offset" to offset)
+    fun piece(batch: String, name: String, size: Long, count: Int, offset: Long, data: ByteArray, length: Int,
+              options: Map<String, Any> = emptyMap()): JSONObject {
+        val params = mapOf("batch" to batch, "name" to name, "size" to size, "count" to count, "offset" to offset) + options
         return call("PUT", url("/upload", params), data, length).second
+    }
+
+    /** What a batch tells ripley: the video it joins (Add more clips) and the Full auto switch. */
+    fun options(batch: Batch): Map<String, Any> =
+        (if (batch.addTo.isNotEmpty()) mapOf("addTo" to batch.addTo) else emptyMap<String, Any>()) +
+            mapOf("auto" to if (batch.auto) "1" else "0")
+
+    /** Finish (Tom, 2026-11-25): the waiting video may be built now; [note] is anything to change, or empty. */
+    fun finish(batch: String, note: String) {
+        call("POST", url("/finish", mapOf("batch" to batch, "note" to note)), ByteArray(0), 0)
     }
 
     /** What ripley is doing with each recent video: its steps, the render bars, and the link once published. */

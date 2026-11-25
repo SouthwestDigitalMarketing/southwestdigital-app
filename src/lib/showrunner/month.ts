@@ -62,6 +62,14 @@ export function thisWeek(now: Date) {
   return { month: today.slice(0, 7), label, start, today, analyticsEnd: settled >= start ? settled : null };
 }
 
+/** This year so far, from January 1 (Central), same shape as thisMonth (Tom, 2026-11-25: Week / Month / Year toggle). */
+export function thisYear(now: Date) {
+  const today = centralDate(now);
+  const start = `${today.slice(0, 4)}-01-01`;
+  const settled = new Date(Date.parse(`${today}T12:00:00Z`) - ANALYTICS_LAG_DAYS * DAY).toISOString().slice(0, 10);
+  return { month: today.slice(0, 7), label: today.slice(0, 4), start, today, analyticsEnd: settled >= start ? settled : null };
+}
+
 /** Midnight at the start of a Central calendar day, as an instant (handles daylight saving). */
 export function centralMidnight(date: string): Date {
   for (const offset of ["-06:00", "-05:00"]) {

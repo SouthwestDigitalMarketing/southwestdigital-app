@@ -1,4 +1,22 @@
 # SWapp handoff
+## 2026-11-25 (later) — Overview toggle, Editor tab, phone Full auto / Add more clips / Finish (Johnny, Tom's asks)
+
+Branch `johnny/showrunner-dev8`.
+
+- Showrunner tabs: Overview (was This Week; This Month folded in) with a Week / Month / Year toggle (`?period=`,
+  `thisYear`, year chart one bar per month, views goal 12x monthly), Series, Leads, Reports, Editor.
+  `/showrunner/month` and `/metrics` redirect to `?period=month`.
+- Editor tab: episode picker from `ShowrunnerVideoStatus` (`loadEpisodes`), `/showrunner/editor/[batch]` shows the
+  episode; the editing tools are not built.
+- `scripts/phone_intake.py`: uploads carry `addTo` and `auto` into `.batch.json`; `POST /finish` writes
+  `done/<batch>/.finish.json`. Deployed by copying to `~/.local/share/swapp-phone-intake/` and restarting
+  `swapp-phone-intake.service`.
+- `android/phone-send` 3.6 (versionCode 9): Full auto switch (off by default), + Add more clips and Finish on a
+  waiting video. APK published as `~/.local/share/swapp-phone-intake/send-to-ripley.apk`.
+- Production bar: amber when a video is waiting for Tom. Waiting, adding clips and Finish handling live in
+  showrunner-app #196.
+- Not tested end to end with a real video (it would publish); unit tests and the receiver self-test cover it.
+
 ## 2026-11-25 — Production bar on every page; New video flow (Johnny, Tom's ask)
 
 Branch `johnny/showrunner-dev7`.

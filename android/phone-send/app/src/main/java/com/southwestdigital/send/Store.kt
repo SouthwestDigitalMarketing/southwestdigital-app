@@ -18,13 +18,18 @@ data class Item(
     var rate: Double = 0.0, // recent send speed, bytes per second
 )
 
-/** One pick is one batch on ripley, and one batch becomes one video. */
+/**
+ * One pick is one batch on ripley, and one batch becomes one video, unless [addTo] names the batch whose video
+ * these clips join (Add more clips, Tom 2026-11-25). [auto] is the Full auto switch when it was picked.
+ */
 data class Batch(
     val id: String,
     val created: Long,
     var state: String = "sending", // sending, waiting, paused, sent, failed
     var message: String = "",
     val items: MutableList<Item> = mutableListOf(),
+    val addTo: String = "",
+    val auto: Boolean = true,
 )
 
 /** Batches kept in a small JSON file so uploads survive the app being closed. */
@@ -83,6 +88,7 @@ object Store {
                     it.optLong("sent"), it.optString("error"), it.optLong("duration", -1), it.optLong("taken"),
                     it.optDouble("rate", 0.0))
             },
+            o.optString("addTo"), o.optBoolean("auto", true),
         )
     }
 
@@ -94,6 +100,6 @@ object Store {
                 .put("duration", it.duration).put("taken", it.taken).put("rate", it.rate))
         }
         return JSONObject().put("id", b.id).put("created", b.created).put("state", b.state)
-            .put("message", b.message).put("items", items)
+            .put("message", b.message).put("items", items).put("addTo", b.addTo).put("auto", b.auto)
     }
 }

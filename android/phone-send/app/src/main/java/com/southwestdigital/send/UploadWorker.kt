@@ -40,7 +40,7 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         for (item in batch.items) {
             if (item.state == "arrived" || item.state == "reused" || item.state == "failed") continue
             try {
-                send(item, count)
+                send(item, count, Ripley.options(batch))
             } catch (e: Refused) {
                 mark(item) { it.state = "failed"; it.error = e.message ?: "refused" }
             } catch (e: IOException) {
@@ -60,8 +60,8 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         return Result.success()
     }
 
-    private suspend fun send(item: Item, count: Int) {
-        val start = Ripley.status(id, item.name, item.size, count, head(item))
+    private suspend fun send(item: Item, count: Int, options: Map<String, Any>) {
+        val start = Ripley.status(id, item.name, item.size, count, head(item), options)
         if (start.optBoolean("done")) {
             mark(item) { it.state = if (start.optBoolean("reused")) "reused" else "arrived"; it.sent = item.size }
             return
@@ -84,7 +84,7 @@ class UploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                     }
                     if (got != want) throw Refused("The file changed size on the phone.")
                     val began = System.nanoTime()
-                    val reply = Ripley.piece(id, item.name, item.size, count, received, buffer, got)
+                    val reply = Ripley.piece(id, item.name, item.size, count, received, buffer, got, options)
                     val seconds = (System.nanoTime() - began) / 1e9
                     received = if (reply.optBoolean("done")) item.size else reply.optLong("received", received)
                     // A smoothed speed, so the time left does not jump with every piece.

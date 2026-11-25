@@ -65,6 +65,18 @@ export async function loadVideoCards(context: BrandDataContext): Promise<VideoCa
   }));
 }
 
+/** Every episode ripley has reported, newest first, for the Editor tab's picker (Tom, 2026-11-25). */
+export async function loadEpisodes(context: BrandDataContext): Promise<VideoStatusRow[]> {
+  return withBrandDataTransaction(context, (tx) =>
+    tx.showrunnerVideoStatus.findMany({
+      where: { brandId: context.brandId },
+      orderBy: { batch: "desc" },
+      take: 100,
+      select: { batch: true, project: true, state: true, stage: true, steps: true, render: true, url: true, title: true, thumbnail: true, details: true, updatedAt: true },
+    }),
+  );
+}
+
 /** This Sunday's wrap-up week from ripley, or null before the first push. */
 export async function loadWeek(context: BrandDataContext): Promise<Week | null> {
   const row = await withBrandDataTransaction(context, (tx) =>

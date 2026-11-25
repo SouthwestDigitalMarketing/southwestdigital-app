@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { daysBetween, isReportMonth, monthLabel, reportMonths, thisMonth, thisWeek, monthRange, centralMidnight } from "./month";
+import { daysBetween, isReportMonth, monthLabel, reportMonths, thisMonth, thisWeek, thisYear, monthRange, centralMidnight } from "./month";
 
 describe("Showrunner months", () => {
   it("counts this month from the 1st in Central time, with YouTube's 3-day lag", () => {
@@ -39,5 +39,16 @@ describe("Showrunner months", () => {
     expect(past.to.toISOString()).toBe("2026-11-01T05:00:00.000Z");
     const now = new Date("2026-11-24T18:00:00Z");
     expect(monthRange("2026-11", now)).toMatchObject({ current: true, analyticsEnd: "2026-11-21", to: now });
+  });
+});
+
+describe("thisYear", () => {
+  it("runs from January 1 to the last settled day", () => {
+    const y = thisYear(new Date("2026-11-25T18:00:00Z"));
+    expect(y).toMatchObject({ label: "2026", start: "2026-01-01", today: "2026-11-25", analyticsEnd: "2026-11-22" });
+  });
+
+  it("has nothing settled in the first days of January", () => {
+    expect(thisYear(new Date("2027-01-02T18:00:00Z")).analyticsEnd).toBeNull();
   });
 });

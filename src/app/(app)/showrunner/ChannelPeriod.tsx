@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireAppBrand } from "@/lib/brands/staff";
 import { showChannelBrand, showLinksBrand } from "@/lib/showrunner/channel-brand";
-import { ANALYTICS_LAG_DAYS, daysBetween, thisMonth, thisWeek } from "@/lib/showrunner/month";
+import { ANALYTICS_LAG_DAYS, daysBetween, thisMonth, thisWeek, thisYear } from "@/lib/showrunner/month";
 import {
   getChannelMetrics,
   getDailyViews,
@@ -24,19 +24,44 @@ import { VideoList } from "./VideoList";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
+const PERIODS: { value: Period; label: string }[] = [
+  { value: "week", label: "Week" },
+  { value: "month", label: "Month" },
+  { value: "year", label: "Year" },
+];
+
+export function parsePeriod(value: string | string[] | undefined): Period {
+  return value === "month" || value === "year" ? value : "week";
+}
+
 /**
- * The top of both tabs: on This Week a New video button (Tom, 2026-11-24: "where's the button to make a video?"),
- * then the calendar. Videos being made show in the production bar on every page.
+ * The top of Overview: the New video button (Tom, 2026-11-24), the calendar, then the Week / Month / Year toggle for
+ * the channel numbers below (Tom, 2026-11-25: one Overview tab instead of This Week and This Month). Videos being
+ * made show in the production bar on every page.
  */
 function PeriodTop({ period }: { period: Period }) {
   return (
     <>
-      {period === "week" ? (
-        <Link href="/showrunner/new" className="mb-3 flex items-center justify-center gap-2 rounded-xl bg-[#ff0000] px-4 py-3 text-base font-semibold text-white hover:bg-red-700">
-          <Plus size={18} aria-hidden="true" /> New video
-        </Link>
-      ) : null}
+      <Link href="/showrunner/new" className="mb-3 flex items-center justify-center gap-2 rounded-xl bg-[#ff0000] px-4 py-3 text-base font-semibold text-white hover:bg-red-700">
+        <Plus size={18} aria-hidden="true" /> New video
+      </Link>
       <div className="mb-3"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
+      <div role="group" aria-label="Period" className="mb-3 grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1">
+        {PERIODS.map((option) => (
+          <Link
+            key={option.value}
+            href={option.value === "week" ? "/showrunner" : `/showrunner?period=${option.value}`}
+            replace
+            scroll={false}
+            aria-current={option.value === period ? "true" : undefined}
+            className={`rounded-lg py-1.5 text-center text-sm font-semibold ${
+              option.value === period ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            {option.label}
+          </Link>
+        ))}
+      </div>
     </>
   );
 }
@@ -49,11 +74,25 @@ function YouTubeIcon({ className }: { className?: string }) {
   );
 }
 
+/** Daily rows summed into one row per month, dated the 1st. */
+function byMonth(rows: StackedDayRow[]): StackedDayRow[] {
+  const months = new Map<string, StackedDayRow>();
+  for (const row of rows) {
+    const key = `${String(row.date).slice(0, 7)}-01`;
+    const month = months.get(key) ?? { date: key };
+    for (const [field, value] of Object.entries(row)) {
+      if (field !== "date") month[field] = Number(month[field] ?? 0) + Number(value);
+    }
+    months.set(key, month);
+  }
+  return [...months.values()];
+}
+
 function getYouTubeAnalyticsNow() {
   return Date.now();
 }
 
-export type Period = "month" | "week";
+export type Period = "week" | "month" | "year";
 
 /**
  * This Month and This Week (Tom, 2026-11-24): the season calendar strip, then the channel numbers for the
@@ -84,7 +123,7 @@ export async function ChannelPeriod({ period }: { period: Period }) {
   if (!theme?.youtubeChannelId) {
     return (
       <div className="px-4 py-5 sm:p-8">
-        <h1 className="sr-only">{period === "week" ? "This week" : "This month"}</h1>
+        <h1 className="sr-only">{`Overview: this ${period}`}</h1>
         <PeriodTop period={period} />
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
         <p className="mt-2 text-sm text-slate-400">YouTube channel not configured for this brand. <a className="font-semibold underline" href="/api/youtube/connect">Connect YouTube</a>.</p>
@@ -97,7 +136,7 @@ export async function ChannelPeriod({ period }: { period: Period }) {
   if (!refreshToken) {
     return (
       <div className="px-4 py-5 sm:p-8">
-        <h1 className="sr-only">{period === "week" ? "This week" : "This month"}</h1>
+        <h1 className="sr-only">{`Overview: this ${period}`}</h1>
         <PeriodTop period={period} />
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
         <p className="mt-2 text-sm text-slate-600">Channel data is unavailable because the saved YouTube connection could not be read here. <a className="font-semibold underline" href="/api/youtube/connect">Connect YouTube</a>.</p>
@@ -107,15 +146,16 @@ export async function ChannelPeriod({ period }: { period: Period }) {
 
   const channelId = theme.youtubeChannelId;
   const monthlyViewsGoal = theme.monthlyViewsGoal ?? 10000;
-  // The week's share of the monthly views goal; it is set (and edited) on This Month.
-  const viewsGoal = period === "week" ? Math.round((monthlyViewsGoal * 7) / 30) : monthlyViewsGoal;
+  // The monthly views goal, scaled to the week or the year; it is set (and edited) on Month.
+  const viewsGoal = period === "week" ? Math.round((monthlyViewsGoal * 7) / 30) : period === "year" ? monthlyViewsGoal * 12 : monthlyViewsGoal;
   const watchPctGoal = theme.youtubeWatchPercentageGoal ?? 30;
   const clicksGoal = theme.monthlyClicksGoal ?? null;
   const redirectDomain = redirectDomainRecord?.hostname ?? null;
 
   // This month only, from the 1st (Central); it resets each month (Tom, 2026-11-24). YouTube Analytics lags
   // ~3 days, so the first days of a month have nothing settled yet.
-  const month = period === "week" ? thisWeek(new Date(getYouTubeAnalyticsNow())) : thisMonth(new Date(getYouTubeAnalyticsNow()));
+  const now = new Date(getYouTubeAnalyticsNow());
+  const month = period === "week" ? thisWeek(now) : period === "year" ? thisYear(now) : thisMonth(now);
   const startDate = month.start;
   const endDate = month.analyticsEnd ?? month.start;
 
@@ -163,7 +203,7 @@ export async function ChannelPeriod({ period }: { period: Period }) {
   if (error || !metrics) {
     return (
       <div className="px-4 py-5 sm:p-8">
-        <h1 className="sr-only">{period === "week" ? "This week" : "This month"}</h1>
+        <h1 className="sr-only">{`Overview: this ${period}`}</h1>
         <PeriodTop period={period} />
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
         <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -195,7 +235,9 @@ export async function ChannelPeriod({ period }: { period: Period }) {
       hasOther = true;
     }
   }
-  const stackedRows: StackedDayRow[] = allDates.map((date) => ({ date, ...(dateMap.get(date) ?? {}) }));
+  const dailyRows: StackedDayRow[] = allDates.map((date) => ({ date, ...(dateMap.get(date) ?? {}) }));
+  // The year is one bar per month; ~330 daily bars cannot be read on a phone.
+  const stackedRows: StackedDayRow[] = period === "year" ? byMonth(dailyRows) : dailyRows;
   const segments: VideoSegment[] = isFallbackMode
     ? [{ videoId: "__total", title: "Total Views", color: VIDEO_COLORS[0] }]
     : [
@@ -209,7 +251,7 @@ export async function ChannelPeriod({ period }: { period: Period }) {
 
   return (
     <div className="px-4 py-5 sm:p-8">
-      <h1 className="sr-only">{period === "week" ? "This week" : "This month"}</h1>
+      <h1 className="sr-only">{`Overview: this ${period}`}</h1>
       <PeriodTop period={period} />
 
       {/* Goal cards */}
@@ -219,7 +261,7 @@ export async function ChannelPeriod({ period }: { period: Period }) {
           label="Views"
           value={metrics.views.toLocaleString("en-US")}
           goal={viewsGoal}
-          goalLabel={`of ${viewsGoal.toLocaleString("en-US")} ${period === "week" ? "weekly " : ""}goal`}
+          goalLabel={`of ${viewsGoal.toLocaleString("en-US")} ${period === "week" ? "weekly " : period === "year" ? "yearly " : ""}goal`}
           pct={viewsPct}
           field="monthlyViewsGoal"
           editable={period === "month"}
@@ -244,12 +286,12 @@ export async function ChannelPeriod({ period }: { period: Period }) {
 
       {/* Daily trend */}
       <div className="mt-3 rounded-xl border border-slate-200 bg-white p-6">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Daily Views</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{period === "year" ? "Monthly Views" : "Daily Views"}</p>
         <p className="mt-1 text-lg font-semibold text-slate-900">
           {metrics.views.toLocaleString("en-US")} total views
         </p>
         <div className="mt-4">
-          <YouTubeTrendChart stackedRows={stackedRows} segments={segments} />
+          <YouTubeTrendChart stackedRows={stackedRows} segments={segments} monthly={period === "year"} />
         </div>
         <div className="mt-1 flex items-center justify-end gap-4">
           <p className="text-xs text-slate-400">* The last 3 days are excluded — YouTube Analytics typically takes 2–3 days to finalize new views.</p>

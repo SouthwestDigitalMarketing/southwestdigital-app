@@ -23,8 +23,10 @@ import android.widget.ProgressBar
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.Switch
 import android.widget.TextView
 import com.google.androidbrowserhelper.trusted.LauncherActivity
 import kotlin.concurrent.thread
@@ -38,6 +40,10 @@ class MainActivity : Activity() {
     // What ripley reports for each sent video (steps, render bars, YouTube link), by batch id.
     @Volatile private var episodes: Map<String, JSONObject> = emptyMap()
     private var polls = 0
+    // Add more clips (Tom, 2026-11-25): the batch whose video the next pick joins; empty for a new video.
+    private var addTarget = ""
+    // Finish tapped: the batch ids, so the card says what happens next until ripley reports it.
+    private val finishing = mutableSetOf<String>()
     private val tick = object : Runnable {
         override fun run() {
             render()
@@ -71,7 +77,24 @@ class MainActivity : Activity() {
             setOnClickListener { openPicker() }
         }
         root.addView(choose)
-        root.addView(text("Pick everything for one video at once. You can leave the app; it keeps sending.", muted, 15f).apply {
+        // Full auto (Tom, 2026-11-25): off, ripley preps the talking head and waits for more clips or Finish.
+        val prefs = getSharedPreferences("send", MODE_PRIVATE)
+        val autoNote = text("", muted, 14f)
+        fun describeAuto(on: Boolean) {
+            autoNote.text = if (on) "Builds and publishes on its own once everything arrives."
+            else "Starts on the talking head, then waits: add more clips, then tap Finish."
+        }
+        root.addView(Switch(this).apply {
+            text = "Full auto"
+            textSize = 16f
+            setTextColor(ink)
+            isChecked = prefs.getBoolean("fullAuto", false)
+            setPadding(0, (14 * dp).toInt(), 0, 0)
+            setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean("fullAuto", on).apply(); describeAuto(on) }
+        })
+        describeAuto(prefs.getBoolean("fullAuto", false))
+        root.addView(autoNote)
+        root.addView(text("Pick everything you have now. You can leave the app; it keeps sending.", muted, 15f).apply {
             setPadding(0, (12 * dp).toInt(), 0, (8 * dp).toInt())
         })
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -179,6 +202,8 @@ class MainActivity : Activity() {
     @Deprecated("Activity result API kept simple on purpose")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        val target = addTarget
+        addTarget = ""
         if (requestCode != pick || resultCode != RESULT_OK || data == null) return
         val uris = mutableListOf<Uri>()
         data.clipData?.let { clip -> for (n in 0 until clip.itemCount) uris.add(clip.getItemAt(n).uri) }
@@ -188,7 +213,8 @@ class MainActivity : Activity() {
         thread {
             val items = uris.mapNotNull { uri -> describe(uri) }
             val id = java.lang.Long.toString(System.currentTimeMillis(), 36) + "-" + java.util.UUID.randomUUID().toString().take(6)
-            Store.put(this, Batch(id, System.currentTimeMillis(), items = items.toMutableList()))
+            val fullAuto = getSharedPreferences("send", MODE_PRIVATE).getBoolean("fullAuto", false)
+            Store.put(this, Batch(id, System.currentTimeMillis(), items = items.toMutableList(), addTo = target, auto = fullAuto))
             UploadWorker.start(this, id)
             runOnUiThread { render() }
         }
@@ -259,6 +285,10 @@ class MainActivity : Activity() {
                 else -> "Sending — $done of ${b.items.size} arrived"
             }
             card.addView(text(head, if (b.state == "failed") bad else ink, 17f, bold = true))
+            if (b.addTo.isNotEmpty()) {
+                val into = episodes[b.addTo]?.optString("project")?.takeIf { it.isNotEmpty() } ?: "the video you picked"
+                card.addView(text("More clips for $into", muted, 14f))
+            }
             val published = episodes[b.id]?.optString("url")?.startsWith("https://") == true
             if (b.message.isNotEmpty() && !published) card.addView(text(b.message, if (b.state == "failed") bad else muted, 14f))
             if (b.state != "sent") {
@@ -268,6 +298,7 @@ class MainActivity : Activity() {
                 card.addView(text(connection(b), muted, 13f).apply { setPadding(0, (4 * dp).toInt(), 0, 0) })
             }
             if (b.state == "sent") episodes[b.id]?.let { card.addView(episodeRows(it, dp)) }
+            if (b.state == "sent" && b.addTo.isEmpty()) episodes[b.id]?.let { goAhead(card, b, it, dp) }
             for (item in b.items) card.addView(fileRows(item, b.state, dp))
             if (b.state != "sent") {
                 val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, (8 * dp).toInt(), 0, 0) }
@@ -286,6 +317,56 @@ class MainActivity : Activity() {
             }
             list.addView(card)
         }
+    }
+
+    /**
+     * While ripley waits for Tom (Full auto off): Add more clips and Finish (Tom, 2026-11-25). Finish asks one
+     * question first, anything to change, and sends the answer to Johnny with the go-ahead.
+     */
+    private fun goAhead(card: LinearLayout, b: Batch, episode: JSONObject, dp: Float) {
+        val steps = episode.optJSONArray("steps") ?: return
+        val waiting = (0 until steps.length()).map { steps.getJSONObject(it) }
+            .any { it.optString("state") == "now" && it.optString("label").startsWith("Waiting for you") }
+        if (!waiting) {
+            finishing.remove(b.id)
+            return
+        }
+        if (b.id in finishing) {
+            card.addView(text("Finishing. ripley starts building within a minute.", good, 14f, bold = true).apply {
+                setPadding(0, (8 * dp).toInt(), 0, 0)
+            })
+            return
+        }
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, (10 * dp).toInt(), 0, 0) }
+        row.addView(button("+ Add more clips") { addTarget = b.id; openPicker() })
+        row.addView(button("Finish") { askFinish(b.id) })
+        card.addView(row)
+    }
+
+    private fun askFinish(batch: String) {
+        val note = EditText(this).apply { hint = "Anything to change? (optional)"; minLines = 2 }
+        AlertDialog.Builder(this)
+            .setTitle("Build this video?")
+            .setMessage("Johnny places the b-roll, renders and uploads it. Anything to change before it starts?")
+            .setView(note)
+            .setPositiveButton("Finish") { _, _ ->
+                finishing.add(batch)
+                render()
+                val words = note.text.toString().trim()
+                thread {
+                    try {
+                        Ripley.finish(batch, words)
+                    } catch (e: Exception) {
+                        runOnUiThread {
+                            finishing.remove(batch)
+                            AlertDialog.Builder(this).setMessage("ripley did not get Finish: " + (e.message ?: "no answer")).setPositiveButton("OK", null).show()
+                            render()
+                        }
+                    }
+                }
+            }
+            .setNegativeButton("Not yet", null)
+            .show()
     }
 
     /**

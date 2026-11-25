@@ -49,8 +49,8 @@ export function ProductionBar() {
       aria-label={`${video.name}: ${video.label}, ${pct}% done. Open production details.`}
     >
       <span className="flex items-center gap-2 text-xs">
-        <span className={`h-2 w-2 shrink-0 rounded-full ${video.stopped ? "bg-rose-600" : "animate-pulse bg-[#ff0000]"}`} aria-hidden="true" />
-        <span className={`min-w-0 flex-1 truncate ${video.stopped ? "font-semibold text-rose-700" : "text-slate-700"}`}>
+        <span className={`h-2 w-2 shrink-0 rounded-full ${video.stopped ? "bg-rose-600" : video.waiting ? "bg-amber-500" : "animate-pulse bg-[#ff0000]"}`} aria-hidden="true" />
+        <span className={`min-w-0 flex-1 truncate ${video.stopped ? "font-semibold text-rose-700" : video.waiting ? "font-semibold text-amber-800" : "text-slate-700"}`}>
           {video.stopped ? "Stopped: " : ""}
           {video.label}
           {video.step && video.steps ? <span className="text-slate-400"> · {video.step} of {video.steps}</span> : null}
@@ -59,7 +59,7 @@ export function ProductionBar() {
         <span className="shrink-0 font-semibold tabular-nums text-slate-900">{pct}%</span>
       </span>
       <span className="mt-1 block h-1 overflow-hidden rounded-full bg-slate-200" aria-hidden="true">
-        <span className={`block h-1 rounded-full ${video.stopped ? "bg-rose-600" : "bg-[#ff0000]"}`} style={{ width: `${pct}%` }} />
+        <span className={`block h-1 rounded-full ${video.stopped ? "bg-rose-600" : video.waiting ? "bg-amber-500" : "bg-[#ff0000]"}`} style={{ width: `${pct}%` }} />
       </span>
     </Link>
   );
