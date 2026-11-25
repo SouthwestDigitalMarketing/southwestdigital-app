@@ -1,4 +1,20 @@
 # SWapp handoff
+## 2026-11-25 — Production bar on every page; New video flow (Johnny, Tom's ask)
+
+Branch `johnny/showrunner-dev7`.
+
+- `ProductionBar` (src/components/showrunner) sits under the top bar in `AppShell` on every page while ripley is
+  making a video: current step, step N of M, % (done steps + current render share, `productionItem` in
+  src/lib/showrunner/production.ts, tested). Polls `GET /api/showrunner/production` (session auth, channel brand
+  via `showChannelBrand`) every 10 s while visible; hidden when nothing is unpublished.
+- Tap → `/showrunner/production/[batch]`: `VideosInProgress` for that video, then any others in production.
+- This Week keeps the New video button; the in-page in-progress list was replaced by the bar.
+- Published rows are excluded because ripley's pusher (`~/.local/share/swapp-phone-intake/push_video_status.py`)
+  re-sends every row at least every 5 minutes, so `updatedAt` is not "last changed". `loadVideoStatus` take 12.
+- Open: batch `mwql4qoy-c42d57` (TREB 261121, private voice test, on YouTube as X4uqPpWHLp0) is stuck at step 12
+  "Checking everything on YouTube" (autopilot.json state running since 2026-11-21) and will hold the bar until it
+  is marked finished. Asked Tom; not changed.
+
 ## 2026-11-24 (late night) — Offers list, lead funnel card, New video button (Johnny, Tom's asks)
 
 Branch `johnny/showrunner-dev6`.

@@ -43,7 +43,7 @@ export async function loadVideoStatus(context: BrandDataContext): Promise<VideoS
     tx.showrunnerVideoStatus.findMany({
       where: { brandId: context.brandId, OR: [{ url: null }, { updatedAt: { gte: since } }] },
       orderBy: { updatedAt: "desc" },
-      take: 6,
+      take: 12,
       select: { batch: true, project: true, state: true, stage: true, steps: true, render: true, url: true, title: true, thumbnail: true, details: true, updatedAt: true },
     }),
   );

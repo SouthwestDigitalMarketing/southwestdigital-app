@@ -24,7 +24,10 @@ import { VideoList } from "./VideoList";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
-/** The top of both tabs: on This Week a New video button first (Tom, 2026-11-24: "where's the button to make a video?"), then the calendar. */
+/**
+ * The top of both tabs: on This Week a New video button (Tom, 2026-11-24: "where's the button to make a video?"),
+ * then the calendar. Videos being made show in the production bar on every page.
+ */
 function PeriodTop({ period }: { period: Period }) {
   return (
     <>
