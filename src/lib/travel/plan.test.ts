@@ -6,7 +6,11 @@ import {
   documentWarnings,
   documentsReady,
   emptyPlan,
+  formatHours,
   hasPhotos,
+  optionTotal,
+  sortOptions,
+  tripDays,
   itemsWithoutPin,
   mapPins,
   pinFor,
@@ -163,5 +167,36 @@ describe("travel plan", () => {
         expect(section.fields.map((field) => field.key), `${section.key}.${key}`).toContain(key);
       }
     }
+  });
+
+  it("totals an option for the trip length and reads that length from dates or the plan", () => {
+    const plan = { ...emptyPlan(), days: 60 };
+    expect(tripDays(plan, { startsOn: "", endsOn: "" })).toBe(60);
+    expect(tripDays(plan, { startsOn: "2027-01-05", endsOn: "2027-03-05" })).toBe(60);
+    expect(tripDays(plan, { startsOn: "2027-01-05", endsOn: "" })).toBe(60);
+    expect(parsePlan({ days: 0 }).days).toBe(30);
+    const option = parseItem("options", { id: id(1), place: "Mexico City", roundTrip: 214, monthly: 1500 });
+    expect(optionTotal(option, 60)).toBe(3214);
+    expect(optionTotal(option, 45)).toBe(2464);
+    expect(optionTotal(parseItem("options", { id: id(2), place: "X" }), 60)).toBeNull();
+  });
+
+  it("sorts options by total or by closeness to Conroe time, missing values last", () => {
+    const opt = (n: number, place: string, roundTrip: number | null, monthly: number | null, hoursAhead: number | null) =>
+      parseItem("options", { id: id(n), place, roundTrip, monthly, hoursAhead });
+    const items = [
+      opt(1, "Fukuoka", 809, 1400, 15),
+      opt(2, "Mexico City", 214, 1500, 0),
+      opt(3, "Unknown", null, null, null),
+      opt(4, "Merida", 300, 1200, 0),
+      opt(5, "Medellin", 492, 1200, 1),
+    ];
+    const names = (sort: "mine" | "total" | "time") => sortOptions(items, sort, 60).map((item) => item.place);
+    expect(names("mine")).toEqual(["Fukuoka", "Mexico City", "Unknown", "Merida", "Medellin"]);
+    expect(names("total")).toEqual(["Merida", "Medellin", "Mexico City", "Fukuoka", "Unknown"]);
+    expect(names("time")).toEqual(["Merida", "Mexico City", "Medellin", "Fukuoka", "Unknown"]);
+    expect(formatHours(0)).toBe("Same time");
+    expect(formatHours(-1)).toBe("1 hour behind");
+    expect(formatHours(15)).toBe("15 hours ahead");
   });
 });
