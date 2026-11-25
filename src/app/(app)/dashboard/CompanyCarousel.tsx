@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { MetricsView } from "@/lib/companyMetrics/summary";
 
 type CashFlow = { month: string; asOf: string; valueUsd: number; stale: boolean } | null;
@@ -184,10 +184,12 @@ const OFFER_STATUS: Record<string, { label: string; tone: string }> = {
 };
 
 /** The Offers card's list: each offer sent in the period with its amount and status, linking to it; then all offers. */
-function OfferList({ offers, colors }: { offers: CompanyOffer[]; colors: Record<string, string> }) {
+function OfferList({ offers: all, colors }: { offers: CompanyOffer[]; colors: Record<string, string> }) {
+  // Only offers still in play (Tom, 2026-11-24): not signed (counted, but done) and not archived (not counted).
+  const offers = all.filter((offer) => offer.status !== "completed" && offer.status !== "archived");
   return (
     <div>
-      {offers.length === 0 ? <p className="text-sm text-slate-500">No offers sent in this period.</p> : (
+      {offers.length === 0 ? <p className="text-sm text-slate-500">No open offers in this period.</p> : (
         <ul className="flex flex-col">
           {offers.map((offer) => {
             const status = OFFER_STATUS[offer.status] ?? { label: offer.status, tone: "bg-slate-100 text-slate-700" };
@@ -240,9 +242,11 @@ function ClientList({ clients, colors, brands }: { clients: CompanyClient[]; col
 
 export type CompanyTargets = { mrrUsd: number; newLeads: number; offersSent: number; responseSeconds: number; freeCashFlowUsd: number };
 
-export function CompanyCarousel({ total, brands, cashFlow, expectedMonth, period, colors, targets, clients, leads, offers, leadAlerts }: {
+export function CompanyCarousel({ total, brands, cashFlow, expectedMonth, period, colors, targets, clients, leads, offers, leadAlerts, funnel }: {
   total: MetricsView; brands: MetricsView[]; cashFlow: CashFlow; expectedMonth: string; period: string;
   colors: Record<string, string>; targets: CompanyTargets; clients: CompanyClient[]; leads: CompanyLead[]; offers: CompanyOffer[]; leadAlerts: LeadAlert[];
+  /** The lead funnel card (Cold to Secured thermometers), shown right under New leads (Tom, 2026-11-24). */
+  funnel?: ReactNode;
 }) {
   const pct = (value: number, target: number) => `${target > 0 ? Math.round((value / target) * 100) : 0}% of ${target.toLocaleString("en-US")}`;
   const parts = (pick: (b: MetricsView) => number, show: (n: number) => string): Part[] =>
@@ -252,6 +256,7 @@ export function CompanyCarousel({ total, brands, cashFlow, expectedMonth, period
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Card label="MRR" value={money(total.mrrUsd)} note={`${total.clients} active client${total.clients === 1 ? "" : "s"} · ${Math.round((total.mrrUsd / targets.mrrUsd) * 100)}% of ${money(targets.mrrUsd)}`} parts={parts((b) => b.mrrUsd, money)} target={targets.mrrUsd} expand={<ClientList clients={clients} colors={colors} brands={brands} />} />
       <Card label="new leads" value={String(total.newLeads)} note={`${period} · ${pct(total.newLeads, targets.newLeads)}`} parts={parts((b) => b.newLeads, count)} target={targets.newLeads} expand={<LeadList leads={leads} colors={colors} />} alert={leadAlerts.length ? <LeadAlerts alerts={leadAlerts} /> : undefined} />
+      {funnel ? <div className="flex flex-col">{funnel}</div> : null}
       <Card label="offers" value={String(total.offersSent)} note={`${total.offersAwaiting} awaiting a reply · ${pct(total.offersSent, targets.offersSent)}`} parts={parts((b) => b.offersSent, count)} target={targets.offersSent} expand={<OfferList offers={offers} colors={colors} />} />
       <Card
         label="response time"

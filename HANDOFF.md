@@ -1,4 +1,19 @@
 # SWapp handoff
+## 2026-11-24 (late night) — Offers list, lead funnel card, New video button (Johnny, Tom's asks)
+
+Branch `johnny/showrunner-dev6`.
+
+- Dashboard Offers card lists only offers still in play: signed (`completed`) and `archived` are left out. Archived
+  offers are also no longer counted as sent in `getCompanyMetrics` (dashboard, Showrunner Leads, monthly reports).
+- The lead funnel card (`PipelineMrrStatCard`, Cold to Secured thermometers, Hot shakes) is on the company view
+  right under New leads, passed into `CompanyCarousel` as `funnel`. It merges `pipe-prospects` across both company
+  brands, so it no longer reads $0 with The Real Estate Bookkeeper active (TREB has no funnel items yet).
+  Tom tried folding the thermometers into New leads, then asked for the two cards separate again (reverted).
+- Showrunner This Week: red New video button above the calendar, to `/showrunner/new` (it went missing when This
+  Week was cleared to the calendar).
+- Checks: Playwright at 412px (card order, funnel stages, button tap). The funnel was not seen with TREB active: the
+  test browser's `swd-active-brand` cookie did not switch brands. Lint 0 errors, typecheck clean.
+
 ## 2026-11-24 (night) — Urgent lead actions live on the New leads card (Johnny, Tom's ask)
 
 - The separate "Paid, GSA not signed" card (GsaAlarm) no longer shows on the Lochside dashboard (other brands keep
@@ -31,7 +46,8 @@
   (A TREB lead's page needs the TREB brand active; TREB has no leads yet.)
   The Offers card opens too: each offer sent in the period (client company or name, amount when the quote row has
   totals, status chip: Sent / Viewed (firstViewedAt) / Accepted / Signed (completed) / Archived), linking to
-  /offers/[id]; Details -> /offers. The count includes archived TEST offers (getCompanyMetrics counts any sentAt).
+  /offers/[id]; Details -> /offers. The list hides signed (completed) and archived offers; getCompanyMetrics no
+  longer counts archived offers as sent (dashboard, Showrunner Leads, monthly reports).
   The other cards are links (stretched, chevron):
   response time -> /scorecard; free cash flow has no page yet.
   Targets (Tom, 2026-11-24): each bar's track is the target and the brand pieces fill their share of the way;
