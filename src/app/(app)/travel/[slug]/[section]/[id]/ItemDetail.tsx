@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { pinFor, sectionFor, visibleFields, type SectionKey, type TripItem } from "@/lib/travel/plan";
+import { formatMoney, pinFor, sectionFor, visibleFields, type SectionKey, type TripItem } from "@/lib/travel/plan";
 import { ItemForm, ItemPhoto, card, danger, ghost, shownValue, useChange } from "../../parts";
 import { TripMap } from "../../TripMap";
 
@@ -16,6 +16,7 @@ export function ItemDetail({
   previousId,
   nextId,
   position,
+  total,
 }: {
   slug: string;
   tripTitle: string;
@@ -25,6 +26,7 @@ export function ItemDetail({
   previousId: string | null;
   nextId: string | null;
   position: string;
+  total: { days: number; amount: number | null } | null;
 }) {
   const section = sectionFor(sectionKey);
   const router = useRouter();
@@ -80,6 +82,13 @@ export function ItemDetail({
               {neighbour(nextId, "Next →")}
             </div>
           </div>
+
+          {total && total.amount !== null ? (
+            <p className="mt-2 text-sm text-slate-700">
+              Total for {total.days} days (round trip + per month):{" "}
+              <strong className="text-lg text-slate-900">{formatMoney(total.amount)}</strong>
+            </p>
+          ) : null}
 
           {editing ? (
             <div className="mt-4">

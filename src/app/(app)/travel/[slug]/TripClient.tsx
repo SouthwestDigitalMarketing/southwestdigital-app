@@ -14,7 +14,12 @@ import {
   itemsWithoutPhoto,
   itemsWithoutPin,
   mapPins,
+  OPTION_SORTS,
+  optionTotal,
+  sortOptions,
+  tripDays,
   type MapPin,
+  type OptionSort,
   type Section,
   type SectionKey,
   type TripItem,
@@ -49,6 +54,7 @@ export function TripClient({
   const warnings = documentWarnings(plan, details, today);
   const counts = (key: SectionKey) => plan.sections[key].length;
   const pins = mapPins(plan);
+  const days = tripDays(plan, details);
   const tiles = [
     { label: "Budget planned", value: totals.planned ? formatMoney(totals.planned) : "Not set" },
     { label: "Spent so far", value: formatMoney(totals.actual) || "$0" },
@@ -69,7 +75,7 @@ export function TripClient({
       <Link href="/travel" className="text-sm text-slate-500 hover:text-slate-800">
         All trips
       </Link>
-      <TripHeader slug={slug} details={details} summary={plan.summary} />
+      <TripHeader slug={slug} details={details} summary={plan.summary} days={plan.days} />
 
       {warnings.length ? (
         <div role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
@@ -122,6 +128,7 @@ export function TripClient({
           slug={slug}
           section={section}
           items={plan.sections[section.key]}
+          days={days}
           missing={
             (AUTO_PHOTO_SECTIONS.has(section.key) ? itemsWithoutPhoto(plan, section.key).length : 0) +
             itemsWithoutPin(plan, section.key).length
@@ -134,10 +141,21 @@ export function TripClient({
   );
 }
 
-function TripHeader({ slug, details, summary }: { slug: string; details: Details; summary: string }) {
+function TripHeader({
+  slug,
+  details,
+  summary,
+  days,
+}: {
+  slug: string;
+  details: Details;
+  summary: string;
+  days: number;
+}) {
   const [editing, setEditing] = useState(false);
   const { pending, error, run } = useChange(slug);
-  const dates = details.startsOn || details.endsOn ? `${details.startsOn || "?"} to ${details.endsOn || "?"}` : "Dates not set";
+  const dates =
+    details.startsOn || details.endsOn ? `${details.startsOn || "?"} to ${details.endsOn || "?"}` : `Dates not set · ${days} days`;
 
   if (!editing) {
     return (
@@ -175,6 +193,7 @@ function TripHeader({ slug, details, summary }: { slug: string; details: Details
               startsOn: form.get("startsOn"),
               endsOn: form.get("endsOn"),
               summary: form.get("summary"),
+              days: form.get("days"),
             },
           },
           () => setEditing(false),
@@ -209,6 +228,10 @@ function TripHeader({ slug, details, summary }: { slug: string; details: Details
           <input type="date" name="endsOn" defaultValue={details.endsOn} className={inputClass} />
         </label>
       </div>
+      <label className="flex flex-col gap-1 text-sm text-slate-700">
+        Length in days (used until dates are set)
+        <input type="number" name="days" min={1} max={365} required defaultValue={days} className={inputClass} />
+      </label>
       <label className="flex flex-col gap-1 text-sm text-slate-700 sm:col-span-2">
         What this trip is
         <textarea name="summary" rows={3} maxLength={5000} defaultValue={summary} className={inputClass} />
@@ -230,14 +253,19 @@ function SectionBlock({
   slug,
   section,
   items,
+  days,
   missing,
 }: {
   slug: string;
   section: Section;
   items: TripItem[];
+  days: number;
   missing: number;
 }) {
   const [adding, setAdding] = useState<string | null>(null);
+  const [sort, setSort] = useState<OptionSort>("mine");
+  const isOptions = section.key === "options";
+  const shown = isOptions ? sortOptions(items, sort, days) : items;
   const { pending, error, run } = useChange(slug);
   const totals =
     section.key === "budget"
@@ -280,16 +308,30 @@ function SectionBlock({
           <strong>{formatMoney(Math.round(totals.actual * 100) / 100)}</strong>
         </p>
       ) : null}
+      {isOptions && items.length > 1 ? (
+        <label className="mt-2 flex items-center gap-2 text-sm text-slate-700">
+          Sort
+          <select value={sort} onChange={(event) => setSort(event.target.value as OptionSort)} className={`${inputClass} w-auto`}>
+            {(Object.keys(OPTION_SORTS) as OptionSort[]).map((key) => (
+              <option key={key} value={key}>
+                {OPTION_SORTS[key]}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
       {error ? <p className="mt-2 text-sm text-red-700">{error}</p> : null}
 
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {items.map((item) => (
+        {shown.map((item) => (
           <ItemCard
             // Keyed on the saved values so a checkbox's instant tick resets once the server answers.
             key={`${item.id}:${JSON.stringify(item)}`}
             slug={slug}
             section={section}
             item={item}
+            total={isOptions ? optionTotal(item, days) : null}
+            days={days}
             pending={pending}
             onToggle={(key, value) => run({ kind: "save", section: section.key, item: { ...item, [key]: value } })}
           />
@@ -321,12 +363,16 @@ function ItemCard({
   slug,
   section,
   item,
+  total,
+  days,
   pending,
   onToggle,
 }: {
   slug: string;
   section: Section;
   item: TripItem;
+  total: number | null;
+  days: number;
   pending: boolean;
   onToggle: (key: string, value: boolean) => void;
 }) {
@@ -347,6 +393,11 @@ function ItemCard({
         >
           {String(item[section.heading] ?? "")}
         </Link>
+        {total !== null ? (
+          <p className="mt-1 text-sm text-slate-700">
+            Total for {days} days: <strong className="text-base text-slate-900">{formatMoney(total)}</strong>
+          </p>
+        ) : null}
         {facts.length ? (
           <dl className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-sm">
             {facts.map(({ field, shown }) => (

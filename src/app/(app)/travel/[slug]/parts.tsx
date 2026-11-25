@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { formatMoney, visibleFields, type Field, type ItemValue, type Section, type TripItem } from "@/lib/travel/plan";
+import { formatHours, formatMoney, visibleFields, type Field, type ItemValue, type Section, type TripItem } from "@/lib/travel/plan";
 import { changeTripAction } from "../actions";
 
 /** Pieces shared by the trip page and an item's own page. */
@@ -57,6 +57,7 @@ export function hostOf(url: string) {
 
 export function shownValue(field: Field, value: ItemValue) {
   if (field.type === "money") return typeof value === "number" ? formatMoney(value) : null;
+  if (field.type === "hours") return typeof value === "number" ? formatHours(value) : null;
   if (typeof value !== "string" || value === "") return null;
   if (field.type === "url" || field.type === "photo") {
     return (
@@ -114,7 +115,7 @@ export function ItemForm({
         for (const field of fields) {
           const raw = form.get(field.key);
           if (field.type === "check") next[field.key] = raw === "on";
-          else if (field.type === "money") {
+          else if (field.type === "money" || field.type === "hours") {
             const text = String(raw ?? "").replace(/[$,\s]/g, "");
             next[field.key] = text === "" ? null : Number(text);
           } else next[field.key] = String(raw ?? "");
@@ -170,6 +171,20 @@ function FieldInput({ field, value, required }: { field: Field; value: ItemValue
           name={field.key}
           inputMode="decimal"
           placeholder="$0"
+          defaultValue={typeof value === "number" ? String(value) : ""}
+          className={inputClass}
+        />
+      );
+      break;
+    case "hours":
+      control = (
+        <input
+          type="number"
+          name={field.key}
+          step="0.5"
+          min="-24"
+          max="24"
+          placeholder="0 = same time, 15 = 15 hours ahead"
           defaultValue={typeof value === "number" ? String(value) : ""}
           className={inputClass}
         />

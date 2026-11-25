@@ -512,6 +512,18 @@ newsletters) into SWapp's Scanner; `/patrol` was removed from every machine the 
 - Open: confirm Zoho empties Spam on its own (oldest Spam mail 31 Oct on 2026-11-24); texts from
   Tom's Pixel (Google Messages for Web, ripley agent Chrome) as a Scanner source — next.
 
+## 2026-11-25 — Travel: option totals, round trips only, sort by price or time zone (Ummon)
+
+Tom: "keep these to round trips for now"; "on the cards we need to have the total"; sort by
+"price and time zone". Options drop One way and gain `hoursAhead` (new field type `hours`,
+-24..24). Trips gain `plan.days` (default 30; starter 60), editable in the trip header and used
+until both dates are set (`tripDays`, inclusive). `optionTotal` = round trip + per month x
+days/30; shown bold on option cards and the option page. Options list has a Sort menu: Your order,
+Lowest total, Closest to Conroe time (|hours|, ties by total); missing values sort last; the
+choice is per page view, not saved. Checks: tsc, eslint, vitest (23 travel tests); phone
+preview rebuilt the starter: totals $3,214 / $2,700 / $2,892 / $3,609 / $2,800 for 60 days, both
+sorts in the expected order, no page errors.
+
 ## 2026-11-25 — Travel: short cards, item pages, trip map (Ummon)
 
 Tom: "simplify the info ... allow the card to be clicked ... 'detail page' ... a map that shows the

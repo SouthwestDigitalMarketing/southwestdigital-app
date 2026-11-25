@@ -19,7 +19,7 @@ export const TRIP_STATUS_LABELS: Record<TripStatus, string> = {
 export const DOCUMENT_STATUSES = ["Need it", "Applied", "Have it", "Not needed"] as const;
 
 /** "coordinate" fields (lat/lng) are looked up on save and never shown in forms or on cards. */
-export type FieldType = "text" | "long" | "money" | "date" | "url" | "photo" | "check" | "choice" | "coordinate";
+export type FieldType = "text" | "long" | "money" | "hours" | "date" | "url" | "photo" | "check" | "choice" | "coordinate";
 export type Field = { key: string; label: string; type: FieldType; options?: readonly string[] };
 export type SectionKey =
   | "options"
@@ -53,14 +53,14 @@ export const SECTIONS: readonly Section[] = [
     blurb: "Places we are weighing before we pick one.",
     itemLabel: "option",
     heading: "place",
-    summary: ["monthly", "roundTrip", "timeGap"],
+    summary: ["roundTrip", "monthly", "timeGap"],
     fields: [
       { key: "place", label: "Place", type: "text" },
       { key: "photo", label: "Photo link", type: "photo" },
       { key: "roundTrip", label: "Round trip", type: "money" },
-      { key: "oneWay", label: "One way", type: "money" },
       { key: "monthly", label: "Per month", type: "money" },
       { key: "visaFree", label: "Visa-free stay", type: "text" },
+      { key: "hoursAhead", label: "Hours ahead of Conroe", type: "hours" },
       { key: "timeGap", label: "Time vs Conroe", type: "text" },
       { key: "safety", label: "Safety", type: "text" },
       { key: "gym", label: "Gym (Olympic lifts)", type: "long" },
@@ -251,13 +251,18 @@ export function sectionFor(key: SectionKey): Section {
 
 export type ItemValue = string | number | boolean | null;
 export type TripItem = { id: string } & Record<string, ItemValue>;
-export type TripPlan = { summary: string; sections: Record<SectionKey, TripItem[]> };
+/** `days` is the trip length used for option totals when the trip has no dates yet. */
+export type TripPlan = { summary: string; days: number; sections: Record<SectionKey, TripItem[]> };
+export const DEFAULT_DAYS = 30;
+export const daysSchema = z.coerce.number().int("Use whole days.").min(1, "At least 1 day.").max(365, "At most 365 days.");
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 export const tripDateSchema = z.union([z.literal(""), z.string().regex(DATE, "Use a date like 2026-12-01")]);
 
 function fieldSchema(field: Field): z.ZodType<ItemValue> {
   switch (field.type) {
+    case "hours":
+      return z.union([z.number().finite().min(-24).max(24), z.null()]);
     case "money":
       return z
         .union([z.number(), z.null()])
@@ -289,7 +294,7 @@ function fieldSchema(field: Field): z.ZodType<ItemValue> {
 }
 
 function blankValue(field: Field): ItemValue {
-  if (field.type === "money" || field.type === "coordinate") return null;
+  if (field.type === "money" || field.type === "hours" || field.type === "coordinate") return null;
   if (field.type === "check") return false;
   return "";
 }
@@ -328,7 +333,12 @@ export function parsePlan(raw: unknown): TripPlan {
       }
     });
   }
-  return { summary: typeof object.summary === "string" ? object.summary : "", sections };
+  const days = daysSchema.safeParse(object.days);
+  return {
+    summary: typeof object.summary === "string" ? object.summary : "",
+    days: days.success ? days.data : DEFAULT_DAYS,
+    sections,
+  };
 }
 
 /** Fields people see and edit (coordinates are looked up, not typed). */
@@ -467,6 +477,52 @@ export function uniqueSlug(base: string, taken: ReadonlySet<string>): string {
     if (!taken.has(candidate)) return candidate;
   }
   throw new Error("Too many trips with this name.");
+}
+
+/** Trip length in days: from the dates when both are set (inclusive), otherwise the plan's own number. */
+export function tripDays(plan: TripPlan, trip: { startsOn: string; endsOn: string }): number {
+  if (trip.startsOn && trip.endsOn) {
+    const span = Math.round((Date.parse(`${trip.endsOn}T00:00:00Z`) - Date.parse(`${trip.startsOn}T00:00:00Z`)) / 86_400_000) + 1;
+    if (Number.isFinite(span) && span >= 1) return span;
+  }
+  return plan.days;
+}
+
+/** An option's whole cost: the round trip plus the monthly cost for the trip's length. Null when neither is known. */
+export function optionTotal(item: TripItem, days: number): number | null {
+  const flight = typeof item.roundTrip === "number" ? item.roundTrip : null;
+  const monthly = typeof item.monthly === "number" ? item.monthly : null;
+  if (flight === null && monthly === null) return null;
+  return Math.round((flight ?? 0) + (monthly ?? 0) * (days / 30));
+}
+
+export const OPTION_SORTS = { mine: "Your order", total: "Lowest total", time: "Closest to Conroe time" } as const;
+export type OptionSort = keyof typeof OPTION_SORTS;
+
+/** Options in the chosen order; anything missing the sort value goes last, ties keep your order. */
+export function sortOptions(items: TripItem[], sort: OptionSort, days: number): TripItem[] {
+  if (sort === "mine") return items;
+  const value = (item: TripItem) =>
+    sort === "total" ? optionTotal(item, days) : typeof item.hoursAhead === "number" ? Math.abs(item.hoursAhead) : null;
+  return items
+    .map((item, index) => ({ item, index, value: value(item) }))
+    .sort((a, b) => {
+      if (a.value === null || b.value === null) return a.value === null ? (b.value === null ? a.index - b.index : 1) : -1;
+      if (a.value !== b.value) return a.value - b.value;
+      if (sort === "time") {
+        const at = optionTotal(a.item, days) ?? Infinity;
+        const bt = optionTotal(b.item, days) ?? Infinity;
+        if (at !== bt) return at - bt;
+      }
+      return a.index - b.index;
+    })
+    .map(({ item }) => item);
+}
+
+export function formatHours(value: number): string {
+  if (value === 0) return "Same time";
+  const hours = Math.abs(value);
+  return `${hours} hour${hours === 1 ? "" : "s"} ${value > 0 ? "ahead" : "behind"}`;
 }
 
 export function formatMoney(value: number | null | undefined): string {

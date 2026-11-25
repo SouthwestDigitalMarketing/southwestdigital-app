@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireStaffBrand } from "@/lib/brands/staff";
 import { withBrandDataTransaction } from "@/lib/tenancy/context";
-import { SECTION_KEYS, parsePlan, sectionFor, type SectionKey } from "@/lib/travel/plan";
+import { SECTION_KEYS, optionTotal, parsePlan, sectionFor, tripDays, type SectionKey } from "@/lib/travel/plan";
 import { ItemDetail } from "./ItemDetail";
 
 export const dynamic = "force-dynamic";
@@ -17,11 +17,13 @@ export default async function TravelItemPage({ params }: PageProps) {
   const trip = await withBrandDataTransaction(dataContext, (tx) =>
     tx.trip.findUnique({
       where: { brandId_slug: { brandId: dataContext.brandId, slug } },
-      select: { slug: true, title: true, plan: true },
+      select: { slug: true, title: true, plan: true, startsOn: true, endsOn: true },
     }),
   );
   if (!trip) notFound();
-  const items = parsePlan(trip.plan).sections[key];
+  const plan = parsePlan(trip.plan);
+  const days = tripDays(plan, trip);
+  const items = plan.sections[key];
   const index = items.findIndex((item) => item.id === id);
   if (index === -1) notFound();
   return (
@@ -35,6 +37,7 @@ export default async function TravelItemPage({ params }: PageProps) {
       previousId={items[index - 1]?.id ?? null}
       nextId={items[index + 1]?.id ?? null}
       position={`${index + 1} of ${items.length}`}
+      total={key === "options" ? { days, amount: optionTotal(items[index], days) } : null}
     />
   );
 }

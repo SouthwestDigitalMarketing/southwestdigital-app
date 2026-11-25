@@ -11,6 +11,7 @@ import {
   AUTO_PHOTO_SECTIONS,
   SECTION_KEYS,
   TRIP_STATUSES,
+  daysSchema,
   emptyPlan,
   moveItem,
   parseItem,
@@ -36,6 +37,7 @@ export async function createTripAction(formData: FormData) {
   const starter = formData.get("starter") === "remote-months";
   const title = starter ? REMOTE_MONTHS_TITLE : titleSchema.parse(formData.get("title"));
   const plan = starter ? remoteMonthsPlan() : emptyPlan();
+  if (starter) plan.days = 60;
   if (starter) plan.sections.options = await enrich("options", plan.sections.options, "", new Map());
   // Every trip starts with Tom's standing needs (gym, shakes, martial arts, internet, guitar).
   plan.sections.needs = standingNeeds(randomUUID);
@@ -65,6 +67,7 @@ const detailsSchema = z
     startsOn: tripDateSchema,
     endsOn: tripDateSchema,
     summary: z.string().trim().max(5000),
+    days: daysSchema,
   })
   .refine((d) => !d.startsOn || !d.endsOn || d.startsOn <= d.endsOn, "The trip ends before it starts.");
 
@@ -209,7 +212,7 @@ async function applyChange(dataContext: Context, slug: string, change: Prepared)
         data.destination = details.destination;
         data.startsOn = details.startsOn;
         data.endsOn = details.endsOn;
-        plan = { ...plan, summary: details.summary };
+        plan = { ...plan, summary: details.summary, days: details.days };
         break;
       }
       case "save": {
