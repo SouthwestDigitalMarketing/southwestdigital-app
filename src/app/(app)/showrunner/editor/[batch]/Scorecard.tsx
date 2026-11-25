@@ -1,5 +1,33 @@
 import { REVIEW_SECTIONS, type VideoReview } from "@/lib/showrunner/review";
 
+/** YouTube's numbers: they explain the score, they do not change it (scorecard section 4). */
+function Results({ review }: { review: VideoReview }) {
+  const r = review.results;
+  if (!r) return null;
+  if ("waiting" in r) {
+    return <p className="mt-3 rounded-xl bg-slate-50 p-3 text-sm text-slate-600">YouTube numbers: {r.waiting}</p>;
+  }
+  return (
+    <div className="mt-3 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
+      <h3 className="font-semibold text-slate-900">On YouTube</h3>
+      <p className="mt-1">
+        {r.views.toLocaleString("en-US")} views · watched {r.averagePercent}% on average ({r.averageMinutes} min)
+        {r.typicalPercent !== null ? ` · your typical video: ${r.typicalPercent}%` : ""}
+      </p>
+      {r.stillWatchingAt30s !== null ? <p className="mt-1">Still watching at 30 seconds: {r.stillWatchingAt30s}%</p> : null}
+      {r.dropOffs.length ? (
+        <ul className="mt-2 space-y-1">
+          {r.dropOffs.map((d) => (
+            <li key={d.at}>
+              <span className="font-semibold tabular-nums">{d.at}</span> lost {d.fall}% of viewers{d.said ? `: "${d.said}"` : ""}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 function tone(points: number, max: number) {
   const share = max > 0 ? points / max : 0;
   return share >= 0.8 ? "bg-emerald-500" : share >= 0.5 ? "bg-amber-400" : "bg-rose-500";
@@ -36,6 +64,7 @@ export function Scorecard({ review }: { review: VideoReview }) {
           <p className="mt-1">{review.nextTime}</p>
         </div>
       ) : null}
+      <Results review={review} />
       {REVIEW_SECTIONS.map((section) => {
         const items = section.ids.map((id) => byId.get(id)).filter((item) => item !== undefined);
         if (items.length === 0) return null;

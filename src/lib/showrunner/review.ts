@@ -4,6 +4,18 @@
  */
 export type ReviewItem = { id: string; title: string; points: number; max: number; reason: string; at: string };
 
+/** YouTube's numbers for the video, filled in by ripley once YouTube has them. */
+export type ReviewResults =
+  | { waiting: string }
+  | {
+      views: number;
+      averageMinutes: number;
+      averagePercent: number;
+      typicalPercent: number | null;
+      stillWatchingAt30s: number | null;
+      dropOffs: { at: string; fall: number; said: string }[];
+    };
+
 export type VideoReview = {
   reviewedAt: string;
   videoId: string | null;
@@ -12,6 +24,7 @@ export type VideoReview = {
   items: ReviewItem[];
   fixNow: { title: string; thumbnailText: string; notes: string[] };
   nextTime: string;
+  results: ReviewResults | null;
 };
 
 /** The scorecard's sections, in order, by item id. */
@@ -57,5 +70,28 @@ export function parseReview(raw: unknown): VideoReview | null {
       notes: Array.isArray(fix.notes) ? fix.notes.slice(0, 5).map((n) => text(n, 300)).filter(Boolean) : [],
     },
     nextTime: text(r.nextTime, 500),
+    results: parseResults(r.results),
+  };
+}
+
+function parseResults(raw: unknown): ReviewResults | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.waiting === "string") return { waiting: text(r.waiting, 300) };
+  if (typeof r.views !== "number") return null;
+  const number = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : null);
+  return {
+    views: count(r.views, 1e9),
+    averageMinutes: number(r.averageMinutes) ?? 0,
+    averagePercent: number(r.averagePercent) ?? 0,
+    typicalPercent: number(r.typicalPercent),
+    stillWatchingAt30s: number(r.stillWatchingAt30s),
+    dropOffs: Array.isArray(r.dropOffs)
+      ? r.dropOffs.slice(0, 5).flatMap((d) => {
+          if (!d || typeof d !== "object") return [];
+          const o = d as Record<string, unknown>;
+          return [{ at: text(o.at, 10), fall: number(o.fall) ?? 0, said: text(o.said, 200) }];
+        })
+      : [],
   };
 }
