@@ -71,39 +71,30 @@ Keep process logs behind a details view.
 
 ### Pages and buttons
 
-Proposed navigation: **Donna** in SWapp's main menu opens `/donna`.
-The old `/scanner` entry points redirect as appropriate when the new page ships.
-The product is Donna; the builder's agent identity remains Ummon.
+Tom clarified the structure on 2026-11-25: Donna's top-level tabs describe areas
+of her job. Start with **Overview** and **Email**. Scorecard is a separate main
+menu item. Work states are filters inside Email, not Donna's top-level tabs.
 
-1. **Donna home.** A brief “Today” summary, mailbox health and last checked time.
-   Four tabs: **Needs you**, **Working**, **Waiting**, **Handled**, each with a
-   count. Default to Needs you. Each row states the person, request, next action
-   and age or deadline. Selecting a row opens its request page. **Check now**
-   refreshes the background intake; normal operation never requires pressing it.
-2. **Request page**, `/donna/requests/[id]`. **What they need**, **Donna's
-   recommendation**, **Prepared work**, **Conversation and files**, and
-   **Activity**. Expand source messages and attachments without leaving the
-   request. A prepared reply shows the exact sender, To/Cc, subject, text and
-   attachments. Buttons: **Approve and send**, **Edit reply**, **Give direction**.
-   Only show actions relevant to the current request. Give direction takes a
-   short instruction; Donna revises the prepared work before asking again.
-   Approval must satisfy the current same-turn sending rule; the button's
-   authorization integration must be resolved before enabling real sends.
-3. **Working tab.** Request rows show owner, next action and due date. Open the
-   same request page to inspect progress or give direction. No second task list.
-4. **Waiting tab.** Each row states who owes what and the next follow-up date.
-   **Change follow-up** adjusts that date; **Prepare follow-up** prepares a
-   message without sending it. Replies update the request automatically.
-5. **Handled tab.** Completed work with time and evidence. **View details**
-   opens the same request page; **Undo filing** appears only for a verified
-   reversible filing action. A sent acknowledgment alone cannot put a request here.
-6. **Donna settings.** **Mailboxes**, **Standing rules**, **Notifications** and
-   **Pause Donna**. A **Resume Donna** control appears when paused. Model names,
-   worker logs and processing details stay out of the normal work flow.
+- **Overview** (`/donna`): a short status and one Email card. No request list,
+  detailed statistics, setup instructions or connection logs.
+- **Email** (`/donna/email`): mailbox status, four work counts, last checked time
+  and history remaining. Each count opens its own small request queue.
+- **Email work** (`/donna/email/work`): two requests per page, with status filters
+  and pagination. All requests remain reachable; none are hidden to force a fit.
+- **Request** (`/donna/requests/[id]`): Summary, Reply, Source and Activity views.
+  Direction and follow-up/completion are separate views. Full text remains
+  accessible in bounded readers; the summary always links to the full text.
+- **Email settings**: Mailbox, Connection, Coverage and Rules views, one at a
+  time. Raw connection details never appear on Overview or Email.
+- **Scorecard** (`/scorecard`): its own menu and compact hub. Email counts live
+  at `/scorecard/email`, grouped into small sets with separate activity drill-down.
+  Existing client response-time data remain available. Old `/donna/activity`
+  links redirect to the new email Scorecard.
 
-Design lesson from Tom, 2026-11-25: when asked for a user journey, describe the
-actual pages, sections, buttons and resulting transitions. An employee narrative
-alone does not make the interface concrete enough to review.
+Default screens should fit above the fold on desktop and phones. Verify at
+360x640, 412x915 and 1280x800; avoid stacking whole workflows on one long page.
+Long mail or notes use explicit readers with their own scroll area, while the
+page's navigation and controls stay visible. This is the project's UI rule.
 
 ## Build sequence
 
@@ -207,8 +198,8 @@ Work outside supported capabilities stays owned, with an explicit next action.
 
 ### 4 Build the Donna page around decisions and results
 
-Replace the Scanner name and findings-first presentation with the four views
-above. Preserve existing links through redirects where practical. A request
+Use Overview and Email as Donna’s top-level tabs, with the four work states
+inside Email and Scorecard in its own menu. Preserve existing links through redirects where practical. A request
 opens to its conversation, prepared work, history and next action. Support
 phone use and keyboard operation.
 

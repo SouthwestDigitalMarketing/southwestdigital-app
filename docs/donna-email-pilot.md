@@ -8,18 +8,22 @@ CRM/bookkeeping records. The broader build sequence is in
 
 ## Pages
 
-- `/donna`: Needs you, Working, Waiting and Handled, with independent totals,
-  pagination, mailbox health, last checked time and Check now.
-- `/donna/requests/[id]`: request, recommendation, proposed reply, source excerpts,
-  attachment names, operator direction, follow-up and completion evidence.
-- `/donna/activity`: Today / This week / This month counts and source drill-down.
-  Previous figures are the previous complete calendar period. Privacy mode hides
-  all source activity and renders only counts. A summary also appears beside the
-  existing response-time Scorecard on the dashboard.
-- `/donna/settings`: existing Zoho account, pause/resume, coverage, webhook setup
-  and the read-only authority boundary.
-- `/scanner` redirects to Donna. `/donna/legacy` retains earlier multi-source
-  findings; existing spam/newsletter review URLs are retained.
+- `/donna`: Overview with a short status and one Email card.
+- `/donna/email`: high-level email status and counts. No request list or setup details.
+- `/donna/email/work`: two requests per page; Needs you, Working, Waiting and
+  Handled are filters here, not top-level Donna tabs.
+- `/donna/requests/[id]`: Summary, Reply, Source and Activity views; separate
+  direction and follow-up/completion views. Long content uses bounded readers.
+- `/donna/settings`: Mailbox, Connection, Coverage and Rules, one view at a time.
+- `/scorecard`: separate main menu item and compact hub.
+- `/scorecard/email`: grouped email counts and two-item activity drill-down.
+  Privacy mode shows counts only. Existing response-time reporting remains available.
+- `/donna/activity` redirects to `/scorecard/email`; old `/donna?tab=...` links
+  redirect to the matching email work queue. `/scanner` redirects to Donna and
+  `/donna/legacy` retains earlier multi-source findings.
+
+The high-level screens are checked above the fold at 360x640, 412x915 and
+1280x800. All records are available through pagination and explicit detail views.
 
 Only a platform operator in the Bookkeeping Conroe data scope can open the pilot.
 Every new table has forced RLS, scoped through the mailbox's brand.

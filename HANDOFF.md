@@ -1,4 +1,31 @@
 # SWapp handoff
+## 2026-11-25 — Compact Donna screens and separate Scorecard (Tom's correction)
+
+- Donna now opens Overview, with only a brief status and Email card. Its other
+  top-level tab is Email: mailbox health, four work counts, last checked and
+  history remaining. Scorecard is a separate main-menu item and compact hub.
+- Work states are filters on `/donna/email/work`, two requests per page. Request
+  summary/reply/source/activity, direction and management are separate views;
+  long source text and notes use bounded readers. Settings are split into views.
+- Email counts moved to `/scorecard/email`, grouped into small sets with paged
+  activity. Old `/donna/activity` and `?tab=` links redirect compatibly. Existing
+  client response-time data and reports are preserved.
+- Lesson from Tom: top-level Donna tabs are work areas (Overview, Email), not
+  work states or other menu items. Keep default screens above the fold on phone
+  and desktop, using progressive disclosure and pagination for detail.
+- QA now checks every new Donna view and Scorecard group at 360x640, 412x915 and
+  1280x800. A fast-edit test caught SSR textarea hydration appending initial text;
+  RequestForm now stays disabled until hydration via useSyncExternalStore.
+- Mailbox, worker, model review and source records were not changed. Pilot remains
+  read-only and paused. This updates draft PR #260 on donna/email; no merge authorized.
+- Checks: typecheck and lint passed; 1,410 JS tests passed, five existing skips.
+  Browser checks passed for all new views at the three sizes, counts-only privacy,
+  server-rendered disabled fields, repeated quick reply edits and operator actions.
+  All Thing decisions and hydration fix pushed (`b3ee339`, `4ee9de4`); vault lint
+  still reports 132 existing findings, none on the updated decision page.
+- Production build passed with `PLATFORM_BASE_URL=http://localhost:3130` after
+  the first build correctly rejected the development-only HTTP tailnet URL.
+
 ## 2026-11-25 — Donna read-only email pilot built (Ummon, Tom)
 
 - Branch `donna/email`; review this first slice before adding live execution. The full

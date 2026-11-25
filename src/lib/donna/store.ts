@@ -55,6 +55,7 @@ export async function loadDesk(
   context: BrandDataContext,
   state: string,
   page = 1,
+  pageSize = 2,
 ) {
   return withBrandDataTransaction(context, async (tx) => {
     const scope = { mailbox: { brandId: context.brandId } };
@@ -71,8 +72,8 @@ export async function loadDesk(
       tx.donnaRequest.findMany({
         where: { ...scope, state },
         orderBy: [{ urgent: "desc" }, { updatedAt: "desc" }],
-        skip: (page - 1) * 50,
-        take: 50,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
         include: { mailbox: { select: { address: true } } },
       }),
     ]);
@@ -271,6 +272,8 @@ export async function loadActivity(
   start: Date,
   end: Date,
   kind?: string,
+  page = 1,
+  pageSize = 2,
 ) {
   return withBrandDataTransaction(context, async (tx) => {
     const where = {
@@ -284,9 +287,13 @@ export async function loadActivity(
     const recent = await tx.donnaActivity.findMany({
       where: { ...where, ...(kind ? { kind } : {}) },
       orderBy: { occurredAt: "desc" },
-      take: 100,
+      take: pageSize,
+      skip: (page - 1) * pageSize,
       include: { request: { select: { id: true, title: true } } },
     });
-    return { counts: activityCounts(rows), recent };
+    const total = await tx.donnaActivity.count({
+      where: { ...where, ...(kind ? { kind } : {}) },
+    });
+    return { counts: activityCounts(rows), recent, total };
   });
 }

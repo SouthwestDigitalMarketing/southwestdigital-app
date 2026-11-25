@@ -33,8 +33,8 @@ const request = await db.donnaRequest.create({
     person: "Example client",
     category: "client",
     owner: "Donna",
-    summary: "Example source request.",
-    recommendation: "Review the prepared response.",
+    summary: "Example source request. ".repeat(40),
+    recommendation: "Review the prepared response. ".repeat(30),
     nextAction: "Review reply",
     firstReceivedAt: now,
     evidence: [
@@ -43,7 +43,7 @@ const request = await db.donnaRequest.create({
         from: "client@example.com",
         subject: "Example",
         at: now.toISOString(),
-        excerpt: "Example source evidence.",
+        excerpt: "Example source evidence. ".repeat(20),
         folder: "INBOX",
         attachments: ["example.pdf"],
       },
@@ -74,26 +74,91 @@ try {
   await page.getByRole("textbox").first().fill("thomas@bookkeepingconroe.com");
   await page.getByRole("button", { name: /sign in/i }).click();
   await page.waitForURL((url) => !url.pathname.startsWith("/login"));
-  for (const tab of ["needs-you", "working", "waiting", "handled"]) {
-    await page.goto(base + "/donna?tab=" + tab);
-    await page.getByRole("heading", { name: "Donna", exact: true }).waitFor();
-    assert.equal(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth > innerWidth,
-      ),
-      false,
-      tab + " overflows",
-    );
+  const withoutJavaScript = await browser.newContext({
+    storageState: await context.storageState(),
+    javaScriptEnabled: false,
+  });
+  const serverPage = await withoutJavaScript.newPage();
+  await serverPage.goto(
+    base + "/donna/requests/" + request.id + "?section=reply",
+  );
+  await expect(
+    serverPage.getByLabel("Edit reply", { exact: true }),
+  ).toBeDisabled();
+  await withoutJavaScript.close();
+  const routes = [
+    "/scorecard",
+    ...["overview", "sorting", "replies", "requests", "quality"].map(
+      (g) => "/scorecard/email?group=" + g,
+    ),
+    "/scorecard/email?kind=reviewed",
+    "/donna",
+    "/donna/email",
+    ...["needs-you", "working", "waiting", "handled"].map(
+      (s) => "/donna/email/work?state=" + s,
+    ),
+    ...["mailbox", "connection", "coverage", "rules"].map(
+      (s) => "/donna/settings?section=" + s,
+    ),
+    ...[
+      "summary",
+      "reply",
+      "source",
+      "activity",
+      "direction",
+      "manage",
+      "full",
+    ].map((s) => "/donna/requests/" + request.id + "?section=" + s),
+  ];
+  for (const viewport of [
+    { width: 360, height: 640 },
+    { width: 412, height: 915 },
+    { width: 1280, height: 800 },
+  ]) {
+    await page.setViewportSize(viewport);
+    for (const route of routes) {
+      await page.goto(base + route);
+      await page
+        .getByRole("heading", {
+          name: route.startsWith("/donna")
+            ? "Donna"
+            : route === "/scorecard"
+              ? "Scorecard"
+              : "Email scorecard",
+          exact: true,
+        })
+        .waitFor();
+      const size = await page.evaluate(() => ({
+        height: document.documentElement.scrollHeight,
+        width: document.documentElement.scrollWidth,
+        viewportHeight: innerHeight,
+        viewportWidth: innerWidth,
+      }));
+      assert.ok(
+        size.width <= size.viewportWidth + 1,
+        route + " overflows horizontally at " + viewport.width,
+      );
+      assert.ok(
+        size.height <= size.viewportHeight + 2,
+        route +
+          " extends below fold at " +
+          viewport.width +
+          "x" +
+          viewport.height +
+          ": " +
+          JSON.stringify(size),
+      );
+      if (route.startsWith("/donna"))
+        assert.deepEqual(
+          await page
+            .locator('nav[aria-label="Donna sections"] a')
+            .allTextContents(),
+          ["Overview", "Email"],
+        );
+    }
   }
-  await page.goto(base + "/donna/requests/" + request.id);
-  for (const section of [
-    "What they need",
-    "Donna recommends",
-    "Prepared work",
-    "Conversation and files",
-    "Activity",
-  ])
-    await page.getByRole("heading", { name: section, exact: true }).waitFor();
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.goto(base + "/donna/requests/" + request.id + "?section=reply");
   await page
     .getByLabel("Edit reply", { exact: true })
     .fill("Example revised response.");
@@ -105,6 +170,24 @@ try {
           .body,
     )
     .toBe("Example revised response.");
+  for (const body of ["First quick edit.", "Second quick edit."]) {
+    await page.goto(base + "/donna/requests/" + request.id + "?section=reply");
+    await page.getByLabel("Edit reply", { exact: true }).fill(body);
+    await page.getByRole("button", { name: "Save reply", exact: true }).click();
+    await expect
+      .poll(
+        async () =>
+          (
+            await db.donnaRequest.findUniqueOrThrow({
+              where: { id: request.id },
+            })
+          ).draft.body,
+      )
+      .toBe(body);
+  }
+  await page.goto(
+    base + "/donna/requests/" + request.id + "?section=direction",
+  );
   await page
     .getByLabel("What should Donna do?")
     .fill("Example: review the attachment.");
@@ -118,9 +201,7 @@ try {
           .direction,
     )
     .toBe("Example: review the attachment.");
-  await page
-    .getByText("Update follow-up or completion", { exact: true })
-    .click();
+  await page.goto(base + "/donna/requests/" + request.id + "?section=manage");
   await page
     .getByLabel("Waiting on, next action, or evidence the work is finished")
     .fill("Example work verified complete by this UI check.");
@@ -137,9 +218,9 @@ try {
   await page
     .getByRole("heading", { name: "Donna settings", exact: true })
     .waitFor();
-  await page.goto(base + "/donna/activity");
+  await page.goto(base + "/scorecard/email");
   await page
-    .getByRole("heading", { name: "Donna scorecard", exact: true })
+    .getByRole("heading", { name: "Email scorecard", exact: true })
     .waitFor();
   await context.addCookies([{ name: "swapp_privacy", value: "1", url: base }]);
   await page.reload();
@@ -166,7 +247,7 @@ try {
   });
   assert.deepEqual(errors, []);
   console.log(
-    "Donna UI checks passed: four tabs, request evidence, edit reply, give direction, complete with evidence, settings, counts-only privacy and mobile/desktop layout.",
+    "Donna UI checks passed: Overview/Email tabs, above-fold layouts at 360x640 / 412x915 / 1280x800, request edit/direction/completion, settings and counts-only Scorecard privacy.",
   );
 } finally {
   await browser.close();

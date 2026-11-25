@@ -1,6 +1,10 @@
 "use client";
-import { useActionState, type ReactNode } from "react";
+import { useActionState, useSyncExternalStore, type ReactNode } from "react";
 import { requestAction } from "./actions";
+
+const subscribe = () => () => {};
+const clientReady = () => true;
+const serverReady = () => false;
 
 export function RequestForm({
   children,
@@ -9,6 +13,7 @@ export function RequestForm({
   children: ReactNode;
   className?: string;
 }) {
+  const hydrated = useSyncExternalStore(subscribe, clientReady, serverReady);
   const [result, action, pending] = useActionState(
     async (_previous: { ok: boolean; message: string }, form: FormData) =>
       requestAction(form),
@@ -16,7 +21,10 @@ export function RequestForm({
   );
   return (
     <form action={action} className={className}>
-      <fieldset disabled={pending} className="space-y-3 disabled:opacity-60">
+      <fieldset
+        disabled={pending || !hydrated}
+        className="space-y-3 disabled:opacity-60"
+      >
         {children}
       </fieldset>
       {result.message ? (
