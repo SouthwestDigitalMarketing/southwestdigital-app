@@ -24,7 +24,7 @@ export default async function EditorPage() {
     .filter((episode) => episode.title || episode.project);
   return (
     <div className="px-4 py-5 sm:p-8">
-      <h1 className="text-lg font-semibold text-slate-900">Choose an episode to edit</h1>
+      <h1 className="text-lg font-semibold text-slate-900">Videos</h1>
       {episodes.length === 0 ? (
         <p className="mt-4 text-sm text-slate-500">No episodes from ripley yet.</p>
       ) : (
@@ -48,6 +48,13 @@ export default async function EditorPage() {
                     <span className="mt-0.5 block text-xs text-slate-500">
                       {[date, episode.url ? "Published" : "In production"].filter(Boolean).join(" · ")}
                     </span>
+                    {episode.review ? (
+                      <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${
+                        episode.review.score >= 80 ? "bg-emerald-50 text-emerald-800" : episode.review.score >= 50 ? "bg-amber-50 text-amber-800" : "bg-rose-50 text-rose-800"
+                      }`}>
+                        Score {episode.review.score}
+                      </span>
+                    ) : null}
                   </span>
                   <ChevronRight size={16} aria-hidden="true" className="shrink-0 text-slate-400" />
                 </Link>

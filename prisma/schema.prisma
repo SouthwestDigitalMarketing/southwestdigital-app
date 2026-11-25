@@ -2043,6 +2043,10 @@ model ShowrunnerVideoStatus {
   thumbnail String?   @db.Text
   details   Json?
   sentAt    DateTime?
+  /// The video scorecard from ripley (showrunner_review.py; All Thing sops/sop-video-scorecard.md).
+  review    Json?
+  /// Run review tapped in SWapp; ripley clears it when it sends the new review.
+  reviewRequestedAt DateTime?
   updatedAt DateTime  @default(now()) @updatedAt
   brand     Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
 

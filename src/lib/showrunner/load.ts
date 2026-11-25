@@ -6,6 +6,7 @@ import type { VideoCard } from "@/components/showrunner/VideosInProgress";
 import { latestByTarget, type LatestFeedback } from "./feedback";
 import type { VideoDetails, VideoRender, VideoStep } from "./video-status";
 import { parseWeek, type Week } from "./weekly";
+import { parseReview, type VideoReview } from "./review";
 
 export async function loadFeedback(
   context: BrandDataContext,
@@ -65,16 +66,22 @@ export async function loadVideoCards(context: BrandDataContext): Promise<VideoCa
   }));
 }
 
-/** Every episode ripley has reported, newest first, for the Editor tab's picker (Tom, 2026-11-25). */
-export async function loadEpisodes(context: BrandDataContext): Promise<VideoStatusRow[]> {
-  return withBrandDataTransaction(context, (tx) =>
+export type EpisodeRow = VideoStatusRow & { review: VideoReview | null; reviewRequestedAt: Date | null };
+
+/** Every episode ripley has reported, newest first, for the Videos tab, with its scorecard (Tom, 2026-11-25). */
+export async function loadEpisodes(context: BrandDataContext): Promise<EpisodeRow[]> {
+  const rows = await withBrandDataTransaction(context, (tx) =>
     tx.showrunnerVideoStatus.findMany({
       where: { brandId: context.brandId },
       orderBy: { batch: "desc" },
       take: 100,
-      select: { batch: true, project: true, state: true, stage: true, steps: true, render: true, url: true, title: true, thumbnail: true, details: true, updatedAt: true },
+      select: {
+        batch: true, project: true, state: true, stage: true, steps: true, render: true, url: true, title: true,
+        thumbnail: true, details: true, updatedAt: true, review: true, reviewRequestedAt: true,
+      },
     }),
   );
+  return rows.map((row) => ({ ...row, review: parseReview(row.review) }));
 }
 
 /** This Sunday's wrap-up week from ripley, or null before the first push. */
