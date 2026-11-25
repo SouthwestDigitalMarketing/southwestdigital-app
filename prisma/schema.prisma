@@ -614,6 +614,7 @@ model Brand {
   scanRules               ScanRule[]
   scanQuestions           ScanQuestion[]
   scanFindings            ScanFinding[]
+  donnaMailboxes          DonnaMailbox[]
   showrunnerVideoStatuses ShowrunnerVideoStatus[]
   showrunnerFeedback      ShowrunnerFeedback[]
   showrunnerStudio        ShowrunnerStudio?
@@ -1926,6 +1927,105 @@ model ScanRole {
 
   @@unique([brandId, key])
   @@index([brandId])
+}
+
+model DonnaMailbox {
+  id             String          @id @default(cuid())
+  brandId        String
+  key            String
+  address        String
+  paused         Boolean         @default(true)
+  hookKey        String          @unique
+  hookSecret     String?
+  setupExpiresAt DateTime?
+  lastNotifiedAt DateTime?
+  lastCheckedAt  DateTime?
+  heartbeatAt    DateTime?
+  lastError      String?
+  coverage       Json            @default("{}")
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  brand          Brand           @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  jobs           DonnaJob[]
+  requests       DonnaRequest[]
+  activities     DonnaActivity[]
+
+  @@unique([brandId, key])
+}
+
+model DonnaJob {
+  id            String       @id @default(cuid())
+  mailboxId     String
+  eventKey      String
+  kind          String
+  status        String       @default("pending")
+  attempts      Int          @default(0)
+  leaseToken    String?
+  leaseUntil    DateTime?
+  nextAttemptAt DateTime     @default(now())
+  error         String?
+  receivedAt    DateTime     @default(now())
+  completedAt   DateTime?
+  mailbox       DonnaMailbox @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+
+  @@unique([mailboxId, eventKey])
+  @@index([status, nextAttemptAt])
+}
+
+model DonnaRequest {
+  id              String          @id @default(cuid())
+  mailboxId       String
+  sourceKey       String
+  sourceVersion   String
+  title           String
+  person          String
+  category        String
+  owner           String          @default("Donna")
+  state           String          @default("needs-you")
+  urgent          Boolean         @default(false)
+  summary         String
+  recommendation  String
+  nextAction      String
+  evidence        Json            @default("[]")
+  draft           Json?
+  draftEdited     Boolean  @default(false)
+  draftStale      Boolean  @default(false)
+  direction       String?
+  dueAt           DateTime?
+  followUpAt      DateTime?
+  waitingOn       String?
+  answeredAt      DateTime?
+  completedAt     DateTime?
+  completionNote  String?
+  firstReceivedAt DateTime
+  version         Int             @default(1)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  mailbox         DonnaMailbox    @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  activities      DonnaActivity[]
+
+  @@unique([mailboxId, sourceKey])
+  @@index([mailboxId, state, dueAt])
+}
+
+model DonnaActivity {
+  id         String        @id @default(cuid())
+  mailboxId  String
+  requestId  String?
+  eventKey   String
+  messageKey String?
+  kind       String
+  detail     String
+  actor      String        @default("Donna")
+  evidence   String
+  metadata   Json          @default("{}")
+  occurredAt DateTime
+  mailbox    DonnaMailbox  @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  request    DonnaRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+
+  @@unique([mailboxId, eventKey])
+  @@index([mailboxId, occurredAt])
+  @@index([requestId])
 }
 
 model ScanFinding {

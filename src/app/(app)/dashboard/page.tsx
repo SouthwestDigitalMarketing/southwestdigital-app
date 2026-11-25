@@ -39,6 +39,7 @@ import { isLochsideBrandSlug } from "@/lib/brands/active-brand";
 import { CompanyCarousel } from "./CompanyCarousel";
 import { TARGETS as SCORECARD_TARGETS } from "@/lib/scorecard/queries";
 import { COMPANY_BRANDS } from "@/lib/companyMetrics";
+import { DonnaScorecardSummary } from "../donna/ScorecardSummary";
 
 export const dynamic = "force-dynamic";
 
@@ -676,6 +677,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       </DashboardSection>
 
       <ResponseTimes data={scorecard} range={responseRange} hrefFor={responseHref} />
+      {isPlatformOperator && brand.slug === "bookkeeping-conroe" ? <DonnaScorecardSummary /> : null}
 
       <DashboardSection title="Reviews" icon={<Star size={14} />}>
         <StatCard

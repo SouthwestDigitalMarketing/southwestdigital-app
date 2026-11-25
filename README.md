@@ -31,6 +31,8 @@ below map the rest.
 - `HANDOFF.md` — current branch state and work in progress
 - `docs/local-development.md` — setup, dev login, checks, scripts
 - `docs/deployment/database-migrations.md` — how schema changes reach production
+- `docs/donna-email-pilot.md` — Donna's read-only email desk, setup and validation
+- `docs/design/donna-email-build-plan.md` — Donna's email build sequence and success measures
 
 ## Status
 

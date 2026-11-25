@@ -1,0 +1,18 @@
+[Unit]
+Description=Donna email desk worker (read-only pilot)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/swapp-donna/env
+WorkingDirectory=%h/.local/share/swapp-donna
+ExecStart=/usr/bin/python3 %h/.local/share/swapp-donna/runtime/donna_worker.py
+Restart=on-failure
+RestartSec=15
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target
