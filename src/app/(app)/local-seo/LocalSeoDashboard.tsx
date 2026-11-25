@@ -102,11 +102,10 @@ export function LocalSeoDashboard({ initialSettings, initialScans, storageMissin
     // Same page padding as the other SWapp pages (p-4 on phones, p-8 wider).
     <div className="space-y-6 p-4 sm:p-8">
       <header>
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <p className="text-sm font-medium text-slate-500">Bookkeeping Conroe · Google Maps</p>
+        <h1 className="sr-only">Local SEO geo grid</h1>
+        <div className="flex justify-end">
           <SeoPlanChecklist />
         </div>
-        <h1 className="mt-1 text-2xl font-semibold text-slate-950">Local SEO geo grid</h1>
         <p className="mt-2 max-w-3xl text-sm text-slate-600">See where Bookkeeping Conroe appears around 96 Beach Walk Blvd. Each square is one search point. A scan saves its results so you can track changes over time.</p>
       </header>
 
