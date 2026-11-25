@@ -90,7 +90,21 @@ def batch_options(query):
     auto = query.get("auto", [""])[0]
     if auto in ("0", "1"):
         options["auto"] = auto == "1"
+    # The playlists picked for a new video, "|"-separated (Tom, 2026-11-25); Showrunner files it after upload.
+    picked = [name.strip()[:100] for name in query.get("playlists", [""])[0].split("|") if name.strip()]
+    if picked:
+        options["playlists"] = picked[:5]
     return options
+
+
+PLAYLISTS_FILE = os.path.expanduser("~/.config/showrunner/playlists.json")
+DEFAULT_PLAYLISTS = ["Lessons", "The $10K Month", "AI for Bookkeepers", "The Real Estate Bookkeeper"]
+
+
+def playlist_names():
+    """The playlists the send app offers, in order; edit ~/.config/showrunner/playlists.json to change them."""
+    names = read_json(PLAYLISTS_FILE, None)
+    return [str(n) for n in names][:12] if isinstance(names, list) and names else DEFAULT_PLAYLISTS
 
 
 def note_batch_file(folder, expected, name, size, options=None):
@@ -1275,6 +1289,18 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self._json(200, queue_status(INBOX))
             return
+        if path == "/playlists.json":
+            query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            secret = os.environ.get("PHONE_INTAKE_SECRET", "")
+            try:
+                exp = int(query.get("exp", ["0"])[0])
+            except ValueError:
+                exp = 0
+            if not secret or exp < int(time.time()) or not session_ok(secret, exp, query.get("sig", [""])[0]):
+                self._json(403, {"error": "This link has expired."})
+                return
+            self._json(200, {"playlists": playlist_names()})
+            return
         if path in ("/upload-status", "/resume"):
             query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             secret = os.environ.get("PHONE_INTAKE_SECRET", "")
@@ -1861,6 +1887,13 @@ def self_test():
         pass
     meta = read_json(os.path.join(INBOX, "b8", ".batch.json"), {})
     assert meta["addTo"] == "b2" and meta["auto"] is False, meta
+    picked = "http://%s:%d/upload?sexp=%d&ssig=%s&size=4&name=e.mp4&batch=b9&count=1&auto=1&offset=0&playlists=%s" % (
+        host, port, sexp, ssig, urllib.parse.quote("Lessons|The $10K Month"))
+    with urllib.request.urlopen(urllib.request.Request(picked, data=body, method="PUT")):
+        pass
+    assert read_json(os.path.join(INBOX, "b9", ".batch.json"), {})["playlists"] == ["Lessons", "The $10K Month"]
+    with urllib.request.urlopen(status_url.replace("/status.json", "/playlists.json")) as response:
+        assert "Lessons" in json.loads(response.read().decode())["playlists"]
     finish = "http://%s:%d/finish?sexp=%d&ssig=%s&note=%s&batch=" % (host, port, sexp, ssig, urllib.parse.quote("open on the coffee"))
     assert post(finish + "b2") == (200, {"ok": True})
     assert read_json(os.path.join(INBOX, "done", "b2", ".finish.json"), {})["note"] == "open on the coffee"

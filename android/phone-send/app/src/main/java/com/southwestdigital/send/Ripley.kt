@@ -60,7 +60,16 @@ object Ripley {
     /** What a batch tells ripley: the video it joins (Add more clips) and the Full auto switch. */
     fun options(batch: Batch): Map<String, Any> =
         (if (batch.addTo.isNotEmpty()) mapOf("addTo" to batch.addTo) else emptyMap<String, Any>()) +
+            (if (batch.playlists.isNotEmpty()) mapOf("playlists" to batch.playlists.joinToString("|")) else emptyMap()) +
             mapOf("auto" to if (batch.auto) "1" else "0")
+
+    /** The playlists to offer for a new video, from ripley (~/.config/showrunner/playlists.json). */
+    fun playlists(): List<String> {
+        val query = "exp=" + URLEncoder.encode(BuildConfig.SEND_EXP, "UTF-8") + "&sig=" + URLEncoder.encode(BuildConfig.SEND_SIG, "UTF-8")
+        val (_, json) = call("GET", URL(BuildConfig.RIPLEY_URL.trimEnd('/') + "/playlists.json?" + query))
+        val list = json.optJSONArray("playlists") ?: return emptyList()
+        return List(list.length()) { list.getString(it) }
+    }
 
     /** Finish (Tom, 2026-11-25): the waiting video may be built now; [note] is anything to change, or empty. */
     fun finish(batch: String, note: String) {

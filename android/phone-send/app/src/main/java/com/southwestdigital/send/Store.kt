@@ -20,7 +20,8 @@ data class Item(
 
 /**
  * One pick is one batch on ripley, and one batch becomes one video, unless [addTo] names the batch whose video
- * these clips join (Add more clips, Tom 2026-11-25). [auto] is the Full auto switch when it was picked.
+ * these clips join (Add more clips, Tom 2026-11-25). [auto] is the Full auto switch when it was picked, and
+ * [playlists] the YouTube playlists the new video goes into.
  */
 data class Batch(
     val id: String,
@@ -30,6 +31,7 @@ data class Batch(
     val items: MutableList<Item> = mutableListOf(),
     val addTo: String = "",
     val auto: Boolean = true,
+    val playlists: List<String> = emptyList(),
 )
 
 /** Batches kept in a small JSON file so uploads survive the app being closed. */
@@ -89,6 +91,7 @@ object Store {
                     it.optDouble("rate", 0.0))
             },
             o.optString("addTo"), o.optBoolean("auto", true),
+            o.optJSONArray("playlists")?.let { list -> List(list.length()) { list.getString(it) } } ?: emptyList(),
         )
     }
 
@@ -101,5 +104,6 @@ object Store {
         }
         return JSONObject().put("id", b.id).put("created", b.created).put("state", b.state)
             .put("message", b.message).put("items", items).put("addTo", b.addTo).put("auto", b.auto)
+            .put("playlists", JSONArray(b.playlists))
     }
 }

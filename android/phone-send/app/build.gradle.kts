@@ -20,8 +20,8 @@ android {
         applicationId = "com.southwestdigital.send"
         minSdk = 29
         targetSdk = 35
-        versionCode = 9
-        versionName = "3.6"
+        versionCode = 10
+        versionName = "3.7"
         buildConfigField("String", "RIPLEY_URL", "\"${ripley.getProperty("url", "")}\"")
         buildConfigField("String", "SEND_EXP", "\"${ripley.getProperty("sexp", "")}\"")
         buildConfigField("String", "SEND_SIG", "\"${ripley.getProperty("ssig", "")}\"")
