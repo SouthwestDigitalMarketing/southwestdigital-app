@@ -21,6 +21,22 @@ import { LinkClicksTable } from "./LinkClicksTable";
 import { ReleaseCalendar } from "./ReleaseCalendar";
 import { getYouTubeRefreshToken } from "@/lib/youtube/credentials";
 import { VideoList } from "./VideoList";
+import Link from "next/link";
+import { Plus } from "lucide-react";
+
+/** The top of both tabs: on This Week a New video button first (Tom, 2026-11-24: "where's the button to make a video?"), then the calendar. */
+function PeriodTop({ period }: { period: Period }) {
+  return (
+    <>
+      {period === "week" ? (
+        <Link href="/showrunner/new" className="mb-3 flex items-center justify-center gap-2 rounded-xl bg-[#ff0000] px-4 py-3 text-base font-semibold text-white hover:bg-red-700">
+          <Plus size={18} aria-hidden="true" /> New video
+        </Link>
+      ) : null}
+      <div className="mb-3"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
+    </>
+  );
+}
 
 function YouTubeIcon({ className }: { className?: string }) {
   return (
@@ -66,7 +82,7 @@ export async function ChannelPeriod({ period }: { period: Period }) {
     return (
       <div className="px-4 py-5 sm:p-8">
         <h1 className="sr-only">{period === "week" ? "This week" : "This month"}</h1>
-        <div className="mb-3"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
+        <PeriodTop period={period} />
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
         <p className="mt-2 text-sm text-slate-400">YouTube channel not configured for this brand. <a className="font-semibold underline" href="/api/youtube/connect">Connect YouTube</a>.</p>
       </div>
@@ -79,7 +95,7 @@ export async function ChannelPeriod({ period }: { period: Period }) {
     return (
       <div className="px-4 py-5 sm:p-8">
         <h1 className="sr-only">{period === "week" ? "This week" : "This month"}</h1>
-        <div className="mb-3"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
+        <PeriodTop period={period} />
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
         <p className="mt-2 text-sm text-slate-600">Channel data is unavailable because the saved YouTube connection could not be read here. <a className="font-semibold underline" href="/api/youtube/connect">Connect YouTube</a>.</p>
       </div>
@@ -145,7 +161,7 @@ export async function ChannelPeriod({ period }: { period: Period }) {
     return (
       <div className="px-4 py-5 sm:p-8">
         <h1 className="sr-only">{period === "week" ? "This week" : "This month"}</h1>
-        <div className="mb-3"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
+        <PeriodTop period={period} />
         <h2 className="text-lg font-semibold text-slate-900">Channel analytics</h2>
         <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           {/refresh token (expired|revoked)/i.test(error ?? "") ? (
@@ -191,7 +207,7 @@ export async function ChannelPeriod({ period }: { period: Period }) {
   return (
     <div className="px-4 py-5 sm:p-8">
       <h1 className="sr-only">{period === "week" ? "This week" : "This month"}</h1>
-      <div className="mb-3"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
+      <PeriodTop period={period} />
 
       {/* Goal cards */}
       <div className="grid gap-3 lg:grid-cols-2">
