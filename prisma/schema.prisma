@@ -617,6 +617,7 @@ model Brand {
   showrunnerVideoStatuses ShowrunnerVideoStatus[]
   showrunnerFeedback      ShowrunnerFeedback[]
   showrunnerStudio        ShowrunnerStudio?
+  trips                   Trip[]
   operationsClients       OperationsClient[]
   operationsEvidence      OperationsEvidence[]
   serviceRecords          ServiceRecord[]
@@ -2069,6 +2070,25 @@ model ShowrunnerFeedback {
 }
 
 /// The $10K Month planning state. A single brand-scoped row is seeded on first visit.
+/// Travel (Tom, 2026-11-25): one row per trip; the plan lists live in `plan` (src/lib/travel/plan.ts).
+model Trip {
+  id          String   @id @default(cuid())
+  brandId     String
+  slug        String
+  title       String
+  status      String   @default("planning")
+  destination String   @default("")
+  /// YYYY-MM-DD, or "" when not set yet.
+  startsOn    String   @default("")
+  endsOn      String   @default("")
+  plan        Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  brand       Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@unique([brandId, slug])
+}
+
 model ShowrunnerStudio {
   id              String   @id @default(cuid())
   brandId         String   @unique
