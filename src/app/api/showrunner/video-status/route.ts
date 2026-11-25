@@ -34,6 +34,7 @@ export async function POST(request: Request) {
     throw error;
   }
   const rows = body.videos.slice(0, 50).map(parseVideoStatus).filter((row) => row !== null);
+  const complete = body.videos.length <= 50;
   const context = createBrandDataContext({ brandId: brand.id, actorUserId: auth.actorUserId });
   await withBrandDataTransaction(context, async (tx) => {
     for (const row of rows) {
@@ -54,6 +55,14 @@ export async function POST(request: Request) {
         where: { brandId_batch: { brandId: brand.id, batch: row.batch } },
         create: { brandId: brand.id, batch: row.batch, ...data },
         update: data,
+      });
+    }
+    // Ripley sends every batch it still has. An unfinished row it no longer sends was cancelled, merged into
+    // another video or cleared, so it must not sit on the production bar (Tom, 2026-11-25). Published rows stay
+    // for the Editor list; a truncated push (over 50) prunes nothing.
+    if (complete) {
+      await tx.showrunnerVideoStatus.deleteMany({
+        where: { brandId: brand.id, url: null, batch: { notIn: rows.map((row) => row.batch) } },
       });
     }
   });
