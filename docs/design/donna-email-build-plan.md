@@ -77,8 +77,8 @@ menu item. Work states are filters inside Email, not Donna's top-level tabs.
 
 - **Overview** (`/donna`): a short status and one Email card. No request list,
   detailed statistics, setup instructions or connection logs.
-- **Email** (`/donna/email`): mailbox status, four work counts, last checked time
-  and history remaining. Each count opens its own small request queue.
+- **Email** (`/donna/email`): mailbox status, each folder with its message count,
+  last checked time and history remaining. Work queues stay on the work page.
 - **Email work** (`/donna/email/work`): two requests per page, with status filters
   and pagination. All requests remain reachable; none are hidden to force a fit.
 - **Request** (`/donna/requests/[id]`): Summary, Reply, Source and Activity views.

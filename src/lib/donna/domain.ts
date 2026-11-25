@@ -143,6 +143,48 @@ export function mailboxHealth(
       : "Webhook setup needed";
 }
 
+const FOLDER_ORDER = [
+  "INBOX",
+  "Spam",
+  "Sent",
+  "Drafts",
+  "Trash",
+  "Archive",
+  "Newsletter",
+];
+
+export function mailboxFolders(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const folders = (value as { folders?: unknown }).folders;
+  if (!Array.isArray(folders)) return [];
+  const rows = folders.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const raw = item as { folder?: unknown; messages?: unknown };
+    const folder = typeof raw.folder === "string" ? raw.folder.trim() : "";
+    if (!folder) return [];
+    const messages =
+      typeof raw.messages === "number" && Number.isFinite(raw.messages)
+        ? Math.max(0, Math.trunc(raw.messages))
+        : 0;
+    return [
+      {
+        folder,
+        label: folder.toUpperCase() === "INBOX" ? "Inbox" : folder,
+        messages,
+      },
+    ];
+  });
+  const rank = (name: string) => {
+    const i = FOLDER_ORDER.findIndex(
+      (item) => item.toLowerCase() === name.toLowerCase(),
+    );
+    return i === -1 ? FOLDER_ORDER.length : i;
+  };
+  return rows.sort(
+    (a, b) => rank(a.folder) - rank(b.folder) || a.label.localeCompare(b.label),
+  );
+}
+
 export function coverageLabel(value: unknown): string {
   if (!value || typeof value !== "object" || Array.isArray(value))
     return "Coverage not verified yet.";

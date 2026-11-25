@@ -4,6 +4,7 @@ import {
   activityCounts,
   mailboxHealth,
   coverageLabel,
+  mailboxFolders,
   requestSchema,
   verifyHook,
 } from "./domain";
@@ -63,6 +64,25 @@ describe("honest health and counts", () => {
     });
     expect(label).toContain("1,900 conversations await review");
     expect(label).not.toContain("All inventoried conversations reviewed");
+  });
+  it("lists mailbox folders with message counts, Inbox first", () => {
+    expect(mailboxFolders({})).toEqual([]);
+    expect(
+      mailboxFolders({
+        folders: [
+          { folder: "Newsletter", messages: 451 },
+          { folder: "INBOX", messages: 73.9 },
+          { folder: "Spam", messages: 209 },
+          { folder: "", messages: 3 },
+          { folder: "Bills", messages: 7 },
+        ],
+      }),
+    ).toEqual([
+      { folder: "INBOX", label: "Inbox", messages: 73 },
+      { folder: "Spam", label: "Spam", messages: 209 },
+      { folder: "Newsletter", label: "Newsletter", messages: 451 },
+      { folder: "Bills", label: "Bills", messages: 7 },
+    ]);
   });
   const box = {
     paused: false,

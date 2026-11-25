@@ -21,6 +21,28 @@ const box = await db.donnaMailbox.create({
     address: "example@example.com",
     paused: true,
     hookKey: randomBytes(32).toString("hex"),
+    coverage: {
+      folders: [
+        { folder: "INBOX", messages: 73 },
+        { folder: "Drafts", messages: 19 },
+        { folder: "Templates", messages: 0 },
+        { folder: "Snoozed", messages: 0 },
+        { folder: "Sent", messages: 546 },
+        { folder: "Spam", messages: 209 },
+        { folder: "Trash", messages: 406 },
+        { folder: "Notification", messages: 445 },
+        { folder: "Newsletter", messages: 451 },
+        { folder: "Archive", messages: 634 },
+        { folder: "Cold Outreach", messages: 226 },
+        { folder: "App Notices", messages: 0 },
+        { folder: "DMARC", messages: 82 },
+        { folder: "Personal", messages: 21 },
+        { folder: "Bills", messages: 7 },
+        { folder: "Payments", messages: 11 },
+      ],
+      message_locations: 3130,
+      remaining_threads: 1932,
+    },
   },
 });
 const now = new Date();
@@ -155,6 +177,8 @@ try {
             .allTextContents(),
           ["Overview", "Email"],
         );
+      if (route === "/donna/email")
+        await page.getByLabel("Mailbox folders", { exact: true }).waitFor();
     }
   }
   await page.setViewportSize({ width: 1280, height: 800 });
