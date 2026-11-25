@@ -300,32 +300,35 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     (slug === "real-estate-bookkeeper" ? theme?.accentColor : theme?.darkColor) ?? "#64748b",
   ]));
 
-  const [awaitingGsaRaw, pipelineRows, recordMrr, [theme, mrrGoals], [currentOffers, previousOffers], [currentReviews, previousReviews], [scorecardRaw, totals]] = await Promise.all([
-    paidAwaitingGsa(dataContext),
-    withBrandDataTransaction(dataContext, (transaction) => transaction.pipeline.findMany({
-      where: { brandId: brand.id, key: PIPE_PROSPECTS_KEY, isActive: true },
-      orderBy: [{ createdAt: "asc" }, { name: "asc" }],
-      select: {
-        id: true,
-        key: true,
-        name: true,
-        stages: {
-          where: { isActive: true },
-          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-          select: { id: true, key: true, name: true },
-        },
-        items: {
-          where: { isActive: true, lead: { isActive: true } },
-          select: {
-            id: true,
-            stageId: true,
-            baseValueUsd: true,
-            stage: { select: { key: true } },
-            lead: { select: { id: true, name: true, company: true, leadStep: true, valueBasis: true } },
+  // Each brand's prospects pipeline: the active brand's for the detail view, both brands' for the company funnel card.
+  const prospectPipelines = (context: typeof dataContext, brandId: string) =>
+    withBrandDataTransaction(context, (transaction) => transaction.pipeline.findMany({
+        where: { brandId, key: PIPE_PROSPECTS_KEY, isActive: true },
+        orderBy: [{ createdAt: "asc" }, { name: "asc" }],
+        select: {
+          id: true,
+          key: true,
+          name: true,
+          stages: {
+            where: { isActive: true },
+            orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+            select: { id: true, key: true, name: true },
+          },
+          items: {
+            where: { isActive: true, lead: { isActive: true } },
+            select: {
+              id: true,
+              stageId: true,
+              baseValueUsd: true,
+              stage: { select: { key: true } },
+              lead: { select: { id: true, name: true, company: true, leadStep: true, valueBasis: true } },
+            },
           },
         },
-      },
-    })),
+      }));
+  const [awaitingGsaRaw, pipelineRows, recordMrr, [theme, mrrGoals], [currentOffers, previousOffers], [currentReviews, previousReviews], [scorecardRaw, totals]] = await Promise.all([
+    paidAwaitingGsa(dataContext),
+    prospectPipelines(dataContext, brand.id),
     getRecordMrr(brand.id),
     Promise.all([
       prisma.brandTheme.findUnique({
@@ -353,7 +356,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     Promise.all([getReviewStats(brand.id, selectedPeriod), getReviewStats(brand.id, previous)]),
     Promise.all([getScorecardData(brand.id, responseRange, windowEnd), getScorecardTotals(brand.id, windowEnd)]),
   ]);
-  const pipelineOverviewRaw: PipelineMrrPipeline[] = pipelineRows.map((pipeline) => {
+  const buildOverview = (rows: typeof pipelineRows): PipelineMrrPipeline[] => rows.map((pipeline) => {
     const monthlyByStage = new Map<number, PipelineMrrPipeline["stages"][number]["items"]>();
     const oneTimeByStage = new Map<number, PipelineMrrPipeline["stages"][number]["items"]>();
     for (const item of pipeline.items) {
@@ -395,6 +398,16 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       { id: `${pipeline.id}-one-time`, key: pipeline.key, name: pipeline.name, basis: "one_time" as const, stages: makeStages(oneTimeByStage, "one_time") },
     ];
   }).flat();
+  const pipelineOverviewRaw = buildOverview(pipelineRows);
+  // The company funnel card spans both brands, whichever one is active (Tom, 2026-11-24: the TREB view showed it empty).
+  const companyFunnelRaw = companyMetrics
+    ? buildOverview((await Promise.all(companyPaletteRows.map((row) =>
+      prospectPipelines(createBrandDataContext({ brandId: row.id, actorUserId: session.user.id }), row.id)))).flat())
+      .filter((pipeline) => pipeline.basis === "monthly")
+      .reduce<PipelineMrrPipeline["stages"]>((merged, pipeline) => merged.length === 0
+        ? pipeline.stages.map((stage) => ({ ...stage, items: [...stage.items] }))
+        : merged.map((stage, index) => ({ ...stage, items: [...stage.items, ...(pipeline.stages[index]?.items ?? [])] })), [])
+    : [];
 
   // From service records (signed agreements).
   const mrr = summarizeMrr(recordMrr.clients.map((client) => client.mrr));
@@ -464,6 +477,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     ...pipeline,
     stages: pipeline.stages.map((stage) => ({ ...stage, items: stage.items.map((item) => hide(item, "Lead")) })),
   }));
+  const companyFunnel = companyFunnelRaw.map((stage) => ({ ...stage, items: stage.items.map((item) => hide(item, "Lead")) }));
   const awaitingGsa = privacy
     ? awaitingGsaRaw.map((proposal) => ({ ...proposal, clientName: alias(proposal.clientName), gsaClientFolder: null }))
     : awaitingGsaRaw;
@@ -605,10 +619,10 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       <div className="mb-3"><ReleaseCalendar initialNow={new Date().toISOString()} /></div>
       {companyMetrics ? null : <GsaAlarm proposals={awaitingGsa} now={windowEnd} />}
       {companyMetrics && <CompanyCarousel {...companyMetrics} period={selectedPeriod.label} colors={companyColors} targets={companyTargets} clients={companyClients} leads={companyLeads} offers={companyOffers} leadAlerts={leadAlerts} />}
-      {/* The lead heat card (Cold to Secured thermometers, Hot one shakes) back on the main view (Tom, 2026-11-24). */}
+      {/* The lead funnel card (Cold to Secured thermometers, Hot one shakes), both brands, beside New leads (Tom, 2026-11-24). */}
       {companyMetrics && (
         <div className="mt-3 flex flex-col">
-          <PipelineMrrStatCard pipelineKey={PIPE_PROSPECTS_KEY} stages={pipelineOverview[0]?.stages ?? []} goal={mrrGoals.leadMrrGoal} />
+          <PipelineMrrStatCard pipelineKey={PIPE_PROSPECTS_KEY} stages={companyFunnel} goal={mrrGoals.leadMrrGoal} />
         </div>
       )}
       <details className="mt-8" open={!companyMetrics}>
