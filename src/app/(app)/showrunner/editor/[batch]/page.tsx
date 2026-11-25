@@ -5,10 +5,12 @@ import { requireAppBrand } from "@/lib/brands/staff";
 import { showChannelBrand } from "@/lib/showrunner/channel-brand";
 import { loadEpisodes } from "@/lib/showrunner/load";
 import { createBrandDataContext } from "@/lib/tenancy/context";
+import { requestReview } from "../actions";
+import { Scorecard } from "./Scorecard";
 
 export const dynamic = "force-dynamic";
 
-/** One episode chosen in the Editor tab (Tom, 2026-11-25). The editing tools are not built yet. */
+/** One video from the Videos tab (Tom, 2026-11-25): its card, its scorecard and Run review. Editing tools come later. */
 export default async function EditEpisodePage({ params }: { params: Promise<{ batch: string }> }) {
   const { batch } = await params;
   const { brand: active, dataContext } = await requireAppBrand();
@@ -35,7 +37,23 @@ export default async function EditEpisodePage({ params }: { params: Promise<{ ba
           </a>
         ) : null}
       </div>
-      <p className="mt-4 max-w-3xl rounded-xl bg-slate-50 p-4 text-sm text-slate-600">Editing tools for this episode come next.</p>
+      {episode.url ? (
+        <form action={requestReview.bind(null, episode.batch)} className="mt-4 flex max-w-3xl items-center gap-3">
+          <button
+            type="submit"
+            disabled={episode.reviewRequestedAt !== null}
+            className="rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white disabled:bg-slate-300"
+          >
+            {episode.review ? "Run review again" : "Run review"}
+          </button>
+          {episode.reviewRequestedAt ? <span className="text-sm text-slate-600">Reviewing on ripley. Takes a few minutes.</span> : null}
+        </form>
+      ) : null}
+      {episode.review ? <Scorecard review={episode.review} /> : (
+        <p className="mt-4 max-w-3xl rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
+          {episode.url ? "No scorecard yet." : "The scorecard comes after the video is published."}
+        </p>
+      )}
     </div>
   );
 }

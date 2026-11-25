@@ -44,6 +44,8 @@ class MainActivity : Activity() {
     private var addTarget = ""
     // Finish tapped: the batch ids, so the card says what happens next until ripley reports it.
     private val finishing = mutableSetOf<String>()
+    // The playlists picked for the next new video (Tom, 2026-11-25: chosen when the video is created).
+    private var nextPlaylists: List<String> = emptyList()
     private val tick = object : Runnable {
         override fun run() {
             render()
@@ -74,7 +76,7 @@ class MainActivity : Activity() {
             background = GradientDrawable().apply { setColor(ink); cornerRadius = 999f }
             setPadding((24 * dp).toInt(), (14 * dp).toInt(), (24 * dp).toInt(), (14 * dp).toInt())
             layoutParams = LinearLayout.LayoutParams(-1, -2)
-            setOnClickListener { openPicker() }
+            setOnClickListener { choosePlaylists() }
         }
         root.addView(choose)
         // Full auto (Tom, 2026-11-25): off, ripley preps the talking head and waits for more clips or Finish.
@@ -154,7 +156,7 @@ class MainActivity : Activity() {
     private fun handle(intent: Intent?) {
         if (intent?.data?.scheme == "swappsend") {
             intent.data = null
-            openPicker()
+            choosePlaylists()
         }
     }
 
@@ -214,7 +216,9 @@ class MainActivity : Activity() {
             val items = uris.mapNotNull { uri -> describe(uri) }
             val id = java.lang.Long.toString(System.currentTimeMillis(), 36) + "-" + java.util.UUID.randomUUID().toString().take(6)
             val fullAuto = getSharedPreferences("send", MODE_PRIVATE).getBoolean("fullAuto", false)
-            Store.put(this, Batch(id, System.currentTimeMillis(), items = items.toMutableList(), addTo = target, auto = fullAuto))
+            val playlists = if (target.isEmpty()) nextPlaylists else emptyList()
+            Store.put(this, Batch(id, System.currentTimeMillis(), items = items.toMutableList(), addTo = target,
+                auto = fullAuto, playlists = playlists))
             UploadWorker.start(this, id)
             runOnUiThread { render() }
         }
@@ -288,6 +292,8 @@ class MainActivity : Activity() {
             if (b.addTo.isNotEmpty()) {
                 val into = episodes[b.addTo]?.optString("project")?.takeIf { it.isNotEmpty() } ?: "the video you picked"
                 card.addView(text("More clips for $into", muted, 14f))
+            } else if (b.playlists.isNotEmpty()) {
+                card.addView(text("Playlists: " + b.playlists.joinToString(", "), muted, 14f))
             }
             val published = episodes[b.id]?.optString("url")?.startsWith("https://") == true
             if (b.message.isNotEmpty() && !published) card.addView(text(b.message, if (b.state == "failed") bad else muted, 14f))
@@ -341,6 +347,34 @@ class MainActivity : Activity() {
         row.addView(button("+ Add more clips") { addTarget = b.id; openPicker() })
         row.addView(button("Finish") { askFinish(b.id) })
         card.addView(row)
+    }
+
+    /**
+     * A new video starts with its playlists (Tom, 2026-11-25): pick any (or none), then the files. The list comes
+     * from ripley; the last pick is ticked again.
+     */
+    private fun choosePlaylists() {
+        val prefs = getSharedPreferences("send", MODE_PRIVATE)
+        thread {
+            val names = (try { Ripley.playlists() } catch (e: Exception) { emptyList() })
+                .ifEmpty { prefs.getString("playlistNames", "Lessons|The \$10K Month")!!.split("|").filter { it.isNotBlank() } }
+            prefs.edit().putString("playlistNames", names.joinToString("|")).apply()
+            val last = prefs.getString("playlists", "")!!.split("|").filter { it.isNotBlank() }.toSet()
+            val ticked = BooleanArray(names.size) { names[it] in last }
+            runOnUiThread {
+                AlertDialog.Builder(this)
+                    .setTitle("Which playlists?")
+                    .setMultiChoiceItems(names.toTypedArray(), ticked) { _, which, on -> ticked[which] = on }
+                    .setPositiveButton("Choose videos") { _, _ ->
+                        nextPlaylists = names.filterIndexed { i, _ -> ticked[i] }
+                        prefs.edit().putString("playlists", nextPlaylists.joinToString("|")).apply()
+                        addTarget = ""
+                        openPicker()
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
+        }
     }
 
     private fun askFinish(batch: String) {
