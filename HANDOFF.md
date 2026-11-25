@@ -512,6 +512,21 @@ newsletters) into SWapp's Scanner; `/patrol` was removed from every machine the 
 - Open: confirm Zoho empties Spam on its own (oldest Spam mail 31 Oct on 2026-11-24); texts from
   Tom's Pixel (Google Messages for Web, ripley agent Chrome) as a Scanner source — next.
 
+## 2026-11-25 — Travel: short cards, item pages, trip map (Ummon)
+
+Tom: "simplify the info ... allow the card to be clicked ... 'detail page' ... a map that shows the
+locations". Cards now show photo, name and the section's `summary` fields (plan.ts) and open
+`/travel/[slug]/[section]/[id]`: big photo, every field, empty fields listed, checkboxes, Edit,
+Remove (then back to the list), Previous/Next within the list, and a one-pin map. Trip page has a
+**Map** of options (blue), stays (green) and places (amber); popups link to the item page.
+Map = Leaflet 1.9.4 + OpenStreetMap tiles (new dependency; no key, so it works on previews; the
+Google Maps key is production-only). Options, stays and places carry hidden `lat`/`lng`
+("coordinate" fields): looked up on save (Wikipedia article coordinates, then OSM Nominatim for
+area/destination; one request at a time), kept while name and area are unchanged. "Find photos and
+pins" fills missing photos and pins for a list. Shared UI in `travel/[slug]/parts.tsx`.
+Checks: tsc, eslint, vitest (21 travel tests); phone preview: 5 option pins, short cards, item page
+with 13 fields + pin, Next, edit keeps the pin, no console errors.
+
 ## 2026-11-25 — Travel: Daily needs on every trip (Ummon)
 
 Tom: gym for Olympic lifts, protein shakes twice a day (recipe in `src/lib/travel/needs.ts`),

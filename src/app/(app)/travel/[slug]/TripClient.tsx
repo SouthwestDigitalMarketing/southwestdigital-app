@@ -12,49 +12,25 @@ import {
   documentsReady,
   formatMoney,
   itemsWithoutPhoto,
-  type Field,
-  type ItemValue,
+  itemsWithoutPin,
+  mapPins,
+  type MapPin,
   type Section,
   type SectionKey,
   type TripItem,
   type TripPlan,
   type TripStatus,
 } from "@/lib/travel/plan";
-import { changeTripAction, deleteTripAction } from "../actions";
+import { deleteTripAction } from "../actions";
+import { ItemForm, ItemPhoto, card, danger, ghost, inputClass, newId, primary, shownValue, useChange } from "./parts";
+import { MapLegend, TripMap } from "./TripMap";
 
 type Details = { title: string; status: TripStatus; destination: string; startsOn: string; endsOn: string };
 
-const inputClass =
-  "ui-focus-ring w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-500 focus:outline-none";
-const ghost =
-  "ui-action-ghost rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide disabled:opacity-50";
-const danger =
-  "ui-action-danger rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide disabled:opacity-50";
-const primary =
-  "ui-action-primary rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide disabled:opacity-50";
-const card = "rounded-xl border border-slate-200 bg-white";
+const MAP_KEYS: SectionKey[] = ["options", "stays", "places"];
 
-function message(error: unknown) {
-  if (error instanceof Error && error.message && !error.message.startsWith("[")) return error.message;
-  return "That did not save. Check the fields and try again.";
-}
-
-function useChange(slug: string) {
-  const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-  const run = (change: Parameters<typeof changeTripAction>[1], after?: () => void) => {
-    setError(null);
-    startTransition(async () => {
-      try {
-        const result = await changeTripAction(slug, change);
-        if (result.error) setError(result.error);
-        else after?.();
-      } catch (caught) {
-        setError(message(caught));
-      }
-    });
-  };
-  return { pending, error, run };
+export function itemHref(slug: string, section: SectionKey, id: string) {
+  return `/travel/${slug}/${section}/${id}`;
 }
 
 export function TripClient({
@@ -72,6 +48,7 @@ export function TripClient({
   const docs = documentsReady(plan);
   const warnings = documentWarnings(plan, details, today);
   const counts = (key: SectionKey) => plan.sections[key].length;
+  const pins = mapPins(plan);
   const tiles = [
     { label: "Budget planned", value: totals.planned ? formatMoney(totals.planned) : "Not set" },
     { label: "Spent so far", value: formatMoney(totals.actual) || "$0" },
@@ -117,6 +94,16 @@ export function TripClient({
         ))}
       </div>
 
+      <section id="map" className="mt-6 scroll-mt-20" aria-labelledby="map-title">
+        <h2 id="map-title" className="text-lg font-semibold text-slate-900">
+          Map
+        </h2>
+        <div className="mt-2">
+          <TripMap pins={pins} hrefFor={(pin: MapPin) => itemHref(slug, pin.section, pin.id)} />
+          <MapLegend sections={MAP_KEYS.filter((key) => pins.some((pin) => pin.section === key))} />
+        </div>
+      </section>
+
       <nav aria-label="Trip sections" className="mt-6 flex gap-2 overflow-x-auto pb-1">
         {SECTIONS.map((section) => (
           <a
@@ -135,7 +122,10 @@ export function TripClient({
           slug={slug}
           section={section}
           items={plan.sections[section.key]}
-          missingPhotos={AUTO_PHOTO_SECTIONS.has(section.key) ? itemsWithoutPhoto(plan, section.key).length : 0}
+          missing={
+            (AUTO_PHOTO_SECTIONS.has(section.key) ? itemsWithoutPhoto(plan, section.key).length : 0) +
+            itemsWithoutPin(plan, section.key).length
+          }
         />
       ))}
 
@@ -236,36 +226,26 @@ function TripHeader({ slug, details, summary }: { slug: string; details: Details
   );
 }
 
-/** A v4 UUID; crypto.randomUUID is missing on plain-http pages (local previews over Tailscale). */
-function newId() {
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-}
-
 function SectionBlock({
   slug,
   section,
   items,
-  missingPhotos,
+  missing,
 }: {
   slug: string;
   section: Section;
   items: TripItem[];
-  missingPhotos: number;
+  missing: number;
 }) {
   const [adding, setAdding] = useState<string | null>(null);
-  const [editing, setEditing] = useState<string | null>(null);
   const { pending, error, run } = useChange(slug);
-  const isBudget = section.key === "budget";
-  const totals = isBudget
-    ? {
-        planned: items.reduce((sum, item) => sum + (typeof item.planned === "number" ? item.planned : 0), 0),
-        actual: items.reduce((sum, item) => sum + (typeof item.actual === "number" ? item.actual : 0), 0),
-      }
-    : null;
+  const totals =
+    section.key === "budget"
+      ? {
+          planned: items.reduce((sum, item) => sum + (typeof item.planned === "number" ? item.planned : 0), 0),
+          actual: items.reduce((sum, item) => sum + (typeof item.actual === "number" ? item.actual : 0), 0),
+        }
+      : null;
 
   return (
     <section id={section.key} className="mt-8 scroll-mt-20" aria-labelledby={`${section.key}-title`}>
@@ -282,18 +262,13 @@ function SectionBlock({
               Add my usual needs
             </button>
           ) : null}
-          {missingPhotos > 0 ? (
-            <button
-              type="button"
-              className={ghost}
-              disabled={pending}
-              onClick={() => run({ kind: "photos", section: section.key })}
-            >
-              {pending ? "Finding photos…" : "Find photos"}
+          {missing > 0 ? (
+            <button type="button" className={ghost} disabled={pending} onClick={() => run({ kind: "fill", section: section.key })}>
+              {pending ? "Looking…" : "Find photos and pins"}
             </button>
           ) : null}
           {adding ? null : (
-            <button type="button" className={ghost} onClick={() => { setEditing(null); setAdding(newId()); }}>
+            <button type="button" className={ghost} onClick={() => setAdding(newId())}>
               Add {section.itemLabel}
             </button>
           )}
@@ -307,34 +282,26 @@ function SectionBlock({
       ) : null}
       {error ? <p className="mt-2 text-sm text-red-700">{error}</p> : null}
 
-      <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
-        {items.map((item, index) =>
-          editing === item.id ? (
-            <ItemForm
-              key={item.id}
-              section={section}
-              item={item}
-              pending={pending}
-              onCancel={() => setEditing(null)}
-              onSave={(next) => run({ kind: "save", section: section.key, item: next }, () => setEditing(null))}
-            />
-          ) : (
-            <ItemCard
-              // Keyed on the saved values so a checkbox's instant tick resets once the server answers.
-              key={`${item.id}:${JSON.stringify(item)}`}
-              section={section}
-              item={item}
-              pending={pending}
-              first={index === 0}
-              last={index === items.length - 1}
-              onEdit={() => { setAdding(null); setEditing(item.id); }}
-              onToggle={(key, value) => run({ kind: "save", section: section.key, item: { ...item, [key]: value } })}
-              onMove={(direction) => run({ kind: "move", section: section.key, id: item.id, direction })}
-              onRemove={() => run({ kind: "remove", section: section.key, id: item.id })}
-            />
-          ),
-        )}
-        {adding ? (
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {items.map((item) => (
+          <ItemCard
+            // Keyed on the saved values so a checkbox's instant tick resets once the server answers.
+            key={`${item.id}:${JSON.stringify(item)}`}
+            slug={slug}
+            section={section}
+            item={item}
+            pending={pending}
+            onToggle={(key, value) => run({ kind: "save", section: section.key, item: { ...item, [key]: value } })}
+          />
+        ))}
+        {items.length === 0 && !adding ? (
+          <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+            Nothing here yet.
+          </p>
+        ) : null}
+      </div>
+      {adding ? (
+        <div className="mt-3">
           <ItemForm
             key={adding}
             section={section}
@@ -343,256 +310,74 @@ function SectionBlock({
             onCancel={() => setAdding(null)}
             onSave={(next) => run({ kind: "save", section: section.key, item: next }, () => setAdding(null))}
           />
-        ) : null}
-        {items.length === 0 && !adding ? (
-          <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
-            Nothing here yet.
-          </p>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </section>
   );
 }
 
-function shownValue(field: Field, value: ItemValue) {
-  if (field.type === "money") return typeof value === "number" ? formatMoney(value) : null;
-  if (typeof value !== "string" || value === "") return null;
-  if (field.type === "url") {
-    let host = value;
-    try {
-      host = new URL(value).hostname.replace(/^www\./, "");
-    } catch {}
-    return (
-      <a href={value} target="_blank" rel="noreferrer" className="text-sky-700 underline break-all">
-        {host}
-      </a>
-    );
-  }
-  return value;
-}
-
+/** A short card: photo, name, a few facts. The whole card opens the item's own page. */
 function ItemCard({
+  slug,
   section,
   item,
   pending,
-  first,
-  last,
-  onEdit,
   onToggle,
-  onMove,
-  onRemove,
 }: {
+  slug: string;
   section: Section;
   item: TripItem;
   pending: boolean;
-  first: boolean;
-  last: boolean;
-  onEdit: () => void;
   onToggle: (key: string, value: boolean) => void;
-  onMove: (direction: -1 | 1) => void;
-  onRemove: () => void;
 }) {
-  const [confirming, setConfirming] = useState(false);
   const [ticked, setTicked] = useState<Record<string, boolean>>({});
-  const rest = section.fields.filter(
-    (field) => field.key !== section.heading && field.type !== "check" && field.type !== "photo",
-  );
+  const facts = section.summary.flatMap((key) => {
+    const field = section.fields.find((candidate) => candidate.key === key);
+    const shown = field ? shownValue(field, item[key] ?? null) : null;
+    return field && shown !== null ? [{ field, shown }] : [];
+  });
   const checks = section.fields.filter((field) => field.type === "check");
-  const photo = typeof item.photo === "string" && item.photo ? item.photo : null;
   return (
-    <div className={`${card} overflow-hidden`}>
-      {photo ? (
-        <div className="relative">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={photo}
-            alt={String(item[section.heading] ?? "")}
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            className="aspect-[16/9] w-full bg-slate-100 object-cover"
-          />
-          {/wikimedia\.org$/.test(hostOf(photo)) ? (
-            <span className="absolute bottom-1 right-2 rounded bg-black/50 px-1.5 py-0.5 text-[10px] text-white">
-              Wikimedia Commons
-            </span>
-          ) : null}
-        </div>
-      ) : null}
+    <div className={`${card} relative overflow-hidden transition hover:border-slate-400`}>
+      <ItemPhoto item={item} section={section} />
       <div className="p-4">
-        <div className="flex items-start justify-between gap-2">
-          <p className="font-semibold text-slate-900">{String(item[section.heading] ?? "")}</p>
-          <div className="flex shrink-0 gap-1">
-            <button type="button" aria-label="Move up" disabled={pending || first} className={ghost} onClick={() => onMove(-1)}>
-              ↑
-            </button>
-            <button type="button" aria-label="Move down" disabled={pending || last} className={ghost} onClick={() => onMove(1)}>
-              ↓
-            </button>
-          </div>
-        </div>
-        <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
-          {rest.map((field) => {
-            const shown = shownValue(field, item[field.key] ?? null);
-            if (shown === null) return null;
-            return (
-              <div key={field.key} className={field.type === "long" ? "sm:col-span-2" : undefined}>
+        <Link
+          href={itemHref(slug, section.key, item.id)}
+          className="ui-focus-ring font-semibold text-slate-900 after:absolute after:inset-0 after:content-['']"
+        >
+          {String(item[section.heading] ?? "")}
+        </Link>
+        {facts.length ? (
+          <dl className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-sm">
+            {facts.map(({ field, shown }) => (
+              <div key={field.key}>
                 <dt className="inline text-slate-500">{field.label}: </dt>
-                <dd className={`inline text-slate-800 ${field.type === "long" ? "whitespace-pre-line" : ""}`}>{shown}</dd>
+                <dd className="inline text-slate-800">{shown}</dd>
               </div>
-            );
-          })}
-        </dl>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          {checks.map((field) => (
-            <label key={field.key} className="flex items-center gap-1.5 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                checked={ticked[field.key] ?? item[field.key] === true}
-                disabled={pending}
-                onChange={(event) => {
-                  const value = event.target.checked;
-                  setTicked((current) => ({ ...current, [field.key]: value }));
-                  onToggle(field.key, value);
-                }}
-              />
-              {field.label}
-            </label>
-          ))}
-          <span className="flex-1" />
-          <button type="button" className={ghost} disabled={pending} onClick={onEdit}>
-            Edit
-          </button>
-          {confirming ? (
-            <>
-              <button type="button" className={danger} disabled={pending} onClick={onRemove}>
-                Really remove
-              </button>
-              <button type="button" className={ghost} onClick={() => setConfirming(false)}>
-                Keep
-              </button>
-            </>
-          ) : (
-            <button type="button" className={ghost} disabled={pending} onClick={() => setConfirming(true)}>
-              Remove
-            </button>
-          )}
-        </div>
+            ))}
+          </dl>
+        ) : null}
+        {checks.length ? (
+          <div className="relative z-10 mt-2 flex flex-wrap gap-3">
+            {checks.map((field) => (
+              <label key={field.key} className="flex items-center gap-1.5 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={ticked[field.key] ?? item[field.key] === true}
+                  disabled={pending}
+                  onChange={(event) => {
+                    const value = event.target.checked;
+                    setTicked((current) => ({ ...current, [field.key]: value }));
+                    onToggle(field.key, value);
+                  }}
+                />
+                {field.label}
+              </label>
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
-  );
-}
-
-function hostOf(url: string) {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return "";
-  }
-}
-
-function ItemForm({
-  section,
-  item,
-  pending,
-  onSave,
-  onCancel,
-}: {
-  section: Section;
-  item: Partial<TripItem> & { id: string };
-  pending: boolean;
-  onSave: (item: Record<string, ItemValue>) => void;
-  onCancel: () => void;
-}) {
-  return (
-    <form
-      className={`${card} grid grid-cols-1 gap-3 p-4 sm:grid-cols-2`}
-      onSubmit={(event) => {
-        event.preventDefault();
-        const form = new FormData(event.currentTarget);
-        const next: Record<string, ItemValue> = { id: item.id };
-        for (const field of section.fields) {
-          const raw = form.get(field.key);
-          if (field.type === "check") next[field.key] = raw === "on";
-          else if (field.type === "money") {
-            const text = String(raw ?? "").replace(/[$,\s]/g, "");
-            next[field.key] = text === "" ? null : Number(text);
-          } else next[field.key] = String(raw ?? "");
-        }
-        onSave(next);
-      }}
-    >
-      {section.fields.map((field) => (
-        <FieldInput key={field.key} field={field} value={item[field.key] ?? null} required={field.key === section.heading} />
-      ))}
-      <div className="flex gap-2 sm:col-span-2">
-        <button type="submit" disabled={pending} className={primary}>
-          Save
-        </button>
-        <button type="button" className={ghost} onClick={onCancel}>
-          Cancel
-        </button>
-      </div>
-    </form>
-  );
-}
-
-function FieldInput({ field, value, required }: { field: Field; value: ItemValue; required: boolean }) {
-  const text = typeof value === "string" ? value : "";
-  if (field.type === "check") {
-    return (
-      <label className="flex items-center gap-2 text-sm text-slate-700">
-        <input type="checkbox" name={field.key} defaultChecked={value === true} />
-        {field.label}
-      </label>
-    );
-  }
-  let control;
-  switch (field.type) {
-    case "long":
-      control = <textarea name={field.key} rows={3} maxLength={5000} defaultValue={text} className={inputClass} />;
-      break;
-    case "choice":
-      control = (
-        <select name={field.key} defaultValue={text} className={inputClass}>
-          <option value="">Pick one</option>
-          {field.options?.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
-      );
-      break;
-    case "money":
-      control = (
-        <input
-          name={field.key}
-          inputMode="decimal"
-          placeholder="$0"
-          defaultValue={typeof value === "number" ? String(value) : ""}
-          className={inputClass}
-        />
-      );
-      break;
-    case "date":
-      control = <input type="date" name={field.key} defaultValue={text} className={inputClass} />;
-      break;
-    case "url":
-      control = <input type="url" name={field.key} placeholder="https://" defaultValue={text} className={inputClass} />;
-      break;
-    case "photo":
-      control = (
-        <input type="url" name={field.key} placeholder="Leave blank to find one" defaultValue={text} className={inputClass} />
-      );
-      break;
-    default:
-      control = <input name={field.key} required={required} maxLength={200} defaultValue={text} className={inputClass} />;
-  }
-  return (
-    <label className={`flex flex-col gap-1 text-sm text-slate-700 ${field.type === "long" ? "sm:col-span-2" : ""}`}>
-      {field.label}
-      {control}
-    </label>
   );
 }
 

@@ -7,6 +7,10 @@ import {
   documentsReady,
   emptyPlan,
   hasPhotos,
+  itemsWithoutPin,
+  mapPins,
+  pinFor,
+  visibleFields,
   itemsWithoutPhoto,
   moveItem,
   parseItem,
@@ -138,5 +142,26 @@ describe("travel plan", () => {
     ]);
     expect(needs[1].plan).toBe(SHAKE_RECIPE);
     expect(needs.every((item) => item.covered === false && item.cost === null)).toBe(true);
+  });
+
+  it("puts located options, stays and places on the map", () => {
+    let plan = emptyPlan();
+    plan = upsertItem(plan, "options", parseItem("options", { id: id(1), place: "Mexico City", lat: 19.43, lng: -99.13 }));
+    plan = upsertItem(plan, "stays", parseItem("stays", { id: id(2), name: "Flat" }));
+    plan = upsertItem(plan, "budget", parseItem("budget", { id: id(3), item: "Food", lat: 1, lng: 1 }));
+    expect(mapPins(plan)).toEqual([{ section: "options", id: id(1), name: "Mexico City", lat: 19.43, lng: -99.13, photo: null }]);
+    expect(itemsWithoutPin(plan, "stays").map((item) => item.id)).toEqual([id(2)]);
+    expect(itemsWithoutPin(plan, "budget")).toEqual([]);
+    expect(pinFor("budget", plan.sections.budget[0])).toBeNull();
+    expect(() => parseItem("places", { id: id(4), name: "X", lat: 500, lng: 0 })).toThrow();
+  });
+
+  it("keeps coordinates out of forms and points every card summary at a real field", () => {
+    for (const section of SECTIONS) {
+      expect(visibleFields(section).some((field) => field.type === "coordinate")).toBe(false);
+      for (const key of section.summary) {
+        expect(section.fields.map((field) => field.key), `${section.key}.${key}`).toContain(key);
+      }
+    }
   });
 });

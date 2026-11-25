@@ -34,6 +34,7 @@
     "@stripe/react-stripe-js": "^6.8.2",
     "@stripe/stripe-js": "^9.14.0",
     "@types/recharts": "^1.8.29",
+    "leaflet": "^1.9.4",
     "lucide-react": "^1.31.0",
     "next": "16.3.1",
     "next-auth": "5.0.0-beta.32",
@@ -50,6 +51,7 @@
   "devDependencies": {
     "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4.1.14",
+    "@types/leaflet": "^1.9.12",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
