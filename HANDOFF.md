@@ -1,4 +1,121 @@
 # SWapp handoff
+## 2026-11-25 — Clean inbox (Tom: implement the four-step list)
+
+- A **Donna** button sits top left above the Overview/Email tabs (full width on
+  the phone). The modal has no extra title. It lists Clean inbox, Empty spam,
+  Clear notifications, Empty trash, Clean drafts, and Do it all, each with the
+  folder count from the Email tables. Only Clean inbox is enabled. That starts
+  a `kind=clean` job.
+  Inbox only: read, file allowlisted folders on Zoho (verified copy, never
+  Trash), draft replies (never send), write `coverage.clean` (filed / waiting /
+  needs you / still in Inbox).
+- Paused mailboxes still claim/lock **clean** jobs; other jobs stay blocked.
+  Clean does not enqueue a backlog pass.
+- Known contacts, client/sales mail, drafts, and attachment gaps stay in Inbox.
+- Preview still `http://100.98.89.93:3130/donna` on `swapp_donna`. Worker is not
+  a standing service; start `donna_worker.py` against 3130 to process Clean.
+- Other modal options later. No merge, deploy, or send.
+
+## 2026-11-25 — Compact Donna screens and separate Scorecard (Tom's correction)
+
+- Donna now opens Overview, with only a brief status and Email card. Its other
+  top-level tab is Email: mailbox health, Zoho folders and custom folders with
+  message counts, last checked and history remaining. Scorecard is a separate
+  main-menu item
+  and compact hub. Work queues remain on `/donna/email/work`.
+- Work states are filters on `/donna/email/work`, two requests per page. Request
+  summary/reply/source/activity, direction and management are separate views;
+  long source text and notes use bounded readers. Settings are split into views.
+- Email counts moved to `/scorecard/email`, grouped into small sets with paged
+  activity. Old `/donna/activity` and `?tab=` links redirect compatibly. Existing
+  client response-time data and reports are preserved.
+- Lesson from Tom: top-level Donna tabs are work areas (Overview, Email), not
+  work states or other menu items. Keep default screens above the fold on phone
+  and desktop, using progressive disclosure and pagination for detail.
+- QA now checks every new Donna view and Scorecard group at 360x640, 412x915 and
+  1280x800. A fast-edit test caught SSR textarea hydration appending initial text;
+  RequestForm now stays disabled until hydration via useSyncExternalStore.
+- Mailbox, worker, model review and source records were not changed. Pilot remains
+  read-only and paused. This updates draft PR #260 on donna/email; no merge authorized.
+- Checks: typecheck and lint passed; 1,410 JS tests passed, five existing skips.
+  Browser checks passed for all new views at the three sizes, counts-only privacy,
+  server-rendered disabled fields, repeated quick reply edits and operator actions.
+  All Thing decisions and hydration fix pushed (`b3ee339`, `4ee9de4`); vault lint
+  still reports 132 existing findings, none on the updated decision page.
+- Production build passed with `PLATFORM_BASE_URL=http://localhost:3130` after
+  the first build correctly rejected the development-only HTTP tailnet URL.
+- Tom: Donna and Scorecard page containers now fill the AppShell width like
+  Clients/Dashboard (`w-full`, no `max-w-4xl`). Nested `<main>` removed; padding
+  matches `px-4 py-5 sm:p-8`. UI checks still pass at 360x640 / 412x915 / 1280x800.
+- Tom: dropped the Read-only pilot badge, the extra Email heading, and the
+  repeated Donna page title (the sidebar already names the area). Settings
+  stays on the Overview/Email tab row.
+
+## 2026-11-25 — Donna read-only email pilot built (Ummon, Tom)
+
+- Branch `donna/email`; review this first slice before adding live execution. The full
+  six-stage build is not complete. Do not merge or deploy until Tom says merge.
+- Preview: `http://100.98.89.93:3130/donna`, unit `swapp-donna-dev-3130`, isolated local
+  Docker database `swapp_donna`. Dev sign-in uses `thomas@bookkeepingconroe.com`.
+  The pilot mailbox is paused; no standing Donna worker/service was installed.
+- Built: Donna's four-tab desk, request detail/evidence/drafts/direction/follow-up/completion,
+  optimistic versions and preservation of edited drafts, settings/pause/enrollment, granular
+  action Scorecard + dashboard summary, privacy counts-only mode, Scanner redirect and legacy view.
+- Backend: four RLS-protected tables, three additive migrations, signed/size-bounded Zoho
+  webhook enrollment with encrypted secret, durable deduplicated queue, exclusive renewable
+  leases and retry/backlog recovery. Worker reads full IMAP threads and local cached sources,
+  including Sent and unsent Drafts, and uses the existing configurable Codex reviewer.
+  Python 3.14 INBOX IDLE push is supported; other folders use webhook/reconciliation.
+- Live read-only evidence: 16 selectable folders, 3,130 message locations, 2,556 cached source
+  messages, two published thread assessments, 1,932 conversations still awaiting review.
+  Main page explicitly shows the unreviewed backlog. No client mail was moved, tagged or sent.
+  A live read-only IDLE subscription was accepted, but no actual incoming test email or public
+  Zoho webhook was configured. Arrival-to-action latency remains unverified.
+- Model work is capped per pass/day, unchanged threads are cached, credentials are stripped
+  from the reviewer environment, and failed/oversized conversations defer without blocking
+  the rest of the mailbox. Daily-limit failures keep the job pending.
+- Checks: typecheck, lint, production build, schema/migration diff, signed-hook/lease/RLS
+  integration checks, 412px and desktop click-through, privacy and operator-action checks.
+  Unit results are recorded in the PR; five pre-existing JS tests remain skipped.
+- All Thing: Donna direction + verified Playwright caret/hydration lesson saved/pushed
+  (`596c33c`, `a72a1dd`). Vault lint still has 132 existing findings; two edited-page
+  footer issues were repaired. No new client records or secrets were put in the vault.
+- Lessons: enforce model-generated keys in the JSON schema; Maildir U= is a near UID and
+  needs `.mbsyncstate` far/near mapping + server UIDVALIDITY; screenshots should use
+  `caret: "initial"` after hydration; Python requests need a custom User-Agent for Cloudflare.
+- Next after review: assess the remaining backlog; implement verified reversible filing,
+  tagging and document handling, real Zoho drafts and exact-message send approval, CRM/role
+  work handoff, follow-up execution/alerts, full source/file access and timing/outcome metrics.
+  Proposed reply text currently stays in SWapp; counts for unimplemented writes stay zero.
+- Runbook: `docs/donna-email-pilot.md`; plan: `docs/design/donna-email-build-plan.md`.
+  Private cache/QA images: `~/.local/state/swapp-donna-dev` and
+  `~/.local/share/swapp-donna-dev`; local credentials are gitignored. Keep `BRIEF-scanner.md`
+  untracked until merge, as that brief directs. It is superseded by the email-first plan.
+
+## 2026-11-25 — Donna email build plan (Ummon, Tom)
+
+- Plan: `docs/design/donna-email-build-plan.md`, on `donna/email`.
+- Tom's goal: an employee who owns the email desk, removes routine work and decisions,
+  serves clients quickly and keeps sales opportunities moving. Zoho email first.
+- Six proposed slices: prove mailbox coverage; understand requests; execute useful work;
+  build the Donna decision view; follow through; prove the benefit and roll out.
+- Next implementation slice: durable Zoho intake/request queue and a read-only Donna view
+  with evidence and recommended next actions. No application implementation started.
+- This supersedes the multi-channel build order in the untracked `BRIEF-scanner.md`.
+  Outbound still requires Tom's same-turn yes; merging waits for his instruction.
+- Documentation saved locally; no commit, push, merge, deploy, or live mailbox change.
+
+## 2026-11-25 — Scanner email scope and branch label (Ummon, Tom)
+
+- Worktree: `~/projects/worktrees/swapp-scanner`; branch renamed from
+  `johnny/scanner-requests` through `ummon/scanner-email` to `donna/email`; HEAD unchanged.
+- Tom narrowed the scanner redesign to email first. Agree the workflow before implementation.
+- Product vision: Donna owns the email desk like a capable employee, reducing Tom’s work and
+  routine decisions while shortening client/prospect waits and supporting company growth.
+- Lesson: Herdr shows the Git branch beneath the tab label. Correct a stale owner prefix
+  when taking over a worktree; explaining the handoff alone does not fix the visible label.
+- Local handoff note only; no application changes, commit, push, merge, or deploy.
+
 ## 2026-11-25 (evening) — Video scorecard, Videos tab, send app 3.7 playlists, ghost-row prune (Johnny, Tom's asks)
 
 Branch `johnny/showrunner-dev10`.

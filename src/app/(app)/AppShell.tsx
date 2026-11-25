@@ -59,8 +59,9 @@ const NAV: Array<{
   dividerAfter?: boolean;
 }> = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, exact: true },
+  { label: "Scorecard", href: "/scorecard", icon: ListChecks },
   { label: "Financial Reports", href: "/reports", icon: FileText },
-  { label: "Scanner", href: "/scanner", icon: Radar },
+  { label: "Donna", href: "/donna", icon: Radar },
   { label: "Operations", href: "/operations", icon: ListChecks },
   { label: "Local SEO", href: "/local-seo", icon: MapPinned },
   { label: "Website", href: "/website", icon: Globe },

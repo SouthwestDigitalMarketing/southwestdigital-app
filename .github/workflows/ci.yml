@@ -43,6 +43,9 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      - name: Donna worker tests
+        run: python3 -m unittest discover -s scripts -p test_donna_worker.py
+
   # Builds an empty database from prisma/migrations and fails if the result
   # differs from prisma/schema.prisma: a schema change with no migration, or
   # a migration that does not apply cleanly, is caught before merge.

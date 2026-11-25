@@ -1,8 +1,13 @@
 # Scorecard
 
+As of 2026-11-25, Scorecard has its own main-menu entry and compact hub at
+`/scorecard`. New email activity lives at `/scorecard/email`; Donna has only
+Overview and Email tabs. Existing response-time components and data below remain
+available through the Client service link and on the Dashboard.
+
 How fast we answer clients, measured from the source systems, shown on the
 Dashboard (`/dashboard`; merged there 2026-11-20 at Tom's request, `/scorecard`
-redirects to `/dashboard?rt=<range>#response-times`). UI lives in
+links to `/dashboard?rt=<range>#response-times` from Client service). UI lives in
 `src/app/(app)/dashboard/_scorecard/`: all-time totals and the waiting/sync strip
 near the top, the Response times section (its own range, `?rt=`) after Offers, and
 "How we measure" folded at the bottom. Tom named it 2026-11-20; the
