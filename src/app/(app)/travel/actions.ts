@@ -7,6 +7,7 @@ import { z } from "zod";
 import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
 import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import {
+  AUTO_PHOTO_SECTIONS,
   SECTION_KEYS,
   TRIP_STATUSES,
   emptyPlan,
@@ -18,9 +19,12 @@ import {
   tripDateSchema,
   uniqueSlug,
   upsertItem,
+  type SectionKey,
+  type TripItem,
   type TripPlan,
 } from "@/lib/travel/plan";
 import { REMOTE_MONTHS_TITLE, remoteMonthsPlan } from "@/lib/travel/starter";
+import { findPlacePhoto } from "@/lib/travel/photos";
 
 const titleSchema = z.string().trim().min(1, "Give the trip a name.").max(120);
 
@@ -29,6 +33,7 @@ export async function createTripAction(formData: FormData) {
   const starter = formData.get("starter") === "remote-months";
   const title = starter ? REMOTE_MONTHS_TITLE : titleSchema.parse(formData.get("title"));
   const plan = starter ? remoteMonthsPlan() : emptyPlan();
+  if (starter) plan.sections.options = await withPhotos("options", plan.sections.options, "");
   const slug = await withBrandDataTransaction(dataContext, async (tx) => {
     const rows = await tx.trip.findMany({ where: { brandId: dataContext.brandId }, select: { slug: true } });
     const next = uniqueSlug(slugify(title), new Set(rows.map((row) => row.slug)));
@@ -58,8 +63,23 @@ const detailsSchema = z
   })
   .refine((d) => !d.startsOn || !d.endsOn || d.startsOn <= d.endsOn, "The trip ends before it starts.");
 
+async function withPhotos(section: SectionKey, items: TripItem[], destination: string): Promise<TripItem[]> {
+  if (!AUTO_PHOTO_SECTIONS.has(section)) return items;
+  return Promise.all(
+    items.map(async (item) => {
+      if (item.photo) return item;
+      const name = String(item[section === "options" ? "place" : "name"] ?? "");
+      const photo =
+        (destination && section === "places" ? await findPlacePhoto(`${name} ${destination}`) : null) ??
+        (await findPlacePhoto(name));
+      return photo ? { ...item, photo } : item;
+    }),
+  );
+}
+
 type Change =
   | { kind: "details"; details: unknown }
+  | { kind: "photos"; section: string }
   | { kind: "save"; section: string; item: unknown }
   | { kind: "remove"; section: string; id: string }
   | { kind: "move"; section: string; id: string; direction: -1 | 1 };
@@ -77,7 +97,7 @@ function reason(error: unknown): string {
 export async function changeTripAction(slug: string, change: Change): Promise<{ error?: string }> {
   const { dataContext } = await requireStaffBrandOrThrow();
   try {
-    await applyChange(dataContext, slug, change);
+    await applyChange(dataContext, slug, await prepare(dataContext, slug, change));
   } catch (error) {
     return { error: reason(error) };
   }
@@ -86,11 +106,30 @@ export async function changeTripAction(slug: string, change: Change): Promise<{ 
   return {};
 }
 
-async function applyChange(
-  dataContext: Awaited<ReturnType<typeof requireStaffBrandOrThrow>>["dataContext"],
-  slug: string,
-  change: Change,
-) {
+type Context = Awaited<ReturnType<typeof requireStaffBrandOrThrow>>["dataContext"];
+type Prepared = Change | { kind: "setPhotos"; section: SectionKey; photos: Record<string, string> };
+
+/** Photo lookups are network calls, so they run before the locked transaction, never inside it. */
+async function prepare(dataContext: Context, slug: string, change: Change): Promise<Prepared> {
+  if (change.kind !== "save" && change.kind !== "photos") return change;
+  const section = sectionSchema.parse(change.section);
+  if (!AUTO_PHOTO_SECTIONS.has(section)) return change;
+  const trip = await withBrandDataTransaction(dataContext, (tx) =>
+    tx.trip.findUnique({ where: { brandId_slug: { brandId: dataContext.brandId, slug } }, select: { destination: true, plan: true } }),
+  );
+  if (!trip) throw new Error("That trip no longer exists.");
+  if (change.kind === "save") {
+    const [item] = await withPhotos(section, [parseItem(section, change.item)], trip.destination);
+    return { ...change, item };
+  }
+  const missing = parsePlan(trip.plan).sections[section].filter((item) => !item.photo);
+  const found = await withPhotos(section, missing, trip.destination);
+  const photos = Object.fromEntries(found.filter((item) => item.photo).map((item) => [item.id, String(item.photo)]));
+  if (Object.keys(photos).length === 0) throw new Error("No photos found. Paste a photo link with Edit.");
+  return { kind: "setPhotos", section, photos };
+}
+
+async function applyChange(dataContext: Context, slug: string, change: Prepared) {
   await withBrandDataTransaction(dataContext, async (tx) => {
     const locked = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT "id" FROM "Trip" WHERE "brandId" = ${dataContext.brandId} AND "slug" = ${slug} FOR UPDATE`;
@@ -114,6 +153,19 @@ async function applyChange(
         plan = upsertItem(plan, section, parseItem(section, change.item));
         break;
       }
+      case "photos":
+        break;
+      case "setPhotos":
+        plan = {
+          ...plan,
+          sections: {
+            ...plan.sections,
+            [change.section]: plan.sections[change.section].map((item) =>
+              !item.photo && change.photos[item.id] ? { ...item, photo: change.photos[item.id] } : item,
+            ),
+          },
+        };
+        break;
       case "remove":
         plan = removeItem(plan, sectionSchema.parse(change.section), z.string().uuid().parse(change.id));
         break;

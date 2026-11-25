@@ -6,6 +6,8 @@ import {
   documentWarnings,
   documentsReady,
   emptyPlan,
+  hasPhotos,
+  itemsWithoutPhoto,
   moveItem,
   parseItem,
   parsePlan,
@@ -110,5 +112,16 @@ describe("travel plan", () => {
 
   it("rejects an unknown document status", () => {
     expect(() => parseItem("documents", { id: id(1), document: "Visa", status: "Maybe" })).toThrow();
+  });
+
+  it("keeps photo links to https pages and lists items still missing one", () => {
+    expect(() => parseItem("options", { id: id(1), place: "A", photo: "data:image/png;base64,AAAA" })).toThrow();
+    let plan = emptyPlan();
+    plan = upsertItem(plan, "options", parseItem("options", { id: id(1), place: "A", photo: "https://upload.wikimedia.org/a.jpg" }));
+    plan = upsertItem(plan, "options", parseItem("options", { id: id(2), place: "B" }));
+    expect(itemsWithoutPhoto(plan, "options").map((item) => item.place)).toEqual(["B"]);
+    expect(hasPhotos("stays")).toBe(true);
+    expect(hasPhotos("budget")).toBe(false);
+    expect(itemsWithoutPhoto(plan, "budget")).toEqual([]);
   });
 });

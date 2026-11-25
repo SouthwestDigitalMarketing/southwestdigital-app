@@ -512,6 +512,17 @@ newsletters) into SWapp's Scanner; `/patrol` was removed from every machine the 
 - Open: confirm Zoho empties Spam on its own (oldest Spam mail 31 Oct on 2026-11-24); texts from
   Tom's Pixel (Google Messages for Web, ripley agent Chrome) as a Scanner source — next.
 
+## 2026-11-25 — Travel: photos on options, places and stays (Ummon)
+
+Tom: "add photos to these options". New field type `photo` (https link) on Options, Places to go
+and Stays; cards show it 16:9 across the top. Options and places saved without a photo get the
+lead image of the best-matching English Wikipedia article (`src/lib/travel/photos.ts`, 4 s
+timeout, only upload/thumb.wikimedia.org accepted, looked up before the locked transaction, never
+blocks a save); stays are usually rentals, so no guess. "Find photos" fills cards still missing
+one; the starter trip gets option photos at creation. Paste any https image link with Edit to
+replace one. Checks: tsc, eslint, vitest (16 travel tests); phone preview at :3120 filled all
+five options (960 px Wikimedia photos), no page errors.
+
 ## 2026-11-25 — Travel menu: one page per trip (Ummon)
 
 Tom: "click on travel and select one of the items for our trips ... the Bible for that trip"; later

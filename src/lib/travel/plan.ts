@@ -18,7 +18,7 @@ export const TRIP_STATUS_LABELS: Record<TripStatus, string> = {
 
 export const DOCUMENT_STATUSES = ["Need it", "Applied", "Have it", "Not needed"] as const;
 
-export type FieldType = "text" | "long" | "money" | "date" | "url" | "check" | "choice";
+export type FieldType = "text" | "long" | "money" | "date" | "url" | "photo" | "check" | "choice";
 export type Field = { key: string; label: string; type: FieldType; options?: readonly string[] };
 export type SectionKey =
   | "options"
@@ -51,6 +51,7 @@ export const SECTIONS: readonly Section[] = [
     heading: "place",
     fields: [
       { key: "place", label: "Place", type: "text" },
+      { key: "photo", label: "Photo link", type: "photo" },
       { key: "roundTrip", label: "Round trip", type: "money" },
       { key: "oneWay", label: "One way", type: "money" },
       { key: "monthly", label: "Per month", type: "money" },
@@ -117,6 +118,7 @@ export const SECTIONS: readonly Section[] = [
     heading: "name",
     fields: [
       { key: "name", label: "Name", type: "text" },
+      { key: "photo", label: "Photo link", type: "photo" },
       { key: "area", label: "Area", type: "text" },
       { key: "checkIn", label: "Check in", type: "date" },
       { key: "checkOut", label: "Check out", type: "date" },
@@ -135,6 +137,7 @@ export const SECTIONS: readonly Section[] = [
     heading: "name",
     fields: [
       { key: "name", label: "Name", type: "text" },
+      { key: "photo", label: "Photo link", type: "photo" },
       { key: "area", label: "Area", type: "text" },
       { key: "why", label: "Why", type: "long" },
       { key: "link", label: "Link", type: "url" },
@@ -224,6 +227,7 @@ function fieldSchema(field: Field): z.ZodType<ItemValue> {
     case "date":
       return tripDateSchema;
     case "url":
+    case "photo":
       return z.union([
         z.literal(""),
         z
@@ -282,6 +286,19 @@ export function parsePlan(raw: unknown): TripPlan {
     });
   }
   return { summary: typeof object.summary === "string" ? object.summary : "", sections };
+}
+
+/** Lists whose items carry a photo (filled from Wikipedia when left blank). */
+export function hasPhotos(sectionKey: SectionKey): boolean {
+  return sectionFor(sectionKey).fields.some((field) => field.type === "photo");
+}
+
+/** Options and places get a Wikipedia photo when saved without one; stays are usually rentals, so no guess. */
+export const AUTO_PHOTO_SECTIONS: ReadonlySet<SectionKey> = new Set(["options", "places"]);
+
+/** Items in a photo list that still have no photo. */
+export function itemsWithoutPhoto(plan: TripPlan, sectionKey: SectionKey): TripItem[] {
+  return hasPhotos(sectionKey) ? plan.sections[sectionKey].filter((item) => !item.photo) : [];
 }
 
 export const MAX_ITEMS_PER_SECTION = 200;
