@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -25,6 +26,7 @@ import {
 } from "@/lib/travel/plan";
 import { REMOTE_MONTHS_TITLE, remoteMonthsPlan } from "@/lib/travel/starter";
 import { findPlacePhoto } from "@/lib/travel/photos";
+import { standingNeeds } from "@/lib/travel/needs";
 
 const titleSchema = z.string().trim().min(1, "Give the trip a name.").max(120);
 
@@ -34,6 +36,8 @@ export async function createTripAction(formData: FormData) {
   const title = starter ? REMOTE_MONTHS_TITLE : titleSchema.parse(formData.get("title"));
   const plan = starter ? remoteMonthsPlan() : emptyPlan();
   if (starter) plan.sections.options = await withPhotos("options", plan.sections.options, "");
+  // Every trip starts with Tom's standing needs (gym, shakes, martial arts, internet, guitar).
+  plan.sections.needs = standingNeeds(randomUUID);
   const slug = await withBrandDataTransaction(dataContext, async (tx) => {
     const rows = await tx.trip.findMany({ where: { brandId: dataContext.brandId }, select: { slug: true } });
     const next = uniqueSlug(slugify(title), new Set(rows.map((row) => row.slug)));
@@ -80,6 +84,7 @@ async function withPhotos(section: SectionKey, items: TripItem[], destination: s
 type Change =
   | { kind: "details"; details: unknown }
   | { kind: "photos"; section: string }
+  | { kind: "standingNeeds" }
   | { kind: "save"; section: string; item: unknown }
   | { kind: "remove"; section: string; id: string }
   | { kind: "move"; section: string; id: string; direction: -1 | 1 };
@@ -154,6 +159,9 @@ async function applyChange(dataContext: Context, slug: string, change: Prepared)
         break;
       }
       case "photos":
+        break;
+      case "standingNeeds":
+        if (plan.sections.needs.length === 0) plan = { ...plan, sections: { ...plan.sections, needs: standingNeeds(randomUUID) } };
         break;
       case "setPhotos":
         plan = {
