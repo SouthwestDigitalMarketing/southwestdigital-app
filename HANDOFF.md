@@ -1,4 +1,17 @@
 # SWapp handoff
+## 2026-11-25 (evening) — Video scorecard, Videos tab, send app 3.7 playlists, ghost-row prune (Johnny, Tom's asks)
+
+Branch `johnny/showrunner-dev10`.
+
+- Videos tab (was Editor): list shows each video's score; `/showrunner/editor/[batch]` shows the scorecard
+  (All Thing `sops/sop-video-scorecard.md`: 16 items, 100 points, Fix now, Next video, YouTube numbers) and
+  Run review. `ShowrunnerVideoStatus.review` / `reviewRequestedAt` (migration 20261125120000). ripley talks to
+  `/api/showrunner/video-review` with the status token: GET lists Run review taps, POST stores a scorecard.
+- Send app 3.7 (versionCode 10): "Which playlists?" before picking a new video (list from ripley
+  `/playlists.json`, `~/.config/showrunner/playlists.json`); uploads carry `playlists`. Receiver self-test covers it.
+- The scoring, cold open and playlist filing are showrunner-app (`showrunner_review.py`, `showrunner_studio.mjs`).
+- Checks: vitest, lint 0 errors, typecheck; dev Playwright for the list chip, scorecard page and Run review loop.
+
 ## 2026-11-25 (later) — Overview toggle, Editor tab, phone Full auto / Add more clips / Finish (Johnny, Tom's asks)
 
 Branch `johnny/showrunner-dev8`.
