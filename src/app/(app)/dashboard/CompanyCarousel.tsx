@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, LockKeyhole, Sparkles, Thermometer } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { MetricsView } from "@/lib/companyMetrics/summary";
 
@@ -145,7 +145,32 @@ function LeadAlerts({ alerts }: { alerts: LeadAlert[] }) {
   );
 }
 
-export type CompanyLead = { id: string; name: string; company: string | null; slug: string; stage: string; createdAt: string };
+export type CompanyLead = { id: string; name: string; company: string | null; slug: string; stage: string; heat: number; createdAt: string };
+
+const HEAT = [
+  { label: "Cold", color: "#3b82f6" },
+  { label: "Cool", color: "#06b6d4" },
+  { label: "Warm", color: "#eab308" },
+  { label: "Hot", color: "#ef4444" },
+  { label: "Secured", color: "#16a34a" },
+];
+
+/** The old lead card's thermometer (Tom, 2026-11-24): fills and colors with heat; Hot shakes and sparks; Secured is a lock. */
+function HeatIcon({ heat }: { heat: number }) {
+  const level = Math.min(5, Math.max(1, heat));
+  const { label, color } = HEAT[level - 1];
+  if (level === 5) return <span className="flex h-6 w-6 shrink-0 items-center justify-center" role="img" aria-label={label}><LockKeyhole size={20} strokeWidth={2.2} style={{ color }} /></span>;
+  return (
+    <span className={`relative h-6 w-6 shrink-0 ${level === 4 ? "lead-thermometer-hot" : ""}`} role="img" aria-label={label}>
+      <Thermometer size={22} strokeWidth={2.2} style={{ color }} />
+      <span className="absolute bottom-[4px] left-1/2 h-[6px] w-[6px] -translate-x-1/2 rounded-full" style={{ backgroundColor: color }} />
+      {level > 1 ? (
+        <span className="absolute bottom-[8px] left-1/2 w-[3px] -translate-x-1/2 rounded-full" style={{ height: level === 4 ? 10 : (level - 1) * 3, backgroundColor: color }} />
+      ) : null}
+      {level === 4 ? <Sparkles size={10} className="lead-thermometer-spark absolute -right-0.5 -top-1 text-amber-300" /> : null}
+    </span>
+  );
+}
 
 /** The New leads card's list: each lead with its brand dot and funnel stage, linking to the lead; then the CRM. */
 function LeadList({ leads, colors }: { leads: CompanyLead[]; colors: Record<string, string> }) {
@@ -153,9 +178,10 @@ function LeadList({ leads, colors }: { leads: CompanyLead[]; colors: Record<stri
     <div>
       {leads.length === 0 ? <p className="text-sm text-slate-500">No new leads in this period.</p> : (
         <ul className="flex flex-col">
-          {leads.map((lead) => (
+          {[...leads].sort((a, b) => b.heat - a.heat).map((lead) => (
             <li key={`${lead.slug}-${lead.id}`}>
               <Link href={`/leads/${lead.id}`} className="flex items-center gap-2 py-1.5 text-sm hover:bg-slate-50">
+                <HeatIcon heat={lead.heat} />
                 <span className="brand-split-seg h-2.5 w-2.5 shrink-0 rounded-full" style={{ ["--seg" as string]: colors[lead.slug] ?? "#64748b" }} />
                 <span className="min-w-0 flex-1 truncate text-slate-800">{lead.company ? `${lead.name} · ${lead.company}` : lead.name}</span>
                 <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">{lead.stage}</span>
