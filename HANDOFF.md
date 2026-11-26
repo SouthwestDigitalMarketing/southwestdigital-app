@@ -1,4 +1,15 @@
 # SWapp handoff
+## 2026-11-25 (late) — Room for new mail; attachments only block mail that matters
+
+- `swapp-donna.service` is installed and running on ripley (linger on), from
+  `~/.local/share/swapp-donna/runtime/donna_worker.py`. First clean filed 13,
+  left 26 on purpose, 8 for attachments, 17 deferred for retry.
+- History (non-Clean) reviews now have their own cap (`--background-reviews
+  60` of `--daily-reviews 200`); claims take clean/undo jobs before backlog.
+- An unreadable attachment blocks filing only when some assessment is not
+  `noise`/`information`.
+- Repo unit template matches the installed unit.
+
 ## 2026-11-25 (late) — Donna files on her own (Tom: "yes. yes")
 
 Tom saw the check-first flow make more work, not less. Decision: Donna files

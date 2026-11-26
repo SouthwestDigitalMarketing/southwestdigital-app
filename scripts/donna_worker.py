@@ -110,12 +110,21 @@ class LocalStore:
         """)
         os.chmod(self.root / "desk.sqlite", 0o600)
         self.daily_limit = 50
+        self.background_limit = None
 
-    def reserve_review(self):
+    def reserve_review(self, background=False):
+        """Count one model review. Background history review has its own smaller cap,
+        so Inbox cleans for new mail always have room left in the day."""
         day = dt.datetime.now(UTC).date().isoformat()
         row = self.db.execute("SELECT attempts FROM review_budget WHERE day=?", (day,)).fetchone()
         if row and row[0] >= self.daily_limit:
             raise ReviewBudgetReached("Daily review limit reached; work remains queued for the next budget window.")
+        if background and self.background_limit is not None:
+            used = self.db.execute("SELECT attempts FROM review_budget WHERE day=?", (day + ":background",)).fetchone()
+            if used and used[0] >= self.background_limit:
+                raise ReviewBudgetReached("Daily history review limit reached; new mail still gets reviewed.")
+            self.db.execute("INSERT INTO review_budget VALUES (?,1) ON CONFLICT(day) DO UPDATE SET attempts=attempts+1",
+                            (day + ":background",))
         self.db.execute("INSERT INTO review_budget VALUES (?,1) ON CONFLICT(day) DO UPDATE SET attempts=attempts+1", (day,))
         self.db.commit()
 
@@ -870,7 +879,7 @@ def process_job(client, store, work, max_threads, clean_threads=100):
                     store.decide(mailbox, thread, fingerprint, "kept")
                 attempted += 1
                 continue
-            store.reserve_review()
+            store.reserve_review(background=not is_clean)
             attempted += 1
             try:
                 if is_clean:
@@ -880,9 +889,13 @@ def process_job(client, store, work, max_threads, clean_threads=100):
                                     extra=CLEAN_INSTRUCTIONS if is_clean else "")
                 dest = None
                 if is_clean:
+                    dest, reason = filing_plan(assessment, messages, work.get("contacts"), coverage.get("folders"))
+                    # An unreadable attachment (often just a logo) only blocks filing when the
+                    # mail could matter: anything not plainly noise or information stays in Inbox.
                     has_gaps = any(a.get("gap") for m in messages for a in m.get("attachments") or [])
-                    dest, reason = (None, "attachment review needed") if has_gaps else filing_plan(
-                        assessment, messages, work.get("contacts"), coverage.get("folders"))
+                    if dest and has_gaps and any(item.get("category") not in ("noise", "information")
+                                                 for item in assessment):
+                        dest, reason = None, "attachment review needed"
                     filed_to = None
                     if dest and preview:
                         store.db.execute("INSERT OR REPLACE INTO clean_plans VALUES (?,?,?,?,?)",
@@ -1042,6 +1055,8 @@ def main():
     parser.add_argument("--max-threads", type=int, default=10)
     parser.add_argument("--daily-reviews", type=int, default=50, help="Maximum model review attempts per UTC day")
     parser.add_argument("--clean-threads", type=int, default=100, help="Inbox conversations one Clean may review")
+    parser.add_argument("--background-reviews", type=int, default=None,
+                        help="Of the daily reviews, at most this many for history (non-Clean) passes")
     args = parser.parse_args()
     if not 1 <= args.max_threads <= 50:
         parser.error("--max-threads must be between 1 and 50")
@@ -1055,6 +1070,7 @@ def main():
         parser.error("Use HTTPS except for a local/Tailscale development server")
     store = LocalStore(args.state)
     store.daily_limit = args.daily_reviews
+    store.background_limit = args.background_reviews
     with (store.root / "worker.lock").open("w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         client = Client(url, token)

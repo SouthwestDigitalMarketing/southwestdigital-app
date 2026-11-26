@@ -1,5 +1,5 @@
 [Unit]
-Description=Donna email desk worker (read-only pilot)
+Description=Donna email desk worker (files allowlisted Inbox mail, Undo in SWapp; Pause in SWapp stops her)
 After=network-online.target
 Wants=network-online.target
 
@@ -7,7 +7,8 @@ Wants=network-online.target
 Type=simple
 EnvironmentFile=%h/.config/swapp-donna/env
 WorkingDirectory=%h/.local/share/swapp-donna
-ExecStart=/usr/bin/python3 %h/.local/share/swapp-donna/runtime/donna_worker.py
+# 200 model reviews a day; history passes may use at most 60, so new mail always has room.
+ExecStart=/usr/bin/python3 %h/.local/share/swapp-donna/runtime/donna_worker.py --daily-reviews 200 --background-reviews 60 --clean-threads 100
 Restart=on-failure
 RestartSec=15
 UMask=0077
