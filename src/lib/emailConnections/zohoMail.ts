@@ -185,3 +185,123 @@ export async function revokeZohoRefreshToken(input: {
     // best-effort — the local record is still deleted so the token is unused.
   }
 }
+
+// ─── Tags (Donna, 2026-11-26) ────────────────────────────────────────────────
+// Zoho calls them labels in the API and tags in the app.
+
+async function zohoJson<T>(input: {
+  region: ZohoRegionKey;
+  accessToken: string;
+  path: string;
+  method?: "GET" | "POST" | "PUT";
+  /** A JSON string, sent as is (ids must stay unquoted longs). */
+  body?: string;
+  what: string;
+}): Promise<T> {
+  const host = ZOHO_REGIONS[input.region].mailApiHost;
+  const response = await fetch(`https://${host}${input.path}`, {
+    method: input.method ?? "GET",
+    headers: {
+      Authorization: zohoAuthHeader(input.accessToken),
+      Accept: "application/json",
+      ...(input.body === undefined ? {} : { "Content-Type": "application/json" }),
+    },
+    body: input.body,
+  });
+  const text = await response.text();
+  if (!response.ok) throw new ZohoApiError(`Zoho ${input.what} failed`, response.status, text);
+  try {
+    // Zoho ids are longs past Number.MAX_SAFE_INTEGER: read them as strings.
+    return JSON.parse(text.replace(/"(messageId|folderId|labelId|tagId|threadId|accountId)"\s*:\s*(\d+)/g, '"$1":"$2"')) as T;
+  } catch {
+    throw new ZohoApiError(`Zoho returned non-JSON for ${input.what}`, response.status, text);
+  }
+}
+
+export type ZohoAuth = { region: ZohoRegionKey; accessToken: string; accountId: string };
+
+function accountPath(auth: ZohoAuth, rest: string) {
+  return `/api/accounts/${encodeURIComponent(auth.accountId)}${rest}`;
+}
+
+export async function listZohoLabels(auth: ZohoAuth) {
+  const json = await zohoJson<{ data?: Array<{ labelId?: string | number; displayName?: string }> }>({
+    ...auth,
+    path: accountPath(auth, "/labels"),
+    what: "label list",
+  });
+  return (json.data ?? []).flatMap((l) =>
+    l.labelId !== undefined && l.displayName ? [{ labelId: String(l.labelId), name: l.displayName }] : [],
+  );
+}
+
+export async function createZohoLabel(auth: ZohoAuth, name: string) {
+  const json = await zohoJson<{ data?: { labelId?: string | number } }>({
+    ...auth,
+    path: accountPath(auth, "/labels"),
+    method: "POST",
+    body: JSON.stringify({ displayName: name }),
+    what: "label create",
+  });
+  if (json.data?.labelId === undefined) throw new ZohoApiError("Zoho label create returned no id", 200, "");
+  return String(json.data.labelId);
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function zohoDate(d: Date) {
+  return `${String(d.getUTCDate()).padStart(2, "0")}-${MONTHS[d.getUTCMonth()]}-${d.getUTCFullYear()}`;
+}
+
+/**
+ * Zoho's messageId for one email, matched on its Message-ID header. Zoho search cannot
+ * search headers, so this searches by sender and a two-day window, then reads the
+ * header of each candidate with the same subject. Null when no exact match.
+ */
+export async function findZohoMessage(
+  auth: ZohoAuth,
+  input: { messageIdHeader: string; from: string; subject: string; at: string },
+) {
+  const sent = new Date(input.at);
+  if (Number.isNaN(sent.getTime()) || !input.from || !input.messageIdHeader) return null;
+  const day = 86_400_000;
+  const searchKey = [
+    `sender:${input.from}`,
+    `fromDate:${zohoDate(new Date(sent.getTime() - day))}`,
+    `toDate:${zohoDate(new Date(sent.getTime() + day))}`,
+  ].join("::");
+  const params = new URLSearchParams({ searchKey, limit: "50", includeto: "false" });
+  const json = await zohoJson<{
+    data?: Array<{ messageId?: string | number; folderId?: string | number; subject?: string }>;
+  }>({ ...auth, path: accountPath(auth, `/messages/search?${params}`), what: "message search" });
+  const wanted = input.messageIdHeader.trim().toLowerCase();
+  const subject = input.subject.trim().toLowerCase();
+  const candidates = (json.data ?? []).filter(
+    (m) => m.messageId !== undefined && m.folderId !== undefined && (m.subject ?? "").trim().toLowerCase() === subject,
+  );
+  for (const m of candidates.slice(0, 10)) {
+    const header = await zohoJson<{ data?: { headerContent?: Record<string, string[]> } }>({
+      ...auth,
+      path: accountPath(auth, `/folders/${m.folderId}/messages/${m.messageId}/header?raw=false`),
+      what: "message header",
+    });
+    const content = header.data?.headerContent ?? {};
+    const ids = Object.entries(content)
+      .filter(([k]) => k.toLowerCase() === "message-id")
+      .flatMap(([, v]) => v)
+      .map((v) => String(v).trim().toLowerCase());
+    if (ids.includes(wanted)) return String(m.messageId);
+  }
+  return null;
+}
+
+export async function applyZohoLabel(auth: ZohoAuth, labelId: string, messageIds: string[]) {
+  const ids = [labelId, ...messageIds];
+  if (!messageIds.length || !ids.every((id) => /^\d{1,25}$/.test(id))) throw new Error("Zoho ids must be numeric.");
+  await zohoJson<unknown>({
+    ...auth,
+    path: accountPath(auth, "/updatemessage"),
+    method: "PUT",
+    body: `{"mode":"applyLabel","labelId":[${labelId}],"messageId":[${messageIds.join(",")}]}`,
+    what: "apply label",
+  });
+}

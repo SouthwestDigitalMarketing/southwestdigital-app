@@ -27,16 +27,24 @@ export function BucketChooser({
     const data = new FormData(form);
     const ticked = new Set(data.getAll("thread").map(String));
     const counts = new Map<string, number>();
+    const add = (what: string, n: number) =>
+      n && counts.set(what, (counts.get(what) ?? 0) + n);
     buckets.forEach((bucket, i) => {
       const choice = String(data.get(`bucket-${i}`) ?? "leave");
       if (choice === "leave") return;
-      const n = bucket.items.filter((item) => ticked.has(item.thread)).length;
-      if (n) counts.set(choice, (counts.get(choice) ?? 0) + n);
+      const tagging = choice === "tag" || choice.startsWith("tag:");
+      const folder = tagging ? choice.slice(4) : choice;
+      const items = bucket.items.filter(
+        (item) => ticked.has(item.thread) && (!tagging || item.client),
+      );
+      if (tagging) add("tag with the client name", items.length);
+      if (folder) add(`move to ${folder}`, items.length);
     });
     setSummary([...counts]);
   }
 
   const moving = summary.reduce((n, [, c]) => n + c, 0);
+  const named = (bucket: Bucket) => bucket.items.filter((i) => i.client).length;
   return (
     <form
       action={action}
@@ -58,6 +66,12 @@ export function BucketChooser({
                 </span>
               </h3>
               <p className="text-xs text-slate-500">{bucket.note}</p>
+              {named(bucket) && named(bucket) < bucket.items.length ? (
+                <p className="text-xs text-amber-700">
+                  {bucket.items.length - named(bucket)} have no client name in
+                  SWapp contacts, so tagging skips them.
+                </p>
+              ) : null}
             </div>
             <label className="flex items-center gap-2 text-sm">
               <span className="sr-only">What to do with {bucket.name}</span>
@@ -67,16 +81,26 @@ export function BucketChooser({
                 className="rounded-md border border-slate-200 px-2 py-1"
               >
                 <option value="leave">Leave in Inbox</option>
+                {named(bucket) ? (
+                  <>
+                    <option value="tag">Tag with client name</option>
+                    <option value="tag:Archive">
+                      Tag with client name, then Archive
+                    </option>
+                  </>
+                ) : null}
                 {bucket.suggest ? (
                   <option value={bucket.suggest}>
                     Move to {bucket.suggest} (Donna suggests)
                   </option>
                 ) : null}
-                {folders.filter((f) => f !== bucket.suggest).map((f) => (
-                  <option key={f} value={f}>
-                    Move to {f}
-                  </option>
-                ))}
+                {folders
+                  .filter((f) => f !== bucket.suggest)
+                  .map((f) => (
+                    <option key={f} value={f}>
+                      Move to {f}
+                    </option>
+                  ))}
               </select>
             </label>
           </div>
@@ -122,12 +146,13 @@ export function BucketChooser({
         <h3 className="font-semibold">Step 2: Do what I chose</h3>
         <p className="text-slate-700">
           {moving
-            ? `Step 2 will move ${moving}: ${summary.map(([f, n]) => `${n} to ${f}`).join(", ")}. Everything else stays in Inbox.`
-            : "Nothing is set to move. Pick a folder for a bucket above to move it."}
+            ? `Step 2 will ${summary.map(([what, n]) => `${what}: ${n}`).join("; ")}. Everything else stays as it is.`
+            : "Nothing is set to change. Pick a choice for a bucket above."}
         </p>
         <p className="text-xs text-slate-500">
-          Nothing has moved yet. Emails that change before step 2 reaches them
-          stay in Inbox. Every move can be undone afterwards.
+          Nothing has changed yet. Emails that change before step 2 reaches them
+          stay in Inbox. Tagging happens first; an email that cannot be tagged
+          is not moved. Every move can be undone afterwards.
         </p>
         {blocked ? (
           <p className="text-xs text-amber-700">{blocked}</p>

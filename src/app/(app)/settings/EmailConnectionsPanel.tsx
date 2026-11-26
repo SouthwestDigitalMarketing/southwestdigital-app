@@ -248,6 +248,22 @@ function ProviderCard({
         </form>
       ) : null}
 
+      {provider === "ZOHO" && !disabled && connection && !connection.canTag ? (
+        <form method="post" action="/api/email-connections/zoho/connect" className="space-y-1">
+          <input type="hidden" name="region" value={connection.region ?? region} />
+          <button
+            type="submit"
+            className="ui-action-primary w-full rounded-lg px-3 py-2 text-sm font-semibold"
+          >
+            Reconnect so Donna can tag mail
+          </button>
+          <p className="text-xs text-slate-500">
+            Zoho asks you to allow reading and tagging mail. Sending keeps working; nothing changes until you
+            choose a step in Donna.
+          </p>
+        </form>
+      ) : null}
+
       {provider === "ZOHO" && !zohoConfigured && !comingSoon ? (
         <p className="text-xs text-amber-700">
           Not configured yet — the platform administrator needs to set{" "}

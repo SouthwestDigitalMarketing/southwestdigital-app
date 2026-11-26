@@ -362,12 +362,21 @@ export async function applyBuckets(form: FormData) {
       },
     });
     if (busy) return busy.id;
+    // A choice is a folder, "tag" (client tag, stays in Inbox) or "tag:<folder>".
     const plan = cleanBuckets(sort.result).flatMap((bucket, i) => {
       const choice = String(form.get(`bucket-${i}`) ?? "leave");
-      if (!(STEP_FOLDERS as readonly string[]).includes(choice)) return [];
+      const tagging = choice === "tag" || choice.startsWith("tag:");
+      const folder = tagging ? choice.slice(4) : choice;
+      if (folder && !(STEP_FOLDERS as readonly string[]).includes(folder))
+        return [];
+      if (!tagging && !folder) return [];
       return bucket.items
-        .filter((item) => ticked.has(item.thread))
-        .map((item) => ({ thread: item.thread, folder: choice }));
+        .filter((item) => ticked.has(item.thread) && (!tagging || item.client))
+        .map((item) => ({
+          thread: item.thread,
+          ...(folder ? { folder } : {}),
+          ...(tagging ? { tag: item.client! } : {}),
+        }));
     });
     if (!plan.length) return null;
     const job = await tx.donnaJob.create({
@@ -380,12 +389,20 @@ export async function applyBuckets(form: FormData) {
     });
     await resetCleanProgress(tx, sort.mailbox, plan.length);
     const counts = new Map<string, number>();
-    for (const p of plan) counts.set(p.folder, (counts.get(p.folder) ?? 0) + 1);
+    for (const p of plan) {
+      const what = [
+        "tag" in p ? "tag" : "",
+        "folder" in p ? `move to ${p.folder}` : "",
+      ]
+        .filter(Boolean)
+        .join(" and ");
+      counts.set(what, (counts.get(what) ?? 0) + 1);
+    }
     await cleanControl(
       tx,
       sort.mailboxId,
       session.user.id,
-      `Step 2 started: move ${[...counts].map(([f, n]) => `${n} to ${f}`).join(", ")}.`,
+      `Step 2 started: ${[...counts].map(([what, n]) => `${what} ${n}`).join(", ")}.`,
     );
     return job.id;
   });

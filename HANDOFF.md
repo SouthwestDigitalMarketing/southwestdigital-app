@@ -1,4 +1,13 @@
 # SWapp handoff
+## 2026-11-26 — Client tags in Zoho (Tom: "just get a client tag")
+
+Branch `donna/client-tags`. Step 2 can tag client emails with the client's name in Zoho,
+optionally then Archive. Uses SWapp's Zoho OAuth connection (new scopes; Tom must click
+**Reconnect so Donna can tag mail** in Settings once). Checks: worker unittest 27 OK, vitest
+emailConnections+donna 61 OK, integration + UI scripts pass, `next build` clean. Not live-tested
+against Zoho until Tom reconnects and runs a step. Open: "addressed" step (archive handled
+client mail), tag Undo, Archive cold-storage policy.
+
 ## 2026-11-26 — Steps and gates (Tom: "just one step… buckets… options for those buckets")
 
 Branch `donna/steps`. Donna now works in steps by default (`DonnaMailbox.settings.steps`,

@@ -1133,6 +1133,7 @@ def run_plan(client, store, work, plan, pending, report, done_threads, progress,
             break
         reason = None
         folder = row["folder"] if row else ""
+        tag = str((entry or {}).get("tag") or "").strip()[:80] if chosen else ""
         if chosen:
             folder = resolve_file_dest((entry or {}).get("folder"), None) or ""
         if not row:
@@ -1147,10 +1148,35 @@ def run_plan(client, store, work, plan, pending, report, done_threads, progress,
             reason = "known contact"
         elif not chosen and str((entry or {}).get("folder") or row["folder"]) != row["folder"]:
             reason = "folder differs from the preview"
-        elif not folder:
+        elif not folder and not tag:
             reason = "no folder chosen"
+        if not reason and tag:
+            # Tag in Zoho first (through SWapp's Zoho connection); an untagged email is never archived.
+            wanted = [{"id": m["key"], "from": email.utils.parseaddr(m.get("from", ""))[1],
+                       "subject": m.get("subject") or "", "at": m.get("at") or ""}
+                      for m in messages if str(m.get("folder", "")).upper() == "INBOX" and not m.get("outgoing")
+                      and m.get("key") and not str(m["key"]).startswith("raw:")][:20]
+            result = {}
+            if wanted:
+                try:
+                    answer = client.call("tag", jobId=job["id"], leaseToken=job["leaseToken"],
+                                         items=[{"thread": thread, "tag": tag, "messages": wanted}])
+                    result = next(iter((answer or {}).get("results") or []), {})
+                except DonnaAPIError as error:
+                    if error.status == 409:
+                        raise LeaseLost("Job was paused or reclaimed; stopping.") from None
+                    result = {"error": "SWapp could not tag it"}
+            else:
+                result = {"error": "no taggable message"}
+            if result.get("tagged"):
+                report.setdefault("tagged", []).append({"thread": thread, "subject": subject, "from": sender,
+                                                        "tag": tag})
+            else:
+                reason = "not tagged: %s" % (result.get("error") or "unknown")
         if reason:
             report["skipped"].append({"thread": thread, "subject": subject, "from": sender, "reason": reason})
+        elif not folder:
+            pass
         else:
             try:
                 keys = file_thread(store, mailbox, messages, folder, filer)

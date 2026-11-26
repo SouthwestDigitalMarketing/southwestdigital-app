@@ -243,7 +243,8 @@ class WorkerTests(unittest.TestCase):
     }
     FOLDERS = {"folders": [{"folder": "INBOX", "messages": 2}, {"folder": "Newsletter", "messages": 10}], "gaps": []}
 
-    def run_clean(self, store, options, filer=None, heartbeat_answer=None, job_id="j", settings=None):
+    def run_clean(self, store, options, filer=None, heartbeat_answer=None, job_id="j", settings=None,
+                  tag_answer=None):
         calls = []
 
         class Client:
@@ -251,6 +252,8 @@ class WorkerTests(unittest.TestCase):
                 calls.append((op, data))
                 if op == "heartbeat" and heartbeat_answer:
                     return heartbeat_answer(data)
+                if op == "tag" and tag_answer:
+                    return tag_answer(data)
                 return {}
 
         def fake_assess(messages, existing, root, contacts=None, extra=""):
@@ -460,6 +463,32 @@ class WorkerTests(unittest.TestCase):
             done = next(d["result"]["report"] for op, d in calls if op == "complete")
             self.assertEqual([i["folder"] for i in done["filed"]], ["Archive"])
             self.assertEqual([i["reason"] for i in done["skipped"]], ["no folder chosen"])
+            store.db.close()
+
+    def test_step_two_tags_first_and_never_archives_an_untagged_email(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = self.clean_fixture(tmp)
+            report = next(d["result"]["report"] for op, d in self.run_clean(store, {}, settings={}) if op == "complete")
+            client_thread = next(i["thread"] for i in report["sorted"] if i["bucket"] == "Clients")
+            promo_thread = next(i["thread"] for i in report["sorted"] if i["bucket"] != "Clients")
+            plan = [{"thread": client_thread, "folder": "Archive", "tag": "Acme"},
+                    {"thread": promo_thread, "tag": "Shop"}]
+            moves, asked = [], []
+
+            def answer(data):
+                asked.append(data["items"][0])
+                ok = data["items"][0]["tag"] == "Acme"
+                return {"results": [{"thread": data["items"][0]["thread"], "tagged": 1 if ok else 0,
+                                     "error": None if ok else "Email not found in Zoho."}]}
+            calls = self.run_clean(store, {"previewJobId": "j", "plan": plan, "buckets": True},
+                                   filer=lambda uid, dest, mid: moves.append((uid, dest)), job_id="two",
+                                   settings={}, tag_answer=answer)
+            self.assertEqual(moves, [(12, "Archive")])
+            self.assertEqual(asked[0]["messages"][0]["id"], "<client@example.com>")
+            self.assertEqual(asked[0]["messages"][0]["from"], "client@example.com")
+            done = next(d["result"]["report"] for op, d in calls if op == "complete")
+            self.assertEqual([i["tag"] for i in done["tagged"]], ["Acme"])
+            self.assertEqual([i["reason"] for i in done["skipped"]], ["not tagged: Email not found in Zoho."])
             store.db.close()
 
     def test_cancel_stops_before_the_next_move_and_reports_what_moved(self):
