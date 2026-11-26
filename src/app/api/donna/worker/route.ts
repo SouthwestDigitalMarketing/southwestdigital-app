@@ -111,7 +111,12 @@ export async function POST(request: Request) {
       const address = await withBrandDataTransaction(
         auth.context,
         async (tx) => {
-          const job = await lockLease(tx, auth.context, input.jobId, input.leaseToken);
+          const job = await lockLease(
+            tx,
+            auth.context,
+            input.jobId,
+            input.leaseToken,
+          );
           const box = await tx.donnaMailbox.findUniqueOrThrow({
             where: { id: job.mailboxId },
             select: { address: true },
@@ -185,6 +190,16 @@ export async function POST(request: Request) {
               current: z.string().max(200).nullable().optional(),
               phase: z.string().max(40).optional(),
               startedAt: z.string().max(40).optional(),
+              // What Donna just did with each email, newest first (live bar).
+              recent: z
+                .array(
+                  z.object({
+                    subject: z.string().max(200),
+                    result: z.string().max(200),
+                  }),
+                )
+                .max(10)
+                .optional(),
             })
             .optional()
             .parse(body.progress);
@@ -215,6 +230,7 @@ export async function POST(request: Request) {
                     current: progress.current ?? null,
                     phase: progress.phase ?? "working",
                     startedAt: progress.startedAt ?? prior.startedAt ?? null,
+                    recent: progress.recent ?? [],
                   },
                 },
               },

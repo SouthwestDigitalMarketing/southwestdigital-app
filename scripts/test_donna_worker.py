@@ -420,6 +420,11 @@ class WorkerTests(unittest.TestCase):
             self.assertTrue(all(i["thread"] and i["why"] for i in report["sorted"]))
             rows = dict(store.db.execute("SELECT thread, folder FROM clean_plans WHERE job='j'").fetchall())
             self.assertEqual(sorted(rows.values()), ["", "Newsletter"])
+            # The live bar hears about each email as it is sorted, newest first.
+            recent = [d["progress"]["recent"] for op, d in calls if op == "heartbeat" and d.get("progress", {}).get("recent")]
+            self.assertEqual(len(recent[-1]), 2)
+            self.assertTrue(all(r["subject"] and r["result"] for r in recent[-1]))
+            self.assertTrue(any(r["result"].startswith("Clients") for r in recent[-1]))
             store.db.close()
 
     def test_step_one_includes_mail_tom_put_back_and_decided_mail(self):

@@ -467,6 +467,14 @@ try {
   assert.deepEqual(stepOne.options, { preview: true, buckets: true, limit: 25 });
   await page.goto(base + "/donna");
   await expect(page.getByRole("link", { name: /Step 1: sorting your Inbox/ })).toBeVisible();
+  // The bar shows what Donna just did with each email.
+  await db.donnaMailbox.update({
+    where: { id: box.id },
+    data: { coverage: { ...box.coverage, cleanProgress: { total: 25, done: 1, current: "Example next", phase: "working",
+      recent: [{ subject: "Example progress update", result: "Clients (Rodan Properties): From Rodan Properties, a client in SWapp" }] } } },
+  });
+  await page.reload();
+  await expect(page.getByRole("list", { name: "Just handled" })).toContainText("Example progress update → Clients (Rodan Properties)");
   // Pause/Resume and Stop sit in the top status bar.
   const bar = page.locator("div", { has: page.getByRole("link", { name: /Step 1: sorting Inbox into buckets/ }) }).last();
   await bar.getByRole("button", { name: "Pause" }).click();

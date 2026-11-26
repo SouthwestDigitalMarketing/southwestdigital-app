@@ -271,6 +271,8 @@ export type CleanBarStatus = {
   label: string;
   countLabel: string;
   etaLabel: string | null;
+  /** What Donna just did with each email, newest first. */
+  recent: { subject: string; result: string }[];
 };
 
 export function formatCleanEta(seconds: number): string {
@@ -489,6 +491,22 @@ export function cleanBarStatus(
             : title,
     countLabel: `${done.toLocaleString("en-US")} of ${total.toLocaleString("en-US")}`,
     etaLabel: waiting ? null : etaLabel,
+    recent: Array.isArray(progress.recent)
+      ? progress.recent
+          .flatMap((r) => {
+            if (!r || typeof r !== "object") return [];
+            const { subject, result } = r as Record<string, unknown>;
+            return typeof subject === "string" && typeof result === "string"
+              ? [
+                  {
+                    subject: subject.slice(0, 200),
+                    result: result.slice(0, 200),
+                  },
+                ]
+              : [];
+          })
+          .slice(0, 8)
+      : [],
   };
 }
 

@@ -563,6 +563,12 @@ def bucket_for(assessment, messages, contacts, folders, rules):
     return "Not sure", summary or "Donna could not tell", None, None
 
 
+def note(progress, subject, result):
+    """What Donna just did with one email, newest first, for SWapp's live bar."""
+    progress["recent"] = ([{"subject": str(subject)[:200], "result": str(result)[:200]}]
+                          + list(progress.get("recent") or []))[:8]
+
+
 def inbox_thread(messages):
     return any(str(m.get("folder", "")).upper() == "INBOX" and not m.get("outgoing") for m in messages)
 
@@ -1016,6 +1022,7 @@ def process_job(client, store, work, max_threads, clean_threads=100):
                     report["sorted"].append({"thread": thread, "subject": subject, "from": sender,
                                              "at": (messages[-1] or {}).get("at") or "", "bucket": bucket,
                                              "why": str(why)[:300], "suggest": suggest, "client": client_name})
+                    note(progress, subject, "%s%s: %s" % (bucket, " (%s)" % client_name if client_name else "", why))
                 elif is_clean:
                     dest, reason = filing_plan(assessment, messages, work.get("contacts"), coverage.get("folders"))
                     # An unreadable attachment (often just a logo) only blocks filing when the
@@ -1177,10 +1184,12 @@ def run_plan(client, store, work, plan, pending, report, done_threads, progress,
             if result.get("tagged"):
                 report.setdefault("tagged", []).append({"thread": thread, "subject": subject, "from": sender,
                                                         "tag": tag})
+                note(progress, subject, "Tagged %s" % tag)
             else:
                 reason = "not tagged: %s" % (result.get("error") or "unknown")
         if reason:
             report["skipped"].append({"thread": thread, "subject": subject, "from": sender, "reason": reason})
+            note(progress, subject, "Left in Inbox: %s" % reason)
         elif not folder:
             pass
         else:
@@ -1195,6 +1204,7 @@ def run_plan(client, store, work, plan, pending, report, done_threads, progress,
                 store.db.commit()
                 report["filed"].append({"thread": thread, "folder": folder, "messages": keys,
                                         "subject": subject, "from": sender})
+                note(progress, subject, "Moved to %s" % folder)
                 assessment = json.loads(row["assessment"])
                 packet = packet_for(work, thread, row["fingerprint"] + ":filed", messages, found[2],
                                     assessment, filed_to=folder)
