@@ -257,10 +257,10 @@ function JapanSwitch({ slug }: { slug: string }) {
   const { pending, error, run } = useChange(slug);
   return (
     <div role="status" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-      <p className="font-semibold">This trip still has the old five-place setup.</p>
+      <p className="font-semibold">This trip still has an earlier plan.</p>
       <p className="mt-1">
-        Switch it to Japan: removes the other places and their spots, loads the Japan budget, Visit Japan Web and
-        Japan entry rules, and names it for Fukuoka. Your Fukuoka spots, ticks and anything you added stay.
+        Switch it to the Japan plan (Tokyo, then Kyoto and Osaka): removes the earlier places and their spots, and loads
+        the Japan budget, documents and entry rules. Your ticks, your own budget lines and anything you spent stay.
       </p>
       {error ? <p className="mt-2 text-red-700">{error}</p> : null}
       <button type="button" className={`${primary} mt-3`} disabled={pending} onClick={() => run({ kind: "switchToJapan" })}>

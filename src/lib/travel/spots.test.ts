@@ -15,11 +15,11 @@ describe("suggested spots", () => {
   });
 
   it("skips spots the option already has, ignoring case", () => {
-    const all = suggestionsFor("fukuoka, japan", []);
-    const rest = suggestionsFor("Fukuoka, Japan", ["tenjin", "ENGINEER CAFE"]);
+    const all = suggestionsFor("japan: tokyo, kyoto & osaka", []);
+    const rest = suggestionsFor("Japan: Tokyo, Kyoto & Osaka", ["koenji", "MUSIC BAR RPM"]);
     expect(rest.length).toBe(all.length - 2);
-    expect(rest.map((spot) => spot.name)).not.toContain("Tenjin");
-    expect(suggestionsFor("Mexico City", [])).toEqual([]);
+    expect(rest.map((spot) => spot.name)).not.toContain("Koenji");
+    expect(suggestionsFor("Fukuoka, Japan", [])).toEqual([]);
     expect(suggestionsFor("Atlantis", [])).toEqual([]);
   });
 });

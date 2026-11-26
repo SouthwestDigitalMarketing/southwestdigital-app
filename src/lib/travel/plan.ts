@@ -599,12 +599,20 @@ export function emptyPlan(): TripPlan {
   return parsePlan({});
 }
 
-/** The one trip in focus since Tom's 2026-11-26 "focus on japan". */
-export const JAPAN_DESTINATION = "Fukuoka, Japan";
+/**
+ * The trip in focus (Tom, 2026-11-26): Japan, about 6 weeks in Tokyo then 2 weeks in Kyoto and
+ * Osaka. Earlier plans used these places as options; a trip still carrying them can be switched.
+ */
+export const JAPAN_DESTINATION = "Japan: Tokyo, Kyoto & Osaka";
+export const EARLIER_PLACES = ["Mexico City", "Mérida, Mexico", "Medellín, Colombia", "Fukuoka, Japan", "Chiang Mai, Thailand"];
 
-/** True for a trip that still carries the old five-place setup around a Fukuoka option. */
+function sameName(a: unknown, b: unknown) {
+  return String(a ?? "").trim().toLowerCase() === String(b ?? "").trim().toLowerCase();
+}
+
+/** True for a trip that still carries an earlier plan (the five places, or Fukuoka). */
 export function needsJapanSwitch(plan: TripPlan, destination: string): boolean {
-  const japan = JAPAN_DESTINATION.toLowerCase();
-  const hasJapan = plan.sections.options.some((option) => String(option.place ?? "").trim().toLowerCase() === japan);
-  return hasJapan && (plan.sections.options.length > 1 || destination.trim().toLowerCase() !== japan);
+  const earlier = plan.sections.options.some((option) => EARLIER_PLACES.some((place) => sameName(place, option.place)));
+  const current = plan.sections.options.some((option) => sameName(option.place, JAPAN_DESTINATION));
+  return earlier || (current && !sameName(destination, JAPAN_DESTINATION));
 }

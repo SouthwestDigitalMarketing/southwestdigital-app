@@ -809,6 +809,22 @@ newsletters) into SWapp's Scanner; `/patrol` was removed from every machine the 
 - Open: confirm Zoho empties Spam on its own (oldest Spam mail 31 Oct on 2026-11-24); texts from
   Tom's Pixel (Google Messages for Web, ripley agent Chrome) as a Scanner source — next.
 
+## 2026-11-26 — Travel: the Japan plan is Tokyo, then Kyoto and Osaka (Ummon)
+
+Tom chose Tokyo (about 6 weeks, based in Koenji or Shimokitazawa near jam sessions) then Kyoto
+and Osaka (about 2 weeks) over Fukuoka. `JAPAN_DESTINATION` = "Japan: Tokyo, Kyoto & Osaka" (one
+option, so the big card stays). Starter: Tokyo photo and pin, round trip $1,036 (Air Canada
+sample, Jan 2027), per month $1,362 (blend of Tokyo and Kansai), budget $5,359 (Black Ships
+weightlifting, Carpe Diem BJJ, Shinkansen, shakes), two train legs, two itinerary blocks, a jam
+video idea. 24 suggested spots (Tokyo, Kyoto, Osaka) carry approximate lat/lng (neighbourhood or
+station, from Wikipedia) and two carry photos, so they never depend on lookups. Switch to Japan now
+also moves Fukuoka-plan trips (drops Fukuoka and its spots, Fukuoka budget lines, keeps Tom's own;
+adds legs/itinerary only when empty). Spot lookups use the city at the end of the spot's area;
+Wikipedia is the fallback when OpenStreetMap refuses (it returned HTTP 629 to ripley on
+2026-11-26). `pagePhoto` upgrades an http:// preview image when the https copy exists (HEAD check).
+Research: ripley ~/Documents/travel/2026-11-26-tokyo-kansai-research.md. Checks: tsc, eslint,
+vitest (34 travel tests); preview: Fukuoka trip switched, 24 spots, 20 photos, no errors.
+
 ## 2026-11-26 — Travel: one-time "Switch to Japan" for older trips (Ummon)
 
 Tom's production trip was made from the five-place starter (screenshot 2026-11-26: old title, no

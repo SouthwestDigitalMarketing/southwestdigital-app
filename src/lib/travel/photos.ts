@@ -136,7 +136,14 @@ export async function pagePhoto(link: string): Promise<string | null> {
         const content = /\bcontent\s*=\s*["']([^"']+)["']/i.exec(tag)?.[1];
         if (name !== wanted || !content) continue;
         const image = new URL(content.replace(/&amp;/g, "&"), finalUrl);
-        if (image.protocol === "https:" && isPublicHost(image.hostname)) return image.toString();
+        if (!isPublicHost(image.hostname)) continue;
+        if (image.protocol === "https:") return image.toString();
+        // Many sites still list an http:// preview image; use it only if the https copy is really there.
+        if (image.protocol === "http:") {
+          image.protocol = "https:";
+          const check = await fetch(image, { method: "HEAD", signal: AbortSignal.timeout(3000), cache: "no-store" }).catch(() => null);
+          if (check?.ok && (check.headers.get("content-type") ?? "").startsWith("image/")) return image.toString();
+        }
       }
     }
     return null;

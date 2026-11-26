@@ -35,12 +35,14 @@ describe("switchToJapan", () => {
     expect(needsJapanSwitch(before, "")).toBe(true);
     const after = switchToJapan(before);
 
-    expect(after.sections.options.map((o) => [o.place, o.notes])).toEqual([["Fukuoka, Japan", "Tom's own note"]]);
-    expect(after.sections.spots.map((s) => s.name)).toEqual(["My ramen place"]);
-    expect(after.summary).toMatch(/^Bag, laptop and phone\. Two months in Fukuoka/);
+    expect(after.sections.options.map((o) => o.place)).toEqual(["Japan: Tokyo, Kyoto & Osaka"]);
+    expect(after.sections.spots).toEqual([]); // earlier places' spots, Fukuoka included, go
+    expect(after.summary).toMatch(/^Bag, laptop and phone\. About 6 weeks based in Tokyo/);
+    expect(after.sections.itinerary).toHaveLength(2);
+    expect(after.sections.travel.map((leg) => leg.route)).toContain("Tokyo to Kyoto");
 
     const budget = Object.fromEntries(after.sections.budget.map((line) => [line.item, [line.planned, line.actual]]));
-    expect(budget["Round trip flight"]).toEqual([809, null]);
+    expect(budget["Round trip flight"]).toEqual([1036, null]);
     expect(budget["Travel insurance"]).toEqual([null, 48]); // money already spent is kept as is
     expect(budget["New laptop bag"]).toEqual([60, null]); // his own line
     expect(after.sections.budget.filter((line) => line.item === "Passport renewal")).toHaveLength(1);
@@ -53,7 +55,7 @@ describe("switchToJapan", () => {
     expect(after.sections.entry.find((r) => r.rule === "Remote work on a tourist entry")?.detail).toMatch(/Unclear in Japan/);
     expect(after.sections.needs[0].covered).toBe(true);
     expect(after.sections.home[0].done).toBe(true);
-    expect(needsJapanSwitch(after, "Fukuoka, Japan")).toBe(false);
+    expect(needsJapanSwitch(after, "Japan: Tokyo, Kyoto & Osaka")).toBe(false);
   });
 
   it("is safe to run twice and leaves a written summary alone", () => {
@@ -63,5 +65,22 @@ describe("switchToJapan", () => {
     expect(twice.sections.budget.map((l) => l.item)).toEqual(once.sections.budget.map((l) => l.item));
     expect(twice.sections.documents.map((d) => d.document)).toEqual(once.sections.documents.map((d) => d.document));
     expect(twice.sections.entry.map((r) => r.rule)).toEqual(once.sections.entry.map((r) => r.rule));
+  });
+
+  it("moves a Fukuoka-plan trip onto Tokyo", () => {
+    const fukuoka = { ...emptyPlan(), days: 60, summary: "Bag, laptop and phone. Two months in Fukuoka with good Wi-Fi..." };
+    add(fukuoka, "options", { place: "Fukuoka, Japan" });
+    add(fukuoka, "spots", { name: "CrossFit Hakata", kind: "Gym", option: "Fukuoka, Japan" });
+    add(fukuoka, "budget", { item: "CrossFit Hakata, 2 months", category: "Other", planned: 440 });
+    add(fukuoka, "budget", { item: "Living, 60 days (rent, food, transit)", category: "Lodging", planned: 2800 });
+    add(fukuoka, "itinerary", { title: "My own day", date: "2027-01-20" });
+    expect(needsJapanSwitch(fukuoka, "Fukuoka, Japan")).toBe(true);
+    const after = switchToJapan(fukuoka);
+    expect(after.sections.options.map((o) => o.place)).toEqual(["Japan: Tokyo, Kyoto & Osaka"]);
+    expect(after.sections.spots).toEqual([]);
+    const items = after.sections.budget.map((line) => line.item);
+    expect(items).not.toContain("CrossFit Hakata, 2 months");
+    expect(items).toContain("Black Ships weightlifting, 2 months");
+    expect(after.sections.itinerary.map((day) => day.title)).toEqual(["My own day"]);
   });
 });
