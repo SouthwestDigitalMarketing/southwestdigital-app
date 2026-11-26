@@ -29,7 +29,11 @@ export function DonnaFrame({
         >
           {[
             { label: "Overview", href: "/donna", key: "overview" },
-            { label: "Current job", href: "/donna/current", key: "current" },
+            {
+              label: "Jobs in progress",
+              href: "/donna/current",
+              key: "current",
+            },
             { label: "Completed jobs", href: "/donna/jobs", key: "jobs" },
             { label: "Email", href: "/donna/email", key: "email" },
           ].map((t) => (

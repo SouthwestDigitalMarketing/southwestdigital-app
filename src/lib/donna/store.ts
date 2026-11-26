@@ -11,6 +11,7 @@ import {
   activityCounts,
   cleanIsDo,
   cleanIsSort,
+  jobEnd,
   sortAwaitsTom,
   donnaActionCounts,
   donnaSettings,
@@ -247,16 +248,15 @@ const JOB_ROW = {
 } as const;
 
 /**
- * Completed jobs tab. A stepped job is one row (its sort, with step 3 folded in);
- * a sort still waiting for Tom's choices is on Current job, not here.
+ * Every job, newest first, a stepped job as one row (its sort, with step 3 folded in).
+ * The Jobs in progress and Completed jobs tabs split these by how the job ended.
  */
-export async function loadJobs(context: BrandDataContext, take = 100) {
+async function loadJobRows(context: BrandDataContext, take: number) {
   return withBrandDataTransaction(context, async (tx) => {
     const rows = await tx.donnaJob.findMany({
       where: {
         mailbox: { brandId: context.brandId },
         kind: { in: ["clean", "undo"] },
-        status: { in: ["done", "cancelled"] },
       },
       orderBy: { receivedAt: "desc" },
       take: take * 2,
@@ -281,14 +281,29 @@ export async function loadJobs(context: BrandDataContext, take = 100) {
     );
     return rows
       .filter((job) => !cleanIsDo(job.options))
-      .map((job) => ({ ...job, follow: byPreview.get(job.id) ?? null }))
-      .filter(
-        (job) =>
-          !sortAwaitsTom(job, job.follow) &&
-          !["pending", "leased"].includes(job.follow?.status ?? ""),
-      )
-      .slice(0, take);
+      .map((job) => ({ ...job, follow: byPreview.get(job.id) ?? null }));
   });
+}
+
+export type JobRow = Awaited<ReturnType<typeof loadJobRows>>[number];
+
+/** Completed jobs tab: only jobs that ran to the end (Tom, 2026-11-26). */
+export async function loadJobs(context: BrandDataContext, take = 100) {
+  const rows = await loadJobRows(context, take);
+  return rows
+    .filter((job) => jobEnd(job, job.follow).label === "Finished")
+    .slice(0, take);
+}
+
+/** Jobs in progress tab: running, waiting for Tom, stopped or closed part-way. */
+export async function loadJobsInProgress(
+  context: BrandDataContext,
+  take = 100,
+) {
+  const rows = await loadJobRows(context, take);
+  return rows
+    .filter((job) => jobEnd(job, job.follow).label !== "Finished")
+    .slice(0, take);
 }
 
 /** The newest sort that finished and still waits for Tom to choose (step 2), if any. */

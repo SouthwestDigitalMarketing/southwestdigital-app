@@ -348,7 +348,7 @@ export default async function CleanPage({
   const steps = jobSteps(job, progress);
   return (
     <DonnaFrame
-      active={active || awaiting ? "current" : "jobs"}
+      active={jobEnd(job, job.follow).label === "Finished" ? "jobs" : "current"}
       refreshEvery={active ? 3000 : undefined}
     >
       <p className="text-xs font-medium tabular-nums text-slate-500">

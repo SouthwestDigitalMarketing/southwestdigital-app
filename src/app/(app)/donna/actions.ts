@@ -486,6 +486,36 @@ export async function closeSort(form: FormData) {
   redirect(`/donna/cleans/${encodeURIComponent(id)}`);
 }
 
+/** A job closed at step 2 goes back to Tom's turn, so it can be finished. */
+export async function reopenSort(form: FormData) {
+  const { dataContext, session } = await requireDonna();
+  const id = z.string().min(1).parse(form.get("jobId"));
+  await withBrandDataTransaction(dataContext, async (tx) => {
+    const sort = await tx.donnaJob.findFirst({
+      where: { id, kind: "clean", mailbox: { brandId: dataContext.brandId } },
+    });
+    if (!sort || !cleanIsSort(sort.options) || !cleanIsClosed(sort.options))
+      return;
+    const { closed: _closed, ...options } = sort.options as Record<
+      string,
+      unknown
+    >;
+    void _closed;
+    await tx.donnaJob.update({
+      where: { id: sort.id },
+      data: { options: options as Prisma.InputJsonObject },
+    });
+    await cleanControl(
+      tx,
+      sort.mailboxId,
+      session.user.id,
+      "Inbox job reopened at step 2.",
+    );
+  });
+  refresh();
+  redirect(`/donna/cleans/${encodeURIComponent(id)}`);
+}
+
 /** Stop a clean. A running worker finishes the move in hand, then reports what it filed. */
 export async function cancelClean(form: FormData) {
   const { dataContext, session } = await requireDonna();
