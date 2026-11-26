@@ -464,6 +464,11 @@ try {
   const stepClaim = (await call({ op: "claim" })).body;
   assert.equal(stepClaim.work?.job?.id, stepOne.id, "Steps: Tom's step 1 runs.");
   assert.equal(stepClaim.work.settings.steps, true);
+  assert.equal(
+    (await call({ op: "heartbeat", folders: [{ folder: "INBOX", messages: 61 }] })).status,
+    200,
+    "Heartbeats accept folder counts.",
+  );
   const liveBeat = await call({
     op: "heartbeat",
     ...lease(stepClaim),

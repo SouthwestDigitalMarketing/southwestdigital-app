@@ -251,8 +251,9 @@ export async function POST(request: Request) {
           }
         }
         // Reconciliation is a recovery path and also observes manual Sent activity.
+        // Paused boxes still take folder counts and usage; they get no new work.
         const boxes = await tx.donnaMailbox.findMany({
-          where: { brandId: auth.context.brandId, paused: false },
+          where: { brandId: auth.context.brandId },
         });
         for (const box of boxes) {
           settings = donnaSettings(box.settings);
@@ -264,10 +265,27 @@ export async function POST(request: Request) {
             })
             .optional()
             .safeParse(body.stats);
+          // Folder counts every two minutes (IMAP STATUS) keep the Overview tables current.
+          const folders = z
+            .array(
+              z.object({
+                folder: z.string().min(1).max(200),
+                messages: z.number().int().nonnegative().max(10_000_000),
+              }),
+            )
+            .min(1)
+            .max(200)
+            .optional()
+            .safeParse(body.folders);
+          const freshFolders =
+            box.key === "zoho" && folders.success && folders.data
+              ? folders.data
+              : null;
           if (
             body.listener === "idle-inbox" ||
             body.listener === "offline" ||
-            (stats.success && stats.data)
+            (stats.success && stats.data) ||
+            freshFolders
           ) {
             const coverage =
               box.coverage &&
@@ -290,11 +308,18 @@ export async function POST(request: Request) {
                         worker: { ...stats.data, at: new Date().toISOString() },
                       }
                     : {}),
+                  ...(freshFolders
+                    ? {
+                        folders: freshFolders,
+                        foldersAt: new Date().toISOString(),
+                      }
+                    : {}),
                 },
               },
             });
           }
           if (
+            !box.paused &&
             settings.history &&
             !settings.steps &&
             (!box.lastCheckedAt ||

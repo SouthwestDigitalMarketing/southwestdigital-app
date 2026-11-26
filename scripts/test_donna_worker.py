@@ -528,6 +528,22 @@ class WorkerTests(unittest.TestCase):
             self.assertGreater(len(beats), 4)
             store.db.close()
 
+    def test_folder_counts_go_out_every_two_minutes_from_the_main_thread_only(self):
+        import threading as _threading
+        with patch.object(donna, "folder_counts", return_value=[{"folder": "INBOX", "messages": 61}]) as counts, \
+                patch.dict(donna._folder_counts, {"at": 0.0}):
+            self.assertEqual(donna.due_folder_counts(), [{"folder": "INBOX", "messages": 61}])
+            self.assertIsNone(donna.due_folder_counts())  # not due again yet
+            donna._folder_counts["at"] = 0.0
+            seen = []
+            t = _threading.Thread(target=lambda: seen.append(donna.due_folder_counts()))
+            t.start(); t.join()
+            self.assertEqual(seen, [None])  # never from the lease keeper thread
+            self.assertEqual(counts.call_count, 1)
+        with patch.object(donna, "folder_counts", side_effect=RuntimeError("imap down")), \
+                patch.dict(donna._folder_counts, {"at": 0.0}):
+            self.assertIsNone(donna.due_folder_counts())
+
     def test_cancel_stops_before_the_next_move_and_reports_what_moved(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = self.clean_fixture(tmp)

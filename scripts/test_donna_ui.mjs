@@ -431,6 +431,16 @@ try {
   }
   await expect(page.getByRole("region", { name: "Zoho folders" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Custom folders" })).toBeVisible();
+  await expect(page.getByText("Counts are from Donna’s last job.")).toBeVisible();
+  {
+    const now = await db.donnaMailbox.findUniqueOrThrow({ where: { id: box.id } });
+    await db.donnaMailbox.update({
+      where: { id: box.id },
+      data: { coverage: { ...now.coverage, foldersAt: new Date().toISOString() } },
+    });
+    await page.reload();
+    await expect(page.getByText(/Counts as of .*Donna recounts every 2 minutes/)).toBeVisible();
+  }
   // Start new job (on Current job) starts step 1.
   await page.goto(base + "/donna/current");
   await page.getByRole("button", { name: "Start new job", exact: true }).click();
