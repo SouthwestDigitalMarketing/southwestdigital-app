@@ -357,14 +357,36 @@ export const STEP_FOLDERS = [
 ] as const;
 
 /** Bucket order on the step 1 page: what matters most first. */
+export const JUNK_BUCKET = "Junk";
+export const RESCUE_BUCKET = "Rescue from Spam/Trash";
+
+/**
+ * Bucket order on the Choose table (Tom, 2026-11-26): junk first, then what matters,
+ * folder buckets (not listed) after these, then Not sure, then rescues from Spam/Trash.
+ */
 export const BUCKET_ORDER = [
+  JUNK_BUCKET,
   "Money and legal",
   "Clients",
   "People you know",
   "Sales and leads",
   "Needs a reply or decision",
-  "Not sure",
 ];
+const BUCKET_LAST = ["Not sure", RESCUE_BUCKET];
+
+/** Step 3 actions beyond folders and client tags. */
+export const JUNK_ACTIONS = ["spam-block", "spam", "trash"] as const;
+export const RESCUE_ACTIONS = ["inbox", "inbox-never"] as const;
+export const ACTION_LABELS: Record<string, string> = {
+  leave: "Leave in Inbox",
+  tag: "Tag client",
+  "tag:Archive": "Tag client, then Archive",
+  "spam-block": "Spam + block sender",
+  spam: "Move to Spam",
+  trash: "Move to Trash",
+  inbox: "Back to Inbox",
+  "inbox-never": "Back to Inbox + never block",
+};
 
 export const BUCKET_NOTES: Record<string, string> = {
   "Money and legal":
@@ -374,6 +396,8 @@ export const BUCKET_NOTES: Record<string, string> = {
   "Sales and leads": "Reads like a lead or a sales conversation.",
   "Needs a reply or decision": "Donna thinks you need to answer or decide.",
   "Not sure": "Donna could not tell where this belongs.",
+  [JUNK_BUCKET]: "Clearly unwanted, and nothing protects it.",
+  [RESCUE_BUCKET]: "In Spam or Trash, but may not be junk.",
 };
 
 export type SortedItem = {
@@ -391,6 +415,10 @@ export type SortedItem = {
   typeHint: string;
   /** Donna made this type up for this email because nothing on the list fitted. */
   typeNew: boolean;
+  /** Donna's recommended step 3 action (folder, tag, junk or rescue action). */
+  action: string;
+  /** Spam or Trash, for a rescue. */
+  folder: string | null;
 };
 
 export type Bucket = {
@@ -426,6 +454,8 @@ function sortedItems(value: unknown): SortedItem[] {
         typeGroup: text(raw.typeGroup, 20) || "Other",
         typeHint: text(raw.typeHint, 80),
         typeNew: raw.typeNew === true,
+        action: text(raw.action, 40),
+        folder: text(raw.folder, 40) || null,
       },
     ];
   });
@@ -442,7 +472,9 @@ export function cleanBuckets(raw: unknown): Bucket[] {
     groups.set(item.bucket, [...(groups.get(item.bucket) ?? []), item]);
   const rank = (name: string) => {
     const i = BUCKET_ORDER.indexOf(name);
-    return i === -1 ? BUCKET_ORDER.length : i;
+    if (i !== -1) return i;
+    const last = BUCKET_LAST.indexOf(name);
+    return last === -1 ? BUCKET_ORDER.length : BUCKET_ORDER.length + 1 + last;
   };
   return [...groups.entries()]
     .map(([name, list]) => ({
@@ -568,6 +600,8 @@ export type CleanReportItem = {
   folder?: string;
   /** Zoho client tag added in step 2. */
   tag?: string;
+  /** Moved to Spam and the sender added to the always-spam list. */
+  blocked?: boolean;
   waitingOn?: string;
   nextAction?: string;
   reason?: string;
@@ -582,6 +616,11 @@ export type CleanReport = {
   remaining: number;
   filed: CleanReportItem[];
   tagged: CleanReportItem[];
+  rescued: CleanReportItem[];
+  /** Step 1: what emptying would delete. Step 3: what it deleted. */
+  empty: Record<string, number> | null;
+  emptied: Record<string, number> | null;
+  emptyError: string | null;
   waiting: CleanReportItem[];
   needsYou: CleanReportItem[];
   skipped: CleanReportItem[];
@@ -614,6 +653,7 @@ function cleanItems(value: unknown): CleanReportItem[] {
         folder:
           typeof raw.folder === "string" ? raw.folder.slice(0, 80) : undefined,
         tag: typeof raw.tag === "string" ? raw.tag.slice(0, 80) : undefined,
+        blocked: raw.blocked === true || undefined,
         waitingOn:
           typeof raw.waitingOn === "string"
             ? raw.waitingOn.slice(0, 200)
@@ -627,6 +667,15 @@ function cleanItems(value: unknown): CleanReportItem[] {
       },
     ];
   });
+}
+
+function folderCounts(value: unknown): Record<string, number> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>))
+    if (typeof v === "number" && Number.isFinite(v))
+      out[k.slice(0, 40)] = Math.max(0, Math.trunc(v));
+  return Object.keys(out).length ? out : null;
 }
 
 export function mailboxCleanReport(value: unknown): CleanReport | null {
@@ -656,6 +705,11 @@ export function cleanReport(raw: unknown): CleanReport | null {
     remaining,
     filed: cleanItems(c.filed).slice(0, 200),
     tagged: cleanItems(c.tagged).slice(0, 200),
+    rescued: cleanItems(c.rescued).slice(0, 200),
+    empty: folderCounts(c.empty),
+    emptied: folderCounts(c.emptied),
+    emptyError:
+      typeof c.emptyError === "string" ? c.emptyError.slice(0, 200) : null,
     waiting: cleanItems(c.waiting).slice(0, 50),
     needsYou: cleanItems(c.needsYou).slice(0, 50),
     skipped: cleanItems(c.skipped).slice(0, 50),
@@ -925,6 +979,10 @@ export function jobOutcome(
       ? `moved ${report.filed.filter((i) => !i.undone).length}`
       : "",
     report.tagged.length ? `tagged ${report.tagged.length}` : "",
+    report.rescued.length ? `rescued ${report.rescued.length}` : "",
+    report.emptied
+      ? `emptied ${Object.values(report.emptied).reduce((a, b) => a + b, 0)}`
+      : "",
     report.skipped.length ? `left ${report.skipped.length}` : "",
     report.preview ? `would file ${report.filed.length}` : "",
   ].filter(Boolean);

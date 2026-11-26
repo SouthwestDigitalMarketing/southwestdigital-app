@@ -149,6 +149,30 @@ function PreviewPlan({
   );
 }
 
+/** What step 3 permanently deleted from Spam and Trash, with Tom's approval. */
+function Emptied({
+  report,
+}: {
+  report: NonNullable<ReturnType<typeof cleanReport>>;
+}) {
+  if (report.emptyError)
+    return (
+      <p role="alert" className="text-sm text-rose-700">
+        Emptying Spam and Trash stopped: {report.emptyError}
+      </p>
+    );
+  if (!report.emptied) return null;
+  return (
+    <p className="text-sm text-slate-700">
+      Emptied with your approval:{" "}
+      {Object.entries(report.emptied)
+        .map(([folder, n]) => `${folder} ${n.toLocaleString("en-US")}`)
+        .join(", ")}
+      .
+    </p>
+  );
+}
+
 function FiledWithUndo({
   jobId,
   items,
@@ -191,7 +215,7 @@ function FiledWithUndo({
                     ? "Moving back to Inbox…"
                     : item.undoError
                       ? `${item.folder} · Undo failed: ${item.undoError}`
-                      : item.folder
+                      : `${item.folder}${item.blocked ? " · sender blocked" : ""}`
               }
             />
             {item.thread && !item.undone && !item.undoPending && !paused ? (
@@ -364,6 +388,7 @@ export default async function CleanPage({
                   : null
               }
               action={applyBuckets}
+              empty={report?.empty ?? null}
             />
             <form action={closeSort}>
               <input type="hidden" name="jobId" value={job.id} />
@@ -390,6 +415,12 @@ export default async function CleanPage({
             items={report.tagged}
             extra={(item) => item.tag}
           />
+          <Items
+            title="Back in Inbox from Spam/Trash"
+            items={report.rescued}
+            extra={(item) => item.folder}
+          />
+          <Emptied report={report} />
           <Items
             title="Left in Inbox"
             items={report.skipped}
@@ -437,6 +468,12 @@ export default async function CleanPage({
             items={report.tagged}
             extra={(item) => item.tag}
           />
+          <Items
+            title="Back in Inbox from Spam/Trash"
+            items={report.rescued}
+            extra={(item) => item.folder}
+          />
+          <Emptied report={report} />
           <Items
             title="Waiting"
             items={report.waiting}

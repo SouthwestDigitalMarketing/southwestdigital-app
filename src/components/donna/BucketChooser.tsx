@@ -2,10 +2,31 @@
 
 import { useRef, useState } from "react";
 import type { Bucket, SortedItem } from "@/lib/donna/domain";
+
+// Mirrors JUNK/RESCUE in domain.ts (kept here so this client file imports no server code).
+const RESCUE = "Rescue from Spam/Trash";
+const LABELS: Record<string, string> = {
+  leave: "Leave in Inbox",
+  tag: "Tag client",
+  "tag:Archive": "Tag client, then Archive",
+  "spam-block": "Spam + block sender",
+  spam: "Move to Spam",
+  trash: "Move to Trash",
+  inbox: "Back to Inbox",
+  "inbox-never": "Back to Inbox + never block",
+};
+const SUMMARY: Record<string, string> = {
+  "spam-block": "spam + block the sender",
+  spam: "move to Spam",
+  trash: "move to Trash",
+  inbox: "put back in Inbox",
+  "inbox-never": "put back in Inbox and never block",
+};
 import { EmailCells, EmailHeads, rowTint, td, th } from "./sortTable";
 
-/** Donna's pick for one email: her suggested folder, a client tag, or leave it. */
+/** Donna's pick for one email (from step 1), else her folder, a client tag, or leave. */
 function recommended(item: SortedItem) {
+  if (item.action) return item.action;
   if (item.suggest) return item.suggest;
   if (item.client) return "tag";
   return "leave";
@@ -16,28 +37,39 @@ function Options({
   folders,
   donna,
 }: {
-  item: { client: string | null };
+  item: { client: string | null; bucket: string };
   folders: readonly string[];
   donna?: string;
 }) {
   const mark = (value: string) => (value === donna ? " (Donna)" : "");
+  const option = (value: string, label = LABELS[value]) => (
+    <option key={value} value={value}>
+      {label}
+      {mark(value)}
+    </option>
+  );
+  // Mail found in Spam or Trash: put it back, or leave it to be emptied.
+  if (item.bucket === RESCUE)
+    return (
+      <>
+        {option("inbox")}
+        {option("inbox-never")}
+        {option("leave", "Leave it there")}
+      </>
+    );
   return (
     <>
-      <option value="leave">Leave in Inbox{mark("leave")}</option>
+      {option("leave")}
       {item.client ? (
         <>
-          <option value="tag">Tag client{mark("tag")}</option>
-          <option value="tag:Archive">
-            Tag client, then Archive{mark("tag:Archive")}
-          </option>
+          {option("tag")}
+          {option("tag:Archive")}
         </>
       ) : null}
-      {folders.map((f) => (
-        <option key={f} value={f}>
-          Move to {f}
-          {mark(f)}
-        </option>
-      ))}
+      {option("spam-block")}
+      {option("spam")}
+      {option("trash")}
+      {folders.map((f) => option(f, `Move to ${f}`))}
     </>
   );
 }
@@ -56,9 +88,12 @@ export function BucketChooser({
   folders,
   blocked,
   action,
+  empty,
 }: {
   jobId: string;
   buckets: Bucket[];
+  /** What step 3 would permanently delete from Spam and Trash, counted in step 1. */
+  empty: Record<string, number> | null;
   /** STEP_FOLDERS, passed in so this client file does not import server code. */
   folders: readonly string[];
   blocked: string | null;
@@ -78,6 +113,10 @@ export function BucketChooser({
     for (const item of all) {
       if (!ticked.has(item.thread)) continue;
       const choice = String(data.get(`choice-${item.thread}`) ?? "leave");
+      if (SUMMARY[choice]) {
+        add(SUMMARY[choice]);
+        continue;
+      }
       const tagging = choice === "tag" || choice.startsWith("tag:");
       const folder = tagging
         ? choice.slice(4)
@@ -132,6 +171,10 @@ export function BucketChooser({
   }
 
   const doing = summary.reduce((n, [, c]) => n + c, 0);
+  const [emptyOn, setEmptyOn] = useState(false);
+  const toDelete = Object.entries(empty ?? {})
+    .map(([folder, n]) => `${folder} (${n.toLocaleString("en-US")})`)
+    .join(" and ");
   return (
     <form ref={form} action={action} onChange={recount} className="space-y-3">
       <input type="hidden" name="jobId" value={jobId} />
@@ -186,6 +229,7 @@ export function BucketChooser({
                             client: bucket.items.some((i) => i.client)
                               ? "yes"
                               : null,
+                            bucket: bucket.name,
                           }}
                           folders={folders}
                         />
@@ -240,23 +284,42 @@ export function BucketChooser({
           })}
         </table>
       </div>
-      <div className="sticky bottom-0 flex flex-wrap items-center gap-3 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm shadow-sm">
-        <span className="min-w-0 flex-1 text-slate-700">
-          {doing
-            ? `Step 3 will ${summary.map(([what, n]) => `${what}: ${n}`).join("; ")}. Unticked emails stay as they are.`
-            : "Nothing ticked yet. Tick the emails (or a whole bucket) to do in step 3."}
-        </span>
-        {blocked ? (
-          <span className="text-xs text-amber-700">{blocked}</span>
-        ) : (
-          <button
-            type="submit"
-            disabled={!doing}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-white disabled:opacity-40"
-          >
-            Start step 3
-          </button>
-        )}
+      <div className="sticky bottom-0 space-y-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm shadow-sm">
+        {toDelete ? (
+          // Emptying is the one step that cannot be undone: it needs Tom's own tick.
+          <label className="flex items-start gap-2 rounded-lg bg-rose-50 px-2 py-1.5 text-rose-900">
+            <input
+              type="checkbox"
+              name="empty"
+              checked={emptyOn}
+              onChange={(e) => setEmptyOn(e.target.checked)}
+              className="mt-0.5 h-3.5 w-3.5"
+            />
+            <span>
+              <span className="font-semibold">Approve:</span> then permanently
+              delete everything in {toDelete}, plus anything this job moves
+              there. Rescued emails go back first. This cannot be undone.
+            </span>
+          </label>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="min-w-0 flex-1 text-slate-700">
+            {doing || emptyOn
+              ? `Step 3 will ${[...summary.map(([what, n]) => `${what}: ${n}`), ...(emptyOn ? ["then empty Spam and Trash"] : [])].join("; ")}. Unticked emails stay as they are.`
+              : "Nothing ticked yet. Tick the emails (or a whole bucket) to do in step 3."}
+          </span>
+          {blocked ? (
+            <span className="text-xs text-amber-700">{blocked}</span>
+          ) : (
+            <button
+              type="submit"
+              disabled={!doing && !emptyOn}
+              className="rounded-lg bg-slate-900 px-4 py-2 text-white disabled:opacity-40"
+            >
+              Start step 3
+            </button>
+          )}
+        </div>
       </div>
     </form>
   );
