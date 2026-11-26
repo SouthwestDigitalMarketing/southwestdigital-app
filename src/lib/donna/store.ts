@@ -67,6 +67,7 @@ export async function loadDonnaAction(context: BrandDataContext) {
       return {
         mailboxId: null as string | null,
         cleaning: false,
+        cleanJobId: null as string | null,
         counts: donnaActionCounts({}),
       };
     const cleaning = await tx.donnaJob.findFirst({
@@ -80,6 +81,7 @@ export async function loadDonnaAction(context: BrandDataContext) {
     return {
       mailboxId: mailbox.id,
       cleaning: Boolean(cleaning),
+      cleanJobId: cleaning?.id ?? null,
       counts: donnaActionCounts(mailbox.coverage),
     };
   });
@@ -94,7 +96,11 @@ export async function loadActiveClean(context: BrandDataContext) {
         status: { in: ["pending", "leased"] },
       },
       orderBy: { receivedAt: "desc" },
-      select: { id: true, status: true },
+      select: {
+        id: true,
+        status: true,
+        mailbox: { select: { coverage: true } },
+      },
     }),
   );
 }

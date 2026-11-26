@@ -18,11 +18,14 @@ client/sales mail. The broader build sequence is in
   notifications, Empty trash, Clean drafts, and Do it all, with folder
   counts; only Clean inbox is enabled. Tapping Clean inbox closes the modal
   and shows a light **Cleaning inbox** bar at the top of every app screen
-  until that job finishes. Tapping the bar opens `/donna/cleans/[id]`.
+  until that job finishes: what it is on, n of total, a progress track, and
+  an ETA once the worker has started. Tapping **Cleaning…** in the modal
+  closes it. Tapping the bar opens `/donna/cleans/[id]`.
 - `/donna/email/work`: two requests per page; Needs you, Working, Waiting and
   Handled are filters here, not top-level Donna tabs.
-- `/donna/cleans/[id]`: one Inbox clean job, in progress or the filed /
-  waiting / needs-you report when it has finished.
+- `/donna/cleans/[id]`: one Inbox clean job. While it runs: current item,
+  n of total, progress, and ETA. After it finishes: filed / waiting /
+  needs-you report.
 - `/donna/requests/[id]`: Summary, Reply, Source and Activity views; separate
   direction and follow-up/completion views. Long content uses bounded readers.
 - `/donna/settings`: Mailbox, Connection, Coverage and Rules, one view at a time.

@@ -17,10 +17,12 @@ function Count({ value }: { value: number }) {
 export function DonnaAction({
   mailboxId,
   cleaning,
+  cleanJobId,
   counts,
 }: {
   mailboxId: string;
   cleaning: boolean;
+  cleanJobId: string | null;
   counts: DonnaActionCounts;
 }) {
   const router = useRouter();
@@ -64,10 +66,19 @@ export function DonnaAction({
             <div className="mt-2 space-y-2">
               <button
                 type="button"
-                disabled={cleaningInbox}
                 onClick={() => {
                   setError(null);
                   setOpen(false);
+                  if (cleaning && !pending) {
+                    if (cleanJobId) {
+                      window.dispatchEvent(
+                        new CustomEvent("swapp:donna-clean", {
+                          detail: { jobId: cleanJobId, total: counts.inbox },
+                        }),
+                      );
+                    }
+                    return;
+                  }
                   const data = new FormData();
                   data.set("mailboxId", mailboxId);
                   startTransition(async () => {
@@ -80,14 +91,17 @@ export function DonnaAction({
                     if (result.jobId) {
                       window.dispatchEvent(
                         new CustomEvent("swapp:donna-clean", {
-                          detail: { jobId: result.jobId },
+                          detail: {
+                            jobId: result.jobId,
+                            total: counts.inbox,
+                          },
                         }),
                       );
                     }
                     router.refresh();
                   });
                 }}
-                className="flex w-full items-center justify-between gap-3 rounded-lg bg-slate-900 px-4 py-3 text-sm text-white disabled:opacity-60"
+                className="flex w-full items-center justify-between gap-3 rounded-lg bg-slate-900 px-4 py-3 text-sm text-white"
               >
                 <span>{cleaningInbox ? "Cleaning…" : "Clean inbox"}</span>
                 <Count value={counts.inbox} />

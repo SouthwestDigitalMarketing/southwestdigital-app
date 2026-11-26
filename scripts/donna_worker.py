@@ -675,9 +675,13 @@ def process_job(client, store, work, max_threads):
     job = work["job"]
     last_heartbeat = [0]
 
-    def heartbeat():
-        if time.monotonic() - last_heartbeat[0] > 20:
-            client.call("heartbeat", jobId=job["id"], leaseToken=job["leaseToken"], listener=listener_state(client))
+    progress = {"total": 0, "done": 0, "current": None, "phase": "queued", "startedAt": stamp()}
+
+    def heartbeat(force=False):
+        if force or time.monotonic() - last_heartbeat[0] > 20:
+            payload = dict(progress) if job.get("kind") == "clean" and progress.get("total") else None
+            client.call("heartbeat", jobId=job["id"], leaseToken=job["leaseToken"],
+                        listener=listener_state(client), **({"progress": payload} if payload is not None else {}))
             last_heartbeat[0] = time.monotonic()
 
     # Keep the lease alive during model calls. A failed lease check is surfaced.
@@ -687,7 +691,7 @@ def process_job(client, store, work, max_threads):
     def lease_keeper():
         while not stop.wait(25):
             try:
-                client.call("heartbeat", jobId=job["id"], leaseToken=job["leaseToken"], listener=listener_state(client))
+                heartbeat(True)
             except Exception as error:
                 lease_errors.append(error)
                 return
@@ -700,6 +704,13 @@ def process_job(client, store, work, max_threads):
         pending = store.threads(work["mailbox"]["id"], work["requests"], work.get("contacts"))
         if is_clean:
             pending = [item for item in pending if inbox_thread(item[2])]
+            inbox_n = 0
+            for folder in coverage.get("folders") or []:
+                if isinstance(folder, dict) and str(folder.get("folder", "")).upper() == "INBOX":
+                    inbox_n = int(folder.get("messages") or 0)
+                    break
+            progress.update(total=max(inbox_n, len(pending), 1), phase="working")
+            heartbeat(True)
         reviewed = 0
         failed = 0
         attempted = 0
@@ -717,6 +728,8 @@ def process_job(client, store, work, max_threads):
                 subject = next((m.get("subject") or "Email" for m in messages if not m.get("outgoing")), "Email")
                 sender = next((m.get("from") or "" for m in messages if not m.get("outgoing")), "")
                 if is_clean:
+                    progress.update(current=str(subject)[:200], phase="reading")
+                    heartbeat(True)
                     has_gaps = any(a.get("gap") for m in messages for a in m.get("attachments") or [])
                     dest, reason = (None, "attachment review needed") if has_gaps else filing_plan(
                         assessment, messages, work.get("contacts"), coverage.get("folders"))
@@ -753,6 +766,9 @@ def process_job(client, store, work, max_threads):
             store.db.execute("DELETE FROM review_failures WHERE mailbox=? AND thread=?", (work["mailbox"]["id"], thread))
             store.db.commit()
             reviewed += 1
+            if is_clean:
+                progress.update(done=reviewed, phase="working")
+                heartbeat(True)
         deferred = getattr(store, "deferred", 0) + failed
         ready = len(pending) - attempted
         report["reviewed"] = reviewed

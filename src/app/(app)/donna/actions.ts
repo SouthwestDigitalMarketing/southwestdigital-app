@@ -7,7 +7,7 @@ import { Prisma } from "@prisma/client";
 import { requireDonna } from "@/lib/donna/access";
 import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { enqueue } from "@/lib/donna/store";
-import { draftSchema } from "@/lib/donna/domain";
+import { donnaActionCounts, draftSchema } from "@/lib/donna/domain";
 import { firmInstant } from "@/lib/operations/schedule";
 
 function refresh() {
@@ -106,6 +106,29 @@ export async function startCleanInbox(
       });
       const job =
         existing ?? (await enqueue(tx, box.id, "clean", `clean:${randomUUID()}`));
+      if (!existing) {
+        const coverage =
+          box.coverage &&
+          typeof box.coverage === "object" &&
+          !Array.isArray(box.coverage)
+            ? (box.coverage as Record<string, unknown>)
+            : {};
+        await tx.donnaMailbox.update({
+          where: { id: box.id },
+          data: {
+            coverage: {
+              ...coverage,
+              cleanProgress: {
+                total: donnaActionCounts(box.coverage).inbox,
+                done: 0,
+                current: null,
+                phase: "queued",
+                startedAt: new Date().toISOString(),
+              },
+            },
+          },
+        });
+      }
       await tx.donnaActivity.create({
         data: {
           mailboxId: box.id,

@@ -337,10 +337,19 @@ try {
   await expect(
     page.getByRole("link", { name: /Cleaning inbox/ }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: /Cleaning inbox/ }),
+  ).toContainText("0 of 73");
+  await expect(
+    page.getByRole("link", { name: /Cleaning inbox/ }),
+  ).toContainText("Waiting to start");
   await page.goto(base + "/dashboard");
   await expect(
     page.getByRole("link", { name: /Cleaning inbox/ }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: /Cleaning inbox/ }),
+  ).toContainText("0 of 73");
   await page.getByRole("link", { name: /Cleaning inbox/ }).click();
   await expect(page).toHaveURL(base + "/donna/cleans/" + cleanJob.id);
   await expect(
@@ -350,7 +359,12 @@ try {
   await page.getByRole("button", { name: "Donna", exact: true }).click();
   await expect(
     page.getByRole("dialog").getByRole("button", { name: /Cleaning/ }),
-  ).toBeDisabled();
+  ).toBeEnabled();
+  await page.getByRole("dialog").getByRole("button", { name: /Cleaning/ }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: /Cleaning inbox/ }),
+  ).toBeVisible();
   await page.goto(base + "/donna/requests/" + request.id + "?section=reply");
   await page
     .getByLabel("Edit reply", { exact: true })
