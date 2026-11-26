@@ -583,7 +583,7 @@ try {
   });
   // Completed jobs: one row per job, step 3 folded in.
   await page.goto(base + "/donna/jobs");
-  const jobs = page.getByRole("list", { name: "Completed jobs" });
+  const jobs = page.getByRole("table", { name: "Completed jobs" });
   await expect(jobs).toContainText("Inbox job: sort, choose, do");
   await expect(jobs).toContainText("6 sorted into 5 buckets · moved 1 · tagged 1");
   await expect(jobs).not.toContainText("Step 3: do what you chose");
@@ -601,7 +601,7 @@ try {
   await page.getByRole("button", { name: "Close this job without changing anything" }).click();
   await expect(page.getByRole("list", { name: "Job steps" })).toContainText("Closed, nothing changed");
   await page.goto(base + "/donna/jobs");
-  await expect(page.getByRole("list", { name: "Completed jobs" })).toContainText("1 sorted into 1 bucket · closed, nothing changed");
+  await expect(page.getByRole("table", { name: "Completed jobs" })).toContainText("1 sorted into 1 bucket · closed, nothing changed");
   await page.goto(base + "/donna/current");
   await expect(page.getByText("No job is running.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Start new job", exact: true })).toBeVisible();
