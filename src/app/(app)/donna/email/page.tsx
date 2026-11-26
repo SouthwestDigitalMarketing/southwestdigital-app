@@ -5,6 +5,7 @@ import {
   mailboxCleanReport,
   mailboxFolderTables,
   mailboxHealth,
+  deferredRetryNote,
   type MailboxFolder,
 } from "@/lib/donna/domain";
 import { DonnaFrame, shortTime } from "../DonnaFrame";
@@ -68,6 +69,7 @@ export default async function EmailPage() {
   );
   const health = m ? mailboxHealth(m) : "Not connected";
   const clean = mailboxCleanReport(m?.coverage);
+  const retry = deferredRetryNote(m?.coverage);
   return (
     <DonnaFrame active="email">
       <div className="flex items-center justify-between gap-3">
@@ -135,6 +137,8 @@ export default async function EmailPage() {
           <p role="alert" className="line-clamp-2 text-xs text-rose-700">
             {m.lastError}
           </p>
+        ) : retry ? (
+          <p className="text-xs text-slate-500">{retry}</p>
         ) : null}
         {clean ? (
           <div aria-label="Last clean">

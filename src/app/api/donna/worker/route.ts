@@ -217,10 +217,7 @@ export async function POST(request: Request) {
             data: {
               lastCheckedAt: new Date(),
               heartbeatAt: new Date(),
-              lastError:
-                Number(coverage.deferred_threads ?? 0) > 0
-                  ? `${Number(coverage.deferred_threads)} conversations could not be assessed; retries are queued.`
-                  : null,
+              lastError: null,
               coverage:
                 coverage as import("@prisma/client").Prisma.InputJsonObject,
             },

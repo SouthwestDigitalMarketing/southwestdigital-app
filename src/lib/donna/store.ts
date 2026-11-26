@@ -115,7 +115,7 @@ export async function loadClean(context: BrandDataContext, id: string) {
       },
       include: {
         mailbox: {
-          select: { address: true, coverage: true, lastError: true },
+          select: { address: true, coverage: true },
         },
       },
     }),

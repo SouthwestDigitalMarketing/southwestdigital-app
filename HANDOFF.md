@@ -1,9 +1,16 @@
 # SWapp handoff
+## 2026-11-25 — Clean page must not show leftover mailbox lastError
+
+- Inbox clean shows `job.error` only. A successful pass no longer writes
+  “conversations could not be assessed” into mailbox `lastError`. Those
+  retries already queue a backlog job. Email status shows a quiet
+  “will be tried again” note from `deferred_threads`.
+
 ## 2026-11-25 — Richer Cleaning inbox bar (Tom: progress, n of total, ETA)
 
 - The app-wide bar now matches the production-bar shape: current work, n of
   total, a progress track, percent, and an ETA once the worker has leased the
-  job. Queued jobs say **Waiting to start** (amber). Tapping **Cleaning…** in
+  job. Queued jobs say **Waiting for Donna** (amber). Tapping **Cleaning…** in
   the Donna modal closes it so the bar is visible.
 - Worker heartbeats write `coverage.cleanProgress`. No standing worker; a
   live Clean still files Zoho Inbox mail on `--once`. Preview

@@ -342,7 +342,7 @@ try {
   ).toContainText("0 of 73");
   await expect(
     page.getByRole("link", { name: /Cleaning inbox/ }),
-  ).toContainText("Waiting to start");
+  ).toContainText("Waiting for Donna");
   await page.goto(base + "/dashboard");
   await expect(
     page.getByRole("link", { name: /Cleaning inbox/ }),
