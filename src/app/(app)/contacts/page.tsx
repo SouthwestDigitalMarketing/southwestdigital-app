@@ -150,19 +150,6 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
         <h2 className="text-lg font-semibold text-slate-900">Contact directory</h2>
       </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {[
-          { label: "Showing", value: total },
-          { label: "Tags", value: tags.length },
-          { label: "Page", value: `${safePage} / ${pageCount}` },
-        ].map(({ label, value }) => (
-          <div key={label} className="rounded-xl border border-slate-200 bg-white p-5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-            <p className="mt-1 text-3xl font-semibold text-slate-900">{value}</p>
-          </div>
-        ))}
-      </div>
-
       <ContactsFilters
         q={q}
         status={status}

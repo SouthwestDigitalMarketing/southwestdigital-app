@@ -1,4 +1,12 @@
 # SWapp handoff
+## 2026-11-26 — Contacts directory: drop the three stat cards (Ummon)
+
+Tom asked to remove the Showing / Tags / Page cards at the top of `/contacts`. Filters,
+tag chips, Add contact / Import CSV / Tags, the list, and Previous/Next paging stay.
+Branch `ummon/contacts-cards`, worktree `~/projects/worktrees/swapp-contacts`. No schema,
+AppShell, travel, ads, scanner, or showrunner changes. Group-message work is a proposal
+only until Tom says yes.
+
 ## 2026-11-26 — Client tags in Zoho (Tom: "just get a client tag")
 
 Branch `donna/client-tags`. Step 2 can tag client emails with the client's name in Zoho,
