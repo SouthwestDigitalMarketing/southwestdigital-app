@@ -453,14 +453,16 @@ try {
   });
   await db.donnaMailbox.update({ where: { id: box.id }, data: { settings: { steps: true } } });
   await page.goto(base + "/donna");
-  await expect(page.getByRole("heading", { name: "Step 1: Sort Inbox into buckets" })).toBeVisible();
+  // One button on the page; everything else waits under More.
   await expect(page.getByRole("button", { name: "Clean inbox now" })).toHaveCount(0);
-  await page.getByLabel("Emails to sort").selectOption("10");
-  await page.getByRole("button", { name: "Start step 1" }).click();
+  await expect(page.getByRole("button", { name: "Pause Donna" })).toBeHidden();
+  await page.getByRole("button", { name: "Sort my Inbox" }).click();
   const pendingClean = { where: { mailboxId: box.id, kind: "clean", status: "pending" } };
   await expect.poll(async () => Boolean(await db.donnaJob.findFirst(pendingClean))).toBe(true);
   const stepOne = await db.donnaJob.findFirstOrThrow(pendingClean);
-  assert.deepEqual(stepOne.options, { preview: true, buckets: true, limit: 10 });
+  assert.deepEqual(stepOne.options, { preview: true, buckets: true, limit: 25 });
+  await page.goto(base + "/donna");
+  await expect(page.getByRole("link", { name: /Sorting your Inbox/ })).toBeVisible();
   const [notice, promoA, promoB, rodan] = ["c3".repeat(32), "d4".repeat(32), "e5".repeat(32), "f6".repeat(32)];
   await db.donnaJob.update({
     where: { id: stepOne.id },
@@ -480,7 +482,7 @@ try {
     },
   });
   await page.goto(base + "/donna");
-  await page.getByRole("link", { name: /Step 1 done: 4 emails in 3 buckets/ }).click();
+  await page.getByRole("link", { name: /Choose what to do with 4 emails/ }).click();
   await expect(page.getByRole("heading", { name: "Step 1: Inbox sorted into buckets" })).toBeVisible();
   await expect(page.getByText("Why: Money or legal trouble")).toBeVisible();
   await expect(page.getByRole("button", { name: "Start step 2" })).toBeDisabled();

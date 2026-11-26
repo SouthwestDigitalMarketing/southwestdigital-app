@@ -79,96 +79,59 @@ function Steps({
       ? (cleanReport(step.result)?.filed.filter((i) => !i.undone).length ?? 0)
       : 0;
   const waitingForTom = step && sort && step.status === "done";
+  const big =
+    "block w-full rounded-xl bg-slate-900 px-6 py-5 text-center text-lg font-semibold text-white disabled:opacity-40";
   return (
-    <section
-      aria-label="Steps"
-      className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 text-sm"
-    >
-      <div>
-        <h2 className="font-semibold">Step 1: Sort Inbox into buckets</h2>
-        <p className="text-slate-600">
-          Donna reads your Inbox emails and puts each one in a bucket, with a
-          one-line reason. Nothing moves, nothing is marked read, nothing is
-          sent. Then you choose what to do with each bucket.
-        </p>
-      </div>
+    <section aria-label="Steps" className="space-y-2">
       {running ? (
-        <div className="space-y-2 rounded-lg bg-slate-50 p-3">
-          <p>
-            <Link href={href} className="font-medium underline">
-              {sort ? "Step 1 is running" : "Step 2 is running"}
-            </Link>
-            {progress ? (
-              <span className="text-slate-500"> · {progress}</span>
-            ) : null}
-          </p>
+        <>
+          <Link href={href} className={big}>
+            {sort ? "Sorting your Inbox…" : "Doing what you chose…"}
+            {progress ? ` ${progress}` : ""}
+          </Link>
           {paused || offline ? (
-            <p className="text-xs text-amber-700">
+            <p className="text-center text-sm text-amber-700">
               {paused
                 ? "Donna is paused, so this waits until you resume her."
                 : "Donna’s worker on Ripley is not running, so this has not started."}
             </p>
           ) : null}
-          <form action={cancelClean}>
+          <form action={cancelClean} className="text-center">
             <input type="hidden" name="jobId" value={step.id} />
-            <button type="submit" className={button}>
-              {sort ? "Stop step 1" : "Stop step 2"}
+            <button type="submit" className="text-sm underline">
+              Stop
             </button>
           </form>
-        </div>
-      ) : (
-        <>
-          {waitingForTom ? (
-            <Link
-              href={href}
-              className="block rounded-lg bg-slate-900 px-4 py-2.5 text-center text-white"
-            >
-              Step 1 done: {sorted} emails in {buckets.length} buckets. Choose
-              what to do
-            </Link>
-          ) : step && !sort && step.status === "done" ? (
-            <p>
-              Last step 2 moved {moved}.{" "}
-              <Link href={href} className="underline">
-                See the report and Undo
-              </Link>
-            </p>
-          ) : step?.status === "cancelled" ? (
-            <p className="text-slate-500">
-              The last step was stopped.{" "}
-              <Link href={href} className="underline">
-                See what it did
-              </Link>
-            </p>
-          ) : null}
-          <form
-            action={cleanInboxNow}
-            className="flex flex-wrap items-center gap-2"
-          >
-            <input type="hidden" name="mailboxId" value={mailboxId} />
-            <label className="flex items-center gap-2">
-              <span>Emails to sort</span>
-              <select
-                name="limit"
-                defaultValue="25"
-                className="rounded-md border border-slate-200 px-2 py-1"
-              >
-                {[10, 25, 50, 100].map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button type="submit" disabled={paused} className={button}>
-              {waitingForTom ? "Start step 1 again" : "Start step 1"}
-            </button>
-          </form>
-          <p className="text-xs text-slate-500">
-            Each email uses one review. Newest and client mail are read first.
-          </p>
         </>
+      ) : waitingForTom ? (
+        <Link href={href} className={big}>
+          Choose what to do with {sorted} emails
+        </Link>
+      ) : (
+        <form action={cleanInboxNow}>
+          <input type="hidden" name="mailboxId" value={mailboxId} />
+          <input type="hidden" name="limit" value="25" />
+          <button type="submit" disabled={paused} className={big}>
+            Sort my Inbox
+          </button>
+        </form>
       )}
+      <p className="text-center text-sm text-slate-500">
+        {running
+          ? sort
+            ? "Donna is putting emails in buckets. Nothing moves."
+            : "Moving only what you chose."
+          : waitingForTom
+            ? `${buckets.length} buckets are ready. Nothing has moved.`
+            : step && !sort && step.status === "done"
+              ? `Last time: moved ${moved}. `
+              : "Donna reads 25 emails and puts them in buckets. Nothing moves."}
+        {!running && step && !sort && step.status === "done" ? (
+          <Link href={href} className="underline">
+            See the report and Undo
+          </Link>
+        ) : null}
+      </p>
     </section>
   );
 }
@@ -240,8 +203,8 @@ export default async function DonnaPage({
       const [one, many] = QUEUE_LABELS[q.kind] ?? [q.kind, q.kind];
       return `${q._count._all} ${q._count._all === 1 ? one : many}`;
     });
-  return (
-    <DonnaFrame active="overview">
+  const details = (
+    <>
       <section
         aria-label="What Donna is doing"
         className="space-y-3 rounded-xl border border-slate-200 bg-white p-4"
@@ -255,8 +218,10 @@ export default async function DonnaPage({
             <h2 className="font-semibold">{now.headline}</h2>
             <p className="text-sm text-slate-600">{now.detail}</p>
             <p className="mt-1 text-xs text-slate-500">
-              Last check-in {shortTime(mailbox.heartbeatAt)} · Up next:{" "}
-              {waiting.length ? waiting.join(", ") : "nothing waiting"}
+              Last check-in {shortTime(mailbox.heartbeatAt)}
+              {settings.steps
+                ? ""
+                : ` · Up next: ${waiting.length ? waiting.join(", ") : "nothing waiting"}`}
             </p>
           </div>
         </div>
@@ -294,20 +259,6 @@ export default async function DonnaPage({
           ) : null}
         </div>
       </section>
-
-      {settings.steps ? (
-        <Steps
-          mailboxId={mailbox.id}
-          step={step}
-          paused={mailbox.paused}
-          offline={now.state === "offline"}
-          progress={
-            progress && step && progress.id === step.id
-              ? progress.countLabel
-              : null
-          }
-        />
-      ) : null}
 
       <section aria-label="Today" className="grid grid-cols-3 gap-2">
         <Link
@@ -431,6 +382,29 @@ export default async function DonnaPage({
             Save limits
           </button>
         </form>
+      </details>
+    </>
+  );
+  if (!settings.steps)
+    return <DonnaFrame active="overview">{details}</DonnaFrame>;
+  return (
+    <DonnaFrame active="overview">
+      <Steps
+        mailboxId={mailbox.id}
+        step={step}
+        paused={mailbox.paused}
+        offline={now.state === "offline"}
+        progress={
+          progress && step && progress.id === step.id
+            ? progress.countLabel
+            : null
+        }
+      />
+      <details className="space-y-3 pt-4">
+        <summary className="cursor-pointer text-center text-xs text-slate-400">
+          More: status, pause, today, history and limits
+        </summary>
+        <div className="mt-3 space-y-4">{details}</div>
       </details>
     </DonnaFrame>
   );
