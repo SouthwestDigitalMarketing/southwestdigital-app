@@ -9,6 +9,9 @@ import {
 } from "@/lib/tenancy/context";
 import {
   activityCounts,
+  cleanIsDo,
+  cleanIsSort,
+  sortAwaitsTom,
   donnaActionCounts,
   donnaSettings,
   requestSchema,
@@ -140,7 +143,7 @@ export async function loadClean(context: BrandDataContext, id: string) {
       },
     });
     if (!job) return null;
-    // The real clean started from this preview, if Tom approved it.
+    // The real clean started from this preview (step 3 of a sort), if Tom started it.
     const approved = await tx.donnaJob.findFirst({
       where: {
         mailboxId: job.mailboxId,
@@ -148,9 +151,13 @@ export async function loadClean(context: BrandDataContext, id: string) {
         options: { path: ["previewJobId"], equals: job.id },
       },
       orderBy: { receivedAt: "desc" },
-      select: { id: true },
+      select: { id: true, status: true, result: true, completedAt: true },
     });
-    return { ...job, approvedJobId: approved?.id ?? null };
+    return {
+      ...job,
+      approvedJobId: approved?.id ?? null,
+      follow: approved ?? null,
+    };
   });
 }
 
@@ -215,29 +222,90 @@ export async function loadStatus(context: BrandDataContext, since: Date) {
 }
 
 /** Completed jobs tab: every finished or stopped clean, step and undo, newest first. */
+const JOB_ROW = {
+  id: true,
+  kind: true,
+  status: true,
+  options: true,
+  result: true,
+  eventKey: true,
+  error: true,
+  receivedAt: true,
+  completedAt: true,
+} as const;
+
+/**
+ * Completed jobs tab. A stepped job is one row (its sort, with step 3 folded in);
+ * a sort still waiting for Tom's choices is on Current job, not here.
+ */
 export async function loadJobs(context: BrandDataContext, take = 100) {
-  return withBrandDataTransaction(context, async (tx) =>
-    tx.donnaJob.findMany({
+  return withBrandDataTransaction(context, async (tx) => {
+    const rows = await tx.donnaJob.findMany({
       where: {
         mailbox: { brandId: context.brandId },
         kind: { in: ["clean", "undo"] },
         status: { in: ["done", "cancelled"] },
       },
       orderBy: { receivedAt: "desc" },
-      take,
-      select: {
-        id: true,
-        kind: true,
-        status: true,
-        options: true,
-        result: true,
-        eventKey: true,
-        error: true,
-        receivedAt: true,
-        completedAt: true,
+      take: take * 2,
+      select: JOB_ROW,
+    });
+    const follows = await tx.donnaJob.findMany({
+      where: {
+        mailbox: { brandId: context.brandId },
+        kind: "clean",
+        options: { path: ["buckets"], equals: true },
       },
-    }),
-  );
+      select: JOB_ROW,
+    });
+    const byPreview = new Map(
+      follows.flatMap((f) => {
+        const from = (f.options as { previewJobId?: unknown } | null)
+          ?.previewJobId;
+        return typeof from === "string" && cleanIsDo(f.options)
+          ? [[from, f] as const]
+          : [];
+      }),
+    );
+    return rows
+      .filter((job) => !cleanIsDo(job.options))
+      .map((job) => ({ ...job, follow: byPreview.get(job.id) ?? null }))
+      .filter(
+        (job) =>
+          !sortAwaitsTom(job, job.follow) &&
+          !["pending", "leased"].includes(job.follow?.status ?? ""),
+      )
+      .slice(0, take);
+  });
+}
+
+/** The newest sort that finished and still waits for Tom to choose (step 2), if any. */
+export async function loadAwaitingSort(context: BrandDataContext) {
+  return withBrandDataTransaction(context, async (tx) => {
+    const sorts = await tx.donnaJob.findMany({
+      where: {
+        mailbox: { brandId: context.brandId },
+        kind: "clean",
+        status: { in: ["done", "cancelled"] },
+        options: { path: ["buckets"], equals: true },
+      },
+      orderBy: { receivedAt: "desc" },
+      take: 5,
+      select: JOB_ROW,
+    });
+    for (const sort of sorts) {
+      if (!cleanIsSort(sort.options)) continue;
+      const follow = await tx.donnaJob.findFirst({
+        where: {
+          kind: "clean",
+          options: { path: ["previewJobId"], equals: sort.id },
+        },
+        select: { id: true },
+      });
+      if (sortAwaitsTom(sort, follow)) return sort;
+    }
+    return null;
+  });
 }
 
 export async function loadDesk(

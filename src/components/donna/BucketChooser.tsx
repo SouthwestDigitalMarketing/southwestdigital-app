@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import type { Bucket } from "@/lib/donna/domain";
+import { EmailCells, EmailHeads, rowTint, td, th } from "./sortTable";
 
 /**
- * Step 1's gate: every bucket with a choice (default Leave in Inbox) and its emails,
- * each ticked. A live line says exactly what step 2 will move before Tom starts it.
+ * Step 2, Choose (Tom's turn): the sorted table with a choice per bucket on its first
+ * row (default Leave in Inbox) and a tick per email. A live line says exactly what
+ * step 3 will do before Tom starts it.
  */
 export function BucketChooser({
   jobId,
@@ -49,123 +51,106 @@ export function BucketChooser({
     <form
       action={action}
       onChange={(e) => recount(e.currentTarget)}
-      className="space-y-4"
+      className="space-y-3"
     >
       <input type="hidden" name="jobId" value={jobId} />
-      {buckets.map((bucket, i) => (
-        <section
-          key={bucket.name}
-          className="space-y-2 rounded-xl border border-slate-200 bg-white p-4"
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+        <table
+          aria-label="Choose what to do"
+          className="w-full min-w-[760px] text-left text-xs"
         >
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div className="min-w-0">
-              <h3 className="font-semibold">
-                {bucket.name}{" "}
-                <span className="font-normal tabular-nums text-slate-400">
-                  {bucket.items.length}
-                </span>
-              </h3>
-              <p className="text-xs text-slate-500">{bucket.note}</p>
-              {named(bucket) && named(bucket) < bucket.items.length ? (
-                <p className="text-xs text-amber-700">
-                  {bucket.items.length - named(bucket)} have no client name in
-                  SWapp contacts, so tagging skips them.
-                </p>
-              ) : null}
-            </div>
-            <label className="flex items-center gap-2 text-sm">
-              <span className="sr-only">What to do with {bucket.name}</span>
-              <select
-                name={`bucket-${i}`}
-                defaultValue="leave"
-                className="rounded-md border border-slate-200 px-2 py-1"
-              >
-                <option value="leave">Leave in Inbox</option>
-                {named(bucket) ? (
-                  <>
-                    <option value="tag">Tag with client name</option>
-                    <option value="tag:Archive">
-                      Tag with client name, then Archive
-                    </option>
-                  </>
-                ) : null}
-                {bucket.suggest ? (
-                  <option value={bucket.suggest}>
-                    Move to {bucket.suggest} (Donna suggests)
-                  </option>
-                ) : null}
-                {folders
-                  .filter((f) => f !== bucket.suggest)
-                  .map((f) => (
-                    <option key={f} value={f}>
-                      Move to {f}
-                    </option>
-                  ))}
-              </select>
-            </label>
-          </div>
-          <details open={bucket.items.length <= 8}>
-            <summary className="cursor-pointer text-xs text-slate-500">
-              {bucket.items.length === 1
-                ? "The email"
-                : `The ${bucket.items.length} emails`}
-              , each with Donna’s reason. Untick one to leave it in Inbox.
-            </summary>
-            <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-100">
-              {bucket.items.map((item) => (
-                <li key={item.thread}>
-                  <label className="flex items-start gap-3 px-3 py-2">
+          <thead className="uppercase tracking-wide text-slate-500">
+            <tr className="border-b border-slate-200">
+              <th className={`w-6 ${th}`}>
+                <span className="sr-only">Include</span>
+              </th>
+              <th className={th}>Bucket and choice</th>
+              <EmailHeads />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {buckets.flatMap((bucket, b) =>
+              bucket.items.map((item, i) => (
+                <tr key={item.thread} className={`align-top ${rowTint(b, i)}`}>
+                  <td className={td}>
                     <input
                       type="checkbox"
                       name="thread"
                       value={item.thread}
                       defaultChecked
-                      className="mt-1 h-4 w-4 shrink-0"
+                      aria-label={`Include ${item.subject}`}
+                      className="mt-0.5 h-3.5 w-3.5"
                     />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm">
-                        {item.subject}
-                      </span>
-                      <span className="block truncate text-xs text-slate-500">
-                        {[item.from, item.client].filter(Boolean).join(" · ")}
-                      </span>
-                      {item.why ? (
-                        <span className="block text-xs text-slate-600">
-                          Why: {item.why}
-                        </span>
-                      ) : null}
-                    </span>
-                  </label>
-                </li>
-              ))}
-            </ul>
-          </details>
-        </section>
-      ))}
-      <section className="sticky bottom-0 space-y-2 rounded-xl border border-slate-300 bg-white p-4 text-sm shadow-sm">
-        <h3 className="font-semibold">Step 2: Do what I chose</h3>
-        <p className="text-slate-700">
+                  </td>
+                  <td className={`${td} font-medium`}>
+                    {i ? null : (
+                      <div className="space-y-1">
+                        <div className="whitespace-nowrap">
+                          {bucket.name} ({bucket.items.length})
+                        </div>
+                        <select
+                          name={`bucket-${b}`}
+                          defaultValue="leave"
+                          aria-label={`What to do with ${bucket.name}`}
+                          className="w-full max-w-[13rem] rounded border border-slate-300 bg-white px-1 py-0.5 font-normal"
+                        >
+                          <option value="leave">Leave in Inbox</option>
+                          {named(bucket) ? (
+                            <>
+                              <option value="tag">Tag with client name</option>
+                              <option value="tag:Archive">
+                                Tag with client name, then Archive
+                              </option>
+                            </>
+                          ) : null}
+                          {bucket.suggest ? (
+                            <option value={bucket.suggest}>
+                              Move to {bucket.suggest} (Donna suggests)
+                            </option>
+                          ) : null}
+                          {folders
+                            .filter((f) => f !== bucket.suggest)
+                            .map((f) => (
+                              <option key={f} value={f}>
+                                Move to {f}
+                              </option>
+                            ))}
+                        </select>
+                        {named(bucket) &&
+                        named(bucket) < bucket.items.length ? (
+                          <div className="font-normal text-amber-700">
+                            {bucket.items.length - named(bucket)} without a
+                            client name are not tagged
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+                  </td>
+                  <EmailCells item={item} />
+                </tr>
+              )),
+            )}
+          </tbody>
+        </table>
+      </div>
+      <div className="sticky bottom-0 flex flex-wrap items-center gap-3 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm shadow-sm">
+        <span className="min-w-0 flex-1 text-slate-700">
           {moving
-            ? `Step 2 will ${summary.map(([what, n]) => `${what}: ${n}`).join("; ")}. Everything else stays as it is.`
-            : "Nothing is set to change. Pick a choice for a bucket above."}
-        </p>
-        <p className="text-xs text-slate-500">
-          Nothing has changed yet. Emails that change before step 2 reaches them
-          stay in Inbox. Tagging happens first; an email that cannot be tagged
-          is not moved. Every move can be undone afterwards.
-        </p>
+            ? `Step 3 will ${summary.map(([what, n]) => `${what}: ${n}`).join("; ")}. Everything else stays as it is.`
+            : "Nothing is set to change. Pick a choice for a bucket."}
+        </span>
         {blocked ? (
-          <p className="text-xs text-amber-700">{blocked}</p>
+          <span className="text-xs text-amber-700">{blocked}</span>
         ) : (
           <button
             type="submit"
             disabled={!moving}
-            className="rounded-lg bg-slate-900 px-4 py-2.5 text-white disabled:opacity-40"
+            className="rounded-lg bg-slate-900 px-4 py-2 text-white disabled:opacity-40"
           >
-            Start step 2
+            Start step 3
           </button>
         )}
-      </section>
+      </div>
     </form>
   );
 }

@@ -450,7 +450,7 @@ try {
   const stepOne = await db.donnaJob.findFirstOrThrow(pendingClean);
   assert.deepEqual(stepOne.options, { preview: true, buckets: true, limit: 25 });
   await page.goto(base + "/donna");
-  await expect(page.getByRole("link", { name: /Step 1: sorting Inbox into buckets/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Step 1 of 3: Sort/ })).toBeVisible();
   // The bar shows what Donna just did with each email.
   await db.donnaMailbox.update({
     where: { id: box.id },
@@ -458,7 +458,7 @@ try {
       recent: [{ subject: "Example progress update", result: "Clients (Rodan Properties): From Rodan Properties, a client in SWapp" }] } } },
   });
   await page.reload();
-  const barLink = page.getByRole("link", { name: /Step 1: sorting Inbox into buckets/ });
+  const barLink = page.getByRole("link", { name: /Step 1 of 3: Sort/ });
   await expect(barLink).toContainText("Example progress update → Clients (Rodan Properties)");
   await expect(barLink).not.toContainText("a client in SWapp");
   // One row: the whole bar stays short.
@@ -486,14 +486,14 @@ try {
   await expect(page.getByRole("table", { name: "Sorted emails" })).not.toContainText("Store promo email");
   await page.goto(base + "/donna");
   // Pause/Resume and Stop sit in the top status bar.
-  const bar = page.locator("div", { has: page.getByRole("link", { name: /Step 1: sorting Inbox into buckets/ }) }).last();
+  const bar = page.locator("div", { has: page.getByRole("link", { name: /Step 1 of 3: Sort/ }) }).last();
   await bar.getByRole("button", { name: "Pause" }).click();
   await expect.poll(async () => (await db.donnaMailbox.findUnique({ where: { id: box.id } })).paused).toBe(true);
   await bar.getByRole("button", { name: "Resume" }).click();
   await expect.poll(async () => (await db.donnaMailbox.findUnique({ where: { id: box.id } })).paused).toBe(false);
   await bar.getByRole("button", { name: "Stop" }).click();
   await expect.poll(async () => (await db.donnaJob.findUnique({ where: { id: stepOne.id } })).status).toBe("cancelled");
-  await expect(page.getByRole("link", { name: /Step 1: sorting Inbox into buckets/ })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Step 1 of 3: Sort/ })).toHaveCount(0);
   const [notice, promoA, promoB, rodan] = ["c3".repeat(32), "d4".repeat(32), "e5".repeat(32), "f6".repeat(32)];
   await db.donnaJob.update({
     where: { id: stepOne.id },
@@ -512,21 +512,33 @@ try {
       },
     },
   });
-  // A finished step 1 is opened from the Jobs tab.
+  // A finished sort waits for Tom: it is on Current job (step 2, Your turn), not Completed jobs.
   await page.goto(base + "/donna/jobs");
-  await page.getByRole("link", { name: /4 sorted into 3 buckets/ }).click();
-  await expect(page.getByRole("heading", { name: "Step 1: Inbox sorted into buckets" })).toBeVisible();
-  await expect(page.getByText("Why: Money or legal trouble")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Start step 2" })).toBeDisabled();
+  await expect(page.getByRole("link", { name: /4 sorted into 3 buckets/ })).toHaveCount(0);
+  await page.goto(base + "/donna/current");
+  await expect(page).toHaveURL(new RegExp("/donna/cleans/" + stepOne.id));
+  const steps = page.getByRole("list", { name: "Job steps" });
+  await expect(steps).toContainText("Sort");
+  await expect(steps).toContainText("4 sorted");
+  await expect(steps.locator('[aria-current="step"]')).toContainText("Your turn");
+  await expect(page.getByRole("link", { name: "Current job" })).toHaveAttribute("aria-current", "page");
+  const choose = page.getByRole("table", { name: "Choose what to do" });
+  await expect(choose).toContainText("Money and legal (1)");
+  await expect(page.getByRole("img", { name: "Why: Money or legal trouble" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start step 3" })).toBeDisabled();
   await page.getByLabel("What to do with Newsletter").selectOption("Newsletter");
-  await page.getByRole("checkbox", { name: /Example sale B/ }).uncheck();
+  await page.getByRole("checkbox", { name: /Include Example sale B/ }).uncheck();
   await page.getByLabel("What to do with Clients").selectOption("tag:Archive");
   await expect(
-    page.getByText("Step 2 will tag with the client name: 1; move to Archive: 1; move to Newsletter: 1. Everything else stays as it is."),
+    page.getByText("Step 3 will tag with the client name: 1; move to Archive: 1; move to Newsletter: 1. Everything else stays as it is."),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Start step 2" }).click();
-  await expect(page.getByRole("heading", { name: "Step 2: what Donna moved" })).toBeVisible();
-  const stepTwo = await db.donnaJob.findFirstOrThrow(pendingClean);
+  await page.getByRole("button", { name: "Start step 3" }).click();
+  const stepTwo = await (async () => {
+    await expect.poll(async () => Boolean(await db.donnaJob.findFirst(pendingClean))).toBe(true);
+    return db.donnaJob.findFirstOrThrow(pendingClean);
+  })();
+  await expect(page).toHaveURL(new RegExp("/donna/cleans/" + stepTwo.id));
+  await expect(page.getByRole("list", { name: "Job steps" }).locator('[aria-current="step"]')).toContainText("Do");
   assert.deepEqual(stepTwo.options, {
     previewJobId: stepOne.id,
     plan: [
@@ -535,13 +547,31 @@ try {
     ],
     buckets: true,
   });
-  await db.donnaJob.updateMany({ where: { id: stepTwo.id }, data: { status: "done" } });
-  // Jobs tab lists every job; each opens its report.
+  await db.donnaJob.updateMany({
+    where: { id: stepTwo.id },
+    data: { status: "done", result: { at: new Date().toISOString(), reviewed: 0, filed: [{ thread: promoA, subject: "Example sale A", folder: "Newsletter" }], tagged: [{ thread: rodan, subject: "Example progress update", tag: "Rodan Properties" }] } },
+  });
+  // Completed jobs: one row per job, step 3 folded in.
   await page.goto(base + "/donna/jobs");
   const jobs = page.getByRole("list", { name: "Completed jobs" });
-  await expect(jobs).toContainText("Step 1: sort Inbox into buckets");
-  await expect(jobs).toContainText("4 sorted into 3 buckets");
-  await expect(jobs).toContainText("Step 2: do what you chose");
+  await expect(jobs).toContainText("Inbox job: sort, choose, do");
+  await expect(jobs).toContainText("4 sorted into 3 buckets · moved 1 · tagged 1");
+  await expect(jobs).not.toContainText("Step 3: do what you chose");
+  await jobs.getByRole("link", { name: /4 sorted into 3 buckets/ }).click();
+  await expect(page.getByRole("list", { name: "Job steps" })).toContainText("Done · moved 1 · tagged 1");
+  await expect(page.getByRole("table", { name: "Sorted emails" })).toBeVisible();
+  // Closing at step 2 changes nothing and files the job under Completed jobs.
+  const closing = await db.donnaJob.create({
+    data: { mailboxId: box.id, kind: "clean", eventKey: "ui-close", status: "done", completedAt: new Date(),
+      options: { preview: true, buckets: true, limit: 25 },
+      result: { preview: true, at: new Date().toISOString(), reviewed: 1, sorted: [{ thread: "ef".repeat(32), subject: "Example close me", from: "c@x.example", bucket: "Not sure", why: "Unclear" }] } },
+  });
+  await page.goto(base + "/donna/current");
+  await expect(page).toHaveURL(new RegExp("/donna/cleans/" + closing.id));
+  await page.getByRole("button", { name: "Close this job without changing anything" }).click();
+  await expect(page.getByRole("list", { name: "Job steps" })).toContainText("Closed, nothing changed");
+  await page.goto(base + "/donna/jobs");
+  await expect(page.getByRole("list", { name: "Completed jobs" })).toContainText("1 sorted into 1 bucket · closed, nothing changed");
   await page.goto(base + "/donna/current");
   await expect(page.getByText("No job is running.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Start new job", exact: true })).toBeVisible();

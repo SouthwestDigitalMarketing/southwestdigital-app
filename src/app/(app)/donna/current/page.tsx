@@ -1,17 +1,26 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireDonna } from "@/lib/donna/access";
-import { loadActiveClean, storageMissing } from "@/lib/donna/store";
+import {
+  loadActiveClean,
+  loadAwaitingSort,
+  storageMissing,
+} from "@/lib/donna/store";
 import { DonnaFrame, DonnaStart } from "../DonnaFrame";
 
 export const dynamic = "force-dynamic";
 
-/** Current job tab: the running job's page, or Start new job when nothing runs. */
+/**
+ * Current job tab: the running job, else a sorted job waiting for Tom's choices,
+ * else Start new job.
+ */
 export default async function CurrentJobPage() {
   const { dataContext } = await requireDonna();
   let job = null;
   try {
-    job = await loadActiveClean(dataContext);
+    job =
+      (await loadActiveClean(dataContext)) ??
+      (await loadAwaitingSort(dataContext));
   } catch (e) {
     if (!storageMissing(e)) throw e;
   }
