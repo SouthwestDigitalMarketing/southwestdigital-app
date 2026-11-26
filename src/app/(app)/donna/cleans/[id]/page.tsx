@@ -5,7 +5,6 @@ import { requireDonna } from "@/lib/donna/access";
 import { loadClean } from "@/lib/donna/store";
 import {
   STEP_FOLDERS,
-  cleanBarStatus,
   cleanBuckets,
   cleanIsPreview,
   cleanIsSort,
@@ -353,13 +352,6 @@ export default async function CleanPage({
     (legacy && job.status === "done"
       ? mailboxCleanReport(job.mailbox.coverage)
       : null);
-  const progress = cleanBarStatus(
-    job,
-    job.mailbox.coverage,
-    new Date(),
-    job.mailbox.paused,
-    job.mailbox.heartbeatAt,
-  );
   const paused = job.mailbox.paused;
   return (
     <DonnaFrame
@@ -388,36 +380,6 @@ export default async function CleanPage({
                 : job.status}
         </span>
       </header>
-      {active ? (
-        // One row: what she is on, how far, the track. Pause and Stop are on the top bar.
-        <section
-          aria-label="Progress"
-          className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm"
-        >
-          <span className="min-w-0 max-w-[40%] truncate text-slate-700">
-            {progress.paused
-              ? "Paused"
-              : progress.offline
-                ? "Donna is not running"
-                : progress.waiting
-                  ? "Waiting for Donna"
-                  : progress.label}
-          </span>
-          <span className="shrink-0 tabular-nums text-slate-500">
-            {progress.countLabel}
-            {progress.etaLabel ? ` · ${progress.etaLabel}` : ""}
-          </span>
-          <span
-            className="block h-1 min-w-12 flex-1 overflow-hidden rounded-full bg-slate-200"
-            aria-hidden="true"
-          >
-            <span
-              className={`block h-1 rounded-full ${progress.waiting ? "bg-amber-500" : "bg-slate-600"}`}
-              style={{ width: `${progress.percent}%` }}
-            />
-          </span>
-        </section>
-      ) : null}
       {active && sort ? (
         <LiveBuckets buckets={cleanBuckets(job.result)} />
       ) : active && report ? (
