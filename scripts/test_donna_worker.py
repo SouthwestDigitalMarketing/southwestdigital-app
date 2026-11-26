@@ -491,6 +491,35 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual([i["reason"] for i in done["skipped"]], ["not tagged: Email not found in Zoho."])
             store.db.close()
 
+    def test_slow_review_keeps_the_lease_without_touching_sqlite_off_thread(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = self.clean_fixture(tmp)
+            beats = []
+            real = self.BY_SENDER
+
+            def slow(messages, existing, root, contacts=None, extra=""):
+                import time as _t
+                _t.sleep(0.3)
+                return real[email.utils.parseaddr(messages[0]["from"])[1].lower()]
+            with patch.object(donna, "LEASE_KEEPER_SECONDS", 0.05), patch.object(donna, "assess", side_effect=slow):
+                calls = []
+
+                class Client:
+                    def call(self, op, **data):
+                        calls.append((op, data))
+                        if op == "heartbeat":
+                            beats.append(data)
+                        return {}
+                work = {"job": {"id": "j", "leaseToken": "l", "kind": "clean", "options": {}},
+                        "mailbox": {"id": "box", "address": "ours@example.com"}, "requests": [],
+                        "contacts": [], "settings": {}}
+                with patch.object(store, "inventory", return_value=self.FOLDERS):
+                    donna.process_job(Client(), store, work, 10)
+            self.assertTrue(any(op == "complete" for op, _ in calls))
+            self.assertFalse(any(op == "fail" for op, _ in calls))
+            self.assertGreater(len(beats), 4)
+            store.db.close()
+
     def test_cancel_stops_before_the_next_move_and_reports_what_moved(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = self.clean_fixture(tmp)
