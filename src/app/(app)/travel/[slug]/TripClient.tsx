@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition, type KeyboardEvent } from "react";
 import {
   AUTO_PHOTO_SECTIONS,
   SECTIONS,
@@ -35,6 +35,16 @@ import { MapLegend, TripMap } from "./TripMap";
 type Details = { title: string; status: TripStatus; destination: string; startsOn: string; endsOn: string };
 
 const MAP_KEYS: SectionKey[] = ["options", "spots", "stays", "places"];
+const TRIP_TABS = [
+  { key: "overview", label: "Overview" },
+  { key: "prep", label: "Trip-prep checklist" },
+  { key: "budget", label: "Budget" },
+  { key: "itinerary", label: "Itinerary" },
+  { key: "places", label: "Places" },
+  { key: "logistics", label: "Travel & essentials" },
+  { key: "videos", label: "Videos" },
+] as const;
+type TripTab = (typeof TRIP_TABS)[number]["key"];
 
 export function itemHref(slug: string, section: SectionKey, id: string) {
   return `/travel/${slug}/${section}/${id}`;
@@ -51,6 +61,8 @@ export function TripClient({
   plan: TripPlan;
   today: string;
 }) {
+  const [activeTab, setActiveTab] = useState<TripTab>("overview");
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const totals = budgetTotals(plan);
   const docs = documentsReady(plan);
   const warnings = documentWarnings(plan, details, today);
@@ -76,87 +88,133 @@ export function TripClient({
   ];
   const progressTiles = focus ? tiles.filter((tile) => tile.label !== "Budget planned") : tiles;
   const focusTotal = totals.planned > 0 ? totals.planned : focus ? optionTotal(focus, days) : null;
+  const renderSections = (keys: SectionKey[]) =>
+    sections.filter((section) => keys.includes(section.key)).map((section) => (
+      <SectionBlock
+        key={section.key}
+        slug={slug}
+        section={section}
+        items={plan.sections[section.key]}
+        days={days}
+        missing={
+          (AUTO_PHOTO_SECTIONS.has(section.key) ? itemsWithoutPhoto(plan, section.key).length : 0) +
+          itemsWithoutPin(plan, section.key).length
+        }
+      />
+    ));
+  const handleTabKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const currentIndex = TRIP_TABS.findIndex((tab) => tab.key === activeTab);
+    const nextIndex = event.key === "ArrowRight"
+      ? (currentIndex + 1) % TRIP_TABS.length
+      : event.key === "ArrowLeft"
+        ? (currentIndex - 1 + TRIP_TABS.length) % TRIP_TABS.length
+        : event.key === "Home"
+          ? 0
+          : event.key === "End"
+            ? TRIP_TABS.length - 1
+            : -1;
+    if (nextIndex < 0) return;
+    const nextTab = TRIP_TABS[nextIndex];
+    if (!nextTab) return;
+    event.preventDefault();
+    setActiveTab(nextTab.key);
+    tabRefs.current[nextIndex]?.focus();
+  };
 
   return (
     <div className="p-4 sm:p-8">
       {needsJapanSwitch(plan, details.destination) ? <JapanSwitch slug={slug} /> : null}
-      {focus ? (
-        <>
-          <FocusCard
-            slug={slug}
-            option={focus}
-            days={days}
-            tripTitle={details.title}
-            total={focusTotal}
-            totalLabel={totals.planned > 0 ? "Planned trip budget" : "Flight + monthly stay estimate"}
-          />
-          <TripPrepChecklist slug={slug} plan={plan} today={today} />
-          <TripHeader slug={slug} details={details} summary={plan.summary} days={plan.days} compact />
-        </>
-      ) : (
-        <TripHeader slug={slug} details={details} summary={plan.summary} days={plan.days} />
-      )}
+      <div
+        role="tablist"
+        aria-label={`${details.title} trip tabs`}
+        onKeyDown={handleTabKeyDown}
+        className="-mx-4 mt-4 flex gap-1 overflow-x-auto border-b border-slate-200 px-4 sm:-mx-8 sm:px-8"
+      >
+        {TRIP_TABS.map((tab, index) => {
+          const selected = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              ref={(node) => { tabRefs.current[index] = node; }}
+              id={`trip-tab-${tab.key}`}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              aria-controls="trip-panel"
+              tabIndex={selected ? 0 : -1}
+              onClick={() => setActiveTab(tab.key)}
+              className={`shrink-0 border-b-2 px-3 py-3 text-sm font-medium ${selected ? "border-slate-900 text-slate-900" : "border-transparent text-slate-500 hover:text-slate-800"}`}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
 
-      {warnings.length ? (
-        <div role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-          <p className="font-semibold">Check these documents</p>
-          <ul className="mt-1 list-disc pl-5">
-            {warnings.map((warning) => (
-              <li key={warning}>{warning}</li>
-            ))}
-          </ul>
-          <a href="#documents" className="mt-2 inline-block underline">
-            Go to Documents
-          </a>
-        </div>
-      ) : null}
+      <section id="trip-panel" role="tabpanel" aria-labelledby={`trip-tab-${activeTab}`} tabIndex={0} className="pt-5">
+        {activeTab === "overview" ? (
+          <>
+            {focus ? (
+              <>
+                <FocusCard
+                  slug={slug}
+                  option={focus}
+                  days={days}
+                  tripTitle={details.title}
+                  total={focusTotal}
+                  totalLabel={totals.planned > 0 ? "Planned trip budget" : "Flight + monthly stay estimate"}
+                />
+                <TripHeader slug={slug} details={details} summary={plan.summary} days={plan.days} compact />
+              </>
+            ) : (
+              <TripHeader slug={slug} details={details} summary={plan.summary} days={plan.days} />
+            )}
+            <section className="mt-5" aria-labelledby="trip-progress-title">
+              <h2 id="trip-progress-title" className="text-lg font-semibold text-slate-900">Trip progress</h2>
+              <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+                {progressTiles.map((tile) => (
+                  <div key={tile.label} className="rounded-xl border border-slate-200 bg-white p-3">
+                    <p className="text-xs text-slate-500">{tile.label}</p>
+                    <p className="mt-1 text-lg font-semibold text-slate-900">{tile.value}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+            <DeleteTrip slug={slug} />
+          </>
+        ) : null}
 
-      <details className="mt-6 rounded-2xl border border-slate-200 bg-white px-4 py-3">
-        <summary className="ui-focus-ring cursor-pointer text-sm font-semibold text-slate-800">Trip progress</summary>
-        <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-          {progressTiles.map((tile) => (
-            <div key={tile.label} className="rounded-xl bg-slate-50 p-3">
-              <p className="text-xs text-slate-500">{tile.label}</p>
-              <p className="mt-1 text-lg font-semibold text-slate-900">{tile.value}</p>
-            </div>
-          ))}
-        </div>
-      </details>
-
-      <details id="map" className="mt-4 scroll-mt-20 rounded-2xl border border-slate-200 bg-white px-4 py-3">
-        <summary className="ui-focus-ring cursor-pointer text-sm font-semibold text-slate-800">Map</summary>
-        <div className="mt-4">
-          <TripMap pins={pins} hrefFor={(pin: MapPin) => itemHref(slug, pin.section, pin.id)} />
-          <MapLegend sections={MAP_KEYS.filter((key) => pins.some((pin) => pin.section === key))} />
-        </div>
-      </details>
-
-      <details className="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-3">
-        <summary className="ui-focus-ring cursor-pointer text-sm font-semibold text-slate-800">Jump to a section</summary>
-        <nav aria-label="Trip sections" className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
-          {sections.map((section) => (
-            <a key={section.key} href={`#${section.key}`} className="ui-focus-ring rounded-lg py-1 text-sm text-slate-700 hover:text-slate-950">
-              {section.title} <span className="text-slate-400">{counts(section.key)}</span>
-            </a>
-          ))}
-        </nav>
-      </details>
-
-      {sections.map((section) => (
-        <SectionBlock
-          key={section.key}
-          slug={slug}
-          section={section}
-          items={plan.sections[section.key]}
-          days={days}
-          missing={
-            (AUTO_PHOTO_SECTIONS.has(section.key) ? itemsWithoutPhoto(plan, section.key).length : 0) +
-            itemsWithoutPin(plan, section.key).length
-          }
-        />
-      ))}
-
-      <DeleteTrip slug={slug} />
+        {activeTab === "prep" ? (
+          <>
+            {warnings.length ? (
+              <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                <p className="font-semibold">Check these documents</p>
+                <ul className="mt-1 list-disc pl-5">{warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
+                {sections.some((section) => section.key === "documents") ? (
+                  <button type="button" className="mt-2 underline" onClick={() => setActiveTab("logistics")}>Go to Documents</button>
+                ) : null}
+              </div>
+            ) : null}
+            <TripPrepChecklist slug={slug} plan={plan} today={today} />
+          </>
+        ) : null}
+        {activeTab === "budget" ? renderSections(["budget"]) : null}
+        {activeTab === "itinerary" ? renderSections(["itinerary"]) : null}
+        {activeTab === "places" ? (
+          <>
+            {renderSections(["options", "spots", "stays", "places"])}
+            <details id="map" className="mt-6 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+              <summary className="ui-focus-ring cursor-pointer text-sm font-semibold text-slate-800">Map</summary>
+              <div className="mt-4">
+                <TripMap pins={pins} hrefFor={(pin: MapPin) => itemHref(slug, pin.section, pin.id)} />
+                <MapLegend sections={MAP_KEYS.filter((key) => pins.some((pin) => pin.section === key))} />
+              </div>
+            </details>
+          </>
+        ) : null}
+        {activeTab === "logistics" ? renderSections(["travel", "documents", "needs", "entry", "home"]) : null}
+        {activeTab === "videos" ? renderSections(["videos"]) : null}
+      </section>
     </div>
   );
 }
