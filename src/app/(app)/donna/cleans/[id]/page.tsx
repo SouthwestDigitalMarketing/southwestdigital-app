@@ -149,16 +149,19 @@ function senderName(from: string) {
   return name || from;
 }
 
-/** Soft tints that set each bucket's rows apart (Tom, 2026-11-26). */
+/**
+ * Soft tints that set each bucket's rows apart, with alternating rows a shade
+ * deeper inside a bucket (Tom, 2026-11-26).
+ */
 const BUCKET_TINTS = [
-  "bg-sky-50",
-  "bg-amber-50",
-  "bg-emerald-50",
-  "bg-violet-50",
-  "bg-rose-50",
-  "bg-teal-50",
-  "bg-orange-50",
-  "bg-indigo-50",
+  ["bg-sky-50", "bg-sky-100/60"],
+  ["bg-amber-50", "bg-amber-100/60"],
+  ["bg-emerald-50", "bg-emerald-100/60"],
+  ["bg-violet-50", "bg-violet-100/60"],
+  ["bg-rose-50", "bg-rose-100/60"],
+  ["bg-teal-50", "bg-teal-100/60"],
+  ["bg-orange-50", "bg-orange-100/60"],
+  ["bg-indigo-50", "bg-indigo-100/60"],
 ];
 
 /** Step 1 while it runs: one table, a row per email, grouped by bucket (Tom, 2026-11-26). */
@@ -191,7 +194,7 @@ function LiveBuckets({ buckets }: { buckets: Bucket[] }) {
             bucket.items.map((item, i) => (
               <tr
                 key={item.thread}
-                className={`align-top ${BUCKET_TINTS[b % BUCKET_TINTS.length]}`}
+                className={`align-top ${BUCKET_TINTS[b % BUCKET_TINTS.length][i % 2]}`}
               >
                 <td className="whitespace-nowrap px-2 py-1 font-medium">
                   {i ? "" : `${bucket.name} (${bucket.items.length})`}
