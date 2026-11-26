@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Info } from "lucide-react";
 import type { Bucket, SortedItem } from "@/lib/donna/domain";
 
@@ -81,8 +82,14 @@ export function WhyCell({ why }: { why: string }) {
   );
 }
 
-/** The email columns after the first: Email, Type, From, Client, Why. */
-export function EmailCells({ item }: { item: SortedItem }) {
+/** The email columns: Email, Type, From, Client, [Action], Why. */
+export function EmailCells({
+  item,
+  action,
+}: {
+  item: SortedItem;
+  action?: ReactNode;
+}) {
   return (
     <>
       <td className={`max-w-[16rem] truncate ${td}`}>{item.subject}</td>
@@ -98,6 +105,7 @@ export function EmailCells({ item }: { item: SortedItem }) {
       <td className={`whitespace-nowrap ${td} text-slate-600`}>
         {item.client ?? ""}
       </td>
+      {action !== undefined ? <td className={td}>{action}</td> : null}
       <td className={`${td} text-slate-400`}>
         <WhyCell why={item.why} />
       </td>
@@ -105,13 +113,14 @@ export function EmailCells({ item }: { item: SortedItem }) {
   );
 }
 
-export function EmailHeads() {
+export function EmailHeads({ action = false }: { action?: boolean }) {
   return (
     <>
       <th className={th}>Email</th>
       <th className={th}>Type</th>
       <th className={th}>From</th>
       <th className={th}>Client</th>
+      {action ? <th className={th}>Action</th> : null}
       <th className={`w-8 ${th}`}>
         <span className="sr-only">Why</span>
       </th>

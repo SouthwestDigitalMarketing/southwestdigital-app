@@ -371,21 +371,31 @@ export async function applyBuckets(form: FormData) {
     });
     if (busy) return busy.id;
     // A choice is a folder, "tag" (client tag, stays in Inbox) or "tag:<folder>".
-    const plan = cleanBuckets(sort.result).flatMap((bucket, i) => {
-      const choice = String(form.get(`bucket-${i}`) ?? "leave");
-      const tagging = choice === "tag" || choice.startsWith("tag:");
-      const folder = tagging ? choice.slice(4) : choice;
-      if (folder && !(STEP_FOLDERS as readonly string[]).includes(folder))
-        return [];
-      if (!tagging && !folder) return [];
-      return bucket.items
-        .filter((item) => ticked.has(item.thread) && (!tagging || item.client))
-        .map((item) => ({
-          thread: item.thread,
-          ...(folder ? { folder } : {}),
-          ...(tagging ? { tag: item.client! } : {}),
-        }));
-    });
+    // Each ticked email has its own choice: a folder, "tag" (client tag, stays in
+    // Inbox) or "tag:<folder>". "leave" and unticked emails stay as they are.
+    const plan = cleanBuckets(sort.result).flatMap((bucket) =>
+      bucket.items.flatMap((item) => {
+        if (!ticked.has(item.thread)) return [];
+        const choice = String(form.get(`choice-${item.thread}`) ?? "leave");
+        const tagging = choice === "tag" || choice.startsWith("tag:");
+        const folder = tagging
+          ? choice.slice(4)
+          : choice === "leave"
+            ? ""
+            : choice;
+        if (folder && !(STEP_FOLDERS as readonly string[]).includes(folder))
+          return [];
+        if (tagging && !item.client) return [];
+        if (!tagging && !folder) return [];
+        return [
+          {
+            thread: item.thread,
+            ...(folder ? { folder } : {}),
+            ...(tagging ? { tag: item.client! } : {}),
+          },
+        ];
+      }),
+    );
     if (!plan.length) return null;
     const job = await tx.donnaJob.create({
       data: {
