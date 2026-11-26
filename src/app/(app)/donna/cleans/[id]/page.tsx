@@ -11,6 +11,7 @@ import {
   cleanIsPreview,
   cleanIsSort,
   cleanReport,
+  jobEnd,
   jobOutcome,
   sortAwaitsTom,
   mailboxCleanReport,
@@ -352,6 +353,7 @@ export default async function CleanPage({
     >
       <p className="text-xs font-medium tabular-nums text-slate-500">
         Job #{job.jobNumber}
+        {active ? "" : ` · ${jobEnd(job, job.follow).detail}`}
       </p>
       {steps ? (
         <Stepper steps={steps} />

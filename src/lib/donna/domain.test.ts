@@ -12,6 +12,7 @@ import {
   cleanIsPreview,
   cleanIsSort,
   cleanBuckets,
+  jobEnd,
   donnaSettings,
   cleanBarStatus,
   formatCleanEta,
@@ -564,5 +565,27 @@ describe("steps", () => {
       ["Spam", 1, null],
     ]);
     expect(buckets[1].items[0].client).toBe("Rodan");
+  });
+});
+
+describe("job end labels", () => {
+  const sort = { preview: true, buckets: true };
+  it("only calls a stepped job Finished when all three steps ran", () => {
+    expect(
+      jobEnd({ status: "done", options: sort }, { status: "done" }).label,
+    ).toBe("Finished");
+    expect(
+      jobEnd({ status: "done", options: { ...sort, closed: true } }).label,
+    ).toBe("Closed");
+    expect(jobEnd({ status: "cancelled", options: sort }).label).toBe(
+      "Stopped",
+    );
+    expect(
+      jobEnd({ status: "done", options: sort }, { status: "cancelled" }).label,
+    ).toBe("Stopped");
+    expect(jobEnd({ status: "done", options: sort }).label).toBe("Waiting");
+    expect(jobEnd({ status: "done", options: { manual: true } }).label).toBe(
+      "Finished",
+    );
   });
 });

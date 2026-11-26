@@ -1,17 +1,10 @@
 import Link from "next/link";
 import { requireDonna } from "@/lib/donna/access";
 import { loadJobs, storageMissing } from "@/lib/donna/store";
-import { jobOutcome, jobTitle } from "@/lib/donna/domain";
+import { jobEnd, jobOutcome, jobTitle } from "@/lib/donna/domain";
 import { DonnaFrame, shortTime } from "../DonnaFrame";
 
 export const dynamic = "force-dynamic";
-
-const STATUS: Record<string, string> = {
-  pending: "Waiting",
-  leased: "Running",
-  done: "Finished",
-  cancelled: "Stopped",
-};
 
 /** Completed jobs tab (Tom, 2026-11-26): every finished job; each opens its report. */
 export default async function JobsPage() {
@@ -73,7 +66,7 @@ export default async function JobsPage() {
                     </td>
                     <td className="px-2 py-1 text-slate-600">{outcome}</td>
                     <td className="whitespace-nowrap px-2 py-1 text-slate-500">
-                      {STATUS[job.status] ?? job.status}
+                      {jobEnd(job, job.follow).label}
                     </td>
                   </tr>
                 );
