@@ -1957,6 +1957,8 @@ model DonnaMailbox {
 
 model DonnaJob {
   id            String       @id @default(cuid())
+  /// Job number shown to Tom (Tom, 2026-11-26); numbered in the order jobs were created.
+  number        Int          @unique @default(autoincrement())
   mailboxId     String
   eventKey      String
   kind          String

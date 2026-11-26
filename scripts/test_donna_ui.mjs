@@ -585,10 +585,14 @@ try {
   await page.goto(base + "/donna/jobs");
   const jobs = page.getByRole("table", { name: "Completed jobs" });
   await expect(jobs).toContainText("Inbox job: sort, choose, do");
+  // Every job has a number; step 3 carries its Inbox job's number.
+  const numbered = await db.donnaJob.findUniqueOrThrow({ where: { id: stepOne.id } });
+  await expect(jobs.getByRole("row", { name: new RegExp("^" + numbered.number + " ") })).toContainText("Inbox job");
   await expect(jobs).toContainText("6 sorted into 5 buckets · moved 1 · tagged 1");
   await expect(jobs).not.toContainText("Step 3: do what you chose");
   await jobs.getByRole("link", { name: /6 sorted into 5 buckets/ }).click();
   await expect(page.getByRole("list", { name: "Job steps" })).toContainText("Done · moved 1 · tagged 1");
+  await expect(page.getByText("Job #" + numbered.number, { exact: true })).toBeVisible();
   await expect(page.getByRole("table", { name: "Sorted emails" })).toBeVisible();
   // Closing at step 2 changes nothing and files the job under Completed jobs.
   const closing = await db.donnaJob.create({

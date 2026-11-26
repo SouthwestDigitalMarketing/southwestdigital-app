@@ -153,10 +153,21 @@ export async function loadClean(context: BrandDataContext, id: string) {
       orderBy: { receivedAt: "desc" },
       select: { id: true, status: true, result: true, completedAt: true },
     });
+    // Step 3 shows its Inbox job's number (the sort it came from).
+    const from = (job.options as { previewJobId?: unknown } | null)
+      ?.previewJobId;
+    const parent =
+      typeof from === "string"
+        ? await tx.donnaJob.findFirst({
+            where: { id: from, mailboxId: job.mailboxId },
+            select: { number: true },
+          })
+        : null;
     return {
       ...job,
       approvedJobId: approved?.id ?? null,
       follow: approved ?? null,
+      jobNumber: parent?.number ?? job.number,
     };
   });
 }
@@ -224,6 +235,7 @@ export async function loadStatus(context: BrandDataContext, since: Date) {
 /** Completed jobs tab: every finished or stopped clean, step and undo, newest first. */
 const JOB_ROW = {
   id: true,
+  number: true,
   kind: true,
   status: true,
   options: true,

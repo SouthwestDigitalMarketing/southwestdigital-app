@@ -33,6 +33,7 @@ export default async function JobsPage() {
           >
             <thead className="uppercase tracking-wide text-slate-500">
               <tr className="border-b border-slate-200">
+                <th className="px-2 py-1 font-semibold">Job #</th>
                 <th className="px-2 py-1 font-semibold">When</th>
                 <th className="px-2 py-1 font-semibold">Job</th>
                 <th className="px-2 py-1 font-semibold">Result</th>
@@ -51,6 +52,9 @@ export default async function JobsPage() {
                     key={job.id}
                     className={`align-top ${i % 2 ? "bg-slate-50" : "bg-white"} hover:bg-sky-50`}
                   >
+                    <td className="whitespace-nowrap px-2 py-1 font-medium tabular-nums">
+                      {job.number}
+                    </td>
                     <td className="whitespace-nowrap px-2 py-1 tabular-nums text-slate-500">
                       {shortTime(job.completedAt ?? job.receivedAt)}
                     </td>
@@ -58,7 +62,7 @@ export default async function JobsPage() {
                       {href ? (
                         <Link
                           href={href}
-                          aria-label={`${jobTitle(job)}: ${outcome}`}
+                          aria-label={`Job ${job.number}, ${jobTitle(job)}: ${outcome}`}
                           className="underline decoration-slate-300 hover:decoration-slate-700"
                         >
                           {jobTitle(job)}
