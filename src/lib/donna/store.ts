@@ -162,55 +162,73 @@ export async function loadStatus(context: BrandDataContext, since: Date) {
       orderBy: { address: "asc" },
     });
     if (!mailbox) return null;
-    const [active, queued, filedToday, needsYou, recent] = await Promise.all([
-      tx.donnaJob.findFirst({
-        where: {
-          mailboxId: mailbox.id,
-          status: "leased",
-          leaseUntil: { gt: new Date() },
-        },
-        select: {
-          id: true,
-          kind: true,
-          status: true,
-          options: true,
-          eventKey: true,
-        },
-      }),
-      tx.donnaJob.groupBy({
-        by: ["kind"],
-        where: { mailboxId: mailbox.id, status: "pending" },
-        _count: { _all: true },
-      }),
-      tx.donnaActivity.count({
-        where: {
-          mailboxId: mailbox.id,
-          kind: "filed",
-          occurredAt: { gte: since },
-        },
-      }),
-      tx.donnaRequest.count({
-        where: { mailboxId: mailbox.id, state: "needs-you" },
-      }),
-      tx.donnaActivity.findMany({
-        where: {
-          mailboxId: mailbox.id,
-          kind: {
-            in: ["filed", "corrected", "failed", "control", "draft-ready"],
+    const [active, queued, filedToday, needsYou, recent, step] =
+      await Promise.all([
+        tx.donnaJob.findFirst({
+          where: {
+            mailboxId: mailbox.id,
+            status: "leased",
+            leaseUntil: { gt: new Date() },
           },
-        },
-        orderBy: { occurredAt: "desc" },
-        take: 12,
-        select: {
-          id: true,
-          kind: true,
-          detail: true,
-          occurredAt: true,
-          request: { select: { id: true, title: true } },
-        },
-      }),
-    ]);
-    return { mailbox, active, queued, filedToday, needsYou, recent };
+          select: {
+            id: true,
+            kind: true,
+            status: true,
+            options: true,
+            eventKey: true,
+          },
+        }),
+        tx.donnaJob.groupBy({
+          by: ["kind"],
+          where: { mailboxId: mailbox.id, status: "pending" },
+          _count: { _all: true },
+        }),
+        tx.donnaActivity.count({
+          where: {
+            mailboxId: mailbox.id,
+            kind: "filed",
+            occurredAt: { gte: since },
+          },
+        }),
+        tx.donnaRequest.count({
+          where: { mailboxId: mailbox.id, state: "needs-you" },
+        }),
+        tx.donnaActivity.findMany({
+          where: {
+            mailboxId: mailbox.id,
+            kind: {
+              in: ["filed", "corrected", "failed", "control", "draft-ready"],
+            },
+          },
+          orderBy: { occurredAt: "desc" },
+          take: 12,
+          select: {
+            id: true,
+            kind: true,
+            detail: true,
+            occurredAt: true,
+            request: { select: { id: true, title: true } },
+          },
+        }),
+        // The newest step (1: sort into buckets, 2: do what Tom chose), any status.
+        tx.donnaJob.findFirst({
+          where: {
+            mailboxId: mailbox.id,
+            kind: "clean",
+            options: { path: ["buckets"], equals: true },
+          },
+          orderBy: { receivedAt: "desc" },
+          select: {
+            id: true,
+            status: true,
+            options: true,
+            result: true,
+            completedAt: true,
+            error: true,
+          },
+        }),
+      ]);
+    return { mailbox, active, queued, filedToday, needsYou, recent, step };
   });
 }
 
@@ -279,7 +297,11 @@ export async function claimJob(context: BrandDataContext) {
       AND NOT m.paused
       AND EXISTS (SELECT 1 FROM "DonnaJob" j WHERE j."mailboxId"=m.id
         AND j.status IN ('pending','leased')
-        AND (j.kind IN ('clean','undo') OR COALESCE((m.settings->>'history')::boolean, true))
+        AND (j.kind = 'undo'
+          OR (j.kind = 'clean' AND (j."eventKey" NOT LIKE 'idle:%'
+            OR NOT COALESCE((m.settings->>'steps')::boolean, true)))
+          OR (NOT COALESCE((m.settings->>'steps')::boolean, true)
+            AND COALESCE((m.settings->>'history')::boolean, true)))
         AND j."nextAttemptAt"<=now() AND (j."leaseUntil" IS NULL OR j."leaseUntil"<=now()))
       ORDER BY m."createdAt" LIMIT 1 FOR UPDATE SKIP LOCKED`;
     if (!candidates[0]) return null;
@@ -293,12 +315,20 @@ export async function claimJob(context: BrandDataContext) {
       OR: [{ leaseUntil: null }, { leaseUntil: { lte: new Date() } }],
     };
     // Inbox cleans (Tom's, undo, and new mail) go ahead of background history passes.
+    // In steps (Tom, 2026-11-26) only the steps Tom started, and his undos, run.
+    const settings = donnaSettings(mailbox.settings);
     const job =
       (await tx.donnaJob.findFirst({
-        where: { ...ready, kind: { in: ["clean", "undo"] } },
+        where: {
+          ...ready,
+          kind: { in: ["clean", "undo"] },
+          ...(settings.steps
+            ? { NOT: { eventKey: { startsWith: AUTO_CLEAN_PREFIX } } }
+            : {}),
+        },
         orderBy: { receivedAt: "asc" },
       })) ??
-      (donnaSettings(mailbox.settings).history
+      (settings.history && !settings.steps
         ? await tx.donnaJob.findFirst({
             where: ready,
             orderBy: { receivedAt: "asc" },

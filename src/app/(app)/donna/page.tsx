@@ -5,6 +5,9 @@ import { loadStatus, storageMissing } from "@/lib/donna/store";
 import {
   STATES,
   cleanBarStatus,
+  cleanBuckets,
+  cleanIsSort,
+  cleanReport,
   donnaNow,
   donnaSettings,
   workerStats,
@@ -39,6 +42,136 @@ const DOT: Record<string, string> = {
 
 const button =
   "rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:opacity-40";
+
+type Step = {
+  id: string;
+  status: string;
+  options: unknown;
+  result: unknown;
+  completedAt: Date | null;
+  error: string | null;
+} | null;
+
+/**
+ * Steps (Tom, 2026-11-26): one step at a time, a gate after each. Step 1 sorts Inbox
+ * into buckets and moves nothing; step 2 does only what Tom chose for each bucket.
+ */
+function Steps({
+  mailboxId,
+  step,
+  paused,
+  offline,
+  progress,
+}: {
+  mailboxId: string;
+  step: Step;
+  paused: boolean;
+  offline: boolean;
+  progress: string | null;
+}) {
+  const running = step && ["pending", "leased"].includes(step.status);
+  const sort = step ? cleanIsSort(step.options) : false;
+  const href = step ? `/donna/cleans/${encodeURIComponent(step.id)}` : "";
+  const buckets = step && sort ? cleanBuckets(step.result) : [];
+  const sorted = buckets.reduce((n, b) => n + b.items.length, 0);
+  const moved =
+    step && !sort
+      ? (cleanReport(step.result)?.filed.filter((i) => !i.undone).length ?? 0)
+      : 0;
+  const waitingForTom = step && sort && step.status === "done";
+  return (
+    <section
+      aria-label="Steps"
+      className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 text-sm"
+    >
+      <div>
+        <h2 className="font-semibold">Step 1: Sort Inbox into buckets</h2>
+        <p className="text-slate-600">
+          Donna reads your Inbox emails and puts each one in a bucket, with a
+          one-line reason. Nothing moves, nothing is marked read, nothing is
+          sent. Then you choose what to do with each bucket.
+        </p>
+      </div>
+      {running ? (
+        <div className="space-y-2 rounded-lg bg-slate-50 p-3">
+          <p>
+            <Link href={href} className="font-medium underline">
+              {sort ? "Step 1 is running" : "Step 2 is running"}
+            </Link>
+            {progress ? (
+              <span className="text-slate-500"> · {progress}</span>
+            ) : null}
+          </p>
+          {paused || offline ? (
+            <p className="text-xs text-amber-700">
+              {paused
+                ? "Donna is paused, so this waits until you resume her."
+                : "Donna’s worker on Ripley is not running, so this has not started."}
+            </p>
+          ) : null}
+          <form action={cancelClean}>
+            <input type="hidden" name="jobId" value={step.id} />
+            <button type="submit" className={button}>
+              {sort ? "Stop step 1" : "Stop step 2"}
+            </button>
+          </form>
+        </div>
+      ) : (
+        <>
+          {waitingForTom ? (
+            <Link
+              href={href}
+              className="block rounded-lg bg-slate-900 px-4 py-2.5 text-center text-white"
+            >
+              Step 1 done: {sorted} emails in {buckets.length} buckets. Choose
+              what to do
+            </Link>
+          ) : step && !sort && step.status === "done" ? (
+            <p>
+              Last step 2 moved {moved}.{" "}
+              <Link href={href} className="underline">
+                See the report and Undo
+              </Link>
+            </p>
+          ) : step?.status === "cancelled" ? (
+            <p className="text-slate-500">
+              The last step was stopped.{" "}
+              <Link href={href} className="underline">
+                See what it did
+              </Link>
+            </p>
+          ) : null}
+          <form
+            action={cleanInboxNow}
+            className="flex flex-wrap items-center gap-2"
+          >
+            <input type="hidden" name="mailboxId" value={mailboxId} />
+            <label className="flex items-center gap-2">
+              <span>Emails to sort</span>
+              <select
+                name="limit"
+                defaultValue="25"
+                className="rounded-md border border-slate-200 px-2 py-1"
+              >
+                {[10, 25, 50, 100].map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="submit" disabled={paused} className={button}>
+              {waitingForTom ? "Start step 1 again" : "Start step 1"}
+            </button>
+          </form>
+          <p className="text-xs text-slate-500">
+            Each email uses one review. Newest and client mail are read first.
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
 
 function activityText(a: {
   kind: string;
@@ -83,7 +216,7 @@ export default async function DonnaPage({
         </Link>
       </DonnaFrame>
     );
-  const { mailbox, active, queued, filedToday, needsYou, recent } = data;
+  const { mailbox, active, queued, filedToday, needsYou, recent, step } = data;
   const settings = donnaSettings(mailbox.settings);
   const stats = workerStats(mailbox.coverage);
   const today = new Date().toISOString().slice(0, 10);
@@ -139,17 +272,19 @@ export default async function DonnaPage({
               {mailbox.paused ? "Resume Donna" : "Pause Donna"}
             </button>
           </form>
-          <form action={cleanInboxNow}>
-            <input type="hidden" name="mailboxId" value={mailbox.id} />
-            <button
-              type="submit"
-              disabled={mailbox.paused || active?.kind === "clean"}
-              className={button}
-            >
-              Clean inbox now
-            </button>
-          </form>
-          {active?.kind === "clean" ? (
+          {settings.steps ? null : (
+            <form action={cleanInboxNow}>
+              <input type="hidden" name="mailboxId" value={mailbox.id} />
+              <button
+                type="submit"
+                disabled={mailbox.paused || active?.kind === "clean"}
+                className={button}
+              >
+                Clean inbox now
+              </button>
+            </form>
+          )}
+          {active?.kind === "clean" && !settings.steps ? (
             <form action={cancelClean}>
               <input type="hidden" name="jobId" value={active.id} />
               <button type="submit" className={button}>
@@ -159,6 +294,20 @@ export default async function DonnaPage({
           ) : null}
         </div>
       </section>
+
+      {settings.steps ? (
+        <Steps
+          mailboxId={mailbox.id}
+          step={step}
+          paused={mailbox.paused}
+          offline={now.state === "offline"}
+          progress={
+            progress && step && progress.id === step.id
+              ? progress.countLabel
+              : null
+          }
+        />
+      ) : null}
 
       <section aria-label="Today" className="grid grid-cols-3 gap-2">
         <Link
@@ -238,14 +387,14 @@ export default async function DonnaPage({
             </select>
           </label>
           <label className="flex items-center justify-between gap-3">
-            <span>Empty the Inbox (Archive what she has read)</span>
+            <span>How Donna works</span>
             <select
-              name="inboxZero"
-              defaultValue={settings.inboxZero ? "on" : "off"}
+              name="steps"
+              defaultValue={settings.steps ? "on" : "off"}
               className="rounded-md border border-slate-200 px-2 py-1"
             >
-              <option value="on">On</option>
-              <option value="off">Off</option>
+              <option value="on">In steps: only what you start</option>
+              <option value="off">On her own</option>
             </select>
           </label>
           <label className="flex items-center justify-between gap-3">
@@ -274,8 +423,9 @@ export default async function DonnaPage({
             </select>
           </label>
           <p className="text-xs text-slate-500">
-            New Inbox mail always comes first. Reviews use your ChatGPT plan’s
-            Codex allowance; the count resets at 6 pm Central.
+            In steps, she does not read older mail or new mail on her own.
+            Reviews use your ChatGPT plan’s Codex allowance; the count resets at
+            6 pm Central.
           </p>
           <button type="submit" className={button}>
             Save limits

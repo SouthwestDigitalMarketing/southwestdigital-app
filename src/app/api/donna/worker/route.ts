@@ -86,7 +86,8 @@ export async function POST(request: Request) {
           where: { brandId: auth.context.brandId, key: "zoho", paused: false },
         });
         for (const box of boxes) {
-          // New Inbox mail: Donna files what she can on her own (Tom, 2026-11-25).
+          // New Inbox mail: Donna files what she can on her own (Tom, 2026-11-25),
+          // unless she works in steps: then she waits for Tom to start one (2026-11-26).
           const queued = await tx.donnaJob.findFirst({
             where: {
               mailboxId: box.id,
@@ -95,7 +96,7 @@ export async function POST(request: Request) {
               eventKey: { startsWith: AUTO_CLEAN_PREFIX },
             },
           });
-          if (!queued)
+          if (!queued && !donnaSettings(box.settings).steps)
             await tx.donnaJob.create({
               data: {
                 mailboxId: box.id,
@@ -222,6 +223,7 @@ export async function POST(request: Request) {
           }
           if (
             settings.history &&
+            !settings.steps &&
             (!box.lastCheckedAt ||
               Date.now() - box.lastCheckedAt.getTime() > 900_000)
           )
@@ -366,6 +368,7 @@ export async function POST(request: Request) {
           if (
             job.kind !== "clean" &&
             !box.paused &&
+            !donnaSettings(box.settings).steps &&
             (Number(coverage.remaining_threads ?? 0) > 0 ||
               coverage.coverage_complete === false)
           ) {

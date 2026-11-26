@@ -4,12 +4,20 @@ import { requireDonna } from "@/lib/donna/access";
 import { loadClean } from "@/lib/donna/store";
 import {
   cleanBarStatus,
+  cleanBuckets,
   cleanIsPreview,
+  cleanIsSort,
   cleanReport,
   mailboxCleanReport,
   type CleanReportItem,
 } from "@/lib/donna/domain";
-import { approveClean, cancelClean, undoFiled } from "../../actions";
+import {
+  applyBuckets,
+  approveClean,
+  cancelClean,
+  undoFiled,
+} from "../../actions";
+import { BucketChooser } from "@/components/donna/BucketChooser";
 import { DonnaFrame, shortTime } from "../../DonnaFrame";
 
 export const dynamic = "force-dynamic";
@@ -209,6 +217,11 @@ export default async function CleanPage({
   if (!job) notFound();
   const active = job.status === "pending" || job.status === "leased";
   const preview = cleanIsPreview(job.options);
+  const sort = cleanIsSort(job.options);
+  const stepTwo =
+    !sort &&
+    Array.isArray((job.options as { plan?: unknown } | null)?.plan) &&
+    (job.options as { buckets?: unknown }).buckets === true;
   // Jobs from before per-job reports fall back to the mailbox's last report.
   const legacy =
     !job.options ||
@@ -236,7 +249,13 @@ export default async function CleanPage({
           Email
         </Link>
         <h2 className="text-lg font-semibold">
-          {preview ? "Inbox check" : "Inbox clean"}
+          {sort
+            ? "Step 1: Inbox sorted into buckets"
+            : stepTwo
+              ? "Step 2: what Donna moved"
+              : preview
+                ? "Inbox check"
+                : "Inbox clean"}
         </h2>
         <p className="truncate text-sm text-slate-500">{job.mailbox.address}</p>
         <p className="text-xs text-slate-500">
@@ -278,9 +297,13 @@ export default async function CleanPage({
                 ? "Donna is not running right now, so this has not started and nothing has moved. It starts when Donna is turned on. Cancel if you no longer want it."
                 : progress.waiting
                   ? "Donna is running and will pick this up shortly."
-                  : preview
-                    ? "Donna is reading your Inbox. Nothing moves until you approve the list."
-                    : "Donna is reading your Inbox and filing what she can. Anything she files can be undone here."}
+                  : sort
+                    ? "Donna is reading each Inbox email and putting it in a bucket. Nothing moves."
+                    : stepTwo
+                      ? "Donna is moving only the emails you chose. Each move can be undone here."
+                      : preview
+                        ? "Donna is reading your Inbox. Nothing moves until you approve the list."
+                        : "Donna is reading your Inbox and filing what she can. Anything she files can be undone here."}
           </p>
           <form action={cancelClean}>
             <input type="hidden" name="jobId" value={job.id} />
@@ -296,6 +319,35 @@ export default async function CleanPage({
         <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
           Cancelled before Donna moved anything.
         </p>
+      ) : sort && report ? (
+        <>
+          <p className="text-sm text-slate-600">
+            Donna read {report?.reviewed ?? 0} emails and moved nothing.
+            {report?.remaining
+              ? ` ${report.remaining.toLocaleString("en-US")} were not read this time.`
+              : ""}{" "}
+            Choose what to do with each bucket, then start step 2.
+          </p>
+          {job.approvedJobId ? (
+            <Link
+              href={`/donna/cleans/${encodeURIComponent(job.approvedJobId)}`}
+              className="block rounded-lg border border-slate-200 px-4 py-2.5 text-center text-sm"
+            >
+              Step 2 already started from this sort. See what it did
+            </Link>
+          ) : (
+            <BucketChooser
+              jobId={job.id}
+              buckets={cleanBuckets(job.result)}
+              blocked={
+                paused
+                  ? "Donna is paused. Resume her on the Overview to start step 2."
+                  : null
+              }
+              action={applyBuckets}
+            />
+          )}
+        </>
       ) : report ? (
         <>
           {job.status === "cancelled" ? (

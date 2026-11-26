@@ -10,6 +10,9 @@ import {
   mailboxCleanReport,
   cleanReport,
   cleanIsPreview,
+  cleanIsSort,
+  cleanBuckets,
+  donnaSettings,
   cleanBarStatus,
   formatCleanEta,
   deferredRetryNote,
@@ -252,7 +255,12 @@ describe("honest health and counts", () => {
         new Date(),
         true,
       ),
-    ).toMatchObject({ paused: true, waiting: true, label: "Paused", etaLabel: null });
+    ).toMatchObject({
+      paused: true,
+      waiting: true,
+      label: "Paused",
+      etaLabel: null,
+    });
   });
 
   it("says plainly when no worker is running to pick up a clean", () => {
@@ -279,13 +287,32 @@ describe("honest health and counts", () => {
       reviewed: 0,
       remaining: 0,
       filed: [
-        { thread: "ab12", subject: "Sale", from: "x@shop.example", folder: "Newsletter", undone: true },
-        { thread: "cd34", subject: "Promo", from: "y@shop.example", folder: "Spam", undoPending: true },
-        { thread: "not hex!", subject: "Odd", folder: "Spam", undoError: "Message is no longer in Spam." },
+        {
+          thread: "ab12",
+          subject: "Sale",
+          from: "x@shop.example",
+          folder: "Newsletter",
+          undone: true,
+        },
+        {
+          thread: "cd34",
+          subject: "Promo",
+          from: "y@shop.example",
+          folder: "Spam",
+          undoPending: true,
+        },
+        {
+          thread: "not hex!",
+          subject: "Odd",
+          folder: "Spam",
+          undoError: "Message is no longer in Spam.",
+        },
       ],
     });
     expect(report?.cancelled).toBe(true);
-    expect(report?.filed.map((i) => [i.thread, i.undone, i.undoPending])).toEqual([
+    expect(
+      report?.filed.map((i) => [i.thread, i.undone, i.undoPending]),
+    ).toEqual([
       ["ab12", true, undefined],
       ["cd34", undefined, true],
       [undefined, undefined, undefined],
@@ -472,5 +499,65 @@ describe("firm-time scorecard periods", () => {
         new Date("2026-11-01T20:00:00Z"),
       ).start.toISOString(),
     ).toBe("2026-10-26T05:00:00.000Z");
+  });
+});
+
+describe("steps", () => {
+  const t = (n: number) => n.toString(16).padStart(8, "0");
+  it("treats only a bucket sort without a plan as step 1", () => {
+    expect(cleanIsSort({ preview: true, buckets: true, limit: 25 })).toBe(true);
+    expect(cleanIsSort({ buckets: true, plan: [], previewJobId: "p" })).toBe(
+      false,
+    );
+    expect(cleanIsSort({ manual: true })).toBe(false);
+  });
+
+  it("works in steps unless Tom turns it off", () => {
+    expect(donnaSettings({}).steps).toBe(true);
+    expect(donnaSettings({ inboxZero: true }).steps).toBe(true);
+    expect(donnaSettings({ steps: false }).steps).toBe(false);
+  });
+
+  it("groups sorted emails into buckets, important ones first", () => {
+    const buckets = cleanBuckets({
+      sorted: [
+        {
+          thread: t(1),
+          subject: "Sale",
+          bucket: "Newsletter",
+          suggest: "Newsletter",
+          why: "Promo",
+        },
+        {
+          thread: t(2),
+          subject: "FINAL Notice",
+          bucket: "Money and legal",
+          suggest: null,
+          why: "Money",
+        },
+        {
+          thread: t(3),
+          subject: "Update",
+          bucket: "Clients",
+          client: "Rodan",
+          why: "Client",
+        },
+        {
+          thread: t(4),
+          subject: "Sale 2",
+          bucket: "Newsletter",
+          suggest: "Newsletter",
+        },
+        { thread: "not-hex!", subject: "Bad", bucket: "Clients" },
+        { thread: t(5), subject: "Odd", bucket: "Spam", suggest: "Trash" },
+      ],
+    });
+    expect(buckets.map((b) => [b.name, b.items.length, b.suggest])).toEqual([
+      ["Money and legal", 1, null],
+      ["Clients", 1, null],
+      ["Newsletter", 2, "Newsletter"],
+      ["Spam", 1, null],
+    ]);
+    expect(buckets[1].items[0].client).toBe("Rodan");
   });
 });

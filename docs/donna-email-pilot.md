@@ -12,6 +12,25 @@ sends. It does not use Trash, and it does not file known contacts or
 client/sales mail. The broader build sequence is in
 [the build plan](design/donna-email-build-plan.md).
 
+**Steps (Tom, 2026-11-26; the default, `settings.steps`).** After inbox zero
+archived client mail with no reasons, Donna works one step at a time with a gate
+after each. **Step 1** (Overview → Start step 1, 10/25/50/100 emails; job options
+`{preview, buckets, limit}`) reads Inbox and puts every email in a bucket with a
+one-line reason; it moves nothing. Buckets come from code first: Mailroom's keep
+rules → *Money and legal*; SWapp contacts with service records → *Clients*
+(client name shown); other contacts → *People you know*; model `sales` → *Sales and
+leads*; Mailroom sort rules (`~/projects/mailroom-app/config/mail-sort-rules.json`,
+`DONNA_SORT_RULES`) → their folder; a written reply → *Needs a reply or decision*;
+model `fileTo` → that folder; else *Not sure*. **Gate:** the step 1 page lists each
+bucket with a choice (default *Leave in Inbox*, or Move to one of `STEP_FOLDERS`),
+each email ticked, and a live line saying exactly what step 2 will move. **Step 2**
+(`{previewJobId, plan:[{thread, folder}], buckets:true}`) moves only those, skips
+anything changed since step 1, and reports each move with Undo. Both steps can be
+stopped. In steps, nothing runs on its own: new-mail notify, heartbeat reconciles
+and history passes are not queued, and `claimJob` hands out only Tom's steps and
+undos. "On her own" in Limits restores the automatic behaviour. Inbox zero
+(`archive_rest`) is removed.
+
 ## Pages
 
 - `/donna`: Overview is Donna's live status and controls: what she is doing

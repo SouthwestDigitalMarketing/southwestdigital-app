@@ -1,4 +1,16 @@
 # SWapp handoff
+## 2026-11-26 — Steps and gates (Tom: "just one step… buckets… options for those buckets")
+
+Branch `donna/steps`. Donna now works in steps by default (`DonnaMailbox.settings.steps`,
+missing = on). Step 1 sorts Inbox into buckets with a reason per email and moves nothing;
+the step 1 page is the gate (per-bucket choice, per-email tick, live "step 2 will move"
+line); step 2 moves only that. Automatic work is held in steps (notify, reconcile, history,
+`idle:` cleans). `archive_rest` and the `inboxZero` setting are gone. Detail:
+`docs/donna-email-pilot.md` (Steps). Checks: worker unittest 26 OK, vitest donna 25 OK,
+`test_donna_integration.mjs` and `test_donna_ui.mjs` pass on the isolated dev DB/server.
+Not done: client tags/folders in Zoho (Tom to choose), unread flag on bucket rows, the 36
+put-back items still show as "filed to Archive" on old clean reports.
+
 ## 2026-11-26 — Inbox zero rolled back (Tom: "I don't trust this yet")
 
 `archive_rest()` archived every *decided* Inbox thread, which bypassed the "never file client or
