@@ -10,6 +10,7 @@ import {
   mailboxCleanReport,
   cleanBarStatus,
   formatCleanEta,
+  deferredRetryNote,
   requestSchema,
   verifyHook,
 } from "./domain";
@@ -222,6 +223,16 @@ describe("honest health and counts", () => {
       countLabel: "12 of 75",
       etaLabel: "About 42 min left",
     });
+  });
+
+  it("describes deferred assessment retries without treating them as a mailbox error", () => {
+    expect(deferredRetryNote({})).toBeNull();
+    expect(deferredRetryNote({ deferred_threads: 1 })).toBe(
+      "1 conversation will be tried again.",
+    );
+    expect(deferredRetryNote({ deferred_threads: 3 })).toBe(
+      "3 conversations will be tried again.",
+    );
   });
 
   it("reads a compact clean report from coverage", () => {

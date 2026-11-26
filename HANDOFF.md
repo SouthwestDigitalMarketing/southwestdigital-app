@@ -1,4 +1,11 @@
 # SWapp handoff
+## 2026-11-25 — Clean page must not show leftover mailbox lastError
+
+- Inbox clean shows `job.error` only. A successful pass no longer writes
+  “conversations could not be assessed” into mailbox `lastError`. Those
+  retries already queue a backlog job. Email status shows a quiet
+  “will be tried again” note from `deferred_threads`.
+
 ## 2026-11-25 — Richer Cleaning inbox bar (Tom: progress, n of total, ETA)
 
 - The app-wide bar now matches the production-bar shape: current work, n of

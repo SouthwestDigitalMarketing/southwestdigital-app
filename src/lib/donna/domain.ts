@@ -425,6 +425,16 @@ export function coverageLabel(value: unknown): string {
   return `${prefix} · Coverage is incomplete.`;
 }
 
+export function deferredRetryNote(value: unknown): string | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const n = Number((value as { deferred_threads?: unknown }).deferred_threads);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const count = Math.trunc(n);
+  return count === 1
+    ? "1 conversation will be tried again."
+    : `${count.toLocaleString("en-US")} conversations will be tried again.`;
+}
+
 export function activityCounts(
   rows: {
     kind: string;

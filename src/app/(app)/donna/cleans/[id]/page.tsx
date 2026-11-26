@@ -131,9 +131,9 @@ export default async function CleanPage({
           it.
         </p>
       )}
-      {job.mailbox.lastError ? (
+      {job.error ? (
         <p role="alert" className="text-xs text-rose-700">
-          {job.mailbox.lastError}
+          {job.error}
         </p>
       ) : null}
     </DonnaFrame>
