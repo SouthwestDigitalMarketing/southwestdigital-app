@@ -18,7 +18,7 @@ import {
   mailboxAction,
   updateDonnaSettings,
 } from "./actions";
-import { DonnaFrame, DonnaStart, shortTime } from "./DonnaFrame";
+import { DonnaFrame, shortTime } from "./DonnaFrame";
 import { FolderTable } from "./FolderTable";
 
 export const dynamic = "force-dynamic";
@@ -304,7 +304,6 @@ export default async function DonnaPage({
           Folder counts appear after Donna checks the mailbox.
         </p>
       )}
-      <DonnaStart />
       {/* Steps (Tom, 2026-11-26): only the tables and Start new job; jobs live on their tabs. */}
       {settings.steps ? null : (
         <details className="space-y-3 pt-4" open>

@@ -177,19 +177,10 @@ try {
           await page
             .locator('nav[aria-label="Donna sections"] a')
             .allTextContents(),
-          ["Overview", "Current job", "Jobs", "Email"],
+          ["Overview", "Current job", "Completed jobs", "Email"],
         );
-        // Start new job sits on the Overview, under the folder tables (Tom, 2026-11-26).
-        const start = page.getByRole("button", { name: "Start new job", exact: true });
-        if (route === "/donna") {
-          await expect(start).toBeVisible();
-          const below = await page.evaluate(() => {
-            const btn = [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Start new job");
-            const table = document.querySelector('section[aria-label="Custom folders"]');
-            return Boolean(btn && table && btn.getBoundingClientRect().top >= table.getBoundingClientRect().bottom);
-          });
-          assert.ok(below, "Start new job is not under the folder tables");
-        } else await expect(start).toHaveCount(0);
+        // Start new job lives on Current job only (Tom, 2026-11-26).
+        await expect(page.getByRole("button", { name: "Start new job", exact: true })).toHaveCount(0);
       }
       if (route === "/donna/email") {
         await page
@@ -252,7 +243,7 @@ try {
     );
   }
   await page.setViewportSize({ width: 412, height: 915 });
-  await page.goto(base + "/donna");
+  await page.goto(base + "/donna/current");
   await page.getByRole("button", { name: "Start new job", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
@@ -297,7 +288,7 @@ try {
   );
   await dialog.getByRole("button", { name: "Close", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await page.goto(base + "/donna");
+  await page.goto(base + "/donna/current");
   await page.getByRole("button", { name: "Start new job", exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: /Clean inbox/ }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -333,16 +324,10 @@ try {
     page.getByRole("heading", { name: "Inbox clean" }),
   ).toBeVisible();
   assert.deepEqual(cleanJob.options, { manual: true });
-  await page.goto(base + "/donna");
-  await page.getByRole("button", { name: "Start new job", exact: true }).click();
-  await expect(
-    page.getByRole("dialog").getByRole("button", { name: /Cleaning/ }),
-  ).toBeEnabled();
-  await page.getByRole("dialog").getByRole("button", { name: /Cleaning/ }).click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(
-    page.getByRole("link", { name: /Cleaning inbox/ }),
-  ).toBeVisible();
+  // While a job runs, Current job opens it and offers no Start new job.
+  await page.goto(base + "/donna/current");
+  await expect(page).toHaveURL(base + "/donna/cleans/" + cleanJob.id);
+  await expect(page.getByRole("button", { name: "Start new job", exact: true })).toHaveCount(0);
   // Cancel a queued check: the job ends and the bar goes away.
   await page.goto(base + "/donna/cleans/" + cleanJob.id);
   await page.getByRole("button", { name: "Stop", exact: true }).click();
@@ -434,7 +419,8 @@ try {
   await expect(page.getByText(/More: status/)).toHaveCount(0);
   await expect(page.getByRole("region", { name: "Zoho folders" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Custom folders" })).toBeVisible();
-  // The Donna button up top starts step 1.
+  // Start new job (on Current job) starts step 1.
+  await page.goto(base + "/donna/current");
   await page.getByRole("button", { name: "Start new job", exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: /Clean inbox/ }).click();
   const pendingClean = { where: { mailboxId: box.id, kind: "clean", status: "pending" } };
@@ -516,12 +502,13 @@ try {
   await db.donnaJob.updateMany({ where: { id: stepTwo.id }, data: { status: "done" } });
   // Jobs tab lists every job; each opens its report.
   await page.goto(base + "/donna/jobs");
-  const jobs = page.getByRole("list", { name: "Jobs" });
+  const jobs = page.getByRole("list", { name: "Completed jobs" });
   await expect(jobs).toContainText("Step 1: sort Inbox into buckets");
   await expect(jobs).toContainText("4 sorted into 3 buckets");
   await expect(jobs).toContainText("Step 2: do what you chose");
   await page.goto(base + "/donna/current");
   await expect(page.getByText("No job is running.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start new job", exact: true })).toBeVisible();
   for (const size of [
     { width: 360, height: 640 },
     { width: 412, height: 915 },
