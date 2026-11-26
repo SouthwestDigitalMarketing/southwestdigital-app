@@ -1,40 +1,35 @@
-import Link from "next/link";
-import { redirect } from "next/navigation";
 import { requireDonna } from "@/lib/donna/access";
-import {
-  loadActiveClean,
-  loadAwaitingSort,
-  storageMissing,
-} from "@/lib/donna/store";
+import { loadJobsInProgress, storageMissing } from "@/lib/donna/store";
+import { jobEnd } from "@/lib/donna/domain";
 import { DonnaFrame, DonnaStart } from "../DonnaFrame";
+import { JobsTable } from "../JobsTable";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Current job tab: the running job, else a sorted job waiting for Tom's choices,
- * else Start new job.
+ * Jobs in progress (Tom, 2026-11-26): every job that has not run to the end:
+ * running, waiting for Tom's choices, stopped or closed part-way. Start new job
+ * shows when nothing is running.
  */
-export default async function CurrentJobPage() {
+export default async function JobsInProgressPage() {
   const { dataContext } = await requireDonna();
-  let job = null;
+  let jobs: Awaited<ReturnType<typeof loadJobsInProgress>> = [];
   try {
-    job =
-      (await loadActiveClean(dataContext)) ??
-      (await loadAwaitingSort(dataContext));
+    jobs = await loadJobsInProgress(dataContext);
   } catch (e) {
     if (!storageMissing(e)) throw e;
   }
-  if (job) redirect(`/donna/cleans/${encodeURIComponent(job.id)}`);
+  const running = jobs.some(
+    (job) => jobEnd(job, job.follow).label === "Running",
+  );
   return (
-    <DonnaFrame active="current">
-      <p className="text-sm text-slate-600">
-        No job is running. Finished jobs are on{" "}
-        <Link href="/donna/jobs" className="underline">
-          Completed jobs
-        </Link>
-        .
-      </p>
-      <DonnaStart />
+    <DonnaFrame active="current" refreshEvery={running ? 5000 : undefined}>
+      {running ? null : <DonnaStart />}
+      {jobs.length ? (
+        <JobsTable label="Jobs in progress" jobs={jobs} />
+      ) : (
+        <p className="text-sm text-slate-600">No jobs in progress.</p>
+      )}
     </DonnaFrame>
   );
 }

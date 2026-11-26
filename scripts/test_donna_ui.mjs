@@ -177,7 +177,7 @@ try {
           await page
             .locator('nav[aria-label="Donna sections"] a')
             .allTextContents(),
-          ["Overview", "Current job", "Completed jobs", "Email"],
+          ["Overview", "Jobs in progress", "Completed jobs", "Email"],
         );
         // Start new job lives on Current job only (Tom, 2026-11-26).
         await expect(page.getByRole("button", { name: "Start new job", exact: true })).toHaveCount(0);
@@ -324,9 +324,9 @@ try {
     page.getByRole("heading", { name: "Inbox clean" }),
   ).toBeVisible();
   assert.deepEqual(cleanJob.options, { manual: true });
-  // While a job runs, Current job opens it and offers no Start new job.
+  // While a job runs, Jobs in progress lists it and offers no Start new job.
   await page.goto(base + "/donna/current");
-  await expect(page).toHaveURL(base + "/donna/cleans/" + cleanJob.id);
+  await expect(page.getByRole("table", { name: "Jobs in progress" })).toContainText("Running");
   await expect(page.getByRole("button", { name: "Start new job", exact: true })).toHaveCount(0);
   // Cancel a queued check: the job ends and the bar goes away.
   await page.goto(base + "/donna/cleans/" + cleanJob.id);
@@ -473,9 +473,11 @@ try {
         { thread: "cd".repeat(32), subject: "Example summons", from: "court@x.example", bucket: "Not sure", why: "Court mail", suggest: null, type: "Court", typeGroup: "Other", typeHint: "Jury duty summons", typeNew: true },
       ] } },
   });
-  await page.getByRole("link", { name: "Current job" }).click();
+  await page.getByRole("link", { name: "Jobs in progress" }).click();
+  const stepOneNo = (await db.donnaJob.findUniqueOrThrow({ where: { id: stepOne.id } })).number;
+  await page.getByRole("link", { name: new RegExp("^Job " + stepOneNo + ",") }).click();
   await expect(page).toHaveURL(new RegExp("/donna/cleans/" + stepOne.id));
-  await expect(page.getByRole("link", { name: "Current job" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("link", { name: "Jobs in progress" })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("table", { name: "Sorted emails" })).toContainText("Newsletter (1)");
   await expect(page.getByRole("table", { name: "Sorted emails" })).toContainText("Example live email");
   // Type: short label, hover text, and "new" when Donna made the type up.
@@ -515,10 +517,12 @@ try {
       },
     },
   });
-  // A finished sort waits for Tom: it is on Current job (step 2, Your turn), not Completed jobs.
+  // A finished sort waits for Tom: it is in Jobs in progress (Your turn), not Completed jobs.
   await page.goto(base + "/donna/jobs");
   await expect(page.getByRole("link", { name: /6 sorted into 5 buckets/ })).toHaveCount(0);
   await page.goto(base + "/donna/current");
+  await expect(page.getByRole("table", { name: "Jobs in progress" }).getByRole("row", { name: new RegExp("^" + stepOneNo + " ") })).toContainText("Your turn");
+  await page.getByRole("link", { name: /6 sorted into 5 buckets/ }).click();
   await expect(page).toHaveURL(new RegExp("/donna/cleans/" + stepOne.id));
   const steps = page.getByRole("list", { name: "Job steps" });
   await expect(steps).toContainText("Sort");
@@ -530,7 +534,7 @@ try {
   await expect(page.getByLabel("Action for Example verify now")).toHaveValue("spam-block");
   await expect(page.getByLabel("Action for Example lost report")).toHaveValue("inbox");
   await expect(steps.locator('[aria-current="step"]')).toContainText("Your turn");
-  await expect(page.getByRole("link", { name: "Current job" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("link", { name: "Jobs in progress" })).toHaveAttribute("aria-current", "page");
   const choose = page.getByRole("table", { name: "Choose what to do" });
   await expect(choose).toContainText("Money and legal (1)");
   await expect(page.getByRole("img", { name: "Why: Money or legal trouble" })).toBeVisible();
@@ -595,24 +599,27 @@ try {
   await expect(page.getByRole("list", { name: "Job steps" })).toContainText("Done · moved 1 · tagged 1");
   await expect(page.getByText("Job #" + numbered.number + " · All three steps done")).toBeVisible();
   await expect(page.getByRole("table", { name: "Sorted emails" })).toBeVisible();
-  // Closing at step 2 changes nothing and files the job under Completed jobs.
+  // Closing at step 2 changes nothing; the job stays in Jobs in progress as Closed, with Reopen.
   const closing = await db.donnaJob.create({
     data: { mailboxId: box.id, kind: "clean", eventKey: "ui-close", status: "done", completedAt: new Date(),
       options: { preview: true, buckets: true, limit: 25 },
       result: { preview: true, at: new Date().toISOString(), reviewed: 1, sorted: [{ thread: "ef".repeat(32), subject: "Example close me", from: "c@x.example", bucket: "Not sure", why: "Unclear" }] } },
   });
+  const closedNo = (await db.donnaJob.findUniqueOrThrow({ where: { id: closing.id } })).number;
   await page.goto(base + "/donna/current");
+  await page.getByRole("link", { name: new RegExp("^Job " + closedNo + ",") }).click();
   await expect(page).toHaveURL(new RegExp("/donna/cleans/" + closing.id));
   await page.getByRole("button", { name: "Close this job without changing anything" }).click();
   await expect(page.getByRole("list", { name: "Job steps" })).toContainText("Closed, nothing changed");
   await page.goto(base + "/donna/jobs");
-  await expect(page.getByRole("table", { name: "Completed jobs" })).toContainText("1 sorted into 1 bucket · closed, nothing changed");
-  // A job closed at step 2 is "Closed", not "Finished".
-  const closedNo = (await db.donnaJob.findUniqueOrThrow({ where: { id: closing.id } })).number;
-  await expect(page.getByRole("table", { name: "Completed jobs" }).getByRole("row", { name: new RegExp("^" + closedNo + " ") })).toContainText("Closed");
+  await expect(page.getByRole("table", { name: "Completed jobs" })).not.toContainText("closed, nothing changed");
   await page.goto(base + "/donna/current");
-  await expect(page.getByText("No job is running.")).toBeVisible();
+  const closedRow = page.getByRole("table", { name: "Jobs in progress" }).getByRole("row", { name: new RegExp("^" + closedNo + " ") });
+  await expect(closedRow).toContainText("Closed");
   await expect(page.getByRole("button", { name: "Start new job", exact: true })).toBeVisible();
+  // Reopen puts it back to Tom's turn.
+  await closedRow.getByRole("button", { name: "Reopen" }).click();
+  await expect(page.getByRole("list", { name: "Job steps" }).locator('[aria-current="step"]')).toContainText("Your turn");
   for (const size of [
     { width: 360, height: 640 },
     { width: 412, height: 915 },
