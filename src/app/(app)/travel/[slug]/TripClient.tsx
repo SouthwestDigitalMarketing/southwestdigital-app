@@ -349,7 +349,9 @@ function TripNextUp({ plan, today }: { plan: TripPlan; today: string }) {
   );
   const nextHome = plan.sections.home.find((item) => item.done !== true);
   const passportStatus = passport ? String(passport.status || "Status not set") : "Not added";
-  const passportExpired = passport && typeof passport.expires === "string" && passport.expires < today;
+  // A blank expiry is "not entered yet", not expired.
+  const passportExpired = Boolean(passport && typeof passport.expires === "string" && passport.expires && passport.expires < today);
+  const passportUrgent = passportExpired || passport?.status === "Need it" || !passport;
   return (
     <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="next-up-title">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -357,8 +359,8 @@ function TripNextUp({ plan, today }: { plan: TripPlan; today: string }) {
           <h2 id="next-up-title" className="text-base font-semibold text-slate-900">Next up</h2>
           <p className="mt-0.5 text-sm text-slate-500">One small step to keep the trip moving.</p>
         </div>
-        <span className={`rounded-full px-3 py-1 text-xs font-medium ${passportExpired ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-700"}`}>
-          Passport · {passportExpired ? "Check expiry" : passportStatus}
+        <span className={`rounded-full px-3 py-1 text-xs font-medium ${passportUrgent ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-700"}`}>
+          {passportExpired ? "Passport expired" : `Passport · ${passportStatus}`}
         </span>
       </div>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
