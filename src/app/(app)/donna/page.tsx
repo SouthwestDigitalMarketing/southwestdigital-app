@@ -8,6 +8,7 @@ import {
   cleanBuckets,
   cleanIsSort,
   cleanReport,
+  mailboxFolderTables,
   donnaNow,
   donnaSettings,
   workerStats,
@@ -21,6 +22,7 @@ import {
   updateDonnaSettings,
 } from "./actions";
 import { DonnaFrame, shortTime } from "./DonnaFrame";
+import { FolderTable } from "./FolderTable";
 
 export const dynamic = "force-dynamic";
 
@@ -57,13 +59,11 @@ type Step = {
  * into buckets and moves nothing; step 2 does only what Tom chose for each bucket.
  */
 function Steps({
-  mailboxId,
   step,
   paused,
   offline,
   progress,
 }: {
-  mailboxId: string;
   step: Step;
   paused: boolean;
   offline: boolean;
@@ -79,61 +79,36 @@ function Steps({
       ? (cleanReport(step.result)?.filed.filter((i) => !i.undone).length ?? 0)
       : 0;
   const waitingForTom = step && sort && step.status === "done";
-  const big =
-    "block w-full rounded-xl bg-slate-900 px-6 py-5 text-center text-lg font-semibold text-white disabled:opacity-40";
-  return (
-    <section aria-label="Steps" className="space-y-2">
-      {running ? (
-        <>
-          <Link href={href} className={big}>
-            {sort ? "Sorting your Inbox…" : "Doing what you chose…"}
-            {progress ? ` ${progress}` : ""}
-          </Link>
-          {paused || offline ? (
-            <p className="text-center text-sm text-amber-700">
-              {paused
-                ? "Donna is paused, so this waits until you resume her."
-                : "Donna’s worker on Ripley is not running, so this has not started."}
-            </p>
-          ) : null}
-          <form action={cancelClean} className="text-center">
-            <input type="hidden" name="jobId" value={step.id} />
-            <button type="submit" className="text-sm underline">
-              Stop
-            </button>
-          </form>
-        </>
-      ) : waitingForTom ? (
-        <Link href={href} className={big}>
-          Choose what to do with {sorted} emails
+  // Tom (2026-11-26): no big button here; the Donna button up top starts a step.
+  if (running)
+    return (
+      <p className="text-sm text-slate-600">
+        <Link href={href} className="underline">
+          {sort ? "Step 1: sorting your Inbox" : "Step 2: doing what you chose"}
+          {progress ? ` · ${progress}` : ""}
         </Link>
-      ) : (
-        <form action={cleanInboxNow}>
-          <input type="hidden" name="mailboxId" value={mailboxId} />
-          <input type="hidden" name="limit" value="25" />
-          <button type="submit" disabled={paused} className={big}>
-            Sort my Inbox
-          </button>
-        </form>
-      )}
-      <p className="text-center text-sm text-slate-500">
-        {running
-          ? sort
-            ? "Donna is putting emails in buckets. Nothing moves."
-            : "Moving only what you chose."
-          : waitingForTom
-            ? `${buckets.length} buckets are ready. Nothing has moved.`
-            : step && !sort && step.status === "done"
-              ? `Last time: moved ${moved}. `
-              : "Donna reads 25 emails and puts them in buckets. Nothing moves."}
-        {!running && step && !sort && step.status === "done" ? (
-          <Link href={href} className="underline">
-            See the report and Undo
-          </Link>
-        ) : null}
+        {paused ? " · paused" : offline ? " · Donna is not running" : ""}
       </p>
-    </section>
-  );
+    );
+  if (waitingForTom)
+    return (
+      <p className="text-sm text-slate-600">
+        <Link href={href} className="font-medium underline">
+          Step 1 done: choose what to do with {sorted} emails in{" "}
+          {buckets.length} buckets
+        </Link>
+      </p>
+    );
+  if (step && !sort && step.status === "done")
+    return (
+      <p className="text-sm text-slate-600">
+        Last step 2 moved {moved}.{" "}
+        <Link href={href} className="underline">
+          See the report and Undo
+        </Link>
+      </p>
+    );
+  return null;
 }
 
 function activityText(a: {
@@ -181,6 +156,7 @@ export default async function DonnaPage({
     );
   const { mailbox, active, queued, filedToday, needsYou, recent, step } = data;
   const settings = donnaSettings(mailbox.settings);
+  const folders = mailboxFolderTables(mailbox.coverage);
   const stats = workerStats(mailbox.coverage);
   const today = new Date().toISOString().slice(0, 10);
   const used = stats?.day === today ? stats.reviews : 0;
@@ -389,8 +365,17 @@ export default async function DonnaPage({
     return <DonnaFrame active="overview">{details}</DonnaFrame>;
   return (
     <DonnaFrame active="overview">
+      {folders.zoho.length || folders.custom.length ? (
+        <>
+          <FolderTable title="Zoho folders" folders={folders.zoho} />
+          <FolderTable title="Custom folders" folders={folders.custom} />
+        </>
+      ) : (
+        <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
+          Folder counts appear after Donna checks the mailbox.
+        </p>
+      )}
       <Steps
-        mailboxId={mailbox.id}
         step={step}
         paused={mailbox.paused}
         offline={now.state === "offline"}
