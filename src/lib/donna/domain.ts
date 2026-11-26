@@ -292,6 +292,129 @@ export function cleanIsPreview(options: unknown): boolean {
   );
 }
 
+/** Step 1 of a stepped clean: sort Inbox into buckets, move nothing. */
+export function cleanIsSort(options: unknown): boolean {
+  return Boolean(
+    options &&
+    typeof options === "object" &&
+    !Array.isArray(options) &&
+    (options as { buckets?: unknown }).buckets === true &&
+    !Array.isArray((options as { plan?: unknown }).plan),
+  );
+}
+
+/** Folders step 2 may move mail to; anything else stays in Inbox. */
+export const STEP_FOLDERS = [
+  "Archive",
+  "Bills",
+  "Payments",
+  "Newsletter",
+  "Notification",
+  "Cold Outreach",
+  "Personal",
+  "DMARC",
+  "Spam",
+] as const;
+
+/** Bucket order on the step 1 page: what matters most first. */
+export const BUCKET_ORDER = [
+  "Money and legal",
+  "Clients",
+  "People you know",
+  "Sales and leads",
+  "Needs a reply or decision",
+  "Not sure",
+];
+
+export const BUCKET_NOTES: Record<string, string> = {
+  "Money and legal":
+    "Past due, final notice, expiring, collection or a client question in Double. Your Mailroom keep rules put these here.",
+  Clients: "From a client in SWapp contacts, or reads like client mail.",
+  "People you know": "From someone in your SWapp contacts.",
+  "Sales and leads": "Reads like a lead or a sales conversation.",
+  "Needs a reply or decision": "Donna thinks you need to answer or decide.",
+  "Not sure": "Donna could not tell where this belongs.",
+};
+
+export type SortedItem = {
+  thread: string;
+  subject: string;
+  from: string;
+  at: string;
+  bucket: string;
+  why: string;
+  suggest: string | null;
+  client: string | null;
+};
+
+export type Bucket = {
+  name: string;
+  note: string;
+  suggest: string | null;
+  items: SortedItem[];
+};
+
+function sortedItems(value: unknown): SortedItem[] {
+  if (!Array.isArray(value)) return [];
+  const text = (v: unknown, n: number) =>
+    typeof v === "string" ? v.trim().slice(0, n) : "";
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const raw = item as Record<string, unknown>;
+    const thread = text(raw.thread, 64);
+    if (!/^[a-f0-9]{1,64}$/.test(thread)) return [];
+    const suggest = text(raw.suggest, 80);
+    return [
+      {
+        thread,
+        subject: text(raw.subject, 200) || "Email",
+        from: text(raw.from, 200),
+        at: text(raw.at, 40),
+        bucket: text(raw.bucket, 80) || "Not sure",
+        why: text(raw.why, 300),
+        suggest: (STEP_FOLDERS as readonly string[]).includes(suggest)
+          ? suggest
+          : null,
+        client: text(raw.client, 120) || null,
+      },
+    ];
+  });
+}
+
+/** Step 1's buckets, most important first; folder buckets after, biggest first. */
+export function cleanBuckets(raw: unknown): Bucket[] {
+  const items =
+    raw && typeof raw === "object" && !Array.isArray(raw)
+      ? sortedItems((raw as { sorted?: unknown }).sorted)
+      : [];
+  const groups = new Map<string, SortedItem[]>();
+  for (const item of items)
+    groups.set(item.bucket, [...(groups.get(item.bucket) ?? []), item]);
+  const rank = (name: string) => {
+    const i = BUCKET_ORDER.indexOf(name);
+    return i === -1 ? BUCKET_ORDER.length : i;
+  };
+  return [...groups.entries()]
+    .map(([name, list]) => ({
+      name,
+      note:
+        BUCKET_NOTES[name] ??
+        (list[0].suggest
+          ? `Donna would move these to ${list[0].suggest}.`
+          : "Donna sorted these together."),
+      suggest: list.every((i) => i.suggest === list[0].suggest)
+        ? list[0].suggest
+        : null,
+      items: list,
+    }))
+    .sort(
+      (a, b) =>
+        rank(a.name) - rank(b.name) ||
+        b.items.length - a.items.length ||
+        a.name.localeCompare(b.name),
+    );
+}
+
 export function cleanBarStatus(
   job: { id: string; status: string; options?: unknown },
   coverage: unknown,
@@ -337,9 +460,14 @@ export function cleanBarStatus(
     const elapsed = Math.max(1, (now.getTime() - startedAt) / 1000);
     etaLabel = formatCleanEta((elapsed / done) * (total - done));
   }
-  const title = cleanIsPreview(job.options)
-    ? "Checking inbox"
-    : "Cleaning inbox";
+  const title = cleanIsSort(job.options)
+    ? "Step 1: sorting Inbox into buckets"
+    : Array.isArray((job.options as { plan?: unknown } | null)?.plan) &&
+        (job.options as { buckets?: unknown }).buckets === true
+      ? "Step 2: doing what you chose"
+      : cleanIsPreview(job.options)
+        ? "Checking inbox"
+        : "Cleaning inbox";
   return {
     id: job.id,
     title,
@@ -533,14 +661,15 @@ export type DonnaSettings = {
   /** Background reading of older mail on or off. Inbox cleans always run. */
   history: boolean;
   /** Inbox zero: everything Donna has read leaves Inbox (rest to Archive). */
-  inboxZero: boolean;
+  /** Steps (Tom, 2026-11-26): Donna only does a step Tom starts; nothing runs on its own. */
+  steps: boolean;
 };
 
 export const DONNA_SETTING_DEFAULTS: DonnaSettings = {
   dailyReviews: 500,
   historyReviews: 60,
   history: true,
-  inboxZero: true,
+  steps: true,
 };
 
 function boundedInt(value: unknown, fallback: number) {
@@ -564,7 +693,7 @@ export function donnaSettings(raw: unknown): DonnaSettings {
       DONNA_SETTING_DEFAULTS.historyReviews,
     ),
     history: typeof s.history === "boolean" ? s.history : true,
-    inboxZero: typeof s.inboxZero === "boolean" ? s.inboxZero : true,
+    steps: typeof s.steps === "boolean" ? s.steps : true,
   };
 }
 
@@ -655,6 +784,12 @@ export function donnaNow(input: {
           : "Reading only; nothing is moved in this step.",
     };
   }
+  if (input.settings.steps)
+    return {
+      state: "idle",
+      headline: "Donna is ready",
+      detail: "She does nothing until you start a step.",
+    };
   return {
     state: "idle",
     headline: "Donna is listening for new mail",

@@ -4,10 +4,10 @@
 Reuses Mailroom's existing account/credential connection. Raw mail and model
 context stay on Ripley. Only request summaries, evidence excerpts and prepared
 replies go to SWapp. Reconcile and incoming jobs are read-only IMAP. A Clean
-job files allowlisted Inbox mail on its own (Tom, 2026-11-25), after a verified
-copy, and records each move so an undo job can put it back. A preview job
-moves nothing; a plan job files only what a preview listed. It never sends,
-never uses Trash, and never files known contacts or client/sales mail.
+job works in steps (Tom, 2026-11-26): step 1 sorts Inbox into buckets and moves
+nothing; step 2 (a plan job) moves only what Tom chose per bucket, after a
+verified copy, and records each move so an undo job can put it back. It never
+sends, never uses Trash and never marks mail read.
 """
 import argparse
 import datetime as dt
@@ -489,6 +489,79 @@ def filing_plan(assessments, messages, contacts, folders):
     return dests[0], None
 
 
+SORT_RULES = Path(os.environ.get(
+    "DONNA_SORT_RULES", str(Path.home() / "projects/mailroom-app/config/mail-sort-rules.json")))
+CONTACT_FIELDS = ("email", "secondaryEmail", "businessEmail", "personalEmail")
+
+
+def load_sort_rules(path=None):
+    """Mailroom's keep and sort rules (Tom's own, by sender and subject). Missing file = no rules."""
+    try:
+        data = json.loads(Path(path or SORT_RULES).read_text())
+    except (OSError, ValueError):
+        return {"keep": [], "rules": []}
+    return {"keep": [r for r in data.get("keep") or [] if isinstance(r, dict)],
+            "rules": [r for r in data.get("rules") or [] if isinstance(r, dict)]}
+
+
+def rule_matches(rule, sender, subject):
+    if rule.get("only_from_box") and str(rule["only_from_box"]).upper() != "INBOX":
+        return False
+    froms = [str(f).lower() for f in rule.get("from") or []]
+    subjects = [str(p) for p in rule.get("subject") or []]
+    if not froms and not subjects:
+        return False
+    if froms and not any(sender == f or (f.startswith("@") and (sender.endswith(f) or sender.endswith("." + f[1:])))
+                         for f in froms):
+        return False
+    try:
+        return not subjects or any(re.search(p, subject or "", re.IGNORECASE) for p in subjects)
+    except re.error:
+        return False
+
+
+def bucket_for(assessment, messages, contacts, folders, rules):
+    """Step 1: which bucket an email goes in, why, and the folder Donna would suggest.
+
+    Tom's own rules decide first, then SWapp contacts, then the model's reading.
+    """
+    inbound = [m for m in messages if not m.get("outgoing")] or messages
+    last = inbound[-1]
+    sender = email.utils.parseaddr(last.get("from", ""))[1].lower()
+    subject = last.get("subject") or ""
+    summary = next((a.get("summary") for a in assessment if a.get("summary")), "")
+    categories = {a.get("category") for a in assessment}
+    for rule in rules.get("keep") or []:
+        if rule_matches(rule, sender, subject):
+            return "Money and legal", rule.get("why") or "Matches a keep-in-front rule", None, None
+    addresses = inbound_addresses(messages)
+    contact = next((c for c in contacts or []
+                    if addresses & {str(c.get(f) or "").lower() for f in CONTACT_FIELDS} - {""}), None)
+    name = (contact or {}).get("company") or (contact or {}).get("name") or ""
+    if contact and (contact.get("_count") or {}).get("serviceRecords", 0):
+        return "Clients", "From %s, a client in SWapp" % name, None, name
+    if "client" in categories:
+        return "Clients", summary or "Reads like client mail", None, None
+    if contact:
+        return "People you know", "From %s, in your SWapp contacts" % name, None, None
+    if "sales" in categories:
+        return "Sales and leads", summary or "Reads like a sales lead", None, None
+    for rule in rules.get("rules") or []:
+        if rule.get("folder") and rule_matches(rule, sender, subject):
+            folder = resolve_file_dest(rule["folder"], folders)
+            return str(rule["folder"]), rule.get("why") or "Matches your sorting rule", folder, None
+    action = next((a.get("nextAction") for a in assessment if a.get("nextAction")), "")
+    if any(a.get("reply") for a in assessment):
+        return "Needs a reply or decision", action or summary, None, None
+    for a in assessment:
+        folder = resolve_file_dest(a.get("fileTo"), folders)
+        if folder:
+            return folder, summary or "Donna would file this in %s" % folder, folder, None
+    if any(a.get("state") == "needs-you" for a in assessment):
+        return "Needs a reply or decision", action or summary, None, None
+    return "Not sure", summary or "Donna could not tell", None, None
+
+
 def inbox_thread(messages):
     return any(str(m.get("folder", "")).upper() == "INBOX" and not m.get("outgoing") for m in messages)
 
@@ -853,7 +926,11 @@ def process_job(client, store, work, max_threads, clean_threads=100):
         is_clean = job.get("kind") == "clean"
         options = job.get("options") or {}
         plan = options.get("plan") if is_clean and isinstance(options.get("plan"), list) else None
-        preview = is_clean and plan is None and options.get("preview") is True
+        # Steps (Tom, 2026-11-26): any Clean that is not Tom's step 2 only sorts into buckets.
+        steps = (work.get("settings") or {}).get("steps", True) is not False
+        sorting = is_clean and plan is None and (steps or options.get("buckets") is True)
+        preview = is_clean and plan is None and (sorting or options.get("preview") is True)
+        rules = load_sort_rules() if sorting else None
         mailbox = work["mailbox"]["id"]
         coverage = store.inventory(mailbox, work["mailbox"]["address"], heartbeat)
         # Clean looks at every Inbox conversation, even ones a read-only pass already reviewed.
@@ -861,6 +938,8 @@ def process_job(client, store, work, max_threads, clean_threads=100):
                                 **({"include_assessed": True} if is_clean else {}))
         report = {"at": stamp(), "reviewed": 0, "remaining": 0, "filed": [], "waiting": [], "needsYou": [],
                   "skipped": [], "preview": preview}
+        if sorting:
+            report["sorted"] = []
         if plan is not None:
             done_threads = set()
             for item in store.filed_for(job["id"]):
@@ -877,12 +956,14 @@ def process_job(client, store, work, max_threads, clean_threads=100):
                                             "coverage": coverage, "report": report,
                                             "cancelled": cancelled.is_set()})
             return
-        inbox_all = [item for item in pending if inbox_thread(item[2])] if is_clean else []
         if is_clean:
             # Inbox conversations Donna has not decided on at this exact version.
+            # Step 1 looks at every Inbox conversation; a direct clean skips ones already decided.
             pending = [item for item in pending if inbox_thread(item[2])
-                       and not (getattr(store, "decided", None) and store.decided(mailbox, item[0], item[1]))]
+                       and (sorting or not (getattr(store, "decided", None) and store.decided(mailbox, item[0], item[1])))]
             max_threads = clean_threads
+            if sorting and isinstance(options.get("limit"), int):
+                max_threads = max(1, min(clean_threads, options["limit"]))
             progress.update(total=max(min(len(pending), max_threads), 1), phase="working")
             heartbeat(True)
         reviewed = 0
@@ -896,7 +977,7 @@ def process_job(client, store, work, max_threads, clean_threads=100):
                 break
             subject = next((m.get("subject") or "Email" for m in messages if not m.get("outgoing")), "Email")
             sender = next((m.get("from") or "" for m in messages if not m.get("outgoing")), "")
-            if is_clean and getattr(store, "kept", None) and store.kept(mailbox, thread):
+            if is_clean and not sorting and getattr(store, "kept", None) and store.kept(mailbox, thread):
                 report["skipped"].append({"subject": subject, "from": sender, "reason": "you moved it back to Inbox"})
                 if not preview and getattr(store, "decide", None):
                     store.decide(mailbox, thread, fingerprint, "kept")
@@ -916,7 +997,20 @@ def process_job(client, store, work, max_threads, clean_threads=100):
                 assessment = assess(messages, existing, store.root, work.get("contacts"),
                                     extra=CLEAN_INSTRUCTIONS if is_clean else "")
                 dest = None
-                if is_clean:
+                filed_to = None
+                if sorting:
+                    bucket, why, suggest, client_name = bucket_for(assessment, messages, work.get("contacts"),
+                                                                   coverage.get("folders"), rules)
+                    if any(a.get("gap") for m in messages for a in m.get("attachments") or []):
+                        why += " (an attachment could not be read)"
+                    if getattr(store, "kept", None) and store.kept(mailbox, thread):
+                        why += " (you put this back in Inbox before)"
+                    store.db.execute("INSERT OR REPLACE INTO clean_plans VALUES (?,?,?,?,?)",
+                                     (job["id"], thread, fingerprint, suggest or "", json.dumps(assessment)))
+                    report["sorted"].append({"thread": thread, "subject": subject, "from": sender,
+                                             "at": (messages[-1] or {}).get("at") or "", "bucket": bucket,
+                                             "why": str(why)[:300], "suggest": suggest, "client": client_name})
+                elif is_clean:
                     dest, reason = filing_plan(assessment, messages, work.get("contacts"), coverage.get("folders"))
                     # An unreadable attachment (often just a logo) only blocks filing when the
                     # mail could matter: anything not plainly noise or information stays in Inbox.
@@ -953,7 +1047,7 @@ def process_job(client, store, work, max_threads, clean_threads=100):
                 client.call("publish", packet=packet)
                 for item in assessment:
                     title = item.get("title") or subject
-                    if dest:
+                    if dest or sorting:
                         continue
                     if item.get("state") == "waiting":
                         report["waiting"].append({"title": title, "from": sender, "waitingOn": item.get("waitingOn") or ""})
@@ -980,9 +1074,6 @@ def process_job(client, store, work, max_threads, clean_threads=100):
             if is_clean:
                 progress.update(done=reviewed, phase="working")
                 heartbeat(True)
-        if is_clean and not preview and (work.get("settings") or {}).get("inboxZero") \
-                and not cancelled.is_set() and getattr(store, "decided", None):
-            archive_rest(client, store, work, inbox_all, report, heartbeat)
         deferred = getattr(store, "deferred", 0) + failed
         ready = len(pending) - attempted
         report["reviewed"] = reviewed
@@ -1012,56 +1103,13 @@ def process_job(client, store, work, max_threads, clean_threads=100):
         keeper.join(timeout=36)
 
 
-def archive_rest(client, store, work, inbox_all, report, heartbeat):
-    """Inbox zero (Tom, 2026-11-25): every conversation Donna has read leaves Inbox.
-
-    What she did not file elsewhere goes to Archive; requests that need Tom stay on
-    his Need you list in SWapp. Unread-by-Donna, unreadable and put-back mail stays.
-    """
-    job = work["job"]
-    mailbox = work["mailbox"]["id"]
-    filer = work.get("filer") or file_via_imap
-    done = {item["thread"] for item in report["filed"]}
-    activities = []
-    archived = set()
-    for thread, fingerprint, messages, _ in inbox_all:
-        if thread in done or store.kept(mailbox, thread) or not store.decided(mailbox, thread, fingerprint):
-            continue
-        heartbeat()
-        subject = next((m.get("subject") or "Email" for m in messages if not m.get("outgoing")), "Email")
-        sender = next((m.get("from") or "" for m in messages if not m.get("outgoing")), "")
-        try:
-            keys = file_thread(store, mailbox, messages, "Archive", filer)
-        except (RuntimeError, ValueError, KeyError, TypeError):
-            report["skipped"].append({"thread": thread, "subject": subject, "from": sender, "reason": "archive failed"})
-            continue
-        store.db.execute("INSERT OR REPLACE INTO clean_filed VALUES (?,?,?,?,?,?)",
-                         (job["id"], thread, "Archive", json.dumps(keys), subject, sender))
-        store.decide(mailbox, thread, fingerprint, "filed:Archive")
-        report["filed"].append({"thread": thread, "folder": "Archive", "messages": keys,
-                                "subject": subject, "from": sender})
-        archived.add((subject, sender))
-        activities.append({"eventKey": "archived:" + digest(thread + fingerprint), "messageKey": thread,
-                           "kind": "filed", "detail": "Filed to Archive",
-                           "evidence": "Inbox zero: verified IMAP copy into Archive, then removed from Inbox.",
-                           "occurredAt": stamp(), "metadata": {"folder": "Archive"}})
-    # Anything archived is no longer "left in Inbox".
-    report["skipped"] = [i for i in report["skipped"] if (i.get("subject"), i.get("from")) not in archived]
-    for start in range(0, len(activities), 400):
-        try:
-            client.call("publish", packet={"jobId": job["id"], "leaseToken": job["leaseToken"],
-                                           "requests": [], "activities": activities[start:start + 400]})
-        except DonnaAPIError as error:
-            if error.status == 409:
-                raise LeaseLost("Job was paused or reclaimed; stopping.") from None
-            print(stamp(), "Archive activity was rejected; moves are still recorded.", flush=True)
-
-
 def run_plan(client, store, work, plan, pending, report, done_threads, progress, heartbeat, cancelled, lease_errors):
     """File exactly what Tom approved from a preview, if the conversation is unchanged."""
     job = work["job"]
     mailbox = work["mailbox"]["id"]
     preview_job = str((job.get("options") or {}).get("previewJobId") or "")
+    # Step 2 of a bucket sort: Tom chose the folder for each bucket; that choice is the authority.
+    chosen = (job.get("options") or {}).get("buckets") is True
     filer = work.get("filer") or file_via_imap
     current = {thread: (fingerprint, messages, existing) for thread, fingerprint, messages, existing in pending}
     known = contact_addresses(work.get("contacts"))
@@ -1084,6 +1132,9 @@ def run_plan(client, store, work, plan, pending, report, done_threads, progress,
         if cancelled.is_set():
             break
         reason = None
+        folder = row["folder"] if row else ""
+        if chosen:
+            folder = resolve_file_dest((entry or {}).get("folder"), None) or ""
         if not row:
             reason = "no preview record on Ripley"
         elif not found or not inbox_thread(messages):
@@ -1092,27 +1143,29 @@ def run_plan(client, store, work, plan, pending, report, done_threads, progress,
             reason = "changed since the preview"
         elif store.kept(mailbox, thread):
             reason = "you moved it back to Inbox"
-        elif inbound_addresses(messages) & known:
+        elif not chosen and inbound_addresses(messages) & known:
             reason = "known contact"
-        elif str((entry or {}).get("folder") or row["folder"]) != row["folder"]:
+        elif not chosen and str((entry or {}).get("folder") or row["folder"]) != row["folder"]:
             reason = "folder differs from the preview"
+        elif not folder:
+            reason = "no folder chosen"
         if reason:
             report["skipped"].append({"thread": thread, "subject": subject, "from": sender, "reason": reason})
         else:
             try:
-                keys = file_thread(store, mailbox, messages, row["folder"], filer)
+                keys = file_thread(store, mailbox, messages, folder, filer)
             except (RuntimeError, ValueError, KeyError, TypeError):
                 report["skipped"].append({"thread": thread, "subject": subject, "from": sender, "reason": "filing failed"})
                 keys = None
             if keys:
                 store.db.execute("INSERT OR REPLACE INTO clean_filed VALUES (?,?,?,?,?,?)",
-                                 (job["id"], thread, row["folder"], json.dumps(keys), subject, sender))
+                                 (job["id"], thread, folder, json.dumps(keys), subject, sender))
                 store.db.commit()
-                report["filed"].append({"thread": thread, "folder": row["folder"], "messages": keys,
+                report["filed"].append({"thread": thread, "folder": folder, "messages": keys,
                                         "subject": subject, "from": sender})
                 assessment = json.loads(row["assessment"])
                 packet = packet_for(work, thread, row["fingerprint"] + ":filed", messages, found[2],
-                                    assessment, filed_to=row["folder"])
+                                    assessment, filed_to=folder)
                 try:
                     client.call("publish", packet=packet)
                 except DonnaAPIError as error:

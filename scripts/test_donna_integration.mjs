@@ -37,6 +37,8 @@ const box = await db.donnaMailbox.create({
     key: "check-" + suffix,
     address: "fixture@example.com",
     paused: false,
+    // The automatic flows first; steps (the default) are checked at the end.
+    settings: { steps: false },
     hookKey: randomBytes(32).toString("hex"),
     setupExpiresAt: new Date(Date.now() + 600000),
   },
@@ -412,7 +414,7 @@ try {
   });
   await db.donnaMailbox.update({
     where: { id: box.id },
-    data: { paused: false, settings: { history: false, dailyReviews: 300, historyReviews: 0 } },
+    data: { paused: false, settings: { history: false, dailyReviews: 300, historyReviews: 0, steps: false } },
   });
   await db.donnaJob.create({
     data: { mailboxId: box.id, kind: "backlog", eventKey: "held:" + suffix },
@@ -423,7 +425,7 @@ try {
   });
   const settingsClaim = (await call({ op: "claim" })).body;
   assert.equal(settingsClaim.work?.job?.id, quietClean.id, "Inbox cleans still run.");
-  assert.deepEqual(settingsClaim.work.settings, { dailyReviews: 300, historyReviews: 0, history: false, inboxZero: true });
+  assert.deepEqual(settingsClaim.work.settings, { dailyReviews: 300, historyReviews: 0, history: false, steps: false });
   const usageBeat = await call({
     op: "heartbeat",
     ...lease(settingsClaim),
@@ -432,6 +434,36 @@ try {
   assert.equal(usageBeat.body.settings.dailyReviews, 300);
   const withUsage = await db.donnaMailbox.findUniqueOrThrow({ where: { id: box.id } });
   assert.equal(withUsage.coverage.worker.reviews, 7);
+
+  // Steps (the default): nothing runs unless Tom started it.
+  await db.donnaJob.updateMany({
+    where: { mailboxId: box.id, status: { in: ["pending", "leased"] } },
+    data: { status: "done", leaseToken: null, leaseUntil: null },
+  });
+  await db.donnaMailbox.update({
+    where: { id: box.id },
+    data: { settings: { history: true }, lastCheckedAt: null },
+  });
+  await call({ op: "heartbeat" });
+  await db.donnaJob.create({
+    data: { mailboxId: box.id, kind: "backlog", eventKey: "steps-held:" + suffix },
+  });
+  await db.donnaJob.create({
+    data: { mailboxId: box.id, kind: "clean", eventKey: "idle:steps-" + suffix, options: { auto: true } },
+  });
+  assert.equal(
+    await db.donnaJob.count({ where: { mailboxId: box.id, kind: "reconcile", status: "pending" } }),
+    0,
+    "Steps: heartbeats do not queue mailbox checks.",
+  );
+  assert.equal((await call({ op: "claim" })).body.work, null, "Steps: automatic jobs are held.");
+  const stepOne = await db.donnaJob.create({
+    data: { mailboxId: box.id, kind: "clean", eventKey: "clean:steps-" + suffix,
+            options: { preview: true, buckets: true, limit: 10 } },
+  });
+  const stepClaim = (await call({ op: "claim" })).body;
+  assert.equal(stepClaim.work?.job?.id, stepOne.id, "Steps: Tom's step 1 runs.");
+  assert.equal(stepClaim.work.settings.steps, true);
   await db.donnaMailbox.update({ where: { id: box.id }, data: { paused: true } });
 
   const role = "donna_rls_" + suffix;
@@ -460,7 +492,7 @@ try {
     await db.$executeRawUnsafe(`DROP ROLE ${role}`);
   }
   console.log(
-    "Donna integration checks passed: signed enrollment, invalid signatures, deduplication, exclusive leases, replay-safe publish, human-edit preservation, backlog recovery, pause stops Clean, clean preview, cancel, undo, history switch, usage reporting and tenant RLS.",
+    "Donna integration checks passed: signed enrollment, invalid signatures, deduplication, exclusive leases, replay-safe publish, human-edit preservation, backlog recovery, pause stops Clean, clean preview, cancel, undo, history switch, usage reporting, steps hold automatic work and tenant RLS.",
   );
 } finally {
   await db.donnaMailbox.delete({ where: { id: box.id } });

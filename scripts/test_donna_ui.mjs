@@ -20,6 +20,8 @@ const box = await db.donnaMailbox.create({
     key: "ui-" + randomBytes(8).toString("hex"),
     address: "example@example.com",
     paused: false,
+    // The automatic Clean flows first; steps (the default) are clicked through later.
+    settings: { steps: false },
     hookKey: randomBytes(32).toString("hex"),
     coverage: {
       folders: [
@@ -443,6 +445,56 @@ try {
     where: { mailboxId: box.id, kind: "undo" },
   });
   assert.deepEqual(undo.options, { cleanJobId: real.id, threads: [file] });
+
+  // Steps: start step 1 from the Overview, choose per bucket, start step 2.
+  await db.donnaJob.updateMany({
+    where: { mailboxId: box.id, status: { in: ["pending", "leased"] } },
+    data: { status: "done", leaseToken: null, leaseUntil: null },
+  });
+  await db.donnaMailbox.update({ where: { id: box.id }, data: { settings: { steps: true } } });
+  await page.goto(base + "/donna");
+  await expect(page.getByRole("heading", { name: "Step 1: Sort Inbox into buckets" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Clean inbox now" })).toHaveCount(0);
+  await page.getByLabel("Emails to sort").selectOption("10");
+  await page.getByRole("button", { name: "Start step 1" }).click();
+  const pendingClean = { where: { mailboxId: box.id, kind: "clean", status: "pending" } };
+  await expect.poll(async () => Boolean(await db.donnaJob.findFirst(pendingClean))).toBe(true);
+  const stepOne = await db.donnaJob.findFirstOrThrow(pendingClean);
+  assert.deepEqual(stepOne.options, { preview: true, buckets: true, limit: 10 });
+  const [notice, promoA, promoB] = ["c3".repeat(32), "d4".repeat(32), "e5".repeat(32)];
+  await db.donnaJob.update({
+    where: { id: stepOne.id },
+    data: {
+      status: "done",
+      completedAt: new Date(),
+      result: {
+        preview: true, at: new Date().toISOString(), reviewed: 3, remaining: 0,
+        filed: [], waiting: [], needsYou: [], skipped: [],
+        sorted: [
+          { thread: promoA, subject: "Example sale A", from: "a@shop.example", bucket: "Newsletter", why: "Promo A", suggest: "Newsletter" },
+          { thread: notice, subject: "Example final notice", from: "n@bank.example", bucket: "Money and legal", why: "Money or legal trouble", suggest: null },
+          { thread: promoB, subject: "Example sale B", from: "b@shop.example", bucket: "Newsletter", why: "Promo B", suggest: "Newsletter" },
+        ],
+      },
+    },
+  });
+  await page.goto(base + "/donna");
+  await page.getByRole("link", { name: /Step 1 done: 3 emails in 2 buckets/ }).click();
+  await expect(page.getByRole("heading", { name: "Step 1: Inbox sorted into buckets" })).toBeVisible();
+  await expect(page.getByText("Why: Money or legal trouble")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start step 2" })).toBeDisabled();
+  await page.getByLabel("What to do with Newsletter").selectOption("Newsletter");
+  await page.getByRole("checkbox", { name: /Example sale B/ }).uncheck();
+  await expect(page.getByText("Step 2 will move 1: 1 to Newsletter. Everything else stays in Inbox.")).toBeVisible();
+  await page.getByRole("button", { name: "Start step 2" }).click();
+  await expect(page.getByRole("heading", { name: "Step 2: what Donna moved" })).toBeVisible();
+  const stepTwo = await db.donnaJob.findFirstOrThrow(pendingClean);
+  assert.deepEqual(stepTwo.options, {
+    previewJobId: stepOne.id,
+    plan: [{ thread: promoA, folder: "Newsletter" }],
+    buckets: true,
+  });
+  await db.donnaJob.updateMany({ where: { id: stepTwo.id }, data: { status: "done" } });
   for (const size of [
     { width: 360, height: 640 },
     { width: 412, height: 915 },
@@ -548,7 +600,7 @@ try {
   });
   assert.deepEqual(errors, []);
   console.log(
-    "Donna UI checks passed: Overview/Email tabs, Clean check/cancel/approve/undo, above-fold layouts at 360x640 / 412x915 / 1280x800, request edit/direction/completion, settings and counts-only Scorecard privacy.",
+    "Donna UI checks passed: Overview/Email tabs, Clean check/cancel/approve/undo, steps 1 and 2 with bucket choices, above-fold layouts at 360x640 / 412x915 / 1280x800, request edit/direction/completion, settings and counts-only Scorecard privacy.",
   );
 } finally {
   await browser.close();

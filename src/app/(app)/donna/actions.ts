@@ -9,6 +9,9 @@ import { requireDonna } from "@/lib/donna/access";
 import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { AUTO_CLEAN_PREFIX, enqueue } from "@/lib/donna/store";
 import {
+  STEP_FOLDERS,
+  cleanBuckets,
+  cleanIsSort,
   cleanReport,
   donnaActionCounts,
   donnaSettings,
@@ -99,11 +102,19 @@ export async function startCleanInbox(
   try {
     const { dataContext, session } = await requireDonna();
     const id = z.string().min(1).parse(form.get("mailboxId"));
+    const limit = z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .catch(25)
+      .parse(form.get("limit") ?? 25);
     const jobId = await withBrandDataTransaction(dataContext, async (tx) => {
       const box = await tx.donnaMailbox.findFirstOrThrow({
         where: { id, brandId: dataContext.brandId },
       });
       if (box.paused) return null;
+      const steps = donnaSettings(box.settings).steps;
       const existing = await tx.donnaJob.findFirst({
         where: {
           mailboxId: box.id,
@@ -112,7 +123,8 @@ export async function startCleanInbox(
           NOT: { eventKey: { startsWith: AUTO_CLEAN_PREFIX } },
         },
       });
-      // Donna files allowlisted Inbox mail on her own; every move can be undone.
+      // Steps (Tom, 2026-11-26): this is step 1, sort into buckets, move nothing.
+      // Without steps Donna files allowlisted Inbox mail on her own, with Undo.
       const job =
         existing ??
         (await tx.donnaJob.create({
@@ -120,14 +132,18 @@ export async function startCleanInbox(
             mailboxId: box.id,
             kind: "clean",
             eventKey: `clean:${randomUUID()}`,
-            options: { manual: true },
+            options: steps
+              ? { preview: true, buckets: true, limit }
+              : { manual: true },
           },
         }));
       if (!existing)
         await resetCleanProgress(
           tx,
           box,
-          donnaActionCounts(box.coverage).inbox,
+          steps
+            ? Math.min(limit, donnaActionCounts(box.coverage).inbox || limit)
+            : donnaActionCounts(box.coverage).inbox,
         );
       await tx.donnaActivity.create({
         data: {
@@ -136,7 +152,9 @@ export async function startCleanInbox(
           kind: "control",
           detail: existing
             ? "Inbox clean already in progress."
-            : "Inbox clean requested.",
+            : steps
+              ? `Step 1 started: sort up to ${limit} Inbox emails into buckets.`
+              : "Inbox clean requested.",
           actor: session.user.id,
           evidence: "Authenticated operator action",
           occurredAt: new Date(),
@@ -173,13 +191,13 @@ export async function updateDonnaSettings(form: FormData) {
       dailyReviews: z.coerce.number().int().min(0).max(2000).optional(),
       historyReviews: z.coerce.number().int().min(0).max(2000).optional(),
       history: z.enum(["on", "off"]).optional(),
-      inboxZero: z.enum(["on", "off"]).optional(),
+      steps: z.enum(["on", "off"]).optional(),
     })
     .parse({
       dailyReviews: form.get("dailyReviews") ?? undefined,
       historyReviews: form.get("historyReviews") ?? undefined,
       history: form.get("history") ?? undefined,
-      inboxZero: form.get("inboxZero") ?? undefined,
+      steps: form.get("steps") ?? undefined,
     });
   await withBrandDataTransaction(dataContext, async (tx) => {
     const box = await tx.donnaMailbox.findFirstOrThrow({
@@ -194,7 +212,7 @@ export async function updateDonnaSettings(form: FormData) {
         ? { historyReviews: input.historyReviews }
         : {}),
       ...(input.history ? { history: input.history === "on" } : {}),
-      ...(input.inboxZero ? { inboxZero: input.inboxZero === "on" } : {}),
+      ...(input.steps ? { steps: input.steps === "on" } : {}),
     };
     await tx.donnaMailbox.update({
       where: { id: box.id },
@@ -204,7 +222,7 @@ export async function updateDonnaSettings(form: FormData) {
       tx,
       box.id,
       session.user.id,
-      `Settings: ${next.dailyReviews} reviews a day, history ${next.history ? `on (up to ${next.historyReviews})` : "off"}, inbox zero ${next.inboxZero ? "on" : "off"}.`,
+      `Settings: ${next.dailyReviews} reviews a day, history ${next.history ? `on (up to ${next.historyReviews})` : "off"}, ${next.steps ? "steps only" : "automatic"}.`,
     );
   });
   refresh();
@@ -305,6 +323,74 @@ export async function approveClean(form: FormData) {
   });
   refresh();
   redirect(`/donna/cleans/${encodeURIComponent(jobId ?? previewId)}`);
+}
+
+/**
+ * Step 2: do what Tom chose for each bucket of a step 1 sort. Only ticked emails in a
+ * bucket set to a folder move; "Leave in Inbox" and unticked emails stay. The emails
+ * come from the stored step 1 report, not the form.
+ */
+export async function applyBuckets(form: FormData) {
+  const { dataContext, session } = await requireDonna();
+  const sortId = z.string().min(1).parse(form.get("jobId"));
+  const ticked = new Set(form.getAll("thread").map(String));
+  const jobId = await withBrandDataTransaction(dataContext, async (tx) => {
+    const sort = await tx.donnaJob.findFirst({
+      where: {
+        id: sortId,
+        kind: "clean",
+        status: "done",
+        mailbox: { brandId: dataContext.brandId },
+      },
+      include: { mailbox: true },
+    });
+    if (!sort || !cleanIsSort(sort.options) || sort.mailbox.paused) return null;
+    const started = await tx.donnaJob.findFirst({
+      where: {
+        mailboxId: sort.mailboxId,
+        kind: "clean",
+        options: { path: ["previewJobId"], equals: sort.id },
+      },
+      select: { id: true },
+    });
+    if (started) return started.id;
+    const busy = await tx.donnaJob.findFirst({
+      where: {
+        mailboxId: sort.mailboxId,
+        kind: "clean",
+        status: { in: ["pending", "leased"] },
+      },
+    });
+    if (busy) return busy.id;
+    const plan = cleanBuckets(sort.result).flatMap((bucket, i) => {
+      const choice = String(form.get(`bucket-${i}`) ?? "leave");
+      if (!(STEP_FOLDERS as readonly string[]).includes(choice)) return [];
+      return bucket.items
+        .filter((item) => ticked.has(item.thread))
+        .map((item) => ({ thread: item.thread, folder: choice }));
+    });
+    if (!plan.length) return null;
+    const job = await tx.donnaJob.create({
+      data: {
+        mailboxId: sort.mailboxId,
+        kind: "clean",
+        eventKey: `clean:${randomUUID()}`,
+        options: { previewJobId: sort.id, plan, buckets: true },
+      },
+    });
+    await resetCleanProgress(tx, sort.mailbox, plan.length);
+    const counts = new Map<string, number>();
+    for (const p of plan) counts.set(p.folder, (counts.get(p.folder) ?? 0) + 1);
+    await cleanControl(
+      tx,
+      sort.mailboxId,
+      session.user.id,
+      `Step 2 started: move ${[...counts].map(([f, n]) => `${n} to ${f}`).join(", ")}.`,
+    );
+    return job.id;
+  });
+  refresh();
+  redirect(`/donna/cleans/${encodeURIComponent(jobId ?? sortId)}`);
 }
 
 /** Stop a clean. A running worker finishes the move in hand, then reports what it filed. */
