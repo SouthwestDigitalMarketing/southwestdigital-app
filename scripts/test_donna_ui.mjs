@@ -620,6 +620,14 @@ try {
   // Reopen puts it back to Tom's turn.
   await closedRow.getByRole("button", { name: "Reopen" }).click();
   await expect(page.getByRole("list", { name: "Job steps" }).locator('[aria-current="step"]')).toContainText("Your turn");
+  // A sort from before Junk existed offers to sort again with today's rules.
+  await page.getByRole("button", { name: "Sort again with the new rules" }).click();
+  await expect.poll(async () => Boolean(await db.donnaJob.findFirst(pendingClean))).toBe(true);
+  const resorted = await db.donnaJob.findFirstOrThrow(pendingClean);
+  assert.deepEqual(resorted.options, { preview: true, buckets: true, limit: 25 });
+  await expect(page).toHaveURL(new RegExp("/donna/cleans/" + resorted.id));
+  assert.equal((await db.donnaJob.findUniqueOrThrow({ where: { id: closing.id } })).options.closed, true);
+  await db.donnaJob.update({ where: { id: resorted.id }, data: { status: "cancelled" } });
   for (const size of [
     { width: 360, height: 640 },
     { width: 412, height: 915 },

@@ -453,7 +453,10 @@ export async function applyBuckets(form: FormData) {
 }
 
 /** Step 2 without step 3: Tom is done with this sort and wants nothing changed. */
-export async function closeSort(form: FormData) {
+export async function closeSort(
+  form: FormData,
+  opts: { redirectTo?: string | null } = {},
+) {
   const { dataContext, session } = await requireDonna();
   const id = z.string().min(1).parse(form.get("jobId"));
   await withBrandDataTransaction(dataContext, async (tx) => {
@@ -483,7 +486,32 @@ export async function closeSort(form: FormData) {
     );
   });
   refresh();
-  redirect(`/donna/cleans/${encodeURIComponent(id)}`);
+  if (opts.redirectTo !== null)
+    redirect(`/donna/cleans/${encodeURIComponent(id)}`);
+}
+
+/**
+ * An old sort from before Junk and Spam/Trash cleanup: close it and start a new
+ * sort with today's rules, then open the new job.
+ */
+export async function resortJob(form: FormData) {
+  const { dataContext } = await requireDonna();
+  const id = z.string().min(1).parse(form.get("jobId"));
+  const old = await withBrandDataTransaction(dataContext, async (tx) =>
+    tx.donnaJob.findFirst({
+      where: { id, kind: "clean", mailbox: { brandId: dataContext.brandId } },
+    }),
+  );
+  if (!old || !cleanIsSort(old.options)) redirect("/donna/current");
+  await closeSort(form, { redirectTo: null });
+  const start = new FormData();
+  start.set("mailboxId", old.mailboxId);
+  const result = await startCleanInbox(start);
+  redirect(
+    result.jobId
+      ? `/donna/cleans/${encodeURIComponent(result.jobId)}`
+      : `/donna/cleans/${encodeURIComponent(id)}`,
+  );
 }
 
 /** A job closed at step 2 goes back to Tom's turn, so it can be finished. */
