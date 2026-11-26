@@ -66,6 +66,7 @@ export function DonnaCleanBar() {
         label: "Waiting for Donna",
         countLabel: `0 of ${total.toLocaleString("en-US")}`,
         etaLabel: null,
+        recent: [],
       });
     }
     window.addEventListener("swapp:donna-clean", onStart);
@@ -91,7 +92,7 @@ export function DonnaCleanBar() {
   const control =
     "rounded border border-slate-300 bg-white px-2 py-0.5 text-xs text-slate-700 hover:bg-slate-100";
   return (
-    <div className="flex shrink-0 items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-1.5">
+    <div className="flex shrink-0 items-start gap-2 border-b border-slate-200 bg-slate-50 px-4 py-1.5">
       <Link
         href={href}
         aria-current={pathname === href ? "page" : undefined}
@@ -124,6 +125,19 @@ export function DonnaCleanBar() {
             style={{ width: `${job.percent}%` }}
           />
         </span>
+        {job.recent.length ? (
+          <ul aria-label="Just handled" className="mt-1 space-y-0.5">
+            {job.recent.slice(0, 3).map((r, i) => (
+              <li
+                key={`${r.subject}-${i}`}
+                className={`truncate text-xs ${i ? "text-slate-400" : "text-slate-700"}`}
+              >
+                <span className="font-medium">{r.subject}</span>
+                <span> → {r.result}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </Link>
       {mailboxId ? (
         <form
