@@ -13,11 +13,7 @@ import {
   mailboxCleanReport,
   type CleanReportItem,
 } from "@/lib/donna/domain";
-import {
-  applyBuckets,
-  approveClean,
-  undoFiled,
-} from "../../actions";
+import { applyBuckets, approveClean, undoFiled } from "../../actions";
 import { BucketChooser } from "@/components/donna/BucketChooser";
 import { DonnaFrame, shortTime } from "../../DonnaFrame";
 
@@ -143,37 +139,63 @@ function PreviewPlan({
   );
 }
 
-/** Step 1 while it runs: the buckets filling in as Donna sorts, newest last. */
+/** Sender's name, or the address when there is no name. */
+function senderName(from: string) {
+  const name = from
+    .replace(/<[^>]*>/, "")
+    .replace(/"/g, "")
+    .trim();
+  return name || from;
+}
+
+/** Step 1 while it runs: one table, a row per email, grouped by bucket (Tom, 2026-11-26). */
 function LiveBuckets({ buckets }: { buckets: Bucket[] }) {
   if (!buckets.length)
     return (
       <p className="text-sm text-slate-500">
-        Buckets appear here as Donna sorts each email.
+        Emails appear here as Donna sorts each one.
       </p>
     );
   return (
-    <div className="space-y-3">
-      {buckets.map((bucket) => (
-        <section
-          key={bucket.name}
-          aria-label={`Bucket ${bucket.name}`}
-          className="space-y-1 rounded-xl border border-slate-200 bg-white p-3"
-        >
-          <Heading title={bucket.name} count={bucket.items.length} />
-          <ul className="divide-y divide-slate-100">
-            {bucket.items.map((item) => (
-              <li key={item.thread} className="py-1.5">
-                <span className="block truncate text-sm">{item.subject}</span>
-                <span className="block truncate text-xs text-slate-500">
-                  {[item.from, item.client, item.why]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <table
+        aria-label="Sorted emails"
+        className="w-full min-w-[640px] text-left text-sm"
+      >
+        <thead className="text-xs uppercase tracking-wide text-slate-500">
+          <tr className="border-b border-slate-200">
+            <th className="px-3 py-2 font-semibold">Bucket</th>
+            <th className="px-3 py-2 font-semibold">Email</th>
+            <th className="px-3 py-2 font-semibold">From</th>
+            <th className="px-3 py-2 font-semibold">Client</th>
+            <th className="px-3 py-2 font-semibold">Why</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {buckets.flatMap((bucket) =>
+            bucket.items.map((item, i) => (
+              <tr key={item.thread} className="align-top">
+                <td className="whitespace-nowrap px-3 py-2 font-medium">
+                  {i ? "" : `${bucket.name} (${bucket.items.length})`}
+                </td>
+                <td className="max-w-[16rem] truncate px-3 py-2">
+                  {item.subject}
+                </td>
+                <td
+                  className="max-w-[12rem] truncate px-3 py-2 text-slate-600"
+                  title={item.from}
+                >
+                  {senderName(item.from)}
+                </td>
+                <td className="whitespace-nowrap px-3 py-2 text-slate-600">
+                  {item.client ?? ""}
+                </td>
+                <td className="px-3 py-2 text-xs text-slate-500">{item.why}</td>
+              </tr>
+            )),
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }

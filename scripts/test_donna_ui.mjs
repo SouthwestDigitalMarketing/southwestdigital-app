@@ -460,7 +460,8 @@ try {
   await page.getByRole("link", { name: "Current job" }).click();
   await expect(page).toHaveURL(new RegExp("/donna/cleans/" + stepOne.id));
   await expect(page.getByRole("link", { name: "Current job" })).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("region", { name: "Bucket Newsletter" })).toContainText("Example live email");
+  await expect(page.getByRole("table", { name: "Sorted emails" })).toContainText("Newsletter (1)");
+  await expect(page.getByRole("table", { name: "Sorted emails" })).toContainText("Example live email");
   await page.goto(base + "/donna");
   // Pause/Resume and Stop sit in the top status bar.
   const bar = page.locator("div", { has: page.getByRole("link", { name: /Step 1: sorting Inbox into buckets/ }) }).last();
