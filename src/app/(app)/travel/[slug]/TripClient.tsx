@@ -545,7 +545,7 @@ function SectionBlock({
           <h2 id={`${section.key}-title`} className="text-lg font-semibold text-slate-900">
             {section.title}
           </h2>
-          <p className="text-sm text-slate-500">{section.blurb}</p>
+          {!tableLayout ? <p className="text-sm text-slate-500">{section.blurb}</p> : null}
         </div>
         <div className="flex flex-wrap gap-2">
           {section.key === "needs" && items.length === 0 ? (
