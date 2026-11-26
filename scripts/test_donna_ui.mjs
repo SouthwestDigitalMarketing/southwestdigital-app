@@ -461,7 +461,7 @@ try {
   await expect.poll(async () => Boolean(await db.donnaJob.findFirst(pendingClean))).toBe(true);
   const stepOne = await db.donnaJob.findFirstOrThrow(pendingClean);
   assert.deepEqual(stepOne.options, { preview: true, buckets: true, limit: 10 });
-  const [notice, promoA, promoB] = ["c3".repeat(32), "d4".repeat(32), "e5".repeat(32)];
+  const [notice, promoA, promoB, rodan] = ["c3".repeat(32), "d4".repeat(32), "e5".repeat(32), "f6".repeat(32)];
   await db.donnaJob.update({
     where: { id: stepOne.id },
     data: {
@@ -474,24 +474,31 @@ try {
           { thread: promoA, subject: "Example sale A", from: "a@shop.example", bucket: "Newsletter", why: "Promo A", suggest: "Newsletter" },
           { thread: notice, subject: "Example final notice", from: "n@bank.example", bucket: "Money and legal", why: "Money or legal trouble", suggest: null },
           { thread: promoB, subject: "Example sale B", from: "b@shop.example", bucket: "Newsletter", why: "Promo B", suggest: "Newsletter" },
+          { thread: rodan, subject: "Example progress update", from: "dan@rodan.example", bucket: "Clients", why: "From Rodan Properties, a client in SWapp", suggest: null, client: "Rodan Properties" },
         ],
       },
     },
   });
   await page.goto(base + "/donna");
-  await page.getByRole("link", { name: /Step 1 done: 3 emails in 2 buckets/ }).click();
+  await page.getByRole("link", { name: /Step 1 done: 4 emails in 3 buckets/ }).click();
   await expect(page.getByRole("heading", { name: "Step 1: Inbox sorted into buckets" })).toBeVisible();
   await expect(page.getByText("Why: Money or legal trouble")).toBeVisible();
   await expect(page.getByRole("button", { name: "Start step 2" })).toBeDisabled();
   await page.getByLabel("What to do with Newsletter").selectOption("Newsletter");
   await page.getByRole("checkbox", { name: /Example sale B/ }).uncheck();
-  await expect(page.getByText("Step 2 will move 1: 1 to Newsletter. Everything else stays in Inbox.")).toBeVisible();
+  await page.getByLabel("What to do with Clients").selectOption("tag:Archive");
+  await expect(
+    page.getByText("Step 2 will tag with the client name: 1; move to Archive: 1; move to Newsletter: 1. Everything else stays as it is."),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Start step 2" }).click();
   await expect(page.getByRole("heading", { name: "Step 2: what Donna moved" })).toBeVisible();
   const stepTwo = await db.donnaJob.findFirstOrThrow(pendingClean);
   assert.deepEqual(stepTwo.options, {
     previewJobId: stepOne.id,
-    plan: [{ thread: promoA, folder: "Newsletter" }],
+    plan: [
+      { thread: rodan, folder: "Archive", tag: "Rodan Properties" },
+      { thread: promoA, folder: "Newsletter" },
+    ],
     buckets: true,
   });
   await db.donnaJob.updateMany({ where: { id: stepTwo.id }, data: { status: "done" } });
@@ -600,7 +607,7 @@ try {
   });
   assert.deepEqual(errors, []);
   console.log(
-    "Donna UI checks passed: Overview/Email tabs, Clean check/cancel/approve/undo, steps 1 and 2 with bucket choices, above-fold layouts at 360x640 / 412x915 / 1280x800, request edit/direction/completion, settings and counts-only Scorecard privacy.",
+    "Donna UI checks passed: Overview/Email tabs, Clean check/cancel/approve/undo, steps 1 and 2 with bucket choices and client tags, above-fold layouts at 360x640 / 412x915 / 1280x800, request edit/direction/completion, settings and counts-only Scorecard privacy.",
   );
 } finally {
   await browser.close();

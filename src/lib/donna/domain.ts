@@ -501,6 +501,8 @@ export type CleanReportItem = {
   undoPending?: boolean;
   undoError?: string;
   folder?: string;
+  /** Zoho client tag added in step 2. */
+  tag?: string;
   waitingOn?: string;
   nextAction?: string;
   reason?: string;
@@ -514,6 +516,7 @@ export type CleanReport = {
   reviewed: number;
   remaining: number;
   filed: CleanReportItem[];
+  tagged: CleanReportItem[];
   waiting: CleanReportItem[];
   needsYou: CleanReportItem[];
   skipped: CleanReportItem[];
@@ -545,6 +548,7 @@ function cleanItems(value: unknown): CleanReportItem[] {
         from: from.slice(0, 200),
         folder:
           typeof raw.folder === "string" ? raw.folder.slice(0, 80) : undefined,
+        tag: typeof raw.tag === "string" ? raw.tag.slice(0, 80) : undefined,
         waitingOn:
           typeof raw.waitingOn === "string"
             ? raw.waitingOn.slice(0, 200)
@@ -586,6 +590,7 @@ export function cleanReport(raw: unknown): CleanReport | null {
     reviewed,
     remaining,
     filed: cleanItems(c.filed).slice(0, 200),
+    tagged: cleanItems(c.tagged).slice(0, 200),
     waiting: cleanItems(c.waiting).slice(0, 50),
     needsYou: cleanItems(c.needsYou).slice(0, 50),
     skipped: cleanItems(c.skipped).slice(0, 50),

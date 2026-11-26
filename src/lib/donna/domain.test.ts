@@ -364,6 +364,7 @@ describe("honest health and counts", () => {
           folder: "Newsletter",
         },
       ],
+      tagged: [],
       waiting: [{ subject: "Bank login", from: "", waitingOn: "Client" }],
       needsYou: [
         {

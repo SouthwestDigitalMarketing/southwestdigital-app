@@ -464,6 +464,16 @@ try {
   const stepClaim = (await call({ op: "claim" })).body;
   assert.equal(stepClaim.work?.job?.id, stepOne.id, "Steps: Tom's step 1 runs.");
   assert.equal(stepClaim.work.settings.steps, true);
+  const tagged = await call({
+    op: "tag",
+    ...lease(stepClaim),
+    items: [{ thread: "ab12", tag: "Acme", messages: [{ id: "<m@x.com>", from: "a@x.com", subject: "Hi", at: "2026-11-26T00:00:00Z" }] }],
+  });
+  assert.equal(tagged.status, 200);
+  assert.equal(tagged.body.results[0].tagged, 0);
+  assert.match(tagged.body.results[0].error, /Zoho is not connected/, "Tagging needs SWapp's Zoho connection.");
+  const badLease = { jobId: stepOne.id, leaseToken: "wrong" };
+  assert.equal((await call({ op: "tag", ...badLease, items: [{ thread: "ab12", tag: "Acme", messages: [{ id: "<m@x.com>", from: "", subject: "", at: "" }] }] })).status, 409);
   await db.donnaMailbox.update({ where: { id: box.id }, data: { paused: true } });
 
   const role = "donna_rls_" + suffix;
@@ -492,7 +502,7 @@ try {
     await db.$executeRawUnsafe(`DROP ROLE ${role}`);
   }
   console.log(
-    "Donna integration checks passed: signed enrollment, invalid signatures, deduplication, exclusive leases, replay-safe publish, human-edit preservation, backlog recovery, pause stops Clean, clean preview, cancel, undo, history switch, usage reporting, steps hold automatic work and tenant RLS.",
+    "Donna integration checks passed: signed enrollment, invalid signatures, deduplication, exclusive leases, replay-safe publish, human-edit preservation, backlog recovery, pause stops Clean, clean preview, cancel, undo, history switch, usage reporting, steps hold automatic work, tagging needs a leased job and a Zoho connection, and tenant RLS.",
   );
 } finally {
   await db.donnaMailbox.delete({ where: { id: box.id } });

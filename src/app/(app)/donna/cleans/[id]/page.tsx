@@ -381,6 +381,11 @@ export default async function CleanPage({
             />
           )}
           <Items
+            title="Tagged in Zoho"
+            items={report.tagged}
+            extra={(item) => item.tag}
+          />
+          <Items
             title="Waiting"
             items={report.waiting}
             extra={(item) => item.waitingOn}

@@ -4,7 +4,18 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { ZOHO_REGIONS, type ZohoRegionKey } from "./providers";
 
 export const ZOHO_OAUTH_STATE_COOKIE = "swd-zoho-oauth-state";
-export const ZOHO_MAIL_SCOPES = ["ZohoMail.messages.CREATE", "ZohoMail.accounts.READ"];
+// Read, update and tags let Donna find a message and tag it with a client
+// (Tom, 2026-11-26). Connections made before that lack them until reconnected.
+export const ZOHO_TAG_SCOPES = ["ZohoMail.messages.READ", "ZohoMail.messages.UPDATE", "ZohoMail.tags.ALL"];
+export const ZOHO_MAIL_SCOPES = ["ZohoMail.messages.CREATE", "ZohoMail.accounts.READ", ...ZOHO_TAG_SCOPES];
+
+/** True when a stored Zoho grant includes what tagging needs (ALL covers READ/UPDATE). */
+export function zohoCanTag(scopes: string | null | undefined) {
+  const granted = new Set((scopes ?? "").split(/[\s,]+/).map((s) => s.trim().toLowerCase()).filter(Boolean));
+  const has = (scope: string) =>
+    granted.has(scope.toLowerCase()) || granted.has(scope.replace(/\.[A-Z]+$/, ".ALL").toLowerCase());
+  return ZOHO_TAG_SCOPES.every(has);
+}
 
 type ZohoOAuthState = {
   membershipId: string;

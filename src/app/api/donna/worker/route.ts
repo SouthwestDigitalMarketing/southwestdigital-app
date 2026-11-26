@@ -13,6 +13,7 @@ import {
 import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { checkRateLimit } from "@/lib/simpleRateLimit";
 import { donnaSettings, type DonnaSettings } from "@/lib/donna/domain";
+import { tagThreads } from "@/lib/donna/tags";
 
 /** Mark undone (or failed) filed items on the clean job that filed them. */
 async function recordUndo(
@@ -79,6 +80,49 @@ export async function POST(request: Request) {
       return NextResponse.json({ work: await claimJob(auth.context) });
     if (body.op === "publish")
       return NextResponse.json(await publish(auth.context, body.packet));
+    if (body.op === "tag") {
+      // Step 2 client tags: the worker holds the lease; SWapp holds the Zoho connection.
+      const input = z
+        .object({
+          jobId: z.string().min(1),
+          leaseToken: z.string().min(1),
+          items: z
+            .array(
+              z.object({
+                thread: z.string().regex(/^[a-f0-9]{1,64}$/),
+                tag: z.string().trim().min(1).max(80),
+                messages: z
+                  .array(
+                    z.object({
+                      id: z.string().min(1).max(500),
+                      from: z.string().max(320),
+                      subject: z.string().max(500),
+                      at: z.string().max(40),
+                    }),
+                  )
+                  .min(1)
+                  .max(20),
+              }),
+            )
+            .min(1)
+            .max(20),
+        })
+        .parse(body);
+      const address = await withBrandDataTransaction(
+        auth.context,
+        async (tx) => {
+          const job = await lockLease(tx, auth.context, input.jobId, input.leaseToken);
+          const box = await tx.donnaMailbox.findUniqueOrThrow({
+            where: { id: job.mailboxId },
+            select: { address: true },
+          });
+          return box.address;
+        },
+      );
+      return NextResponse.json(
+        await tagThreads(auth.context.brandId, address, input.items),
+      );
+    }
     if (body.op === "notify") {
       const key = z.string().min(1).max(200).parse(body.eventKey);
       await withBrandDataTransaction(auth.context, async (tx) => {

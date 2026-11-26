@@ -31,6 +31,19 @@ and history passes are not queued, and `claimJob` hands out only Tom's steps and
 undos. "On her own" in Limits restores the automatic behaviour. Inbox zero
 (`archive_rest`) is removed.
 
+**Client tags (Tom, 2026-11-26).** Client mail gets a Zoho tag with the client's
+name (no per-client folders) and is archived once addressed. Zoho IMAP takes no
+custom keywords, so tags go through the Zoho Mail API using the mailbox owner's
+SWapp email connection (`EmailConnection`, scopes now include
+`ZohoMail.messages.READ`, `ZohoMail.messages.UPDATE`, `ZohoMail.tags.ALL`;
+older grants show **Reconnect so Donna can tag mail** in Settings). Step 2
+choices for a bucket with client names: *Tag with client name* or *Tag with
+client name, then Archive*. The worker calls the `tag` op (lease-checked);
+SWapp finds each email by sender and date, confirms its `Message-Id` header,
+creates the tag if new and applies it (`src/lib/donna/tags.ts`). Tagging comes
+first; an email that cannot be tagged is not moved. Only emails from SWapp
+contacts with service records carry a client name. Tags have no Undo yet.
+
 ## Pages
 
 - `/donna`: Overview is Donna's live status and controls: what she is doing
