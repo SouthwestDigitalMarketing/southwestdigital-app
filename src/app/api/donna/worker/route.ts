@@ -1,5 +1,7 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import {
   workerContext,
   claimJob,
@@ -9,6 +11,54 @@ import {
 } from "@/lib/donna/store";
 import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { checkRateLimit } from "@/lib/simpleRateLimit";
+
+/** Mark undone (or failed) filed items on the clean job that filed them. */
+async function recordUndo(
+  tx: Prisma.TransactionClient,
+  mailboxId: string,
+  undo: {
+    cleanJobId: string;
+    undone: string[];
+    failed: { thread: string; reason: string }[];
+  },
+) {
+  const clean = await tx.donnaJob.findFirst({
+    where: { id: undo.cleanJobId, mailboxId, kind: "clean" },
+  });
+  const result =
+    clean?.result && typeof clean.result === "object" && !Array.isArray(clean.result)
+      ? (clean.result as Record<string, unknown>)
+      : null;
+  if (!clean || !result || !Array.isArray(result.filed)) return;
+  const done = new Set(undo.undone);
+  const failed = new Map(undo.failed.map((f) => [f.thread, f.reason]));
+  const filed = result.filed.map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return item;
+    const row = item as Record<string, unknown>;
+    const thread = String(row.thread ?? "");
+    if (done.has(thread))
+      return { ...row, undone: true, undoPending: false, undoError: undefined };
+    if (failed.has(thread))
+      return { ...row, undoPending: false, undoError: failed.get(thread) };
+    return row;
+  });
+  await tx.donnaJob.update({
+    where: { id: clean.id },
+    data: { result: { ...result, filed } as Prisma.InputJsonObject },
+  });
+  if (undo.undone.length)
+    await tx.donnaActivity.create({
+      data: {
+        mailboxId,
+        eventKey: `unfiled:${clean.id}:${randomUUID()}`,
+        kind: "corrected",
+        detail: `Moved ${undo.undone.length} back to Inbox`,
+        evidence:
+          "Verified IMAP copy back into Inbox, then removed from the filing folder.",
+        occurredAt: new Date(),
+      },
+    });
+}
 
 export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
@@ -42,6 +92,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
     if (body.op === "heartbeat") {
+      let cancelled = false;
       await withBrandDataTransaction(auth.context, async (tx) => {
         await tx.donnaMailbox.updateMany({
           where: { brandId: auth.context.brandId, paused: false },
@@ -54,6 +105,8 @@ export async function POST(request: Request) {
             body.jobId,
             body.leaseToken,
           );
+          // Tom pressed Cancel: the worker stops before its next move and reports.
+          cancelled = job.status === "cancelled";
           await tx.donnaJob.update({
             where: { id: body.jobId },
             data: { leaseUntil: new Date(Date.now() + 600_000) },
@@ -135,7 +188,7 @@ export async function POST(request: Request) {
             );
         }
       });
-      return NextResponse.json({ ok: true });
+      return NextResponse.json({ ok: true, cancelled });
     }
     if (body.op === "complete" || body.op === "fail") {
       const input = z
@@ -144,6 +197,22 @@ export async function POST(request: Request) {
           leaseToken: z.string(),
           error: z.string().max(1000).optional(),
           coverage: z.record(z.string(), z.unknown()).optional(),
+          report: z.record(z.string(), z.unknown()).optional(),
+          cancelled: z.boolean().optional(),
+          undo: z
+            .object({
+              cleanJobId: z.string().max(100),
+              undone: z.array(z.string().max(100)).max(200),
+              failed: z
+                .array(
+                  z.object({
+                    thread: z.string().max(100),
+                    reason: z.string().max(200),
+                  }),
+                )
+                .max(200),
+            })
+            .optional(),
         })
         .parse(body.result);
       await withBrandDataTransaction(auth.context, async (tx) => {
@@ -153,7 +222,13 @@ export async function POST(request: Request) {
           input.jobId,
           input.leaseToken,
         );
-        if (body.op === "fail") {
+        if (body.op === "fail" && job.status === "cancelled") {
+          // Cancelled stays cancelled; never requeue a job Tom stopped.
+          await tx.donnaJob.update({
+            where: { id: job.id },
+            data: { leaseToken: null, leaseUntil: null },
+          });
+        } else if (body.op === "fail") {
           await tx.donnaJob.update({
             where: { id: job.id },
             data: {
@@ -185,7 +260,7 @@ export async function POST(request: Request) {
               },
             ],
           });
-        } else {
+        } else if (job.kind === "undo") {
           await tx.donnaJob.update({
             where: { id: job.id },
             data: {
@@ -193,6 +268,27 @@ export async function POST(request: Request) {
               completedAt: new Date(),
               leaseToken: null,
               leaseUntil: null,
+              result: (input.undo ?? {}) as Prisma.InputJsonObject,
+            },
+          });
+          if (input.undo) await recordUndo(tx, job.mailboxId, input.undo);
+        } else {
+          const stopped = job.status === "cancelled" || input.cancelled === true;
+          await tx.donnaJob.update({
+            where: { id: job.id },
+            data: {
+              status: stopped ? "cancelled" : "done",
+              completedAt: new Date(),
+              leaseToken: null,
+              leaseUntil: null,
+              ...(job.kind === "clean" && input.report
+                ? {
+                    result: {
+                      ...input.report,
+                      cancelled: stopped,
+                    } as Prisma.InputJsonObject,
+                  }
+                : {}),
             },
           });
           const box = await tx.donnaMailbox.findUniqueOrThrow({
@@ -218,8 +314,7 @@ export async function POST(request: Request) {
               lastCheckedAt: new Date(),
               heartbeatAt: new Date(),
               lastError: null,
-              coverage:
-                coverage as import("@prisma/client").Prisma.InputJsonObject,
+                coverage: coverage as Prisma.InputJsonObject,
             },
           });
           if (

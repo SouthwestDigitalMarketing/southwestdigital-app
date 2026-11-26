@@ -2,12 +2,17 @@
 
 import { randomBytes, randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { requireDonna } from "@/lib/donna/access";
 import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { enqueue } from "@/lib/donna/store";
-import { donnaActionCounts, draftSchema } from "@/lib/donna/domain";
+import {
+  cleanReport,
+  donnaActionCounts,
+  draftSchema,
+} from "@/lib/donna/domain";
 import { firmInstant } from "@/lib/operations/schedule";
 
 function refresh() {
@@ -97,6 +102,7 @@ export async function startCleanInbox(
       const box = await tx.donnaMailbox.findFirstOrThrow({
         where: { id, brandId: dataContext.brandId },
       });
+      if (box.paused) return null;
       const existing = await tx.donnaJob.findFirst({
         where: {
           mailboxId: box.id,
@@ -104,31 +110,19 @@ export async function startCleanInbox(
           status: { in: ["pending", "leased"] },
         },
       });
+      // Clean inbox always starts with a preview; nothing moves until Tom approves.
       const job =
-        existing ?? (await enqueue(tx, box.id, "clean", `clean:${randomUUID()}`));
-      if (!existing) {
-        const coverage =
-          box.coverage &&
-          typeof box.coverage === "object" &&
-          !Array.isArray(box.coverage)
-            ? (box.coverage as Record<string, unknown>)
-            : {};
-        await tx.donnaMailbox.update({
-          where: { id: box.id },
+        existing ??
+        (await tx.donnaJob.create({
           data: {
-            coverage: {
-              ...coverage,
-              cleanProgress: {
-                total: donnaActionCounts(box.coverage).inbox,
-                done: 0,
-                current: null,
-                phase: "queued",
-                startedAt: new Date().toISOString(),
-              },
-            },
+            mailboxId: box.id,
+            kind: "clean",
+            eventKey: `clean:${randomUUID()}`,
+            options: { preview: true },
           },
-        });
-      }
+        }));
+      if (!existing)
+        await resetCleanProgress(tx, box, donnaActionCounts(box.coverage).inbox);
       await tx.donnaActivity.create({
         data: {
           mailboxId: box.id,
@@ -144,14 +138,208 @@ export async function startCleanInbox(
       });
       return job.id;
     });
+    if (!jobId)
+      return {
+        ok: false,
+        message: "Donna is paused. Resume her in Settings to clean the inbox.",
+      };
     refresh();
-    return { ok: true, message: "Cleaning inbox.", jobId };
+    return { ok: true, message: "Checking inbox.", jobId };
   } catch {
     return {
       ok: false,
       message: "Could not start Clean. Reload and try again.",
     };
   }
+}
+
+async function resetCleanProgress(
+  tx: Prisma.TransactionClient,
+  box: { id: string; coverage: Prisma.JsonValue },
+  total: number,
+) {
+  const coverage =
+    box.coverage && typeof box.coverage === "object" && !Array.isArray(box.coverage)
+      ? (box.coverage as Record<string, unknown>)
+      : {};
+  await tx.donnaMailbox.update({
+    where: { id: box.id },
+    data: {
+      coverage: {
+        ...coverage,
+        cleanProgress: {
+          total,
+          done: 0,
+          current: null,
+          phase: "queued",
+          startedAt: new Date().toISOString(),
+        },
+      } as Prisma.InputJsonObject,
+    },
+  });
+}
+
+async function cleanControl(
+  tx: Prisma.TransactionClient,
+  mailboxId: string,
+  actor: string,
+  detail: string,
+) {
+  await tx.donnaActivity.create({
+    data: {
+      mailboxId,
+      eventKey: `control:${randomUUID()}`,
+      kind: "control",
+      detail,
+      actor,
+      evidence: "Authenticated operator action",
+      occurredAt: new Date(),
+    },
+  });
+}
+
+/** File the preview's emails Tom left ticked. The plan comes from the stored preview, not the form. */
+export async function approveClean(form: FormData) {
+  const { dataContext, session } = await requireDonna();
+  const previewId = z.string().min(1).parse(form.get("jobId"));
+  const chosen = new Set(form.getAll("thread").map(String));
+  const jobId = await withBrandDataTransaction(dataContext, async (tx) => {
+    const preview = await tx.donnaJob.findFirst({
+      where: {
+        id: previewId,
+        kind: "clean",
+        status: "done",
+        mailbox: { brandId: dataContext.brandId },
+      },
+      include: { mailbox: true },
+    });
+    const report = cleanReport(preview?.result);
+    if (!preview || !report?.preview || preview.mailbox.paused) return null;
+    const busy = await tx.donnaJob.findFirst({
+      where: {
+        mailboxId: preview.mailboxId,
+        kind: "clean",
+        status: { in: ["pending", "leased"] },
+      },
+    });
+    if (busy) return busy.id;
+    const plan = report.filed
+      .filter((item) => item.thread && chosen.has(item.thread))
+      .map((item) => ({ thread: item.thread!, folder: item.folder ?? "" }));
+    if (!plan.length) return null;
+    const job = await tx.donnaJob.create({
+      data: {
+        mailboxId: preview.mailboxId,
+        kind: "clean",
+        eventKey: `clean:${randomUUID()}`,
+        options: { previewJobId: preview.id, plan },
+      },
+    });
+    await resetCleanProgress(tx, preview.mailbox, plan.length);
+    await cleanControl(
+      tx,
+      preview.mailboxId,
+      session.user.id,
+      `Inbox clean approved: file ${plan.length}.`,
+    );
+    return job.id;
+  });
+  refresh();
+  redirect(`/donna/cleans/${encodeURIComponent(jobId ?? previewId)}`);
+}
+
+/** Stop a clean. A running worker finishes the move in hand, then reports what it filed. */
+export async function cancelClean(form: FormData) {
+  const { dataContext, session } = await requireDonna();
+  const id = z.string().min(1).parse(form.get("jobId"));
+  await withBrandDataTransaction(dataContext, async (tx) => {
+    const job = await tx.donnaJob.findFirst({
+      where: {
+        id,
+        kind: "clean",
+        status: { in: ["pending", "leased"] },
+        mailbox: { brandId: dataContext.brandId },
+      },
+    });
+    if (!job) return;
+    const running = job.status === "leased" && job.leaseToken;
+    await tx.donnaJob.update({
+      where: { id: job.id },
+      data: running
+        ? { status: "cancelled" }
+        : {
+            status: "cancelled",
+            completedAt: new Date(),
+            leaseToken: null,
+            leaseUntil: null,
+          },
+    });
+    await cleanControl(tx, job.mailboxId, session.user.id, "Inbox clean cancelled.");
+  });
+  refresh();
+}
+
+/** Put filed mail back in Inbox: one conversation, or every one still filed. */
+export async function undoFiled(form: FormData) {
+  const { dataContext, session } = await requireDonna();
+  const id = z.string().min(1).parse(form.get("jobId"));
+  const which = z.string().min(1).max(100).parse(form.get("thread"));
+  await withBrandDataTransaction(dataContext, async (tx) => {
+    const clean = await tx.donnaJob.findFirst({
+      where: {
+        id,
+        kind: "clean",
+        status: { in: ["done", "cancelled"] },
+        mailbox: { brandId: dataContext.brandId },
+      },
+      include: { mailbox: { select: { paused: true } } },
+    });
+    const result =
+      clean?.result && typeof clean.result === "object" && !Array.isArray(clean.result)
+        ? (clean.result as Record<string, unknown>)
+        : null;
+    const report = cleanReport(result);
+    if (!clean || !result || !report || report.preview || clean.mailbox.paused)
+      return;
+    const threads = report.filed
+      .filter(
+        (item) =>
+          item.thread &&
+          !item.undone &&
+          !item.undoPending &&
+          (which === "all" || item.thread === which),
+      )
+      .map((item) => item.thread!);
+    if (!threads.length) return;
+    await tx.donnaJob.create({
+      data: {
+        mailboxId: clean.mailboxId,
+        kind: "undo",
+        eventKey: `undo:${randomUUID()}`,
+        options: { cleanJobId: clean.id, threads },
+      },
+    });
+    const pending = new Set(threads);
+    const filed = (Array.isArray(result.filed) ? result.filed : []).map((item) =>
+      item &&
+      typeof item === "object" &&
+      !Array.isArray(item) &&
+      pending.has(String((item as Record<string, unknown>).thread))
+        ? { ...(item as Record<string, unknown>), undoPending: true, undoError: null }
+        : item,
+    );
+    await tx.donnaJob.update({
+      where: { id: clean.id },
+      data: { result: { ...result, filed } as Prisma.InputJsonObject },
+    });
+    await cleanControl(
+      tx,
+      clean.mailboxId,
+      session.user.id,
+      `Undo requested: move ${threads.length} back to Inbox.`,
+    );
+  });
+  refresh();
 }
 
 async function performRequestAction(form: FormData) {

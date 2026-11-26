@@ -8,6 +8,8 @@ import {
   mailboxFolderTables,
   donnaActionCounts,
   mailboxCleanReport,
+  cleanReport,
+  cleanIsPreview,
   cleanBarStatus,
   formatCleanEta,
   deferredRetryNote,
@@ -225,6 +227,53 @@ describe("honest health and counts", () => {
     });
   });
 
+  it("labels a preview, a real clean and a paused mailbox on the bar", () => {
+    expect(cleanIsPreview({})).toBe(true);
+    expect(cleanIsPreview({ preview: true })).toBe(true);
+    expect(cleanIsPreview({ previewJobId: "p", plan: [] })).toBe(false);
+    const coverage = { cleanProgress: { total: 5, done: 1 } };
+    expect(
+      cleanBarStatus({ id: "j", status: "leased", options: {} }, coverage),
+    ).toMatchObject({ title: "Checking inbox", waiting: false, paused: false });
+    expect(
+      cleanBarStatus(
+        { id: "j", status: "leased", options: { plan: [{ thread: "a" }] } },
+        coverage,
+      ),
+    ).toMatchObject({ title: "Cleaning inbox", label: "Cleaning inbox" });
+    expect(
+      cleanBarStatus(
+        { id: "j", status: "leased", options: {} },
+        coverage,
+        new Date(),
+        true,
+      ),
+    ).toMatchObject({ paused: true, waiting: true, label: "Paused", etaLabel: null });
+  });
+
+  it("reads a job's own report with thread ids and undo state", () => {
+    const report = cleanReport({
+      preview: false,
+      cancelled: true,
+      at: "2026-11-26T00:00:00Z",
+      reviewed: 0,
+      remaining: 0,
+      filed: [
+        { thread: "ab12", subject: "Sale", from: "x@shop.example", folder: "Newsletter", undone: true },
+        { thread: "cd34", subject: "Promo", from: "y@shop.example", folder: "Spam", undoPending: true },
+        { thread: "not hex!", subject: "Odd", folder: "Spam", undoError: "Message is no longer in Spam." },
+      ],
+    });
+    expect(report?.cancelled).toBe(true);
+    expect(report?.filed.map((i) => [i.thread, i.undone, i.undoPending])).toEqual([
+      ["ab12", true, undefined],
+      ["cd34", undefined, true],
+      [undefined, undefined, undefined],
+    ]);
+    expect(report?.filed[2].undoError).toBe("Message is no longer in Spam.");
+    expect(cleanReport(null)).toBeNull();
+  });
+
   it("describes deferred assessment retries without treating them as a mailbox error", () => {
     expect(deferredRetryNote({})).toBeNull();
     expect(deferredRetryNote({ deferred_threads: 1 })).toBe(
@@ -256,6 +305,8 @@ describe("honest health and counts", () => {
         },
       }),
     ).toEqual({
+      preview: false,
+      cancelled: false,
       at: "2026-11-25T18:00:00Z",
       reviewed: 3,
       remaining: 67,

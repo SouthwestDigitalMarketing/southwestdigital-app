@@ -1964,6 +1964,10 @@ model DonnaJob {
   leaseUntil    DateTime?
   nextAttemptAt DateTime     @default(now())
   error         String?
+  /// Clean: { preview } or { previewJobId, plan }. Undo: { cleanJobId, threads }.
+  options       Json         @default("{}")
+  /// Clean: the pass report (filed, waiting, needs you, left in Inbox).
+  result        Json?
   receivedAt    DateTime     @default(now())
   completedAt   DateTime?
   mailbox       DonnaMailbox @relation(fields: [mailboxId], references: [id], onDelete: Cascade)

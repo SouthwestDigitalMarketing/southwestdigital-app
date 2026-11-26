@@ -4,12 +4,38 @@ import { requireDonna } from "@/lib/donna/access";
 import { loadClean } from "@/lib/donna/store";
 import {
   cleanBarStatus,
+  cleanIsPreview,
+  cleanReport,
   mailboxCleanReport,
   type CleanReportItem,
 } from "@/lib/donna/domain";
+import { approveClean, cancelClean, undoFiled } from "../../actions";
 import { DonnaFrame, shortTime } from "../../DonnaFrame";
 
 export const dynamic = "force-dynamic";
+
+const listClass =
+  "divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white";
+
+function Heading({ title, count }: { title: string; count: number }) {
+  return (
+    <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+      {title}{" "}
+      <span className="font-normal tabular-nums text-slate-400">{count}</span>
+    </h3>
+  );
+}
+
+function Line({ item, extra }: { item: CleanReportItem; extra?: string }) {
+  return (
+    <span className="min-w-0 flex-1">
+      <span className="block truncate text-sm">{item.subject}</span>
+      <span className="block truncate text-xs text-slate-500">
+        {[item.from, extra].filter(Boolean).join(" · ")}
+      </span>
+    </span>
+  );
+}
 
 function Items({
   title,
@@ -23,19 +49,145 @@ function Items({
   if (!items.length) return null;
   return (
     <section className="space-y-1">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-        {title}{" "}
-        <span className="font-normal tabular-nums text-slate-400">
-          {items.length}
-        </span>
-      </h3>
-      <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
+      <Heading title={title} count={items.length} />
+      <ul className={listClass}>
         {items.map((item, i) => (
-          <li key={`${item.subject}-${i}`} className="px-3 py-2">
-            <p className="truncate text-sm">{item.subject}</p>
-            <p className="truncate text-xs text-slate-500">
-              {[item.from, extra?.(item)].filter(Boolean).join(" · ")}
-            </p>
+          <li key={`${item.subject}-${i}`} className="flex px-3 py-2">
+            <Line item={item} extra={extra?.(item)} />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** What Donna would file. Every row starts ticked; untick to keep it in Inbox. */
+function PreviewPlan({
+  jobId,
+  items,
+  approvedJobId,
+  paused,
+}: {
+  jobId: string;
+  items: CleanReportItem[];
+  approvedJobId: string | null;
+  paused: boolean;
+}) {
+  const choosable = items.filter((item) => item.thread);
+  if (!items.length)
+    return (
+      <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+        Donna found nothing to file this time.
+      </p>
+    );
+  return (
+    <form action={approveClean} className="space-y-2">
+      <input type="hidden" name="jobId" value={jobId} />
+      <Heading title="Donna would file" count={items.length} />
+      <ul className={listClass}>
+        {items.map((item, i) => (
+          <li key={`${item.thread ?? item.subject}-${i}`}>
+            <label className="flex items-center gap-3 px-3 py-2">
+              <input
+                type="checkbox"
+                name="thread"
+                value={item.thread ?? ""}
+                defaultChecked={Boolean(item.thread)}
+                disabled={!item.thread || Boolean(approvedJobId)}
+                className="h-4 w-4 shrink-0"
+              />
+              <Line item={item} extra={item.folder ? `to ${item.folder}` : undefined} />
+            </label>
+          </li>
+        ))}
+      </ul>
+      {approvedJobId ? (
+        <Link
+          href={`/donna/cleans/${encodeURIComponent(approvedJobId)}`}
+          className="block rounded-lg border border-slate-200 px-4 py-2.5 text-center text-sm"
+        >
+          Already approved. See what was filed
+        </Link>
+      ) : paused ? (
+        <p className="text-xs text-amber-700">
+          Donna is paused. Resume her in Settings to file these.
+        </p>
+      ) : (
+        <>
+          <button
+            type="submit"
+            disabled={!choosable.length}
+            className="block w-full rounded-lg bg-slate-900 px-4 py-2.5 text-center text-sm text-white sm:w-auto"
+          >
+            File the ticked emails
+          </button>
+          <p className="text-xs text-slate-500">
+            Nothing has moved yet. Untick anything you want to keep in Inbox.
+            Anything that changes before Donna files it stays in Inbox.
+          </p>
+        </>
+      )}
+    </form>
+  );
+}
+
+function FiledWithUndo({
+  jobId,
+  items,
+  paused,
+}: {
+  jobId: string;
+  items: CleanReportItem[];
+  paused: boolean;
+}) {
+  if (!items.length) return null;
+  const undoable = items.filter(
+    (item) => item.thread && !item.undone && !item.undoPending,
+  );
+  return (
+    <section className="space-y-1">
+      <div className="flex items-center justify-between gap-3">
+        <Heading title="Filed" count={items.length} />
+        {undoable.length > 1 && !paused ? (
+          <form action={undoFiled}>
+            <input type="hidden" name="jobId" value={jobId} />
+            <input type="hidden" name="thread" value="all" />
+            <button type="submit" className="text-xs underline">
+              Undo all
+            </button>
+          </form>
+        ) : null}
+      </div>
+      <ul className={listClass}>
+        {items.map((item, i) => (
+          <li
+            key={`${item.thread ?? item.subject}-${i}`}
+            className="flex items-center gap-3 px-3 py-2"
+          >
+            <Line
+              item={item}
+              extra={
+                item.undone
+                  ? "Back in Inbox"
+                  : item.undoPending
+                    ? "Moving back to Inbox…"
+                    : item.undoError
+                      ? `${item.folder} · Undo failed: ${item.undoError}`
+                      : item.folder
+              }
+            />
+            {item.thread && !item.undone && !item.undoPending && !paused ? (
+              <form action={undoFiled} className="shrink-0">
+                <input type="hidden" name="jobId" value={jobId} />
+                <input type="hidden" name="thread" value={item.thread} />
+                <button
+                  type="submit"
+                  className="rounded-md border border-slate-200 px-2.5 py-1 text-xs"
+                >
+                  Undo
+                </button>
+              </form>
+            ) : null}
           </li>
         ))}
       </ul>
@@ -53,11 +205,18 @@ export default async function CleanPage({
   const job = await loadClean(dataContext, id);
   if (!job) notFound();
   const active = job.status === "pending" || job.status === "leased";
-  const report = mailboxCleanReport(job.mailbox.coverage);
-  const progress = cleanBarStatus(
-    { id: job.id, status: job.status },
-    job.mailbox.coverage,
-  );
+  const preview = cleanIsPreview(job.options);
+  // Jobs from before per-job reports fall back to the mailbox's last report.
+  const legacy =
+    !job.options ||
+    (typeof job.options === "object" && !Object.keys(job.options).length);
+  const report =
+    cleanReport(job.result) ??
+    (legacy && job.status === "done"
+      ? mailboxCleanReport(job.mailbox.coverage)
+      : null);
+  const progress = cleanBarStatus(job, job.mailbox.coverage, new Date(), job.mailbox.paused);
+  const paused = job.mailbox.paused;
   return (
     <DonnaFrame active="email">
       <header className="space-y-1">
@@ -67,16 +226,22 @@ export default async function CleanPage({
         >
           Email
         </Link>
-        <h2 className="text-lg font-semibold">Inbox clean</h2>
+        <h2 className="text-lg font-semibold">
+          {preview ? "Inbox check" : "Inbox clean"}
+        </h2>
         <p className="truncate text-sm text-slate-500">{job.mailbox.address}</p>
         <p className="text-xs text-slate-500">
           {active
-            ? progress.waiting
-              ? "Queued"
-              : "In progress"
+            ? progress.paused
+              ? "Paused"
+              : progress.waiting
+                ? "Queued"
+                : "In progress"
             : job.status === "done"
               ? `Finished ${shortTime(job.completedAt)}`
-              : job.status}
+              : job.status === "cancelled"
+                ? `Cancelled ${shortTime(job.completedAt)}`
+                : job.status}
         </p>
       </header>
       {active ? (
@@ -96,22 +261,54 @@ export default async function CleanPage({
             />
           </span>
           <p className="text-xs text-slate-500">
-            {progress.waiting
-              ? "You do not need to do anything. This starts when Donna is running."
-              : "Filed mail, waiting items, and anything that needs you will show here as this pass finishes."}
+            {progress.paused
+              ? "Donna is paused. This continues when you resume her in Settings."
+              : progress.waiting
+                ? "You do not need to do anything. This starts when Donna is running."
+                : preview
+                  ? "Donna is reading your Inbox. Nothing moves until you approve the list."
+                  : "Donna is filing the emails you approved."}
           </p>
+          <form action={cancelClean}>
+            <input type="hidden" name="jobId" value={job.id} />
+            <button
+              type="submit"
+              className="rounded-md border border-slate-200 px-3 py-1.5 text-xs"
+            >
+              Cancel
+            </button>
+          </form>
         </section>
+      ) : job.status === "cancelled" && !report ? (
+        <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+          Cancelled before Donna moved anything.
+        </p>
       ) : report ? (
         <>
+          {job.status === "cancelled" ? (
+            <p className="text-sm text-slate-600">
+              Cancelled. Anything filed before you cancelled stays filed; you
+              can undo it below.
+            </p>
+          ) : null}
           <p className="text-sm text-slate-600">
-            Reviewed {report.reviewed.toLocaleString("en-US")} · Still in Inbox{" "}
-            {report.remaining.toLocaleString("en-US")}
+            {preview
+              ? `Read ${report.reviewed.toLocaleString("en-US")}`
+              : `Filed ${report.filed.filter((i) => !i.undone).length.toLocaleString("en-US")}`}
+            {report.remaining
+              ? ` · Not looked at yet ${report.remaining.toLocaleString("en-US")}`
+              : ""}
           </p>
-          <Items
-            title="Filed"
-            items={report.filed}
-            extra={(item) => item.folder}
-          />
+          {preview ? (
+            <PreviewPlan
+              jobId={job.id}
+              items={report.filed}
+              approvedJobId={job.approvedJobId}
+              paused={paused}
+            />
+          ) : (
+            <FiledWithUndo jobId={job.id} items={report.filed} paused={paused} />
+          )}
           <Items
             title="Waiting"
             items={report.waiting}

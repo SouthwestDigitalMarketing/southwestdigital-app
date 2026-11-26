@@ -1,4 +1,41 @@
 # SWapp handoff
+## 2026-11-25 (night) — Clean inbox safety: check first, cancel, pause, undo (Ummon, Tom)
+
+Branch `donna/clean-safety` off `origin/main`. Tom approved items 1–3 of the
+plan (stop control incl. a Cancel button, undo, preview). Not pushed.
+
+- **Check first.** Clean inbox now starts a read-only check (`options.preview`).
+  Any clean job without a `plan` is a check, including production's pending
+  `cmwwt5eee0001if07m0dvl8f1`. The clean page lists *Donna would file*, all
+  ticked; *File the ticked emails* enqueues a clean with
+  `{previewJobId, plan}` built server-side from the stored check. The worker
+  files only plan threads whose fingerprint is unchanged, without another model
+  review. The check now reviews already-assessed Inbox threads too (before, an
+  assessed thread was silently skipped by Clean).
+- **Cancel** on the clean page. Queued → `cancelled`, never claimed. Running →
+  `cancelled` with the lease kept; heartbeat answers `cancelled: true`; the
+  worker stops before the next move and reports what it filed.
+- **Pause stops Clean.** Removed the paused-mailbox exemption in `claimJob` and
+  `lockLease`; a running worker gets 409 and stops quietly (`LeaseLost`).
+  Clean inbox is refused while paused.
+- **Undo** per filed row and *Undo all*: enqueues `kind=undo`; the worker reads
+  its own `clean_filed` record, copies back to Inbox, verifies, removes the
+  filed copy, and marks the thread kept in Inbox. Logged as a `corrected`
+  activity.
+- Migrations `20261126090000_donna_clean_safety` (`DonnaJob.options`,
+  `DonnaJob.result`) and `20261126090100_donna_job_cancelled` (status check
+  adds `cancelled`). Applied to local `swapp_donna` only; no drift.
+- Checks: typecheck clean; lint 0 errors (1 old warning); vitest 1,419 passed /
+  5 skipped; worker unittest 18 passed; Donna integration and UI checks passed
+  on 3130 (UI covers check/cancel/approve/undo, no sideways scroll at 360 /
+  412 / 1280). Phone screenshots looked right. No live mail touched, worker
+  not started.
+- **Before any worker runs against production:** recopy
+  `scripts/donna_worker.py` to `~/.local/share/swapp-donna/runtime/`. The old
+  runtime copy files mail directly with no check.
+- Known limit: a check reviews `--max-threads` (default 10) conversations per
+  pass, within 50 reviews a day, so 75 Inbox emails take several checks.
+
 ## 2026-11-25 — Clean page must not show leftover mailbox lastError
 
 - Inbox clean shows `job.error` only. A successful pass no longer writes

@@ -4,9 +4,10 @@
 Reuses Mailroom's existing account/credential connection. Raw mail and model
 context stay on Ripley. Only request summaries, evidence excerpts and prepared
 replies go to SWapp. Reconcile and incoming jobs are read-only IMAP. A Clean
-job may file Inbox messages into allowlisted folders after a verified copy.
-It never sends, never uses Trash, and never files known contacts or
-client/sales mail.
+job first previews what it would file and moves nothing. Only an approved
+preview plan files Inbox messages into allowlisted folders, after a verified
+copy, and each move is recorded so an undo job can put it back. It never
+sends, never uses Trash, and never files known contacts or client/sales mail.
 """
 import argparse
 import datetime as dt
@@ -35,6 +36,10 @@ UTC = dt.timezone.utc
 
 class ReviewBudgetReached(RuntimeError):
     pass
+
+
+class LeaseLost(RuntimeError):
+    """The job was paused, reclaimed or removed; stop without reporting failure."""
 
 
 class DonnaAPIError(RuntimeError):
@@ -91,6 +96,14 @@ class LocalStore:
           CREATE TABLE IF NOT EXISTS review_failures (
             mailbox TEXT, thread TEXT, fingerprint TEXT, retry_after REAL, reason TEXT,
             PRIMARY KEY(mailbox,thread));
+          CREATE TABLE IF NOT EXISTS clean_plans (
+            job TEXT, thread TEXT, fingerprint TEXT, folder TEXT, assessment TEXT,
+            PRIMARY KEY(job,thread));
+          CREATE TABLE IF NOT EXISTS clean_filed (
+            job TEXT, thread TEXT, folder TEXT, messages TEXT, subject TEXT, sender TEXT,
+            PRIMARY KEY(job,thread));
+          CREATE TABLE IF NOT EXISTS kept_in_inbox (
+            mailbox TEXT, thread TEXT, PRIMARY KEY(mailbox,thread));
         """)
         os.chmod(self.root / "desk.sqlite", 0o600)
         self.daily_limit = 50
@@ -304,7 +317,16 @@ class LocalStore:
                 pass
         return {"folders": folders, "message_locations": total, "unread_is_not_pending": True, "gaps": gaps}
 
-    def threads(self, mailbox, existing, contacts=None, now=None):
+    def kept(self, mailbox, thread):
+        return bool(self.db.execute("SELECT 1 FROM kept_in_inbox WHERE mailbox=? AND thread=?",
+                                    (mailbox, thread)).fetchone())
+
+    def filed_for(self, job):
+        return [{"thread": r["thread"], "folder": r["folder"], "messages": json.loads(r["messages"]),
+                 "subject": r["subject"], "from": r["sender"]}
+                for r in self.db.execute("SELECT * FROM clean_filed WHERE job=? ORDER BY rowid", (job,))]
+
+    def threads(self, mailbox, existing, contacts=None, now=None, include_assessed=False):
         grouped = {}
         for row in self.db.execute("SELECT * FROM messages WHERE mailbox=?", (mailbox,)):
             grouped.setdefault(row["thread"], []).append(json.loads(row["payload"]))
@@ -317,7 +339,7 @@ class LocalStore:
             context = [r for r in existing if r["sourceKey"].startswith(thread + ":")]
             fingerprint = digest(json.dumps([messages, [(r["sourceKey"], r["direction"]) for r in context if r["direction"]]], sort_keys=True))
             old = self.db.execute("SELECT fingerprint FROM assessments WHERE mailbox=? AND thread=?", (mailbox, thread)).fetchone()
-            if not old or old[0] != fingerprint:
+            if include_assessed or not old or old[0] != fingerprint:
                 failure = self.db.execute("SELECT fingerprint,retry_after FROM review_failures WHERE mailbox=? AND thread=?", (mailbox, thread)).fetchone()
                 if failure and failure[0] == fingerprint and failure[1] > time.time():
                     self.deferred += 1
@@ -468,7 +490,7 @@ def file_via_imap(uid, dest, message_id):
 
 
 def file_thread(store, mailbox, messages, dest, filer):
-    filed = 0
+    filed = []
     for message in messages:
         if str(message.get("folder", "")).upper() != "INBOX" or message.get("outgoing"):
             continue
@@ -487,10 +509,86 @@ def file_thread(store, mailbox, messages, dest, filer):
             "UPDATE messages SET payload=? WHERE mailbox=? AND key=?",
             (json.dumps(payload), mailbox, message["key"]))
         store.db.commit()
-        filed += 1
+        filed.append(message["key"])
     if not filed:
         raise RuntimeError("No Inbox messages were available to file.")
     return filed
+
+
+def unfile_via_imap(folder, message_id):
+    """Put one filed message back in Inbox: verified copy, then remove from folder."""
+    if not message_id or str(message_id).startswith("raw:"):
+        raise RuntimeError("Message cannot be verified for undo.")
+    if folder.lower() in BLOCKED_FILE_DESTINATIONS:
+        raise RuntimeError("Undo only works from Donna's filing folders.")
+    helper = mail_module()
+    conn, _ = helper.connect("zoho")
+    try:
+        if "UIDPLUS" not in helper.caps(conn):
+            raise RuntimeError("Mailbox cannot verify a moved copy.")
+        quoted = helper.quote(folder)
+        if conn.select(quoted)[0] != "OK":
+            raise RuntimeError("Could not open %s to undo." % folder)
+        status, found = conn.uid("SEARCH", None, "HEADER", "Message-ID", str(message_id))
+        uids = (found[0] or b"").split() if status == "OK" and found else []
+        if not uids:
+            raise RuntimeError("Message is no longer in %s." % folder)
+        uid_set = b",".join(uids).decode()
+        if conn.uid("COPY", uid_set, "INBOX")[0] != "OK":
+            raise RuntimeError("Could not copy the message back to Inbox.")
+        if conn.select("INBOX")[0] != "OK":
+            raise RuntimeError("Could not open Inbox to verify the undo.")
+        status, back = conn.uid("SEARCH", None, "HEADER", "Message-ID", str(message_id))
+        if status != "OK" or not (back and back[0] and back[0].split()):
+            raise RuntimeError("Copy back in Inbox was not found.")
+        if conn.select(quoted)[0] != "OK":
+            raise RuntimeError("Could not reopen %s after the undo copy." % folder)
+        if conn.uid("STORE", uid_set, "+FLAGS.SILENT", "(\\Deleted)")[0] != "OK":
+            raise RuntimeError("Filed copy could not be marked after undo.")
+        if conn.uid("EXPUNGE", uid_set)[0] != "OK":
+            raise RuntimeError("Filed copy could not be removed after undo.")
+    finally:
+        try:
+            conn.logout()
+        except Exception:
+            pass
+
+
+def process_undo(client, store, work):
+    """Move the recorded messages of the chosen filed threads back to Inbox."""
+    job = work["job"]
+    mailbox = work["mailbox"]["id"]
+    options = job.get("options") or {}
+    clean_job = str(options.get("cleanJobId") or "")
+    wanted = [str(t) for t in options.get("threads") or []][:200]
+    unfiler = work.get("unfiler") or unfile_via_imap
+    records = {item["thread"]: item for item in store.filed_for(clean_job)}
+    undone, failed = [], []
+    for thread in wanted:
+        item = records.get(thread)
+        if not item:
+            failed.append({"thread": thread, "reason": "No record of this move on Ripley."})
+            continue
+        try:
+            for key in item["messages"]:
+                unfiler(item["folder"], key)
+                payload_row = store.db.execute("SELECT payload FROM messages WHERE mailbox=? AND key=?",
+                                               (mailbox, key)).fetchone()
+                if payload_row:
+                    payload = json.loads(payload_row["payload"])
+                    payload["folder"] = "INBOX"
+                    store.db.execute("UPDATE messages SET payload=? WHERE mailbox=? AND key=?",
+                                     (json.dumps(payload), mailbox, key))
+                store.db.execute("DELETE FROM locations WHERE mailbox=? AND folder=? AND key=?",
+                                 (mailbox, item["folder"], key))
+            # Tom put it back: a later Clean must leave this conversation in Inbox.
+            store.db.execute("INSERT OR IGNORE INTO kept_in_inbox VALUES (?,?)", (mailbox, thread))
+            store.db.commit()
+            undone.append(thread)
+        except (RuntimeError, OSError) as error:
+            failed.append({"thread": thread, "reason": str(error)[:200]})
+    client.call("complete", result={"jobId": job["id"], "leaseToken": job["leaseToken"],
+                                    "undo": {"cleanJobId": clean_job, "undone": undone, "failed": failed}})
 
 
 def assess(messages, existing, root, contacts=None, extra=""):
@@ -673,15 +771,25 @@ def listener_state(client):
 
 def process_job(client, store, work, max_threads):
     job = work["job"]
+    if job.get("kind") == "undo":
+        return process_undo(client, store, work)
     last_heartbeat = [0]
+    cancelled = threading.Event()
 
     progress = {"total": 0, "done": 0, "current": None, "phase": "queued", "startedAt": stamp()}
 
     def heartbeat(force=False):
         if force or time.monotonic() - last_heartbeat[0] > 20:
             payload = dict(progress) if job.get("kind") == "clean" and progress.get("total") else None
-            client.call("heartbeat", jobId=job["id"], leaseToken=job["leaseToken"],
-                        listener=listener_state(client), **({"progress": payload} if payload is not None else {}))
+            try:
+                answer = client.call("heartbeat", jobId=job["id"], leaseToken=job["leaseToken"],
+                                     listener=listener_state(client), **({"progress": payload} if payload is not None else {}))
+            except DonnaAPIError as error:
+                if error.status == 409:
+                    raise LeaseLost("Job was paused or reclaimed; stopping.") from None
+                raise
+            if isinstance(answer, dict) and answer.get("cancelled"):
+                cancelled.set()
             last_heartbeat[0] = time.monotonic()
 
     # Keep the lease alive during model calls. A failed lease check is surfaced.
@@ -700,70 +808,95 @@ def process_job(client, store, work, max_threads):
     keeper.start()
     try:
         is_clean = job.get("kind") == "clean"
-        coverage = store.inventory(work["mailbox"]["id"], work["mailbox"]["address"], heartbeat)
-        pending = store.threads(work["mailbox"]["id"], work["requests"], work.get("contacts"))
+        options = job.get("options") or {}
+        # A Clean files mail only from a plan Tom approved; anything else is a preview.
+        plan = options.get("plan") if is_clean and isinstance(options.get("plan"), list) else None
+        mailbox = work["mailbox"]["id"]
+        coverage = store.inventory(mailbox, work["mailbox"]["address"], heartbeat)
+        # Clean looks at every Inbox conversation, even ones a read-only pass already reviewed.
+        pending = store.threads(mailbox, work["requests"], work.get("contacts"),
+                                **({"include_assessed": True} if is_clean else {}))
+        report = {"at": stamp(), "reviewed": 0, "remaining": 0, "filed": [], "waiting": [], "needsYou": [],
+                  "skipped": [], "preview": is_clean and plan is None}
+        if plan is not None:
+            done_threads = set()
+            for item in store.filed_for(job["id"]):
+                report["filed"].append(item)
+                done_threads.add(item["thread"])
+            progress.update(total=max(len(plan), 1), done=len(done_threads), phase="working")
+            heartbeat(True)
+            run_plan(client, store, work, plan, pending, report, done_threads, progress, heartbeat,
+                     cancelled, lease_errors)
+            report["remaining"] = 0
+            coverage.update({"threads_reviewed_this_pass": 0, "sending_enabled": False,
+                             "clean": report, "mode": "clean"})
+            client.call("complete", result={"jobId": job["id"], "leaseToken": job["leaseToken"],
+                                            "coverage": coverage, "report": report,
+                                            "cancelled": cancelled.is_set()})
+            return
         if is_clean:
             pending = [item for item in pending if inbox_thread(item[2])]
-            inbox_n = 0
-            for folder in coverage.get("folders") or []:
-                if isinstance(folder, dict) and str(folder.get("folder", "")).upper() == "INBOX":
-                    inbox_n = int(folder.get("messages") or 0)
-                    break
-            progress.update(total=max(inbox_n, len(pending), 1), phase="working")
+            progress.update(total=max(min(len(pending), max_threads), 1), phase="working")
             heartbeat(True)
         reviewed = 0
         failed = 0
         attempted = 0
-        report = {"at": stamp(), "reviewed": 0, "remaining": 0, "filed": [], "waiting": [], "needsYou": [], "skipped": []}
-        filer = work.get("filer") or file_via_imap
         for thread, fingerprint, messages, existing in pending[:max_threads]:
             if lease_errors:
                 raise lease_errors[0]
+            if cancelled.is_set():
+                break
+            subject = next((m.get("subject") or "Email" for m in messages if not m.get("outgoing")), "Email")
+            sender = next((m.get("from") or "" for m in messages if not m.get("outgoing")), "")
+            if is_clean and getattr(store, "kept", None) and store.kept(mailbox, thread):
+                report["skipped"].append({"subject": subject, "from": sender, "reason": "you moved it back to Inbox"})
+                attempted += 1
+                continue
             store.reserve_review()
             attempted += 1
             try:
-                assessment = assess(messages, existing, store.root, work.get("contacts"),
-                                    extra=CLEAN_INSTRUCTIONS if is_clean else "")
-                filed_to = None
-                subject = next((m.get("subject") or "Email" for m in messages if not m.get("outgoing")), "Email")
-                sender = next((m.get("from") or "" for m in messages if not m.get("outgoing")), "")
                 if is_clean:
                     progress.update(current=str(subject)[:200], phase="reading")
                     heartbeat(True)
+                assessment = assess(messages, existing, store.root, work.get("contacts"),
+                                    extra=CLEAN_INSTRUCTIONS if is_clean else "")
+                dest = None
+                if is_clean:
                     has_gaps = any(a.get("gap") for m in messages for a in m.get("attachments") or [])
                     dest, reason = (None, "attachment review needed") if has_gaps else filing_plan(
                         assessment, messages, work.get("contacts"), coverage.get("folders"))
                     if dest:
-                        try:
-                            file_thread(store, work["mailbox"]["id"], messages, dest, filer)
-                            filed_to = dest
-                            report["filed"].append({"subject": subject, "from": sender, "folder": dest})
-                        except (RuntimeError, ValueError, KeyError, TypeError):
-                            report["skipped"].append({"subject": subject, "from": sender, "reason": "filing failed"})
+                        store.db.execute("INSERT OR REPLACE INTO clean_plans VALUES (?,?,?,?,?)",
+                                         (job["id"], thread, fingerprint, dest, json.dumps(assessment)))
+                        report["filed"].append({"thread": thread, "subject": subject, "from": sender, "folder": dest})
                     elif reason != "no file destination":
                         report["skipped"].append({"subject": subject, "from": sender, "reason": reason})
-                packet = packet_for(work, thread, fingerprint, messages, existing, assessment, filed_to=filed_to)
+                packet = packet_for(work, thread, fingerprint, messages, existing, assessment)
                 client.call("publish", packet=packet)
                 for item in assessment:
                     title = item.get("title") or subject
-                    if filed_to:
+                    if dest:
                         continue
                     if item.get("state") == "waiting":
                         report["waiting"].append({"title": title, "from": sender, "waitingOn": item.get("waitingOn") or ""})
                     elif item.get("state") == "needs-you" or item.get("reply"):
                         report["needsYou"].append({"title": title, "from": sender, "nextAction": item.get("nextAction") or ""})
             except DonnaAPIError as error:
+                if error.status == 409:
+                    raise LeaseLost("Job was paused or reclaimed; stopping.") from None
                 if error.status not in (400, 413):
                     raise
-                store.record_failure(work["mailbox"]["id"], thread, fingerprint, "Prepared data needs another review attempt.")
+                store.record_failure(mailbox, thread, fingerprint, "Prepared data needs another review attempt.")
                 failed += 1
                 continue
+            except LeaseLost:
+                raise
             except (RuntimeError, ValueError, KeyError, TypeError):
-                store.record_failure(work["mailbox"]["id"], thread, fingerprint, "Conversation could not be assessed fully.")
+                store.record_failure(mailbox, thread, fingerprint, "Conversation could not be assessed fully.")
                 failed += 1
                 continue
-            store.db.execute("INSERT OR REPLACE INTO assessments VALUES (?,?,?)", (work["mailbox"]["id"], thread, fingerprint))
-            store.db.execute("DELETE FROM review_failures WHERE mailbox=? AND thread=?", (work["mailbox"]["id"], thread))
+            store.db.execute("INSERT OR REPLACE INTO assessments VALUES (?,?,?)", (mailbox, thread, fingerprint))
+            store.db.execute("DELETE FROM review_failures WHERE mailbox=? AND thread=?", (mailbox, thread))
             store.db.commit()
             reviewed += 1
             if is_clean:
@@ -780,7 +913,13 @@ def process_job(client, store, work, max_threads):
             coverage.update({"remaining_threads": ready + deferred, "ready_threads": ready, "deferred_threads": deferred,
                              "coverage_complete": not coverage["gaps"] and not ready and not deferred,
                              "mode": "read-only"})
-        client.call("complete", result={"jobId": job["id"], "leaseToken": job["leaseToken"], "coverage": coverage})
+        result = {"jobId": job["id"], "leaseToken": job["leaseToken"], "coverage": coverage}
+        if is_clean:
+            result.update({"report": report, "cancelled": cancelled.is_set()})
+        client.call("complete", result=result)
+    except LeaseLost as error:
+        # Pause or a reclaimed lease: the server already holds the job; report nothing.
+        print(stamp(), "Donna stopped this job:", error, flush=True)
     except Exception as error:
         # Never include credentials, raw mail, reviewer output or command stderr in SWapp errors.
         reason = str(error) if isinstance(error, RuntimeError) else "Mailbox processing failed; inspect the local worker log."
@@ -789,6 +928,73 @@ def process_job(client, store, work, max_threads):
     finally:
         stop.set()
         keeper.join(timeout=36)
+
+
+def run_plan(client, store, work, plan, pending, report, done_threads, progress, heartbeat, cancelled, lease_errors):
+    """File exactly what Tom approved from a preview, if the conversation is unchanged."""
+    job = work["job"]
+    mailbox = work["mailbox"]["id"]
+    preview_job = str((job.get("options") or {}).get("previewJobId") or "")
+    filer = work.get("filer") or file_via_imap
+    current = {thread: (fingerprint, messages, existing) for thread, fingerprint, messages, existing in pending}
+    known = contact_addresses(work.get("contacts"))
+    for entry in plan[:200]:
+        if lease_errors:
+            raise lease_errors[0]
+        if cancelled.is_set():
+            break
+        thread = str((entry or {}).get("thread") or "")
+        if not thread or thread in done_threads:
+            continue
+        row = store.db.execute("SELECT * FROM clean_plans WHERE job=? AND thread=?", (preview_job, thread)).fetchone()
+        found = current.get(thread)
+        messages = found[1] if found else []
+        subject = next((m.get("subject") or "Email" for m in messages if not m.get("outgoing")), "Email")
+        sender = next((m.get("from") or "" for m in messages if not m.get("outgoing")), "")
+        progress.update(current=str(subject)[:200], phase="filing")
+        # Checks the lease and picks up Cancel right before every move.
+        heartbeat(True)
+        if cancelled.is_set():
+            break
+        reason = None
+        if not row:
+            reason = "no preview record on Ripley"
+        elif not found or not inbox_thread(messages):
+            reason = "already out of Inbox"
+        elif found[0] != row["fingerprint"]:
+            reason = "changed since the preview"
+        elif store.kept(mailbox, thread):
+            reason = "you moved it back to Inbox"
+        elif inbound_addresses(messages) & known:
+            reason = "known contact"
+        elif str((entry or {}).get("folder") or row["folder"]) != row["folder"]:
+            reason = "folder differs from the preview"
+        if reason:
+            report["skipped"].append({"thread": thread, "subject": subject, "from": sender, "reason": reason})
+        else:
+            try:
+                keys = file_thread(store, mailbox, messages, row["folder"], filer)
+            except (RuntimeError, ValueError, KeyError, TypeError):
+                report["skipped"].append({"thread": thread, "subject": subject, "from": sender, "reason": "filing failed"})
+                keys = None
+            if keys:
+                store.db.execute("INSERT OR REPLACE INTO clean_filed VALUES (?,?,?,?,?,?)",
+                                 (job["id"], thread, row["folder"], json.dumps(keys), subject, sender))
+                store.db.commit()
+                report["filed"].append({"thread": thread, "folder": row["folder"], "messages": keys,
+                                        "subject": subject, "from": sender})
+                assessment = json.loads(row["assessment"])
+                packet = packet_for(work, thread, row["fingerprint"] + ":filed", messages, found[2],
+                                    assessment, filed_to=row["folder"])
+                try:
+                    client.call("publish", packet=packet)
+                except DonnaAPIError as error:
+                    if error.status == 409:
+                        raise LeaseLost("Job was paused or reclaimed; stopping.") from None
+                    # The move is recorded locally and in the report; the request catches up later.
+                    print(stamp(), "Filed request update was rejected; the move is still recorded.", flush=True)
+        done_threads.add(thread)
+        progress.update(done=len(done_threads), phase="working")
 
 
 def main():

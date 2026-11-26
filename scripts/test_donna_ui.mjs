@@ -19,7 +19,7 @@ const box = await db.donnaMailbox.create({
     brandId: brand.id,
     key: "ui-" + randomBytes(8).toString("hex"),
     address: "example@example.com",
-    paused: true,
+    paused: false,
     hookKey: randomBytes(32).toString("hex"),
     coverage: {
       folders: [
@@ -335,25 +335,25 @@ try {
     where: { mailboxId: box.id, kind: "clean" },
   });
   await expect(
-    page.getByRole("link", { name: /Cleaning inbox/ }),
+    page.getByRole("link", { name: /Checking inbox/ }),
   ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: /Cleaning inbox/ }),
+    page.getByRole("link", { name: /Checking inbox/ }),
   ).toContainText("0 of 73");
   await expect(
-    page.getByRole("link", { name: /Cleaning inbox/ }),
+    page.getByRole("link", { name: /Checking inbox/ }),
   ).toContainText("Waiting for Donna");
   await page.goto(base + "/dashboard");
   await expect(
-    page.getByRole("link", { name: /Cleaning inbox/ }),
+    page.getByRole("link", { name: /Checking inbox/ }),
   ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: /Cleaning inbox/ }),
+    page.getByRole("link", { name: /Checking inbox/ }),
   ).toContainText("0 of 73");
-  await page.getByRole("link", { name: /Cleaning inbox/ }).click();
+  await page.getByRole("link", { name: /Checking inbox/ }).click();
   await expect(page).toHaveURL(base + "/donna/cleans/" + cleanJob.id);
   await expect(
-    page.getByRole("heading", { name: "Inbox clean" }),
+    page.getByRole("heading", { name: "Inbox check" }),
   ).toBeVisible();
   await page.goto(base + "/donna/email/work");
   await page.getByRole("button", { name: "Donna", exact: true }).click();
@@ -363,8 +363,101 @@ try {
   await page.getByRole("dialog").getByRole("button", { name: /Cleaning/ }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(
-    page.getByRole("link", { name: /Cleaning inbox/ }),
+    page.getByRole("link", { name: /Checking inbox/ }),
   ).toBeVisible();
+  // Cancel a queued check: the job ends and the bar goes away.
+  await page.goto(base + "/donna/cleans/" + cleanJob.id);
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect
+    .poll(async () =>
+      (await db.donnaJob.findUniqueOrThrow({ where: { id: cleanJob.id } }))
+        .status,
+    )
+    .toBe("cancelled");
+  await page.reload();
+  await expect(page.getByText("Cancelled before Donna moved anything.")).toBeVisible();
+  await expect(page.getByRole("link", { name: /Checking inbox/ })).toHaveCount(0);
+  // A finished preview: untick one, approve the rest.
+  const [keep, file] = ["a1".repeat(32), "b2".repeat(32)];
+  const preview = await db.donnaJob.create({
+    data: {
+      mailboxId: box.id,
+      kind: "clean",
+      eventKey: "ui-preview",
+      status: "done",
+      completedAt: new Date(),
+      options: { preview: true },
+      result: {
+        preview: true,
+        at: new Date().toISOString(),
+        reviewed: 3,
+        remaining: 70,
+        filed: [
+          { thread: keep, subject: "Example keep", from: "a@shop.example", folder: "Newsletter" },
+          { thread: file, subject: "Example file", from: "b@shop.example", folder: "Spam" },
+        ],
+        waiting: [],
+        needsYou: [{ title: "Example question", nextAction: "Review draft" }],
+        skipped: [{ subject: "Example client", reason: "known contact" }],
+      },
+    },
+  });
+  await page.goto(base + "/donna/cleans/" + preview.id);
+  await expect(page.getByText("Donna would file")).toBeVisible();
+  await expect(page.getByText("Not looked at yet 70")).toBeVisible();
+  await page.getByRole("checkbox", { name: /Example keep/ }).uncheck();
+  await page.getByRole("button", { name: "File the ticked emails" }).click();
+  await expect(page.getByRole("heading", { name: "Inbox clean" })).toBeVisible();
+  const real = await db.donnaJob.findFirstOrThrow({
+    where: { mailboxId: box.id, kind: "clean", status: "pending" },
+  });
+  assert.deepEqual(real.options, {
+    previewJobId: preview.id,
+    plan: [{ thread: file, folder: "Spam" }],
+  });
+  await expect(page.getByRole("link", { name: /Cleaning inbox/ })).toBeVisible();
+  await page.goto(base + "/donna/cleans/" + preview.id);
+  await expect(page.getByRole("link", { name: /Already approved/ })).toBeVisible();
+  await db.donnaJob.update({
+    where: { id: real.id },
+    data: {
+      status: "done",
+      completedAt: new Date(),
+      result: {
+        preview: false,
+        at: new Date().toISOString(),
+        reviewed: 0,
+        remaining: 0,
+        filed: [{ thread: file, subject: "Example file", from: "b@shop.example", folder: "Spam", messages: ["<x@y>"] }],
+        waiting: [],
+        needsYou: [],
+        skipped: [],
+      },
+    },
+  });
+  await page.goto(base + "/donna/cleans/" + real.id);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(page.getByText(/Moving back to Inbox/)).toBeVisible();
+  const undo = await db.donnaJob.findFirstOrThrow({
+    where: { mailboxId: box.id, kind: "undo" },
+  });
+  assert.deepEqual(undo.options, { cleanJobId: real.id, threads: [file] });
+  for (const size of [
+    { width: 360, height: 640 },
+    { width: 412, height: 915 },
+    { width: 1280, height: 800 },
+  ]) {
+    await page.setViewportSize(size);
+    for (const id of [preview.id, real.id]) {
+      await page.goto(base + "/donna/cleans/" + id);
+      assert.equal(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+        true,
+        `No sideways scroll on the clean page at ${size.width}px`,
+      );
+    }
+  }
+  await page.setViewportSize({ width: 412, height: 915 });
   await page.goto(base + "/donna/requests/" + request.id + "?section=reply");
   await page
     .getByLabel("Edit reply", { exact: true })
@@ -454,7 +547,7 @@ try {
   });
   assert.deepEqual(errors, []);
   console.log(
-    "Donna UI checks passed: Overview/Email tabs, above-fold layouts at 360x640 / 412x915 / 1280x800, request edit/direction/completion, settings and counts-only Scorecard privacy.",
+    "Donna UI checks passed: Overview/Email tabs, Clean check/cancel/approve/undo, above-fold layouts at 360x640 / 412x915 / 1280x800, request edit/direction/completion, settings and counts-only Scorecard privacy.",
   );
 } finally {
   await browser.close();

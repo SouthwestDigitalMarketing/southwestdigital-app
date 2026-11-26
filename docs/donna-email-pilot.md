@@ -3,8 +3,10 @@
 Donna's first build is an email desk. It inventories Zoho, reads full
 conversations including Sent and Drafts, prepares recommendations and reply text,
 and records verifiable work in SWapp. Reconcile jobs stay read-only. **Clean**
-files allowlisted Inbox mail on Zoho after a verified copy, drafts replies, and
-never sends. It does not use Trash, and it does not file known contacts or
+starts as a read-only check that lists what Donna would file. Only the emails
+the operator leaves ticked and approves are filed, on Zoho, after a verified
+copy; each move is recorded so it can be undone. It drafts replies and never
+sends. It does not use Trash, and it does not file known contacts or
 client/sales mail. The broader build sequence is in
 [the build plan](design/donna-email-build-plan.md).
 
@@ -17,17 +19,24 @@ client/sales mail. The broader build sequence is in
   chrome (every Donna view) opens Clean inbox, Empty spam, Clear
   notifications, Empty trash, Clean drafts, and Do it all, with folder
   counts; only Clean inbox is enabled. Tapping Clean inbox closes the modal
-  and shows a light **Cleaning inbox** bar at the top of every app screen
-  until that job finishes: what it is on, n of total, a progress track, and
-  an ETA once Donna is running. Queued jobs say **Waiting for Donna**; the
-  operator does not need to tap anything else. Tapping **Cleaning…** in the modal
-  closes it. Tapping the bar opens `/donna/cleans/[id]`.
+  and starts a check. A light bar sits at the top of every app screen until
+  the job finishes: **Checking inbox** for the check, **Cleaning inbox** once
+  approved mail is being filed, with what it is on, n of total, a progress
+  track, and an ETA once Donna is running. Queued jobs say **Waiting for
+  Donna**; a paused mailbox says **Paused**. Tapping **Cleaning…** in the
+  modal closes it. Tapping the bar opens `/donna/cleans/[id]`. Clean inbox
+  is refused while the mailbox is paused.
 - `/donna/email/work`: two requests per page; Needs you, Working, Waiting and
   Handled are filters here, not top-level Donna tabs.
-- `/donna/cleans/[id]`: one Inbox clean job. While it runs: current item,
-  n of total, progress, and ETA. After it finishes: filed / waiting /
-  needs-you report. This page shows that job’s own error, not leftover
-  mailbox `lastError` from an earlier inventory.
+- `/donna/cleans/[id]`: one Inbox check or clean job. While it runs or waits:
+  current item, n of total, progress, ETA and **Cancel**. A finished check
+  lists **Donna would file**, every row ticked; **File the ticked emails**
+  starts the real clean with exactly those conversations (the plan comes from
+  the stored check, not the form). A finished clean lists each filed
+  conversation with **Undo** (and **Undo all**); undone rows say Back in
+  Inbox. Waiting, needs-you and left-in-Inbox lists follow. Each job keeps its
+  own report in `DonnaJob.result`. This page shows that job’s own error, not
+  leftover mailbox `lastError` from an earlier inventory.
 - `/donna/requests/[id]`: Summary, Reply, Source and Activity views; separate
   direction and follow-up/completion views. Long content uses bounded readers.
 - `/donna/settings`: Mailbox, Connection, Coverage and Rules, one view at a time.
@@ -68,17 +77,29 @@ mailbox every two seconds. A fifteen-minute recovery reconciliation observes
 missed pushes, changes in other folders and manually sent replies.
 
 Mailbox locks serialize claims; jobs carry expiring, renewable leases. Publishing
-and completion require the current lease. A paused mailbox still accepts a
-Clean job so the operator can work Inbox without turning the rest of the desk
-on. Failed work remains pending with exponential retry delay. A partial
+and completion require the current lease. **Pause stops every job, Clean
+included**: a paused mailbox is never claimed, and a running worker's next
+heartbeat gets HTTP 409 and stops without reporting failure; the job stays
+pending and continues on Resume. **Cancel** marks a Clean `cancelled`. A
+queued one never runs. A running one keeps its lease: the next heartbeat
+answers `cancelled: true`, the worker stops before its next move and reports
+what it already filed; mail already filed stays filed and can be undone.
+Failed work remains pending with exponential retry delay. A partial
 reconcile pass queues its remaining backlog. Clean does not. Individual failed/oversized conversations are deferred for five minutes
 without blocking other mail; ready and deferred counts stay in the coverage
 report. Restarting never turns an incomplete queue into a successful result.
 
 The native reader inventories all selectable folders and all UIDs. Reconcile
-uses read-only SELECT and BODY.PEEK. Clean uses a writable Inbox select only
-to copy an allowlisted message and expunge the Inbox copy after the destination
-copy is verified. Trash is counted but not made into new requests;
+uses read-only SELECT and BODY.PEEK. A Clean check reviews every Inbox
+conversation, even ones a read-only pass already assessed, and moves nothing;
+its filing plan (thread, fingerprint, folder, assessment) is kept in the
+worker's SQLite. An approved clean files only plan threads whose fingerprint is
+unchanged since the check, with no new model review; changed, kept or
+known-contact threads stay in Inbox with a reason. It uses a writable Inbox
+select only to copy an allowlisted message and expunge the Inbox copy after the
+destination copy is verified, and records each move (`clean_filed`). An `undo`
+job copies those recorded messages back to Inbox, verifies, removes the filed
+copy, and marks the conversation kept in Inbox so a later Clean leaves it. Trash is counted but not made into new requests;
 unsent Drafts never count as sent answers. Raw mail stays in a private local
 SQLite/cache directory on Ripley. Supported PDF and text attachments are read;
 unsupported or oversized content remains an explicit request-level gap.
@@ -115,7 +136,9 @@ Reuses `~/projects/mailroom-app/bin/mail` for its existing Zoho credentials. The
 configured address must match that account. No new mail password is requested.
 The reviewer runs without shell, apps, plugins, code mode or web search. Incoming
 mail is evidence, not authority to change rules. No model output can send mail. Clean may file Inbox mail only through the
-allowlisted, verified copy path.
+allowlisted, verified copy path, and only from a plan the operator approved.
+A check reviews at most `--max-threads` conversations per pass within the daily
+review budget; the rest show as not looked at yet.
 
 Each pass assesses up to ten threads by default (`--max-threads`, 1–50).
 `--daily-reviews` defaults to fifty model review attempts per UTC day, persisted
