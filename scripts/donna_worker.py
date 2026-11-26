@@ -877,6 +877,7 @@ def process_job(client, store, work, max_threads, clean_threads=100):
                                             "coverage": coverage, "report": report,
                                             "cancelled": cancelled.is_set()})
             return
+        inbox_all = [item for item in pending if inbox_thread(item[2])] if is_clean else []
         if is_clean:
             # Inbox conversations Donna has not decided on at this exact version.
             pending = [item for item in pending if inbox_thread(item[2])
@@ -887,6 +888,7 @@ def process_job(client, store, work, max_threads, clean_threads=100):
         reviewed = 0
         failed = 0
         attempted = 0
+        budget_reached = False
         for thread, fingerprint, messages, existing in pending[:max_threads]:
             if lease_errors:
                 raise lease_errors[0]
@@ -900,7 +902,12 @@ def process_job(client, store, work, max_threads, clean_threads=100):
                     store.decide(mailbox, thread, fingerprint, "kept")
                 attempted += 1
                 continue
-            store.reserve_review(background=not is_clean)
+            try:
+                store.reserve_review(background=not is_clean)
+            except ReviewBudgetReached:
+                # A limit is not a fault: stop this pass and leave the rest for the next window.
+                budget_reached = True
+                break
             attempted += 1
             try:
                 if is_clean:
@@ -973,11 +980,15 @@ def process_job(client, store, work, max_threads, clean_threads=100):
             if is_clean:
                 progress.update(done=reviewed, phase="working")
                 heartbeat(True)
+        if is_clean and not preview and (work.get("settings") or {}).get("inboxZero") \
+                and not cancelled.is_set() and getattr(store, "decided", None):
+            archive_rest(client, store, work, inbox_all, report, heartbeat)
         deferred = getattr(store, "deferred", 0) + failed
         ready = len(pending) - attempted
         report["reviewed"] = reviewed
         report["remaining"] = ready + deferred
-        coverage.update({"threads_reviewed_this_pass": reviewed, "sending_enabled": False})
+        coverage.update({"threads_reviewed_this_pass": reviewed, "sending_enabled": False,
+                         "budget_reached": budget_reached})
         if is_clean:
             coverage.update({"clean": report, "mode": "clean"})
         else:
@@ -999,6 +1010,51 @@ def process_job(client, store, work, max_threads, clean_threads=100):
     finally:
         stop.set()
         keeper.join(timeout=36)
+
+
+def archive_rest(client, store, work, inbox_all, report, heartbeat):
+    """Inbox zero (Tom, 2026-11-25): every conversation Donna has read leaves Inbox.
+
+    What she did not file elsewhere goes to Archive; requests that need Tom stay on
+    his Need you list in SWapp. Unread-by-Donna, unreadable and put-back mail stays.
+    """
+    job = work["job"]
+    mailbox = work["mailbox"]["id"]
+    filer = work.get("filer") or file_via_imap
+    done = {item["thread"] for item in report["filed"]}
+    activities = []
+    archived = set()
+    for thread, fingerprint, messages, _ in inbox_all:
+        if thread in done or store.kept(mailbox, thread) or not store.decided(mailbox, thread, fingerprint):
+            continue
+        heartbeat()
+        subject = next((m.get("subject") or "Email" for m in messages if not m.get("outgoing")), "Email")
+        sender = next((m.get("from") or "" for m in messages if not m.get("outgoing")), "")
+        try:
+            keys = file_thread(store, mailbox, messages, "Archive", filer)
+        except (RuntimeError, ValueError, KeyError, TypeError):
+            report["skipped"].append({"thread": thread, "subject": subject, "from": sender, "reason": "archive failed"})
+            continue
+        store.db.execute("INSERT OR REPLACE INTO clean_filed VALUES (?,?,?,?,?,?)",
+                         (job["id"], thread, "Archive", json.dumps(keys), subject, sender))
+        store.decide(mailbox, thread, fingerprint, "filed:Archive")
+        report["filed"].append({"thread": thread, "folder": "Archive", "messages": keys,
+                                "subject": subject, "from": sender})
+        archived.add((subject, sender))
+        activities.append({"eventKey": "archived:" + digest(thread + fingerprint), "messageKey": thread,
+                           "kind": "filed", "detail": "Filed to Archive",
+                           "evidence": "Inbox zero: verified IMAP copy into Archive, then removed from Inbox.",
+                           "occurredAt": stamp(), "metadata": {"folder": "Archive"}})
+    # Anything archived is no longer "left in Inbox".
+    report["skipped"] = [i for i in report["skipped"] if (i.get("subject"), i.get("from")) not in archived]
+    for start in range(0, len(activities), 400):
+        try:
+            client.call("publish", packet={"jobId": job["id"], "leaseToken": job["leaseToken"],
+                                           "requests": [], "activities": activities[start:start + 400]})
+        except DonnaAPIError as error:
+            if error.status == 409:
+                raise LeaseLost("Job was paused or reclaimed; stopping.") from None
+            print(stamp(), "Archive activity was rejected; moves are still recorded.", flush=True)
 
 
 def run_plan(client, store, work, plan, pending, report, done_threads, progress, heartbeat, cancelled, lease_errors):

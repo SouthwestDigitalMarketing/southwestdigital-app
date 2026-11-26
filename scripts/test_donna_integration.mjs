@@ -423,7 +423,7 @@ try {
   });
   const settingsClaim = (await call({ op: "claim" })).body;
   assert.equal(settingsClaim.work?.job?.id, quietClean.id, "Inbox cleans still run.");
-  assert.deepEqual(settingsClaim.work.settings, { dailyReviews: 300, historyReviews: 0, history: false });
+  assert.deepEqual(settingsClaim.work.settings, { dailyReviews: 300, historyReviews: 0, history: false, inboxZero: true });
   const usageBeat = await call({
     op: "heartbeat",
     ...lease(settingsClaim),

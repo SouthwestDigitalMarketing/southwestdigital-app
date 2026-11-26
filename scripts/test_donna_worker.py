@@ -401,6 +401,39 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual([i["reason"] for i in report["skipped"]], ["attachment review needed"])
             store.db.close()
 
+    def test_inbox_zero_archives_everything_read_except_put_back_mail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = self.clean_fixture(tmp)
+            moves = []
+            calls = []
+
+            class Client:
+                def call(self, op, **data):
+                    calls.append((op, data))
+                    return {}
+
+            def fake_assess(messages, existing, root, contacts=None, extra=""):
+                return self.BY_SENDER[email.utils.parseaddr(messages[0]["from"])[1].lower()]
+            work = {"job": {"id": "z", "leaseToken": "l", "kind": "clean", "options": {"manual": True}},
+                    "mailbox": {"id": "box", "address": "ours@example.com"}, "requests": [],
+                    "contacts": [{"email": "client@example.com", "_count": {"serviceRecords": 1}}],
+                    "settings": {"inboxZero": True},
+                    "filer": lambda uid, dest, mid: moves.append((uid, dest))}
+            with patch.object(store, "inventory", return_value=self.FOLDERS), \
+                    patch.object(donna, "assess", side_effect=fake_assess):
+                donna.process_job(Client(), store, work, 10)
+            self.assertEqual(sorted(moves), [(11, "Newsletter"), (12, "Archive")])
+            report = next(d["result"]["report"] for op, d in calls if op == "complete")
+            self.assertEqual(report["skipped"], [])
+            self.assertEqual(sorted(i["folder"] for i in report["filed"]), ["Archive", "Newsletter"])
+            archived = [d["packet"] for op, d in calls if op == "publish" and not d["packet"]["requests"]]
+            self.assertEqual(archived[0]["activities"][0]["detail"], "Filed to Archive")
+            # The client request itself is untouched: it stays on Need you.
+            client_packet = next(d["packet"] for op, d in calls if op == "publish" and d["packet"]["requests"]
+                                 and d["packet"]["requests"][0]["title"] == "Client report")
+            self.assertEqual(client_packet["requests"][0]["state"], "needs-you")
+            store.db.close()
+
     def test_cancel_stops_before_the_next_move_and_reports_what_moved(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = self.clean_fixture(tmp)

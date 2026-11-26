@@ -1,4 +1,15 @@
 # SWapp handoff
+## 2026-11-25 (late) — Inbox zero (Tom: "clear the conversations")
+
+- Setting `inboxZero` (default on, Limits on the Overview): after a Clean,
+  every Inbox conversation Donna has decided on and did not file elsewhere is
+  moved to Archive (verified copy, recorded for Undo, `filed` activity). Its
+  request keeps its state, so needs-you work stays on Need you in SWapp. Mail
+  she could not read, has not reviewed, or that Tom put back stays in Inbox.
+  No extra model reviews.
+- A daily limit is no longer an error: the pass stops, completes, and the next
+  history pass waits until 00:05 UTC. No more red "Needs attention" for it.
+
 ## 2026-11-25 (late) — Donna Overview = live status and controls (Tom: clarity and control in SWapp)
 
 - `/donna` Overview now says what Donna is doing (working / listening /
