@@ -16,7 +16,6 @@ import {
 import {
   applyBuckets,
   approveClean,
-  cancelClean,
   undoFiled,
 } from "../../actions";
 import { BucketChooser } from "@/components/donna/BucketChooser";
@@ -281,48 +280,49 @@ export default async function CleanPage({
       active={active ? "current" : "jobs"}
       refreshEvery={active ? 3000 : undefined}
     >
-      <header className="space-y-1">
-        <Link
-          href="/donna/email"
-          className="text-xs text-slate-500 underline decoration-slate-300"
-        >
-          Email
-        </Link>
+      <header className="flex flex-wrap items-baseline gap-x-2">
         <h2 className="text-lg font-semibold">
           {sort
-            ? "Step 1: Inbox sorted into buckets"
+            ? active
+              ? "Step 1: sorting Inbox into buckets"
+              : "Step 1: Inbox sorted into buckets"
             : stepTwo
               ? "Step 2: what Donna moved"
               : preview
                 ? "Inbox check"
                 : "Inbox clean"}
         </h2>
-        <p className="truncate text-sm text-slate-500">{job.mailbox.address}</p>
-        <p className="text-xs text-slate-500">
+        <span className="text-sm text-slate-500">
           {active
-            ? progress.paused
-              ? "Paused"
-              : progress.offline
-                ? "Not started"
-                : progress.waiting
-                  ? "Queued"
-                  : "In progress"
+            ? null
             : job.status === "done"
               ? `Finished ${shortTime(job.completedAt)}`
               : job.status === "cancelled"
-                ? `Cancelled ${shortTime(job.completedAt)}`
+                ? `Stopped ${shortTime(job.completedAt)}`
                 : job.status}
-        </p>
+        </span>
       </header>
       {active ? (
-        <section className="space-y-2 rounded-xl border border-slate-200 bg-white p-4 text-sm">
-          <p className="text-slate-700">{progress.label}</p>
-          <p className="tabular-nums text-slate-500">
+        // One row: what she is on, how far, the track. Pause and Stop are on the top bar.
+        <section
+          aria-label="Progress"
+          className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm"
+        >
+          <span className="min-w-0 max-w-[40%] truncate text-slate-700">
+            {progress.paused
+              ? "Paused"
+              : progress.offline
+                ? "Donna is not running"
+                : progress.waiting
+                  ? "Waiting for Donna"
+                  : progress.label}
+          </span>
+          <span className="shrink-0 tabular-nums text-slate-500">
             {progress.countLabel}
             {progress.etaLabel ? ` · ${progress.etaLabel}` : ""}
-          </p>
+          </span>
           <span
-            className="block h-1 overflow-hidden rounded-full bg-slate-200"
+            className="block h-1 min-w-12 flex-1 overflow-hidden rounded-full bg-slate-200"
             aria-hidden="true"
           >
             <span
@@ -330,30 +330,6 @@ export default async function CleanPage({
               style={{ width: `${progress.percent}%` }}
             />
           </span>
-          <p className="text-xs text-slate-500">
-            {progress.paused
-              ? "Donna is paused. This continues when you resume her in Settings."
-              : progress.offline
-                ? "Donna is not running right now, so this has not started and nothing has moved. It starts when Donna is turned on. Cancel if you no longer want it."
-                : progress.waiting
-                  ? "Donna is running and will pick this up shortly."
-                  : sort
-                    ? "Donna is reading each Inbox email and putting it in a bucket. Nothing moves."
-                    : stepTwo
-                      ? "Donna is moving only the emails you chose. Each move can be undone here."
-                      : preview
-                        ? "Donna is reading your Inbox. Nothing moves until you approve the list."
-                        : "Donna is reading your Inbox and filing what she can. Anything she files can be undone here."}
-          </p>
-          <form action={cancelClean}>
-            <input type="hidden" name="jobId" value={job.id} />
-            <button
-              type="submit"
-              className="rounded-md border border-slate-200 px-3 py-1.5 text-xs"
-            >
-              Cancel
-            </button>
-          </form>
         </section>
       ) : null}
       {active && sort ? (

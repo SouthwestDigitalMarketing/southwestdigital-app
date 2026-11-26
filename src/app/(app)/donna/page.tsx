@@ -21,7 +21,7 @@ import {
   mailboxAction,
   updateDonnaSettings,
 } from "./actions";
-import { DonnaFrame, shortTime } from "./DonnaFrame";
+import { DonnaFrame, DonnaStart, shortTime } from "./DonnaFrame";
 import { FolderTable } from "./FolderTable";
 
 export const dynamic = "force-dynamic";
@@ -361,8 +361,6 @@ export default async function DonnaPage({
       </details>
     </>
   );
-  if (!settings.steps)
-    return <DonnaFrame active="overview">{details}</DonnaFrame>;
   return (
     <DonnaFrame active="overview">
       {folders.zoho.length || folders.custom.length ? (
@@ -375,17 +373,20 @@ export default async function DonnaPage({
           Folder counts appear after Donna checks the mailbox.
         </p>
       )}
-      <Steps
-        step={step}
-        paused={mailbox.paused}
-        offline={now.state === "offline"}
-        progress={
-          progress && step && progress.id === step.id
-            ? progress.countLabel
-            : null
-        }
-      />
-      <details className="space-y-3 pt-4">
+      <DonnaStart />
+      {settings.steps ? (
+        <Steps
+          step={step}
+          paused={mailbox.paused}
+          offline={now.state === "offline"}
+          progress={
+            progress && step && progress.id === step.id
+              ? progress.countLabel
+              : null
+          }
+        />
+      ) : null}
+      <details className="space-y-3 pt-4" open={!settings.steps}>
         <summary className="cursor-pointer text-center text-xs text-slate-400">
           More: status, pause, today, history and limits
         </summary>

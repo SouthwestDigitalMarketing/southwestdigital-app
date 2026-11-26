@@ -3,11 +3,10 @@ import type { ReactNode } from "react";
 import { Settings } from "lucide-react";
 import { requireDonna } from "@/lib/donna/access";
 import { loadDonnaAction, storageMissing } from "@/lib/donna/store";
-import { donnaActionCounts } from "@/lib/donna/domain";
 import { RefreshDonna } from "./refresh";
 import { DonnaAction } from "./DonnaAction";
 
-export async function DonnaFrame({
+export function DonnaFrame({
   active,
   children,
   live = true,
@@ -19,32 +18,10 @@ export async function DonnaFrame({
   /** Milliseconds between refreshes; the Current job page refreshes fast. */
   refreshEvery?: number;
 }) {
-  let mailboxId: string | null = null;
-  let cleaning = false;
-  let cleanJobId: string | null = null;
-  let counts = donnaActionCounts({});
-  try {
-    const { dataContext } = await requireDonna();
-    const action = await loadDonnaAction(dataContext);
-    mailboxId = action.mailboxId;
-    cleaning = action.cleaning;
-    cleanJobId = action.cleanJobId;
-    counts = action.counts;
-  } catch (e) {
-    if (!storageMissing(e)) throw e;
-  }
   return (
     <div className="w-full min-w-0 break-words space-y-4 px-4 py-5 text-slate-900 sm:p-8">
       {live ? <RefreshDonna every={refreshEvery} /> : null}
       <h1 className="sr-only">Donna</h1>
-      {mailboxId ? (
-        <DonnaAction
-          mailboxId={mailboxId}
-          cleaning={cleaning}
-          cleanJobId={cleanJobId}
-          counts={counts}
-        />
-      ) : null}
       <div className="flex items-center gap-6 border-b border-slate-200">
         <nav
           aria-label="Donna sections"
@@ -89,4 +66,28 @@ export function shortTime(date: Date | null) {
         timeZone: "America/Chicago",
       })
     : "Not checked yet";
+}
+
+/**
+ * Start new job (Tom, 2026-11-26): the button that opens Donna's job list, shown
+ * on the Overview under the folder tables.
+ */
+export async function DonnaStart() {
+  let action;
+  try {
+    const { dataContext } = await requireDonna();
+    action = await loadDonnaAction(dataContext);
+  } catch (e) {
+    if (!storageMissing(e)) throw e;
+    return null;
+  }
+  if (!action.mailboxId) return null;
+  return (
+    <DonnaAction
+      mailboxId={action.mailboxId}
+      cleaning={action.cleaning}
+      cleanJobId={action.cleanJobId}
+      counts={action.counts}
+    />
+  );
 }

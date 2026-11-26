@@ -41,13 +41,13 @@ export function DonnaAction({
         }}
         className="block w-full rounded-lg bg-slate-900 px-4 py-2.5 text-center text-sm text-white sm:w-auto"
       >
-        Donna
+        Start new job
       </button>
 
       {open && (
         <Modal
           onClose={() => setOpen(false)}
-          label="Donna"
+          label="Start new job"
           className="max-w-md"
           busy={pending}
         >
