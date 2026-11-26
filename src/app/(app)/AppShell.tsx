@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ProductionBar } from "@/components/showrunner/ProductionBar";
+import { DonnaCleanBar } from "@/components/donna/DonnaCleanBar";
 import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -458,6 +459,7 @@ export function AppShell({
           </button>
         </header>
         <ProductionBar />
+        <DonnaCleanBar />
 
         <main
           id="main-content"

@@ -1,4 +1,35 @@
 # SWapp handoff
+## 2026-11-25 — Clean inbox status bar (Tom: modal closes, bar until done)
+
+- Tapping **Clean inbox** closes the Donna modal. A light **Cleaning inbox**
+  bar sits at the top of the app shell on every screen until that `kind=clean`
+  job is no longer pending/leased. Tapping the bar opens `/donna/cleans/[id]`.
+- `DonnaCleanBar` sits next to `ProductionBar` in AppShell (no NAV change).
+  Status comes from `GET /api/donna/clean`. A `swapp:donna-clean` event shows
+  the bar immediately after enqueue.
+- Local preview still `http://100.98.89.93:3130/donna`. Do not tap Clean on
+  production; that files live Zoho Inbox mail when a worker runs.
+
+## 2026-11-25 — Production Donna mailbox enrolled (Tom: test the merge live)
+
+- Production `DonnaMailbox` row exists for Bookkeeping Conroe: id
+  `c662beac91b5701c499f15fd6`, key `zoho`, address
+  `thomas@bookkeepingconroe.com`. Was paused; **resumed** for the first live
+  inventory. DIRECT insert matched `addMailbox`. No schema SQL. Pooler 6543
+  was not used.
+- Vercel production now has `DONNA_WORKER_TOKEN` (secret),
+  `DONNA_WORKER_USER_ID` (config, `cmoue64aq0000inegl7hgmqjr`),
+  `DONNA_WORKER_BRAND` (config, `bookkeeping-conroe`). Redeployed
+  `swapp-jtzmr0dxx`; unauthenticated `/api/donna/worker` is 401 (configured).
+- Ripley worker config `~/.config/swapp-donna/env` (mode 600), runtime copy
+  `~/.local/share/swapp-donna/runtime/donna_worker.py`, state
+  `~/.local/state/swapp-donna`. One-shot `--once` finished exit 0 in ~2 min.
+  Coverage: 16 folders, 3134 locations, INBOX 75, remaining 1928, mode
+  read-only. Mailbox lastError: 1 conversation could not be assessed; retries
+  queued. Extra reconcile/backlog jobs still pending; no standing service.
+  No Clean. Refresh https://app.bookkeepingconroe.com/donna and Email.
+- PR #260 is on `origin/main` (`ee8409e`). Later main also has #262.
+
 ## 2026-11-25 — Clean inbox (Tom: implement the four-step list)
 
 - A **Donna** button sits top left above the Overview/Email tabs (full width on
