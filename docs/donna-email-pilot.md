@@ -31,6 +31,14 @@ and history passes are not queued, and `claimJob` hands out only Tom's steps and
 undos. "On her own" in Limits restores the automatic behaviour. Inbox zero
 (`archive_rest`) is removed.
 
+**Email types (Tom, 2026-11-26).** Step 1 gives each email a short type
+(`EMAIL_TYPES` in the worker: People, Money, Systems, Marketing, Unwanted groups,
+e.g. Quote, To pay, Phish, Pitch) with hover text and a group colour dot on the
+Current job table. When nothing fits, the model invents a label (≤12 chars) with a
+description; the worker keeps it in the local `email_types` table and offers it in
+every later prompt. No approval: Tom reviews and asks for changes. A type's first
+appearance is marked "new".
+
 **Client tags (Tom, 2026-11-26).** Client mail gets a Zoho tag with the client's
 name (no per-client folders) and is archived once addressed. Zoho IMAP takes no
 custom keywords, so tags go through the Zoho Mail API using the mailbox owner's

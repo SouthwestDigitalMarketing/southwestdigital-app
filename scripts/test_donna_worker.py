@@ -418,6 +418,17 @@ class WorkerTests(unittest.TestCase):
             buckets = {i["subject"]: (i["bucket"], i["suggest"]) for i in report["sorted"]}
             self.assertEqual(buckets, {"Sale": ("Newsletter", "Newsletter"), "Report": ("Clients", None)})
             self.assertTrue(all(i["thread"] and i["why"] for i in report["sorted"]))
+            # No model type in the fixture: the category stands in.
+            self.assertEqual({i["subject"]: i["type"] for i in report["sorted"]}, {"Sale": "Noise", "Report": "Client"})
+            self.assertFalse(any(i["typeNew"] for i in report["sorted"]))
+            self.assertEqual(donna.email_type([{"type": "phish", "category": "noise"}]),
+                             ("Phish", "Unwanted", "Fake login or account warning", False))
+            self.assertEqual(donna.email_type([{"category": "unknown"}])[0], "")
+            # Nothing fits: Donna adds a short type herself and uses it from then on.
+            made = donna.email_type([{"type": "Court notice", "typeHint": "Jury duty summons"}], store)
+            self.assertEqual(made, ("Court notice", "Other", "Jury duty summons", True))
+            self.assertEqual(donna.email_type([{"type": "court notice"}], store)[3], False)
+            self.assertIn("Court notice = Jury duty summons", donna.type_instructions(store.email_types()))
             rows = dict(store.db.execute("SELECT thread, folder FROM clean_plans WHERE job='j'").fetchall())
             self.assertEqual(sorted(rows.values()), ["", "Newsletter"])
             # The live bar hears about each email as it is sorted, newest first.
