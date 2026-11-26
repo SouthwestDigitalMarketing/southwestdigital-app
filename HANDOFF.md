@@ -1,4 +1,12 @@
 # SWapp handoff
+## 2026-11-26 — Contacts: Close friend / Friend / Client filter (Ummon)
+
+Tom: try relationship instead of the All clients company picker. Dropdown is
+All people / Close friend / Friend / Client. Tags `close-friend`, `friend`,
+`client` are seeded (no schema). Client also matches `active-client` or a
+company link so current bookkeeping clients show up. Close friend and Friend
+need a tag on the person. Branch `ummon/contacts-relationship`.
+
 ## 2026-11-26 — Contacts: drop heading and filter card (Ummon)
 
 Tom: remove the "Contact directory" heading and the filter card chrome (border,

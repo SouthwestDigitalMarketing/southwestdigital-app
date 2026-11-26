@@ -39,6 +39,22 @@ export function parseStatusFilter(raw: string | undefined): "all" | "active" | "
   return "all";
 }
 
+export const RELATIONSHIP_TAGS = [
+  { key: "close-friend", label: "Close friend", sortOrder: 1 },
+  { key: "friend", label: "Friend", sortOrder: 2 },
+  { key: "client", label: "Client", sortOrder: 3 },
+] as const;
+
+export type ContactRelationship = "all" | (typeof RELATIONSHIP_TAGS)[number]["key"];
+
+/** Extra keys that already mean "this person is a bookkeeping client". */
+export const CLIENT_RELATIONSHIP_TAG_KEYS = ["client", "active-client"] as const;
+
+export function parseRelationship(raw: string | undefined): ContactRelationship {
+  if (raw === "close-friend" || raw === "friend" || raw === "client") return raw;
+  return "all";
+}
+
 export function parseTagKeys(raw: string | string[] | undefined): string[] {
   if (!raw) return [];
   const values = Array.isArray(raw) ? raw : raw.split(",");

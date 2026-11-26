@@ -3,8 +3,15 @@ import "server-only";
 import { ContactTagKind } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { REAL_ESTATE_TAG_KEY } from "@/lib/quotes/catalog";
+import { RELATIONSHIP_TAGS } from "./tags";
 
 const DEFAULT_CONTACT_TAGS = [
+  ...RELATIONSHIP_TAGS.map((tag) => ({
+    key: tag.key,
+    label: tag.label,
+    kind: ContactTagKind.CUSTOM,
+    sortOrder: tag.sortOrder,
+  })),
   { key: "bookkeeper", label: "Bookkeeper", kind: ContactTagKind.SERVICES, sortOrder: 10 },
   { key: "business-owner", label: "Business owner", kind: ContactTagKind.LEAD, sortOrder: 20 },
   { key: "accountant", label: "Accountant", kind: ContactTagKind.INDUSTRY, sortOrder: 30 },
@@ -35,6 +42,20 @@ export async function ensureDefaultContactTags(brandId: string) {
       skipDuplicates: true,
     });
     return;
+  }
+
+  for (const tag of RELATIONSHIP_TAGS) {
+    await prisma.contactTag.upsert({
+      where: { brandId_key: { brandId, key: tag.key } },
+      create: {
+        brandId,
+        key: tag.key,
+        label: tag.label,
+        kind: ContactTagKind.CUSTOM,
+        sortOrder: tag.sortOrder,
+      },
+      update: {},
+    });
   }
 
   await prisma.contactTag.upsert({

@@ -2,14 +2,14 @@
 
 import { SearchInput } from "@/components/keyboard/SearchInput";
 import { useRouter } from "next/navigation";
+import { RELATIONSHIP_TAGS, type ContactRelationship } from "@/lib/contacts/tags";
 
 export function ContactsFilters({
   q,
   status,
   sort,
   selectedTagKeys,
-  clients,
-  clientId,
+  relationship,
   brands,
   relatedBrandId,
 }: {
@@ -17,8 +17,7 @@ export function ContactsFilters({
   status: string;
   sort: string;
   selectedTagKeys: string[];
-  clients: Array<{ id: string; label: string }>;
-  clientId: string;
+  relationship: ContactRelationship;
   brands: Array<{ id: string; label: string }>;
   relatedBrandId: string;
 }) {
@@ -28,19 +27,19 @@ export function ContactsFilters({
     q?: string;
     status?: string;
     sort?: string;
-    clientId?: string;
+    relationship?: ContactRelationship;
     relatedBrandId?: string;
   }) {
     const params = new URLSearchParams();
     const query = next.q ?? q;
     const nextStatus = next.status ?? status;
     const nextSort = next.sort ?? sort;
-    const nextClientId = next.clientId ?? clientId;
+    const nextRelationship = next.relationship ?? relationship;
     const nextBrandId = next.relatedBrandId ?? relatedBrandId;
     if (query) params.set("q", query);
     if (nextStatus && nextStatus !== "all") params.set("status", nextStatus);
     if (nextSort && nextSort !== "name") params.set("sort", nextSort);
-    if (nextClientId) params.set("client", nextClientId);
+    if (nextRelationship !== "all") params.set("rel", nextRelationship);
     if (nextBrandId) params.set("brand", nextBrandId);
     for (const key of selectedTagKeys) params.append("tag", key);
     const qs = params.toString();
@@ -73,14 +72,15 @@ export function ContactsFilters({
         <option value="inactive">Inactive</option>
       </select>
       <select
-        value={clientId}
-        onChange={(event) => push({ clientId: event.target.value })}
+        value={relationship}
+        onChange={(event) => push({ relationship: event.target.value as ContactRelationship })}
         className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+        aria-label="Relationship"
       >
-        <option value="">All clients</option>
-        {clients.map((client) => (
-          <option key={client.id} value={client.id}>
-            {client.label}
+        <option value="all">All people</option>
+        {RELATIONSHIP_TAGS.map((tag) => (
+          <option key={tag.key} value={tag.key}>
+            {tag.label}
           </option>
         ))}
       </select>
