@@ -48,74 +48,72 @@ export function ContactsFilters({
   }
 
   return (
-    <div className="mt-6 rounded-xl border border-slate-200 bg-white p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filters</p>
-      <form
-        className="mt-3 flex flex-wrap gap-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          const data = new FormData(event.currentTarget);
-          push({ q: String(data.get("q") ?? "").trim() });
-        }}
+    <form
+      aria-label="Filters"
+      className="flex flex-wrap items-center gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const data = new FormData(event.currentTarget);
+        push({ q: String(data.get("q") ?? "").trim() });
+      }}
+    >
+      <SearchInput
+        name="q"
+        defaultValue={q}
+        placeholder="Search name, email, company, role, or phone"
+        className="min-w-[16rem] flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+      />
+      <select
+        value={status}
+        onChange={(event) => push({ status: event.target.value })}
+        className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
       >
-        <SearchInput
-          name="q"
-          defaultValue={q}
-          placeholder="Search name, email, company, role, or phone"
-          className="min-w-[16rem] flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
-        />
+        <option value="all">All statuses</option>
+        <option value="active">Active</option>
+        <option value="inactive">Inactive</option>
+      </select>
+      <select
+        value={clientId}
+        onChange={(event) => push({ clientId: event.target.value })}
+        className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+      >
+        <option value="">All clients</option>
+        {clients.map((client) => (
+          <option key={client.id} value={client.id}>
+            {client.label}
+          </option>
+        ))}
+      </select>
+      {brands.length > 0 && (
         <select
-          value={status}
-          onChange={(event) => push({ status: event.target.value })}
+          value={relatedBrandId}
+          onChange={(event) => push({ relatedBrandId: event.target.value })}
           className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
         >
-          <option value="all">All statuses</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-        </select>
-        <select
-          value={clientId}
-          onChange={(event) => push({ clientId: event.target.value })}
-          className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
-        >
-          <option value="">All clients</option>
-          {clients.map((client) => (
-            <option key={client.id} value={client.id}>
-              {client.label}
+          <option value="">All brands</option>
+          {brands.map((brand) => (
+            <option key={brand.id} value={brand.id}>
+              {brand.label}
             </option>
           ))}
         </select>
-        {brands.length > 0 && (
-          <select
-            value={relatedBrandId}
-            onChange={(event) => push({ relatedBrandId: event.target.value })}
-            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
-          >
-            <option value="">All brands</option>
-            {brands.map((brand) => (
-              <option key={brand.id} value={brand.id}>
-                {brand.label}
-              </option>
-            ))}
-          </select>
-        )}
-        <select
-          value={sort}
-          onChange={(event) => push({ sort: event.target.value })}
-          className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
-        >
-          <option value="name">Name A–Z</option>
-          <option value="name-desc">Name Z–A</option>
-          <option value="updated">Recently updated</option>
-          <option value="created">Newest</option>
-        </select>
-        <button
-          type="submit"
-          className="rounded-full border border-slate-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-700 hover:bg-slate-50"
-        >
-          Search
-        </button>
-      </form>
-    </div>
+      )}
+      <select
+        value={sort}
+        onChange={(event) => push({ sort: event.target.value })}
+        className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+      >
+        <option value="name">Name A–Z</option>
+        <option value="name-desc">Name Z–A</option>
+        <option value="updated">Recently updated</option>
+        <option value="created">Newest</option>
+      </select>
+      <button
+        type="submit"
+        className="rounded-full border border-slate-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-700 hover:bg-slate-50"
+      >
+        Search
+      </button>
+    </form>
   );
 }
