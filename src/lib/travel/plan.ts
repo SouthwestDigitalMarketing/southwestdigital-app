@@ -598,3 +598,13 @@ export function formatMoney(value: number | null | undefined): string {
 export function emptyPlan(): TripPlan {
   return parsePlan({});
 }
+
+/** The one trip in focus since Tom's 2026-11-26 "focus on japan". */
+export const JAPAN_DESTINATION = "Fukuoka, Japan";
+
+/** True for a trip that still carries the old five-place setup around a Fukuoka option. */
+export function needsJapanSwitch(plan: TripPlan, destination: string): boolean {
+  const japan = JAPAN_DESTINATION.toLowerCase();
+  const hasJapan = plan.sections.options.some((option) => String(option.place ?? "").trim().toLowerCase() === japan);
+  return hasJapan && (plan.sections.options.length > 1 || destination.trim().toLowerCase() !== japan);
+}

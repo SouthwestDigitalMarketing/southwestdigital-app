@@ -14,6 +14,7 @@ import {
   itemsWithoutPhoto,
   itemsWithoutPin,
   mapPins,
+  needsJapanSwitch,
   OPTION_SORTS,
   optionTotal,
   sortOptions,
@@ -75,6 +76,7 @@ export function TripClient({
 
   return (
     <div className="p-4 sm:p-8">
+      {needsJapanSwitch(plan, details.destination) ? <JapanSwitch slug={slug} /> : null}
       {focus ? <FocusCard slug={slug} option={focus} days={days} /> : null}
       <TripHeader slug={slug} details={details} summary={plan.summary} days={plan.days} />
 
@@ -247,6 +249,24 @@ function TripHeader({
         </button>
       </div>
     </form>
+  );
+}
+
+/** One tap to turn a trip from the old five-place starter into the Japan trip (Tom, 2026-11-26). */
+function JapanSwitch({ slug }: { slug: string }) {
+  const { pending, error, run } = useChange(slug);
+  return (
+    <div role="status" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+      <p className="font-semibold">This trip still has the old five-place setup.</p>
+      <p className="mt-1">
+        Switch it to Japan: removes the other places and their spots, loads the Japan budget, Visit Japan Web and
+        Japan entry rules, and names it for Fukuoka. Your Fukuoka spots, ticks and anything you added stay.
+      </p>
+      {error ? <p className="mt-2 text-red-700">{error}</p> : null}
+      <button type="button" className={`${primary} mt-3`} disabled={pending} onClick={() => run({ kind: "switchToJapan" })}>
+        {pending ? "Switching…" : "Switch to Japan"}
+      </button>
+    </div>
   );
 }
 
