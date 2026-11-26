@@ -32,6 +32,7 @@ import urllib.request
 import uuid
 
 UTC = dt.timezone.utc
+LEASE_KEEPER_SECONDS = 25
 
 
 class ReviewBudgetReached(RuntimeError):
@@ -890,14 +891,19 @@ def process_job(client, store, work, max_threads, clean_threads=100):
     cancelled = threading.Event()
 
     progress = {"total": 0, "done": 0, "current": None, "phase": "queued", "startedAt": stamp()}
+    # SQLite objects only work on the thread that opened them: the lease keeper reuses
+    # the last stats the main thread read instead of reading the store itself.
+    last_stats = [None]
 
     def heartbeat(force=False):
         if force or time.monotonic() - last_heartbeat[0] > 20:
             payload = dict(progress) if job.get("kind") == "clean" and progress.get("total") else None
             try:
                 extra = {"progress": payload} if payload is not None else {}
-                if hasattr(store, "usage"):
-                    extra["stats"] = store.usage()
+                if hasattr(store, "usage") and threading.current_thread() is threading.main_thread():
+                    last_stats[0] = store.usage()
+                if last_stats[0] is not None:
+                    extra["stats"] = last_stats[0]
                 answer = client.call("heartbeat", jobId=job["id"], leaseToken=job["leaseToken"],
                                      listener=listener_state(client), **extra)
             except DonnaAPIError as error:
@@ -913,7 +919,7 @@ def process_job(client, store, work, max_threads, clean_threads=100):
     lease_errors = []
 
     def lease_keeper():
-        while not stop.wait(25):
+        while not stop.wait(LEASE_KEEPER_SECONDS):
             try:
                 heartbeat(True)
             except Exception as error:
