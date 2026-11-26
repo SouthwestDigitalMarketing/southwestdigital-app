@@ -10,6 +10,9 @@ import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { AUTO_CLEAN_PREFIX, enqueue } from "@/lib/donna/store";
 import {
   STEP_FOLDERS,
+  JUNK_ACTIONS,
+  RESCUE_ACTIONS,
+  RESCUE_BUCKET,
   cleanBuckets,
   cleanIsClosed,
   cleanIsSort,
@@ -373,10 +376,23 @@ export async function applyBuckets(form: FormData) {
     // A choice is a folder, "tag" (client tag, stays in Inbox) or "tag:<folder>".
     // Each ticked email has its own choice: a folder, "tag" (client tag, stays in
     // Inbox) or "tag:<folder>". "leave" and unticked emails stay as they are.
+    type PlanEntry = {
+      thread: string;
+      folder?: string;
+      tag?: string;
+      action?: string;
+    };
     const plan = cleanBuckets(sort.result).flatMap((bucket) =>
-      bucket.items.flatMap((item) => {
+      bucket.items.flatMap((item): PlanEntry[] => {
         if (!ticked.has(item.thread)) return [];
         const choice = String(form.get(`choice-${item.thread}`) ?? "leave");
+        // Junk actions for Inbox mail; rescue actions only for Spam/Trash finds.
+        const rescue = item.bucket === RESCUE_BUCKET;
+        if ((RESCUE_ACTIONS as readonly string[]).includes(choice))
+          return rescue ? [{ thread: item.thread, action: choice }] : [];
+        if (rescue) return [];
+        if ((JUNK_ACTIONS as readonly string[]).includes(choice))
+          return [{ thread: item.thread, action: choice }];
         const tagging = choice === "tag" || choice.startsWith("tag:");
         const folder = tagging
           ? choice.slice(4)
@@ -396,21 +412,29 @@ export async function applyBuckets(form: FormData) {
         ];
       }),
     );
-    if (!plan.length) return null;
+    // Emptying Spam and Trash is permanent: only with Tom's own tick (Tom, 2026-11-26).
+    const empty = form.get("empty") === "on";
+    if (!plan.length && !empty) return null;
     const job = await tx.donnaJob.create({
       data: {
         mailboxId: sort.mailboxId,
         kind: "clean",
         eventKey: `clean:${randomUUID()}`,
-        options: { previewJobId: sort.id, plan, buckets: true },
+        options: {
+          previewJobId: sort.id,
+          plan,
+          buckets: true,
+          ...(empty ? { empty: true } : {}),
+        },
       },
     });
     await resetCleanProgress(tx, sort.mailbox, plan.length);
     const counts = new Map<string, number>();
     for (const p of plan) {
       const what = [
-        "tag" in p ? "tag" : "",
-        "folder" in p ? `move to ${p.folder}` : "",
+        p.action ?? "",
+        p.tag ? "tag" : "",
+        p.folder ? `move to ${p.folder}` : "",
       ]
         .filter(Boolean)
         .join(" and ");
@@ -420,7 +444,7 @@ export async function applyBuckets(form: FormData) {
       tx,
       sort.mailboxId,
       session.user.id,
-      `Step 2 started: ${[...counts].map(([what, n]) => `${what} ${n}`).join(", ")}.`,
+      `Step 3 started: ${[...counts].map(([what, n]) => `${what} ${n}`).join(", ")}${empty ? ", then empty Spam and Trash (approved)" : ""}.`,
     );
     return job.id;
   });

@@ -39,6 +39,21 @@ with no step 3 and not closed is Tom's turn (`sortAwaitsTom`): Current job opens
 and Completed jobs leaves it out. Completed jobs shows one row per job with step 3
 folded into the outcome. The top bar reads "Step 1 of 3: Sort" / "Step 3 of 3: Do".
 
+**Junk and Spam/Trash in every job (Tom, 2026-11-26).** Step 1 also asks the model
+for `junk` (high/medium/low/no). An email goes in the **Junk** bucket (first on the
+Choose table) only when junk is high or the sender is on Mailroom's always-spam list
+(`~/.local/state/mailroom/spam-always-block.json`; those skip the model review),
+and no guard applies: keep rules, SWapp contacts/clients, Mailroom's never-block list
+(`config/spam-never-block.json`), a thread Tom replied in, money types, client/sales
+category (`protected_reason`). Junk defaults: Spam + block sender (exact address onto
+always-spam) for scam/pitch types, else Trash. Step 1 then sweeps Spam and Trash by
+rules only: protected mail becomes **Rescue from Spam/Trash** (last bucket; Back to
+Inbox, or Back to Inbox + never block), and the rest is snapshotted in
+`empty_snapshot`. Step 3 rescues first, then junk actions, moves and tags, then, only
+if Tom ticked the **Approve** box in step 2 (`options.empty`), permanently deletes the
+snapshot (minus rescues) plus what the job moved to Spam/Trash; mail that arrived after
+step 1 is never deleted unseen. Unsubscribe is not built.
+
 **Email types (Tom, 2026-11-26).** Step 1 gives each email a short type
 (`EMAIL_TYPES` in the worker: People, Money, Systems, Marketing, Unwanted groups,
 e.g. Quote, To pay, Phish, Pitch) with hover text and a group colour dot on the

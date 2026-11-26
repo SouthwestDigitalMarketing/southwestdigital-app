@@ -508,18 +508,27 @@ try {
           { thread: notice, subject: "Example final notice", from: "n@bank.example", bucket: "Money and legal", why: "Money or legal trouble", suggest: null },
           { thread: promoB, subject: "Example sale B", from: "b@shop.example", bucket: "Newsletter", why: "Promo B", suggest: "Newsletter" },
           { thread: rodan, subject: "Example progress update", from: "dan@rodan.example", bucket: "Clients", why: "From Rodan Properties, a client in SWapp", suggest: null, client: "Rodan Properties" },
+          { thread: "a7".repeat(32), subject: "Example verify now", from: "scam@bad.example", bucket: "Junk", why: "Phishing", suggest: null, action: "spam-block", type: "Phish", typeGroup: "Unwanted" },
+          { thread: "b8".repeat(32), subject: "Example lost report", from: "client@example.com", bucket: "Rescue from Spam/Trash", why: "From someone in your SWapp contacts (now in Spam)", suggest: null, action: "inbox", folder: "Spam" },
         ],
+        empty: { Spam: 214, Trash: 325 },
       },
     },
   });
   // A finished sort waits for Tom: it is on Current job (step 2, Your turn), not Completed jobs.
   await page.goto(base + "/donna/jobs");
-  await expect(page.getByRole("link", { name: /4 sorted into 3 buckets/ })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /6 sorted into 5 buckets/ })).toHaveCount(0);
   await page.goto(base + "/donna/current");
   await expect(page).toHaveURL(new RegExp("/donna/cleans/" + stepOne.id));
   const steps = page.getByRole("list", { name: "Job steps" });
   await expect(steps).toContainText("Sort");
-  await expect(steps).toContainText("4 sorted");
+  await expect(steps).toContainText("6 sorted");
+  // Junk is the first bucket, rescues from Spam/Trash the last.
+  const bucketNames = await page.locator('tbody[aria-label^="Bucket "]').evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")));
+  assert.equal(bucketNames[0], "Bucket Junk");
+  assert.equal(bucketNames.at(-1), "Bucket Rescue from Spam/Trash");
+  await expect(page.getByLabel("Action for Example verify now")).toHaveValue("spam-block");
+  await expect(page.getByLabel("Action for Example lost report")).toHaveValue("inbox");
   await expect(steps.locator('[aria-current="step"]')).toContainText("Your turn");
   await expect(page.getByRole("link", { name: "Current job" })).toHaveAttribute("aria-current", "page");
   const choose = page.getByRole("table", { name: "Choose what to do" });
@@ -533,7 +542,7 @@ try {
   // Bucket header: select all, then set the selected rows at once.
   await page.getByLabel("Select all in Money and legal").check();
   await page.getByLabel("Set selected in Money and legal to").selectOption("Spam");
-  await page.getByRole("button", { name: "Apply" }).first().click();
+  await page.locator('tbody[aria-label="Bucket Money and legal"]').getByRole("button", { name: "Apply" }).click();
   await expect(page.getByLabel("Action for Example final notice")).toHaveValue("Spam");
   await page.getByLabel("Select all in Money and legal").uncheck();
   // Tick what to do: the whole Newsletter bucket but one, and the client email.
@@ -541,9 +550,15 @@ try {
   await page.getByRole("checkbox", { name: /Do Example sale B/ }).uncheck();
   await page.getByLabel("Action for Example progress update").selectOption("tag:Archive");
   await page.getByRole("checkbox", { name: /Do Example progress update/ }).check();
+  await page.getByLabel("Select all in Junk").check();
+  await page.getByRole("checkbox", { name: /Do Example lost report/ }).check();
   await expect(
-    page.getByText("Step 3 will tag the client: 1; move to Archive: 1; move to Newsletter: 1. Unticked emails stay as they are."),
+    page.getByText("Step 3 will spam + block the sender: 1; tag the client: 1; move to Archive: 1; move to Newsletter: 1; put back in Inbox: 1. Unticked emails stay as they are."),
   ).toBeVisible();
+  // Emptying needs its own approval tick.
+  await expect(page.getByText(/Approve: then permanently delete everything in Spam \(214\) and Trash \(325\)/)).toBeVisible();
+  await page.getByRole("checkbox", { name: /Approve: then permanently delete/ }).check();
+  await expect(page.getByText(/; then empty Spam and Trash\. Unticked/)).toBeVisible();
   await page.getByRole("button", { name: "Start step 3" }).click();
   const stepTwo = await (async () => {
     await expect.poll(async () => Boolean(await db.donnaJob.findFirst(pendingClean))).toBe(true);
@@ -554,10 +569,13 @@ try {
   assert.deepEqual(stepTwo.options, {
     previewJobId: stepOne.id,
     plan: [
+      { thread: "a7".repeat(32), action: "spam-block" },
       { thread: rodan, folder: "Archive", tag: "Rodan Properties" },
       { thread: promoA, folder: "Newsletter" },
+      { thread: "b8".repeat(32), action: "inbox" },
     ],
     buckets: true,
+    empty: true,
   });
   await db.donnaJob.updateMany({
     where: { id: stepTwo.id },
@@ -567,9 +585,9 @@ try {
   await page.goto(base + "/donna/jobs");
   const jobs = page.getByRole("list", { name: "Completed jobs" });
   await expect(jobs).toContainText("Inbox job: sort, choose, do");
-  await expect(jobs).toContainText("4 sorted into 3 buckets · moved 1 · tagged 1");
+  await expect(jobs).toContainText("6 sorted into 5 buckets · moved 1 · tagged 1");
   await expect(jobs).not.toContainText("Step 3: do what you chose");
-  await jobs.getByRole("link", { name: /4 sorted into 3 buckets/ }).click();
+  await jobs.getByRole("link", { name: /6 sorted into 5 buckets/ }).click();
   await expect(page.getByRole("list", { name: "Job steps" })).toContainText("Done · moved 1 · tagged 1");
   await expect(page.getByRole("table", { name: "Sorted emails" })).toBeVisible();
   // Closing at step 2 changes nothing and files the job under Completed jobs.

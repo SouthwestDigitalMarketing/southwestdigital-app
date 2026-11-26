@@ -365,6 +365,10 @@ describe("honest health and counts", () => {
         },
       ],
       tagged: [],
+      rescued: [],
+      empty: null,
+      emptied: null,
+      emptyError: null,
       waiting: [{ subject: "Bank login", from: "", waitingOn: "Client" }],
       needsYou: [
         {
