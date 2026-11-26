@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Info } from "lucide-react";
 import { notFound } from "next/navigation";
 import { requireDonna } from "@/lib/donna/access";
 import { loadClean } from "@/lib/donna/store";
@@ -148,6 +149,18 @@ function senderName(from: string) {
   return name || from;
 }
 
+/** Soft tints that set each bucket's rows apart (Tom, 2026-11-26). */
+const BUCKET_TINTS = [
+  "bg-sky-50",
+  "bg-amber-50",
+  "bg-emerald-50",
+  "bg-violet-50",
+  "bg-rose-50",
+  "bg-teal-50",
+  "bg-orange-50",
+  "bg-indigo-50",
+];
+
 /** Step 1 while it runs: one table, a row per email, grouped by bucket (Tom, 2026-11-26). */
 function LiveBuckets({ buckets }: { buckets: Bucket[] }) {
   if (!buckets.length)
@@ -160,7 +173,7 @@ function LiveBuckets({ buckets }: { buckets: Bucket[] }) {
     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
       <table
         aria-label="Sorted emails"
-        className="w-full min-w-[640px] text-left text-xs"
+        className="w-full min-w-[560px] text-left text-xs"
       >
         <thead className="uppercase tracking-wide text-slate-500">
           <tr className="border-b border-slate-200">
@@ -168,13 +181,18 @@ function LiveBuckets({ buckets }: { buckets: Bucket[] }) {
             <th className="px-2 py-1 font-semibold">Email</th>
             <th className="px-2 py-1 font-semibold">From</th>
             <th className="px-2 py-1 font-semibold">Client</th>
-            <th className="px-2 py-1 font-semibold">Why</th>
+            <th className="w-8 px-2 py-1 font-semibold">
+              <span className="sr-only">Why</span>
+            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {buckets.flatMap((bucket) =>
+          {buckets.flatMap((bucket, b) =>
             bucket.items.map((item, i) => (
-              <tr key={item.thread} className="align-top">
+              <tr
+                key={item.thread}
+                className={`align-top ${BUCKET_TINTS[b % BUCKET_TINTS.length]}`}
+              >
                 <td className="whitespace-nowrap px-2 py-1 font-medium">
                   {i ? "" : `${bucket.name} (${bucket.items.length})`}
                 </td>
@@ -190,7 +208,20 @@ function LiveBuckets({ buckets }: { buckets: Bucket[] }) {
                 <td className="whitespace-nowrap px-2 py-1 text-slate-600">
                   {item.client ?? ""}
                 </td>
-                <td className="px-2 py-1 text-slate-500">{item.why}</td>
+                <td className="px-2 py-1 text-slate-400">
+                  {item.why ? (
+                    // Hover (or focus) shows Donna's reason.
+                    <span
+                      role="img"
+                      tabIndex={0}
+                      title={item.why}
+                      aria-label={`Why: ${item.why}`}
+                      className="inline-flex cursor-help hover:text-slate-700 focus:text-slate-700"
+                    >
+                      <Info size={14} aria-hidden="true" />
+                    </span>
+                  ) : null}
+                </td>
               </tr>
             )),
           )}

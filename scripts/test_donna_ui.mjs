@@ -417,6 +417,18 @@ try {
   await expect(page.getByRole("button", { name: "Clean inbox now" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Pause Donna" })).toHaveCount(0);
   await expect(page.getByText(/More: status/)).toHaveCount(0);
+  // One click collapses and expands the sidebar.
+  {
+    const phone = page.viewportSize();
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.getByRole("button", { name: "Collapse sidebar" }).click();
+    await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible();
+    await page.getByRole("button", { name: "Expand sidebar" }).click();
+    await expect(page.getByRole("button", { name: "Collapse sidebar" })).toBeVisible();
+    if (phone) await page.setViewportSize(phone);
+  }
   await expect(page.getByRole("region", { name: "Zoho folders" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Custom folders" })).toBeVisible();
   // Start new job (on Current job) starts step 1.
@@ -448,6 +460,9 @@ try {
   await expect(page.getByRole("link", { name: "Current job" })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("table", { name: "Sorted emails" })).toContainText("Newsletter (1)");
   await expect(page.getByRole("table", { name: "Sorted emails" })).toContainText("Example live email");
+  // Why is a hover icon, not a column of text.
+  await expect(page.getByRole("img", { name: "Why: Promo" })).toHaveAttribute("title", "Promo");
+  await expect(page.getByRole("table", { name: "Sorted emails" })).not.toContainText("Promo");
   await page.goto(base + "/donna");
   // Pause/Resume and Stop sit in the top status bar.
   const bar = page.locator("div", { has: page.getByRole("link", { name: /Step 1: sorting Inbox into buckets/ }) }).last();
