@@ -33,6 +33,8 @@ import uuid
 
 UTC = dt.timezone.utc
 LEASE_KEEPER_SECONDS = 25
+FOLDER_COUNT_SECONDS = 120
+_folder_counts = {"at": 0.0}
 
 
 class ReviewBudgetReached(RuntimeError):
@@ -563,6 +565,46 @@ def bucket_for(assessment, messages, contacts, folders, rules):
     return "Not sure", summary or "Donna could not tell", None, None
 
 
+def folder_counts():
+    """Message count per selectable folder (IMAP STATUS): no mail is read or moved."""
+    helper = mail_module()
+    conn, _ = helper.connect("zoho")
+    try:
+        status, rows = conn.list()
+        if status != "OK":
+            return None
+        counts = []
+        for row in rows or []:
+            text = row.decode(errors="replace") if isinstance(row, bytes) else str(row)
+            if "\\noselect" in text.lower():
+                continue
+            match = re.search(r'"((?:\\.|[^"\\])*)"\s*$', text)
+            folder = match.group(1).replace('\\"', '"') if match else text.rsplit(" ", 1)[-1]
+            status, data = conn.status(helper.quote(folder), "(MESSAGES)")
+            found = re.search(rb"MESSAGES (\d+)", (data or [b""])[0] or b"") if status == "OK" else None
+            if found:
+                counts.append({"folder": folder, "messages": int(found[1])})
+        return counts[:200]
+    finally:
+        try:
+            conn.logout()
+        except Exception:
+            pass
+
+
+def due_folder_counts():
+    """Fresh folder counts every two minutes for SWapp's Overview tables, else None."""
+    if threading.current_thread() is not threading.main_thread():
+        return None
+    if time.monotonic() - _folder_counts["at"] < FOLDER_COUNT_SECONDS:
+        return None
+    _folder_counts["at"] = time.monotonic()
+    try:
+        return folder_counts()
+    except Exception:
+        return None
+
+
 def note(progress, subject, result):
     """What Donna just did with one email, newest first, for SWapp's live bar."""
     progress["recent"] = ([{"subject": str(subject)[:200], "result": str(result)[:200]}]
@@ -914,6 +956,9 @@ def process_job(client, store, work, max_threads, clean_threads=100):
                     last_stats[0] = store.usage()
                 if last_stats[0] is not None:
                     extra["stats"] = last_stats[0]
+                counts = due_folder_counts()
+                if counts:
+                    extra["folders"] = counts
                 answer = client.call("heartbeat", jobId=job["id"], leaseToken=job["leaseToken"],
                                      listener=listener_state(client), **extra)
             except DonnaAPIError as error:
@@ -1260,7 +1305,9 @@ def main():
         while True:
             try:
                 if time.monotonic() - last_heartbeat > 25:
-                    answer = client.call("heartbeat", listener=listener_state(client), stats=store.usage())
+                    counts = due_folder_counts()
+                    answer = client.call("heartbeat", listener=listener_state(client), stats=store.usage(),
+                                         **({"folders": counts} if counts else {}))
                     if isinstance(answer, dict):
                         store.apply_settings(answer.get("settings"))
                     last_heartbeat = time.monotonic()

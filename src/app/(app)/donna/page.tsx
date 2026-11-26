@@ -88,6 +88,12 @@ export default async function DonnaPage({
   const { mailbox, active, queued, filedToday, needsYou, recent } = data;
   const settings = donnaSettings(mailbox.settings);
   const folders = mailboxFolderTables(mailbox.coverage);
+  const foldersAtRaw = (mailbox.coverage as { foldersAt?: unknown } | null)
+    ?.foldersAt;
+  const foldersAt =
+    typeof foldersAtRaw === "string" && !Number.isNaN(Date.parse(foldersAtRaw))
+      ? new Date(foldersAtRaw)
+      : null;
   const stats = workerStats(mailbox.coverage);
   const today = new Date().toISOString().slice(0, 10);
   const used = stats?.day === today ? stats.reviews : 0;
@@ -298,6 +304,11 @@ export default async function DonnaPage({
         <>
           <FolderTable title="Zoho folders" folders={folders.zoho} />
           <FolderTable title="Custom folders" folders={folders.custom} />
+          <p className="text-xs text-slate-500">
+            {foldersAt
+              ? `Counts as of ${shortTime(foldersAt)}. Donna recounts every 2 minutes.`
+              : "Counts are from Donna’s last job."}
+          </p>
         </>
       ) : (
         <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
