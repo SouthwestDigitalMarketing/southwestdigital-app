@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { parseItem, type SectionKey, type TripItem, type TripPlan, emptyPlan } from "./plan";
+import { JAPAN_DESTINATION, parseItem, type SectionKey, type TripItem, type TripPlan, emptyPlan } from "./plan";
 
 /**
  * The Japan trip (Tom, 2026-11-26: "let's just focus on japan"), from the 2026-11-25 research
@@ -8,7 +8,7 @@ import { parseItem, type SectionKey, type TripItem, type TripPlan, emptyPlan } f
  * ~/Documents/travel/2026-11-25-remote-month-comparison.md.
  */
 export const REMOTE_MONTHS_TITLE = "Japan: two months, no car";
-export const REMOTE_MONTHS_DESTINATION = "Fukuoka, Japan";
+export const REMOTE_MONTHS_DESTINATION = JAPAN_DESTINATION;
 
 const SUMMARY =
   "Bag, laptop and phone. Two months in Fukuoka with good Wi-Fi, run Bookkeeping Conroe remotely, " +
@@ -100,4 +100,68 @@ export function remoteMonthsPlan(): TripPlan {
     plan.sections[key] = items.map((item): TripItem => parseItem(key, { id: randomUUID(), ...item }));
   }
   return plan;
+}
+
+export const OLD_REMOTE_MONTHS_TITLE = "Two months abroad, no car";
+
+/** Budget lines the old five-place starter created (2026-11-25), recognised by name. */
+const OLD_BUDGET_LINES = new Set([
+  "Round trip flight",
+  "Lodging, 60 days",
+  "Food, 60 days",
+  "Local transit",
+  "Protein shakes, 60 days",
+  "Gym and martial arts",
+  "Phone data / eSIM",
+  "Passport renewal",
+  "Travel insurance",
+]);
+const OLD_ARRIVAL_FORM = "Arrival form for the place we pick";
+const OLD_ENTRY_DETAIL = /everywhere on the list|Thailand wants 6 months/;
+
+function sameText(a: unknown, b: unknown) {
+  return String(a ?? "").trim().toLowerCase() === String(b ?? "").trim().toLowerCase();
+}
+
+/**
+ * Turns a trip made from the old five-place starter into the Japan trip (Tom, 2026-11-26) without
+ * losing anything Tom added: keeps the Fukuoka option and its spots, ticks, his own budget lines and
+ * any line with money spent; drops the other places and their spots; swaps in the Japan budget,
+ * Visit Japan Web and Japan entry rules. Stays, places, itinerary, needs, home and videos are untouched.
+ */
+export function switchToJapan(plan: TripPlan, japan: TripPlan = remoteMonthsPlan()): TripPlan {
+  const isJapan = (name: unknown) => sameText(name, REMOTE_MONTHS_DESTINATION);
+  const options = plan.sections.options.filter((option) => isJapan(option.place));
+  // Old starter lines with nothing spent are swapped in place for the Japan line of the same name
+  // (or dropped when Japan has none); everything else stays where it is; new Japan lines go last.
+  const budget = plan.sections.budget.flatMap((line) => {
+    if (!OLD_BUDGET_LINES.has(String(line.item ?? "")) || typeof line.actual === "number") return [line];
+    const replacement = japan.sections.budget.find((candidate) => sameText(candidate.item, line.item));
+    return replacement ? [{ ...replacement, id: line.id }] : [];
+  });
+  budget.push(...japan.sections.budget.filter((line) => !budget.some((kept) => sameText(kept.item, line.item))));
+  const keptDocs = plan.sections.documents.filter((doc) => !sameText(doc.document, OLD_ARRIVAL_FORM));
+  const documents = [
+    ...keptDocs,
+    ...japan.sections.documents.filter((doc) => !keptDocs.some((kept) => sameText(kept.document, doc.document))),
+  ];
+  const keptEntry = plan.sections.entry.filter((rule) => !OLD_ENTRY_DETAIL.test(String(rule.detail ?? "")));
+  const entry = [
+    ...japan.sections.entry.filter((rule) => !keptEntry.some((kept) => sameText(kept.rule, rule.rule))),
+    ...keptEntry,
+  ];
+  return {
+    ...plan,
+    // Only the old starter's wording is replaced; a summary Tom wrote himself stays.
+    summary: plan.summary.startsWith("Bag, laptop and phone. A cheap long stay") || !plan.summary ? japan.summary : plan.summary,
+    days: plan.days === 30 ? 60 : plan.days,
+    sections: {
+      ...plan.sections,
+      options: options.length ? options : japan.sections.options,
+      spots: plan.sections.spots.filter((spot) => isJapan(spot.option)),
+      budget,
+      documents,
+      entry,
+    },
+  };
 }

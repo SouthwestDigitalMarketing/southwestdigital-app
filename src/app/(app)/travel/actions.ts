@@ -26,7 +26,13 @@ import {
   type TripItem,
   type TripPlan,
 } from "@/lib/travel/plan";
-import { REMOTE_MONTHS_DESTINATION, REMOTE_MONTHS_TITLE, remoteMonthsPlan } from "@/lib/travel/starter";
+import {
+  OLD_REMOTE_MONTHS_TITLE,
+  REMOTE_MONTHS_DESTINATION,
+  REMOTE_MONTHS_TITLE,
+  remoteMonthsPlan,
+  switchToJapan,
+} from "@/lib/travel/starter";
 import { geocode, lookupPlace, pagePhoto } from "@/lib/travel/photos";
 import { standingNeeds } from "@/lib/travel/needs";
 import { suggestionsFor } from "@/lib/travel/spots";
@@ -151,6 +157,7 @@ type Change =
   | { kind: "fill"; section: string }
   | { kind: "standingNeeds" }
   | { kind: "suggestSpots"; option: string }
+  | { kind: "switchToJapan" }
   | { kind: "save"; section: string; item: unknown }
   | { kind: "remove"; section: string; id: string }
   | { kind: "move"; section: string; id: string; direction: -1 | 1 };
@@ -254,6 +261,11 @@ async function applyChange(dataContext: Context, slug: string, change: Prepared)
       case "fill":
         break;
       case "suggestSpots":
+        break;
+      case "switchToJapan":
+        plan = switchToJapan(plan);
+        if (row.title === OLD_REMOTE_MONTHS_TITLE) data.title = REMOTE_MONTHS_TITLE;
+        data.destination = REMOTE_MONTHS_DESTINATION;
         break;
       case "addSpots":
         for (const item of change.items) {

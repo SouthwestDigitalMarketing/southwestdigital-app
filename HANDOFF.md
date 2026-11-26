@@ -809,6 +809,18 @@ newsletters) into SWapp's Scanner; `/patrol` was removed from every machine the 
 - Open: confirm Zoho empties Spam on its own (oldest Spam mail 31 Oct on 2026-11-24); texts from
   Tom's Pixel (Google Messages for Web, ripley agent Chrome) as a Scanner source — next.
 
+## 2026-11-26 — Travel: one-time "Switch to Japan" for older trips (Ummon)
+
+Tom's production trip was made from the five-place starter (screenshot 2026-11-26: old title, no
+place, $130 budget, five pins). A trip with a Fukuoka option and either other options or no
+Fukuoka destination (`needsJapanSwitch`, plan.ts) shows an amber banner with **Switch to Japan**.
+`switchToJapan` (starter.ts) keeps the Fukuoka option and its spots, every tick, Tom's own budget
+lines and any line with money spent, and a summary he wrote; drops the other options and their
+spots; swaps old starter budget lines in place for the Japan ones ($5,045), the generic arrival
+form for Visit Japan Web, and the old entry rules for Japan's; sets title (if still the old one)
+and destination. Tests: switch.test.ts (old-style trip, run twice). Preview: an old-style copy
+switched cleanly (16 pins to 12, Japan card on top, budget $5,045), then deleted.
+
 ## 2026-11-26 — Travel focuses on Japan (Ummon)
 
 Tom: "focus on japan ... remove the other options ... change 'travel' in the sidebar to just
