@@ -420,8 +420,9 @@ RESULT_SCHEMA = {
         "required": ["key", "title", "category", "type", "typeHint", "summary", "recommendation", "nextAction", "owner", "urgent", "state", "waitingOn", "followUpAt", "dueAt", "reply", "fileTo"],
         "properties": {
             **{k: {"type": "string"} for k in ["key", "title", "summary", "recommendation", "nextAction", "owner"]},
-            "type": {"type": "string", "maxLength": 24},
-            "typeHint": {"type": "string", "maxLength": 80},
+            # No length keywords: the code trims labels, and strict schemas may refuse them.
+            "type": {"type": "string"},
+            "typeHint": {"type": "string"},
             "key": {"type": "string", "pattern": "^[a-zA-Z0-9_-]{1,80}$"},
             "category": {"type": "string", "enum": ["client", "sales", "business", "information", "personal", "noise", "unknown"]},
             "urgent": {"type": "boolean"}, "state": {"type": "string", "enum": ["needs-you", "working", "waiting"]},
