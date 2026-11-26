@@ -261,6 +261,8 @@ export type CleanBarStatus = {
   /** "Checking inbox" for a preview, "Cleaning inbox" when mail moves. */
   title: string;
   paused: boolean;
+  /** Queued, and no worker heartbeat in the last 90 seconds: nothing will pick it up. */
+  offline: boolean;
   waiting: boolean;
   total: number;
   done: number;
@@ -294,6 +296,7 @@ export function cleanBarStatus(
   coverage: unknown,
   now = new Date(),
   paused = false,
+  heartbeatAt?: Date | null,
 ): CleanBarStatus {
   const counts = donnaActionCounts(coverage);
   const raw =
@@ -317,6 +320,11 @@ export function cleanBarStatus(
       ? progress.current.trim().slice(0, 200)
       : null;
   const waiting = paused || job.status !== "leased";
+  const offline =
+    waiting &&
+    !paused &&
+    heartbeatAt !== undefined &&
+    (!heartbeatAt || now.getTime() - heartbeatAt.getTime() > 90_000);
   const percent = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
   let etaLabel: string | null = null;
   const startedAt =
@@ -330,6 +338,7 @@ export function cleanBarStatus(
     id: job.id,
     title,
     paused,
+    offline,
     waiting,
     total,
     done,
@@ -337,7 +346,9 @@ export function cleanBarStatus(
     current,
     label: paused
       ? "Paused"
-      : waiting
+      : offline
+        ? "Donna is not running"
+        : waiting
         ? "Waiting for Donna"
         : current
           ? current

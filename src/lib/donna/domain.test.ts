@@ -251,6 +251,22 @@ describe("honest health and counts", () => {
     ).toMatchObject({ paused: true, waiting: true, label: "Paused", etaLabel: null });
   });
 
+  it("says plainly when no worker is running to pick up a clean", () => {
+    const now = new Date("2026-11-26T02:00:00Z");
+    const job = { id: "j", status: "pending", options: {} };
+    expect(cleanBarStatus(job, {}, now, false, null)).toMatchObject({
+      offline: true,
+      label: "Donna is not running",
+    });
+    expect(
+      cleanBarStatus(job, {}, now, false, new Date("2026-11-26T01:59:40Z")),
+    ).toMatchObject({ offline: false, label: "Waiting for Donna" });
+    expect(cleanBarStatus(job, {}, now, true, null)).toMatchObject({
+      offline: false,
+      label: "Paused",
+    });
+  });
+
   it("reads a job's own report with thread ids and undo state", () => {
     const report = cleanReport({
       preview: false,

@@ -2,7 +2,13 @@
 ## 2026-11-25 (night) — Clean inbox safety: check first, cancel, pause, undo (Ummon, Tom)
 
 Branch `donna/clean-safety` off `origin/main`. Tom approved items 1–3 of the
-plan (stop control incl. a Cancel button, undo, preview). Not pushed.
+plan (stop control incl. a Cancel button, undo, preview). Merged as #266
+(`275bf87`); production migrations applied by the deploy. Ripley runtime
+worker replaced with this version (old copy kept at
+`~/.local/share/swapp-donna/donna_worker.py.before-clean-safety`).
+- Follow-up (same night): queued cleans now say **Donna is not running** when
+  there is no worker heartbeat in 90 s, instead of "starts when Donna is
+  running" (Tom could not tell nothing would happen).
 
 - **Check first.** Clean inbox now starts a read-only check (`options.preview`).
   Any clean job without a `plan` is a check, including production's pending

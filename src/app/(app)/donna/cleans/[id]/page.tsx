@@ -96,7 +96,10 @@ function PreviewPlan({
                 disabled={!item.thread || Boolean(approvedJobId)}
                 className="h-4 w-4 shrink-0"
               />
-              <Line item={item} extra={item.folder ? `to ${item.folder}` : undefined} />
+              <Line
+                item={item}
+                extra={item.folder ? `to ${item.folder}` : undefined}
+              />
             </label>
           </li>
         ))}
@@ -215,7 +218,13 @@ export default async function CleanPage({
     (legacy && job.status === "done"
       ? mailboxCleanReport(job.mailbox.coverage)
       : null);
-  const progress = cleanBarStatus(job, job.mailbox.coverage, new Date(), job.mailbox.paused);
+  const progress = cleanBarStatus(
+    job,
+    job.mailbox.coverage,
+    new Date(),
+    job.mailbox.paused,
+    job.mailbox.heartbeatAt,
+  );
   const paused = job.mailbox.paused;
   return (
     <DonnaFrame active="email">
@@ -234,9 +243,11 @@ export default async function CleanPage({
           {active
             ? progress.paused
               ? "Paused"
-              : progress.waiting
-                ? "Queued"
-                : "In progress"
+              : progress.offline
+                ? "Not started"
+                : progress.waiting
+                  ? "Queued"
+                  : "In progress"
             : job.status === "done"
               ? `Finished ${shortTime(job.completedAt)}`
               : job.status === "cancelled"
@@ -263,11 +274,13 @@ export default async function CleanPage({
           <p className="text-xs text-slate-500">
             {progress.paused
               ? "Donna is paused. This continues when you resume her in Settings."
-              : progress.waiting
-                ? "You do not need to do anything. This starts when Donna is running."
-                : preview
-                  ? "Donna is reading your Inbox. Nothing moves until you approve the list."
-                  : "Donna is filing the emails you approved."}
+              : progress.offline
+                ? "Donna is not running right now, so this has not started and nothing has moved. It starts when Donna is turned on. Cancel if you no longer want it."
+                : progress.waiting
+                  ? "Donna is running and will pick this up shortly."
+                  : preview
+                    ? "Donna is reading your Inbox. Nothing moves until you approve the list."
+                    : "Donna is filing the emails you approved."}
           </p>
           <form action={cancelClean}>
             <input type="hidden" name="jobId" value={job.id} />
@@ -307,7 +320,11 @@ export default async function CleanPage({
               paused={paused}
             />
           ) : (
-            <FiledWithUndo jobId={job.id} items={report.filed} paused={paused} />
+            <FiledWithUndo
+              jobId={job.id}
+              items={report.filed}
+              paused={paused}
+            />
           )}
           <Items
             title="Waiting"
