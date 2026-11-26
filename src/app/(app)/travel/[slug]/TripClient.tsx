@@ -88,7 +88,7 @@ export function TripClient({
   ];
   const progressTiles = focus ? tiles.filter((tile) => tile.label !== "Budget planned") : tiles;
   const focusTotal = totals.planned > 0 ? totals.planned : focus ? optionTotal(focus, days) : null;
-  const renderSections = (keys: SectionKey[]) =>
+  const renderSections = (keys: SectionKey[], tableLayout = false) =>
     sections.filter((section) => keys.includes(section.key)).map((section) => (
       <SectionBlock
         key={section.key}
@@ -96,6 +96,7 @@ export function TripClient({
         section={section}
         items={plan.sections[section.key]}
         days={days}
+        tableLayout={tableLayout}
         missing={
           (AUTO_PHOTO_SECTIONS.has(section.key) ? itemsWithoutPhoto(plan, section.key).length : 0) +
           itemsWithoutPin(plan, section.key).length
@@ -212,7 +213,7 @@ export function TripClient({
             </details>
           </>
         ) : null}
-        {activeTab === "logistics" ? renderSections(["travel", "documents", "needs", "entry", "home"]) : null}
+        {activeTab === "logistics" ? renderSections(["travel", "documents", "needs", "entry", "home"], true) : null}
         {activeTab === "videos" ? renderSections(["videos"]) : null}
       </section>
     </div>
@@ -508,12 +509,14 @@ function SectionBlock({
   items,
   days,
   missing,
+  tableLayout = false,
 }: {
   slug: string;
   section: Section;
   items: TripItem[];
   days: number;
   missing: number;
+  tableLayout?: boolean;
 }) {
   const [adding, setAdding] = useState<string | null>(null);
   const [sort, setSort] = useState<OptionSort>("mine");
@@ -595,26 +598,55 @@ function SectionBlock({
       ) : null}
       {error ? <p className="mt-2 text-sm text-red-700">{error}</p> : null}
 
-      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {shown.map((item) => (
-          <ItemCard
-            // Keyed on the saved values so a checkbox's instant tick resets once the server answers.
-            key={`${item.id}:${JSON.stringify(item)}`}
-            slug={slug}
-            section={section}
-            item={item}
-            total={isOptions ? optionTotal(item, days) : null}
-            days={days}
-            pending={pending}
-            onToggle={(key, value) => run({ kind: "save", section: section.key, item: { ...item, [key]: value } })}
-          />
-        ))}
-        {items.length === 0 && !adding ? (
-          <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
-            Nothing here yet.
-          </p>
-        ) : null}
-      </div>
+      {tableLayout ? (
+        <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200 bg-white">
+          <table className="w-full min-w-[600px] text-left text-xs">
+            <thead className="text-[10px] uppercase tracking-wide text-slate-500">
+              <tr className="border-b border-slate-200">
+                <th scope="col" className="w-[30%] px-2 py-2 font-semibold">Item</th>
+                <th scope="col" className="w-[48%] px-2 py-2 font-semibold">Details</th>
+                <th scope="col" className="w-[22%] px-2 py-2 font-semibold">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {shown.map((item) => (
+                <SectionTableRow
+                  key={`${item.id}:${JSON.stringify(item)}`}
+                  slug={slug}
+                  section={section}
+                  item={item}
+                  pending={pending}
+                  onToggle={(key, value) => run({ kind: "save", section: section.key, item: { ...item, [key]: value } })}
+                />
+              ))}
+              {items.length === 0 && !adding ? (
+                <tr><td colSpan={3} className="px-2 py-4 text-center text-slate-500">Nothing here yet.</td></tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {shown.map((item) => (
+            <ItemCard
+              // Keyed on the saved values so a checkbox's instant tick resets once the server answers.
+              key={`${item.id}:${JSON.stringify(item)}`}
+              slug={slug}
+              section={section}
+              item={item}
+              total={isOptions ? optionTotal(item, days) : null}
+              days={days}
+              pending={pending}
+              onToggle={(key, value) => run({ kind: "save", section: section.key, item: { ...item, [key]: value } })}
+            />
+          ))}
+          {items.length === 0 && !adding ? (
+            <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+              Nothing here yet.
+            </p>
+          ) : null}
+        </div>
+      )}
       {adding ? (
         <div className="mt-3">
           <ItemForm
@@ -632,6 +664,69 @@ function SectionBlock({
 }
 
 /** A short card: photo, name, a few facts. The whole card opens the item's own page. */
+function SectionTableRow({
+  slug,
+  section,
+  item,
+  pending,
+  onToggle,
+}: {
+  slug: string;
+  section: Section;
+  item: TripItem;
+  pending: boolean;
+  onToggle: (key: string, value: boolean) => void;
+}) {
+  const [ticked, setTicked] = useState<Record<string, boolean>>({});
+  const title = String(item[section.heading] ?? "Untitled item");
+  const facts = section.summary.flatMap((key) => {
+    const field = section.fields.find((candidate) => candidate.key === key);
+    const shown = field ? shownValue(field, item[key] ?? null) : null;
+    return field && shown !== null ? [`${field.label}: ${shown}`] : [];
+  });
+  const checks = section.fields.filter((field) => field.type === "check");
+
+  return (
+    <tr className="h-10 align-middle">
+      <th scope="row" className="px-2 py-1 font-normal">
+        <Link
+          href={itemHref(slug, section.key, item.id)}
+          title={title}
+          className="ui-focus-ring block truncate font-medium text-slate-900 hover:underline"
+        >
+          {title}
+        </Link>
+      </th>
+      <td className="max-w-0 truncate px-2 py-1 text-slate-600" title={facts.join(" · ")}>
+        {facts.length ? facts.join(" · ") : "—"}
+      </td>
+      <td className="whitespace-nowrap px-2 py-1">
+        {checks.length ? (
+          <div className="flex items-center gap-3">
+            {checks.map((field) => (
+              <label key={field.key} className="inline-flex items-center gap-1.5 text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={ticked[field.key] ?? item[field.key] === true}
+                  disabled={pending}
+                  onChange={(event) => {
+                    const value = event.target.checked;
+                    setTicked((current) => ({ ...current, [field.key]: value }));
+                    onToggle(field.key, value);
+                  }}
+                />
+                {field.label}
+              </label>
+            ))}
+          </div>
+        ) : (
+          <span className="text-slate-400">—</span>
+        )}
+      </td>
+    </tr>
+  );
+}
+
 function ItemCard({
   slug,
   section,
