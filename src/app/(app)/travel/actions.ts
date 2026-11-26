@@ -26,7 +26,7 @@ import {
   type TripItem,
   type TripPlan,
 } from "@/lib/travel/plan";
-import { REMOTE_MONTHS_TITLE, remoteMonthsPlan } from "@/lib/travel/starter";
+import { REMOTE_MONTHS_DESTINATION, REMOTE_MONTHS_TITLE, remoteMonthsPlan } from "@/lib/travel/starter";
 import { geocode, lookupPlace, pagePhoto } from "@/lib/travel/photos";
 import { standingNeeds } from "@/lib/travel/needs";
 import { suggestionsFor } from "@/lib/travel/spots";
@@ -51,6 +51,7 @@ export async function createTripAction(formData: FormData) {
         slug: next,
         title,
         status: "planning",
+        destination: starter ? REMOTE_MONTHS_DESTINATION : "",
         plan: plan as unknown as Prisma.InputJsonValue,
       },
     });

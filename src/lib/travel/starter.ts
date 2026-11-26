@@ -2,66 +2,21 @@ import { randomUUID } from "node:crypto";
 import { parseItem, type SectionKey, type TripItem, type TripPlan, emptyPlan } from "./plan";
 
 /**
- * The first trip, from Donna's 2026-11-25 research (prices are web snapshots found that day,
- * not live fares): 60 days abroad without a car, running Bookkeeping Conroe and filming.
+ * The Japan trip (Tom, 2026-11-26: "let's just focus on japan"), from the 2026-11-25 research
+ * (prices are web snapshots found that day, not live fares): 60 days in Fukuoka without a car,
+ * running Bookkeeping Conroe and filming. Earlier comparison of five places: git history and ripley
+ * ~/Documents/travel/2026-11-25-remote-month-comparison.md.
  */
-export const REMOTE_MONTHS_TITLE = "Two months abroad, no car";
+export const REMOTE_MONTHS_TITLE = "Japan: two months, no car";
+export const REMOTE_MONTHS_DESTINATION = "Fukuoka, Japan";
 
 const SUMMARY =
-  "Bag, laptop and phone. A cheap long stay with good Wi-Fi, run Bookkeeping Conroe remotely, " +
-  "and film it for The Real Estate Bookkeeper. 60 days. No clients need us in person. " +
-  "Prices in Options are web snapshots found 2026-11-25, not live fares.";
+  "Bag, laptop and phone. Two months in Fukuoka with good Wi-Fi, run Bookkeeping Conroe remotely, " +
+  "and film it for The Real Estate Bookkeeper. No clients need us in person. " +
+  "Prices are web snapshots found 2026-11-25, not live fares.";
 
 const SEED: Partial<Record<SectionKey, Array<Record<string, string | number | boolean | null>>>> = {
   options: [
-    {
-      place: "Mexico City",
-      roundTrip: 214,
-      monthly: 1500,
-      visaFree: "Up to 180 days; the officer decides",
-      hoursAhead: 0,
-      timeGap: "Same time (1 hour behind from 2027-03-14)",
-      safety: "Mexico Level 2 (confirm)",
-      notes: "Round trip $214-350 Volaris/Viva early Dec; one way $78-109 Viva. Rent $1,300-1,800/mo all-in living in Narvarte. Metro, Uber, walkable.",
-      gym: "Anytime Fitness Cuauhtémoc (north of Reforma; no platform listed). For cleans and snatches: CrossFit Condesa, CrossFit Barrio (Narvarte), Inpeak Insurgentes; drop-ins about $10-16.",
-      shakes: 260,
-      martialArts: "Muay Thai: KIN Muay Thai (Roma Norte), Muy Muay Thai (Hipódromo). BJJ: Atlas Grappling (Narvarte), Zenith BJJ about $30-60/month, coaches explain in English.",
-      internet: "Median home speed about 100 Mbps; 50-200 Mbps in Roma/Condesa. Storm power cuts happen. Impact Hub day pass about $18. Unlimited eSIM $62-83 for 30 days.",
-      music: "Buy: Calle Bolívar music shops (Casa Veerkamp); new acoustic $74-232. Blues: El 61 / Ruta 61 Thursday jam (2018 info), Pata Negra blues Tuesdays, Casa Franca. Confirm on Instagram.",
-      source: "https://www.vivaaerobus.com/en-us/flights-from-houston-to-mexico-city",
-    },
-    {
-      place: "Mérida, Mexico",
-      roundTrip: 300,
-      monthly: 1200,
-      visaFree: "Up to 180 days; the officer decides",
-      hoursAhead: 0,
-      timeGap: "Same time",
-      safety: "Yucatán Level 1",
-      notes: "United nonstop from IAH (fares thin: ~$300-375 round trip). $1,100-1,300/mo. Buses ~$0.50, rides $3-5. Hot.",
-      gym: "3 Anytime Fitness clubs, none near Centro. CrossFit Cupra (Buenavista, near Itzimná) and Badass Athletics (weightlifting classes). Bumper plates not confirmed; ask on WhatsApp.",
-      shakes: 260,
-      martialArts: "BJJ: Henosis Jiu Jitsu (near Itzimná, mornings), Gracie Allegiance, Dream Jiujitsu. No men's Muay Thai found. No prices posted.",
-      internet: "Average about 55 Mbps; fiber up to 300 Mbps, but not in every old Centro building. Storm power cuts. 24/7 coworking about $100-200/month.",
-      music: "Shops (unconfirmed): Casa Musical de Mérida, Centro Musical del Sureste. Blues: Cantina El Dzalbay (jazz and blues nightly), El Cardenal. No confirmed sit-in night.",
-      source: "https://meridaliving.com/digital-nomad-merida/",
-    },
-    {
-      place: "Medellín, Colombia",
-      roundTrip: 492,
-      monthly: 1200,
-      visaFree: "90 days, extendable to 180",
-      hoursAhead: 1,
-      timeGap: "1 hour ahead",
-      safety: "Colombia Level 3: reconsider travel",
-      notes: "Frontier 1-stop Jan 4-Feb 2, 2027 ~$492 (checked 2026-10-13). $1,000-1,600/mo. Metro ~$1 a ride.",
-      gym: "No Anytime Fitness in Medellín. CrossFit DLX (El Poblado, drop-ins welcome), Forja CrossFit (Laureles, about $90/month, unverified), BullBox CrossFit (Laureles).",
-      shakes: 340,
-      martialArts: "Zona de Combate (El Poblado: BJJ, Muay Thai, MMA), MMA Factory BJJ drop-in about $8, Evolution Fight Club Muay Thai (English-speaking owners). Monthly prices by WhatsApp.",
-      internet: "Fiber 100-300 Mbps; short outages, keep phone data. Atom House coworking $10/day. Local SIM $10-25/month.",
-      music: "Shops: Más Musical, Pasaje Junín arcade; beginner guitar $60-180. Jam: El Club del Jazz, Thursdays 8 pm, bring your instrument (about $10 cover). No blues jam found.",
-      source: "https://helloaxel.com/en/flights/from-houston-to-medellin-mde",
-    },
     {
       place: "Fukuoka, Japan",
       roundTrip: 809,
@@ -78,31 +33,14 @@ const SEED: Partial<Record<SectionKey, Array<Record<string, string | number | bo
       music: "Used guitars: Shimamura Music, Amu Plaza Hakata 7F. Blues: BB Kenchan Sunday blues session (date unknown), Tribe open jam, jazz jams. Confirm on Instagram.",
       source: "https://www.google.com/travel/flights/flights-from-houston-to-tokyo.html",
     },
-    {
-      place: "Chiang Mai, Thailand",
-      roundTrip: 1000,
-      monthly: 900,
-      visaFree: "30 days (since 2026-09-15), +30 for about $57",
-      hoursAhead: 13,
-      timeGap: "13 hours ahead: Conroe 8-5 is 9 PM-6 AM",
-      safety: "Level 1 (confirm)",
-      notes: "Round trip to Bangkok $990-1,100, then a short flight. $850-1,000/mo. Needs passport valid 6 months and a ticket out.",
-      gym: "Anytime Fitness only in Mae Rim (outside the city). CFCNX CrossFit: 300 THB drop-in (about $9), Olympic lifting needs experience. Pulmo Weightlifting sessions Mon/Wed 6 pm.",
-      shakes: 350,
-      martialArts: "Muay Thai capital: Kru Dam unlimited 6,399 THB/month (about $190), Hongthong 8,000 THB. BJJ: Lazy Leopard (two gyms, one in the Old City), price not found.",
-      internet: "Nimman condos 200-500 Mbps fiber; AIS most stable. Burning season Feb-Apr: bad air for training. Coworking about $90-180/month. AIS tourist SIM about $36 for 30 days.",
-      music: "Buy: Patr Music near North Gate, Cin Guitars; Yamaha F310 about $145. Jams: North Gate Jazz Co-op Tuesdays, Soi Dog Blues Bar Sunday blues jam, Boy Blues Bar. Avocados are off season in January.",
-      source: "https://nomadbriefing.com/visa/us-citizens/thailand/",
-    },
   ],
   budget: [
-    { item: "Round trip flight", category: "Getting there", planned: null, actual: null, notes: "Fill in when the place is picked." },
-    { item: "Lodging, 60 days", category: "Lodging", planned: null, actual: null, notes: "" },
-    { item: "Food, 60 days", category: "Food", planned: null, actual: null, notes: "" },
-    { item: "Local transit", category: "Local transit", planned: null, actual: null, notes: "" },
-    { item: "Protein shakes, 60 days", category: "Food", planned: null, actual: null, notes: "Two a day. About $260-350 per 30 days depending on the place (whey is half the cost). See Options." },
-    { item: "Gym and martial arts", category: "Other", planned: null, actual: null, notes: "CrossFit or weightlifting gym plus BJJ or Muay Thai. See Options." },
-    { item: "Phone data / eSIM", category: "Phone and internet", planned: null, actual: null, notes: "Keep the US number working for login codes." },
+    { item: "Round trip flight", category: "Getting there", planned: 809, actual: null, notes: "ZIPAIR nonstop Houston-Narita; $809 on Google Flights for Nov 30-Dec 14 (seen 2026-11-25). Recheck for real dates." },
+    { item: "Living, 60 days (rent, food, transit)", category: "Lodging", planned: 2800, actual: null, notes: "About ¥160k-250k a month in Fukuoka; $1,400/month used." },
+    { item: "Protein shakes, 60 days", category: "Food", planned: 540, actual: null, notes: "Two a day, about ¥670 (~$4.50) each. Order whey from Myprotein Japan; Costco is out of town." },
+    { item: "CrossFit Hakata, 2 months", category: "Other", planned: 440, actual: null, notes: "¥33,000/month drop-in plan (about $220)." },
+    { item: "Master Japan BJJ, 2 months", category: "Other", planned: 206, actual: null, notes: "¥15,400/month unlimited (about $103)." },
+    { item: "Phone data / eSIM", category: "Phone and internet", planned: 120, actual: null, notes: "About $30-82 per 30 days. Keep the US number working for login codes." },
     { item: "Passport renewal", category: "Fees and documents", planned: 130, actual: null, notes: "Routine book renewal fee; +$60 to expedite. See Documents." },
     { item: "Travel insurance", category: "Insurance", planned: null, actual: null, notes: "" },
   ],
@@ -118,27 +56,27 @@ const SEED: Partial<Record<SectionKey, Array<Record<string, string | number | bo
       link: "https://opr.travel.state.gov/",
     },
     {
-      document: "Arrival form for the place we pick",
+      document: "Visit Japan Web",
       who: "Tom",
       status: "Need it",
       expires: "",
       due: "",
       cost: null,
-      how: "Mexico: digital entry at Mexico City airport (paper FMM elsewhere). Japan: Visit Japan Web. Thailand: TDAC arrival card plus a ticket out. Colombia: Check-MIG. Fill in once the place is picked.",
-      link: "",
+      how: "Japan's online arrival form (immigration and customs QR codes). Fill it in before the flight.",
+      link: "https://www.vjw.digital.go.jp/",
     },
   ],
   entry: [
     {
-      rule: "Remote work on a tourist entry",
-      detail: "A gray area everywhere on the list. Mexico usually tolerates it; Japan sources conflict; Colombia and Thailand entries are for tourism.",
+      rule: "90 days visa-free",
+      detail: "US citizens can visit Japan visa-free for up to 90 days; a 60-day stay fits. Japan may ask for the return ticket.",
       source: "",
       checked: "2026-11-25",
     },
     {
-      rule: "Passport validity",
-      detail: "Thailand wants 6 months left on the passport and proof of a ticket out. Check the others once the place is picked.",
-      source: "https://nomadbriefing.com/visa/us-citizens/thailand/",
+      rule: "Remote work on a tourist entry",
+      detail: "Unclear in Japan: one guide says it is not permitted, another cites a government paper allowing remote work for an overseas employer for up to 90 days. The digital nomad visa needs about ¥10M a year in income.",
+      source: "https://guide.genki.world/digital-nomad-visa-japan/",
       checked: "2026-11-25",
     },
   ],

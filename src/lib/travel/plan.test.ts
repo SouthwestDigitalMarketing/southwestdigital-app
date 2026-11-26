@@ -99,7 +99,8 @@ describe("travel plan", () => {
 
   it("builds the starter trip from valid items", () => {
     const plan = remoteMonthsPlan();
-    expect(plan.sections.options.map((o) => o.place)).toHaveLength(5);
+    expect(plan.sections.options.map((o) => o.place)).toEqual(["Fukuoka, Japan"]);
+    expect(plan.sections.budget.reduce((sum, line) => sum + (typeof line.planned === "number" ? line.planned : 0), 0)).toBe(5045);
     expect(plan.sections.documents[0]).toMatchObject({ document: "US passport", status: "Need it" });
     expect(parsePlan(JSON.parse(JSON.stringify(plan)))).toEqual(plan);
   });

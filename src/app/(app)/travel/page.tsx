@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { requireStaffBrand } from "@/lib/brands/staff";
 import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { TRIP_STATUS_LABELS, budgetTotals, formatMoney, parsePlan, type TripStatus } from "@/lib/travel/plan";
@@ -20,6 +21,9 @@ export default async function TravelPage() {
       orderBy: [{ startsOn: "desc" }, { createdAt: "desc" }],
     }),
   );
+
+  // One trip in focus (Tom, 2026-11-26: Japan): the menu item goes straight to it.
+  if (trips.length === 1) redirect(`/travel/${trips[0].slug}`);
 
   return (
     <div className="p-4 sm:p-8">
@@ -75,7 +79,7 @@ export default async function TravelPage() {
           <form action={createTripAction}>
             <input type="hidden" name="starter" value="remote-months" />
             <button type="submit" className="ui-action-secondary rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide">
-              Start from the two-months-abroad research
+              Start the Japan trip
             </button>
           </form>
         ) : null}

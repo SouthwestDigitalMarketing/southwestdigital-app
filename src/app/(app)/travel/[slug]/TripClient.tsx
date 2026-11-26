@@ -55,6 +55,9 @@ export function TripClient({
   const counts = (key: SectionKey) => plan.sections[key].length;
   const pins = mapPins(plan);
   const days = tripDays(plan, details);
+  // One option in focus (Tom, 2026-11-26: Japan): it becomes the big card at the top instead of a list.
+  const focus = plan.sections.options.length === 1 ? plan.sections.options[0] : null;
+  const sections = SECTIONS.filter((section) => !(focus && section.key === "options"));
   const tiles = [
     { label: "Budget planned", value: totals.planned ? formatMoney(totals.planned) : "Not set" },
     { label: "Spent so far", value: formatMoney(totals.actual) || "$0" },
@@ -72,9 +75,7 @@ export function TripClient({
 
   return (
     <div className="p-4 sm:p-8">
-      <Link href="/travel" className="text-sm text-slate-500 hover:text-slate-800">
-        All trips
-      </Link>
+      {focus ? <FocusCard slug={slug} option={focus} days={days} /> : null}
       <TripHeader slug={slug} details={details} summary={plan.summary} days={plan.days} />
 
       {warnings.length ? (
@@ -111,7 +112,7 @@ export function TripClient({
       </section>
 
       <nav aria-label="Trip sections" className="mt-6 flex gap-2 overflow-x-auto pb-1">
-        {SECTIONS.map((section) => (
+        {sections.map((section) => (
           <a
             key={section.key}
             href={`#${section.key}`}
@@ -122,7 +123,7 @@ export function TripClient({
         ))}
       </nav>
 
-      {SECTIONS.map((section) => (
+      {sections.map((section) => (
         <SectionBlock
           key={section.key}
           slug={slug}
@@ -246,6 +247,46 @@ function TripHeader({
         </button>
       </div>
     </form>
+  );
+}
+
+/** The trip's one option as a big card: photo, total and the key facts; opens its own page. */
+function FocusCard({ slug, option, days }: { slug: string; option: TripItem; days: number }) {
+  const section = SECTIONS.find((candidate) => candidate.key === "options")!;
+  const total = optionTotal(option, days);
+  const facts = ["roundTrip", "monthly", "timeGap", "visaFree"].flatMap((key) => {
+    const field = section.fields.find((candidate) => candidate.key === key);
+    const shown = field ? shownValue(field, option[key] ?? null) : null;
+    return field && shown !== null ? [{ field, shown }] : [];
+  });
+  return (
+    <div className={`${card} relative overflow-hidden transition hover:border-slate-400`}>
+      <ItemPhoto item={option} section={section} tall />
+      <div className="p-4 sm:p-6">
+        <Link
+          href={itemHref(slug, "options", option.id)}
+          className="ui-focus-ring text-2xl font-semibold text-slate-900 after:absolute after:inset-0 after:content-['']"
+        >
+          {String(option.place ?? "")}
+        </Link>
+        {total !== null ? (
+          <p className="mt-1 text-slate-700">
+            Total for {days} days: <strong className="text-2xl text-slate-900">{formatMoney(total)}</strong>
+          </p>
+        ) : null}
+        {facts.length ? (
+          <dl className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm">
+            {facts.map(({ field, shown }) => (
+              <div key={field.key}>
+                <dt className="inline text-slate-500">{field.label}: </dt>
+                <dd className="inline text-slate-800">{shown}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : null}
+        <p className="mt-3 text-sm font-semibold text-sky-700">Open for day-to-day life, gyms, cafés and the map →</p>
+      </div>
+    </div>
   );
 }
 

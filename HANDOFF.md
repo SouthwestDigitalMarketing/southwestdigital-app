@@ -809,6 +809,20 @@ newsletters) into SWapp's Scanner; `/patrol` was removed from every machine the 
 - Open: confirm Zoho empties Spam on its own (oldest Spam mail 31 Oct on 2026-11-24); texts from
   Tom's Pixel (Google Messages for Web, ripley agent Chrome) as a Scanner source — next.
 
+## 2026-11-26 — Travel focuses on Japan (Ummon)
+
+Tom: "focus on japan ... remove the other options ... change 'travel' in the sidebar to just
+'japan' ... at the top of that page i want to see just our japan card". Sidebar label **Japan**
+(route stays `/travel`; command menu title Japan, alias travel). `/travel` redirects to the trip
+when there is exactly one. A trip with exactly one option shows it as a big card at the top
+(photo, 60-day total, round trip, per month, time, visa) linking to the option page, and hides
+the Options list and chip; the "All trips" link is gone. Starter is now "Japan: two months, no
+car" (destination Fukuoka, Japan): Fukuoka only, budget filled from research ($5,045 planned),
+Visit Japan Web document, Japan entry rules. Suggested spots: Fukuoka only (others in git history).
+Existing trips keep their data: a trip with several options shows the list as before.
+Checks: tsc, eslint, vitest; preview rebuilt as the Japan trip (12 Fukuoka spots, 8 photos), menu
+reads Japan and opens the trip, no page errors.
+
 ## 2026-11-25 — Travel: Day-to-day life on each option (Ummon)
 
 Tom: "show me like Airbnb options ... the coffee shops I'd work from ... images of the public
