@@ -14,6 +14,7 @@ export function DonnaCleanBar() {
   const pathname = usePathname();
   const [job, setJob] = useState<CleanBarStatus | null>(null);
 
+  // Re-check on navigation so a clean started by a form redirect shows at once.
   useEffect(() => {
     let stopped = false;
     let running = false;
@@ -46,6 +47,8 @@ export function DonnaCleanBar() {
       running = true;
       setJob({
         id: detail.jobId,
+        title: "Checking inbox",
+        paused: false,
         waiting: true,
         total,
         done: 0,
@@ -63,12 +66,12 @@ export function DonnaCleanBar() {
       clearTimeout(timer);
       window.removeEventListener("swapp:donna-clean", onStart);
     };
-  }, []);
+  }, [pathname]);
 
   if (!job) return null;
   const href = `/donna/cleans/${encodeURIComponent(job.id)}`;
   const aria = [
-    "Cleaning inbox",
+    job.title,
     job.label,
     job.countLabel,
     job.waiting ? null : `${job.percent}%`,
@@ -81,7 +84,7 @@ export function DonnaCleanBar() {
       href={href}
       aria-current={pathname === href ? "page" : undefined}
       className="block shrink-0 border-b border-slate-200 bg-slate-50 px-4 py-1.5 hover:bg-slate-100"
-      aria-label={`${aria}. Open inbox clean details.`}
+      aria-label={`${aria}. Open details.`}
     >
       <span className="flex items-center gap-2 text-xs">
         <span
@@ -89,7 +92,7 @@ export function DonnaCleanBar() {
           aria-hidden="true"
         />
         <span className="min-w-0 flex-1 truncate text-slate-700">
-          Cleaning inbox
+          {job.title}
           <span className="text-slate-500"> · {job.label}</span>
           <span className="text-slate-400"> · {job.countLabel}</span>
           {job.etaLabel ? (

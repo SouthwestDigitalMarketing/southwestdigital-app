@@ -18,8 +18,10 @@ export async function GET() {
     {
       job: job
         ? cleanBarStatus(
-            { id: job.id, status: job.status },
+            job,
             job.mailbox.coverage,
+            new Date(),
+            job.mailbox.paused,
           )
         : null,
     },

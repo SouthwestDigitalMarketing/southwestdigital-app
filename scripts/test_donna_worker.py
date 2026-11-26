@@ -202,72 +202,185 @@ class WorkerTests(unittest.TestCase):
         self.assertIsNone(dest)
         self.assertEqual(reason, "reply needed")
 
-    def test_clean_files_inbox_noise_and_skips_contacts(self):
+    def clean_fixture(self, tmp):
+        store = donna.LocalStore(tmp)
+        noise = message("<promo@example.com>", "Sale", sender="promo@shop.example")
+        client_msg = message("<client@example.com>", "Report", sender="client@example.com")
+        archived = message("<old@example.com>", "Old", sender="promo@shop.example")
+        store.save("box", "INBOX", "1", 11, noise.as_bytes(), "ours@example.com", Helper)
+        store.save("box", "INBOX", "1", 12, client_msg.as_bytes(), "ours@example.com", Helper)
+        store.save("box", "Archive", "1", 13, archived.as_bytes(), "ours@example.com", Helper)
+        store.db.commit()
+        return store
+
+    BY_SENDER = {
+        "promo@shop.example": [{"key": "promo", "title": "Shop sale", "category": "noise", "owner": "Donna",
+                                "state": "needs-you", "urgent": False, "summary": "Promo", "recommendation": "File",
+                                "nextAction": "File to Newsletter", "reply": None, "dueAt": None,
+                                "followUpAt": None, "waitingOn": None, "fileTo": "Newsletter"}],
+        "client@example.com": [{"key": "report", "title": "Client report", "category": "client", "owner": "Donna",
+                                "state": "needs-you", "urgent": False, "summary": "Needs reply",
+                                "recommendation": "Draft", "nextAction": "Review draft",
+                                "reply": "Here is the report.", "dueAt": None, "followUpAt": None,
+                                "waitingOn": None, "fileTo": "Spam"}],
+    }
+    FOLDERS = {"folders": [{"folder": "INBOX", "messages": 2}, {"folder": "Newsletter", "messages": 10}], "gaps": []}
+
+    def run_clean(self, store, options, filer=None, heartbeat_answer=None, job_id="j"):
+        calls = []
+
+        class Client:
+            def call(self, op, **data):
+                calls.append((op, data))
+                if op == "heartbeat" and heartbeat_answer:
+                    return heartbeat_answer(data)
+                return {}
+
+        def fake_assess(messages, existing, root, contacts=None, extra=""):
+            return self.BY_SENDER[email.utils.parseaddr(messages[0]["from"])[1].lower()]
+
+        work = {
+            "job": {"id": job_id, "leaseToken": "l", "kind": "clean", "options": options},
+            "mailbox": {"id": "box", "address": "ours@example.com"},
+            "requests": [],
+            "contacts": [{"email": "client@example.com", "_count": {"serviceRecords": 1}}],
+            "filer": filer or (lambda *a: (_ for _ in ()).throw(AssertionError("must not file"))),
+        }
+        with patch.object(store, "inventory", return_value=self.FOLDERS), \
+                patch.object(donna, "assess", side_effect=fake_assess):
+            donna.process_job(Client(), store, work, 10)
+        return calls
+
+    def test_clean_preview_moves_nothing_and_records_the_plan(self):
         with tempfile.TemporaryDirectory() as tmp:
-            store = donna.LocalStore(tmp)
-            noise = message("<promo@example.com>", "Sale", sender="promo@shop.example")
-            client_msg = message("<client@example.com>", "Report", sender="client@example.com")
-            archived = message("<old@example.com>", "Old", sender="promo@shop.example")
-            store.save("box", "INBOX", "1", 11, noise.as_bytes(), "ours@example.com", Helper)
-            store.save("box", "INBOX", "1", 12, client_msg.as_bytes(), "ours@example.com", Helper)
-            store.save("box", "Archive", "1", 13, archived.as_bytes(), "ours@example.com", Helper)
+            store = self.clean_fixture(tmp)
+            calls = self.run_clean(store, {})
+            published = [data["packet"] for op, data in calls if op == "publish"]
+            self.assertEqual(len(published), 2)
+            self.assertFalse(any(r["state"] == "handled" for p in published for r in p["requests"]))
+            self.assertNotIn("filed", [a["kind"] for p in published for a in p["activities"]])
+            result = next(data["result"] for op, data in calls if op == "complete")
+            report = result["report"]
+            self.assertTrue(report["preview"])
+            self.assertFalse(result["cancelled"])
+            self.assertEqual([(i["folder"], i["subject"]) for i in report["filed"]], [("Newsletter", "Sale")])
+            self.assertTrue(report["filed"][0]["thread"])
+            self.assertEqual(report["needsYou"][0]["title"], "Client report")
+            self.assertEqual(report["skipped"][0]["reason"], "known contact")
+            self.assertEqual(result["coverage"]["clean"], report)
+            self.assertNotIn("remaining_threads", result["coverage"])
+            row = store.db.execute("SELECT folder FROM clean_plans WHERE job='j'").fetchall()
+            self.assertEqual([r[0] for r in row], ["Newsletter"])
+            store.db.close()
+
+    def test_clean_preview_rereviews_threads_already_assessed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = self.clean_fixture(tmp)
+            for thread, fingerprint, _, _ in store.threads("box", []):
+                store.db.execute("INSERT INTO assessments VALUES ('box',?,?)", (thread, fingerprint))
+            store.db.commit()
+            self.assertEqual(store.threads("box", []), [])
+            report = next(d["result"]["report"] for op, d in self.run_clean(store, {}) if op == "complete")
+            self.assertEqual(len(report["filed"]), 1)
+            store.db.close()
+
+    def test_approved_plan_files_and_records_each_move(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = self.clean_fixture(tmp)
+            preview = next(d["result"]["report"] for op, d in self.run_clean(store, {}) if op == "complete")
+            thread = preview["filed"][0]["thread"]
             moves = []
+            calls = self.run_clean(store, {"previewJobId": "j", "plan": [{"thread": thread, "folder": "Newsletter"}]},
+                                   filer=lambda uid, dest, mid: moves.append((uid, dest, mid)), job_id="real")
+            self.assertEqual(moves, [(11, "Newsletter", "<promo@example.com>")])
+            packet = next(d["packet"] for op, d in calls if op == "publish")
+            self.assertEqual(packet["requests"][0]["state"], "handled")
+            self.assertEqual(packet["requests"][0]["completionNote"], "Filed to Newsletter.")
+            self.assertTrue(packet["requests"][0]["sourceVersion"].endswith(":filed"))
+            self.assertIn("filed", [a["kind"] for a in packet["activities"]])
+            report = next(d["result"]["report"] for op, d in calls if op == "complete")
+            self.assertFalse(report["preview"])
+            self.assertEqual(report["filed"][0]["messages"], ["<promo@example.com>"])
+            self.assertEqual(store.filed_for("real")[0]["folder"], "Newsletter")
+            # A rerun of the same job (after a pause) never files twice.
+            again = self.run_clean(store, {"previewJobId": "j", "plan": [{"thread": thread}]}, job_id="real")
+            self.assertEqual(len(next(d["result"]["report"] for op, d in again if op == "complete")["filed"]), 1)
+            store.db.close()
 
-            def filer(uid, dest, mid):
-                moves.append((uid, dest, mid))
+    def test_plan_skips_changed_unknown_and_kept_threads(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = self.clean_fixture(tmp)
+            preview = next(d["result"]["report"] for op, d in self.run_clean(store, {}) if op == "complete")
+            thread = preview["filed"][0]["thread"]
+            store.db.execute("UPDATE clean_plans SET fingerprint='old' WHERE thread=?", (thread,))
+            store.db.commit()
+            calls = self.run_clean(store, {"previewJobId": "j", "plan": [{"thread": thread}, {"thread": "nope"}]},
+                                   job_id="r1")
+            reasons = [i["reason"] for i in next(d["result"]["report"] for op, d in calls if op == "complete")["skipped"]]
+            self.assertEqual(reasons, ["changed since the preview", "no preview record on Ripley"])
+            store.db.execute("DELETE FROM clean_plans")
+            store.db.execute("INSERT INTO kept_in_inbox VALUES ('box',?)", (thread,))
+            store.db.commit()
+            again = next(d["result"]["report"] for op, d in self.run_clean(store, {}) if op == "complete")
+            self.assertEqual(again["filed"], [])
+            self.assertIn("you moved it back to Inbox", [i["reason"] for i in again["skipped"]])
+            store.db.close()
 
-            by_sender = {
-                "promo@shop.example": [{"key": "promo", "title": "Shop sale", "category": "noise", "owner": "Donna",
-                                        "state": "needs-you", "urgent": False, "summary": "Promo", "recommendation": "File",
-                                        "nextAction": "File to Newsletter", "reply": None, "dueAt": None,
-                                        "followUpAt": None, "waitingOn": None, "fileTo": "Newsletter"}],
-                "client@example.com": [{"key": "report", "title": "Client report", "category": "client", "owner": "Donna",
-                                        "state": "needs-you", "urgent": False, "summary": "Needs reply",
-                                        "recommendation": "Draft", "nextAction": "Review draft",
-                                        "reply": "Here is the report.", "dueAt": None, "followUpAt": None,
-                                        "waitingOn": None, "fileTo": "Spam"}],
-            }
+    def test_cancel_stops_before_the_next_move_and_reports_what_moved(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = self.clean_fixture(tmp)
+            extra = message("<promo2@example.com>", "Another sale", sender="promo@shop.example")
+            store.save("box", "INBOX", "1", 14, extra.as_bytes(), "ours@example.com", Helper)
+            store.db.commit()
+            preview = next(d["result"]["report"] for op, d in self.run_clean(store, {}) if op == "complete")
+            plan = [{"thread": i["thread"]} for i in preview["filed"]]
+            self.assertEqual(len(plan), 2)
+            moves = []
+            calls = self.run_clean(store, {"previewJobId": "j", "plan": plan},
+                                   filer=lambda *a: moves.append(a), job_id="real",
+                                   heartbeat_answer=lambda data: {"cancelled": bool(moves)})
+            self.assertEqual(len(moves), 1)
+            result = next(d["result"] for op, d in calls if op == "complete")
+            self.assertTrue(result["cancelled"])
+            self.assertEqual(len(result["report"]["filed"]), 1)
+            store.db.close()
 
-            def fake_assess(messages, existing, root, contacts=None, extra=""):
-                sender = email.utils.parseaddr(messages[0]["from"])[1].lower()
-                return by_sender[sender]
+    def test_pause_mid_clean_stops_without_failing_the_job(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = self.clean_fixture(tmp)
 
+            def paused(data):
+                raise donna.DonnaAPIError("heartbeat", 409)
+            calls = self.run_clean(store, {}, heartbeat_answer=paused)
+            self.assertFalse(any(op in ("complete", "fail", "publish") for op, _ in calls))
+            store.db.close()
+
+    def test_undo_moves_recorded_mail_back_and_keeps_it_in_inbox(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = self.clean_fixture(tmp)
+            preview = next(d["result"]["report"] for op, d in self.run_clean(store, {}) if op == "complete")
+            thread = preview["filed"][0]["thread"]
+            self.run_clean(store, {"previewJobId": "j", "plan": [{"thread": thread}]},
+                           filer=lambda *a: None, job_id="real")
+            back = []
             calls = []
 
             class Client:
                 def call(self, op, **data):
                     calls.append((op, data))
                     return {}
-
-            work = {
-                "job": {"id": "j", "leaseToken": "l", "kind": "clean"},
-                "mailbox": {"id": "box", "address": "ours@example.com"},
-                "requests": [],
-                "contacts": [{"email": "client@example.com", "_count": {"serviceRecords": 1}}],
-                "filer": filer,
-            }
-            with patch.object(store, "inventory", return_value={"folders": [
-                {"folder": "INBOX", "messages": 2},
-                {"folder": "Newsletter", "messages": 10},
-            ], "gaps": []}), patch.object(donna, "assess", side_effect=fake_assess):
-                donna.process_job(Client(), store, work, 10)
-            self.assertEqual(moves, [(11, "Newsletter", "<promo@example.com>")])
-            published = [data["packet"] for op, data in calls if op == "publish"]
-            self.assertEqual(len(published), 2)
-            kinds = [activity["kind"] for packet in published for activity in packet["activities"]]
-            self.assertIn("filed", kinds)
-            self.assertIn("draft-ready", kinds)
-            self.assertNotIn("sent", kinds)
-            filed_packet = next(packet for packet in published if packet["requests"][0]["state"] == "handled")
-            self.assertEqual(filed_packet["requests"][0]["completionNote"], "Filed to Newsletter.")
-            self.assertIsNone(filed_packet["requests"][0]["draft"])
-            coverage = next(data["result"]["coverage"] for op, data in calls if op == "complete")
-            self.assertFalse(coverage["sending_enabled"])
-            self.assertEqual(coverage["mode"], "clean")
-            self.assertEqual(coverage["clean"]["filed"][0]["folder"], "Newsletter")
-            self.assertEqual(coverage["clean"]["needsYou"][0]["title"], "Client report")
-            self.assertEqual(coverage["clean"]["skipped"][0]["reason"], "known contact")
-            self.assertNotIn("remaining_threads", coverage)
+            work = {"job": {"id": "u", "leaseToken": "l", "kind": "undo",
+                            "options": {"cleanJobId": "real", "threads": [thread, "missing"]}},
+                    "mailbox": {"id": "box", "address": "ours@example.com"}, "requests": [],
+                    "unfiler": lambda folder, key: back.append((folder, key))}
+            donna.process_job(Client(), store, work, 10)
+            self.assertEqual(back, [("Newsletter", "<promo@example.com>")])
+            undo = next(d["result"]["undo"] for op, d in calls if op == "complete")
+            self.assertEqual(undo["undone"], [thread])
+            self.assertEqual(undo["failed"][0]["thread"], "missing")
+            self.assertTrue(store.kept("box", thread))
+            payload = json.loads(store.db.execute("SELECT payload FROM messages WHERE key='<promo@example.com>'").fetchone()[0])
+            self.assertEqual(payload["folder"], "INBOX")
             store.db.close()
 
     def test_clean_ignores_non_inbox_threads(self):
@@ -278,7 +391,7 @@ class WorkerTests(unittest.TestCase):
                 raise AssertionError("Archive mail must not be reviewed during Clean")
             def inventory(self, *args):
                 return {"folders": [{"folder": "Archive", "messages": 1}], "gaps": []}
-            def threads(self, *args):
+            def threads(self, *args, **kwargs):
                 return [("archived", "hash", [{"folder": "Archive", "outgoing": False}], [])]
             class DB:
                 def execute(self, *args):

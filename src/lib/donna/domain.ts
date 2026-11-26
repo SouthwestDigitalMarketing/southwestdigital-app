@@ -258,6 +258,9 @@ export function donnaActionCounts(value: unknown): DonnaActionCounts {
 
 export type CleanBarStatus = {
   id: string;
+  /** "Checking inbox" for a preview, "Cleaning inbox" when mail moves. */
+  title: string;
+  paused: boolean;
   waiting: boolean;
   total: number;
   done: number;
@@ -277,10 +280,20 @@ export function formatCleanEta(seconds: number): string {
   return hours === 1 ? "About 1 hr left" : `About ${hours} hr left`;
 }
 
+export function cleanIsPreview(options: unknown): boolean {
+  return !(
+    options &&
+    typeof options === "object" &&
+    !Array.isArray(options) &&
+    Array.isArray((options as { plan?: unknown }).plan)
+  );
+}
+
 export function cleanBarStatus(
-  job: { id: string; status: string },
+  job: { id: string; status: string; options?: unknown },
   coverage: unknown,
   now = new Date(),
+  paused = false,
 ): CleanBarStatus {
   const counts = donnaActionCounts(coverage);
   const raw =
@@ -303,7 +316,7 @@ export function cleanBarStatus(
     typeof progress.current === "string" && progress.current.trim()
       ? progress.current.trim().slice(0, 200)
       : null;
-  const waiting = job.status !== "leased";
+  const waiting = paused || job.status !== "leased";
   const percent = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
   let etaLabel: string | null = null;
   const startedAt =
@@ -312,26 +325,36 @@ export function cleanBarStatus(
     const elapsed = Math.max(1, (now.getTime() - startedAt) / 1000);
     etaLabel = formatCleanEta((elapsed / done) * (total - done));
   }
+  const title = cleanIsPreview(job.options) ? "Checking inbox" : "Cleaning inbox";
   return {
     id: job.id,
+    title,
+    paused,
     waiting,
     total,
     done,
     percent,
     current,
-    label: waiting
-      ? "Waiting for Donna"
-      : current
-        ? current
-        : "Cleaning inbox",
+    label: paused
+      ? "Paused"
+      : waiting
+        ? "Waiting for Donna"
+        : current
+          ? current
+          : title,
     countLabel: `${done.toLocaleString("en-US")} of ${total.toLocaleString("en-US")}`,
     etaLabel: waiting ? null : etaLabel,
   };
 }
 
 export type CleanReportItem = {
+  /** Worker thread id; present on filed items so they can be approved or undone. */
+  thread?: string;
   subject: string;
   from: string;
+  undone?: boolean;
+  undoPending?: boolean;
+  undoError?: string;
   folder?: string;
   waitingOn?: string;
   nextAction?: string;
@@ -339,6 +362,9 @@ export type CleanReportItem = {
 };
 
 export type CleanReport = {
+  /** True when nothing moved: the list is what Donna would file. */
+  preview: boolean;
+  cancelled: boolean;
   at: string;
   reviewed: number;
   remaining: number;
@@ -360,6 +386,16 @@ function cleanItems(value: unknown): CleanReportItem[] {
     if (!text) return [];
     return [
       {
+        thread:
+          typeof raw.thread === "string" && /^[a-f0-9]{1,64}$/.test(raw.thread)
+            ? raw.thread
+            : undefined,
+        undone: raw.undone === true || undefined,
+        undoPending: raw.undoPending === true || undefined,
+        undoError:
+          typeof raw.undoError === "string"
+            ? raw.undoError.slice(0, 200)
+            : undefined,
         subject: text.slice(0, 200),
         from: from.slice(0, 200),
         folder:
@@ -381,7 +417,11 @@ function cleanItems(value: unknown): CleanReportItem[] {
 
 export function mailboxCleanReport(value: unknown): CleanReport | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const raw = (value as { clean?: unknown }).clean;
+  return cleanReport((value as { clean?: unknown }).clean);
+}
+
+/** A clean job's own report (DonnaJob.result), the same shape the worker writes. */
+export function cleanReport(raw: unknown): CleanReport | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const c = raw as Record<string, unknown>;
   const at = typeof c.at === "string" ? c.at : "";
@@ -395,10 +435,12 @@ export function mailboxCleanReport(value: unknown): CleanReport | null {
       : 0;
   if (!at && !reviewed && !remaining && !Array.isArray(c.filed)) return null;
   return {
+    preview: c.preview === true,
+    cancelled: c.cancelled === true,
     at,
     reviewed,
     remaining,
-    filed: cleanItems(c.filed).slice(0, 50),
+    filed: cleanItems(c.filed).slice(0, 200),
     waiting: cleanItems(c.waiting).slice(0, 50),
     needsYou: cleanItems(c.needsYou).slice(0, 50),
     skipped: cleanItems(c.skipped).slice(0, 50),

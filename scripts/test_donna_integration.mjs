@@ -211,65 +211,191 @@ try {
     data: { paused: true },
   });
   assert.equal((await (await worker({ op: "claim" })).json()).work, null);
-  await db.donnaJob.create({
+  // Clean safety: pause stops cleans, cancel is reported, previews move nothing.
+  await db.donnaJob.updateMany({
+    where: { mailboxId: box.id, status: "pending" },
+    data: { status: "done" },
+  });
+  const call = async (body) => {
+    const response = await worker(body);
+    return { status: response.status, body: await response.json() };
+  };
+  const lease = (claim) => ({
+    jobId: claim.work.job.id,
+    leaseToken: claim.work.job.leaseToken,
+  });
+  const report = (extra) => ({
+    at: "2026-11-26T00:00:00Z",
+    reviewed: 1,
+    remaining: 0,
+    filed: [],
+    waiting: [],
+    needsYou: [],
+    skipped: [],
+    ...extra,
+  });
+  const previewJob = await db.donnaJob.create({
     data: {
       mailboxId: box.id,
       kind: "clean",
       eventKey: "clean:" + suffix,
+      options: { preview: true },
     },
   });
-  const cleanClaim = await (await worker({ op: "claim" })).json();
-  assert.equal(cleanClaim.work?.job?.kind, "clean");
   assert.equal(
-    (
-      await worker({
-        op: "heartbeat",
-        jobId: cleanClaim.work.job.id,
-        leaseToken: cleanClaim.work.job.leaseToken,
-      })
-    ).status,
-    200,
-    "A Clean lease must stay alive on a paused mailbox.",
+    (await call({ op: "claim" })).body.work,
+    null,
+    "Pause must stop Clean too.",
   );
-  const pendingBeforeClean = await db.donnaJob.count({
-    where: { mailboxId: box.id, status: "pending" },
+  await db.donnaMailbox.update({
+    where: { id: box.id },
+    data: { paused: false },
   });
+  const previewClaim = (await call({ op: "claim" })).body;
+  assert.equal(previewClaim.work?.job?.id, previewJob.id);
+  assert.deepEqual(previewClaim.work.job.options, { preview: true });
+  const beat = await call({ op: "heartbeat", ...lease(previewClaim) });
+  assert.equal(beat.status, 200);
+  assert.equal(beat.body.cancelled, false);
+  const thread = "ab".repeat(32);
   assert.equal(
     (
-      await worker({
+      await call({
         op: "complete",
         result: {
-          jobId: cleanClaim.work.job.id,
-          leaseToken: cleanClaim.work.job.leaseToken,
+          ...lease(previewClaim),
           coverage: {
+            clean: report({ preview: true }),
             remaining_threads: 9,
             coverage_complete: false,
-            clean: {
-              at: "2026-11-25T18:00:00Z",
-              reviewed: 1,
-              remaining: 9,
-              filed: [],
-              waiting: [],
-              needsYou: [],
-              skipped: [],
-            },
           },
+          report: report({
+            preview: true,
+            filed: [{ thread, subject: "Sale", from: "x@shop.example", folder: "Newsletter" }],
+          }),
+          cancelled: false,
         },
       })
     ).status,
     200,
   );
-  assert.equal(
-    await db.donnaJob.count({
-      where: { mailboxId: box.id, status: "pending" },
-    }),
-    pendingBeforeClean,
-    "Clean must not queue a backlog pass while the mailbox is paused.",
-  );
-  const boxAfterClean = await db.donnaMailbox.findUniqueOrThrow({
-    where: { id: box.id },
+  const previewDone = await db.donnaJob.findUniqueOrThrow({
+    where: { id: previewJob.id },
   });
-  assert.equal(boxAfterClean.coverage.clean.reviewed, 1);
+  assert.equal(previewDone.status, "done");
+  assert.equal(previewDone.result.preview, true);
+  assert.equal(previewDone.result.filed[0].thread, thread);
+  assert.equal(
+    await db.donnaJob.count({ where: { mailboxId: box.id, status: "pending" } }),
+    0,
+    "Clean must not queue a backlog pass.",
+  );
+
+  const realJob = await db.donnaJob.create({
+    data: {
+      mailboxId: box.id,
+      kind: "clean",
+      eventKey: "clean-real:" + suffix,
+      options: { previewJobId: previewJob.id, plan: [{ thread, folder: "Newsletter" }] },
+    },
+  });
+  const realClaim = (await call({ op: "claim" })).body;
+  assert.equal(realClaim.work?.job?.id, realJob.id);
+  // What cancelClean does to a running job: status only, the lease stays to report.
+  await db.donnaJob.update({ where: { id: realJob.id }, data: { status: "cancelled" } });
+  assert.equal((await call({ op: "claim" })).body.work, null);
+  const cancelBeat = await call({ op: "heartbeat", ...lease(realClaim) });
+  assert.equal(cancelBeat.status, 200);
+  assert.equal(cancelBeat.body.cancelled, true, "Heartbeat must tell the worker to stop.");
+  assert.equal(
+    (
+      await call({
+        op: "complete",
+        result: {
+          ...lease(realClaim),
+          coverage: { clean: report({}) },
+          report: report({
+            filed: [{ thread, subject: "Sale", from: "x@shop.example", folder: "Newsletter", messages: ["<s@x>"] }],
+          }),
+          cancelled: true,
+        },
+      })
+    ).status,
+    200,
+  );
+  const realDone = await db.donnaJob.findUniqueOrThrow({ where: { id: realJob.id } });
+  assert.equal(realDone.status, "cancelled");
+  assert.equal(realDone.result.cancelled, true);
+  assert.equal(realDone.result.filed.length, 1, "Moves before Cancel stay on the report.");
+
+  const failJob = await db.donnaJob.create({
+    data: { mailboxId: box.id, kind: "clean", eventKey: "clean-fail:" + suffix, options: {} },
+  });
+  const failClaim = (await call({ op: "claim" })).body;
+  assert.equal(failClaim.work?.job?.id, failJob.id);
+  await db.donnaJob.update({ where: { id: failJob.id }, data: { status: "cancelled" } });
+  assert.equal(
+    (await call({ op: "fail", result: { ...lease(failClaim), error: "stopped" } })).status,
+    200,
+  );
+  assert.equal(
+    (await db.donnaJob.findUniqueOrThrow({ where: { id: failJob.id } })).status,
+    "cancelled",
+    "A failure report must never requeue a cancelled clean.",
+  );
+
+  const pauseJob = await db.donnaJob.create({
+    data: { mailboxId: box.id, kind: "clean", eventKey: "clean-pause:" + suffix, options: {} },
+  });
+  const pauseClaim = (await call({ op: "claim" })).body;
+  assert.equal(pauseClaim.work?.job?.id, pauseJob.id);
+  await db.donnaMailbox.update({ where: { id: box.id }, data: { paused: true } });
+  assert.equal(
+    (await call({ op: "heartbeat", ...lease(pauseClaim) })).status,
+    409,
+    "Pausing mid-clean must end the worker's lease.",
+  );
+  await db.donnaJob.update({ where: { id: pauseJob.id }, data: { status: "done" } });
+  await db.donnaMailbox.update({ where: { id: box.id }, data: { paused: false } });
+
+  await db.donnaJob.update({
+    where: { id: realJob.id },
+    data: {
+      result: {
+        ...realDone.result,
+        filed: realDone.result.filed.map((i) => ({ ...i, undoPending: true })),
+      },
+    },
+  });
+  await db.donnaJob.create({
+    data: {
+      mailboxId: box.id,
+      kind: "undo",
+      eventKey: "undo:" + suffix,
+      options: { cleanJobId: realJob.id, threads: [thread] },
+    },
+  });
+  const undoClaim = (await call({ op: "claim" })).body;
+  assert.equal(undoClaim.work?.job?.kind, "undo");
+  assert.equal(
+    (
+      await call({
+        op: "complete",
+        result: {
+          ...lease(undoClaim),
+          undo: { cleanJobId: realJob.id, undone: [thread], failed: [] },
+        },
+      })
+    ).status,
+    200,
+  );
+  const afterUndo = await db.donnaJob.findUniqueOrThrow({ where: { id: realJob.id } });
+  assert.equal(afterUndo.result.filed[0].undone, true);
+  assert.equal(afterUndo.result.filed[0].undoPending, false);
+  assert.equal(
+    await db.donnaActivity.count({ where: { mailboxId: box.id, kind: "corrected" } }),
+    1,
+  );
 
   const role = "donna_rls_" + suffix;
   await db.$executeRawUnsafe(`CREATE ROLE ${role} NOLOGIN`);
@@ -297,7 +423,7 @@ try {
     await db.$executeRawUnsafe(`DROP ROLE ${role}`);
   }
   console.log(
-    "Donna integration checks passed: signed enrollment, invalid signatures, deduplication, exclusive leases, replay-safe publish, human-edit preservation, backlog recovery, pause and tenant RLS.",
+    "Donna integration checks passed: signed enrollment, invalid signatures, deduplication, exclusive leases, replay-safe publish, human-edit preservation, backlog recovery, pause stops Clean, clean preview, cancel, undo and tenant RLS.",
   );
 } finally {
   await db.donnaMailbox.delete({ where: { id: box.id } });
