@@ -48,11 +48,58 @@ export async function POST(request: Request) {
           data: { heartbeatAt: new Date() },
         });
         if (body.jobId && body.leaseToken) {
-          await lockLease(tx, auth.context, body.jobId, body.leaseToken);
+          const job = await lockLease(
+            tx,
+            auth.context,
+            body.jobId,
+            body.leaseToken,
+          );
           await tx.donnaJob.update({
             where: { id: body.jobId },
             data: { leaseUntil: new Date(Date.now() + 600_000) },
           });
+          const progress = z
+            .object({
+              total: z.number().int().nonnegative().max(100_000),
+              done: z.number().int().nonnegative().max(100_000),
+              current: z.string().max(200).nullable().optional(),
+              phase: z.string().max(40).optional(),
+              startedAt: z.string().max(40).optional(),
+            })
+            .optional()
+            .parse(body.progress);
+          if (progress) {
+            const box = await tx.donnaMailbox.findUnique({
+              where: { id: job.mailboxId },
+            });
+            const coverage =
+              box?.coverage &&
+              typeof box.coverage === "object" &&
+              !Array.isArray(box.coverage)
+                ? (box.coverage as Record<string, unknown>)
+                : {};
+            const prior =
+              coverage.cleanProgress &&
+              typeof coverage.cleanProgress === "object" &&
+              !Array.isArray(coverage.cleanProgress)
+                ? (coverage.cleanProgress as Record<string, unknown>)
+                : {};
+            await tx.donnaMailbox.update({
+              where: { id: job.mailboxId },
+              data: {
+                coverage: {
+                  ...coverage,
+                  cleanProgress: {
+                    total: progress.total,
+                    done: progress.done,
+                    current: progress.current ?? null,
+                    phase: progress.phase ?? "working",
+                    startedAt: progress.startedAt ?? prior.startedAt ?? null,
+                  },
+                },
+              },
+            });
+          }
         }
         // Reconciliation is a recovery path and also observes manual Sent activity.
         const boxes = await tx.donnaMailbox.findMany({

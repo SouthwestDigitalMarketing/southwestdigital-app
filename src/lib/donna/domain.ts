@@ -256,6 +256,79 @@ export function donnaActionCounts(value: unknown): DonnaActionCounts {
   };
 }
 
+export type CleanBarStatus = {
+  id: string;
+  waiting: boolean;
+  total: number;
+  done: number;
+  percent: number;
+  current: string | null;
+  label: string;
+  countLabel: string;
+  etaLabel: string | null;
+};
+
+export function formatCleanEta(seconds: number): string {
+  if (seconds < 60) return "Under a minute left";
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  if (minutes === 1) return "About 1 min left";
+  if (minutes < 60) return `About ${minutes} min left`;
+  const hours = Math.max(1, Math.round(minutes / 60));
+  return hours === 1 ? "About 1 hr left" : `About ${hours} hr left`;
+}
+
+export function cleanBarStatus(
+  job: { id: string; status: string },
+  coverage: unknown,
+  now = new Date(),
+): CleanBarStatus {
+  const counts = donnaActionCounts(coverage);
+  const raw =
+    coverage && typeof coverage === "object" && !Array.isArray(coverage)
+      ? (coverage as { cleanProgress?: unknown }).cleanProgress
+      : null;
+  const progress =
+    raw && typeof raw === "object" && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>)
+      : {};
+  const total =
+    typeof progress.total === "number" && Number.isFinite(progress.total)
+      ? Math.max(0, Math.trunc(progress.total))
+      : counts.inbox;
+  const done =
+    typeof progress.done === "number" && Number.isFinite(progress.done)
+      ? Math.max(0, Math.min(total, Math.trunc(progress.done)))
+      : 0;
+  const current =
+    typeof progress.current === "string" && progress.current.trim()
+      ? progress.current.trim().slice(0, 200)
+      : null;
+  const waiting = job.status !== "leased";
+  const percent = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+  let etaLabel: string | null = null;
+  const startedAt =
+    typeof progress.startedAt === "string" ? Date.parse(progress.startedAt) : NaN;
+  if (!waiting && done > 0 && total > done && Number.isFinite(startedAt)) {
+    const elapsed = Math.max(1, (now.getTime() - startedAt) / 1000);
+    etaLabel = formatCleanEta((elapsed / done) * (total - done));
+  }
+  return {
+    id: job.id,
+    waiting,
+    total,
+    done,
+    percent,
+    current,
+    label: waiting
+      ? "Waiting to start"
+      : current
+        ? current
+        : "Cleaning inbox",
+    countLabel: `${done.toLocaleString("en-US")} of ${total.toLocaleString("en-US")}`,
+    etaLabel: waiting ? null : etaLabel,
+  };
+}
+
 export type CleanReportItem = {
   subject: string;
   from: string;

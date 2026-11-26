@@ -1,4 +1,14 @@
 # SWapp handoff
+## 2026-11-25 — Richer Cleaning inbox bar (Tom: progress, n of total, ETA)
+
+- The app-wide bar now matches the production-bar shape: current work, n of
+  total, a progress track, percent, and an ETA once the worker has leased the
+  job. Queued jobs say **Waiting to start** (amber). Tapping **Cleaning…** in
+  the Donna modal closes it so the bar is visible.
+- Worker heartbeats write `coverage.cleanProgress`. No standing worker; a
+  live Clean still files Zoho Inbox mail on `--once`. Preview
+  `http://100.98.89.93:3130/donna`.
+
 ## 2026-11-25 — Clean inbox status bar (Tom: modal closes, bar until done)
 
 - Tapping **Clean inbox** closes the Donna modal. A light **Cleaning inbox**

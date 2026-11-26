@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAppBrand } from "@/lib/brands/staff";
 import { loadActiveClean } from "@/lib/donna/store";
+import { cleanBarStatus } from "@/lib/donna/domain";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,14 @@ export async function GET() {
     );
   const job = await loadActiveClean(ctx.dataContext);
   return NextResponse.json(
-    { job: job ? { id: job.id, status: job.status } : null },
+    {
+      job: job
+        ? cleanBarStatus(
+            { id: job.id, status: job.status },
+            job.mailbox.coverage,
+          )
+        : null,
+    },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

@@ -8,6 +8,8 @@ import {
   mailboxFolderTables,
   donnaActionCounts,
   mailboxCleanReport,
+  cleanBarStatus,
+  formatCleanEta,
   requestSchema,
   verifyHook,
 } from "./domain";
@@ -177,6 +179,51 @@ describe("honest health and counts", () => {
       all: 1152,
     });
   });
+  it("formats a clean ETA in short words", () => {
+    expect(formatCleanEta(20)).toBe("Under a minute left");
+    expect(formatCleanEta(60)).toBe("About 1 min left");
+    expect(formatCleanEta(8 * 60)).toBe("About 8 min left");
+    expect(formatCleanEta(70 * 60)).toBe("About 1 hr left");
+  });
+
+  it("builds the Cleaning inbox bar from job status and coverage", () => {
+    const folders = [{ folder: "INBOX", messages: 75 }];
+    expect(
+      cleanBarStatus({ id: "job-1", status: "pending" }, { folders }),
+    ).toMatchObject({
+      id: "job-1",
+      waiting: true,
+      total: 75,
+      done: 0,
+      percent: 0,
+      label: "Waiting to start",
+      countLabel: "0 of 75",
+      etaLabel: null,
+    });
+    expect(
+      cleanBarStatus(
+        { id: "job-1", status: "leased" },
+        {
+          folders,
+          cleanProgress: {
+            total: 75,
+            done: 12,
+            current: "Weekly digest",
+            startedAt: "2026-11-26T00:00:00Z",
+          },
+        },
+        new Date("2026-11-26T00:08:00Z"),
+      ),
+    ).toMatchObject({
+      waiting: false,
+      done: 12,
+      percent: 16,
+      label: "Weekly digest",
+      countLabel: "12 of 75",
+      etaLabel: "About 42 min left",
+    });
+  });
+
   it("reads a compact clean report from coverage", () => {
     expect(mailboxCleanReport({})).toBeNull();
     expect(

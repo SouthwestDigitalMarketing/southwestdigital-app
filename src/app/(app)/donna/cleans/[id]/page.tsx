@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireDonna } from "@/lib/donna/access";
 import { loadClean } from "@/lib/donna/store";
 import {
+  cleanBarStatus,
   mailboxCleanReport,
   type CleanReportItem,
 } from "@/lib/donna/domain";
@@ -53,6 +54,10 @@ export default async function CleanPage({
   if (!job) notFound();
   const active = job.status === "pending" || job.status === "leased";
   const report = mailboxCleanReport(job.mailbox.coverage);
+  const progress = cleanBarStatus(
+    { id: job.id, status: job.status },
+    job.mailbox.coverage,
+  );
   return (
     <DonnaFrame active="email">
       <header className="space-y-1">
@@ -73,10 +78,26 @@ export default async function CleanPage({
         </p>
       </header>
       {active ? (
-        <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-          Donna is going through Inbox. Filed mail, waiting items, and anything
-          that needs you will show here when this pass finishes.
-        </p>
+        <section className="space-y-2 rounded-xl border border-slate-200 bg-white p-4 text-sm">
+          <p className="text-slate-700">{progress.label}</p>
+          <p className="tabular-nums text-slate-500">
+            {progress.countLabel}
+            {progress.etaLabel ? ` · ${progress.etaLabel}` : ""}
+          </p>
+          <span
+            className="block h-1 overflow-hidden rounded-full bg-slate-200"
+            aria-hidden="true"
+          >
+            <span
+              className={`block h-1 rounded-full ${progress.waiting ? "bg-amber-500" : "bg-slate-600"}`}
+              style={{ width: `${progress.percent}%` }}
+            />
+          </span>
+          <p className="text-xs text-slate-500">
+            Filed mail, waiting items, and anything that needs you will show
+            here as this pass finishes.
+          </p>
+        </section>
       ) : report ? (
         <>
           <p className="text-sm text-slate-600">

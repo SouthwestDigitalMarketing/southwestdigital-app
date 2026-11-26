@@ -18,12 +18,14 @@ export async function DonnaFrame({
 }) {
   let mailboxId: string | null = null;
   let cleaning = false;
+  let cleanJobId: string | null = null;
   let counts = donnaActionCounts({});
   try {
     const { dataContext } = await requireDonna();
     const action = await loadDonnaAction(dataContext);
     mailboxId = action.mailboxId;
     cleaning = action.cleaning;
+    cleanJobId = action.cleanJobId;
     counts = action.counts;
   } catch (e) {
     if (!storageMissing(e)) throw e;
@@ -36,6 +38,7 @@ export async function DonnaFrame({
         <DonnaAction
           mailboxId={mailboxId}
           cleaning={cleaning}
+          cleanJobId={cleanJobId}
           counts={counts}
         />
       ) : null}
