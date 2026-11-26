@@ -10,7 +10,7 @@
 
 - The app-wide bar now matches the production-bar shape: current work, n of
   total, a progress track, percent, and an ETA once the worker has leased the
-  job. Queued jobs say **Waiting to start** (amber). Tapping **Cleaning…** in
+  job. Queued jobs say **Waiting for Donna** (amber). Tapping **Cleaning…** in
   the Donna modal closes it so the bar is visible.
 - Worker heartbeats write `coverage.cleanProgress`. No standing worker; a
   live Clean still files Zoho Inbox mail on `--once`. Preview

@@ -51,7 +51,7 @@ export function DonnaCleanBar() {
         done: 0,
         percent: 0,
         current: null,
-        label: "Waiting to start",
+        label: "Waiting for Donna",
         countLabel: `0 of ${total.toLocaleString("en-US")}`,
         etaLabel: null,
       });

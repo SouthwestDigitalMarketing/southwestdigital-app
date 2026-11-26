@@ -71,7 +71,9 @@ export default async function CleanPage({
         <p className="truncate text-sm text-slate-500">{job.mailbox.address}</p>
         <p className="text-xs text-slate-500">
           {active
-            ? "In progress"
+            ? progress.waiting
+              ? "Queued"
+              : "In progress"
             : job.status === "done"
               ? `Finished ${shortTime(job.completedAt)}`
               : job.status}
@@ -94,8 +96,9 @@ export default async function CleanPage({
             />
           </span>
           <p className="text-xs text-slate-500">
-            Filed mail, waiting items, and anything that needs you will show
-            here as this pass finishes.
+            {progress.waiting
+              ? "You do not need to do anything. This starts when Donna is running."
+              : "Filed mail, waiting items, and anything that needs you will show here as this pass finishes."}
           </p>
         </section>
       ) : report ? (

@@ -197,7 +197,7 @@ describe("honest health and counts", () => {
       total: 75,
       done: 0,
       percent: 0,
-      label: "Waiting to start",
+      label: "Waiting for Donna",
       countLabel: "0 of 75",
       etaLabel: null,
     });

@@ -320,7 +320,7 @@ export function cleanBarStatus(
     percent,
     current,
     label: waiting
-      ? "Waiting to start"
+      ? "Waiting for Donna"
       : current
         ? current
         : "Cleaning inbox",

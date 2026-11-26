@@ -19,7 +19,8 @@ client/sales mail. The broader build sequence is in
   counts; only Clean inbox is enabled. Tapping Clean inbox closes the modal
   and shows a light **Cleaning inbox** bar at the top of every app screen
   until that job finishes: what it is on, n of total, a progress track, and
-  an ETA once the worker has started. Tapping **Cleaning…** in the modal
+  an ETA once Donna is running. Queued jobs say **Waiting for Donna**; the
+  operator does not need to tap anything else. Tapping **Cleaning…** in the modal
   closes it. Tapping the bar opens `/donna/cleans/[id]`.
 - `/donna/email/work`: two requests per page; Needs you, Working, Waiting and
   Handled are filters here, not top-level Donna tabs.
