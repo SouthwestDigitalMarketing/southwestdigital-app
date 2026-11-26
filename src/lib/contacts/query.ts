@@ -48,7 +48,11 @@ export function contactSearchWhere(args: {
     and.push({ brandLinks: { some: { relatedBrandId: args.relatedBrandId } } });
   }
 
-  if (args.relationship === "close-friend" || args.relationship === "friend") {
+  if (
+    args.relationship &&
+    args.relationship !== "all" &&
+    args.relationship !== "client"
+  ) {
     and.push({ tagLinks: { some: { tag: { key: args.relationship } } } });
   }
 

@@ -26,7 +26,9 @@ describe("parseTagKeys", () => {
 });
 
 describe("parseRelationship", () => {
-  it("accepts Close friend, Friend, and Client", () => {
+  it("accepts Close family, Family, Close friend, Friend, and Client", () => {
+    expect(parseRelationship("close-family")).toBe("close-family");
+    expect(parseRelationship("family")).toBe("family");
     expect(parseRelationship("close-friend")).toBe("close-friend");
     expect(parseRelationship("friend")).toBe("friend");
     expect(parseRelationship("client")).toBe("client");
