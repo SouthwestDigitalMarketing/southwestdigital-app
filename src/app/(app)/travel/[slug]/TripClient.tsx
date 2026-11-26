@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import {
   AUTO_PHOTO_SECTIONS,
@@ -89,7 +90,7 @@ export function TripClient({
             total={focusTotal}
             totalLabel={totals.planned > 0 ? "Planned trip budget" : "Flight + monthly stay estimate"}
           />
-          <TripNextUp plan={plan} today={today} />
+          <TripPrepChecklist slug={slug} plan={plan} today={today} />
           <TripHeader slug={slug} details={details} summary={plan.summary} days={plan.days} compact />
         </>
       ) : (
@@ -342,47 +343,101 @@ function FocusCard({
   );
 }
 
-function TripNextUp({ plan, today }: { plan: TripPlan; today: string }) {
-  const passport = plan.sections.documents.find((item) => String(item.document ?? "").toLowerCase().includes("passport"));
-  const nextDocument = plan.sections.documents.find(
-    (item) => !String(item.document ?? "").toLowerCase().includes("passport") && (item.status === "Need it" || item.status === "Applied"),
-  );
-  const nextHome = plan.sections.home.find((item) => item.done !== true);
-  const passportStatus = passport ? String(passport.status || "Status not set") : "Not added";
-  // A blank expiry is "not entered yet", not expired.
-  const passportExpired = Boolean(passport && typeof passport.expires === "string" && passport.expires && passport.expires < today);
-  const passportUrgent = passportExpired || passport?.status === "Need it" || !passport;
+function TripPrepChecklist({ slug, plan, today }: { slug: string; plan: TripPlan; today: string }) {
+  const router = useRouter();
+  const { pending, error, run } = useChange(slug);
+  const documents = plan.sections.documents;
+  const homeTasks = plan.sections.home;
+  const total = documents.length + homeTasks.length;
+  const done = documents.filter((item) => item.status === "Have it" || item.status === "Not needed").length +
+    homeTasks.filter((item) => item.done === true).length;
+
   return (
-    <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="next-up-title">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="trip-prep-title">
+      <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h2 id="next-up-title" className="text-base font-semibold text-slate-900">Next up</h2>
-          <p className="mt-0.5 text-sm text-slate-500">One small step to keep the trip moving.</p>
+          <h2 id="trip-prep-title" className="text-lg font-semibold tracking-tight text-slate-900">Trip-prep checklist</h2>
+          <p className="mt-0.5 text-sm text-slate-500">Documents and tasks to handle at home.</p>
         </div>
-        <span className={`rounded-full px-3 py-1 text-xs font-medium ${passportUrgent ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-700"}`}>
-          {passportExpired ? "Passport expired" : `Passport · ${passportStatus}`}
-        </span>
+        <p className="text-sm text-slate-500">{done} of {total} ready</p>
       </div>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        {nextDocument ? (
-          <a href="#documents" className="ui-focus-ring rounded-xl bg-slate-50 p-3 hover:bg-slate-100">
-            <span className="block text-xs text-slate-500">Document</span>
-            <span className="mt-1 block text-sm font-medium text-slate-900">{String(nextDocument.document ?? "Review travel documents")}</span>
-            <span className="mt-1 block text-xs text-slate-500">{String(nextDocument.status ?? "Status not set")} →</span>
-          </a>
-        ) : null}
-        {nextHome ? (
-          <a href="#home" className="ui-focus-ring rounded-xl bg-slate-50 p-3 hover:bg-slate-100">
-            <span className="block text-xs text-slate-500">Home checklist</span>
-            <span className="mt-1 block text-sm font-medium text-slate-900">{String(nextHome.task ?? nextHome.item ?? "Review your home checklist")}</span>
-            <span className="mt-1 block text-xs text-slate-500">Open checklist →</span>
-          </a>
-        ) : null}
-        {!nextDocument && !nextHome ? <p className="text-sm text-slate-600">Your checklist is clear for now.</p> : null}
-      </div>
-      <p className="sr-only">Passport status: {passportStatus}{passport?.expires ? `, expires ${String(passport.expires)}` : ""}.</p>
+
+      {total ? (
+        <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
+          <table className="w-full table-fixed text-left text-sm">
+            <thead className="bg-slate-50 text-xs text-slate-500">
+              <tr>
+                <th scope="col" className="w-[50%] px-3 py-2 font-medium sm:w-[58%]">Item</th>
+                <th scope="col" className="w-[30%] px-2 py-2 font-medium sm:w-[24%]">Status</th>
+                <th scope="col" className="w-[20%] px-2 py-2 font-medium">Due / expiry</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {documents.map((item) => {
+                const expires = typeof item.expires === "string" ? item.expires : "";
+                const expired = Boolean(expires && expires < today && item.status !== "Not needed");
+                const date = typeof item.due === "string" && item.due ? item.due : expires;
+                return (
+                  <tr key={`document-${item.id}`} className="align-middle">
+                    <th scope="row" className="px-3 py-2.5 font-normal">
+                      <span className="block text-[10px] text-slate-500">Document</span>
+                      <Link href={itemHref(slug, "documents", item.id)} className="ui-focus-ring block break-words font-medium text-slate-900 hover:underline">
+                        {String(item.document ?? "Untitled document")}
+                      </Link>
+                    </th>
+                    <td className="px-2 py-2.5">
+                      <span className={`inline-flex max-w-full whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium ${expired ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-700"}`}>
+                        {expired ? "Expired" : String(item.status || "Set status")}
+                      </span>
+                    </td>
+                    <td className="px-2 py-2.5 text-xs text-slate-600">
+                      {date ? <time dateTime={date}>{shortDate(date)}</time> : <span aria-label="No date">—</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+              {homeTasks.map((item) => (
+                <tr key={`home-${item.id}`} className="align-middle">
+                  <th scope="row" className="px-3 py-2.5 font-normal">
+                    <span className="block text-[10px] text-slate-500">At home</span>
+                    <Link href={itemHref(slug, "home", item.id)} className="ui-focus-ring block break-words font-medium text-slate-900 hover:underline">
+                      {String(item.task ?? "Untitled task")}
+                    </Link>
+                  </th>
+                  <td className="px-2 py-2.5">
+                    <label className="flex items-center gap-1.5 text-xs text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={item.done === true}
+                        disabled={pending}
+                        aria-label={`Mark ${String(item.task ?? "task")} done`}
+                        onChange={(event) => run(
+                          { kind: "save", section: "home", item: { ...item, done: event.target.checked } },
+                          () => router.refresh(),
+                        )}
+                      />
+                      {item.done === true ? "Done" : "To do"}
+                    </label>
+                  </td>
+                  <td className="px-2 py-2.5 text-xs text-slate-600">
+                    {typeof item.due === "string" && item.due ? <time dateTime={item.due}>{shortDate(item.due)}</time> : <span aria-label="No date">—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="mt-4 rounded-xl bg-slate-50 px-4 py-5 text-center text-sm text-slate-600">Your trip-prep checklist is clear.</p>
+      )}
+      {error ? <p role="alert" className="mt-3 text-sm text-red-700">{error}</p> : null}
     </section>
   );
+}
+
+function shortDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(`${value}T12:00:00`));
 }
 
 function SectionBlock({
