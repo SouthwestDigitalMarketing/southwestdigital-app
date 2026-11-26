@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { STEP_FOLDERS, type Bucket } from "@/lib/donna/domain";
+import type { Bucket } from "@/lib/donna/domain";
 
 /**
  * Step 1's gate: every bucket with a choice (default Leave in Inbox) and its emails,
@@ -10,11 +10,14 @@ import { STEP_FOLDERS, type Bucket } from "@/lib/donna/domain";
 export function BucketChooser({
   jobId,
   buckets,
+  folders,
   blocked,
   action,
 }: {
   jobId: string;
   buckets: Bucket[];
+  /** STEP_FOLDERS, passed in so this client file does not import server code. */
+  folders: readonly string[];
   blocked: string | null;
   action: (form: FormData) => Promise<void>;
 }) {
@@ -69,7 +72,7 @@ export function BucketChooser({
                     Move to {bucket.suggest} (Donna suggests)
                   </option>
                 ) : null}
-                {STEP_FOLDERS.filter((f) => f !== bucket.suggest).map((f) => (
+                {folders.filter((f) => f !== bucket.suggest).map((f) => (
                   <option key={f} value={f}>
                     Move to {f}
                   </option>

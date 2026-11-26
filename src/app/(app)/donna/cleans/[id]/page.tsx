@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireDonna } from "@/lib/donna/access";
 import { loadClean } from "@/lib/donna/store";
 import {
+  STEP_FOLDERS,
   cleanBarStatus,
   cleanBuckets,
   cleanIsPreview,
@@ -339,6 +340,7 @@ export default async function CleanPage({
             <BucketChooser
               jobId={job.id}
               buckets={cleanBuckets(job.result)}
+              folders={STEP_FOLDERS}
               blocked={
                 paused
                   ? "Donna is paused. Resume her on the Overview to start step 2."
