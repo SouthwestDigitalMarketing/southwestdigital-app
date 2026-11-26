@@ -526,11 +526,23 @@ try {
   await expect(choose).toContainText("Money and legal (1)");
   await expect(page.getByRole("img", { name: "Why: Money or legal trouble" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Start step 3" })).toBeDisabled();
-  await page.getByLabel("What to do with Newsletter").selectOption("Newsletter");
-  await page.getByRole("checkbox", { name: /Include Example sale B/ }).uncheck();
-  await page.getByLabel("What to do with Clients").selectOption("tag:Archive");
+  // Every email has its own action, set to Donna's pick.
+  await expect(page.getByLabel("Action for Example sale A")).toHaveValue("Newsletter");
+  await expect(page.getByLabel("Action for Example progress update")).toHaveValue("tag");
+  await expect(page.getByLabel("Action for Example final notice")).toHaveValue("leave");
+  // Bucket header: select all, then set the selected rows at once.
+  await page.getByLabel("Select all in Money and legal").check();
+  await page.getByLabel("Set selected in Money and legal to").selectOption("Spam");
+  await page.getByRole("button", { name: "Apply" }).first().click();
+  await expect(page.getByLabel("Action for Example final notice")).toHaveValue("Spam");
+  await page.getByLabel("Select all in Money and legal").uncheck();
+  // Tick what to do: the whole Newsletter bucket but one, and the client email.
+  await page.getByLabel("Select all in Newsletter").check();
+  await page.getByRole("checkbox", { name: /Do Example sale B/ }).uncheck();
+  await page.getByLabel("Action for Example progress update").selectOption("tag:Archive");
+  await page.getByRole("checkbox", { name: /Do Example progress update/ }).check();
   await expect(
-    page.getByText("Step 3 will tag with the client name: 1; move to Archive: 1; move to Newsletter: 1. Everything else stays as it is."),
+    page.getByText("Step 3 will tag the client: 1; move to Archive: 1; move to Newsletter: 1. Unticked emails stay as they are."),
   ).toBeVisible();
   await page.getByRole("button", { name: "Start step 3" }).click();
   const stepTwo = await (async () => {
