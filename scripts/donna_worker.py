@@ -121,12 +121,28 @@ class LocalStore:
             raise ReviewBudgetReached("Daily review limit reached; work remains queued for the next budget window.")
         if background and self.background_limit is not None:
             used = self.db.execute("SELECT attempts FROM review_budget WHERE day=?", (day + ":background",)).fetchone()
-            if used and used[0] >= self.background_limit:
+            if (used[0] if used else 0) >= self.background_limit:
                 raise ReviewBudgetReached("Daily history review limit reached; new mail still gets reviewed.")
             self.db.execute("INSERT INTO review_budget VALUES (?,1) ON CONFLICT(day) DO UPDATE SET attempts=attempts+1",
                             (day + ":background",))
         self.db.execute("INSERT INTO review_budget VALUES (?,1) ON CONFLICT(day) DO UPDATE SET attempts=attempts+1", (day,))
         self.db.commit()
+
+    def usage(self):
+        """Today's review counts, sent with heartbeats so SWapp can show them."""
+        day = dt.datetime.now(UTC).date().isoformat()
+        rows = dict(self.db.execute("SELECT day, attempts FROM review_budget WHERE day IN (?,?)",
+                                    (day, day + ":background")).fetchall())
+        return {"day": day, "reviews": rows.get(day, 0), "history": rows.get(day + ":background", 0)}
+
+    def apply_settings(self, settings):
+        """Tom's limits from SWapp override the command-line defaults."""
+        if not isinstance(settings, dict):
+            return
+        if isinstance(settings.get("dailyReviews"), int):
+            self.daily_limit = max(0, min(2000, settings["dailyReviews"]))
+        if isinstance(settings.get("historyReviews"), int):
+            self.background_limit = max(0, min(2000, settings["historyReviews"]))
 
     def record_failure(self, mailbox, thread, fingerprint, reason):
         self.db.execute("INSERT OR REPLACE INTO review_failures VALUES (?,?,?,?,?)",
@@ -793,6 +809,8 @@ def listener_state(client):
 
 def process_job(client, store, work, max_threads, clean_threads=100):
     job = work["job"]
+    if hasattr(store, "apply_settings"):
+        store.apply_settings(work.get("settings"))
     if job.get("kind") == "undo":
         return process_undo(client, store, work)
     last_heartbeat = [0]
@@ -804,8 +822,11 @@ def process_job(client, store, work, max_threads, clean_threads=100):
         if force or time.monotonic() - last_heartbeat[0] > 20:
             payload = dict(progress) if job.get("kind") == "clean" and progress.get("total") else None
             try:
+                extra = {"progress": payload} if payload is not None else {}
+                if hasattr(store, "usage"):
+                    extra["stats"] = store.usage()
                 answer = client.call("heartbeat", jobId=job["id"], leaseToken=job["leaseToken"],
-                                     listener=listener_state(client), **({"progress": payload} if payload is not None else {}))
+                                     listener=listener_state(client), **extra)
             except DonnaAPIError as error:
                 if error.status == 409:
                     raise LeaseLost("Job was paused or reclaimed; stopping.") from None
@@ -1082,7 +1103,9 @@ def main():
         while True:
             try:
                 if time.monotonic() - last_heartbeat > 25:
-                    client.call("heartbeat", listener=listener_state(client))
+                    answer = client.call("heartbeat", listener=listener_state(client), stats=store.usage())
+                    if isinstance(answer, dict):
+                        store.apply_settings(answer.get("settings"))
                     last_heartbeat = time.monotonic()
                 work = client.call("claim")["work"]
                 if work:

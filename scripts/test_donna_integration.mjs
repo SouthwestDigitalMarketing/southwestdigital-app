@@ -405,6 +405,35 @@ try {
     1,
   );
 
+  // Tom's controls: history off holds background jobs; heartbeats carry usage back.
+  await db.donnaJob.updateMany({
+    where: { mailboxId: box.id, status: { in: ["pending", "leased"] } },
+    data: { status: "done" },
+  });
+  await db.donnaMailbox.update({
+    where: { id: box.id },
+    data: { paused: false, settings: { history: false, dailyReviews: 300, historyReviews: 0 } },
+  });
+  await db.donnaJob.create({
+    data: { mailboxId: box.id, kind: "backlog", eventKey: "held:" + suffix },
+  });
+  assert.equal((await call({ op: "claim" })).body.work, null, "History off holds history passes.");
+  const quietClean = await db.donnaJob.create({
+    data: { mailboxId: box.id, kind: "clean", eventKey: "idle:" + suffix, options: { auto: true } },
+  });
+  const settingsClaim = (await call({ op: "claim" })).body;
+  assert.equal(settingsClaim.work?.job?.id, quietClean.id, "Inbox cleans still run.");
+  assert.deepEqual(settingsClaim.work.settings, { dailyReviews: 300, historyReviews: 0, history: false });
+  const usageBeat = await call({
+    op: "heartbeat",
+    ...lease(settingsClaim),
+    stats: { day: "2026-11-26", reviews: 7, history: 2 },
+  });
+  assert.equal(usageBeat.body.settings.dailyReviews, 300);
+  const withUsage = await db.donnaMailbox.findUniqueOrThrow({ where: { id: box.id } });
+  assert.equal(withUsage.coverage.worker.reviews, 7);
+  await db.donnaMailbox.update({ where: { id: box.id }, data: { paused: true } });
+
   const role = "donna_rls_" + suffix;
   await db.$executeRawUnsafe(`CREATE ROLE ${role} NOLOGIN`);
   try {
@@ -431,7 +460,7 @@ try {
     await db.$executeRawUnsafe(`DROP ROLE ${role}`);
   }
   console.log(
-    "Donna integration checks passed: signed enrollment, invalid signatures, deduplication, exclusive leases, replay-safe publish, human-edit preservation, backlog recovery, pause stops Clean, clean preview, cancel, undo and tenant RLS.",
+    "Donna integration checks passed: signed enrollment, invalid signatures, deduplication, exclusive leases, replay-safe publish, human-edit preservation, backlog recovery, pause stops Clean, clean preview, cancel, undo, history switch, usage reporting and tenant RLS.",
   );
 } finally {
   await db.donnaMailbox.delete({ where: { id: box.id } });

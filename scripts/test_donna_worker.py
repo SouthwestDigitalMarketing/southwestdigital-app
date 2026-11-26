@@ -370,6 +370,20 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual((report["reviewed"], report["filed"]), (0, []))
             store.db.close()
 
+    def test_limits_from_swapp_override_defaults_and_usage_is_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = donna.LocalStore(tmp)
+            store.apply_settings({"dailyReviews": 2, "historyReviews": 0, "history": False})
+            self.assertEqual((store.daily_limit, store.background_limit), (2, 0))
+            with self.assertRaisesRegex(RuntimeError, "history review limit"):
+                store.reserve_review(background=True)
+            store.reserve_review()
+            usage = store.usage()
+            self.assertEqual((usage["reviews"], usage["history"]), (1, 0))
+            store.apply_settings(None)
+            self.assertEqual(store.daily_limit, 2)
+            store.db.close()
+
     def test_unreadable_attachment_blocks_filing_only_when_mail_could_matter(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = donna.LocalStore(tmp)
