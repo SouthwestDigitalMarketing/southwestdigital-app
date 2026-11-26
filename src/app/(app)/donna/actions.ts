@@ -173,11 +173,13 @@ export async function updateDonnaSettings(form: FormData) {
       dailyReviews: z.coerce.number().int().min(0).max(2000).optional(),
       historyReviews: z.coerce.number().int().min(0).max(2000).optional(),
       history: z.enum(["on", "off"]).optional(),
+      inboxZero: z.enum(["on", "off"]).optional(),
     })
     .parse({
       dailyReviews: form.get("dailyReviews") ?? undefined,
       historyReviews: form.get("historyReviews") ?? undefined,
       history: form.get("history") ?? undefined,
+      inboxZero: form.get("inboxZero") ?? undefined,
     });
   await withBrandDataTransaction(dataContext, async (tx) => {
     const box = await tx.donnaMailbox.findFirstOrThrow({
@@ -192,6 +194,7 @@ export async function updateDonnaSettings(form: FormData) {
         ? { historyReviews: input.historyReviews }
         : {}),
       ...(input.history ? { history: input.history === "on" } : {}),
+      ...(input.inboxZero ? { inboxZero: input.inboxZero === "on" } : {}),
     };
     await tx.donnaMailbox.update({
       where: { id: box.id },
@@ -201,7 +204,7 @@ export async function updateDonnaSettings(form: FormData) {
       tx,
       box.id,
       session.user.id,
-      `Settings: ${next.dailyReviews} reviews a day, history ${next.history ? `on (up to ${next.historyReviews})` : "off"}.`,
+      `Settings: ${next.dailyReviews} reviews a day, history ${next.history ? `on (up to ${next.historyReviews})` : "off"}, inbox zero ${next.inboxZero ? "on" : "off"}.`,
     );
   });
   refresh();

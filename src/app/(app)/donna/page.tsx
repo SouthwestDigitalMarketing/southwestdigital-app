@@ -238,6 +238,17 @@ export default async function DonnaPage({
             </select>
           </label>
           <label className="flex items-center justify-between gap-3">
+            <span>Empty the Inbox (Archive what she has read)</span>
+            <select
+              name="inboxZero"
+              defaultValue={settings.inboxZero ? "on" : "off"}
+              className="rounded-md border border-slate-200 px-2 py-1"
+            >
+              <option value="on">On</option>
+              <option value="off">Off</option>
+            </select>
+          </label>
+          <label className="flex items-center justify-between gap-3">
             <span>Read older mail in the background</span>
             <select
               name="history"

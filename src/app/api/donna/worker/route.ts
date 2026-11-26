@@ -375,7 +375,15 @@ export async function POST(request: Request) {
               "backlog",
               `backlog:${job.id}`,
             );
-            if (
+            if (coverage.budget_reached === true) {
+              // Daily limit hit: try again after the UTC day turns over (6 pm Central).
+              const tomorrow = new Date();
+              tomorrow.setUTCHours(24, 5, 0, 0);
+              await tx.donnaJob.update({
+                where: { id: next.id },
+                data: { nextAttemptAt: tomorrow },
+              });
+            } else if (
               (Array.isArray(coverage.gaps) && coverage.gaps.length) ||
               (Number(coverage.deferred_threads ?? 0) > 0 &&
                 Number(coverage.ready_threads ?? 0) === 0)

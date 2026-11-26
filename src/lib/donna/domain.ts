@@ -532,12 +532,15 @@ export type DonnaSettings = {
   historyReviews: number;
   /** Background reading of older mail on or off. Inbox cleans always run. */
   history: boolean;
+  /** Inbox zero: everything Donna has read leaves Inbox (rest to Archive). */
+  inboxZero: boolean;
 };
 
 export const DONNA_SETTING_DEFAULTS: DonnaSettings = {
   dailyReviews: 500,
   historyReviews: 60,
   history: true,
+  inboxZero: true,
 };
 
 function boundedInt(value: unknown, fallback: number) {
@@ -561,6 +564,7 @@ export function donnaSettings(raw: unknown): DonnaSettings {
       DONNA_SETTING_DEFAULTS.historyReviews,
     ),
     history: typeof s.history === "boolean" ? s.history : true,
+    inboxZero: typeof s.inboxZero === "boolean" ? s.inboxZero : true,
   };
 }
 
