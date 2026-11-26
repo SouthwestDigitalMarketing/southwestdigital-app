@@ -22,6 +22,7 @@ export async function GET() {
             job.mailbox.coverage,
             new Date(),
             job.mailbox.paused,
+            job.mailbox.heartbeatAt,
           )
         : null,
     },

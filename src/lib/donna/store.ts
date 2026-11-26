@@ -100,7 +100,9 @@ export async function loadActiveClean(context: BrandDataContext) {
         id: true,
         status: true,
         options: true,
-        mailbox: { select: { coverage: true, paused: true } },
+        mailbox: {
+          select: { coverage: true, paused: true, heartbeatAt: true },
+        },
       },
     }),
   );
@@ -116,7 +118,13 @@ export async function loadClean(context: BrandDataContext, id: string) {
       },
       include: {
         mailbox: {
-          select: { id: true, address: true, coverage: true, paused: true },
+          select: {
+            id: true,
+            address: true,
+            coverage: true,
+            paused: true,
+            heartbeatAt: true,
+          },
         },
       },
     });

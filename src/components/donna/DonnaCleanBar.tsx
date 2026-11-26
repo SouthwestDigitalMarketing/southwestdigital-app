@@ -49,6 +49,7 @@ export function DonnaCleanBar() {
         id: detail.jobId,
         title: "Checking inbox",
         paused: false,
+        offline: false,
         waiting: true,
         total,
         done: 0,
