@@ -199,7 +199,7 @@ export function TripClient({
             <TripPrepChecklist slug={slug} plan={plan} today={today} />
           </>
         ) : null}
-        {activeTab === "budget" ? renderSections(["budget"]) : null}
+        {activeTab === "budget" ? renderSections(["budget"], true) : null}
         {activeTab === "itinerary" ? renderSections(["itinerary"]) : null}
         {activeTab === "places" ? (
           <>
@@ -565,7 +565,7 @@ function SectionBlock({
           )}
         </div>
       </div>
-      {totals ? (
+      {totals && !tableLayout ? (
         <p className="mt-2 text-sm text-slate-700">
           Planned <strong>{formatMoney(Math.round(totals.planned * 100) / 100)}</strong> · Actual{" "}
           <strong>{formatMoney(Math.round(totals.actual * 100) / 100)}</strong>
@@ -599,6 +599,15 @@ function SectionBlock({
       {error ? <p className="mt-2 text-sm text-red-700">{error}</p> : null}
 
       {tableLayout ? (
+        section.key === "budget" ? (
+          <BudgetTable
+            slug={slug}
+            items={shown}
+            planned={totals?.planned ?? 0}
+            actual={totals?.actual ?? 0}
+            empty={!items.length && !adding}
+          />
+        ) : (
         <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200 bg-white">
           <table className="w-full min-w-[600px] text-left text-xs">
             <thead className="text-[10px] uppercase tracking-wide text-slate-500">
@@ -625,6 +634,7 @@ function SectionBlock({
             </tbody>
           </table>
         </div>
+        )
       ) : (
         <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {shown.map((item) => (
@@ -660,6 +670,85 @@ function SectionBlock({
         </div>
       ) : null}
     </section>
+  );
+}
+
+function moneyCell(value: unknown) {
+  return typeof value === "number" ? formatMoney(value) : "—";
+}
+
+function BudgetTable({
+  slug,
+  items,
+  planned,
+  actual,
+  empty,
+}: {
+  slug: string;
+  items: TripItem[];
+  planned: number;
+  actual: number;
+  empty: boolean;
+}) {
+  const plannedTotal = formatMoney(Math.round(planned * 100) / 100) || "$0";
+  const actualTotal = formatMoney(Math.round(actual * 100) / 100) || "$0";
+  return (
+    <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <table className="w-full text-left text-xs">
+        <thead className="text-[10px] uppercase tracking-wide text-slate-500">
+          <tr className="border-b border-slate-200">
+            <th scope="col" className="px-2 py-2 font-semibold">Item</th>
+            <th scope="col" className="hidden px-2 py-2 font-semibold sm:table-cell">Category</th>
+            <th scope="col" className="px-2 py-2 text-right font-semibold">Planned</th>
+            <th scope="col" className="px-2 py-2 text-right font-semibold">Actual</th>
+            <th scope="col" className="hidden px-2 py-2 font-semibold md:table-cell">Notes</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {items.map((item) => {
+            const title = String(item.item ?? "Untitled item");
+            const category = String(item.category || "");
+            const notes = typeof item.notes === "string" ? item.notes : "";
+            return (
+              <tr key={`${item.id}:${JSON.stringify(item)}`} className="h-10 align-middle">
+                <th scope="row" className="max-w-[40vw] px-2 py-1 font-normal sm:max-w-none">
+                  <Link
+                    href={itemHref(slug, "budget", item.id)}
+                    title={title}
+                    className="ui-focus-ring block truncate font-medium text-slate-900 hover:underline"
+                  >
+                    {title}
+                  </Link>
+                  {category ? <p className="truncate text-slate-500 sm:hidden">{category}</p> : null}
+                </th>
+                <td className="hidden whitespace-nowrap px-2 py-1 text-slate-600 sm:table-cell">{category || "—"}</td>
+                <td className="whitespace-nowrap px-2 py-1 text-right tabular-nums text-slate-900">{moneyCell(item.planned)}</td>
+                <td className="whitespace-nowrap px-2 py-1 text-right tabular-nums text-slate-900">{moneyCell(item.actual)}</td>
+                <td className="hidden max-w-0 truncate px-2 py-1 text-slate-500 md:table-cell" title={notes || undefined}>
+                  {notes || <span aria-label="No notes">—</span>}
+                </td>
+              </tr>
+            );
+          })}
+          {empty ? (
+            <tr>
+              <td colSpan={5} className="px-2 py-4 text-center text-slate-500">Nothing here yet.</td>
+            </tr>
+          ) : null}
+        </tbody>
+        {empty ? null : (
+          <tfoot>
+            <tr className="border-t border-slate-200 text-slate-900">
+              <th scope="row" className="px-2 py-2 font-semibold">Total</th>
+              <td className="hidden sm:table-cell" />
+              <td className="whitespace-nowrap px-2 py-2 text-right font-semibold tabular-nums">{plannedTotal}</td>
+              <td className="whitespace-nowrap px-2 py-2 text-right font-semibold tabular-nums">{actualTotal}</td>
+              <td className="hidden md:table-cell" />
+            </tr>
+          </tfoot>
+        )}
+      </table>
+    </div>
   );
 }
 
