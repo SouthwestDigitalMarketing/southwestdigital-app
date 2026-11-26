@@ -67,7 +67,8 @@ const NAV: Array<{
   { label: "Local SEO", href: "/local-seo", icon: MapPinned },
   { label: "Website", href: "/website", icon: Globe },
   { label: "Showrunner", href: "/showrunner", icon: Clapperboard },
-  { label: "Travel", href: "/travel", icon: Plane },
+  // Focus on one trip (Tom, 2026-11-26): the Travel menu is labelled Japan and opens that trip.
+  { label: "Japan", href: "/travel", icon: Plane },
   { label: "Reviews", href: "/reviews", icon: Star, dividerAfter: true },
   { label: "Contacts", href: "/contacts", icon: Contact },
   { label: "CRM", href: "/pipeline", icon: TrendingUp },
