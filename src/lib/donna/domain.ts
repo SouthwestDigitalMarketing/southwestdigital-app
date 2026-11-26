@@ -286,9 +286,9 @@ export function formatCleanEta(seconds: number): string {
 export function cleanIsPreview(options: unknown): boolean {
   return Boolean(
     options &&
-      typeof options === "object" &&
-      !Array.isArray(options) &&
-      (options as { preview?: unknown }).preview === true,
+    typeof options === "object" &&
+    !Array.isArray(options) &&
+    (options as { preview?: unknown }).preview === true,
   );
 }
 
@@ -326,15 +326,20 @@ export function cleanBarStatus(
     !paused &&
     heartbeatAt !== undefined &&
     (!heartbeatAt || now.getTime() - heartbeatAt.getTime() > 90_000);
-  const percent = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+  const percent =
+    total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
   let etaLabel: string | null = null;
   const startedAt =
-    typeof progress.startedAt === "string" ? Date.parse(progress.startedAt) : NaN;
+    typeof progress.startedAt === "string"
+      ? Date.parse(progress.startedAt)
+      : NaN;
   if (!waiting && done > 0 && total > done && Number.isFinite(startedAt)) {
     const elapsed = Math.max(1, (now.getTime() - startedAt) / 1000);
     etaLabel = formatCleanEta((elapsed / done) * (total - done));
   }
-  const title = cleanIsPreview(job.options) ? "Checking inbox" : "Cleaning inbox";
+  const title = cleanIsPreview(job.options)
+    ? "Checking inbox"
+    : "Cleaning inbox";
   return {
     id: job.id,
     title,
@@ -350,10 +355,10 @@ export function cleanBarStatus(
       : offline
         ? "Donna is not running"
         : waiting
-        ? "Waiting for Donna"
-        : current
-          ? current
-          : title,
+          ? "Waiting for Donna"
+          : current
+            ? current
+            : title,
     countLabel: `${done.toLocaleString("en-US")} of ${total.toLocaleString("en-US")}`,
     etaLabel: waiting ? null : etaLabel,
   };
@@ -518,4 +523,137 @@ export function activityCounts(
       groups.get(key)?.size ?? 0,
     ]),
   );
+}
+
+export type DonnaSettings = {
+  /** Model reviews Donna may use per UTC day. */
+  dailyReviews: number;
+  /** Of those, the most that background history reading may use. */
+  historyReviews: number;
+  /** Background reading of older mail on or off. Inbox cleans always run. */
+  history: boolean;
+};
+
+export const DONNA_SETTING_DEFAULTS: DonnaSettings = {
+  dailyReviews: 500,
+  historyReviews: 60,
+  history: true,
+};
+
+function boundedInt(value: unknown, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(0, Math.min(2000, Math.trunc(value)))
+    : fallback;
+}
+
+export function donnaSettings(raw: unknown): DonnaSettings {
+  const s =
+    raw && typeof raw === "object" && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>)
+      : {};
+  return {
+    dailyReviews: boundedInt(
+      s.dailyReviews,
+      DONNA_SETTING_DEFAULTS.dailyReviews,
+    ),
+    historyReviews: boundedInt(
+      s.historyReviews,
+      DONNA_SETTING_DEFAULTS.historyReviews,
+    ),
+    history: typeof s.history === "boolean" ? s.history : true,
+  };
+}
+
+export type WorkerStats = {
+  day: string;
+  reviews: number;
+  history: number;
+  at: string;
+};
+
+export function workerStats(coverage: unknown): WorkerStats | null {
+  const raw =
+    coverage && typeof coverage === "object" && !Array.isArray(coverage)
+      ? (coverage as { worker?: unknown }).worker
+      : null;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const w = raw as Record<string, unknown>;
+  if (typeof w.day !== "string") return null;
+  return {
+    day: w.day,
+    reviews: boundedInt(w.reviews, 0),
+    history: boundedInt(w.history, 0),
+    at: typeof w.at === "string" ? w.at : "",
+  };
+}
+
+const JOB_LABELS: Record<string, string> = {
+  clean: "Cleaning inbox",
+  undo: "Moving mail back to Inbox",
+  reconcile: "Checking the mailbox",
+  backlog: "Reading older mail",
+  incoming: "Reading new mail",
+};
+
+export type DonnaNow = {
+  state: "working" | "idle" | "paused" | "offline" | "limit";
+  headline: string;
+  detail: string;
+};
+
+/** One plain sentence about what Donna is doing right now. */
+export function donnaNow(input: {
+  paused: boolean;
+  heartbeatAt: Date | null;
+  activeKind: string | null;
+  progress: CleanBarStatus | null;
+  settings: DonnaSettings;
+  stats: WorkerStats | null;
+  now?: Date;
+}): DonnaNow {
+  const now = input.now ?? new Date();
+  if (input.paused)
+    return {
+      state: "paused",
+      headline: "Donna is paused",
+      detail:
+        "She is not reading or filing anything. Resume to start her again.",
+    };
+  if (
+    !input.heartbeatAt ||
+    now.getTime() - input.heartbeatAt.getTime() > 90_000
+  )
+    return {
+      state: "offline",
+      headline: "Donna is not running",
+      detail: input.heartbeatAt
+        ? "The worker on Ripley has stopped checking in. Nothing is being read or filed."
+        : "The worker on Ripley has never checked in.",
+    };
+  const today = now.toISOString().slice(0, 10);
+  const used = input.stats?.day === today ? input.stats.reviews : 0;
+  if (used >= input.settings.dailyReviews)
+    return {
+      state: "limit",
+      headline: "Donna reached today’s review limit",
+      detail: `She used ${used} of ${input.settings.dailyReviews} reviews. She starts again at 6 pm Central, or raise the limit below.`,
+    };
+  if (input.activeKind) {
+    const label = JOB_LABELS[input.activeKind] ?? "Working";
+    const p = input.activeKind === "clean" ? input.progress : null;
+    return {
+      state: "working",
+      headline: `Donna is ${label.charAt(0).toLowerCase()}${label.slice(1)}`,
+      detail: p
+        ? [p.current, p.countLabel, p.etaLabel].filter(Boolean).join(" · ")
+        : input.activeKind === "undo"
+          ? "Putting back the mail you undid."
+          : "Reading only; nothing is moved in this step.",
+    };
+  }
+  return {
+    state: "idle",
+    headline: "Donna is listening for new mail",
+    detail: "New Inbox mail is read and filed within a minute or two.",
+  };
 }

@@ -1,4 +1,19 @@
 # SWapp handoff
+## 2026-11-25 (late) — Donna Overview = live status and controls (Tom: clarity and control in SWapp)
+
+- `/donna` Overview now says what Donna is doing (working / listening /
+  paused / not running / daily limit reached), last check-in, what is queued,
+  with Pause/Resume, Clean inbox now and Stop this clean. Today: filed (links
+  to Undo), need you, reviews used of the daily limit (history share). *What
+  she did*: last 12 filed / drafted / undo / problem / control events.
+  *Limits*: reviews a day, background history on/off, history cap.
+- `DonnaMailbox.settings` (migration `20261126100000_donna_mailbox_settings`).
+  The worker applies settings from claim and heartbeat replies; heartbeats send
+  `stats` (today's reviews) stored as `coverage.worker`. History off: backlog,
+  reconcile and incoming jobs are not claimed or enqueued; cleans still run.
+- Ripley service runs `--daily-reviews 500 --background-reviews 60`; SWapp
+  settings override those once saved.
+
 ## 2026-11-25 (late) — Room for new mail; attachments only block mail that matters
 
 - `swapp-donna.service` is installed and running on ripley (linger on), from

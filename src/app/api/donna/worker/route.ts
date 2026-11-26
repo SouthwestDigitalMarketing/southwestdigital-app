@@ -12,6 +12,7 @@ import {
 } from "@/lib/donna/store";
 import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { checkRateLimit } from "@/lib/simpleRateLimit";
+import { donnaSettings, type DonnaSettings } from "@/lib/donna/domain";
 
 /** Mark undone (or failed) filed items on the clean job that filed them. */
 async function recordUndo(
@@ -113,6 +114,7 @@ export async function POST(request: Request) {
     }
     if (body.op === "heartbeat") {
       let cancelled = false;
+      let settings: DonnaSettings | null = null;
       await withBrandDataTransaction(auth.context, async (tx) => {
         await tx.donnaMailbox.updateMany({
           where: { brandId: auth.context.brandId, paused: false },
@@ -179,7 +181,20 @@ export async function POST(request: Request) {
           where: { brandId: auth.context.brandId, paused: false },
         });
         for (const box of boxes) {
-          if (body.listener === "idle-inbox" || body.listener === "offline") {
+          settings = donnaSettings(box.settings);
+          const stats = z
+            .object({
+              day: z.string().max(10),
+              reviews: z.number().int().nonnegative().max(100_000),
+              history: z.number().int().nonnegative().max(100_000),
+            })
+            .optional()
+            .safeParse(body.stats);
+          if (
+            body.listener === "idle-inbox" ||
+            body.listener === "offline" ||
+            (stats.success && stats.data)
+          ) {
             const coverage =
               box.coverage &&
               typeof box.coverage === "object" &&
@@ -191,14 +206,24 @@ export async function POST(request: Request) {
               data: {
                 coverage: {
                   ...coverage,
-                  idleInbox: body.listener === "idle-inbox",
+                  ...(body.listener === "idle-inbox" ||
+                  body.listener === "offline"
+                    ? { idleInbox: body.listener === "idle-inbox" }
+                    : {}),
+                  // Review counts so SWapp can show today's usage.
+                  ...(stats.success && stats.data
+                    ? {
+                        worker: { ...stats.data, at: new Date().toISOString() },
+                      }
+                    : {}),
                 },
               },
             });
           }
           if (
-            !box.lastCheckedAt ||
-            Date.now() - box.lastCheckedAt.getTime() > 900_000
+            settings.history &&
+            (!box.lastCheckedAt ||
+              Date.now() - box.lastCheckedAt.getTime() > 900_000)
           )
             await enqueue(
               tx,
@@ -208,7 +233,7 @@ export async function POST(request: Request) {
             );
         }
       });
-      return NextResponse.json({ ok: true, cancelled });
+      return NextResponse.json({ ok: true, cancelled, settings });
     }
     if (body.op === "complete" || body.op === "fail") {
       const input = z

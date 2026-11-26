@@ -14,7 +14,10 @@ client/sales mail. The broader build sequence is in
 
 ## Pages
 
-- `/donna`: Overview with a short status and one Email card.
+- `/donna`: Overview is Donna's live status and controls: what she is doing
+  now, last check-in, queue, Pause/Resume, Clean inbox now, Stop this clean,
+  today's filed / need-you / review usage, recent actions, and Limits (reviews
+  a day, background history on/off and cap, stored in `DonnaMailbox.settings`).
 - `/donna/email`: mailbox status, Zoho default folders and custom folders with
   message counts, and the last Clean report. No request list or setup details.
   Work queues stay at `/donna/email/work`. A **Donna** button in the Donna

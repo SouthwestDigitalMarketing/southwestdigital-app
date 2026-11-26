@@ -10,6 +10,7 @@ import {
 import {
   activityCounts,
   donnaActionCounts,
+  donnaSettings,
   requestSchema,
   activitySchema,
 } from "./domain";
@@ -153,6 +154,66 @@ export async function loadClean(context: BrandDataContext, id: string) {
   });
 }
 
+/** Everything the Overview needs to show what Donna is doing and let Tom steer her. */
+export async function loadStatus(context: BrandDataContext, since: Date) {
+  return withBrandDataTransaction(context, async (tx) => {
+    const mailbox = await tx.donnaMailbox.findFirst({
+      where: { brandId: context.brandId },
+      orderBy: { address: "asc" },
+    });
+    if (!mailbox) return null;
+    const [active, queued, filedToday, needsYou, recent] = await Promise.all([
+      tx.donnaJob.findFirst({
+        where: {
+          mailboxId: mailbox.id,
+          status: "leased",
+          leaseUntil: { gt: new Date() },
+        },
+        select: {
+          id: true,
+          kind: true,
+          status: true,
+          options: true,
+          eventKey: true,
+        },
+      }),
+      tx.donnaJob.groupBy({
+        by: ["kind"],
+        where: { mailboxId: mailbox.id, status: "pending" },
+        _count: { _all: true },
+      }),
+      tx.donnaActivity.count({
+        where: {
+          mailboxId: mailbox.id,
+          kind: "filed",
+          occurredAt: { gte: since },
+        },
+      }),
+      tx.donnaRequest.count({
+        where: { mailboxId: mailbox.id, state: "needs-you" },
+      }),
+      tx.donnaActivity.findMany({
+        where: {
+          mailboxId: mailbox.id,
+          kind: {
+            in: ["filed", "corrected", "failed", "control", "draft-ready"],
+          },
+        },
+        orderBy: { occurredAt: "desc" },
+        take: 12,
+        select: {
+          id: true,
+          kind: true,
+          detail: true,
+          occurredAt: true,
+          request: { select: { id: true, title: true } },
+        },
+      }),
+    ]);
+    return { mailbox, active, queued, filedToday, needsYou, recent };
+  });
+}
+
 export async function loadDesk(
   context: BrandDataContext,
   state: string,
@@ -218,6 +279,7 @@ export async function claimJob(context: BrandDataContext) {
       AND NOT m.paused
       AND EXISTS (SELECT 1 FROM "DonnaJob" j WHERE j."mailboxId"=m.id
         AND j.status IN ('pending','leased')
+        AND (j.kind IN ('clean','undo') OR COALESCE((m.settings->>'history')::boolean, true))
         AND j."nextAttemptAt"<=now() AND (j."leaseUntil" IS NULL OR j."leaseUntil"<=now()))
       ORDER BY m."createdAt" LIMIT 1 FOR UPDATE SKIP LOCKED`;
     if (!candidates[0]) return null;
@@ -236,10 +298,12 @@ export async function claimJob(context: BrandDataContext) {
         where: { ...ready, kind: { in: ["clean", "undo"] } },
         orderBy: { receivedAt: "asc" },
       })) ??
-      (await tx.donnaJob.findFirst({
-        where: ready,
-        orderBy: { receivedAt: "asc" },
-      }));
+      (donnaSettings(mailbox.settings).history
+        ? await tx.donnaJob.findFirst({
+            where: ready,
+            orderBy: { receivedAt: "asc" },
+          })
+        : null);
     if (!job) return null;
     const lease = await tx.donnaJob.update({
       where: { id: job.id },
@@ -254,6 +318,7 @@ export async function claimJob(context: BrandDataContext) {
     return {
       job: lease,
       mailbox: { id: mailbox.id, key: mailbox.key, address: mailbox.address },
+      settings: donnaSettings(mailbox.settings),
       contacts: await tx.contact.findMany({
         where: { brandId: context.brandId, isActive: true },
         select: {

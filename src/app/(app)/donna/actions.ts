@@ -11,6 +11,7 @@ import { AUTO_CLEAN_PREFIX, enqueue } from "@/lib/donna/store";
 import {
   cleanReport,
   donnaActionCounts,
+  donnaSettings,
   draftSchema,
 } from "@/lib/donna/domain";
 import { firmInstant } from "@/lib/operations/schedule";
@@ -156,6 +157,54 @@ export async function startCleanInbox(
       message: "Could not start Clean. Reload and try again.",
     };
   }
+}
+
+/** Clean inbox from a plain form (the Overview); same as the Donna modal button. */
+export async function cleanInboxNow(form: FormData) {
+  await startCleanInbox(form);
+}
+
+/** Tom's limits and the history on/off switch; the worker picks them up within half a minute. */
+export async function updateDonnaSettings(form: FormData) {
+  const { dataContext, session } = await requireDonna();
+  const id = z.string().min(1).parse(form.get("mailboxId"));
+  const input = z
+    .object({
+      dailyReviews: z.coerce.number().int().min(0).max(2000).optional(),
+      historyReviews: z.coerce.number().int().min(0).max(2000).optional(),
+      history: z.enum(["on", "off"]).optional(),
+    })
+    .parse({
+      dailyReviews: form.get("dailyReviews") ?? undefined,
+      historyReviews: form.get("historyReviews") ?? undefined,
+      history: form.get("history") ?? undefined,
+    });
+  await withBrandDataTransaction(dataContext, async (tx) => {
+    const box = await tx.donnaMailbox.findFirstOrThrow({
+      where: { id, brandId: dataContext.brandId },
+    });
+    const next = {
+      ...donnaSettings(box.settings),
+      ...(input.dailyReviews !== undefined
+        ? { dailyReviews: input.dailyReviews }
+        : {}),
+      ...(input.historyReviews !== undefined
+        ? { historyReviews: input.historyReviews }
+        : {}),
+      ...(input.history ? { history: input.history === "on" } : {}),
+    };
+    await tx.donnaMailbox.update({
+      where: { id: box.id },
+      data: { settings: next },
+    });
+    await cleanControl(
+      tx,
+      box.id,
+      session.user.id,
+      `Settings: ${next.dailyReviews} reviews a day, history ${next.history ? `on (up to ${next.historyReviews})` : "off"}.`,
+    );
+  });
+  refresh();
 }
 
 async function resetCleanProgress(

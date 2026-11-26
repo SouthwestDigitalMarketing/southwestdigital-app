@@ -1,12 +1,58 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Mail, ArrowRight } from "lucide-react";
 import { requireDonna } from "@/lib/donna/access";
-import { loadDesk, storageMissing } from "@/lib/donna/store";
-import { STATES, type DonnaState } from "@/lib/donna/domain";
-import { DonnaFrame } from "./DonnaFrame";
+import { loadStatus, storageMissing } from "@/lib/donna/store";
+import {
+  STATES,
+  cleanBarStatus,
+  donnaNow,
+  donnaSettings,
+  workerStats,
+  type DonnaState,
+} from "@/lib/donna/domain";
+import { activityPeriod } from "@/lib/donna/period";
+import {
+  cancelClean,
+  cleanInboxNow,
+  mailboxAction,
+  updateDonnaSettings,
+} from "./actions";
+import { DonnaFrame, shortTime } from "./DonnaFrame";
 
 export const dynamic = "force-dynamic";
+
+const QUEUE_LABELS: Record<string, [string, string]> = {
+  clean: ["Inbox clean", "Inbox cleans"],
+  undo: ["undo", "undos"],
+  backlog: ["history pass", "history passes"],
+  reconcile: ["mailbox check", "mailbox checks"],
+  incoming: ["new-mail read", "new-mail reads"],
+};
+
+const DOT: Record<string, string> = {
+  working: "animate-pulse bg-emerald-500",
+  idle: "bg-emerald-500",
+  paused: "bg-amber-500",
+  limit: "bg-amber-500",
+  offline: "bg-rose-500",
+};
+
+const button =
+  "rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:opacity-40";
+
+function activityText(a: {
+  kind: string;
+  detail: string;
+  request: { title: string } | null;
+}) {
+  if (a.kind === "filed")
+    return `${a.detail}${a.request ? `: ${a.request.title}` : ""}`;
+  if (a.kind === "draft-ready")
+    return `Reply drafted${a.request ? `: ${a.request.title}` : ""}`;
+  if (a.kind === "failed") return `Problem: ${a.detail}`;
+  return a.detail;
+}
+
 export default async function DonnaPage({
   searchParams,
 }: {
@@ -20,7 +66,7 @@ export default async function DonnaPage({
   const { dataContext } = await requireDonna();
   let data;
   try {
-    data = await loadDesk(dataContext, "needs-you");
+    data = await loadStatus(dataContext, activityPeriod("today").start);
   } catch (e) {
     if (!storageMissing(e)) throw e;
     return (
@@ -29,60 +75,202 @@ export default async function DonnaPage({
       </DonnaFrame>
     );
   }
-  const needs =
-    data.groups.find((g) => g.state === "needs-you")?._count._all ?? 0;
-  const paused =
-    data.mailboxes.length > 0 && data.mailboxes.every((m) => m.paused);
-  const errors = data.mailboxes.some((m) => m.lastError);
-  const remaining = data.mailboxes.reduce(
-    (n, m) =>
-      n +
-      Number(
-        (m.coverage as { remaining_threads?: number })?.remaining_threads ?? 0,
-      ),
-    0,
-  );
+  if (!data)
+    return (
+      <DonnaFrame active="overview">
+        <Link href="/donna/settings" className="text-sm underline">
+          Connect the mailbox to start Donna.
+        </Link>
+      </DonnaFrame>
+    );
+  const { mailbox, active, queued, filedToday, needsYou, recent } = data;
+  const settings = donnaSettings(mailbox.settings);
+  const stats = workerStats(mailbox.coverage);
+  const today = new Date().toISOString().slice(0, 10);
+  const used = stats?.day === today ? stats.reviews : 0;
+  const history = stats?.day === today ? stats.history : 0;
+  const progress =
+    active?.kind === "clean"
+      ? cleanBarStatus(active, mailbox.coverage, new Date(), mailbox.paused)
+      : null;
+  const now = donnaNow({
+    paused: mailbox.paused,
+    heartbeatAt: mailbox.heartbeatAt,
+    activeKind: active?.kind ?? null,
+    progress,
+    settings,
+    stats,
+  });
+  const waiting = queued
+    .filter((q) => settings.history || ["clean", "undo"].includes(q.kind))
+    .map((q) => {
+      const [one, many] = QUEUE_LABELS[q.kind] ?? [q.kind, q.kind];
+      return `${q._count._all} ${q._count._all === 1 ? one : many}`;
+    });
   return (
     <DonnaFrame active="overview">
-      <section className="space-y-2 py-2">
-        <h2 className="text-lg font-semibold">
-          {!data.mailboxes.length
-            ? "Let’s set up the email desk."
-            : paused
-              ? "The email desk is paused."
-              : errors
-                ? "The email desk needs attention."
-                : "Your email desk at a glance."}
-        </h2>
-        <p className="text-sm text-slate-600">
-          {needs
-            ? `${needs} request${needs === 1 ? " is" : "s are"} ready for your review.`
-            : "No requests are waiting for your decision."}
-        </p>
-        {remaining > 0 ? (
-          <p className="text-xs text-slate-500">
-            History review: {remaining.toLocaleString("en-US")} conversations
-            left.
-          </p>
-        ) : null}
-      </section>
-      <Link
-        href={data.mailboxes.length ? "/donna/email" : "/donna/settings"}
-        className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-5 hover:border-slate-400"
+      <section
+        aria-label="What Donna is doing"
+        className="space-y-3 rounded-xl border border-slate-200 bg-white p-4"
       >
-        <span className="rounded-xl bg-slate-100 p-3">
-          <Mail size={22} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <h2 className="font-semibold">Email</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            {data.mailboxes.length
-              ? `${needs} need you · ${paused ? "Paused" : errors ? "Needs attention" : "Connected"}`
-              : "Connect your existing mailbox"}
+        <div className="flex items-start gap-3">
+          <span
+            className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${DOT[now.state]}`}
+            aria-hidden="true"
+          />
+          <div className="min-w-0">
+            <h2 className="font-semibold">{now.headline}</h2>
+            <p className="text-sm text-slate-600">{now.detail}</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Last check-in {shortTime(mailbox.heartbeatAt)} · Up next:{" "}
+              {waiting.length ? waiting.join(", ") : "nothing waiting"}
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <form action={mailboxAction}>
+            <input type="hidden" name="mailboxId" value={mailbox.id} />
+            <input
+              type="hidden"
+              name="action"
+              value={mailbox.paused ? "resume" : "pause"}
+            />
+            <button type="submit" className={button}>
+              {mailbox.paused ? "Resume Donna" : "Pause Donna"}
+            </button>
+          </form>
+          <form action={cleanInboxNow}>
+            <input type="hidden" name="mailboxId" value={mailbox.id} />
+            <button
+              type="submit"
+              disabled={mailbox.paused || active?.kind === "clean"}
+              className={button}
+            >
+              Clean inbox now
+            </button>
+          </form>
+          {active?.kind === "clean" ? (
+            <form action={cancelClean}>
+              <input type="hidden" name="jobId" value={active.id} />
+              <button type="submit" className={button}>
+                Stop this clean
+              </button>
+            </form>
+          ) : null}
+        </div>
+      </section>
+
+      <section aria-label="Today" className="grid grid-cols-3 gap-2">
+        <Link
+          href="/donna/email"
+          className="rounded-xl border border-slate-200 bg-white p-3 hover:border-slate-400"
+        >
+          <p className="text-xl font-semibold tabular-nums">{filedToday}</p>
+          <p className="text-xs text-slate-500">Filed today · Undo</p>
+        </Link>
+        <Link
+          href="/donna/email/work?state=needs-you"
+          className="rounded-xl border border-slate-200 bg-white p-3 hover:border-slate-400"
+        >
+          <p className="text-xl font-semibold tabular-nums">{needsYou}</p>
+          <p className="text-xs text-slate-500">Need you</p>
+        </Link>
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <p className="text-xl font-semibold tabular-nums">
+            {used}
+            <span className="text-sm font-normal text-slate-400">
+              /{settings.dailyReviews}
+            </span>
+          </p>
+          <p className="text-xs text-slate-500">
+            Reviews today · history {history}
           </p>
         </div>
-        <ArrowRight size={18} className="shrink-0 text-slate-400" />
-      </Link>
+      </section>
+
+      <section aria-label="Recent" className="space-y-1">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          What she did
+        </h3>
+        {recent.length ? (
+          <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
+            {recent.map((a) => (
+              <li key={a.id} className="flex gap-3 px-3 py-2 text-sm">
+                <span className="w-24 shrink-0 text-xs tabular-nums text-slate-500">
+                  {shortTime(a.occurredAt)}
+                </span>
+                {a.request ? (
+                  <Link
+                    href={`/donna/requests/${a.request.id}`}
+                    className="min-w-0 flex-1 truncate underline decoration-slate-200"
+                  >
+                    {activityText(a)}
+                  </Link>
+                ) : (
+                  <span className="min-w-0 flex-1 truncate">
+                    {activityText(a)}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-slate-500">Nothing yet.</p>
+        )}
+      </section>
+
+      <details className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
+        <summary className="cursor-pointer font-medium">Limits</summary>
+        <form action={updateDonnaSettings} className="mt-3 space-y-3">
+          <input type="hidden" name="mailboxId" value={mailbox.id} />
+          <label className="flex items-center justify-between gap-3">
+            <span>Reviews a day</span>
+            <select
+              name="dailyReviews"
+              defaultValue={String(settings.dailyReviews)}
+              className="rounded-md border border-slate-200 px-2 py-1"
+            >
+              {[100, 200, 500, 1000, 2000].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center justify-between gap-3">
+            <span>Read older mail in the background</span>
+            <select
+              name="history"
+              defaultValue={settings.history ? "on" : "off"}
+              className="rounded-md border border-slate-200 px-2 py-1"
+            >
+              <option value="on">On</option>
+              <option value="off">Off</option>
+            </select>
+          </label>
+          <label className="flex items-center justify-between gap-3">
+            <span>Most reviews for older mail</span>
+            <select
+              name="historyReviews"
+              defaultValue={String(settings.historyReviews)}
+              className="rounded-md border border-slate-200 px-2 py-1"
+            >
+              {[0, 30, 60, 120, 250].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="text-xs text-slate-500">
+            New Inbox mail always comes first. Reviews use your ChatGPT plan’s
+            Codex allowance; the count resets at 6 pm Central.
+          </p>
+          <button type="submit" className={button}>
+            Save limits
+          </button>
+        </form>
+      </details>
     </DonnaFrame>
   );
 }
