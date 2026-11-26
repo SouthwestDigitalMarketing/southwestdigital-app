@@ -11,6 +11,7 @@ import { draftSchema } from "@/lib/donna/domain";
 import { firmInstant } from "@/lib/operations/schedule";
 
 function refresh() {
+  revalidatePath("/", "layout");
   revalidatePath("/donna", "layout");
   revalidatePath("/dashboard");
 }
@@ -88,11 +89,11 @@ export async function mailboxAction(form: FormData) {
 
 export async function startCleanInbox(
   form: FormData,
-): Promise<{ ok: boolean; message: string }> {
+): Promise<{ ok: boolean; message: string; jobId?: string }> {
   try {
     const { dataContext, session } = await requireDonna();
     const id = z.string().min(1).parse(form.get("mailboxId"));
-    await withBrandDataTransaction(dataContext, async (tx) => {
+    const jobId = await withBrandDataTransaction(dataContext, async (tx) => {
       const box = await tx.donnaMailbox.findFirstOrThrow({
         where: { id, brandId: dataContext.brandId },
       });
@@ -103,8 +104,8 @@ export async function startCleanInbox(
           status: { in: ["pending", "leased"] },
         },
       });
-      if (!existing)
-        await enqueue(tx, box.id, "clean", `clean:${randomUUID()}`);
+      const job =
+        existing ?? (await enqueue(tx, box.id, "clean", `clean:${randomUUID()}`));
       await tx.donnaActivity.create({
         data: {
           mailboxId: box.id,
@@ -118,9 +119,10 @@ export async function startCleanInbox(
           occurredAt: new Date(),
         },
       });
+      return job.id;
     });
     refresh();
-    return { ok: true, message: "Cleaning inbox." };
+    return { ok: true, message: "Cleaning inbox.", jobId };
   } catch {
     return {
       ok: false,

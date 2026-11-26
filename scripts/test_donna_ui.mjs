@@ -323,6 +323,7 @@ try {
   await page.goto(base + "/donna/email");
   await page.getByRole("button", { name: "Donna", exact: true }).click();
   await page.getByRole("button", { name: /Clean inbox/ }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect
     .poll(async () =>
       db.donnaJob.count({
@@ -330,6 +331,21 @@ try {
       }),
     )
     .toBe(1);
+  const cleanJob = await db.donnaJob.findFirstOrThrow({
+    where: { mailboxId: box.id, kind: "clean" },
+  });
+  await expect(
+    page.getByRole("link", { name: /Cleaning inbox/ }),
+  ).toBeVisible();
+  await page.goto(base + "/dashboard");
+  await expect(
+    page.getByRole("link", { name: /Cleaning inbox/ }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: /Cleaning inbox/ }).click();
+  await expect(page).toHaveURL(base + "/donna/cleans/" + cleanJob.id);
+  await expect(
+    page.getByRole("heading", { name: "Inbox clean" }),
+  ).toBeVisible();
   await page.goto(base + "/donna/email/work");
   await page.getByRole("button", { name: "Donna", exact: true }).click();
   await expect(

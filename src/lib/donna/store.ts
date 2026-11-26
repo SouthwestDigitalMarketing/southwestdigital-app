@@ -85,6 +85,37 @@ export async function loadDonnaAction(context: BrandDataContext) {
   });
 }
 
+export async function loadActiveClean(context: BrandDataContext) {
+  return withBrandDataTransaction(context, async (tx) =>
+    tx.donnaJob.findFirst({
+      where: {
+        mailbox: { brandId: context.brandId },
+        kind: "clean",
+        status: { in: ["pending", "leased"] },
+      },
+      orderBy: { receivedAt: "desc" },
+      select: { id: true, status: true },
+    }),
+  );
+}
+
+export async function loadClean(context: BrandDataContext, id: string) {
+  return withBrandDataTransaction(context, async (tx) =>
+    tx.donnaJob.findFirst({
+      where: {
+        id,
+        kind: "clean",
+        mailbox: { brandId: context.brandId },
+      },
+      include: {
+        mailbox: {
+          select: { address: true, coverage: true, lastError: true },
+        },
+      },
+    }),
+  );
+}
+
 export async function loadDesk(
   context: BrandDataContext,
   state: string,

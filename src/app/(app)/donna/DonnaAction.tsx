@@ -67,15 +67,23 @@ export function DonnaAction({
                 disabled={cleaningInbox}
                 onClick={() => {
                   setError(null);
+                  setOpen(false);
                   const data = new FormData();
                   data.set("mailboxId", mailboxId);
                   startTransition(async () => {
                     const result = await startCleanInbox(data);
                     if (!result.ok) {
+                      setOpen(true);
                       setError(result.message);
                       return;
                     }
-                    setOpen(false);
+                    if (result.jobId) {
+                      window.dispatchEvent(
+                        new CustomEvent("swapp:donna-clean", {
+                          detail: { jobId: result.jobId },
+                        }),
+                      );
+                    }
                     router.refresh();
                   });
                 }}
