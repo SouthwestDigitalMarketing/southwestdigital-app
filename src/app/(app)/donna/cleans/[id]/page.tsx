@@ -8,6 +8,7 @@ import {
   cleanBuckets,
   cleanIsPreview,
   cleanIsSort,
+  type Bucket,
   cleanReport,
   mailboxCleanReport,
   type CleanReportItem,
@@ -143,6 +144,41 @@ function PreviewPlan({
   );
 }
 
+/** Step 1 while it runs: the buckets filling in as Donna sorts, newest last. */
+function LiveBuckets({ buckets }: { buckets: Bucket[] }) {
+  if (!buckets.length)
+    return (
+      <p className="text-sm text-slate-500">
+        Buckets appear here as Donna sorts each email.
+      </p>
+    );
+  return (
+    <div className="space-y-3">
+      {buckets.map((bucket) => (
+        <section
+          key={bucket.name}
+          aria-label={`Bucket ${bucket.name}`}
+          className="space-y-1 rounded-xl border border-slate-200 bg-white p-3"
+        >
+          <Heading title={bucket.name} count={bucket.items.length} />
+          <ul className="divide-y divide-slate-100">
+            {bucket.items.map((item) => (
+              <li key={item.thread} className="py-1.5">
+                <span className="block truncate text-sm">{item.subject}</span>
+                <span className="block truncate text-xs text-slate-500">
+                  {[item.from, item.client, item.why]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 function FiledWithUndo({
   jobId,
   items,
@@ -241,7 +277,10 @@ export default async function CleanPage({
   );
   const paused = job.mailbox.paused;
   return (
-    <DonnaFrame active="email">
+    <DonnaFrame
+      active={active ? "current" : "jobs"}
+      refreshEvery={active ? 3000 : undefined}
+    >
       <header className="space-y-1">
         <Link
           href="/donna/email"
@@ -316,7 +355,29 @@ export default async function CleanPage({
             </button>
           </form>
         </section>
-      ) : job.status === "cancelled" && !report ? (
+      ) : null}
+      {active && sort ? (
+        <LiveBuckets buckets={cleanBuckets(job.result)} />
+      ) : active && report ? (
+        <>
+          <Items
+            title="Moved"
+            items={report.filed}
+            extra={(item) => item.folder}
+          />
+          <Items
+            title="Tagged in Zoho"
+            items={report.tagged}
+            extra={(item) => item.tag}
+          />
+          <Items
+            title="Left in Inbox"
+            items={report.skipped}
+            extra={(item) => item.reason}
+          />
+        </>
+      ) : null}
+      {active ? null : job.status === "cancelled" && !report ? (
         <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
           Cancelled before Donna moved anything.
         </p>

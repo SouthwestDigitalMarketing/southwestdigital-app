@@ -232,6 +232,31 @@ export async function loadStatus(context: BrandDataContext, since: Date) {
   });
 }
 
+/** Jobs tab: every Inbox clean, step and undo Donna ran, newest first. */
+export async function loadJobs(context: BrandDataContext, take = 100) {
+  return withBrandDataTransaction(context, async (tx) =>
+    tx.donnaJob.findMany({
+      where: {
+        mailbox: { brandId: context.brandId },
+        kind: { in: ["clean", "undo"] },
+      },
+      orderBy: { receivedAt: "desc" },
+      take,
+      select: {
+        id: true,
+        kind: true,
+        status: true,
+        options: true,
+        result: true,
+        eventKey: true,
+        error: true,
+        receivedAt: true,
+        completedAt: true,
+      },
+    }),
+  );
+}
+
 export async function loadDesk(
   context: BrandDataContext,
   state: string,

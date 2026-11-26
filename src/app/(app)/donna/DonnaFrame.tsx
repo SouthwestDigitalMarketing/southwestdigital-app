@@ -11,10 +11,13 @@ export async function DonnaFrame({
   active,
   children,
   live = true,
+  refreshEvery,
 }: {
-  active: "overview" | "email";
+  active: "overview" | "current" | "jobs" | "email";
   children: ReactNode;
   live?: boolean;
+  /** Milliseconds between refreshes; the Current job page refreshes fast. */
+  refreshEvery?: number;
 }) {
   let mailboxId: string | null = null;
   let cleaning = false;
@@ -32,7 +35,7 @@ export async function DonnaFrame({
   }
   return (
     <div className="w-full min-w-0 break-words space-y-4 px-4 py-5 text-slate-900 sm:p-8">
-      {live ? <RefreshDonna /> : null}
+      {live ? <RefreshDonna every={refreshEvery} /> : null}
       <h1 className="sr-only">Donna</h1>
       {mailboxId ? (
         <DonnaAction
@@ -43,9 +46,14 @@ export async function DonnaFrame({
         />
       ) : null}
       <div className="flex items-center gap-6 border-b border-slate-200">
-        <nav aria-label="Donna sections" className="flex gap-6">
+        <nav
+          aria-label="Donna sections"
+          className="flex min-w-0 gap-4 overflow-x-auto whitespace-nowrap sm:gap-6"
+        >
           {[
             { label: "Overview", href: "/donna", key: "overview" },
+            { label: "Current job", href: "/donna/current", key: "current" },
+            { label: "Jobs", href: "/donna/jobs", key: "jobs" },
             { label: "Email", href: "/donna/email", key: "email" },
           ].map((t) => (
             <Link

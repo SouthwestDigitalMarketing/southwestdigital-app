@@ -819,3 +819,60 @@ export function donnaNow(input: {
     detail: "New Inbox mail is read and filed within a minute or two.",
   };
 }
+
+/** What a job was, in Tom's words, for the Jobs tab. */
+export function jobTitle(job: {
+  kind: string;
+  options: unknown;
+  eventKey: string | null;
+}): string {
+  if (job.kind === "undo") return "Undo";
+  const o =
+    job.options &&
+    typeof job.options === "object" &&
+    !Array.isArray(job.options)
+      ? (job.options as Record<string, unknown>)
+      : {};
+  if (cleanIsSort(o)) return "Step 1: sort Inbox into buckets";
+  if (Array.isArray(o.plan))
+    return o.buckets === true
+      ? "Step 2: do what you chose"
+      : "File approved emails";
+  if (o.preview === true) return "Inbox check";
+  if (job.eventKey?.startsWith("idle:")) return "Automatic clean (new mail)";
+  return "Inbox clean";
+}
+
+/** One line on what a job did, from its report. */
+export function jobOutcome(job: {
+  kind: string;
+  status: string;
+  options: unknown;
+  result: unknown;
+  error: string | null;
+}): string {
+  if (job.status === "pending") return "Waiting to start";
+  if (job.kind === "undo") {
+    const threads = (job.options as { threads?: unknown } | null)?.threads;
+    return Array.isArray(threads) ? `Put back ${threads.length}` : "Put back";
+  }
+  if (cleanIsSort(job.options)) {
+    const buckets = cleanBuckets(job.result);
+    const n = buckets.reduce((sum, b) => sum + b.items.length, 0);
+    return `${n} sorted into ${buckets.length} bucket${buckets.length === 1 ? "" : "s"}`;
+  }
+  const report = cleanReport(job.result);
+  if (!report) return job.error ? `Problem: ${job.error}` : "No report";
+  const parts = [
+    report.filed.length
+      ? `moved ${report.filed.filter((i) => !i.undone).length}`
+      : "",
+    report.tagged.length ? `tagged ${report.tagged.length}` : "",
+    report.skipped.length ? `left ${report.skipped.length}` : "",
+    report.preview ? `would file ${report.filed.length}` : "",
+  ].filter(Boolean);
+  if (report.preview) return parts.slice(-1).join("") || "Read only";
+  return parts.length
+    ? parts.join(" · ")
+    : `read ${report.reviewed}, nothing changed`;
+}

@@ -464,6 +464,16 @@ try {
   const stepClaim = (await call({ op: "claim" })).body;
   assert.equal(stepClaim.work?.job?.id, stepOne.id, "Steps: Tom's step 1 runs.");
   assert.equal(stepClaim.work.settings.steps, true);
+  const liveBeat = await call({
+    op: "heartbeat",
+    ...lease(stepClaim),
+    progress: { total: 2, done: 1, current: "Next", recent: [{ subject: "Hi", result: "Clients" }] },
+    report: { preview: true, at: "2026-11-26T00:00:00Z", reviewed: 1, sorted: [{ thread: "ab12", subject: "Hi", bucket: "Clients" }] },
+  });
+  assert.equal(liveBeat.status, 200);
+  const liveJob = await db.donnaJob.findUniqueOrThrow({ where: { id: stepOne.id } });
+  assert.equal(liveJob.result.live, true, "Heartbeats store the report so far.");
+  assert.equal(liveJob.result.sorted[0].bucket, "Clients");
   const tagged = await call({
     op: "tag",
     ...lease(stepClaim),
@@ -502,7 +512,7 @@ try {
     await db.$executeRawUnsafe(`DROP ROLE ${role}`);
   }
   console.log(
-    "Donna integration checks passed: signed enrollment, invalid signatures, deduplication, exclusive leases, replay-safe publish, human-edit preservation, backlog recovery, pause stops Clean, clean preview, cancel, undo, history switch, usage reporting, steps hold automatic work, tagging needs a leased job and a Zoho connection, and tenant RLS.",
+    "Donna integration checks passed: signed enrollment, invalid signatures, deduplication, exclusive leases, replay-safe publish, human-edit preservation, backlog recovery, pause stops Clean, clean preview, cancel, undo, history switch, usage reporting, steps hold automatic work, live reports, tagging needs a leased job and a Zoho connection, and tenant RLS.",
   );
 } finally {
   await db.donnaMailbox.delete({ where: { id: box.id } });
