@@ -830,6 +830,18 @@ newsletters) into SWapp's Scanner; `/patrol` was removed from every machine the 
 - Open: confirm Zoho empties Spam on its own (oldest Spam mail 31 Oct on 2026-11-24); texts from
   Tom's Pixel (Google Messages for Web, ripley agent Chrome) as a Scanner source — next.
 
+## 2026-11-26 — Travel: Apple-style redesign of the Japan pages (Codex helper + Ummon)
+
+Tom: "update the view and layout of this page as per what Steve Jobs and his team would design".
+A Codex helper (pane w30:p2, brief ripley ~/projects/worktrees/travel-scripts/codex-brief.md, local
+commits only) reworked the trip page around one photo hero with the planned trip budget and one
+"Open your Japan plan" button, a short "Next up" (passport status, next document, first home task),
+and moved progress tiles, map, section links, trip edit, sort/filter and delete into quieter
+`<details>` disclosures; the Japan (option) page gets a fact grid and the map leads Day-to-day life.
+Ummon review fixed the passport chip (a blank expiry read as expired). Notes and before/after
+screenshots: ripley ~/projects/worktrees/travel-scripts/design-notes.md and design-shots/.
+Checks: tsc, eslint, vitest 1431 passed; Codex click-through at 412/1280 px incl. dark mode.
+
 ## 2026-11-26 — Travel: the Japan plan is Tokyo, then Kyoto and Osaka (Ummon)
 
 Tom chose Tokyo (about 6 weeks, based in Koenji or Shimokitazawa near jam sessions) then Kyoto
