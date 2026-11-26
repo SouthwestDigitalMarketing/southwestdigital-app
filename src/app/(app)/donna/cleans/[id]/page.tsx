@@ -160,37 +160,37 @@ function LiveBuckets({ buckets }: { buckets: Bucket[] }) {
     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
       <table
         aria-label="Sorted emails"
-        className="w-full min-w-[640px] text-left text-sm"
+        className="w-full min-w-[640px] text-left text-xs"
       >
-        <thead className="text-xs uppercase tracking-wide text-slate-500">
+        <thead className="uppercase tracking-wide text-slate-500">
           <tr className="border-b border-slate-200">
-            <th className="px-3 py-2 font-semibold">Bucket</th>
-            <th className="px-3 py-2 font-semibold">Email</th>
-            <th className="px-3 py-2 font-semibold">From</th>
-            <th className="px-3 py-2 font-semibold">Client</th>
-            <th className="px-3 py-2 font-semibold">Why</th>
+            <th className="px-2 py-1 font-semibold">Bucket</th>
+            <th className="px-2 py-1 font-semibold">Email</th>
+            <th className="px-2 py-1 font-semibold">From</th>
+            <th className="px-2 py-1 font-semibold">Client</th>
+            <th className="px-2 py-1 font-semibold">Why</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {buckets.flatMap((bucket) =>
             bucket.items.map((item, i) => (
               <tr key={item.thread} className="align-top">
-                <td className="whitespace-nowrap px-3 py-2 font-medium">
+                <td className="whitespace-nowrap px-2 py-1 font-medium">
                   {i ? "" : `${bucket.name} (${bucket.items.length})`}
                 </td>
-                <td className="max-w-[16rem] truncate px-3 py-2">
+                <td className="max-w-[16rem] truncate px-2 py-1">
                   {item.subject}
                 </td>
                 <td
-                  className="max-w-[12rem] truncate px-3 py-2 text-slate-600"
+                  className="max-w-[12rem] truncate px-2 py-1 text-slate-600"
                   title={item.from}
                 >
                   {senderName(item.from)}
                 </td>
-                <td className="whitespace-nowrap px-3 py-2 text-slate-600">
+                <td className="whitespace-nowrap px-2 py-1 text-slate-600">
                   {item.client ?? ""}
                 </td>
-                <td className="px-3 py-2 text-xs text-slate-500">{item.why}</td>
+                <td className="px-2 py-1 text-slate-500">{item.why}</td>
               </tr>
             )),
           )}
