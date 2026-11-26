@@ -1,4 +1,11 @@
 # SWapp handoff
+## 2026-11-26 — Contacts directory: hide the tag chip wall (Ummon)
+
+Tom: the filter tag chips on `/contacts` are too many to show. Search, status,
+client, brand, sort stay. Add contact / Import CSV / Tags (settings) stay. Per-row
+tags in the list stay. URL `?tag=` still filters if present. Branch
+`ummon/contacts-hide-tag-chips`.
+
 ## 2026-11-26 — Contacts directory: drop the three stat cards (Ummon)
 
 Tom asked to remove the Showing / Tags / Page cards at the top of `/contacts`. Filters,
