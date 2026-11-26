@@ -170,11 +170,8 @@ export function BucketChooser({
                       className="mt-0.5 h-3.5 w-3.5"
                     />
                   </td>
-                  <td colSpan={4} className={`${td} font-semibold`}>
+                  <td colSpan={4} className={`${td} text-sm font-semibold`}>
                     {bucket.name} ({count})
-                    <span className="ml-2 font-normal text-slate-500">
-                      {bucket.note}
-                    </span>
                   </td>
                   <td colSpan={2} className={td}>
                     <span className="flex items-center gap-1">
