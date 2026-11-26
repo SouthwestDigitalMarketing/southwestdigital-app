@@ -921,6 +921,39 @@ export function donnaNow(input: {
   };
 }
 
+/**
+ * Where a job ended, in plain words (Tom, 2026-11-26: a job closed at step 2 is not
+ * "finished"). A stepped job is judged by its sort and its step 3 together.
+ */
+export function jobEnd(
+  job: { status: string; options: unknown },
+  follow?: { status: string } | null,
+): { label: string; detail: string } {
+  if (["pending", "leased"].includes(job.status))
+    return { label: "Running", detail: "In progress" };
+  if (cleanIsSort(job.options)) {
+    if (follow) {
+      if (["pending", "leased"].includes(follow.status))
+        return { label: "Running", detail: "Step 3 in progress" };
+      return follow.status === "cancelled"
+        ? { label: "Stopped", detail: "Stopped during step 3" }
+        : { label: "Finished", detail: "All three steps done" };
+    }
+    if (cleanIsClosed(job.options))
+      return { label: "Closed", detail: "Closed at step 2, nothing changed" };
+    return job.status === "cancelled"
+      ? { label: "Stopped", detail: "Stopped during step 1" }
+      : { label: "Waiting", detail: "Waiting for your choices" };
+  }
+  if (cleanIsDo(job.options))
+    return job.status === "cancelled"
+      ? { label: "Stopped", detail: "Stopped during step 3" }
+      : { label: "Finished", detail: "All three steps done" };
+  return job.status === "cancelled"
+    ? { label: "Stopped", detail: "Stopped" }
+    : { label: "Finished", detail: "Finished" };
+}
+
 /** What a job was, in Tom's words, for the Jobs tab. */
 export function jobTitle(job: {
   kind: string;

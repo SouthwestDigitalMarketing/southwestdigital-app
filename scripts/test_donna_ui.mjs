@@ -588,11 +588,12 @@ try {
   // Every job has a number; step 3 carries its Inbox job's number.
   const numbered = await db.donnaJob.findUniqueOrThrow({ where: { id: stepOne.id } });
   await expect(jobs.getByRole("row", { name: new RegExp("^" + numbered.number + " ") })).toContainText("Inbox job");
+  await expect(jobs.getByRole("row", { name: new RegExp("^" + numbered.number + " ") })).toContainText("Finished");
   await expect(jobs).toContainText("6 sorted into 5 buckets · moved 1 · tagged 1");
   await expect(jobs).not.toContainText("Step 3: do what you chose");
   await jobs.getByRole("link", { name: /6 sorted into 5 buckets/ }).click();
   await expect(page.getByRole("list", { name: "Job steps" })).toContainText("Done · moved 1 · tagged 1");
-  await expect(page.getByText("Job #" + numbered.number, { exact: true })).toBeVisible();
+  await expect(page.getByText("Job #" + numbered.number + " · All three steps done")).toBeVisible();
   await expect(page.getByRole("table", { name: "Sorted emails" })).toBeVisible();
   // Closing at step 2 changes nothing and files the job under Completed jobs.
   const closing = await db.donnaJob.create({
@@ -606,6 +607,9 @@ try {
   await expect(page.getByRole("list", { name: "Job steps" })).toContainText("Closed, nothing changed");
   await page.goto(base + "/donna/jobs");
   await expect(page.getByRole("table", { name: "Completed jobs" })).toContainText("1 sorted into 1 bucket · closed, nothing changed");
+  // A job closed at step 2 is "Closed", not "Finished".
+  const closedNo = (await db.donnaJob.findUniqueOrThrow({ where: { id: closing.id } })).number;
+  await expect(page.getByRole("table", { name: "Completed jobs" }).getByRole("row", { name: new RegExp("^" + closedNo + " ") })).toContainText("Closed");
   await page.goto(base + "/donna/current");
   await expect(page.getByText("No job is running.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Start new job", exact: true })).toBeVisible();
