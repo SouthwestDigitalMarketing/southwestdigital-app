@@ -162,73 +162,55 @@ export async function loadStatus(context: BrandDataContext, since: Date) {
       orderBy: { address: "asc" },
     });
     if (!mailbox) return null;
-    const [active, queued, filedToday, needsYou, recent, step] =
-      await Promise.all([
-        tx.donnaJob.findFirst({
-          where: {
-            mailboxId: mailbox.id,
-            status: "leased",
-            leaseUntil: { gt: new Date() },
+    const [active, queued, filedToday, needsYou, recent] = await Promise.all([
+      tx.donnaJob.findFirst({
+        where: {
+          mailboxId: mailbox.id,
+          status: "leased",
+          leaseUntil: { gt: new Date() },
+        },
+        select: {
+          id: true,
+          kind: true,
+          status: true,
+          options: true,
+          eventKey: true,
+        },
+      }),
+      tx.donnaJob.groupBy({
+        by: ["kind"],
+        where: { mailboxId: mailbox.id, status: "pending" },
+        _count: { _all: true },
+      }),
+      tx.donnaActivity.count({
+        where: {
+          mailboxId: mailbox.id,
+          kind: "filed",
+          occurredAt: { gte: since },
+        },
+      }),
+      tx.donnaRequest.count({
+        where: { mailboxId: mailbox.id, state: "needs-you" },
+      }),
+      tx.donnaActivity.findMany({
+        where: {
+          mailboxId: mailbox.id,
+          kind: {
+            in: ["filed", "corrected", "failed", "control", "draft-ready"],
           },
-          select: {
-            id: true,
-            kind: true,
-            status: true,
-            options: true,
-            eventKey: true,
-          },
-        }),
-        tx.donnaJob.groupBy({
-          by: ["kind"],
-          where: { mailboxId: mailbox.id, status: "pending" },
-          _count: { _all: true },
-        }),
-        tx.donnaActivity.count({
-          where: {
-            mailboxId: mailbox.id,
-            kind: "filed",
-            occurredAt: { gte: since },
-          },
-        }),
-        tx.donnaRequest.count({
-          where: { mailboxId: mailbox.id, state: "needs-you" },
-        }),
-        tx.donnaActivity.findMany({
-          where: {
-            mailboxId: mailbox.id,
-            kind: {
-              in: ["filed", "corrected", "failed", "control", "draft-ready"],
-            },
-          },
-          orderBy: { occurredAt: "desc" },
-          take: 12,
-          select: {
-            id: true,
-            kind: true,
-            detail: true,
-            occurredAt: true,
-            request: { select: { id: true, title: true } },
-          },
-        }),
-        // The newest step (1: sort into buckets, 2: do what Tom chose), any status.
-        tx.donnaJob.findFirst({
-          where: {
-            mailboxId: mailbox.id,
-            kind: "clean",
-            options: { path: ["buckets"], equals: true },
-          },
-          orderBy: { receivedAt: "desc" },
-          select: {
-            id: true,
-            status: true,
-            options: true,
-            result: true,
-            completedAt: true,
-            error: true,
-          },
-        }),
-      ]);
-    return { mailbox, active, queued, filedToday, needsYou, recent, step };
+        },
+        orderBy: { occurredAt: "desc" },
+        take: 12,
+        select: {
+          id: true,
+          kind: true,
+          detail: true,
+          occurredAt: true,
+          request: { select: { id: true, title: true } },
+        },
+      }),
+    ]);
+    return { mailbox, active, queued, filedToday, needsYou, recent };
   });
 }
 

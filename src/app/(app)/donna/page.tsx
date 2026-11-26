@@ -5,9 +5,6 @@ import { loadStatus, storageMissing } from "@/lib/donna/store";
 import {
   STATES,
   cleanBarStatus,
-  cleanBuckets,
-  cleanIsSort,
-  cleanReport,
   mailboxFolderTables,
   donnaNow,
   donnaSettings,
@@ -44,72 +41,6 @@ const DOT: Record<string, string> = {
 
 const button =
   "rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:opacity-40";
-
-type Step = {
-  id: string;
-  status: string;
-  options: unknown;
-  result: unknown;
-  completedAt: Date | null;
-  error: string | null;
-} | null;
-
-/**
- * Steps (Tom, 2026-11-26): one step at a time, a gate after each. Step 1 sorts Inbox
- * into buckets and moves nothing; step 2 does only what Tom chose for each bucket.
- */
-function Steps({
-  step,
-  paused,
-  offline,
-  progress,
-}: {
-  step: Step;
-  paused: boolean;
-  offline: boolean;
-  progress: string | null;
-}) {
-  const running = step && ["pending", "leased"].includes(step.status);
-  const sort = step ? cleanIsSort(step.options) : false;
-  const href = step ? `/donna/cleans/${encodeURIComponent(step.id)}` : "";
-  const buckets = step && sort ? cleanBuckets(step.result) : [];
-  const sorted = buckets.reduce((n, b) => n + b.items.length, 0);
-  const moved =
-    step && !sort
-      ? (cleanReport(step.result)?.filed.filter((i) => !i.undone).length ?? 0)
-      : 0;
-  const waitingForTom = step && sort && step.status === "done";
-  // Tom (2026-11-26): no big button here; the Donna button up top starts a step.
-  if (running)
-    return (
-      <p className="text-sm text-slate-600">
-        <Link href={href} className="underline">
-          {sort ? "Step 1: sorting your Inbox" : "Step 2: doing what you chose"}
-          {progress ? ` · ${progress}` : ""}
-        </Link>
-        {paused ? " · paused" : offline ? " · Donna is not running" : ""}
-      </p>
-    );
-  if (waitingForTom)
-    return (
-      <p className="text-sm text-slate-600">
-        <Link href={href} className="font-medium underline">
-          Step 1 done: choose what to do with {sorted} emails in{" "}
-          {buckets.length} buckets
-        </Link>
-      </p>
-    );
-  if (step && !sort && step.status === "done")
-    return (
-      <p className="text-sm text-slate-600">
-        Last step 2 moved {moved}.{" "}
-        <Link href={href} className="underline">
-          See the report and Undo
-        </Link>
-      </p>
-    );
-  return null;
-}
 
 function activityText(a: {
   kind: string;
@@ -154,7 +85,7 @@ export default async function DonnaPage({
         </Link>
       </DonnaFrame>
     );
-  const { mailbox, active, queued, filedToday, needsYou, recent, step } = data;
+  const { mailbox, active, queued, filedToday, needsYou, recent } = data;
   const settings = donnaSettings(mailbox.settings);
   const folders = mailboxFolderTables(mailbox.coverage);
   const stats = workerStats(mailbox.coverage);
@@ -374,24 +305,15 @@ export default async function DonnaPage({
         </p>
       )}
       <DonnaStart />
-      {settings.steps ? (
-        <Steps
-          step={step}
-          paused={mailbox.paused}
-          offline={now.state === "offline"}
-          progress={
-            progress && step && progress.id === step.id
-              ? progress.countLabel
-              : null
-          }
-        />
-      ) : null}
-      <details className="space-y-3 pt-4" open={!settings.steps}>
-        <summary className="cursor-pointer text-center text-xs text-slate-400">
-          More: status, pause, today, history and limits
-        </summary>
-        <div className="mt-3 space-y-4">{details}</div>
-      </details>
+      {/* Steps (Tom, 2026-11-26): only the tables and Start new job; jobs live on their tabs. */}
+      {settings.steps ? null : (
+        <details className="space-y-3 pt-4" open>
+          <summary className="cursor-pointer text-center text-xs text-slate-400">
+            More: status, pause, today, history and limits
+          </summary>
+          <div className="mt-3 space-y-4">{details}</div>
+        </details>
+      )}
     </DonnaFrame>
   );
 }

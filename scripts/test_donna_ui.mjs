@@ -430,7 +430,8 @@ try {
   await page.goto(base + "/donna");
   // One button on the page; everything else waits under More.
   await expect(page.getByRole("button", { name: "Clean inbox now" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Pause Donna" })).toBeHidden();
+  await expect(page.getByRole("button", { name: "Pause Donna" })).toHaveCount(0);
+  await expect(page.getByText(/More: status/)).toHaveCount(0);
   await expect(page.getByRole("region", { name: "Zoho folders" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Custom folders" })).toBeVisible();
   // The Donna button up top starts step 1.
@@ -441,7 +442,7 @@ try {
   const stepOne = await db.donnaJob.findFirstOrThrow(pendingClean);
   assert.deepEqual(stepOne.options, { preview: true, buckets: true, limit: 25 });
   await page.goto(base + "/donna");
-  await expect(page.getByRole("link", { name: /Step 1: sorting your Inbox/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Step 1: sorting Inbox into buckets/ })).toBeVisible();
   // The bar shows what Donna just did with each email.
   await db.donnaMailbox.update({
     where: { id: box.id },
@@ -488,8 +489,9 @@ try {
       },
     },
   });
-  await page.goto(base + "/donna");
-  await page.getByRole("link", { name: /Step 1 done: choose what to do with 4 emails/ }).click();
+  // A finished step 1 is opened from the Jobs tab.
+  await page.goto(base + "/donna/jobs");
+  await page.getByRole("link", { name: /4 sorted into 3 buckets/ }).click();
   await expect(page.getByRole("heading", { name: "Step 1: Inbox sorted into buckets" })).toBeVisible();
   await expect(page.getByText("Why: Money or legal trouble")).toBeVisible();
   await expect(page.getByRole("button", { name: "Start step 2" })).toBeDisabled();
