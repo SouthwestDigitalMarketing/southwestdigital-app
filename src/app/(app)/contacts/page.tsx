@@ -73,7 +73,6 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
       key: true,
       label: true,
       kind: true,
-      _count: { select: { contacts: true } },
     },
   });
 
@@ -155,13 +154,6 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
         status={status}
         sort={sort}
         selectedTagKeys={tagKeys}
-        tags={tags.map((tag) => ({
-          id: tag.id,
-          key: tag.key,
-          label: tag.label,
-          kind: tag.kind,
-          count: tag._count.contacts,
-        }))}
         clients={clientOptions}
         clientId={clientId}
         brands={brandOptions}

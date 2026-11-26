@@ -2,22 +2,12 @@
 
 import { SearchInput } from "@/components/keyboard/SearchInput";
 import { useRouter } from "next/navigation";
-import { TAG_KIND_LABELS, type ContactTagKindName } from "@/lib/contacts/tags";
-
-type TagOption = {
-  id: string;
-  key: string;
-  label: string;
-  kind: ContactTagKindName;
-  count: number;
-};
 
 export function ContactsFilters({
   q,
   status,
   sort,
   selectedTagKeys,
-  tags,
   clients,
   clientId,
   brands,
@@ -27,20 +17,17 @@ export function ContactsFilters({
   status: string;
   sort: string;
   selectedTagKeys: string[];
-  tags: TagOption[];
   clients: Array<{ id: string; label: string }>;
   clientId: string;
   brands: Array<{ id: string; label: string }>;
   relatedBrandId: string;
 }) {
   const router = useRouter();
-  const selected = new Set(selectedTagKeys);
 
   function push(next: {
     q?: string;
     status?: string;
     sort?: string;
-    tags?: string[];
     clientId?: string;
     relatedBrandId?: string;
   }) {
@@ -48,7 +35,6 @@ export function ContactsFilters({
     const query = next.q ?? q;
     const nextStatus = next.status ?? status;
     const nextSort = next.sort ?? sort;
-    const nextTags = next.tags ?? selectedTagKeys;
     const nextClientId = next.clientId ?? clientId;
     const nextBrandId = next.relatedBrandId ?? relatedBrandId;
     if (query) params.set("q", query);
@@ -56,16 +42,16 @@ export function ContactsFilters({
     if (nextSort && nextSort !== "name") params.set("sort", nextSort);
     if (nextClientId) params.set("client", nextClientId);
     if (nextBrandId) params.set("brand", nextBrandId);
-    for (const key of nextTags) params.append("tag", key);
+    for (const key of selectedTagKeys) params.append("tag", key);
     const qs = params.toString();
     router.push(qs ? `/contacts?${qs}` : "/contacts", { scroll: false });
   }
 
   return (
-    <div className="mt-6 space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+    <div className="mt-6 rounded-xl border border-slate-200 bg-white p-4">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filters</p>
       <form
-        className="flex flex-wrap gap-3"
+        className="mt-3 flex flex-wrap gap-3"
         onSubmit={(event) => {
           event.preventDefault();
           const data = new FormData(event.currentTarget);
@@ -130,35 +116,6 @@ export function ContactsFilters({
           Search
         </button>
       </form>
-
-      <div className="flex flex-wrap gap-2">
-        {tags.map((tag) => {
-          const on = selected.has(tag.key);
-          return (
-            <button
-              key={tag.id}
-              type="button"
-              onClick={() => {
-                const next = on
-                  ? selectedTagKeys.filter((key) => key !== tag.key)
-                  : [...selectedTagKeys, tag.key];
-                push({ tags: next });
-              }}
-              className={`rounded-full px-3 py-1 text-xs font-medium ${
-                on
-                  ? "bg-slate-900 text-white"
-                  : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              {tag.label}
-              <span className={on ? "ml-1 text-white/70" : "ml-1 text-slate-400"}>
-                {tag.count}
-              </span>
-              <span className="sr-only"> {TAG_KIND_LABELS[tag.kind]}</span>
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 }
