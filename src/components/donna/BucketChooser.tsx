@@ -200,7 +200,7 @@ export function BucketChooser({
                 aria-label={`Bucket ${bucket.name}`}
                 className="divide-y divide-slate-100"
               >
-                <tr className={`border-t border-slate-200 ${rowTint(b, 1)}`}>
+                <tr className={`border-t-2 border-slate-700 ${rowTint(b, 1)}`}>
                   <td className={td}>
                     <input
                       type="checkbox"
