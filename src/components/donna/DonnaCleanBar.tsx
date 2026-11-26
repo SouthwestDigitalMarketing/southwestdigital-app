@@ -108,6 +108,7 @@ export function DonnaCleanBar() {
         <span className="shrink-0 text-slate-700">{job.title}</span>
         <span className="shrink-0 text-slate-500">
           {job.waiting ? ` · ${job.label}` : ""} · {job.countLabel}
+          {job.etaLabel ? ` · ${job.etaLabel}` : ""}
         </span>
         {job.recent[0] ? (
           <span
