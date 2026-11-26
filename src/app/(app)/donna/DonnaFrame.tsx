@@ -30,7 +30,7 @@ export function DonnaFrame({
           {[
             { label: "Overview", href: "/donna", key: "overview" },
             { label: "Current job", href: "/donna/current", key: "current" },
-            { label: "Jobs", href: "/donna/jobs", key: "jobs" },
+            { label: "Completed jobs", href: "/donna/jobs", key: "jobs" },
             { label: "Email", href: "/donna/email", key: "email" },
           ].map((t) => (
             <Link
@@ -70,7 +70,7 @@ export function shortTime(date: Date | null) {
 
 /**
  * Start new job (Tom, 2026-11-26): the button that opens Donna's job list, shown
- * on the Overview under the folder tables.
+ * on the Current job tab only while no job is running.
  */
 export async function DonnaStart() {
   let action;

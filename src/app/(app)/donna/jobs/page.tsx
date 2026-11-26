@@ -13,7 +13,7 @@ const STATUS: Record<string, string> = {
   cancelled: "Stopped",
 };
 
-/** Jobs tab (Tom, 2026-11-26): every job Donna ran; each opens its report. */
+/** Completed jobs tab (Tom, 2026-11-26): every finished job; each opens its report. */
 export default async function JobsPage() {
   const { dataContext } = await requireDonna();
   let jobs: Awaited<ReturnType<typeof loadJobs>> = [];
@@ -26,7 +26,7 @@ export default async function JobsPage() {
     <DonnaFrame active="jobs">
       {jobs.length ? (
         <ul
-          aria-label="Jobs"
+          aria-label="Completed jobs"
           className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white"
         >
           {jobs.map((job) => {
@@ -68,7 +68,7 @@ export default async function JobsPage() {
         </ul>
       ) : (
         <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-          No jobs yet.
+          No completed jobs yet.
         </p>
       )}
     </DonnaFrame>
