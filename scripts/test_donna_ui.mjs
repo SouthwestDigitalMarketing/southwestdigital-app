@@ -467,6 +467,15 @@ try {
   assert.deepEqual(stepOne.options, { preview: true, buckets: true, limit: 25 });
   await page.goto(base + "/donna");
   await expect(page.getByRole("link", { name: /Step 1: sorting your Inbox/ })).toBeVisible();
+  // Pause/Resume and Stop sit in the top status bar.
+  const bar = page.locator("div", { has: page.getByRole("link", { name: /Step 1: sorting Inbox into buckets/ }) }).last();
+  await bar.getByRole("button", { name: "Pause" }).click();
+  await expect.poll(async () => (await db.donnaMailbox.findUnique({ where: { id: box.id } })).paused).toBe(true);
+  await bar.getByRole("button", { name: "Resume" }).click();
+  await expect.poll(async () => (await db.donnaMailbox.findUnique({ where: { id: box.id } })).paused).toBe(false);
+  await bar.getByRole("button", { name: "Stop" }).click();
+  await expect.poll(async () => (await db.donnaJob.findUnique({ where: { id: stepOne.id } })).status).toBe("cancelled");
+  await expect(page.getByRole("link", { name: /Step 1: sorting Inbox into buckets/ })).toHaveCount(0);
   const [notice, promoA, promoB, rodan] = ["c3".repeat(32), "d4".repeat(32), "e5".repeat(32), "f6".repeat(32)];
   await db.donnaJob.update({
     where: { id: stepOne.id },
@@ -613,7 +622,7 @@ try {
   });
   assert.deepEqual(errors, []);
   console.log(
-    "Donna UI checks passed: Overview/Email tabs, Clean check/cancel/approve/undo, steps 1 and 2 with bucket choices and client tags, above-fold layouts at 360x640 / 412x915 / 1280x800, request edit/direction/completion, settings and counts-only Scorecard privacy.",
+    "Donna UI checks passed: Overview/Email tabs, Clean check/cancel/approve/undo, steps 1 and 2 with bucket choices and client tags, bar Pause/Resume/Stop, above-fold layouts at 360x640 / 412x915 / 1280x800, request edit/direction/completion, settings and counts-only Scorecard privacy.",
   );
 } finally {
   await browser.close();

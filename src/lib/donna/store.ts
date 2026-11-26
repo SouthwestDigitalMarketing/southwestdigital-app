@@ -112,7 +112,7 @@ export async function loadActiveClean(context: BrandDataContext) {
         status: true,
         options: true,
         mailbox: {
-          select: { coverage: true, paused: true, heartbeatAt: true },
+          select: { id: true, coverage: true, paused: true, heartbeatAt: true },
         },
       },
     }),
