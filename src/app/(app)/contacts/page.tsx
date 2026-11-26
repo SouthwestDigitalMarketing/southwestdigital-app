@@ -10,6 +10,7 @@ import {
   PAGE_SIZE,
   parseContactSort,
   parsePage,
+  parseRelationship,
   parseStatusFilter,
   parseTagKeys,
 } from "@/lib/contacts/tags";
@@ -27,7 +28,7 @@ type SearchParams = Promise<{
   sort?: string;
   tag?: string | string[];
   page?: string;
-  client?: string;
+  rel?: string;
   brand?: string;
 }>;
 
@@ -36,7 +37,7 @@ function hrefFor(args: {
   status: string;
   sort: string;
   tagKeys: string[];
-  clientId: string;
+  relationship: string;
   relatedBrandId: string;
   page?: number;
 }) {
@@ -44,7 +45,7 @@ function hrefFor(args: {
   if (args.q) params.set("q", args.q);
   if (args.status !== "all") params.set("status", args.status);
   if (args.sort !== "name") params.set("sort", args.sort);
-  if (args.clientId) params.set("client", args.clientId);
+  if (args.relationship !== "all") params.set("rel", args.relationship);
   if (args.relatedBrandId) params.set("brand", args.relatedBrandId);
   for (const key of args.tagKeys) params.append("tag", key);
   if (args.page && args.page > 1) params.set("page", String(args.page));
@@ -62,7 +63,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
   const sort = parseContactSort(params.sort);
   const tagKeys = parseTagKeys(params.tag);
   const page = parsePage(params.page);
-  const clientId = typeof params.client === "string" ? params.client.trim() : "";
+  const relationship = parseRelationship(params.rel);
   const relatedBrandId = typeof params.brand === "string" ? params.brand.trim() : "";
 
   const tags = await prisma.contactTag.findMany({
@@ -82,8 +83,8 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
     q,
     status,
     tagIds: selectedTagIds,
-    clientId: clientId || undefined,
     relatedBrandId: relatedBrandId || undefined,
+    relationship,
   });
 
   const [[total, contacts], clients, platformBrands] = await Promise.all([
@@ -151,8 +152,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
         status={status}
         sort={sort}
         selectedTagKeys={tagKeys}
-        clients={clientOptions}
-        clientId={clientId}
+        relationship={relationship}
         brands={brandOptions}
         relatedBrandId={relatedBrandId}
       />
@@ -261,7 +261,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
                 status,
                 sort,
                 tagKeys,
-                clientId,
+                relationship,
                 relatedBrandId,
                 page: safePage - 1,
               })}
@@ -279,7 +279,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
                 status,
                 sort,
                 tagKeys,
-                clientId,
+                relationship,
                 relatedBrandId,
                 page: safePage + 1,
               })}

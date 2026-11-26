@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parsePage, parseTagKeys, slugifyTagKey } from "./tags";
+import { parsePage, parseRelationship, parseTagKeys, slugifyTagKey } from "./tags";
 
 describe("slugifyTagKey", () => {
   it("normalizes labels into keys", () => {
@@ -22,6 +22,19 @@ describe("parseTagKeys", () => {
       "bookkeeper",
       "accountant",
     ]);
+  });
+});
+
+describe("parseRelationship", () => {
+  it("accepts Close friend, Friend, and Client", () => {
+    expect(parseRelationship("close-friend")).toBe("close-friend");
+    expect(parseRelationship("friend")).toBe("friend");
+    expect(parseRelationship("client")).toBe("client");
+  });
+
+  it("defaults unknown values to all people", () => {
+    expect(parseRelationship(undefined)).toBe("all");
+    expect(parseRelationship("active-client")).toBe("all");
   });
 });
 
