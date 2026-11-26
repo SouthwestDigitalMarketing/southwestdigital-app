@@ -350,6 +350,9 @@ export default async function CleanPage({
       active={active || awaiting ? "current" : "jobs"}
       refreshEvery={active ? 3000 : undefined}
     >
+      <p className="text-xs font-medium tabular-nums text-slate-500">
+        Job #{job.jobNumber}
+      </p>
       {steps ? (
         <Stepper steps={steps} />
       ) : (
