@@ -1,4 +1,12 @@
 # SWapp handoff
+## 2026-11-26 — Japan Budget tab as a compact table (Ummon)
+
+Tom: Budget tab should use the same table styling as trip-prep / logistics.
+`renderSections(["budget"], true)` with columns Item, Category, Planned, Actual,
+Notes, plus a totals row. Branch `ummon/travel-budget-table`, worktree
+`~/projects/worktrees/swapp-travel-budget`. No schema, AppShell, ads, scanner,
+or showrunner changes.
+
 ## 2026-11-26 — Contacts: Close family / Family groups (Ummon)
 
 Tom: two more groups, Close family and Family. Dropdown is All people / Close
