@@ -16,6 +16,8 @@ export async function GET() {
   const job = await loadActiveClean(ctx.dataContext);
   return NextResponse.json(
     {
+      // The bar's Pause and Stop need the mailbox and the job.
+      mailboxId: job?.mailbox.id ?? null,
       job: job
         ? cleanBarStatus(
             job,
