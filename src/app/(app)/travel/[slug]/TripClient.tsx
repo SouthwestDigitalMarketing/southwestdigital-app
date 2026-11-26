@@ -363,49 +363,47 @@ function TripPrepChecklist({ slug, plan, today }: { slug: string; plan: TripPlan
       </div>
 
       {total ? (
-        <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
-          <table className="w-full table-fixed text-left text-sm">
-            <thead className="bg-slate-50 text-xs text-slate-500">
-              <tr>
-                <th scope="col" className="w-[50%] px-3 py-2 font-medium sm:w-[58%]">Item</th>
-                <th scope="col" className="w-[30%] px-2 py-2 font-medium sm:w-[24%]">Status</th>
-                <th scope="col" className="w-[20%] px-2 py-2 font-medium">Due / expiry</th>
+        <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-white">
+          <table className="w-full min-w-[560px] text-left text-xs">
+            <thead className="text-[10px] uppercase tracking-wide text-slate-500">
+              <tr className="border-b border-slate-200">
+                <th scope="col" className="w-[54%] px-2 py-2 font-semibold">Item</th>
+                <th scope="col" className="w-[26%] px-2 py-2 font-semibold">Status</th>
+                <th scope="col" className="w-[20%] px-2 py-2 font-semibold">Due / expiry</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-slate-100">
               {documents.map((item) => {
                 const expires = typeof item.expires === "string" ? item.expires : "";
                 const expired = Boolean(expires && expires < today && item.status !== "Not needed");
                 const date = typeof item.due === "string" && item.due ? item.due : expires;
                 return (
-                  <tr key={`document-${item.id}`} className="align-middle">
-                    <th scope="row" className="px-3 py-2.5 font-normal">
-                      <span className="block text-[10px] text-slate-500">Document</span>
-                      <Link href={itemHref(slug, "documents", item.id)} className="ui-focus-ring block break-words font-medium text-slate-900 hover:underline">
+                  <tr key={`document-${item.id}`} className="h-10 align-middle">
+                    <th scope="row" className="px-2 py-1 font-normal">
+                      <Link href={itemHref(slug, "documents", item.id)} title={String(item.document ?? "Untitled document")} className="ui-focus-ring block truncate font-medium text-slate-900 hover:underline">
                         {String(item.document ?? "Untitled document")}
                       </Link>
                     </th>
-                    <td className="px-2 py-2.5">
-                      <span className={`inline-flex max-w-full whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium ${expired ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-700"}`}>
+                    <td className="whitespace-nowrap px-2 py-1">
+                      <span className={`inline-flex max-w-full whitespace-nowrap rounded-full px-2 py-0.5 font-medium ${expired ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-700"}`}>
                         {expired ? "Expired" : String(item.status || "Set status")}
                       </span>
                     </td>
-                    <td className="px-2 py-2.5 text-xs text-slate-600">
+                    <td className="whitespace-nowrap px-2 py-1 text-slate-600">
                       {date ? <time dateTime={date}>{shortDate(date)}</time> : <span aria-label="No date">—</span>}
                     </td>
                   </tr>
                 );
               })}
               {homeTasks.map((item) => (
-                <tr key={`home-${item.id}`} className="align-middle">
-                  <th scope="row" className="px-3 py-2.5 font-normal">
-                    <span className="block text-[10px] text-slate-500">At home</span>
-                    <Link href={itemHref(slug, "home", item.id)} className="ui-focus-ring block break-words font-medium text-slate-900 hover:underline">
+                <tr key={`home-${item.id}`} className="h-10 align-middle">
+                  <th scope="row" className="px-2 py-1 font-normal">
+                    <Link href={itemHref(slug, "home", item.id)} title={String(item.task ?? "Untitled task")} className="ui-focus-ring block truncate font-medium text-slate-900 hover:underline">
                       {String(item.task ?? "Untitled task")}
                     </Link>
                   </th>
-                  <td className="px-2 py-2.5">
-                    <label className="flex items-center gap-1.5 text-xs text-slate-700">
+                  <td className="whitespace-nowrap px-2 py-1">
+                    <label className="inline-flex items-center gap-1.5 text-slate-700">
                       <input
                         type="checkbox"
                         checked={item.done === true}
@@ -419,7 +417,7 @@ function TripPrepChecklist({ slug, plan, today }: { slug: string; plan: TripPlan
                       {item.done === true ? "Done" : "To do"}
                     </label>
                   </td>
-                  <td className="px-2 py-2.5 text-xs text-slate-600">
+                  <td className="whitespace-nowrap px-2 py-1 text-slate-600">
                     {typeof item.due === "string" && item.due ? <time dateTime={item.due}>{shortDate(item.due)}</time> : <span aria-label="No date">—</span>}
                   </td>
                 </tr>
