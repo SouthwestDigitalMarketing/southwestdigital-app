@@ -448,7 +448,12 @@ try {
       recent: [{ subject: "Example progress update", result: "Clients (Rodan Properties): From Rodan Properties, a client in SWapp" }] } } },
   });
   await page.reload();
-  await expect(page.getByRole("list", { name: "Just handled" })).toContainText("Example progress update → Clients (Rodan Properties)");
+  const barLink = page.getByRole("link", { name: /Step 1: sorting Inbox into buckets/ });
+  await expect(barLink).toContainText("Example progress update → Clients (Rodan Properties)");
+  await expect(barLink).not.toContainText("a client in SWapp");
+  // One row: the whole bar stays short.
+  const barHeight = await barLink.evaluate((el) => el.parentElement.getBoundingClientRect().height);
+  assert.ok(barHeight <= 40, "Status bar is taller than one row: " + barHeight);
   // Current job tab opens the running job; it shows buckets filling in.
   await db.donnaJob.update({
     where: { id: stepOne.id },

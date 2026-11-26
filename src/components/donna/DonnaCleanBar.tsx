@@ -92,53 +92,47 @@ export function DonnaCleanBar() {
   const control =
     "rounded border border-slate-300 bg-white px-2 py-0.5 text-xs text-slate-700 hover:bg-slate-100";
   return (
-    <div className="flex shrink-0 items-start gap-2 border-b border-slate-200 bg-slate-50 px-4 py-1.5">
+    // One row (Tom, 2026-11-26): status, count, the latest email, %, controls.
+    // The track is a thin line along the bottom edge; detail is on Current job.
+    <div className="relative flex shrink-0 items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-1">
       <Link
         href={href}
         aria-current={pathname === href ? "page" : undefined}
-        className="block min-w-0 flex-1 hover:opacity-80"
+        className="flex min-w-0 flex-1 items-center gap-2 text-xs hover:opacity-80"
         aria-label={`${aria}. Open details.`}
       >
-        <span className="flex items-center gap-2 text-xs">
-          <span
-            className={`h-2 w-2 shrink-0 rounded-full ${job.waiting ? "bg-amber-500" : "animate-pulse bg-slate-500"}`}
-            aria-hidden="true"
-          />
-          <span className="min-w-0 flex-1 truncate text-slate-700">
-            {job.title}
-            <span className="text-slate-500"> · {job.label}</span>
-            <span className="text-slate-400"> · {job.countLabel}</span>
-            {job.etaLabel ? (
-              <span className="text-slate-400"> · {job.etaLabel}</span>
-            ) : null}
-          </span>
-          <span className="shrink-0 font-semibold tabular-nums text-slate-900">
-            {job.percent}%
-          </span>
-        </span>
         <span
-          className="mt-1 block h-1 overflow-hidden rounded-full bg-slate-200"
+          className={`h-2 w-2 shrink-0 rounded-full ${job.waiting ? "bg-amber-500" : "animate-pulse bg-slate-500"}`}
           aria-hidden="true"
-        >
-          <span
-            className={`block h-1 rounded-full ${job.waiting ? "bg-amber-500" : "bg-slate-600"}`}
-            style={{ width: `${job.percent}%` }}
-          />
+        />
+        <span className="shrink-0 text-slate-700">{job.title}</span>
+        <span className="shrink-0 text-slate-500">
+          {job.waiting ? ` · ${job.label}` : ""} · {job.countLabel}
         </span>
-        {job.recent.length ? (
-          <ul aria-label="Just handled" className="mt-1 space-y-0.5">
-            {job.recent.slice(0, 3).map((r, i) => (
-              <li
-                key={`${r.subject}-${i}`}
-                className={`truncate text-xs ${i ? "text-slate-400" : "text-slate-700"}`}
-              >
-                <span className="font-medium">{r.subject}</span>
-                <span> → {r.result}</span>
-              </li>
-            ))}
-          </ul>
-        ) : null}
+        {job.recent[0] ? (
+          <span
+            aria-label="Just handled"
+            className="min-w-0 flex-1 truncate text-slate-500"
+          >
+            · <span className="text-slate-700">{job.recent[0].subject}</span> →{" "}
+            {job.recent[0].result.split(":")[0]}
+          </span>
+        ) : (
+          <span className="min-w-0 flex-1" />
+        )}
+        <span className="shrink-0 font-semibold tabular-nums text-slate-900">
+          {job.percent}%
+        </span>
       </Link>
+      <span
+        className="absolute inset-x-0 bottom-0 block h-0.5 bg-slate-200"
+        aria-hidden="true"
+      >
+        <span
+          className={`block h-0.5 ${job.waiting ? "bg-amber-500" : "bg-slate-600"}`}
+          style={{ width: `${job.percent}%` }}
+        />
+      </span>
       {mailboxId ? (
         <form
           action={async (data) => {
