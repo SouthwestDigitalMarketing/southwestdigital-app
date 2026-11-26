@@ -21,6 +21,7 @@ import {
   applyBuckets,
   approveClean,
   closeSort,
+  resortJob,
   undoFiled,
 } from "../../actions";
 import { SortedTable } from "@/components/donna/sortTable";
@@ -376,6 +377,26 @@ export default async function CleanPage({
       {sort ? (
         awaiting ? (
           <>
+            {report && !report.empty ? (
+              // Sorted before Junk and the Spam/Trash sweep existed (Tom, 2026-11-26).
+              <form
+                action={resortJob}
+                className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900"
+              >
+                <input type="hidden" name="jobId" value={job.id} />
+                <span className="min-w-0 flex-1">
+                  Sorted before Junk and Spam/Trash cleanup existed, so this job
+                  has no Junk bucket and no emptying.
+                </span>
+                <button
+                  type="submit"
+                  disabled={paused}
+                  className="rounded-lg bg-slate-900 px-3 py-1.5 text-white disabled:opacity-40"
+                >
+                  Sort again with the new rules
+                </button>
+              </form>
+            ) : null}
             <p className="text-sm text-slate-600">
               Donna sorted {report?.reviewed ?? 0} emails and moved nothing.
               {report?.remaining
