@@ -1,4 +1,10 @@
 # SWapp handoff
+## 2026-11-26 — Contacts: drop heading and filter card (Ummon)
+
+Tom: remove the "Contact directory" heading and the filter card chrome (border,
+background, padding, "Filters" label) so the search row sits on the page.
+sr-only "Contacts" heading stays. Branch `ummon/contacts-filter-chrome`.
+
 ## 2026-11-26 — Contacts directory: hide the tag chip wall (Ummon)
 
 Tom: the filter tag chips on `/contacts` are too many to show. Search, status,

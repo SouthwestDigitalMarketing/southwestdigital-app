@@ -144,10 +144,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
 
   return (
     <div className="p-8">
-      <div>
-        <h1 className="sr-only">Contacts</h1>
-        <h2 className="text-lg font-semibold text-slate-900">Contact directory</h2>
-      </div>
+      <h1 className="sr-only">Contacts</h1>
 
       <ContactsFilters
         q={q}
@@ -160,7 +157,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Sea
         relatedBrandId={relatedBrandId}
       />
 
-      <div className="mt-6 flex items-center gap-2">
+      <div className="mt-3 flex items-center gap-2">
         <CreateContactDialog
           tags={tags.map((tag) => ({ id: tag.id, label: tag.label, kind: tag.kind }))}
           clients={clientOptions}
