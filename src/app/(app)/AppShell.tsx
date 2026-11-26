@@ -6,6 +6,8 @@ import { DonnaCleanBar } from "@/components/donna/DonnaCleanBar";
 import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  PanelLeftClose,
+  PanelLeftOpen,
   LayoutDashboard,
   Building2,
   Star,
@@ -217,6 +219,29 @@ export function AppShell({
   const [sidebarWidth, setSidebarWidth] = useState(256);
   const [resizingSidebar, setResizingSidebar] = useState(false);
   const deviceThemeKey = `swapp-device-theme:${activeBrandId}`;
+  const sidebarKey = "swapp-sidebar-collapsed";
+
+  useEffect(() => {
+    try {
+      // Browser-only preference, read after hydration like the theme below.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (window.localStorage.getItem(sidebarKey) === "1") setCollapsed(true);
+    } catch {
+      // No storage: start expanded.
+    }
+  }, []);
+
+  /** One click collapses or expands the sidebar (Tom, 2026-11-26). */
+  function toggleSidebar() {
+    const next = !collapsed;
+    setCollapsed(next);
+    if (!next && sidebarWidth <= 96) setSidebarWidth(256);
+    try {
+      window.localStorage.setItem(sidebarKey, next ? "1" : "0");
+    } catch {
+      // Not remembered; still toggles.
+    }
+  }
 
   useEffect(() => {
     try {
@@ -284,8 +309,18 @@ export function AppShell({
       {/* No brand logo or brand switcher: SWapp is Lochside LLC's one app (Tom, 2026-11-24). */}
 
       {/* Scan lives on the Scanner page now (Tom, 2026-11-24); on a computer the privacy switch keeps this row. */}
-      <div className={`flex ${collapsed ? "justify-center px-1" : "px-5"} py-3 max-lg:hidden`} style={{ borderBottom: `1px solid ${dividerColor}` }}>
+      <div className={`flex items-center ${collapsed ? "flex-col gap-2 px-1" : "justify-between gap-2 px-5"} py-3 max-lg:hidden`} style={{ borderBottom: `1px solid ${dividerColor}` }}>
         <PrivacyToggle on={privacy} iconOnly={collapsed} />
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className={`rounded-lg p-1.5 ${isLight ? "hover:bg-black/5" : "hover:bg-white/10"}`}
+          style={{ color: navTextColor }}
+        >
+          {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+        </button>
       </div>
 
       <nav className={`flex-1 space-y-0.5 py-4 ${collapsed ? "px-2" : "px-3"}`}>
