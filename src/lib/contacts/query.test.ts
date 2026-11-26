@@ -16,7 +16,13 @@ describe("contactSearchWhere relationship", () => {
     expect(contactSearchWhere({ ...base, relationship: "all" })).toEqual({ brandId: "b1" });
   });
 
-  it("filters Close friend and Friend by tag key", () => {
+  it("filters family and friend groups by tag key", () => {
+    expect(contactSearchWhere({ ...base, relationship: "close-family" }).AND).toEqual([
+      { tagLinks: { some: { tag: { key: "close-family" } } } },
+    ]);
+    expect(contactSearchWhere({ ...base, relationship: "family" }).AND).toEqual([
+      { tagLinks: { some: { tag: { key: "family" } } } },
+    ]);
     expect(contactSearchWhere({ ...base, relationship: "close-friend" }).AND).toEqual([
       { tagLinks: { some: { tag: { key: "close-friend" } } } },
     ]);

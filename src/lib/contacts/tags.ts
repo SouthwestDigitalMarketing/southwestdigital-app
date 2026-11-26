@@ -40,9 +40,11 @@ export function parseStatusFilter(raw: string | undefined): "all" | "active" | "
 }
 
 export const RELATIONSHIP_TAGS = [
-  { key: "close-friend", label: "Close friend", sortOrder: 1 },
-  { key: "friend", label: "Friend", sortOrder: 2 },
-  { key: "client", label: "Client", sortOrder: 3 },
+  { key: "close-family", label: "Close family", sortOrder: 1 },
+  { key: "family", label: "Family", sortOrder: 2 },
+  { key: "close-friend", label: "Close friend", sortOrder: 3 },
+  { key: "friend", label: "Friend", sortOrder: 4 },
+  { key: "client", label: "Client", sortOrder: 5 },
 ] as const;
 
 export type ContactRelationship = "all" | (typeof RELATIONSHIP_TAGS)[number]["key"];
@@ -51,7 +53,9 @@ export type ContactRelationship = "all" | (typeof RELATIONSHIP_TAGS)[number]["ke
 export const CLIENT_RELATIONSHIP_TAG_KEYS = ["client", "active-client"] as const;
 
 export function parseRelationship(raw: string | undefined): ContactRelationship {
-  if (raw === "close-friend" || raw === "friend" || raw === "client") return raw;
+  if (RELATIONSHIP_TAGS.some((tag) => tag.key === raw)) {
+    return raw as Exclude<ContactRelationship, "all">;
+  }
   return "all";
 }
 

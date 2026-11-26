@@ -1,4 +1,13 @@
 # SWapp handoff
+## 2026-11-26 — Contacts: Close family / Family groups (Ummon)
+
+Tom: two more groups, Close family and Family. Dropdown is All people / Close
+family / Family / Close friend / Friend / Client. Tags seeded, no schema.
+Google Contacts export (tmacdonald7@gmail.com, 432 cards, same book as the
+Pixel) imported into Bookkeeping Conroe via pipe; Google Family/Friends labels
+mapped to family/friend tags. Close family still needs Tom. Branch
+`ummon/contacts-family`.
+
 ## 2026-11-26 — Contacts: Close friend / Friend / Client filter (Ummon)
 
 Tom: try relationship instead of the All clients company picker. Dropdown is
