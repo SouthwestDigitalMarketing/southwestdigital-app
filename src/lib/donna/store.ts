@@ -224,15 +224,22 @@ export async function claimJob(context: BrandDataContext) {
     const mailbox = await tx.donnaMailbox.findUniqueOrThrow({
       where: { id: candidates[0].id },
     });
-    const job = await tx.donnaJob.findFirst({
-      where: {
-        mailboxId: mailbox.id,
-        status: { in: ["pending", "leased"] },
-        nextAttemptAt: { lte: new Date() },
-        OR: [{ leaseUntil: null }, { leaseUntil: { lte: new Date() } }],
-      },
-      orderBy: { receivedAt: "asc" },
-    });
+    const ready = {
+      mailboxId: mailbox.id,
+      status: { in: ["pending", "leased"] },
+      nextAttemptAt: { lte: new Date() },
+      OR: [{ leaseUntil: null }, { leaseUntil: { lte: new Date() } }],
+    };
+    // Inbox cleans (Tom's, undo, and new mail) go ahead of background history passes.
+    const job =
+      (await tx.donnaJob.findFirst({
+        where: { ...ready, kind: { in: ["clean", "undo"] } },
+        orderBy: { receivedAt: "asc" },
+      })) ??
+      (await tx.donnaJob.findFirst({
+        where: ready,
+        orderBy: { receivedAt: "asc" },
+      }));
     if (!job) return null;
     const lease = await tx.donnaJob.update({
       where: { id: job.id },

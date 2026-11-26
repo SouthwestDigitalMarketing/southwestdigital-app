@@ -234,6 +234,10 @@ try {
     skipped: [],
     ...extra,
   });
+  // An older background job must not hold up an Inbox clean.
+  await db.donnaJob.create({
+    data: { mailboxId: box.id, kind: "backlog", eventKey: "older-backlog:" + suffix },
+  });
   const previewJob = await db.donnaJob.create({
     data: {
       mailboxId: box.id,
@@ -287,9 +291,13 @@ try {
   assert.equal(previewDone.result.filed[0].thread, thread);
   assert.equal(
     await db.donnaJob.count({ where: { mailboxId: box.id, status: "pending" } }),
-    0,
-    "Clean must not queue a backlog pass.",
+    1,
+    "Clean must not queue a backlog pass (only the older one waits).",
   );
+  await db.donnaJob.updateMany({
+    where: { mailboxId: box.id, kind: "backlog", status: "pending" },
+    data: { status: "done" },
+  });
 
   const realJob = await db.donnaJob.create({
     data: {

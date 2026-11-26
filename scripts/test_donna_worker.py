@@ -57,6 +57,20 @@ class WorkerTests(unittest.TestCase):
                 resumed.reserve_review()
             resumed.db.close()
 
+    def test_history_reviews_have_their_own_cap_so_new_mail_has_room(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = donna.LocalStore(tmp)
+            store.daily_limit = 3
+            store.background_limit = 1
+            store.reserve_review(background=True)
+            with self.assertRaisesRegex(RuntimeError, "history review limit"):
+                store.reserve_review(background=True)
+            store.reserve_review()
+            store.reserve_review()
+            with self.assertRaisesRegex(RuntimeError, "Daily review limit"):
+                store.reserve_review()
+            store.db.close()
+
     def test_reply_and_original_share_identity_without_subject_guessing(self):
         original = message("<root@example.com>")
         reply = message("<reply@example.com>", "Re: Question", "<root@example.com>", "thomas@bookkeepingconroe.com")
@@ -129,7 +143,7 @@ class WorkerTests(unittest.TestCase):
     def test_partial_job_is_not_complete_and_does_not_touch_live_mail(self):
         class Store:
             root = "/tmp"
-            def reserve_review(self):
+            def reserve_review(self, **kwargs):
                 pass
             def inventory(self, *args):
                 return {"gaps": []}
@@ -158,7 +172,7 @@ class WorkerTests(unittest.TestCase):
         class Store:
             root = "/tmp"
             failures = []
-            def reserve_review(self): pass
+            def reserve_review(self, **kwargs): pass
             def inventory(self, *args): return {"gaps": []}
             def threads(self, *args): return [("broken", "h1", [], []), ("good", "h2", [], [])]
             def record_failure(self, *args): self.failures.append(args)
@@ -356,6 +370,23 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual((report["reviewed"], report["filed"]), (0, []))
             store.db.close()
 
+    def test_unreadable_attachment_blocks_filing_only_when_mail_could_matter(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = donna.LocalStore(tmp)
+            for uid, key, sender in [(21, "<logo@x>", "promo@shop.example"), (22, "<odd@x>", "who@unknown.example")]:
+                msg = message(key, "Hello", sender=sender)
+                msg.add_attachment(b"\x89PNG", maintype="image", subtype="png", filename="logo.png")
+                store.save("box", "INBOX", "1", uid, msg.as_bytes(), "ours@example.com", Helper)
+            store.db.commit()
+            unknown = dict(self.BY_SENDER["promo@shop.example"][0], key="odd", category="unknown")
+            moves = []
+            with patch.dict(self.BY_SENDER, {"who@unknown.example": [unknown]}):
+                calls = self.run_clean(store, {"manual": True}, filer=lambda uid, dest, mid: moves.append(uid))
+            self.assertEqual(moves, [21])
+            report = next(d["result"]["report"] for op, d in calls if op == "complete")
+            self.assertEqual([i["reason"] for i in report["skipped"]], ["attachment review needed"])
+            store.db.close()
+
     def test_cancel_stops_before_the_next_move_and_reports_what_moved(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = self.clean_fixture(tmp)
@@ -417,7 +448,7 @@ class WorkerTests(unittest.TestCase):
         class Store:
             root = "/tmp"
             deferred = 0
-            def reserve_review(self):
+            def reserve_review(self, **kwargs):
                 raise AssertionError("Archive mail must not be reviewed during Clean")
             def inventory(self, *args):
                 return {"folders": [{"folder": "Archive", "messages": 1}], "gaps": []}
