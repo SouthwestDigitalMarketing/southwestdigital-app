@@ -179,42 +179,17 @@ try {
             .allTextContents(),
           ["Overview", "Current job", "Jobs", "Email"],
         );
-        const donna = page.getByRole("button", { name: "Donna", exact: true });
-        await expect(donna).toBeVisible();
-        const chrome = await page.evaluate(() => {
-          const btn = [...document.querySelectorAll("button")].find(
-            (b) => b.textContent.trim() === "Donna",
-          );
-          const nav = document.querySelector(
-            'nav[aria-label="Donna sections"]',
-          );
-          const frame = document.querySelector("#main-content > div");
-          if (!btn || !nav || !frame) return null;
-          const buttonBox = btn.getBoundingClientRect();
-          const navBox = nav.getBoundingClientRect();
-          const frameBox = frame.getBoundingClientRect();
-          const pad = parseFloat(getComputedStyle(frame).paddingLeft) || 0;
-          const contentWidth =
-            frame.clientWidth -
-            pad -
-            (parseFloat(getComputedStyle(frame).paddingRight) || 0);
-          return {
-            aboveTabs: buttonBox.bottom <= navBox.top + 1,
-            left: Math.abs(buttonBox.left - (frameBox.left + pad)) <= 1,
-            fullWidth: Math.abs(buttonBox.width - contentWidth) <= 2,
-          };
-        });
-        assert.ok(
-          chrome?.aboveTabs,
-          route + " Donna button is not above the tabs",
-        );
-        assert.ok(chrome?.left, route + " Donna button is not top left");
-        if (viewport.width <= 412)
-          assert.ok(
-            chrome?.fullWidth,
-            route + " Donna button is not full width on the phone",
-          );
-        else assert.equal(chrome?.fullWidth, false);
+        // Start new job sits on the Overview, under the folder tables (Tom, 2026-11-26).
+        const start = page.getByRole("button", { name: "Start new job", exact: true });
+        if (route === "/donna") {
+          await expect(start).toBeVisible();
+          const below = await page.evaluate(() => {
+            const btn = [...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Start new job");
+            const table = document.querySelector('section[aria-label="Custom folders"]');
+            return Boolean(btn && table && btn.getBoundingClientRect().top >= table.getBoundingClientRect().bottom);
+          });
+          assert.ok(below, "Start new job is not under the folder tables");
+        } else await expect(start).toHaveCount(0);
       }
       if (route === "/donna/email") {
         await page
@@ -278,7 +253,7 @@ try {
   }
   await page.setViewportSize({ width: 412, height: 915 });
   await page.goto(base + "/donna");
-  await page.getByRole("button", { name: "Donna", exact: true }).click();
+  await page.getByRole("button", { name: "Start new job", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
   await expect(
@@ -322,9 +297,9 @@ try {
   );
   await dialog.getByRole("button", { name: "Close", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await page.goto(base + "/donna/email");
-  await page.getByRole("button", { name: "Donna", exact: true }).click();
-  await page.getByRole("button", { name: /Clean inbox/ }).click();
+  await page.goto(base + "/donna");
+  await page.getByRole("button", { name: "Start new job", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: /Clean inbox/ }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect
     .poll(async () =>
@@ -358,8 +333,8 @@ try {
     page.getByRole("heading", { name: "Inbox clean" }),
   ).toBeVisible();
   assert.deepEqual(cleanJob.options, { manual: true });
-  await page.goto(base + "/donna/email/work");
-  await page.getByRole("button", { name: "Donna", exact: true }).click();
+  await page.goto(base + "/donna");
+  await page.getByRole("button", { name: "Start new job", exact: true }).click();
   await expect(
     page.getByRole("dialog").getByRole("button", { name: /Cleaning/ }),
   ).toBeEnabled();
@@ -370,7 +345,7 @@ try {
   ).toBeVisible();
   // Cancel a queued check: the job ends and the bar goes away.
   await page.goto(base + "/donna/cleans/" + cleanJob.id);
-  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
   await expect
     .poll(async () =>
       (await db.donnaJob.findUniqueOrThrow({ where: { id: cleanJob.id } }))
@@ -459,7 +434,7 @@ try {
   await expect(page.getByRole("region", { name: "Zoho folders" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Custom folders" })).toBeVisible();
   // The Donna button up top starts step 1.
-  await page.getByRole("button", { name: "Donna", exact: true }).click();
+  await page.getByRole("button", { name: "Start new job", exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: /Clean inbox/ }).click();
   const pendingClean = { where: { mailboxId: box.id, kind: "clean", status: "pending" } };
   await expect.poll(async () => Boolean(await db.donnaJob.findFirst(pendingClean))).toBe(true);
