@@ -900,12 +900,16 @@ def process_job(client, store, work, max_threads, clean_threads=100):
     # SQLite objects only work on the thread that opened them: the lease keeper reuses
     # the last stats the main thread read instead of reading the store itself.
     last_stats = [None]
+    # The report so far, sent with heartbeats so SWapp's Current job page fills in live.
+    live = {}
 
     def heartbeat(force=False):
         if force or time.monotonic() - last_heartbeat[0] > 20:
             payload = dict(progress) if job.get("kind") == "clean" and progress.get("total") else None
             try:
                 extra = {"progress": payload} if payload is not None else {}
+                if payload is not None and live.get("report") is not None:
+                    extra["report"] = live["report"]
                 if hasattr(store, "usage") and threading.current_thread() is threading.main_thread():
                     last_stats[0] = store.usage()
                 if last_stats[0] is not None:
@@ -952,6 +956,8 @@ def process_job(client, store, work, max_threads, clean_threads=100):
                   "skipped": [], "preview": preview}
         if sorting:
             report["sorted"] = []
+        if is_clean:
+            live["report"] = report
         if plan is not None:
             done_threads = set()
             for item in store.filed_for(job["id"]):

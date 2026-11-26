@@ -425,6 +425,9 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual(len(recent[-1]), 2)
             self.assertTrue(all(r["subject"] and r["result"] for r in recent[-1]))
             self.assertTrue(any(r["result"].startswith("Clients") for r in recent[-1]))
+            # The report so far rides along, so the Current job page fills in live.
+            partial = [d["report"] for op, d in calls if op == "heartbeat" and d.get("report")]
+            self.assertTrue(partial and partial[-1]["sorted"])
             store.db.close()
 
     def test_step_one_includes_mail_tom_put_back_and_decided_mail(self):

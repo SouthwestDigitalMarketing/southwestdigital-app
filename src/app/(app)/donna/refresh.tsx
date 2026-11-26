@@ -1,13 +1,13 @@
 "use client";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-export function RefreshDonna() {
+export function RefreshDonna({ every = 15000 }: { every?: number }) {
   const router = useRouter();
   useEffect(() => {
     const timer = setInterval(() => {
       if (document.visibilityState === "visible") router.refresh();
-    }, 15000);
+    }, every);
     return () => clearInterval(timer);
-  }, [router]);
+  }, [router, every]);
   return null;
 }

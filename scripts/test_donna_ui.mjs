@@ -177,7 +177,7 @@ try {
           await page
             .locator('nav[aria-label="Donna sections"] a')
             .allTextContents(),
-          ["Overview", "Email"],
+          ["Overview", "Current job", "Jobs", "Email"],
         );
         const donna = page.getByRole("button", { name: "Donna", exact: true });
         await expect(donna).toBeVisible();
@@ -475,6 +475,17 @@ try {
   });
   await page.reload();
   await expect(page.getByRole("list", { name: "Just handled" })).toContainText("Example progress update → Clients (Rodan Properties)");
+  // Current job tab opens the running job; it shows buckets filling in.
+  await db.donnaJob.update({
+    where: { id: stepOne.id },
+    data: { result: { preview: true, live: true, at: new Date().toISOString(), reviewed: 1,
+      sorted: [{ thread: "ab".repeat(32), subject: "Example live email", from: "x@shop.example", bucket: "Newsletter", why: "Promo", suggest: "Newsletter" }] } },
+  });
+  await page.getByRole("link", { name: "Current job" }).click();
+  await expect(page).toHaveURL(new RegExp("/donna/cleans/" + stepOne.id));
+  await expect(page.getByRole("link", { name: "Current job" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("region", { name: "Bucket Newsletter" })).toContainText("Example live email");
+  await page.goto(base + "/donna");
   // Pause/Resume and Stop sit in the top status bar.
   const bar = page.locator("div", { has: page.getByRole("link", { name: /Step 1: sorting Inbox into buckets/ }) }).last();
   await bar.getByRole("button", { name: "Pause" }).click();
@@ -525,6 +536,14 @@ try {
     buckets: true,
   });
   await db.donnaJob.updateMany({ where: { id: stepTwo.id }, data: { status: "done" } });
+  // Jobs tab lists every job; each opens its report.
+  await page.goto(base + "/donna/jobs");
+  const jobs = page.getByRole("list", { name: "Jobs" });
+  await expect(jobs).toContainText("Step 1: sort Inbox into buckets");
+  await expect(jobs).toContainText("4 sorted into 3 buckets");
+  await expect(jobs).toContainText("Step 2: do what you chose");
+  await page.goto(base + "/donna/current");
+  await expect(page.getByText("No job is running.")).toBeVisible();
   for (const size of [
     { width: 360, height: 640 },
     { width: 412, height: 915 },
@@ -630,7 +649,7 @@ try {
   });
   assert.deepEqual(errors, []);
   console.log(
-    "Donna UI checks passed: Overview/Email tabs, Clean check/cancel/approve/undo, steps 1 and 2 with bucket choices and client tags, bar Pause/Resume/Stop, above-fold layouts at 360x640 / 412x915 / 1280x800, request edit/direction/completion, settings and counts-only Scorecard privacy.",
+    "Donna UI checks passed: Overview/Email tabs, Clean check/cancel/approve/undo, steps 1 and 2 with bucket choices and client tags, bar Pause/Resume/Stop, Current job and Jobs tabs, above-fold layouts at 360x640 / 412x915 / 1280x800, request edit/direction/completion, settings and counts-only Scorecard privacy.",
   );
 } finally {
   await browser.close();

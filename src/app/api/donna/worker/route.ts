@@ -203,6 +203,19 @@ export async function POST(request: Request) {
             })
             .optional()
             .parse(body.progress);
+          // The clean's report so far: the Current job page shows it filling in.
+          if (progress && job.kind === "clean" && body.report) {
+            const partial = z
+              .record(z.string(), z.unknown())
+              .parse(body.report);
+            if (JSON.stringify(partial).length <= 400_000)
+              await tx.donnaJob.update({
+                where: { id: job.id },
+                data: {
+                  result: { ...partial, live: true } as Prisma.InputJsonObject,
+                },
+              });
+          }
           if (progress) {
             const box = await tx.donnaMailbox.findUnique({
               where: { id: job.mailboxId },

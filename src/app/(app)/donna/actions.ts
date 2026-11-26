@@ -339,7 +339,8 @@ export async function applyBuckets(form: FormData) {
       where: {
         id: sortId,
         kind: "clean",
-        status: "done",
+        // A stopped sort keeps what it sorted; Tom may act on that part.
+        status: { in: ["done", "cancelled"] },
         mailbox: { brandId: dataContext.brandId },
       },
       include: { mailbox: true },
