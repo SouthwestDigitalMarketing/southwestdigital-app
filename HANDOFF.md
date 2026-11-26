@@ -1,4 +1,16 @@
 # SWapp handoff
+## 2026-11-26 — Inbox zero rolled back (Tom: "I don't trust this yet")
+
+`archive_rest()` archived every *decided* Inbox thread, which bypassed the "never file client or
+sales mail" rule and Mailroom's `keep` rules (final notice, will expire, collection, Double client
+questions). 36 conversations went to Archive with no per-email reason, no client tag. On
+2026-11-26 Ummon stopped `swapp-donna` (inactive), moved all 36 back to INBOX via
+`unfile_via_imap` (36/36 verified), marked them `kept_in_inbox`, and relabelled their
+`clean_filed` rows `Archive (put back)`. Backup of the local DB is in the session scratchpad.
+SWapp's clean reports still list them as filed to Archive (stale). Do not restart the worker
+with inbox zero on. Next: reasons on every move, client tagging, ask-when-unsure, a run report,
+and Mailroom's rules (`~/projects/mailroom-app/config/mail-sort-rules.json`) as hard guards.
+
 ## 2026-11-25 (late) — Inbox zero (Tom: "clear the conversations")
 
 - Setting `inboxZero` (default on, Limits on the Overview): after a Clean,
