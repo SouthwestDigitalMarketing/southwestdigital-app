@@ -25,47 +25,58 @@ export default async function JobsPage() {
   return (
     <DonnaFrame active="jobs">
       {jobs.length ? (
-        <ul
-          aria-label="Completed jobs"
-          className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white"
-        >
-          {jobs.map((job) => {
-            const body = (
-              <>
-                <span className="w-28 shrink-0 text-xs tabular-nums text-slate-500">
-                  {shortTime(job.completedAt ?? job.receivedAt)}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">
-                    {jobTitle(job)}
-                  </span>
-                  <span className="block truncate text-xs text-slate-500">
-                    {jobOutcome(job, job.follow)}
-                  </span>
-                </span>
-                <span className="shrink-0 text-xs text-slate-500">
-                  {STATUS[job.status] ?? job.status}
-                </span>
-              </>
-            );
-            return (
-              <li key={job.id}>
-                {job.kind === "clean" ? (
-                  <Link
-                    href={`/donna/cleans/${encodeURIComponent(job.id)}`}
-                    className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50"
+        // Same compact table style as the job pages (Tom, 2026-11-26).
+        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+          <table
+            aria-label="Completed jobs"
+            className="w-full min-w-[560px] text-left text-xs"
+          >
+            <thead className="uppercase tracking-wide text-slate-500">
+              <tr className="border-b border-slate-200">
+                <th className="px-2 py-1 font-semibold">When</th>
+                <th className="px-2 py-1 font-semibold">Job</th>
+                <th className="px-2 py-1 font-semibold">Result</th>
+                <th className="px-2 py-1 font-semibold">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {jobs.map((job, i) => {
+                const href =
+                  job.kind === "clean"
+                    ? `/donna/cleans/${encodeURIComponent(job.id)}`
+                    : null;
+                const outcome = jobOutcome(job, job.follow);
+                return (
+                  <tr
+                    key={job.id}
+                    className={`align-top ${i % 2 ? "bg-slate-50" : "bg-white"} hover:bg-sky-50`}
                   >
-                    {body}
-                  </Link>
-                ) : (
-                  <div className="flex items-center gap-3 px-3 py-2">
-                    {body}
-                  </div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+                    <td className="whitespace-nowrap px-2 py-1 tabular-nums text-slate-500">
+                      {shortTime(job.completedAt ?? job.receivedAt)}
+                    </td>
+                    <td className="whitespace-nowrap px-2 py-1 font-medium">
+                      {href ? (
+                        <Link
+                          href={href}
+                          aria-label={`${jobTitle(job)}: ${outcome}`}
+                          className="underline decoration-slate-300 hover:decoration-slate-700"
+                        >
+                          {jobTitle(job)}
+                        </Link>
+                      ) : (
+                        jobTitle(job)
+                      )}
+                    </td>
+                    <td className="px-2 py-1 text-slate-600">{outcome}</td>
+                    <td className="whitespace-nowrap px-2 py-1 text-slate-500">
+                      {STATUS[job.status] ?? job.status}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       ) : (
         <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
           No completed jobs yet.
