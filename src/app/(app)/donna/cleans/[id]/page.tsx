@@ -164,6 +164,16 @@ const BUCKET_TINTS = [
   ["bg-indigo-50", "bg-indigo-100/60"],
 ];
 
+/** One colour per type group, so a scam or a money email stands out. */
+const TYPE_DOTS: Record<string, string> = {
+  People: "bg-sky-500",
+  Money: "bg-emerald-500",
+  Systems: "bg-slate-500",
+  Marketing: "bg-violet-500",
+  Unwanted: "bg-rose-500",
+  Other: "bg-slate-300",
+};
+
 /** Step 1 while it runs: one table, a row per email, grouped by bucket (Tom, 2026-11-26). */
 function LiveBuckets({ buckets }: { buckets: Bucket[] }) {
   if (!buckets.length)
@@ -176,12 +186,13 @@ function LiveBuckets({ buckets }: { buckets: Bucket[] }) {
     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
       <table
         aria-label="Sorted emails"
-        className="w-full min-w-[560px] text-left text-xs"
+        className="w-full min-w-[640px] text-left text-xs"
       >
         <thead className="uppercase tracking-wide text-slate-500">
           <tr className="border-b border-slate-200">
             <th className="px-2 py-1 font-semibold">Bucket</th>
             <th className="px-2 py-1 font-semibold">Email</th>
+            <th className="px-2 py-1 font-semibold">Type</th>
             <th className="px-2 py-1 font-semibold">From</th>
             <th className="px-2 py-1 font-semibold">Client</th>
             <th className="w-8 px-2 py-1 font-semibold">
@@ -201,6 +212,25 @@ function LiveBuckets({ buckets }: { buckets: Bucket[] }) {
                 </td>
                 <td className="max-w-[16rem] truncate px-2 py-1">
                   {item.subject}
+                </td>
+                <td className="whitespace-nowrap px-2 py-1 text-slate-600">
+                  {item.type ? (
+                    <span
+                      title={item.typeHint || item.type}
+                      className="inline-flex items-center gap-1"
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={`h-1.5 w-1.5 rounded-full ${TYPE_DOTS[item.typeGroup] ?? TYPE_DOTS.Other}`}
+                      />
+                      {item.type}
+                      {item.typeNew ? (
+                        <span className="rounded bg-slate-900 px-1 text-[10px] leading-4 text-white">
+                          new
+                        </span>
+                      ) : null}
+                    </span>
+                  ) : null}
                 </td>
                 <td
                   className="max-w-[12rem] truncate px-2 py-1 text-slate-600"

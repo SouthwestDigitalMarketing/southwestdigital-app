@@ -468,16 +468,22 @@ try {
   await db.donnaJob.update({
     where: { id: stepOne.id },
     data: { result: { preview: true, live: true, at: new Date().toISOString(), reviewed: 1,
-      sorted: [{ thread: "ab".repeat(32), subject: "Example live email", from: "x@shop.example", bucket: "Newsletter", why: "Promo", suggest: "Newsletter" }] } },
+      sorted: [
+        { thread: "ab".repeat(32), subject: "Example live email", from: "x@shop.example", bucket: "Newsletter", why: "Store promo email", suggest: "Newsletter", type: "Promo", typeGroup: "Marketing", typeHint: "Promotion or sale" },
+        { thread: "cd".repeat(32), subject: "Example summons", from: "court@x.example", bucket: "Not sure", why: "Court mail", suggest: null, type: "Court", typeGroup: "Other", typeHint: "Jury duty summons", typeNew: true },
+      ] } },
   });
   await page.getByRole("link", { name: "Current job" }).click();
   await expect(page).toHaveURL(new RegExp("/donna/cleans/" + stepOne.id));
   await expect(page.getByRole("link", { name: "Current job" })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("table", { name: "Sorted emails" })).toContainText("Newsletter (1)");
   await expect(page.getByRole("table", { name: "Sorted emails" })).toContainText("Example live email");
+  // Type: short label, hover text, and "new" when Donna made the type up.
+  await expect(page.getByTitle("Promotion or sale")).toHaveText("Promo");
+  await expect(page.getByTitle("Jury duty summons")).toHaveText("Courtnew");
   // Why is a hover icon, not a column of text.
-  await expect(page.getByRole("img", { name: "Why: Promo" })).toHaveAttribute("title", "Promo");
-  await expect(page.getByRole("table", { name: "Sorted emails" })).not.toContainText("Promo");
+  await expect(page.getByRole("img", { name: "Why: Store promo email" })).toHaveAttribute("title", "Store promo email");
+  await expect(page.getByRole("table", { name: "Sorted emails" })).not.toContainText("Store promo email");
   await page.goto(base + "/donna");
   // Pause/Resume and Stop sit in the top status bar.
   const bar = page.locator("div", { has: page.getByRole("link", { name: /Step 1: sorting Inbox into buckets/ }) }).last();

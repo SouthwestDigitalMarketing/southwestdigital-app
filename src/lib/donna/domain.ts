@@ -347,6 +347,12 @@ export type SortedItem = {
   why: string;
   suggest: string | null;
   client: string | null;
+  /** What the email is, short (Quote, Phish, …), its group and hover text. */
+  type: string;
+  typeGroup: string;
+  typeHint: string;
+  /** Donna made this type up for this email because nothing on the list fitted. */
+  typeNew: boolean;
 };
 
 export type Bucket = {
@@ -378,6 +384,10 @@ function sortedItems(value: unknown): SortedItem[] {
           ? suggest
           : null,
         client: text(raw.client, 120) || null,
+        type: text(raw.type, 24),
+        typeGroup: text(raw.typeGroup, 20) || "Other",
+        typeHint: text(raw.typeHint, 80),
+        typeNew: raw.typeNew === true,
       },
     ];
   });
