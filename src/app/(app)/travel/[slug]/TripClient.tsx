@@ -353,19 +353,19 @@ function TripPrepChecklist({ slug, plan, today }: { slug: string; plan: TripPlan
     homeTasks.filter((item) => item.done === true).length;
 
   return (
-    <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="trip-prep-title">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h2 id="trip-prep-title" className="text-lg font-semibold tracking-tight text-slate-900">Trip-prep checklist</h2>
-          <p className="mt-0.5 text-sm text-slate-500">Documents and tasks to handle at home.</p>
-        </div>
-        <p className="text-sm text-slate-500">{done} of {total} ready</p>
-      </div>
-
+    <section className="mt-4" aria-labelledby="trip-prep-title">
       {total ? (
-        <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-white">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
           <table className="w-full min-w-[560px] text-left text-xs">
             <thead className="text-[10px] uppercase tracking-wide text-slate-500">
+              <tr className="border-b border-slate-200 text-sm normal-case tracking-normal text-slate-900">
+                <th colSpan={3} className="px-2 py-2.5 font-semibold">
+                  <div className="flex items-center justify-between gap-3">
+                    <h2 id="trip-prep-title">Trip-prep checklist</h2>
+                    <span className="text-xs font-normal text-slate-500">{done} of {total} ready</span>
+                  </div>
+                </th>
+              </tr>
               <tr className="border-b border-slate-200">
                 <th scope="col" className="w-[54%] px-2 py-2 font-semibold">Item</th>
                 <th scope="col" className="w-[26%] px-2 py-2 font-semibold">Status</th>
@@ -426,7 +426,13 @@ function TripPrepChecklist({ slug, plan, today }: { slug: string; plan: TripPlan
           </table>
         </div>
       ) : (
-        <p className="mt-4 rounded-xl bg-slate-50 px-4 py-5 text-center text-sm text-slate-600">Your trip-prep checklist is clear.</p>
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+          <div className="flex items-center justify-between gap-3">
+            <h2 id="trip-prep-title" className="text-sm font-semibold text-slate-900">Trip-prep checklist</h2>
+            <span className="text-xs text-slate-500">{done} of {total} ready</span>
+          </div>
+          <p className="mt-2 text-sm text-slate-600">Your trip-prep checklist is clear.</p>
+        </div>
       )}
       {error ? <p role="alert" className="mt-3 text-sm text-red-700">{error}</p> : null}
     </section>
