@@ -47,7 +47,7 @@ export function DonnaCleanBar() {
       running = true;
       setJob({
         id: detail.jobId,
-        title: "Checking inbox",
+        title: "Cleaning inbox",
         paused: false,
         offline: false,
         waiting: true,

@@ -7,7 +7,7 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { requireDonna } from "@/lib/donna/access";
 import { withBrandDataTransaction } from "@/lib/tenancy/context";
-import { enqueue } from "@/lib/donna/store";
+import { AUTO_CLEAN_PREFIX, enqueue } from "@/lib/donna/store";
 import {
   cleanReport,
   donnaActionCounts,
@@ -108,9 +108,10 @@ export async function startCleanInbox(
           mailboxId: box.id,
           kind: "clean",
           status: { in: ["pending", "leased"] },
+          NOT: { eventKey: { startsWith: AUTO_CLEAN_PREFIX } },
         },
       });
-      // Clean inbox always starts with a preview; nothing moves until Tom approves.
+      // Donna files allowlisted Inbox mail on her own; every move can be undone.
       const job =
         existing ??
         (await tx.donnaJob.create({
@@ -118,11 +119,15 @@ export async function startCleanInbox(
             mailboxId: box.id,
             kind: "clean",
             eventKey: `clean:${randomUUID()}`,
-            options: { preview: true },
+            options: { manual: true },
           },
         }));
       if (!existing)
-        await resetCleanProgress(tx, box, donnaActionCounts(box.coverage).inbox);
+        await resetCleanProgress(
+          tx,
+          box,
+          donnaActionCounts(box.coverage).inbox,
+        );
       await tx.donnaActivity.create({
         data: {
           mailboxId: box.id,
@@ -144,7 +149,7 @@ export async function startCleanInbox(
         message: "Donna is paused. Resume her in Settings to clean the inbox.",
       };
     refresh();
-    return { ok: true, message: "Checking inbox.", jobId };
+    return { ok: true, message: "Cleaning inbox.", jobId };
   } catch {
     return {
       ok: false,
@@ -159,7 +164,9 @@ async function resetCleanProgress(
   total: number,
 ) {
   const coverage =
-    box.coverage && typeof box.coverage === "object" && !Array.isArray(box.coverage)
+    box.coverage &&
+    typeof box.coverage === "object" &&
+    !Array.isArray(box.coverage)
       ? (box.coverage as Record<string, unknown>)
       : {};
   await tx.donnaMailbox.update({
@@ -274,7 +281,12 @@ export async function cancelClean(form: FormData) {
             leaseUntil: null,
           },
     });
-    await cleanControl(tx, job.mailboxId, session.user.id, "Inbox clean cancelled.");
+    await cleanControl(
+      tx,
+      job.mailboxId,
+      session.user.id,
+      "Inbox clean cancelled.",
+    );
   });
   refresh();
 }
@@ -295,7 +307,9 @@ export async function undoFiled(form: FormData) {
       include: { mailbox: { select: { paused: true } } },
     });
     const result =
-      clean?.result && typeof clean.result === "object" && !Array.isArray(clean.result)
+      clean?.result &&
+      typeof clean.result === "object" &&
+      !Array.isArray(clean.result)
         ? (clean.result as Record<string, unknown>)
         : null;
     const report = cleanReport(result);
@@ -320,13 +334,18 @@ export async function undoFiled(form: FormData) {
       },
     });
     const pending = new Set(threads);
-    const filed = (Array.isArray(result.filed) ? result.filed : []).map((item) =>
-      item &&
-      typeof item === "object" &&
-      !Array.isArray(item) &&
-      pending.has(String((item as Record<string, unknown>).thread))
-        ? { ...(item as Record<string, unknown>), undoPending: true, undoError: null }
-        : item,
+    const filed = (Array.isArray(result.filed) ? result.filed : []).map(
+      (item) =>
+        item &&
+        typeof item === "object" &&
+        !Array.isArray(item) &&
+        pending.has(String((item as Record<string, unknown>).thread))
+          ? {
+              ...(item as Record<string, unknown>),
+              undoPending: true,
+              undoError: null,
+            }
+          : item,
     );
     await tx.donnaJob.update({
       where: { id: clean.id },

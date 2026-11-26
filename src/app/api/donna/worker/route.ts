@@ -8,6 +8,7 @@ import {
   publish,
   lockLease,
   enqueue,
+  AUTO_CLEAN_PREFIX,
 } from "@/lib/donna/store";
 import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { checkRateLimit } from "@/lib/simpleRateLimit";
@@ -26,7 +27,9 @@ async function recordUndo(
     where: { id: undo.cleanJobId, mailboxId, kind: "clean" },
   });
   const result =
-    clean?.result && typeof clean.result === "object" && !Array.isArray(clean.result)
+    clean?.result &&
+    typeof clean.result === "object" &&
+    !Array.isArray(clean.result)
       ? (clean.result as Record<string, unknown>)
       : null;
   if (!clean || !result || !Array.isArray(result.filed)) return;
@@ -82,7 +85,24 @@ export async function POST(request: Request) {
           where: { brandId: auth.context.brandId, key: "zoho", paused: false },
         });
         for (const box of boxes) {
-          await enqueue(tx, box.id, "incoming", `idle:${key}`);
+          // New Inbox mail: Donna files what she can on her own (Tom, 2026-11-25).
+          const queued = await tx.donnaJob.findFirst({
+            where: {
+              mailboxId: box.id,
+              kind: "clean",
+              status: "pending",
+              eventKey: { startsWith: AUTO_CLEAN_PREFIX },
+            },
+          });
+          if (!queued)
+            await tx.donnaJob.create({
+              data: {
+                mailboxId: box.id,
+                kind: "clean",
+                eventKey: `${AUTO_CLEAN_PREFIX}${key}`,
+                options: { auto: true },
+              },
+            });
           await tx.donnaMailbox.update({
             where: { id: box.id },
             data: { lastNotifiedAt: new Date() },
@@ -273,7 +293,8 @@ export async function POST(request: Request) {
           });
           if (input.undo) await recordUndo(tx, job.mailboxId, input.undo);
         } else {
-          const stopped = job.status === "cancelled" || input.cancelled === true;
+          const stopped =
+            job.status === "cancelled" || input.cancelled === true;
           await tx.donnaJob.update({
             where: { id: job.id },
             data: {
@@ -314,7 +335,7 @@ export async function POST(request: Request) {
               lastCheckedAt: new Date(),
               heartbeatAt: new Date(),
               lastError: null,
-                coverage: coverage as Prisma.InputJsonObject,
+              coverage: coverage as Prisma.InputJsonObject,
             },
           });
           if (

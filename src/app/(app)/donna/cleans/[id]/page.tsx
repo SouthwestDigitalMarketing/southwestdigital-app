@@ -280,7 +280,7 @@ export default async function CleanPage({
                   ? "Donna is running and will pick this up shortly."
                   : preview
                     ? "Donna is reading your Inbox. Nothing moves until you approve the list."
-                    : "Donna is filing the emails you approved."}
+                    : "Donna is reading your Inbox and filing what she can. Anything she files can be undone here."}
           </p>
           <form action={cancelClean}>
             <input type="hidden" name="jobId" value={job.id} />

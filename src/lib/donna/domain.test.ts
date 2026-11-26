@@ -228,12 +228,16 @@ describe("honest health and counts", () => {
   });
 
   it("labels a preview, a real clean and a paused mailbox on the bar", () => {
-    expect(cleanIsPreview({})).toBe(true);
+    expect(cleanIsPreview({})).toBe(false);
+    expect(cleanIsPreview({ manual: true })).toBe(false);
     expect(cleanIsPreview({ preview: true })).toBe(true);
     expect(cleanIsPreview({ previewJobId: "p", plan: [] })).toBe(false);
     const coverage = { cleanProgress: { total: 5, done: 1 } };
     expect(
-      cleanBarStatus({ id: "j", status: "leased", options: {} }, coverage),
+      cleanBarStatus(
+        { id: "j", status: "leased", options: { preview: true } },
+        coverage,
+      ),
     ).toMatchObject({ title: "Checking inbox", waiting: false, paused: false });
     expect(
       cleanBarStatus(

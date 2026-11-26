@@ -1,4 +1,23 @@
 # SWapp handoff
+## 2026-11-25 (late) — Donna files on her own (Tom: "yes. yes")
+
+Tom saw the check-first flow make more work, not less. Decision: Donna files
+allowlisted Inbox mail on her own inside the existing limits (allowlisted
+folders, never Trash, never clients/contacts, never sends); Tom checks her
+record with Undo afterwards. She runs as a standing service; Pause is the off
+switch. Branch `donna/auto-clean`.
+
+- Clean (`options.manual`, or `{auto}` from new mail) files directly and
+  records each move for Undo. `options.preview` still moves nothing.
+- Worker keeps `clean_decisions` (thread + fingerprint) so a decided Inbox
+  conversation is not reviewed again until it changes; `--clean-threads`
+  (default 100) per Clean.
+- IDLE `notify` now queues one quiet automatic Clean (`eventKey` prefix
+  `idle:`, `AUTO_CLEAN_PREFIX`) instead of an `incoming` job. The bar only shows
+  cleans Tom starts. Lesson: a Prisma JSON-path `NOT` filter drops rows missing
+  the key (SQL NULL), so filter on a non-null column.
+- `/donna/email` lists **Filed by Donna** (last five cleans that moved mail).
+
 ## 2026-11-25 (night) — Clean inbox safety: check first, cancel, pause, undo (Ummon, Tom)
 
 Branch `donna/clean-safety` off `origin/main`. Tom approved items 1–3 of the

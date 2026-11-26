@@ -3,9 +3,11 @@
 Donna's first build is an email desk. It inventories Zoho, reads full
 conversations including Sent and Drafts, prepares recommendations and reply text,
 and records verifiable work in SWapp. Reconcile jobs stay read-only. **Clean**
-starts as a read-only check that lists what Donna would file. Only the emails
-the operator leaves ticked and approves are filed, on Zoho, after a verified
-copy; each move is recorded so it can be undone. It drafts replies and never
+files allowlisted Inbox mail on Zoho on its own (Tom, 2026-11-25: check her
+record afterwards, do not approve first), after a verified copy; each move is
+recorded so it can be undone. New Inbox mail (IDLE push) queues a quiet
+automatic Clean. An explicit preview job (`options.preview`) still moves
+nothing, and a plan job files only what a preview listed. It drafts replies and never
 sends. It does not use Trash, and it does not file known contacts or
 client/sales mail. The broader build sequence is in
 [the build plan](design/donna-email-build-plan.md).
@@ -19,13 +21,15 @@ client/sales mail. The broader build sequence is in
   chrome (every Donna view) opens Clean inbox, Empty spam, Clear
   notifications, Empty trash, Clean drafts, and Do it all, with folder
   counts; only Clean inbox is enabled. Tapping Clean inbox closes the modal
-  and starts a check. A light bar sits at the top of every app screen until
-  the job finishes: **Checking inbox** for the check, **Cleaning inbox** once
-  approved mail is being filed, with what it is on, n of total, a progress
+  and starts a clean. A light bar sits at the top of every app screen until
+  a clean the operator started finishes (**Cleaning inbox**; **Checking
+  inbox** for a preview); automatic cleans from new mail show no bar, with what it is on, n of total, a progress
   track, and an ETA once Donna is running. Queued jobs say **Waiting for
   Donna**; a paused mailbox says **Paused**. Tapping **Cleaning…** in the
   modal closes it. Tapping the bar opens `/donna/cleans/[id]`. Clean inbox
   is refused while the mailbox is paused.
+- `/donna/email`: also lists **Filed by Donna**, the last five cleans that
+  moved mail, each opening its list with Undo.
 - `/donna/email/work`: two requests per page; Needs you, Working, Waiting and
   Handled are filters here, not top-level Donna tabs.
 - `/donna/cleans/[id]`: one Inbox check or clean job. While it runs or waits:
