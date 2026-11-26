@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireDonna } from "@/lib/donna/access";
 import { loadDesk, storageMissing } from "@/lib/donna/store";
 import {
-  mailboxCleanReport,
+  cleanReport,
   mailboxFolderTables,
   mailboxHealth,
   deferredRetryNote,
@@ -68,7 +68,11 @@ export default async function EmailPage() {
     0,
   );
   const health = m ? mailboxHealth(m) : "Not connected";
-  const clean = mailboxCleanReport(m?.coverage);
+  // Recent cleans that moved mail, newest first; each opens its list with Undo.
+  const filedRuns = data.cleans
+    .map((job) => ({ job, report: cleanReport(job.result) }))
+    .filter(({ report }) => report && !report.preview && report.filed.length)
+    .slice(0, 5);
   const retry = deferredRetryNote(m?.coverage);
   return (
     <DonnaFrame active="email">
@@ -140,19 +144,24 @@ export default async function EmailPage() {
         ) : retry ? (
           <p className="text-xs text-slate-500">{retry}</p>
         ) : null}
-        {clean ? (
-          <div aria-label="Last clean">
-            <div className="flex justify-between gap-3">
-              <span className="text-slate-500">Last clean</span>
-              <span>
-                Filed {clean.filed.length} · Waiting {clean.waiting.length} ·
-                Needs you {clean.needsYou.length}
-              </span>
-            </div>
-            <div className="flex justify-between gap-3">
-              <span className="text-slate-500">Still in Inbox</span>
-              <span>{clean.remaining.toLocaleString("en-US")}</span>
-            </div>
+        {filedRuns.length ? (
+          <div aria-label="Filed by Donna" className="space-y-1">
+            <span className="text-slate-500">Filed by Donna</span>
+            <ul className="space-y-1">
+              {filedRuns.map(({ job, report }) => (
+                <li key={job.id}>
+                  <Link
+                    href={`/donna/cleans/${encodeURIComponent(job.id)}`}
+                    className="flex justify-between gap-3 underline decoration-slate-300"
+                  >
+                    <span>{shortTime(job.completedAt)}</span>
+                    <span className="tabular-nums">
+                      {report!.filed.filter((i) => !i.undone).length} filed
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </div>
         ) : null}
       </section>

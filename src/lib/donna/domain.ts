@@ -282,12 +282,13 @@ export function formatCleanEta(seconds: number): string {
   return hours === 1 ? "About 1 hr left" : `About ${hours} hr left`;
 }
 
+/** Only an explicit preview moves nothing; other cleans file on their own. */
 export function cleanIsPreview(options: unknown): boolean {
-  return !(
+  return Boolean(
     options &&
-    typeof options === "object" &&
-    !Array.isArray(options) &&
-    Array.isArray((options as { plan?: unknown }).plan)
+      typeof options === "object" &&
+      !Array.isArray(options) &&
+      (options as { preview?: unknown }).preview === true,
   );
 }
 

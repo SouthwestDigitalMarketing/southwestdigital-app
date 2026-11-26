@@ -4,10 +4,10 @@
 Reuses Mailroom's existing account/credential connection. Raw mail and model
 context stay on Ripley. Only request summaries, evidence excerpts and prepared
 replies go to SWapp. Reconcile and incoming jobs are read-only IMAP. A Clean
-job first previews what it would file and moves nothing. Only an approved
-preview plan files Inbox messages into allowlisted folders, after a verified
-copy, and each move is recorded so an undo job can put it back. It never
-sends, never uses Trash, and never files known contacts or client/sales mail.
+job files allowlisted Inbox mail on its own (Tom, 2026-11-25), after a verified
+copy, and records each move so an undo job can put it back. A preview job
+moves nothing; a plan job files only what a preview listed. It never sends,
+never uses Trash, and never files known contacts or client/sales mail.
 """
 import argparse
 import datetime as dt
@@ -104,6 +104,9 @@ class LocalStore:
             PRIMARY KEY(job,thread));
           CREATE TABLE IF NOT EXISTS kept_in_inbox (
             mailbox TEXT, thread TEXT, PRIMARY KEY(mailbox,thread));
+          CREATE TABLE IF NOT EXISTS clean_decisions (
+            mailbox TEXT, thread TEXT, fingerprint TEXT, decision TEXT,
+            PRIMARY KEY(mailbox,thread));
         """)
         os.chmod(self.root / "desk.sqlite", 0o600)
         self.daily_limit = 50
@@ -320,6 +323,16 @@ class LocalStore:
     def kept(self, mailbox, thread):
         return bool(self.db.execute("SELECT 1 FROM kept_in_inbox WHERE mailbox=? AND thread=?",
                                     (mailbox, thread)).fetchone())
+
+    def decided(self, mailbox, thread, fingerprint):
+        row = self.db.execute("SELECT fingerprint FROM clean_decisions WHERE mailbox=? AND thread=?",
+                              (mailbox, thread)).fetchone()
+        return bool(row and row[0] == fingerprint)
+
+    def decide(self, mailbox, thread, fingerprint, decision):
+        self.db.execute("INSERT OR REPLACE INTO clean_decisions VALUES (?,?,?,?)",
+                        (mailbox, thread, fingerprint, decision))
+        self.db.commit()
 
     def filed_for(self, job):
         return [{"thread": r["thread"], "folder": r["folder"], "messages": json.loads(r["messages"]),
@@ -769,7 +782,7 @@ def listener_state(client):
     return "idle-inbox" if listener and listener.connected.is_set() else "offline"
 
 
-def process_job(client, store, work, max_threads):
+def process_job(client, store, work, max_threads, clean_threads=100):
     job = work["job"]
     if job.get("kind") == "undo":
         return process_undo(client, store, work)
@@ -809,15 +822,15 @@ def process_job(client, store, work, max_threads):
     try:
         is_clean = job.get("kind") == "clean"
         options = job.get("options") or {}
-        # A Clean files mail only from a plan Tom approved; anything else is a preview.
         plan = options.get("plan") if is_clean and isinstance(options.get("plan"), list) else None
+        preview = is_clean and plan is None and options.get("preview") is True
         mailbox = work["mailbox"]["id"]
         coverage = store.inventory(mailbox, work["mailbox"]["address"], heartbeat)
         # Clean looks at every Inbox conversation, even ones a read-only pass already reviewed.
         pending = store.threads(mailbox, work["requests"], work.get("contacts"),
                                 **({"include_assessed": True} if is_clean else {}))
         report = {"at": stamp(), "reviewed": 0, "remaining": 0, "filed": [], "waiting": [], "needsYou": [],
-                  "skipped": [], "preview": is_clean and plan is None}
+                  "skipped": [], "preview": preview}
         if plan is not None:
             done_threads = set()
             for item in store.filed_for(job["id"]):
@@ -835,7 +848,10 @@ def process_job(client, store, work, max_threads):
                                             "cancelled": cancelled.is_set()})
             return
         if is_clean:
-            pending = [item for item in pending if inbox_thread(item[2])]
+            # Inbox conversations Donna has not decided on at this exact version.
+            pending = [item for item in pending if inbox_thread(item[2])
+                       and not (getattr(store, "decided", None) and store.decided(mailbox, item[0], item[1]))]
+            max_threads = clean_threads
             progress.update(total=max(min(len(pending), max_threads), 1), phase="working")
             heartbeat(True)
         reviewed = 0
@@ -850,6 +866,8 @@ def process_job(client, store, work, max_threads):
             sender = next((m.get("from") or "" for m in messages if not m.get("outgoing")), "")
             if is_clean and getattr(store, "kept", None) and store.kept(mailbox, thread):
                 report["skipped"].append({"subject": subject, "from": sender, "reason": "you moved it back to Inbox"})
+                if not preview and getattr(store, "decide", None):
+                    store.decide(mailbox, thread, fingerprint, "kept")
                 attempted += 1
                 continue
             store.reserve_review()
@@ -865,13 +883,32 @@ def process_job(client, store, work, max_threads):
                     has_gaps = any(a.get("gap") for m in messages for a in m.get("attachments") or [])
                     dest, reason = (None, "attachment review needed") if has_gaps else filing_plan(
                         assessment, messages, work.get("contacts"), coverage.get("folders"))
-                    if dest:
+                    filed_to = None
+                    if dest and preview:
                         store.db.execute("INSERT OR REPLACE INTO clean_plans VALUES (?,?,?,?,?)",
                                          (job["id"], thread, fingerprint, dest, json.dumps(assessment)))
                         report["filed"].append({"thread": thread, "subject": subject, "from": sender, "folder": dest})
-                    elif reason != "no file destination":
+                    elif dest:
+                        try:
+                            keys = file_thread(store, mailbox, messages, dest, work.get("filer") or file_via_imap)
+                        except (RuntimeError, ValueError, KeyError, TypeError):
+                            keys = None
+                            reason = "filing failed"
+                            dest = None
+                        if keys:
+                            filed_to = dest
+                            store.db.execute("INSERT OR REPLACE INTO clean_filed VALUES (?,?,?,?,?,?)",
+                                             (job["id"], thread, dest, json.dumps(keys), subject, sender))
+                            report["filed"].append({"thread": thread, "folder": dest, "messages": keys,
+                                                    "subject": subject, "from": sender})
+                    if not dest and reason != "no file destination":
                         report["skipped"].append({"subject": subject, "from": sender, "reason": reason})
-                packet = packet_for(work, thread, fingerprint, messages, existing, assessment)
+                    if not preview and getattr(store, "decide", None):
+                        store.decide(mailbox, thread, fingerprint, ("filed:" + filed_to) if filed_to else (reason or "stay"))
+                filed = filed_to if is_clean else None
+                # A filed version must replace any earlier read-only publish of the same source.
+                packet = packet_for(work, thread, fingerprint + (":filed" if filed else ""), messages, existing,
+                                    assessment, filed_to=filed)
                 client.call("publish", packet=packet)
                 for item in assessment:
                     title = item.get("title") or subject
@@ -1004,6 +1041,7 @@ def main():
     parser.add_argument("--state", default=os.environ.get("DONNA_STATE", str(Path.home() / ".local/state/swapp-donna")))
     parser.add_argument("--max-threads", type=int, default=10)
     parser.add_argument("--daily-reviews", type=int, default=50, help="Maximum model review attempts per UTC day")
+    parser.add_argument("--clean-threads", type=int, default=100, help="Inbox conversations one Clean may review")
     args = parser.parse_args()
     if not 1 <= args.max_threads <= 50:
         parser.error("--max-threads must be between 1 and 50")
@@ -1032,7 +1070,7 @@ def main():
                     last_heartbeat = time.monotonic()
                 work = client.call("claim")["work"]
                 if work:
-                    process_job(client, store, work, args.max_threads)
+                    process_job(client, store, work, args.max_threads, args.clean_threads)
             except Exception as error:
                 print(stamp(), type(error).__name__, "Donna work remains pending; check mailbox health.", flush=True)
                 if args.once:

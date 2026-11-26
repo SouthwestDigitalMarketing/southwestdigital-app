@@ -254,7 +254,7 @@ class WorkerTests(unittest.TestCase):
     def test_clean_preview_moves_nothing_and_records_the_plan(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = self.clean_fixture(tmp)
-            calls = self.run_clean(store, {})
+            calls = self.run_clean(store, {"preview": True})
             published = [data["packet"] for op, data in calls if op == "publish"]
             self.assertEqual(len(published), 2)
             self.assertFalse(any(r["state"] == "handled" for p in published for r in p["requests"]))
@@ -280,14 +280,14 @@ class WorkerTests(unittest.TestCase):
                 store.db.execute("INSERT INTO assessments VALUES ('box',?,?)", (thread, fingerprint))
             store.db.commit()
             self.assertEqual(store.threads("box", []), [])
-            report = next(d["result"]["report"] for op, d in self.run_clean(store, {}) if op == "complete")
+            report = next(d["result"]["report"] for op, d in self.run_clean(store, {"preview": True}) if op == "complete")
             self.assertEqual(len(report["filed"]), 1)
             store.db.close()
 
     def test_approved_plan_files_and_records_each_move(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = self.clean_fixture(tmp)
-            preview = next(d["result"]["report"] for op, d in self.run_clean(store, {}) if op == "complete")
+            preview = next(d["result"]["report"] for op, d in self.run_clean(store, {"preview": True}) if op == "complete")
             thread = preview["filed"][0]["thread"]
             moves = []
             calls = self.run_clean(store, {"previewJobId": "j", "plan": [{"thread": thread, "folder": "Newsletter"}]},
@@ -310,7 +310,7 @@ class WorkerTests(unittest.TestCase):
     def test_plan_skips_changed_unknown_and_kept_threads(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = self.clean_fixture(tmp)
-            preview = next(d["result"]["report"] for op, d in self.run_clean(store, {}) if op == "complete")
+            preview = next(d["result"]["report"] for op, d in self.run_clean(store, {"preview": True}) if op == "complete")
             thread = preview["filed"][0]["thread"]
             store.db.execute("UPDATE clean_plans SET fingerprint='old' WHERE thread=?", (thread,))
             store.db.commit()
@@ -321,9 +321,39 @@ class WorkerTests(unittest.TestCase):
             store.db.execute("DELETE FROM clean_plans")
             store.db.execute("INSERT INTO kept_in_inbox VALUES ('box',?)", (thread,))
             store.db.commit()
-            again = next(d["result"]["report"] for op, d in self.run_clean(store, {}) if op == "complete")
+            again = next(d["result"]["report"] for op, d in self.run_clean(store, {"preview": True}) if op == "complete")
             self.assertEqual(again["filed"], [])
             self.assertIn("you moved it back to Inbox", [i["reason"] for i in again["skipped"]])
+            store.db.close()
+
+    def test_clean_files_on_its_own_and_does_not_rereview_decided_mail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = self.clean_fixture(tmp)
+            moves = []
+            calls = self.run_clean(store, {"manual": True}, filer=lambda uid, dest, mid: moves.append((uid, dest, mid)))
+            self.assertEqual(moves, [(11, "Newsletter", "<promo@example.com>")])
+            result = next(d["result"] for op, d in calls if op == "complete")
+            self.assertFalse(result["report"]["preview"])
+            self.assertEqual(result["report"]["filed"][0]["messages"], ["<promo@example.com>"])
+            self.assertEqual(result["report"]["skipped"][0]["reason"], "known contact")
+            packets = [d["packet"] for op, d in calls if op == "publish"]
+            filed = next(p for p in packets if p["requests"][0]["state"] == "handled")
+            self.assertTrue(filed["requests"][0]["sourceVersion"].endswith(":filed"))
+            self.assertEqual(store.filed_for("j")[0]["folder"], "Newsletter")
+            # The client thread was decided (stays); a later Clean does not review it again.
+            calls = []
+            class Client:
+                def call(self, op, **data):
+                    calls.append((op, data))
+                    return {}
+            work = {"job": {"id": "j2", "leaseToken": "l", "kind": "clean", "options": {"auto": True}},
+                    "mailbox": {"id": "box", "address": "ours@example.com"}, "requests": [],
+                    "contacts": [{"email": "client@example.com", "_count": {"serviceRecords": 1}}]}
+            with patch.object(store, "inventory", return_value=self.FOLDERS), \
+                    patch.object(donna, "assess", side_effect=AssertionError("no re-review")):
+                donna.process_job(Client(), store, work, 10)
+            report = next(d["result"]["report"] for op, d in calls if op == "complete")
+            self.assertEqual((report["reviewed"], report["filed"]), (0, []))
             store.db.close()
 
     def test_cancel_stops_before_the_next_move_and_reports_what_moved(self):
@@ -332,7 +362,7 @@ class WorkerTests(unittest.TestCase):
             extra = message("<promo2@example.com>", "Another sale", sender="promo@shop.example")
             store.save("box", "INBOX", "1", 14, extra.as_bytes(), "ours@example.com", Helper)
             store.db.commit()
-            preview = next(d["result"]["report"] for op, d in self.run_clean(store, {}) if op == "complete")
+            preview = next(d["result"]["report"] for op, d in self.run_clean(store, {"preview": True}) if op == "complete")
             plan = [{"thread": i["thread"]} for i in preview["filed"]]
             self.assertEqual(len(plan), 2)
             moves = []
@@ -351,14 +381,14 @@ class WorkerTests(unittest.TestCase):
 
             def paused(data):
                 raise donna.DonnaAPIError("heartbeat", 409)
-            calls = self.run_clean(store, {}, heartbeat_answer=paused)
+            calls = self.run_clean(store, {"preview": True}, heartbeat_answer=paused)
             self.assertFalse(any(op in ("complete", "fail", "publish") for op, _ in calls))
             store.db.close()
 
     def test_undo_moves_recorded_mail_back_and_keeps_it_in_inbox(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = self.clean_fixture(tmp)
-            preview = next(d["result"]["report"] for op, d in self.run_clean(store, {}) if op == "complete")
+            preview = next(d["result"]["report"] for op, d in self.run_clean(store, {"preview": True}) if op == "complete")
             thread = preview["filed"][0]["thread"]
             self.run_clean(store, {"previewJobId": "j", "plan": [{"thread": thread}]},
                            filer=lambda *a: None, job_id="real")

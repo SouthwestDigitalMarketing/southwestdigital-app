@@ -335,26 +335,27 @@ try {
     where: { mailboxId: box.id, kind: "clean" },
   });
   await expect(
-    page.getByRole("link", { name: /Checking inbox/ }),
+    page.getByRole("link", { name: /Cleaning inbox/ }),
   ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: /Checking inbox/ }),
+    page.getByRole("link", { name: /Cleaning inbox/ }),
   ).toContainText("0 of 73");
   await expect(
-    page.getByRole("link", { name: /Checking inbox/ }),
+    page.getByRole("link", { name: /Cleaning inbox/ }),
   ).toContainText("Waiting for Donna");
   await page.goto(base + "/dashboard");
   await expect(
-    page.getByRole("link", { name: /Checking inbox/ }),
+    page.getByRole("link", { name: /Cleaning inbox/ }),
   ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: /Checking inbox/ }),
+    page.getByRole("link", { name: /Cleaning inbox/ }),
   ).toContainText("0 of 73");
-  await page.getByRole("link", { name: /Checking inbox/ }).click();
+  await page.getByRole("link", { name: /Cleaning inbox/ }).click();
   await expect(page).toHaveURL(base + "/donna/cleans/" + cleanJob.id);
   await expect(
-    page.getByRole("heading", { name: "Inbox check" }),
+    page.getByRole("heading", { name: "Inbox clean" }),
   ).toBeVisible();
+  assert.deepEqual(cleanJob.options, { manual: true });
   await page.goto(base + "/donna/email/work");
   await page.getByRole("button", { name: "Donna", exact: true }).click();
   await expect(
@@ -363,7 +364,7 @@ try {
   await page.getByRole("dialog").getByRole("button", { name: /Cleaning/ }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(
-    page.getByRole("link", { name: /Checking inbox/ }),
+    page.getByRole("link", { name: /Cleaning inbox/ }),
   ).toBeVisible();
   // Cancel a queued check: the job ends and the bar goes away.
   await page.goto(base + "/donna/cleans/" + cleanJob.id);
@@ -376,7 +377,7 @@ try {
     .toBe("cancelled");
   await page.reload();
   await expect(page.getByText("Cancelled before Donna moved anything.")).toBeVisible();
-  await expect(page.getByRole("link", { name: /Checking inbox/ })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Cleaning inbox/ })).toHaveCount(0);
   // A finished preview: untick one, approve the rest.
   const [keep, file] = ["a1".repeat(32), "b2".repeat(32)];
   const preview = await db.donnaJob.create({

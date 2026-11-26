@@ -15,6 +15,13 @@ import {
 } from "./domain";
 import { z } from "zod";
 
+/**
+ * Event-key prefix of cleans queued by new mail. They run quietly; the bar is
+ * for cleans Tom starts. (A JSON-path NOT filter would also drop jobs whose
+ * options lack the key, so this keys on the non-null eventKey instead.)
+ */
+export const AUTO_CLEAN_PREFIX = "idle:";
+
 export function storageMissing(error: unknown) {
   return (
     error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -75,6 +82,7 @@ export async function loadDonnaAction(context: BrandDataContext) {
         mailboxId: mailbox.id,
         kind: "clean",
         status: { in: ["pending", "leased"] },
+        NOT: { eventKey: { startsWith: AUTO_CLEAN_PREFIX } },
       },
       select: { id: true },
     });
@@ -94,6 +102,8 @@ export async function loadActiveClean(context: BrandDataContext) {
         mailbox: { brandId: context.brandId },
         kind: "clean",
         status: { in: ["pending", "leased"] },
+        // Cleans started by new mail run quietly; the bar is for ones Tom starts.
+        NOT: { eventKey: { startsWith: AUTO_CLEAN_PREFIX } },
       },
       orderBy: { receivedAt: "desc" },
       select: {
@@ -151,7 +161,7 @@ export async function loadDesk(
 ) {
   return withBrandDataTransaction(context, async (tx) => {
     const scope = { mailbox: { brandId: context.brandId } };
-    const [mailboxes, groups, rows, cleaning] = await Promise.all([
+    const [mailboxes, groups, rows, cleaning, cleans] = await Promise.all([
       tx.donnaMailbox.findMany({
         where: { brandId: context.brandId },
         orderBy: { address: "asc" },
@@ -173,8 +183,19 @@ export async function loadDesk(
           mailbox: { brandId: context.brandId },
           kind: "clean",
           status: { in: ["pending", "leased"] },
+          NOT: { eventKey: { startsWith: AUTO_CLEAN_PREFIX } },
         },
         select: { mailboxId: true },
+      }),
+      tx.donnaJob.findMany({
+        where: {
+          mailbox: { brandId: context.brandId },
+          kind: "clean",
+          status: { in: ["done", "cancelled"] },
+        },
+        orderBy: { completedAt: "desc" },
+        take: 50,
+        select: { id: true, completedAt: true, result: true },
       }),
     ]);
     return {
@@ -182,6 +203,7 @@ export async function loadDesk(
       groups,
       rows,
       cleaning: cleaning.map((job) => job.mailboxId),
+      cleans,
     };
   });
 }
