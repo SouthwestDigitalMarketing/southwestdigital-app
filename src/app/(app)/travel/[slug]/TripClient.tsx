@@ -73,12 +73,28 @@ export function TripClient({
       value: `${plan.sections.home.filter((item) => item.done === true).length} of ${counts("home")} done`,
     },
   ];
+  const progressTiles = focus ? tiles.filter((tile) => tile.label !== "Budget planned") : tiles;
+  const focusTotal = totals.planned > 0 ? totals.planned : focus ? optionTotal(focus, days) : null;
 
   return (
     <div className="p-4 sm:p-8">
       {needsJapanSwitch(plan, details.destination) ? <JapanSwitch slug={slug} /> : null}
-      {focus ? <FocusCard slug={slug} option={focus} days={days} /> : null}
-      <TripHeader slug={slug} details={details} summary={plan.summary} days={plan.days} />
+      {focus ? (
+        <>
+          <FocusCard
+            slug={slug}
+            option={focus}
+            days={days}
+            tripTitle={details.title}
+            total={focusTotal}
+            totalLabel={totals.planned > 0 ? "Planned trip budget" : "Flight + monthly stay estimate"}
+          />
+          <TripNextUp plan={plan} today={today} />
+          <TripHeader slug={slug} details={details} summary={plan.summary} days={plan.days} compact />
+        </>
+      ) : (
+        <TripHeader slug={slug} details={details} summary={plan.summary} days={plan.days} />
+      )}
 
       {warnings.length ? (
         <div role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
@@ -94,36 +110,36 @@ export function TripClient({
         </div>
       ) : null}
 
-      <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        {tiles.map((tile) => (
-          <div key={tile.label} className={`${card} p-4`}>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{tile.label}</p>
-            <p className="mt-1 text-xl font-semibold text-slate-900">{tile.value}</p>
-          </div>
-        ))}
-      </div>
+      <details className="mt-6 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+        <summary className="ui-focus-ring cursor-pointer text-sm font-semibold text-slate-800">Trip progress</summary>
+        <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+          {progressTiles.map((tile) => (
+            <div key={tile.label} className="rounded-xl bg-slate-50 p-3">
+              <p className="text-xs text-slate-500">{tile.label}</p>
+              <p className="mt-1 text-lg font-semibold text-slate-900">{tile.value}</p>
+            </div>
+          ))}
+        </div>
+      </details>
 
-      <section id="map" className="mt-6 scroll-mt-20" aria-labelledby="map-title">
-        <h2 id="map-title" className="text-lg font-semibold text-slate-900">
-          Map
-        </h2>
-        <div className="mt-2">
+      <details id="map" className="mt-4 scroll-mt-20 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+        <summary className="ui-focus-ring cursor-pointer text-sm font-semibold text-slate-800">Map</summary>
+        <div className="mt-4">
           <TripMap pins={pins} hrefFor={(pin: MapPin) => itemHref(slug, pin.section, pin.id)} />
           <MapLegend sections={MAP_KEYS.filter((key) => pins.some((pin) => pin.section === key))} />
         </div>
-      </section>
+      </details>
 
-      <nav aria-label="Trip sections" className="mt-6 flex gap-2 overflow-x-auto pb-1">
-        {sections.map((section) => (
-          <a
-            key={section.key}
-            href={`#${section.key}`}
-            className="ui-focus-ring shrink-0 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-400"
-          >
-            {section.title} <span className="text-slate-400">{counts(section.key)}</span>
-          </a>
-        ))}
-      </nav>
+      <details className="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+        <summary className="ui-focus-ring cursor-pointer text-sm font-semibold text-slate-800">Jump to a section</summary>
+        <nav aria-label="Trip sections" className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
+          {sections.map((section) => (
+            <a key={section.key} href={`#${section.key}`} className="ui-focus-ring rounded-lg py-1 text-sm text-slate-700 hover:text-slate-950">
+              {section.title} <span className="text-slate-400">{counts(section.key)}</span>
+            </a>
+          ))}
+        </nav>
+      </details>
 
       {sections.map((section) => (
         <SectionBlock
@@ -149,11 +165,13 @@ function TripHeader({
   details,
   summary,
   days,
+  compact = false,
 }: {
   slug: string;
   details: Details;
   summary: string;
   days: number;
+  compact?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const { pending, error, run } = useChange(slug);
@@ -161,6 +179,22 @@ function TripHeader({
     details.startsOn || details.endsOn ? `${details.startsOn || "?"} to ${details.endsOn || "?"}` : `Dates not set · ${days} days`;
 
   if (!editing) {
+    if (compact) {
+      return (
+        <details className="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+          <summary className="ui-focus-ring cursor-pointer text-sm font-semibold text-slate-800">Trip details and edit</summary>
+          <div className="mt-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-medium text-slate-900">{details.title}</p>
+              <span className="text-sm text-slate-500">{TRIP_STATUS_LABELS[details.status]}</span>
+              <button type="button" className={ghost} onClick={() => setEditing(true)}>Edit</button>
+            </div>
+            <p className="mt-1 text-sm text-slate-600">{details.destination || "Place not picked yet"} · {dates}</p>
+            {summary ? <p className="mt-3 max-w-3xl whitespace-pre-line text-sm leading-relaxed text-slate-700">{summary}</p> : null}
+          </div>
+        </details>
+      );
+    }
     return (
       <div className="mt-2">
         <div className="flex flex-wrap items-center gap-3">
@@ -270,43 +304,82 @@ function JapanSwitch({ slug }: { slug: string }) {
   );
 }
 
-/** The trip's one option as a big card: photo, total and the key facts; opens its own page. */
-function FocusCard({ slug, option, days }: { slug: string; option: TripItem; days: number }) {
+/** The trip's one option as a quiet hero: place, total and one clear way in. */
+function FocusCard({
+  slug,
+  option,
+  days,
+  tripTitle,
+  total,
+  totalLabel,
+}: {
+  slug: string;
+  option: TripItem;
+  days: number;
+  tripTitle: string;
+  total: number | null;
+  totalLabel: string;
+}) {
   const section = SECTIONS.find((candidate) => candidate.key === "options")!;
-  const total = optionTotal(option, days);
-  const facts = ["roundTrip", "monthly", "timeGap", "visaFree"].flatMap((key) => {
-    const field = section.fields.find((candidate) => candidate.key === key);
-    const shown = field ? shownValue(field, option[key] ?? null) : null;
-    return field && shown !== null ? [{ field, shown }] : [];
-  });
   return (
-    <div className={`${card} relative overflow-hidden transition hover:border-slate-400`}>
+    <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm" aria-label="Japan trip">
       <ItemPhoto item={option} section={section} tall />
-      <div className="p-4 sm:p-6">
-        <Link
-          href={itemHref(slug, "options", option.id)}
-          className="ui-focus-ring text-2xl font-semibold text-slate-900 after:absolute after:inset-0 after:content-['']"
-        >
-          {String(option.place ?? "")}
-        </Link>
+      <div className="p-5 sm:p-8">
+        <p className="text-sm text-slate-500">{tripTitle} · {days} days</p>
+        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">{String(option.place ?? "")}</h1>
         {total !== null ? (
-          <p className="mt-1 text-slate-700">
-            Total for {days} days: <strong className="text-2xl text-slate-900">{formatMoney(total)}</strong>
-          </p>
+          <div className="mt-5">
+            <p className="text-xs text-slate-500">{totalLabel} · {days} days</p>
+            <p className="mt-0.5 text-3xl font-semibold tracking-tight text-slate-950">{formatMoney(total)}</p>
+          </div>
         ) : null}
-        {facts.length ? (
-          <dl className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm">
-            {facts.map(({ field, shown }) => (
-              <div key={field.key}>
-                <dt className="inline text-slate-500">{field.label}: </dt>
-                <dd className="inline text-slate-800">{shown}</dd>
-              </div>
-            ))}
-          </dl>
-        ) : null}
-        <p className="mt-3 text-sm font-semibold text-sky-700">Open for day-to-day life, gyms, cafés and the map →</p>
+        <p className="mt-2 text-sm text-slate-600">Tokyo first, then Kyoto and Osaka.</p>
+        <Link href={itemHref(slug, "options", option.id)} className={`${primary} mt-5 inline-flex items-center normal-case tracking-normal`}>
+          Open your Japan plan <span aria-hidden="true" className="ml-2">→</span>
+        </Link>
       </div>
-    </div>
+    </section>
+  );
+}
+
+function TripNextUp({ plan, today }: { plan: TripPlan; today: string }) {
+  const passport = plan.sections.documents.find((item) => String(item.document ?? "").toLowerCase().includes("passport"));
+  const nextDocument = plan.sections.documents.find(
+    (item) => !String(item.document ?? "").toLowerCase().includes("passport") && (item.status === "Need it" || item.status === "Applied"),
+  );
+  const nextHome = plan.sections.home.find((item) => item.done !== true);
+  const passportStatus = passport ? String(passport.status || "Status not set") : "Not added";
+  const passportExpired = passport && typeof passport.expires === "string" && passport.expires < today;
+  return (
+    <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="next-up-title">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 id="next-up-title" className="text-base font-semibold text-slate-900">Next up</h2>
+          <p className="mt-0.5 text-sm text-slate-500">One small step to keep the trip moving.</p>
+        </div>
+        <span className={`rounded-full px-3 py-1 text-xs font-medium ${passportExpired ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-700"}`}>
+          Passport · {passportExpired ? "Check expiry" : passportStatus}
+        </span>
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {nextDocument ? (
+          <a href="#documents" className="ui-focus-ring rounded-xl bg-slate-50 p-3 hover:bg-slate-100">
+            <span className="block text-xs text-slate-500">Document</span>
+            <span className="mt-1 block text-sm font-medium text-slate-900">{String(nextDocument.document ?? "Review travel documents")}</span>
+            <span className="mt-1 block text-xs text-slate-500">{String(nextDocument.status ?? "Status not set")} →</span>
+          </a>
+        ) : null}
+        {nextHome ? (
+          <a href="#home" className="ui-focus-ring rounded-xl bg-slate-50 p-3 hover:bg-slate-100">
+            <span className="block text-xs text-slate-500">Home checklist</span>
+            <span className="mt-1 block text-sm font-medium text-slate-900">{String(nextHome.task ?? nextHome.item ?? "Review your home checklist")}</span>
+            <span className="mt-1 block text-xs text-slate-500">Open checklist →</span>
+          </a>
+        ) : null}
+        {!nextDocument && !nextHome ? <p className="text-sm text-slate-600">Your checklist is clear for now.</p> : null}
+      </div>
+      <p className="sr-only">Passport status: {passportStatus}{passport?.expires ? `, expires ${String(passport.expires)}` : ""}.</p>
+    </section>
   );
 }
 
@@ -377,29 +450,29 @@ function SectionBlock({
         </p>
       ) : null}
       {isOptions && items.length > 1 ? (
-        <label className="mt-2 flex items-center gap-2 text-sm text-slate-700">
-          Sort
-          <select value={sort} onChange={(event) => setSort(event.target.value as OptionSort)} className={`${inputClass} w-auto`}>
-            {(Object.keys(OPTION_SORTS) as OptionSort[]).map((key) => (
-              <option key={key} value={key}>
-                {OPTION_SORTS[key]}
-              </option>
-            ))}
-          </select>
-        </label>
+        <details className="mt-3 text-sm text-slate-600">
+          <summary className="ui-focus-ring w-fit cursor-pointer rounded-full px-2 py-1">Sort options</summary>
+          <label className="mt-2 flex max-w-sm items-center gap-2">
+            <span className="shrink-0">Order</span>
+            <select value={sort} onChange={(event) => setSort(event.target.value as OptionSort)} className={`${inputClass} w-auto`}>
+              {(Object.keys(OPTION_SORTS) as OptionSort[]).map((key) => (
+                <option key={key} value={key}>{OPTION_SORTS[key]}</option>
+              ))}
+            </select>
+          </label>
+        </details>
       ) : null}
       {isSpots && spotOptions.length > 1 ? (
-        <label className="mt-2 flex items-center gap-2 text-sm text-slate-700">
-          Show
-          <select value={only} onChange={(event) => setOnly(event.target.value)} className={`${inputClass} w-auto`}>
-            <option value="">All options</option>
-            {spotOptions.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <details className="mt-3 text-sm text-slate-600">
+          <summary className="ui-focus-ring w-fit cursor-pointer rounded-full px-2 py-1">Filter day-to-day spots</summary>
+          <label className="mt-2 flex max-w-sm items-center gap-2">
+            <span className="shrink-0">Place</span>
+            <select value={only} onChange={(event) => setOnly(event.target.value)} className={`${inputClass} w-auto`}>
+              <option value="">All options</option>
+              {spotOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+            </select>
+          </label>
+        </details>
       ) : null}
       {error ? <p className="mt-2 text-sm text-red-700">{error}</p> : null}
 
@@ -517,9 +590,10 @@ function DeleteTrip({ slug }: { slug: string }) {
   const [confirming, setConfirming] = useState(false);
   const [pending, startTransition] = useTransition();
   return (
-    <div className="mt-12 border-t border-slate-200 pt-6">
+    <details className="mt-10 border-t border-slate-200 pt-4">
+      <summary className="ui-focus-ring w-fit cursor-pointer rounded-full px-3 py-2 text-sm text-slate-500">Trip actions</summary>
       {confirming ? (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <p className="text-sm text-slate-700">Delete this trip and everything on its page?</p>
           <button
             type="button"
@@ -534,10 +608,10 @@ function DeleteTrip({ slug }: { slug: string }) {
           </button>
         </div>
       ) : (
-        <button type="button" className={ghost} onClick={() => setConfirming(true)}>
+        <button type="button" className={`${ghost} mt-2`} onClick={() => setConfirming(true)}>
           Delete trip
         </button>
       )}
-    </div>
+    </details>
   );
 }

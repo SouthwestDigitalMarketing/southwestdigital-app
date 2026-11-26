@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { formatMoney, pinFor, sectionFor, visibleFields, type MapPin, type SectionKey, type TripItem } from "@/lib/travel/plan";
-import { ItemForm, ItemPhoto, card, danger, ghost, shownValue, useChange } from "../../parts";
+import { ItemForm, ItemPhoto, card, danger, ghost, primary, shownValue, useChange } from "../../parts";
 import { TripMap } from "../../TripMap";
 import { DayLife } from "./DayLife";
 
@@ -45,7 +45,17 @@ export function ItemDetail({
   const [ticked, setTicked] = useState<Record<string, boolean>>({});
   const { pending, error, run } = useChange(slug);
   const back = `/travel/${slug}#${sectionKey}`;
-  const fields = visibleFields(section).filter((field) => field.key !== section.heading && field.type !== "check" && field.type !== "photo");
+  const optionSummaryKeys = sectionKey === "options" ? new Set(["roundTrip", "monthly", "hoursAhead", "timeGap", "visaFree"]) : new Set<string>();
+  const fields = visibleFields(section).filter(
+    (field) => field.key !== section.heading && field.type !== "check" && field.type !== "photo" && !optionSummaryKeys.has(field.key),
+  );
+  const optionFacts = sectionKey === "options"
+    ? ["roundTrip", "monthly", "timeGap", "visaFree"].flatMap((key) => {
+        const field = section.fields.find((candidate) => candidate.key === key);
+        const shown = field ? shownValue(field, item[key] ?? null) : null;
+        return field && shown !== null ? [{ field, shown }] : [];
+      })
+    : [];
   const filled = fields.flatMap((field) => {
     const shown = shownValue(field, item[field.key] ?? null);
     return shown === null ? [] : [{ field, shown }];
@@ -69,7 +79,7 @@ export function ItemDetail({
     <div className="p-4 sm:p-8">
       <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1 text-sm text-slate-500">
         <Link href="/travel" className="hover:text-slate-800">
-          Travel
+          Japan
         </Link>
         <span aria-hidden="true">/</span>
         <Link href={`/travel/${slug}`} className="hover:text-slate-800">
@@ -94,18 +104,30 @@ export function ItemDetail({
         <div className="p-4 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <h1 className="text-2xl font-semibold text-slate-900">{String(item[section.heading] ?? "")}</h1>
-            <div className="flex items-center gap-2">
-              {neighbour(previousId, "← Previous")}
-              <span className="text-xs text-slate-500">{position}</span>
-              {neighbour(nextId, "Next →")}
-            </div>
+            {previousId || nextId ? (
+              <div className="flex items-center gap-2">
+                {neighbour(previousId, "← Previous")}
+                <span className="text-xs text-slate-500">{position}</span>
+                {neighbour(nextId, "Next →")}
+              </div>
+            ) : null}
           </div>
 
           {total && total.amount !== null ? (
-            <p className="mt-2 text-sm text-slate-700">
-              Total for {total.days} days (round trip + per month):{" "}
-              <strong className="text-lg text-slate-900">{formatMoney(total.amount)}</strong>
-            </p>
+            <div className="mt-5 rounded-2xl bg-slate-50 p-4 sm:p-5">
+              <p className="text-xs text-slate-500">Flight + monthly stay estimate · {total.days} days</p>
+              <p className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">{formatMoney(total.amount)}</p>
+              {optionFacts.length ? (
+                <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {optionFacts.map(({ field, shown }) => (
+                    <div key={field.key}>
+                      <dt className="text-xs text-slate-500">{field.label}</dt>
+                      <dd className="mt-1 text-sm font-medium text-slate-800">{shown}</dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : null}
+            </div>
           ) : null}
 
           {editing ? (
@@ -145,44 +167,38 @@ export function ItemDetail({
               <dl className="mt-4 grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
                 {filled.map(({ field, shown }) => (
                   <div key={field.key} className={field.type === "long" ? "sm:col-span-2" : undefined}>
-                    <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">{field.label}</dt>
-                    <dd className={`mt-1 text-sm text-slate-800 ${field.type === "long" ? "whitespace-pre-line leading-relaxed" : ""}`}>
+                    <dt className="text-sm font-medium text-slate-500">{field.label}</dt>
+                    <dd className={`mt-1 text-sm leading-relaxed text-slate-800 ${field.type === "long" ? "whitespace-pre-line" : ""}`}>
                       {shown}
                     </dd>
                   </div>
                 ))}
               </dl>
               {empty.length ? (
-                <p className="mt-4 text-xs text-slate-500">Not filled in yet: {empty.map((field) => field.label).join(", ")}</p>
+              <p className="mt-4 text-xs text-slate-500">Not filled in yet: {empty.map((field) => field.label).join(", ")}</p>
               ) : null}
             </>
           )}
           {error ? <p className="mt-3 text-sm text-red-700">{error}</p> : null}
 
           {!editing ? (
-            <div className="mt-6 flex flex-wrap gap-2">
-              <button type="button" className={ghost} disabled={pending} onClick={() => setEditing(true)}>
+            <div className="relative mt-6 flex flex-wrap items-center gap-2">
+              <button type="button" className={primary} disabled={pending} onClick={() => setEditing(true)}>
                 Edit
               </button>
-              {confirming ? (
-                <>
-                  <button
-                    type="button"
-                    className={danger}
-                    disabled={pending}
-                    onClick={() => run({ kind: "remove", section: sectionKey, id: item.id }, () => router.push(back))}
-                  >
-                    Really remove
-                  </button>
-                  <button type="button" className={ghost} onClick={() => setConfirming(false)}>
-                    Keep
-                  </button>
-                </>
-              ) : (
-                <button type="button" className={ghost} disabled={pending} onClick={() => setConfirming(true)}>
-                  Remove
-                </button>
-              )}
+              <details className="text-sm text-slate-600">
+                <summary className="ui-focus-ring cursor-pointer rounded-full px-3 py-2">More</summary>
+                <div className="absolute z-10 mt-1 flex gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+                  {confirming ? (
+                    <>
+                      <button type="button" className={danger} disabled={pending} onClick={() => run({ kind: "remove", section: sectionKey, id: item.id }, () => router.push(back))}>Really remove</button>
+                      <button type="button" className={ghost} onClick={() => setConfirming(false)}>Keep</button>
+                    </>
+                  ) : (
+                    <button type="button" className={ghost} disabled={pending} onClick={() => setConfirming(true)}>Remove</button>
+                  )}
+                </div>
+              </details>
             </div>
           ) : null}
         </div>

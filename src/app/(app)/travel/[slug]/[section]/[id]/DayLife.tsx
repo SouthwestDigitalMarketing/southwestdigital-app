@@ -94,15 +94,23 @@ export function DayLife({
         </div>
       ) : null}
 
-      <div className={`${card} mt-4 p-4`}>
-        <p className="text-sm font-semibold text-slate-900">Find a monthly rental</p>
-        <p className="mt-0.5 text-xs text-slate-500">Opens Airbnb&apos;s own search for monthly stays.</p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {rentalSearches.map((place) => (
-            <a key={place} href={airbnbSearchUrl(place)} target="_blank" rel="noreferrer" className={ghost}>
-              Airbnb: {place}
-            </a>
-          ))}
+      <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+        <div className={`${card} overflow-hidden p-2`}>
+          <TripMap pins={pins} hrefFor={(pin) => `/travel/${slug}/${pin.section}/${pin.id}`} className="h-64 sm:h-80" zoom={12} />
+          <div className="px-2 pb-2">
+            <MapLegend sections={[...new Set(pins.map((pin) => pin.section))]} />
+          </div>
+        </div>
+        <div className={`${card} flex flex-col justify-center p-5 sm:p-6`}>
+          <p className="text-sm font-semibold text-slate-900">Find a monthly rental</p>
+          <p className="mt-1 text-sm text-slate-500">Search Airbnb for a month at a time.</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {rentalSearches.map((place) => (
+              <a key={place} href={airbnbSearchUrl(place)} target="_blank" rel="noreferrer" className={ghost}>
+                Airbnb · {place}
+              </a>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -113,9 +121,12 @@ export function DayLife({
       ) : null}
 
       {groups.map((group) => (
-        <div key={group.kind} className="mt-6">
-          <h3 className="text-base font-semibold text-slate-900">{group.kind}</h3>
-          <p className="text-xs text-slate-500">{KIND_BLURBS[group.kind] ?? ""}</p>
+        <div key={group.kind} className="mt-8">
+          <div className="flex items-baseline justify-between gap-3">
+            <h3 className="text-lg font-semibold tracking-tight text-slate-900">{group.kind}</h3>
+            <span className="text-xs text-slate-500">{group.spots.length} {group.spots.length === 1 ? "place" : "places"}</span>
+          </div>
+          <p className="mt-0.5 text-sm text-slate-500">{KIND_BLURBS[group.kind] ?? ""}</p>
           <div className="-mx-4 mt-2 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-3">
             {group.spots.map((spot) => (
               <SpotCard key={spot.id} slug={slug} spot={spot} />
@@ -124,15 +135,6 @@ export function DayLife({
         </div>
       ))}
 
-      {pins.length ? (
-        <div className="mt-6">
-          <h3 className="text-base font-semibold text-slate-900">Map of {option}</h3>
-          <div className="mt-2">
-            <TripMap pins={pins} hrefFor={(pin) => `/travel/${slug}/${pin.section}/${pin.id}`} zoom={12} />
-            <MapLegend sections={[...new Set(pins.map((pin) => pin.section))]} />
-          </div>
-        </div>
-      ) : null}
     </section>
   );
 }
@@ -142,7 +144,7 @@ function SpotCard({ slug, spot }: { slug: string; spot: TripItem }) {
   return (
     <Link
       href={`/travel/${slug}/spots/${spot.id}`}
-      className={`${card} ui-focus-ring w-64 shrink-0 snap-start overflow-hidden hover:border-slate-400 sm:w-auto`}
+      className={`${card} ui-focus-ring w-64 shrink-0 snap-start overflow-hidden rounded-2xl shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:w-auto`}
     >
       {photo ? (
         // eslint-disable-next-line @next/next/no-img-element
