@@ -74,12 +74,23 @@ describe("pagePhoto", () => {
     expect(await pagePhoto("https://gym.example.com/")).toBe("https://gym.example.com/img/box.jpg?a=1&b=2");
   });
 
-  it("falls back to twitter:image and ignores non-https images", async () => {
+  it("falls back to twitter:image when an http image has no https copy", async () => {
+    const page = await htmlPage(
+      '<meta property="og:image" content="http://x.example.com/a.jpg"><meta name="twitter:image" content="https://cdn.example.com/b.jpg">',
+    )();
+    const fetch = vi.fn().mockResolvedValueOnce(page).mockResolvedValueOnce({ ok: false, headers: new Headers() });
+    vi.stubGlobal("fetch", fetch);
+    expect(await pagePhoto("https://cafe.example.com/")).toBe("https://cdn.example.com/b.jpg");
+    expect(String(fetch.mock.calls[1][0])).toBe("https://x.example.com/a.jpg");
+  });
+
+  it("upgrades an http preview image when the https copy exists", async () => {
+    const page = await htmlPage('<meta property="og:image" content="http://x.example.com/a.jpg">')();
     vi.stubGlobal(
       "fetch",
-      htmlPage('<meta property="og:image" content="http://x.example.com/a.jpg"><meta name="twitter:image" content="https://cdn.example.com/b.jpg">'),
+      vi.fn().mockResolvedValueOnce(page).mockResolvedValueOnce({ ok: true, headers: new Headers({ "content-type": "image/jpeg" }) }),
     );
-    expect(await pagePhoto("https://cafe.example.com/")).toBe("https://cdn.example.com/b.jpg");
+    expect(await pagePhoto("https://bar.example.com/")).toBe("https://x.example.com/a.jpg");
   });
 
   it("never fetches private or odd addresses", async () => {

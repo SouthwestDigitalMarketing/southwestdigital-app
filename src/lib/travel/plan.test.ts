@@ -99,8 +99,9 @@ describe("travel plan", () => {
 
   it("builds the starter trip from valid items", () => {
     const plan = remoteMonthsPlan();
-    expect(plan.sections.options.map((o) => o.place)).toEqual(["Fukuoka, Japan"]);
-    expect(plan.sections.budget.reduce((sum, line) => sum + (typeof line.planned === "number" ? line.planned : 0), 0)).toBe(5045);
+    expect(plan.sections.options.map((o) => o.place)).toEqual(["Japan: Tokyo, Kyoto & Osaka"]);
+    expect(plan.sections.budget.reduce((sum, line) => sum + (typeof line.planned === "number" ? line.planned : 0), 0)).toBe(5359);
+    expect(plan.sections.itinerary.map((day) => day.title)).toEqual(["Tokyo: about 6 weeks", "Kyoto and Osaka: about 2 weeks"]);
     expect(plan.sections.documents[0]).toMatchObject({ document: "US passport", status: "Need it" });
     expect(parsePlan(JSON.parse(JSON.stringify(plan)))).toEqual(plan);
   });

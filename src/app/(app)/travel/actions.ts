@@ -27,7 +27,7 @@ import {
   type TripPlan,
 } from "@/lib/travel/plan";
 import {
-  OLD_REMOTE_MONTHS_TITLE,
+  OLD_REMOTE_MONTHS_TITLES,
   REMOTE_MONTHS_DESTINATION,
   REMOTE_MONTHS_TITLE,
   remoteMonthsPlan,
@@ -113,8 +113,10 @@ async function enrich(
     }
     const wantPhoto = AUTO_PHOTO_SECTIONS.has(section) && !item.photo;
     const wantPin = !located(item);
-    // A spot belongs to an option ("Mexico City"); that is its place, not the trip's destination.
-    const where = section === "spots" ? String(item.option ?? "") : destination;
+    // A spot's place is the city at the end of its area ("Koenji, Suginami, Tokyo"), else its option.
+    const areaCity = area.replace(/\([^)]*\)/g, "").split(",").map((part) => part.trim()).filter(Boolean);
+    const where =
+      section === "spots" ? (areaCity.length > 1 ? areaCity[areaCity.length - 1] : String(item.option ?? "")) : destination;
     const link = typeof item.link === "string" ? item.link : "";
     const wiki = section !== "stays" && (section !== "spots" || WIKI_SPOT_KINDS.has(String(item.kind)));
     if (wantPhoto && section === "spots" && link) {
@@ -145,6 +147,11 @@ async function enrich(
           item = { ...item, lat: pin.lat, lng: pin.lng };
           break;
         }
+      }
+      // OpenStreetMap can refuse or rate-limit; the neighbourhood's Wikipedia article is the fallback.
+      if (!located(item) && plainArea) {
+        const hit = await lookupPlace(`${plainArea} ${where}`.trim());
+        if (hit.lat !== null && hit.lng !== null) item = { ...item, lat: hit.lat, lng: hit.lng };
       }
     }
     out.push(item);
@@ -264,7 +271,7 @@ async function applyChange(dataContext: Context, slug: string, change: Prepared)
         break;
       case "switchToJapan":
         plan = switchToJapan(plan);
-        if (row.title === OLD_REMOTE_MONTHS_TITLE) data.title = REMOTE_MONTHS_TITLE;
+        if (OLD_REMOTE_MONTHS_TITLES.includes(row.title)) data.title = REMOTE_MONTHS_TITLE;
         data.destination = REMOTE_MONTHS_DESTINATION;
         break;
       case "addSpots":
