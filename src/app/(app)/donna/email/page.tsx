@@ -6,42 +6,9 @@ import {
   mailboxFolderTables,
   mailboxHealth,
   deferredRetryNote,
-  type MailboxFolder,
 } from "@/lib/donna/domain";
 import { DonnaFrame, shortTime } from "../DonnaFrame";
-
-function FolderTable({
-  title,
-  folders,
-}: {
-  title: string;
-  folders: MailboxFolder[];
-}) {
-  if (!folders.length) return null;
-  return (
-    <section
-      aria-label={title}
-      className="overflow-hidden rounded-xl border border-slate-200"
-    >
-      <h3 className="bg-white px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-        {title}
-      </h3>
-      <ul className="grid grid-cols-2 gap-px bg-slate-100 lg:grid-cols-4">
-        {folders.map((folder) => (
-          <li
-            key={folder.folder}
-            className="flex min-w-0 items-baseline justify-between gap-2 bg-white px-3 py-2"
-          >
-            <span className="truncate text-sm">{folder.label}</span>
-            <span className="tabular-nums text-sm font-semibold">
-              {folder.messages.toLocaleString("en-US")}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
+import { FolderTable } from "../FolderTable";
 
 export const dynamic = "force-dynamic";
 export default async function EmailPage() {
