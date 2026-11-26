@@ -305,7 +305,45 @@ export function cleanIsSort(options: unknown): boolean {
   );
 }
 
-/** Folders step 2 may move mail to; anything else stays in Inbox. */
+/** Step 3 of a stepped job: do only what Tom chose for each bucket. */
+export function cleanIsDo(options: unknown): boolean {
+  return Boolean(
+    options &&
+    typeof options === "object" &&
+    !Array.isArray(options) &&
+    (options as { buckets?: unknown }).buckets === true &&
+    Array.isArray((options as { plan?: unknown }).plan),
+  );
+}
+
+/** Tom closed this sort without changing anything (step 2 done, step 3 skipped). */
+export function cleanIsClosed(options: unknown): boolean {
+  return Boolean(
+    options &&
+    typeof options === "object" &&
+    !Array.isArray(options) &&
+    (options as { closed?: unknown }).closed === true,
+  );
+}
+
+/**
+ * A finished (or stopped) sort with emails in it, no step 3 yet and not closed:
+ * it is Tom's turn (step 2), so it belongs on Current job, not Completed jobs.
+ */
+export function sortAwaitsTom(
+  job: { status: string; options: unknown; result: unknown },
+  follow: unknown,
+): boolean {
+  return (
+    cleanIsSort(job.options) &&
+    ["done", "cancelled"].includes(job.status) &&
+    !follow &&
+    !cleanIsClosed(job.options) &&
+    cleanBuckets(job.result).length > 0
+  );
+}
+
+/** Folders step 3 may move mail to; anything else stays in Inbox. */
 export const STEP_FOLDERS = [
   "Archive",
   "Bills",
@@ -473,10 +511,9 @@ export function cleanBarStatus(
     etaLabel = formatCleanEta((elapsed / done) * (total - done));
   }
   const title = cleanIsSort(job.options)
-    ? "Step 1: sorting Inbox into buckets"
-    : Array.isArray((job.options as { plan?: unknown } | null)?.plan) &&
-        (job.options as { buckets?: unknown }).buckets === true
-      ? "Step 2: doing what you chose"
+    ? "Step 1 of 3: Sort"
+    : cleanIsDo(job.options)
+      ? "Step 3 of 3: Do"
       : cleanIsPreview(job.options)
         ? "Checking inbox"
         : "Cleaning inbox";
@@ -843,10 +880,10 @@ export function jobTitle(job: {
     !Array.isArray(job.options)
       ? (job.options as Record<string, unknown>)
       : {};
-  if (cleanIsSort(o)) return "Step 1: sort Inbox into buckets";
+  if (cleanIsSort(o)) return "Inbox job: sort, choose, do";
   if (Array.isArray(o.plan))
     return o.buckets === true
-      ? "Step 2: do what you chose"
+      ? "Step 3: do what you chose"
       : "File approved emails";
   if (o.preview === true) return "Inbox check";
   if (job.eventKey?.startsWith("idle:")) return "Automatic clean (new mail)";
@@ -854,13 +891,19 @@ export function jobTitle(job: {
 }
 
 /** One line on what a job did, from its report. */
-export function jobOutcome(job: {
+type OutcomeJob = {
   kind: string;
   status: string;
   options: unknown;
   result: unknown;
   error: string | null;
-}): string {
+};
+
+export function jobOutcome(
+  job: OutcomeJob,
+  /** Step 3 of a sort, folded into the sort's line. */
+  follow?: OutcomeJob | null,
+): string {
   if (job.status === "pending") return "Waiting to start";
   if (job.kind === "undo") {
     const threads = (job.options as { threads?: unknown } | null)?.threads;
@@ -869,7 +912,11 @@ export function jobOutcome(job: {
   if (cleanIsSort(job.options)) {
     const buckets = cleanBuckets(job.result);
     const n = buckets.reduce((sum, b) => sum + b.items.length, 0);
-    return `${n} sorted into ${buckets.length} bucket${buckets.length === 1 ? "" : "s"}`;
+    const sorted = `${n} sorted into ${buckets.length} bucket${buckets.length === 1 ? "" : "s"}`;
+    if (follow) return `${sorted} · ${jobOutcome(follow)}`;
+    if (cleanIsClosed(job.options))
+      return `${sorted} · closed, nothing changed`;
+    return sorted;
   }
   const report = cleanReport(job.result);
   if (!report) return job.error ? `Problem: ${job.error}` : "No report";

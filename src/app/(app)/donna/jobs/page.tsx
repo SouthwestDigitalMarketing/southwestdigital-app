@@ -40,7 +40,7 @@ export default async function JobsPage() {
                     {jobTitle(job)}
                   </span>
                   <span className="block truncate text-xs text-slate-500">
-                    {jobOutcome(job)}
+                    {jobOutcome(job, job.follow)}
                   </span>
                 </span>
                 <span className="shrink-0 text-xs text-slate-500">

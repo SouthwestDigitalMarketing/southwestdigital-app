@@ -31,6 +31,14 @@ and history passes are not queued, and `claimJob` hands out only Tom's steps and
 undos. "On her own" in Limits restores the automatic behaviour. Inbox zero
 (`archive_rest`) is removed.
 
+**Sort, Choose, Do (Tom, 2026-11-26).** A stepped job is three steps shown by a
+stepper on the job page: 1 Sort (Donna; the bucket sort job), 2 Choose (Tom; the
+compact choice table, or "Close this job without changing anything", which sets
+`options.closed`), 3 Do (Donna; the plan job with `buckets: true`). A finished sort
+with no step 3 and not closed is Tom's turn (`sortAwaitsTom`): Current job opens it
+and Completed jobs leaves it out. Completed jobs shows one row per job with step 3
+folded into the outcome. The top bar reads "Step 1 of 3: Sort" / "Step 3 of 3: Do".
+
 **Email types (Tom, 2026-11-26).** Step 1 gives each email a short type
 (`EMAIL_TYPES` in the worker: People, Money, Systems, Marketing, Unwanted groups,
 e.g. Quote, To pay, Phish, Pitch) with hover text and a group colour dot on the

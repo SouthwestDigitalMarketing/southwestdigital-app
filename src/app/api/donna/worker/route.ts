@@ -256,7 +256,9 @@ export async function POST(request: Request) {
           where: { brandId: auth.context.brandId },
         });
         for (const box of boxes) {
-          settings = donnaSettings(box.settings);
+          // The worker takes its limits from a working (unpaused) mailbox.
+          if (!box.paused || settings === null)
+            settings = donnaSettings(box.settings);
           const stats = z
             .object({
               day: z.string().max(10),

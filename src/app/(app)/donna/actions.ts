@@ -11,6 +11,7 @@ import { AUTO_CLEAN_PREFIX, enqueue } from "@/lib/donna/store";
 import {
   STEP_FOLDERS,
   cleanBuckets,
+  cleanIsClosed,
   cleanIsSort,
   cleanReport,
   donnaActionCounts,
@@ -345,7 +346,13 @@ export async function applyBuckets(form: FormData) {
       },
       include: { mailbox: true },
     });
-    if (!sort || !cleanIsSort(sort.options) || sort.mailbox.paused) return null;
+    if (
+      !sort ||
+      !cleanIsSort(sort.options) ||
+      cleanIsClosed(sort.options) ||
+      sort.mailbox.paused
+    )
+      return null;
     const started = await tx.donnaJob.findFirst({
       where: {
         mailboxId: sort.mailboxId,
@@ -409,6 +416,40 @@ export async function applyBuckets(form: FormData) {
   });
   refresh();
   redirect(`/donna/cleans/${encodeURIComponent(jobId ?? sortId)}`);
+}
+
+/** Step 2 without step 3: Tom is done with this sort and wants nothing changed. */
+export async function closeSort(form: FormData) {
+  const { dataContext, session } = await requireDonna();
+  const id = z.string().min(1).parse(form.get("jobId"));
+  await withBrandDataTransaction(dataContext, async (tx) => {
+    const sort = await tx.donnaJob.findFirst({
+      where: {
+        id,
+        kind: "clean",
+        status: { in: ["done", "cancelled"] },
+        mailbox: { brandId: dataContext.brandId },
+      },
+    });
+    if (!sort || !cleanIsSort(sort.options)) return;
+    await tx.donnaJob.update({
+      where: { id: sort.id },
+      data: {
+        options: {
+          ...(sort.options as Record<string, unknown>),
+          closed: true,
+        } as Prisma.InputJsonObject,
+      },
+    });
+    await cleanControl(
+      tx,
+      sort.mailboxId,
+      session.user.id,
+      "Inbox job closed at step 2: nothing changed.",
+    );
+  });
+  refresh();
+  redirect(`/donna/cleans/${encodeURIComponent(id)}`);
 }
 
 /** Stop a clean. A running worker finishes the move in hand, then reports what it filed. */

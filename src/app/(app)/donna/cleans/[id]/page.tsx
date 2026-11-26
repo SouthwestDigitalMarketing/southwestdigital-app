@@ -1,19 +1,29 @@
 import Link from "next/link";
-import { Info } from "lucide-react";
 import { notFound } from "next/navigation";
 import { requireDonna } from "@/lib/donna/access";
 import { loadClean } from "@/lib/donna/store";
 import {
   STEP_FOLDERS,
+  cleanBarStatus,
   cleanBuckets,
+  cleanIsClosed,
+  cleanIsDo,
   cleanIsPreview,
   cleanIsSort,
-  type Bucket,
   cleanReport,
+  jobOutcome,
+  sortAwaitsTom,
   mailboxCleanReport,
   type CleanReportItem,
 } from "@/lib/donna/domain";
-import { applyBuckets, approveClean, undoFiled } from "../../actions";
+import {
+  applyBuckets,
+  approveClean,
+  closeSort,
+  undoFiled,
+} from "../../actions";
+import { SortedTable } from "@/components/donna/sortTable";
+import { Stepper, type Step } from "@/components/donna/Stepper";
 import { BucketChooser } from "@/components/donna/BucketChooser";
 import { DonnaFrame, shortTime } from "../../DonnaFrame";
 
@@ -139,130 +149,6 @@ function PreviewPlan({
   );
 }
 
-/** Sender's name, or the address when there is no name. */
-function senderName(from: string) {
-  const name = from
-    .replace(/<[^>]*>/, "")
-    .replace(/"/g, "")
-    .trim();
-  return name || from;
-}
-
-/**
- * Soft tints that set each bucket's rows apart, with alternating rows a shade
- * deeper inside a bucket (Tom, 2026-11-26).
- */
-const BUCKET_TINTS = [
-  ["bg-sky-50", "bg-sky-100/60"],
-  ["bg-amber-50", "bg-amber-100/60"],
-  ["bg-emerald-50", "bg-emerald-100/60"],
-  ["bg-violet-50", "bg-violet-100/60"],
-  ["bg-rose-50", "bg-rose-100/60"],
-  ["bg-teal-50", "bg-teal-100/60"],
-  ["bg-orange-50", "bg-orange-100/60"],
-  ["bg-indigo-50", "bg-indigo-100/60"],
-];
-
-/** One colour per type group, so a scam or a money email stands out. */
-const TYPE_DOTS: Record<string, string> = {
-  People: "bg-sky-500",
-  Money: "bg-emerald-500",
-  Systems: "bg-slate-500",
-  Marketing: "bg-violet-500",
-  Unwanted: "bg-rose-500",
-  Other: "bg-slate-300",
-};
-
-/** Step 1 while it runs: one table, a row per email, grouped by bucket (Tom, 2026-11-26). */
-function LiveBuckets({ buckets }: { buckets: Bucket[] }) {
-  if (!buckets.length)
-    return (
-      <p className="text-sm text-slate-500">
-        Emails appear here as Donna sorts each one.
-      </p>
-    );
-  return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-      <table
-        aria-label="Sorted emails"
-        className="w-full min-w-[640px] text-left text-xs"
-      >
-        <thead className="uppercase tracking-wide text-slate-500">
-          <tr className="border-b border-slate-200">
-            <th className="px-2 py-1 font-semibold">Bucket</th>
-            <th className="px-2 py-1 font-semibold">Email</th>
-            <th className="px-2 py-1 font-semibold">Type</th>
-            <th className="px-2 py-1 font-semibold">From</th>
-            <th className="px-2 py-1 font-semibold">Client</th>
-            <th className="w-8 px-2 py-1 font-semibold">
-              <span className="sr-only">Why</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {buckets.flatMap((bucket, b) =>
-            bucket.items.map((item, i) => (
-              <tr
-                key={item.thread}
-                className={`align-top ${BUCKET_TINTS[b % BUCKET_TINTS.length][i % 2]}`}
-              >
-                <td className="whitespace-nowrap px-2 py-1 font-medium">
-                  {i ? "" : `${bucket.name} (${bucket.items.length})`}
-                </td>
-                <td className="max-w-[16rem] truncate px-2 py-1">
-                  {item.subject}
-                </td>
-                <td className="whitespace-nowrap px-2 py-1 text-slate-600">
-                  {item.type ? (
-                    <span
-                      title={item.typeHint || item.type}
-                      className="inline-flex items-center gap-1"
-                    >
-                      <span
-                        aria-hidden="true"
-                        className={`h-1.5 w-1.5 rounded-full ${TYPE_DOTS[item.typeGroup] ?? TYPE_DOTS.Other}`}
-                      />
-                      {item.type}
-                      {item.typeNew ? (
-                        <span className="rounded bg-slate-900 px-1 text-[10px] leading-4 text-white">
-                          new
-                        </span>
-                      ) : null}
-                    </span>
-                  ) : null}
-                </td>
-                <td
-                  className="max-w-[12rem] truncate px-2 py-1 text-slate-600"
-                  title={item.from}
-                >
-                  {senderName(item.from)}
-                </td>
-                <td className="whitespace-nowrap px-2 py-1 text-slate-600">
-                  {item.client ?? ""}
-                </td>
-                <td className="px-2 py-1 text-slate-400">
-                  {item.why ? (
-                    // Hover (or focus) shows Donna's reason.
-                    <span
-                      role="img"
-                      tabIndex={0}
-                      title={item.why}
-                      aria-label={`Why: ${item.why}`}
-                      className="inline-flex cursor-help hover:text-slate-700 focus:text-slate-700"
-                    >
-                      <Info size={14} aria-hidden="true" />
-                    </span>
-                  ) : null}
-                </td>
-              </tr>
-            )),
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 function FiledWithUndo({
   jobId,
   items,
@@ -327,6 +213,83 @@ function FiledWithUndo({
   );
 }
 
+/** Sort, Choose, Do for a stepped job; null for older single-step cleans. */
+function jobSteps(
+  job: Awaited<ReturnType<typeof loadClean>> & object,
+  now: { countLabel: string; paused: boolean },
+): Step[] | null {
+  const active = ["pending", "leased"].includes(job.status);
+  if (cleanIsSort(job.options)) {
+    const buckets = cleanBuckets(job.result);
+    const sorted = buckets.reduce((n, b) => n + b.items.length, 0);
+    const follow = job.follow;
+    const closed = cleanIsClosed(job.options);
+    const followActive =
+      follow && ["pending", "leased"].includes(follow.status);
+    const doHref = follow
+      ? `/donna/cleans/${encodeURIComponent(follow.id)}`
+      : undefined;
+    return [
+      {
+        label: "Sort",
+        state: active ? "current" : "done",
+        note: active
+          ? `${now.countLabel}${now.paused ? " · paused" : ""}`
+          : `${sorted} sorted${job.status === "cancelled" ? " · stopped" : ""}`,
+      },
+      {
+        label: "Choose",
+        state: active ? "todo" : follow || closed ? "done" : "yours",
+        note: active
+          ? "After sorting"
+          : follow
+            ? "Chosen"
+            : closed
+              ? "Closed, nothing changed"
+              : "Your turn",
+      },
+      {
+        label: "Do",
+        state: follow
+          ? followActive
+            ? "current"
+            : "done"
+          : closed
+            ? "skipped"
+            : "todo",
+        note: follow
+          ? followActive
+            ? "Running"
+            : `Done · ${jobOutcome({ ...follow, kind: "clean", options: { plan: [] }, error: null })}`
+          : closed
+            ? "Skipped"
+            : "Not started",
+        href: doHref,
+      },
+    ];
+  }
+  if (cleanIsDo(job.options)) {
+    const from = String(
+      (job.options as { previewJobId?: unknown }).previewJobId ?? "",
+    );
+    const sortHref = from
+      ? `/donna/cleans/${encodeURIComponent(from)}`
+      : undefined;
+    return [
+      { label: "Sort", state: "done", note: "Sorted", href: sortHref },
+      { label: "Choose", state: "done", note: "Chosen", href: sortHref },
+      {
+        label: "Do",
+        state: active ? "current" : "done",
+        note: active
+          ? `${now.countLabel}${now.paused ? " · paused" : ""}`
+          : `${job.status === "cancelled" ? "Stopped" : "Done"} · ${jobOutcome(job)}`,
+      },
+    ];
+  }
+  return null;
+}
+
 export default async function CleanPage({
   params,
 }: {
@@ -339,10 +302,7 @@ export default async function CleanPage({
   const active = job.status === "pending" || job.status === "leased";
   const preview = cleanIsPreview(job.options);
   const sort = cleanIsSort(job.options);
-  const stepTwo =
-    !sort &&
-    Array.isArray((job.options as { plan?: unknown } | null)?.plan) &&
-    (job.options as { buckets?: unknown }).buckets === true;
+  const awaiting = sortAwaitsTom(job, job.follow);
   // Jobs from before per-job reports fall back to the mailbox's last report.
   const legacy =
     !job.options ||
@@ -353,35 +313,71 @@ export default async function CleanPage({
       ? mailboxCleanReport(job.mailbox.coverage)
       : null);
   const paused = job.mailbox.paused;
+  const progress = cleanBarStatus(
+    job,
+    job.mailbox.coverage,
+    new Date(),
+    paused,
+    job.mailbox.heartbeatAt,
+  );
+  const steps = jobSteps(job, progress);
   return (
     <DonnaFrame
-      active={active ? "current" : "jobs"}
+      active={active || awaiting ? "current" : "jobs"}
       refreshEvery={active ? 3000 : undefined}
     >
-      <header className="flex flex-wrap items-baseline gap-x-2">
-        <h2 className="text-lg font-semibold">
-          {sort
-            ? active
-              ? "Step 1: sorting Inbox into buckets"
-              : "Step 1: Inbox sorted into buckets"
-            : stepTwo
-              ? "Step 2: what Donna moved"
-              : preview
-                ? "Inbox check"
-                : "Inbox clean"}
-        </h2>
-        <span className="text-sm text-slate-500">
-          {active
-            ? null
-            : job.status === "done"
-              ? `Finished ${shortTime(job.completedAt)}`
-              : job.status === "cancelled"
-                ? `Stopped ${shortTime(job.completedAt)}`
-                : job.status}
-        </span>
-      </header>
-      {active && sort ? (
-        <LiveBuckets buckets={cleanBuckets(job.result)} />
+      {steps ? (
+        <Stepper steps={steps} />
+      ) : (
+        <header className="flex flex-wrap items-baseline gap-x-2">
+          <h2 className="text-lg font-semibold">
+            {preview ? "Inbox check" : "Inbox clean"}
+          </h2>
+          <span className="text-sm text-slate-500">
+            {active
+              ? null
+              : job.status === "done"
+                ? `Finished ${shortTime(job.completedAt)}`
+                : job.status === "cancelled"
+                  ? `Stopped ${shortTime(job.completedAt)}`
+                  : job.status}
+          </span>
+        </header>
+      )}
+      {sort ? (
+        awaiting ? (
+          <>
+            <p className="text-sm text-slate-600">
+              Donna sorted {report?.reviewed ?? 0} emails and moved nothing.
+              {report?.remaining
+                ? ` ${report.remaining.toLocaleString("en-US")} were not read this time.`
+                : ""}{" "}
+              Choose what to do with each bucket, then start step 3.
+            </p>
+            <BucketChooser
+              jobId={job.id}
+              buckets={cleanBuckets(job.result)}
+              folders={STEP_FOLDERS}
+              blocked={
+                paused
+                  ? "Donna is paused. Resume her on the top bar to start step 3."
+                  : null
+              }
+              action={applyBuckets}
+            />
+            <form action={closeSort}>
+              <input type="hidden" name="jobId" value={job.id} />
+              <button
+                type="submit"
+                className="text-xs text-slate-500 underline"
+              >
+                Close this job without changing anything
+              </button>
+            </form>
+          </>
+        ) : (
+          <SortedTable buckets={cleanBuckets(job.result)} />
+        )
       ) : active && report ? (
         <>
           <Items
@@ -400,57 +396,28 @@ export default async function CleanPage({
             extra={(item) => item.reason}
           />
         </>
-      ) : null}
-      {active ? null : job.status === "cancelled" && !report ? (
+      ) : active ? null : job.status === "cancelled" && !report ? (
         <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
           Cancelled before Donna moved anything.
         </p>
-      ) : sort && report ? (
-        <>
-          <p className="text-sm text-slate-600">
-            Donna read {report?.reviewed ?? 0} emails and moved nothing.
-            {report?.remaining
-              ? ` ${report.remaining.toLocaleString("en-US")} were not read this time.`
-              : ""}{" "}
-            Choose what to do with each bucket, then start step 2.
-          </p>
-          {job.approvedJobId ? (
-            <Link
-              href={`/donna/cleans/${encodeURIComponent(job.approvedJobId)}`}
-              className="block rounded-lg border border-slate-200 px-4 py-2.5 text-center text-sm"
-            >
-              Step 2 already started from this sort. See what it did
-            </Link>
-          ) : (
-            <BucketChooser
-              jobId={job.id}
-              buckets={cleanBuckets(job.result)}
-              folders={STEP_FOLDERS}
-              blocked={
-                paused
-                  ? "Donna is paused. Resume her on the Overview to start step 2."
-                  : null
-              }
-              action={applyBuckets}
-            />
-          )}
-        </>
       ) : report ? (
         <>
           {job.status === "cancelled" ? (
             <p className="text-sm text-slate-600">
-              Cancelled. Anything filed before you cancelled stays filed; you
-              can undo it below.
+              Stopped. Anything moved before you stopped stays moved; you can
+              undo it below.
             </p>
           ) : null}
-          <p className="text-sm text-slate-600">
-            {preview
-              ? `Read ${report.reviewed.toLocaleString("en-US")}`
-              : `Filed ${report.filed.filter((i) => !i.undone).length.toLocaleString("en-US")}`}
-            {report.remaining
-              ? ` · Not looked at yet ${report.remaining.toLocaleString("en-US")}`
-              : ""}
-          </p>
+          {steps ? null : (
+            <p className="text-sm text-slate-600">
+              {preview
+                ? `Read ${report.reviewed.toLocaleString("en-US")}`
+                : `Filed ${report.filed.filter((i) => !i.undone).length.toLocaleString("en-US")}`}
+              {report.remaining
+                ? ` · Not looked at yet ${report.remaining.toLocaleString("en-US")}`
+                : ""}
+            </p>
+          )}
           {preview ? (
             <PreviewPlan
               jobId={job.id}
