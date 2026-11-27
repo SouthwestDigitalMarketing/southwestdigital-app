@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { ThumbnailCopy, TranscriptAccordion } from "@/components/showrunner/ThumbnailCopy";
 import type { VideoDetails, VideoRender, VideoStep } from "@/lib/showrunner/video-status";
 
 export type VideoCard = {
@@ -16,6 +17,10 @@ export type VideoCard = {
   thumbnail: string | null;
   details: VideoDetails | null;
   finishRequestedAt?: Date | string | null;
+  transcript?: string | null;
+  thumbnailText?: string | null;
+  thumbnailOptions?: string[] | null;
+  thumbnailBusy?: boolean;
 };
 
 const MARK: Record<VideoStep["state"], string> = { done: "✓", now: "●", todo: "○", stopped: "✕" };
@@ -93,7 +98,7 @@ function Steps({ video }: { video: VideoCard }) {
  * Every video ripley is making, full width: the YouTube title once written, the steps and render
  * bars on the left, the thumbnail and details on the right (stacked on a phone). Refreshes itself.
  */
-export function VideosInProgress({ videos }: { videos: VideoCard[] }) {
+export function VideosInProgress({ videos, copyBatch }: { videos: VideoCard[]; copyBatch?: string }) {
   const router = useRouter();
   useEffect(() => {
     const timer = setInterval(() => router.refresh(), 4_000);
@@ -114,7 +119,7 @@ export function VideosInProgress({ videos }: { videos: VideoCard[] }) {
                 {video.title && video.project ? <p className="mt-0.5 text-xs text-slate-500">{video.project}</p> : null}
                 {video.url ? <p className="mt-2 font-semibold text-green-700">Published on YouTube</p> : <Steps video={video} />}
               </div>
-              <div className={video.thumbnail || details || video.url ? "min-w-0" : "hidden md:block"}>
+              <div className={video.thumbnail || details || video.url || copyBatch === video.batch ? "min-w-0" : "hidden md:block"}>
                 {video.thumbnail ? (
                   // eslint-disable-next-line @next/next/no-img-element -- inline data: JPEG from ripley
                   <img src={video.thumbnail} alt="" className="aspect-video w-full rounded-xl object-cover" />
@@ -129,8 +134,17 @@ export function VideosInProgress({ videos }: { videos: VideoCard[] }) {
                     Watch on YouTube
                   </a>
                 ) : null}
+                {copyBatch === video.batch ? (
+                  <ThumbnailCopy
+                    batch={video.batch}
+                    thumbnailText={video.thumbnailText ?? null}
+                    thumbnailOptions={video.thumbnailOptions ?? null}
+                    busy={Boolean(video.thumbnailBusy)}
+                  />
+                ) : null}
               </div>
             </div>
+            {copyBatch === video.batch ? <TranscriptAccordion transcript={video.transcript ?? null} /> : null}
           </div>
         );
       })}

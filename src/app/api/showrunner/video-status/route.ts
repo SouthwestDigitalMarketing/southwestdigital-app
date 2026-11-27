@@ -49,6 +49,10 @@ export async function POST(request: Request) {
         title: row.title,
         thumbnail: row.thumbnail,
         details: row.details ?? Prisma.JsonNull,
+        transcript: row.transcript,
+        thumbnailText: row.thumbnailText,
+        thumbnailOptions: row.thumbnailOptions ?? Prisma.JsonNull,
+        thumbnailBusy: row.thumbnailBusy,
         sentAt: row.sentAt,
       };
       await tx.showrunnerVideoStatus.upsert({

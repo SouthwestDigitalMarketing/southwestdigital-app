@@ -39,7 +39,7 @@ export default async function ProductionPage({ params }: { params: Promise<{ bat
           published={Boolean(video.url)}
         />
       </div>
-      <VideosInProgress videos={[video, ...others]} />
+      <VideosInProgress videos={[video, ...others]} copyBatch={video.batch} />
     </div>
   );
 }
