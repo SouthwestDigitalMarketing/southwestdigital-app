@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { VideoCard } from "@/components/showrunner/VideosInProgress";
-import { productionItem } from "./production";
+import { productionItem, stageProgress } from "./production";
 
 const base: VideoCard = { batch: "b1", project: "TREB 261125 New Video", state: "episode", stage: null, steps: null, render: null, url: null, title: null, thumbnail: null, details: null };
 
@@ -37,6 +37,19 @@ describe("productionItem", () => {
   });
 
   it("uses the stage line before ripley sends steps", () => {
-    expect(productionItem({ ...base, stage: "Sending 1 of 1 — 40%" })).toMatchObject({ label: "Sending 1 of 1 — 40%", step: null, progress: 0 });
+    expect(productionItem({ ...base, stage: "Sending 1 of 1 — 40%" })).toMatchObject({
+      label: "Sending 1 of 1 — 40%",
+      step: null,
+      progress: 0.4,
+    });
+  });
+});
+
+describe("stageProgress", () => {
+  it("reads the percent at the end of a sending line", () => {
+    expect(stageProgress("Sending 1 of 9 — 54%")).toBe(0.54);
+    expect(stageProgress("Paused 2 of 8 — 0%")).toBe(0);
+    expect(stageProgress("On its way to ripley")).toBe(0);
+    expect(stageProgress(null)).toBe(0);
   });
 });

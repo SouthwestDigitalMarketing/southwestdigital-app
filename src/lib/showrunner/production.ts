@@ -13,6 +13,14 @@ export type ProductionItem = {
   waiting: boolean;
 };
 
+/** Percent from a phone-send stage line ("Sending 1 of 9 — 54%"), else 0. */
+export function stageProgress(stage: string | null | undefined): number {
+  if (!stage) return 0;
+  const match = /(\d{1,3})\s*%\s*$/.exec(stage);
+  if (!match) return 0;
+  return Math.min(1, Math.max(0, Number(match[1]) / 100));
+}
+
 /**
  * A video still being made, reduced to one bar (Tom, 2026-11-25): done steps plus the current step's render share,
  * over all steps. Published videos are not in production.
@@ -22,7 +30,8 @@ export function productionItem(video: VideoCard): ProductionItem | null {
   const name = video.title ?? video.project ?? "New video";
   const steps = video.steps ?? [];
   if (steps.length === 0) {
-    return { batch: video.batch, name, label: video.stage ?? "On its way to ripley", step: null, steps: null, progress: 0, stopped: false, waiting: false };
+    const label = video.stage ?? "On its way to ripley";
+    return { batch: video.batch, name, label, step: null, steps: null, progress: stageProgress(label), stopped: false, waiting: false };
   }
   const stopped = steps.find((step) => step.state === "stopped");
   const current = stopped ?? steps.find((step) => step.state === "now") ?? steps.find((step) => step.state === "todo") ?? steps[steps.length - 1];
