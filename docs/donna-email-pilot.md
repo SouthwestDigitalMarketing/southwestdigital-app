@@ -54,6 +54,19 @@ if Tom ticked the **Approve** box in step 2 (`options.empty`), permanently delet
 snapshot (minus rescues) plus what the job moved to Spam/Trash; mail that arrived after
 step 1 is never deleted unseen. Unsubscribe is not built.
 
+**Step 4 is the Spam step (Tom, 2026-11-28, second pass).** All spam is reviewed in one
+place: Inbox junk no longer appears in Choose (the Junk and Rescue buckets are gone for
+new jobs); step 1 groups by sender Inbox junk (sure), all of the Spam folder (one review
+per 25 senders: block only when highly confident, plus an `unsubscribe` flag for a real
+company's bulk mail) and guarded Spam/Trash mail (to check, Not spam). The page has two
+buckets, **Sure spam** (preset Spam) and **Check these** (Looks real preset Not spam,
+Not sure preset Decide later), then one Trash row. Spam = one-click unsubscribe
+(RFC 8058, https, only when flagged; never for scams) + always-spam + Zoho org spam list +
+mail moved to Trash (`move_via_imap`). Not spam = back to Inbox + never-block + Zoho
+allow list. Emptying Trash is separate, step 1's snapshot only, with its own Approve
+tick. "Nothing to do here: go to the Spam step" (`chooseSkipped`) covers a job whose
+Inbox mail was all spam. Unsubscribe is approved by Tom's Confirm click (Tom, 2026-11-28).
+
 **Step 4, Clean up (Tom, 2026-11-28).** Deleting moved out of Choose: approving the
 deletion of 600+ Spam/Trash emails Tom never saw was backwards. Jobs are now Sort,
 Choose, Do, Clean up. Step 1 also groups Spam (minus guarded mail, which is a rescue)

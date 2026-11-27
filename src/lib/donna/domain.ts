@@ -326,6 +326,16 @@ export function cleanIsCleanup(options: unknown): boolean {
   );
 }
 
+/** Tom had nothing to choose in step 2 and went straight to the Spam step. */
+export function chooseSkipped(options: unknown): boolean {
+  return Boolean(
+    options &&
+    typeof options === "object" &&
+    !Array.isArray(options) &&
+    (options as { chooseSkipped?: unknown }).chooseSkipped === true,
+  );
+}
+
 /** Tom chose not to clean up Spam and Trash for this job. */
 export function cleanupSkipped(options: unknown): boolean {
   return Boolean(
@@ -343,6 +353,12 @@ export type SpamSender = {
   samples: string[];
   verdict: "block" | "keep" | "unsure";
   why: string;
+  /** Donna is highly confident it is spam (the Sure spam bucket). */
+  sure: boolean;
+  /** A real company's bulk mail with a safe one-click unsubscribe to try. */
+  unsubscribe: boolean;
+  /** Folders their mail is in: INBOX, Spam, Trash. */
+  where: string[];
 };
 
 export type CleanupPlan = {
@@ -384,6 +400,13 @@ export function cleanupPlan(result: unknown): CleanupPlan | null {
               ? r.verdict
               : "unsure",
           why: typeof r.why === "string" ? r.why.slice(0, 200) : "",
+          sure: typeof r.sure === "boolean" ? r.sure : r.verdict === "block",
+          unsubscribe: r.unsubscribe === true,
+          where: Array.isArray(r.where)
+            ? r.where
+                .filter((x): x is string => typeof x === "string")
+                .slice(0, 3)
+            : ["Spam"],
         },
       ];
     },
@@ -423,7 +446,9 @@ export function sortAwaitsTom(
     ["done", "cancelled"].includes(job.status) &&
     !follow &&
     !cleanIsClosed(job.options) &&
-    cleanBuckets(job.result).length > 0
+    !chooseSkipped(job.options) &&
+    // Real mail to choose, or only spam to review (then step 2 is just "go to Spam").
+    (cleanBuckets(job.result).length > 0 || cleanupHasWork(job.result))
   );
 }
 
@@ -705,6 +730,10 @@ export type CleanReport = {
   rescued: CleanReportItem[];
   /** Step 4: senders blocked forever. */
   blocked: CleanReportItem[];
+  /** Step 4: one-click unsubscribes tried, with the result in reason. */
+  unsubscribed: CleanReportItem[];
+  /** Step 4: emails moved to Trash. */
+  trashed: number;
   /** Step 1: what emptying would delete. Step 3: what it deleted. */
   empty: Record<string, number> | null;
   emptied: Record<string, number> | null;
@@ -797,6 +826,11 @@ export function cleanReport(raw: unknown): CleanReport | null {
     tagged: cleanItems(c.tagged).slice(0, 200),
     rescued: cleanItems(c.rescued).slice(0, 200),
     blocked: cleanItems(c.blocked).slice(0, 500),
+    unsubscribed: cleanItems(c.unsubscribed).slice(0, 500),
+    trashed:
+      typeof c.trashed === "number" && Number.isFinite(c.trashed)
+        ? Math.max(0, Math.trunc(c.trashed))
+        : 0,
     empty: folderCounts(c.empty),
     emptied: folderCounts(c.emptied),
     emptyError:
@@ -1045,6 +1079,7 @@ export function jobEnd(
     }
     if (cleanIsClosed(job.options))
       return { label: "Closed", detail: "Closed at step 2, nothing changed" };
+    if (chooseSkipped(job.options)) return cleanupEnd(job, cleanup);
     return job.status === "cancelled"
       ? { label: "Stopped", detail: "Stopped during step 1" }
       : { label: "Waiting", detail: "Waiting for your choices" };
@@ -1077,7 +1112,7 @@ function cleanupEnd(
   if (cleanupSkipped(sort.options))
     return { label: "Finished", detail: "Done; clean up skipped" };
   return cleanupHasWork(sort.result)
-    ? { label: "Waiting", detail: "Your turn: clean up Spam and Trash" }
+    ? { label: "Waiting", detail: "Your turn: review the spam" }
     : { label: "Finished", detail: "All steps done" };
 }
 
@@ -1145,7 +1180,11 @@ export function jobOutcome(
       : "",
     report.tagged.length ? `tagged ${report.tagged.length}` : "",
     report.rescued.length ? `rescued ${report.rescued.length}` : "",
-    report.blocked.length ? `blocked ${report.blocked.length}` : "",
+    report.blocked.length ? `spam ${report.blocked.length}` : "",
+    report.unsubscribed.filter((u) => u.reason === "unsubscribed").length
+      ? `unsubscribed ${report.unsubscribed.filter((u) => u.reason === "unsubscribed").length}`
+      : "",
+    report.trashed ? `to Trash ${report.trashed}` : "",
     report.emptied
       ? `emptied ${Object.values(report.emptied).reduce((a, b) => a + b, 0)}`
       : "",
