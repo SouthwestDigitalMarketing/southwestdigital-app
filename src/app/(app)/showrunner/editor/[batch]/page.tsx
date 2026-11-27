@@ -43,11 +43,14 @@ export default async function EditEpisodePage({ params }: { params: Promise<{ ba
             Watch on YouTube
           </a>
         ) : null}
-        {!episode.url && (waiting || finishing) ? (
-          <div className="-mx-4 -mb-4 mt-4 rounded-b-2xl border-t border-amber-200 bg-amber-50 px-4 pb-4">
-            <WaitingActions batch={episode.batch} finishing={finishing} />
-          </div>
-        ) : null}
+        <div className={`-mx-4 -mb-4 mt-4 rounded-b-2xl border-t px-4 pb-4 ${waiting ? "border-amber-200 bg-amber-50" : "border-slate-100"}`}>
+          <WaitingActions
+            batch={episode.batch}
+            finishing={finishing}
+            waiting={waiting}
+            published={Boolean(episode.url)}
+          />
+        </div>
       </div>
       {episode.url ? (
         <form action={requestReview.bind(null, episode.batch)} className="mt-4 flex max-w-3xl items-center gap-3">

@@ -63,7 +63,7 @@ describe("phone intake tickets", () => {
     expect(url.searchParams.get("sig")).toBe(signSession(secret, link.exp));
   });
 
-  it("puts addTo on the send-page link so extra clips join a waiting video", () => {
+  it("puts addTo on the send-page link so extra clips join that video", () => {
     const link = sendPageLink({
       secret, publicUrl: "http://127.0.0.1:8932", nowSeconds: 1_700_000_000,
       extra: { addTo: "mwzglzlj-5643aa" },

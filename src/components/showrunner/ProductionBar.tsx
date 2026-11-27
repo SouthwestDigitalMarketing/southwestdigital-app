@@ -79,18 +79,16 @@ export function ProductionBar() {
         </span>
         <span className="shrink-0 font-semibold tabular-nums text-slate-900">{pct}%</span>
       </Link>
+      <Link href={`/phone?addTo=${encodeURIComponent(video.batch)}`} className={control}>
+        Add clips
+      </Link>
       {video.waiting ? (
-        <>
-          <Link href={`/phone?addTo=${encodeURIComponent(video.batch)}`} className={control}>
-            Add clips
-          </Link>
-          <form action={requestFinish}>
-            <input type="hidden" name="batch" value={video.batch} />
-            <button type="submit" className={control}>
-              Finish
-            </button>
-          </form>
-        </>
+        <form action={requestFinish}>
+          <input type="hidden" name="batch" value={video.batch} />
+          <button type="submit" className={control}>
+            Finish
+          </button>
+        </form>
       ) : null}
       {video.finishing ? <span className="shrink-0 text-xs text-slate-600">Starting…</span> : null}
       <span className="absolute inset-x-0 bottom-0 block h-0.5 bg-slate-200" aria-hidden="true">
