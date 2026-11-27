@@ -1,4 +1,11 @@
 # SWapp handoff
+## 2026-11-27 — Tap the waiting card to act (Johnny)
+
+Tom's phone screenshot is the Videos episode page on live SWapp: the card
+tap already goes there, and that page had no buttons. Finish / Add clips
+now sit on that same card. Videos list marks it "Waiting on you". Demo
+`:3110`. Live still needs merge.
+
 ## 2026-11-27 — Waiting on you: Finish and Add clips in SWapp (Johnny)
 
 Tom: "waiting on me" needs a button, not copy that sends him to the send app.
