@@ -1,4 +1,11 @@
 # SWapp handoff
+## 2026-11-27 — Thumbnail text ships without waiting (Johnny)
+
+Autopilot already publishes Johnny's pick. The episode page picker is a later
+edit, collapsed under **Change thumbnail text**, available while encoding and
+after YouTube (ripley remakes the picture and calls `set_thumbnail`). Tom
+does not approve the wording to ship.
+
 ## 2026-11-27 — Transcript + thumbnail text on the production page (Johnny)
 
 The top status bar and the Videos-in-production card open the same episode
