@@ -1,4 +1,13 @@
 # SWapp handoff
+## 2026-11-27 — Add clips on every episode (Johnny)
+
+Tom: future uploads should not wait for more clips. Add clips stays available
+at every production step, including after publish: recut, take down the current
+YouTube video, republish. **Add clips** is on the Videos episode page (published
+included), the production page, and the job bar. Finish stays only on videos
+still waiting at the old gate. Pair with showrunner-app `johnny/add-clips-anytime`.
+Did not touch AppShell NAV or Studio.
+
 ## 2026-11-27 — Tap the waiting card to act (Johnny)
 
 Tom's phone screenshot is the Videos episode page on live SWapp: the card
