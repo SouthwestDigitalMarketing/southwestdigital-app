@@ -1,4 +1,33 @@
 # SWapp handoff
+## 2026-11-27 — Tap the waiting card to act (Johnny)
+
+Tom's phone screenshot is the Videos episode page on live SWapp: the card
+tap already goes there, and that page had no buttons. Finish / Add clips
+now sit on that same card. Videos list marks it "Waiting on you". Demo
+`:3110`. Live still needs merge.
+
+## 2026-11-27 — Waiting on you: Finish and Add clips in SWapp (Johnny)
+
+Tom: "waiting on me" needs a button, not copy that sends him to the send app.
+Full auto off parks the video at step 6. SWapp now has **Add clips** (signed
+`/phone?addTo=<batch>` → ripley send page) and **Finish** (sets
+`finishRequestedAt`, writes `done/<batch>/.finish.json` on ripley). On the
+Videos episode page, the production page, and the job bar. Demo
+`http://100.98.89.93:3110`. Merge only when Tom says merge. Production Vercel
+still needs `showrunner_review.py` to poll `/api/showrunner/video-finish` after
+merge; :3110 writes the file itself.
+
+## 2026-11-27 — Video job bar missing during a live phone send (Johnny)
+
+Tom: bar at the top of every page while a video is being made, like Donna's job bar; tap for
+that video's progress page. It was already in PR #249 but hidden during the current send
+(`mwzglzlj-5643aa`). Cause: `loadVideoStatus` took 12 rows by `updatedAt` desc. Ripley upserts
+the live send first, then 12 published videos in the same push, so the send is 13th and dropped.
+Fix: load unpublished rows on their own (take 50), then recent published (take 12). Sending
+stage percent fills the bar before steps exist. `ProductionBar` layout matches `DonnaCleanBar`.
+Branch `johnny/video-bar`, worktree `~/projects/worktrees/swapp-video-bar`, demo
+`http://100.98.89.93:3110`. Merge only when Tom says merge. Did not touch AppShell NAV or Studio.
+
 ## 2026-11-26 — Japan Budget tab as a compact table (Ummon)
 
 Tom: Budget tab should use the same table styling as trip-prep / logistics.

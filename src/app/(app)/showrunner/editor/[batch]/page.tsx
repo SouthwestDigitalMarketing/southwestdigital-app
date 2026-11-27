@@ -5,6 +5,8 @@ import { requireAppBrand } from "@/lib/brands/staff";
 import { showChannelBrand } from "@/lib/showrunner/channel-brand";
 import { loadEpisodes } from "@/lib/showrunner/load";
 import { createBrandDataContext } from "@/lib/tenancy/context";
+import { WaitingActions } from "@/components/showrunner/WaitingActions";
+import { isWaitingForYou } from "@/lib/showrunner/production";
 import { requestReview } from "../actions";
 import { Scorecard } from "./Scorecard";
 
@@ -18,6 +20,11 @@ export default async function EditEpisodePage({ params }: { params: Promise<{ ba
   const episode = (await loadEpisodes(createBrandDataContext({ brandId: brand.id, actorUserId: dataContext.actorUserId })))
     .find((row) => row.batch === batch);
   if (!episode) notFound();
+  const waiting = isWaitingForYou(
+    Array.isArray(episode.steps) ? (episode.steps as { state: string; label: string }[]) : null,
+    episode.stage,
+  );
+  const finishing = Boolean(episode.finishRequestedAt);
   return (
     <div className="px-4 py-5 sm:p-8">
       <Link href="/showrunner/editor" className="inline-flex items-center gap-1 text-sm font-semibold text-slate-600">
@@ -35,6 +42,11 @@ export default async function EditEpisodePage({ params }: { params: Promise<{ ba
           <a href={episode.url} target="_blank" rel="noopener" className="mt-3 inline-flex rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
             Watch on YouTube
           </a>
+        ) : null}
+        {!episode.url && (waiting || finishing) ? (
+          <div className="-mx-4 -mb-4 mt-4 rounded-b-2xl border-t border-amber-200 bg-amber-50 px-4 pb-4">
+            <WaitingActions batch={episode.batch} finishing={finishing} />
+          </div>
         ) : null}
       </div>
       {episode.url ? (

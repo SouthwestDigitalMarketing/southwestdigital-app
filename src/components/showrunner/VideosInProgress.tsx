@@ -15,6 +15,7 @@ export type VideoCard = {
   title: string | null;
   thumbnail: string | null;
   details: VideoDetails | null;
+  finishRequestedAt?: Date | string | null;
 };
 
 const MARK: Record<VideoStep["state"], string> = { done: "✓", now: "●", todo: "○", stopped: "✕" };

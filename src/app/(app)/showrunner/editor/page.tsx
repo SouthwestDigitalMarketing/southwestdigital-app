@@ -3,6 +3,7 @@ import { ChevronRight } from "lucide-react";
 import { requireAppBrand } from "@/lib/brands/staff";
 import { showChannelBrand } from "@/lib/showrunner/channel-brand";
 import { loadEpisodes } from "@/lib/showrunner/load";
+import { isWaitingForYou } from "@/lib/showrunner/production";
 import { createBrandDataContext } from "@/lib/tenancy/context";
 
 export const dynamic = "force-dynamic";
@@ -39,11 +40,15 @@ export default async function EditorPage() {
         <ul className="mt-3 flex max-w-3xl flex-col gap-2">
           {episodes.map((episode) => {
             const date = filmedOn(episode.project);
+            const waiting = !episode.url && isWaitingForYou(
+              Array.isArray(episode.steps) ? (episode.steps as { state: string; label: string }[]) : null,
+              episode.stage,
+            );
             return (
               <li key={episode.batch}>
                 <Link
                   href={`/showrunner/editor/${encodeURIComponent(episode.batch)}`}
-                  className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-2 hover:bg-slate-50"
+                  className={`flex items-center gap-3 rounded-xl border bg-white p-2 hover:bg-slate-50 ${waiting ? "border-amber-300" : "border-slate-200"}`}
                 >
                   {episode.thumbnail ? (
                     // eslint-disable-next-line @next/next/no-img-element -- inline data: JPEG from ripley
@@ -53,8 +58,8 @@ export default async function EditorPage() {
                   )}
                   <span className="min-w-0 flex-1">
                     <span className="line-clamp-2 text-sm font-semibold leading-snug text-slate-900">{episode.title ?? episode.project ?? "Untitled"}</span>
-                    <span className="mt-0.5 block text-xs text-slate-500">
-                      {[date, episode.url ? "Published" : "In production"].filter(Boolean).join(" · ")}
+                    <span className={`mt-0.5 block text-xs ${waiting ? "font-semibold text-amber-800" : "text-slate-500"}`}>
+                      {[date, episode.url ? "Published" : waiting ? "Waiting on you" : "In production"].filter(Boolean).join(" · ")}
                     </span>
                     {episode.review ? (
                       <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${

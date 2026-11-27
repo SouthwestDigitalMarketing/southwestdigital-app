@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { VideoCard } from "@/components/showrunner/VideosInProgress";
-import { productionItem } from "./production";
+import { isWaitingForYou, productionItem, stageProgress } from "./production";
 
 const base: VideoCard = { batch: "b1", project: "TREB 261125 New Video", state: "episode", stage: null, steps: null, render: null, url: null, title: null, thumbnail: null, details: null };
 
@@ -33,10 +33,39 @@ describe("productionItem", () => {
       ...base,
       steps: [{ label: "Making the cut", state: "done" }, { label: "Waiting for you: add clips or finish", state: "now" }, { label: "Rendering", state: "todo" }],
     });
-    expect(item).toMatchObject({ waiting: true, stopped: false, step: 2 });
+    expect(item).toMatchObject({ waiting: true, finishing: false, stopped: false, step: 2 });
+  });
+
+  it("shows starting the build after Finish", () => {
+    const item = productionItem({
+      ...base,
+      finishRequestedAt: new Date("2026-11-27T21:00:00Z"),
+      steps: [{ label: "Making the cut", state: "done" }, { label: "Waiting for you: add clips or finish", state: "now" }, { label: "Rendering", state: "todo" }],
+    });
+    expect(item).toMatchObject({ waiting: false, finishing: true, label: "Starting the build" });
   });
 
   it("uses the stage line before ripley sends steps", () => {
-    expect(productionItem({ ...base, stage: "Sending 1 of 1 — 40%" })).toMatchObject({ label: "Sending 1 of 1 — 40%", step: null, progress: 0 });
+    expect(productionItem({ ...base, stage: "Sending 1 of 1 — 40%" })).toMatchObject({
+      label: "Sending 1 of 1 — 40%",
+      step: null,
+      progress: 0.4,
+    });
+  });
+});
+
+describe("isWaitingForYou", () => {
+  it("reads the stage line when steps are not loaded yet", () => {
+    expect(isWaitingForYou(null, "Step 6 of 14: Waiting for you: add clips or finish")).toBe(true);
+    expect(isWaitingForYou(null, "Sending 1 of 9 — 54%")).toBe(false);
+  });
+});
+
+describe("stageProgress", () => {
+  it("reads the percent at the end of a sending line", () => {
+    expect(stageProgress("Sending 1 of 9 — 54%")).toBe(0.54);
+    expect(stageProgress("Paused 2 of 8 — 0%")).toBe(0);
+    expect(stageProgress("On its way to ripley")).toBe(0);
+    expect(stageProgress(null)).toBe(0);
   });
 });
