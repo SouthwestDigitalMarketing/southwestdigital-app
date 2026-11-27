@@ -53,6 +53,7 @@ export async function requestThumbnailText(data: FormData) {
     }),
   );
   await writeLocalThumbnail(batch, text);
+  revalidatePath(`/showrunner/editor/${batch}`);
   revalidatePath(`/showrunner/production/${batch}`);
   revalidatePath("/showrunner");
 }

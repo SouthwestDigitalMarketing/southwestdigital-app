@@ -1,10 +1,13 @@
 # SWapp handoff
 ## 2026-11-27 — Transcript + thumbnail text on the production page (Johnny)
 
-On `/showrunner/production/<batch>`: accordion with the full transcript, and
-3–5 thumbnail wordings plus a custom field. Picking one remakes the thumbnail
-while the video keeps encoding (ripley `johnny/thumbnail-copy`). Migration
-`20261127233000_showrunner_thumbnail_copy`.
+The top status bar and the Videos-in-production card open the same episode
+page (`/showrunner/editor/<batch>`; old `/showrunner/production/<batch>`
+redirects there). That page has the step list and render bars, the thumbnail,
+3–5 wording options plus a custom field, a transcript accordion, Add clips,
+and the scorecard once it is live. Picking new thumbnail words remakes the
+picture while the video keeps encoding (ripley `johnny/thumbnail-copy`).
+Migration `20261127233000_showrunner_thumbnail_copy`.
 
 ## 2026-11-27 — Render bars on the production page (Johnny)
 

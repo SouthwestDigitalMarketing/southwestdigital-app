@@ -87,9 +87,9 @@ export async function loadVideoStatus(context: BrandDataContext): Promise<VideoS
   });
 }
 
-/** loadVideoStatus shaped for the VideosInProgress cards (Showrunner and YouTube pages). */
-export async function loadVideoCards(context: BrandDataContext): Promise<VideoCard[]> {
-  return (await loadVideoStatus(context)).map((row) => ({
+/** One ShowrunnerVideoStatus row as a VideosInProgress card. */
+export function videoCardFromStatus(row: VideoStatusRow): VideoCard {
+  return {
     batch: row.batch,
     project: row.project,
     state: row.state,
@@ -105,7 +105,12 @@ export async function loadVideoCards(context: BrandDataContext): Promise<VideoCa
     thumbnailText: row.thumbnailText,
     thumbnailOptions: Array.isArray(row.thumbnailOptions) ? (row.thumbnailOptions as string[]) : null,
     thumbnailBusy: row.thumbnailBusy || Boolean(row.thumbnailRequestedAt),
-  }));
+  };
+}
+
+/** loadVideoStatus shaped for the VideosInProgress cards (Showrunner and YouTube pages). */
+export async function loadVideoCards(context: BrandDataContext): Promise<VideoCard[]> {
+  return (await loadVideoStatus(context)).map(videoCardFromStatus);
 }
 
 export type EpisodeRow = VideoStatusRow & {

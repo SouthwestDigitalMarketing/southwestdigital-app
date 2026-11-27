@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { ThumbnailCopy, TranscriptAccordion } from "@/components/showrunner/ThumbnailCopy";
+import { WaitingActions } from "@/components/showrunner/WaitingActions";
+import { isWaitingForYou } from "@/lib/showrunner/production";
 import type { VideoDetails, VideoRender, VideoStep } from "@/lib/showrunner/video-status";
 
 export type VideoCard = {
@@ -98,7 +100,15 @@ function Steps({ video }: { video: VideoCard }) {
  * Every video ripley is making, full width: the YouTube title once written, the steps and render
  * bars on the left, the thumbnail and details on the right (stacked on a phone). Refreshes itself.
  */
-export function VideosInProgress({ videos, copyBatch }: { videos: VideoCard[]; copyBatch?: string }) {
+export function VideosInProgress({
+  videos,
+  copyBatch,
+  heading = true,
+}: {
+  videos: VideoCard[];
+  copyBatch?: string;
+  heading?: boolean;
+}) {
   const router = useRouter();
   useEffect(() => {
     const timer = setInterval(() => router.refresh(), 4_000);
@@ -108,18 +118,14 @@ export function VideosInProgress({ videos, copyBatch }: { videos: VideoCard[]; c
   if (videos.length === 0) return null;
   return (
     <section className="mt-6 flex flex-col gap-4">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Videos in progress</h2>
+      {heading ? <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Videos in progress</h2> : null}
       {videos.map((video) => {
         const details = detailLine(video.details);
+        const copy = copyBatch === video.batch;
         return (
           <div key={video.batch} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,20rem)]">
-              <div className="min-w-0">
-                <p className="text-lg font-semibold leading-snug text-slate-900">{video.title ?? video.project ?? "New video"}</p>
-                {video.title && video.project ? <p className="mt-0.5 text-xs text-slate-500">{video.project}</p> : null}
-                {video.url ? <p className="mt-2 font-semibold text-green-700">Published on YouTube</p> : <Steps video={video} />}
-              </div>
-              <div className={video.thumbnail || details || video.url || copyBatch === video.batch ? "min-w-0" : "hidden md:block"}>
+              <div className={video.thumbnail || details || video.url || copy ? "min-w-0 md:order-2" : "hidden md:order-2 md:block"}>
                 {video.thumbnail ? (
                   // eslint-disable-next-line @next/next/no-img-element -- inline data: JPEG from ripley
                   <img src={video.thumbnail} alt="" className="aspect-video w-full rounded-xl object-cover" />
@@ -134,7 +140,7 @@ export function VideosInProgress({ videos, copyBatch }: { videos: VideoCard[]; c
                     Watch on YouTube
                   </a>
                 ) : null}
-                {copyBatch === video.batch ? (
+                {copy ? (
                   <ThumbnailCopy
                     batch={video.batch}
                     thumbnailText={video.thumbnailText ?? null}
@@ -143,8 +149,21 @@ export function VideosInProgress({ videos, copyBatch }: { videos: VideoCard[]; c
                   />
                 ) : null}
               </div>
+              <div className="min-w-0 md:order-1">
+                <p className="text-lg font-semibold leading-snug text-slate-900">{video.title ?? video.project ?? "New video"}</p>
+                {video.title && video.project ? <p className="mt-0.5 text-xs text-slate-500">{video.project}</p> : null}
+                {video.url ? <p className="mt-2 font-semibold text-green-700">Published on YouTube</p> : <Steps video={video} />}
+                {copy ? (
+                  <WaitingActions
+                    batch={video.batch}
+                    finishing={Boolean(video.finishRequestedAt)}
+                    waiting={isWaitingForYou(video.steps, video.stage)}
+                    published={Boolean(video.url)}
+                  />
+                ) : null}
+              </div>
             </div>
-            {copyBatch === video.batch ? <TranscriptAccordion transcript={video.transcript ?? null} /> : null}
+            {copy ? <TranscriptAccordion transcript={video.transcript ?? null} /> : null}
           </div>
         );
       })}
