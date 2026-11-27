@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { requestFinish } from "@/app/(app)/showrunner/editor/actions";
 import type { ProductionItem } from "@/lib/showrunner/production";
 
 /**
@@ -57,6 +58,7 @@ export function ProductionBar() {
     .join(". ");
   const track = video.stopped ? "bg-rose-600" : video.waiting ? "bg-amber-500" : "bg-slate-600";
   const dot = video.stopped ? "bg-rose-600" : video.waiting ? "bg-amber-500" : "animate-pulse bg-slate-500";
+  const control = "rounded border border-slate-300 bg-white px-2 py-0.5 text-xs text-slate-700 hover:bg-slate-100";
   return (
     <div className="relative flex shrink-0 items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-1">
       <Link
@@ -77,6 +79,20 @@ export function ProductionBar() {
         </span>
         <span className="shrink-0 font-semibold tabular-nums text-slate-900">{pct}%</span>
       </Link>
+      {video.waiting ? (
+        <>
+          <Link href={`/phone?addTo=${encodeURIComponent(video.batch)}`} className={control}>
+            Add clips
+          </Link>
+          <form action={requestFinish}>
+            <input type="hidden" name="batch" value={video.batch} />
+            <button type="submit" className={control}>
+              Finish
+            </button>
+          </form>
+        </>
+      ) : null}
+      {video.finishing ? <span className="shrink-0 text-xs text-slate-600">Starting…</span> : null}
       <span className="absolute inset-x-0 bottom-0 block h-0.5 bg-slate-200" aria-hidden="true">
         <span className={`block h-0.5 ${track}`} style={{ width: `${pct}%` }} />
       </span>

@@ -35,6 +35,7 @@ export type VideoStatusRow = {
   thumbnail: string | null;
   details: unknown;
   updatedAt: Date;
+  finishRequestedAt: Date | null;
 };
 
 const VIDEO_STATUS_SELECT = {
@@ -49,6 +50,7 @@ const VIDEO_STATUS_SELECT = {
   thumbnail: true,
   details: true,
   updatedAt: true,
+  finishRequestedAt: true,
 } as const;
 
 /**
@@ -88,10 +90,16 @@ export async function loadVideoCards(context: BrandDataContext): Promise<VideoCa
     title: row.title,
     thumbnail: row.thumbnail,
     details: row.details && typeof row.details === "object" ? (row.details as VideoDetails) : null,
+    finishRequestedAt: row.finishRequestedAt,
   }));
 }
 
-export type EpisodeRow = VideoStatusRow & { review: VideoReview | null; reviewRequestedAt: Date | null };
+export type EpisodeRow = VideoStatusRow & {
+  review: VideoReview | null;
+  reviewRequestedAt: Date | null;
+  finishRequestedAt: Date | null;
+  finishNote: string | null;
+};
 
 /** Every episode ripley has reported, newest first, for the Videos tab, with its scorecard (Tom, 2026-11-25). */
 export async function loadEpisodes(context: BrandDataContext): Promise<EpisodeRow[]> {
@@ -103,6 +111,7 @@ export async function loadEpisodes(context: BrandDataContext): Promise<EpisodeRo
       select: {
         batch: true, project: true, state: true, stage: true, steps: true, render: true, url: true, title: true,
         thumbnail: true, details: true, updatedAt: true, review: true, reviewRequestedAt: true,
+        finishRequestedAt: true, finishNote: true,
       },
     }),
   );

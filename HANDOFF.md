@@ -1,4 +1,15 @@
 # SWapp handoff
+## 2026-11-27 — Waiting on you: Finish and Add clips in SWapp (Johnny)
+
+Tom: "waiting on me" needs a button, not copy that sends him to the send app.
+Full auto off parks the video at step 6. SWapp now has **Add clips** (signed
+`/phone?addTo=<batch>` → ripley send page) and **Finish** (sets
+`finishRequestedAt`, writes `done/<batch>/.finish.json` on ripley). On the
+Videos episode page, the production page, and the job bar. Demo
+`http://100.98.89.93:3110`. Merge only when Tom says merge. Production Vercel
+still needs `showrunner_review.py` to poll `/api/showrunner/video-finish` after
+merge; :3110 writes the file itself.
+
 ## 2026-11-27 — Video job bar missing during a live phone send (Johnny)
 
 Tom: bar at the top of every page while a video is being made, like Donna's job bar; tap for

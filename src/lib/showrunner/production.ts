@@ -9,9 +9,16 @@ export type ProductionItem = {
   steps: number | null;
   progress: number;
   stopped: boolean;
-  /** Full auto off and the prep done: ripley waits for more clips or Finish in the send app (Tom, 2026-11-25). */
+  /** Full auto off and the prep done: ripley waits for more clips or Finish (Tom, 2026-11-25). */
   waiting: boolean;
+  /** Tom already tapped Finish; ripley has not started the build yet. */
+  finishing: boolean;
 };
+
+/** True while the autopilot is at the gate waiting for more clips or Finish. */
+export function isWaitingForYou(steps: { state: string; label: string }[] | null | undefined): boolean {
+  return Boolean(steps?.some((step) => step.state === "now" && step.label.startsWith("Waiting for you")));
+}
 
 /** Percent from a phone-send stage line ("Sending 1 of 9 — 54%"), else 0. */
 export function stageProgress(stage: string | null | undefined): number {
@@ -31,20 +38,33 @@ export function productionItem(video: VideoCard): ProductionItem | null {
   const steps = video.steps ?? [];
   if (steps.length === 0) {
     const label = video.stage ?? "On its way to ripley";
-    return { batch: video.batch, name, label, step: null, steps: null, progress: stageProgress(label), stopped: false, waiting: false };
+    return {
+      batch: video.batch,
+      name,
+      label,
+      step: null,
+      steps: null,
+      progress: stageProgress(label),
+      stopped: false,
+      waiting: false,
+      finishing: Boolean(video.finishRequestedAt),
+    };
   }
   const stopped = steps.find((step) => step.state === "stopped");
   const current = stopped ?? steps.find((step) => step.state === "now") ?? steps.find((step) => step.state === "todo") ?? steps[steps.length - 1];
   const done = steps.filter((step) => step.state === "done").length;
   const share = current.state === "now" ? Math.min(1, Math.max(0, video.render?.total ?? 0)) : 0;
+  const finishing = Boolean(video.finishRequestedAt);
+  const waiting = !stopped && !finishing && current.state === "now" && current.label.startsWith("Waiting for you");
   return {
     batch: video.batch,
     name,
-    label: current.label,
+    label: finishing ? "Starting the build" : current.label,
     step: steps.indexOf(current) + 1,
     steps: steps.length,
     progress: Math.min(1, (done + share) / steps.length),
     stopped: Boolean(stopped),
-    waiting: !stopped && current.state === "now" && current.label.startsWith("Waiting for you"),
+    waiting,
+    finishing,
   };
 }

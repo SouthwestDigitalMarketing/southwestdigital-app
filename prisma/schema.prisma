@@ -2156,6 +2156,9 @@ model ShowrunnerVideoStatus {
   review    Json?
   /// Run review tapped in SWapp; ripley clears it when it sends the new review.
   reviewRequestedAt DateTime?
+  /// Finish tapped in SWapp while the video waits for Tom; ripley writes .finish.json and clears this.
+  finishRequestedAt DateTime?
+  finishNote String? @db.Text
   updatedAt DateTime  @default(now()) @updatedAt
   brand     Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
 

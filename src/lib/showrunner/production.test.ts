@@ -33,7 +33,16 @@ describe("productionItem", () => {
       ...base,
       steps: [{ label: "Making the cut", state: "done" }, { label: "Waiting for you: add clips or finish", state: "now" }, { label: "Rendering", state: "todo" }],
     });
-    expect(item).toMatchObject({ waiting: true, stopped: false, step: 2 });
+    expect(item).toMatchObject({ waiting: true, finishing: false, stopped: false, step: 2 });
+  });
+
+  it("shows starting the build after Finish", () => {
+    const item = productionItem({
+      ...base,
+      finishRequestedAt: new Date("2026-11-27T21:00:00Z"),
+      steps: [{ label: "Making the cut", state: "done" }, { label: "Waiting for you: add clips or finish", state: "now" }, { label: "Rendering", state: "todo" }],
+    });
+    expect(item).toMatchObject({ waiting: false, finishing: true, label: "Starting the build" });
   });
 
   it("uses the stage line before ripley sends steps", () => {

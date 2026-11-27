@@ -3,8 +3,10 @@ import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { requireAppBrand } from "@/lib/brands/staff";
 import { VideosInProgress } from "@/components/showrunner/VideosInProgress";
+import { WaitingActions } from "@/components/showrunner/WaitingActions";
 import { showChannelBrand } from "@/lib/showrunner/channel-brand";
 import { loadVideoCards } from "@/lib/showrunner/load";
+import { isWaitingForYou } from "@/lib/showrunner/production";
 import { createBrandDataContext } from "@/lib/tenancy/context";
 
 export const dynamic = "force-dynamic";
@@ -25,10 +27,8 @@ export default async function ProductionPage({ params }: { params: Promise<{ bat
         <ChevronLeft size={16} aria-hidden="true" /> Showrunner
       </Link>
       <h1 className="sr-only">Video production</h1>
-      {video.steps?.some((step) => step.state === "now" && step.label.startsWith("Waiting for you")) ? (
-        <p className="mt-3 max-w-3xl rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
-          Waiting for you. In the SWapp send app, tap Add more clips to send b-roll, or Finish to build it.
-        </p>
+      {isWaitingForYou(video.steps) || video.finishRequestedAt ? (
+        <WaitingActions batch={video.batch} finishing={Boolean(video.finishRequestedAt)} />
       ) : null}
       <VideosInProgress videos={[video, ...others]} />
     </div>

@@ -5,6 +5,8 @@ import { requireAppBrand } from "@/lib/brands/staff";
 import { showChannelBrand } from "@/lib/showrunner/channel-brand";
 import { loadEpisodes } from "@/lib/showrunner/load";
 import { createBrandDataContext } from "@/lib/tenancy/context";
+import { WaitingActions } from "@/components/showrunner/WaitingActions";
+import { isWaitingForYou } from "@/lib/showrunner/production";
 import { requestReview } from "../actions";
 import { Scorecard } from "./Scorecard";
 
@@ -18,6 +20,10 @@ export default async function EditEpisodePage({ params }: { params: Promise<{ ba
   const episode = (await loadEpisodes(createBrandDataContext({ brandId: brand.id, actorUserId: dataContext.actorUserId })))
     .find((row) => row.batch === batch);
   if (!episode) notFound();
+  const waiting = isWaitingForYou(
+    Array.isArray(episode.steps) ? (episode.steps as { state: string; label: string }[]) : null,
+  );
+  const finishing = Boolean(episode.finishRequestedAt);
   return (
     <div className="px-4 py-5 sm:p-8">
       <Link href="/showrunner/editor" className="inline-flex items-center gap-1 text-sm font-semibold text-slate-600">
@@ -37,6 +43,7 @@ export default async function EditEpisodePage({ params }: { params: Promise<{ ba
           </a>
         ) : null}
       </div>
+      {!episode.url && (waiting || finishing) ? <WaitingActions batch={episode.batch} finishing={finishing} /> : null}
       {episode.url ? (
         <form action={requestReview.bind(null, episode.batch)} className="mt-4 flex max-w-3xl items-center gap-3">
           <button

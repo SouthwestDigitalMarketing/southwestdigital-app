@@ -1167,7 +1167,7 @@ b{display:block}.ok{color:#15803d}.bad{color:#be123c}small{display:block;color:#
 .meter .bar{flex:1;height:10px;margin:0;border-radius:5px}.meter .bar i{height:10px;border-radius:5px}.meter b{flex:0 0 3.2em;text-align:right;font-size:15px}
 </style></head><body>
 <label for=f>Choose videos and pictures</label>
-<p style="margin-top:12px">Pick everything for one video at once. Keep this screen open while it sends.</p>
+<p id=hint style="margin-top:12px">Pick everything for one video at once. Keep this screen open while it sends.</p>
 <p><a id=getapp href="#">Get the phone app</a> (keeps sending through calls and other apps)</p>
 <input id=f type=file accept="video/*,image/*" multiple>
 <p id=msg class=bad></p>
@@ -1181,6 +1181,8 @@ let chain=Promise.resolve();
 const CHUNK=8*1024*1024;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const auth={sexp:q.get('exp'),ssig:q.get('sig')};
+const addTo=(q.get('addTo')||'').replace(/[^A-Za-z0-9-]/g,'').slice(0,60);
+if(addTo)document.getElementById('hint').textContent='These clips join the video that is waiting. Keep this screen open while it sends.';
 f.onchange=async()=>{const files=[...f.files];f.value='';if(!files.length)return;msg.textContent='';
 let batch=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8);
 try{const r=await(await fetch('/resume?'+new URLSearchParams({...auth,name:files[0].name,size:files[0].size}))).json();if(r.batch)batch=r.batch;}catch(e){}
@@ -1188,6 +1190,7 @@ for(const file of files)chain=chain.then(()=>send(file,batch,files.length));chai
 async function where(base){const r=await fetch('/upload-status?'+new URLSearchParams(base),{cache:'no-store'});return r.json();}
 async function send(file,batch,count){
  const base={...auth,size:file.size,name:file.name,batch,count};
+ if(addTo)base.addTo=addTo;
  let received=0,tries=0;
  try{received=(await where(base)).received;}catch(e){}
  while(received<file.size){
@@ -1805,6 +1808,7 @@ def self_test():
     with urllib.request.urlopen(page) as response:
         sent = response.read()
         assert b"Send to ripley" in sent and b"Get the phone app" in sent
+        assert b"if(addTo)base.addTo=addTo" in sent
     try:
         urllib.request.urlopen(page + "00")
         raise SystemExit("bad send link was accepted")
