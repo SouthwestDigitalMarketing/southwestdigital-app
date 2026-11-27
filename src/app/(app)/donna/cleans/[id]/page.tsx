@@ -414,7 +414,6 @@ export default async function CleanPage({
                   : null
               }
               action={applyBuckets}
-              empty={report?.empty ?? null}
             />
             <form action={closeSort}>
               <input type="hidden" name="jobId" value={job.id} />

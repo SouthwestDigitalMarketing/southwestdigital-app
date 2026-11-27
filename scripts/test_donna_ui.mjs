@@ -559,10 +559,8 @@ try {
   await expect(
     page.getByText("Step 3 will spam + block the sender: 1; tag the client: 1; move to Archive: 1; move to Newsletter: 1; put back in Inbox: 1. Unticked emails stay as they are."),
   ).toBeVisible();
-  // Emptying needs its own approval tick.
-  await expect(page.getByText(/Approve: then permanently delete everything in Spam \(214\) and Trash \(325\)/)).toBeVisible();
-  await page.getByRole("checkbox", { name: /Approve: then permanently delete/ }).check();
-  await expect(page.getByText(/; then empty Spam and Trash\. Unticked/)).toBeVisible();
+  // Choose never deletes: emptying Spam and Trash has its own Clean up step.
+  await expect(page.getByText(/permanently delete/)).toHaveCount(0);
   await page.getByRole("button", { name: "Start step 3" }).click();
   const stepTwo = await (async () => {
     await expect.poll(async () => Boolean(await db.donnaJob.findFirst(pendingClean))).toBe(true);
@@ -579,7 +577,6 @@ try {
       { thread: "b8".repeat(32), action: "inbox" },
     ],
     buckets: true,
-    empty: true,
   });
   await db.donnaJob.updateMany({
     where: { id: stepTwo.id },

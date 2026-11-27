@@ -413,7 +413,9 @@ export async function applyBuckets(form: FormData) {
       }),
     );
     // Emptying Spam and Trash is permanent: only with Tom's own tick (Tom, 2026-11-26).
-    const empty = form.get("empty") === "on";
+    // Deleting Spam and Trash moved to its own Clean up step (Tom, 2026-11-28);
+    // step 3 never empties anything.
+    const empty = false;
     if (!plan.length && !empty) return null;
     const job = await tx.donnaJob.create({
       data: {
