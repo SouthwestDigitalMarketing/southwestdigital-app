@@ -516,8 +516,9 @@ try {
         empty: { Spam: 214, Trash: 325 },
         cleanup: {
           spam: [
-            { sender: "junk@spam.example", name: "Junk Co", count: 3, samples: ["Win big"], verdict: "block", why: "Lottery spam" },
-            { sender: "ap@vendor.example", name: "", count: 1, samples: ["Invoice 12"], verdict: "keep", why: "Looks like a vendor invoice" },
+            { sender: "junk@spam.example", name: "Junk Co", count: 3, samples: ["Win big"], verdict: "block", why: "Lottery spam", sure: true, unsubscribe: true, where: ["Spam"] },
+            { sender: "ap@vendor.example", name: "", count: 1, samples: ["Invoice 12"], verdict: "keep", why: "Looks like a vendor invoice", sure: false, unsubscribe: false, where: ["Spam"] },
+            { sender: "odd@maybe.example", name: "", count: 2, samples: ["Quick question"], verdict: "unsure", why: "Could be a lead", sure: false, unsubscribe: false, where: ["INBOX"] },
           ],
           trash: { total: 325, older30: 300 },
         },
@@ -596,26 +597,31 @@ try {
   await page.goto(base + "/donna/current");
   await expect(page.getByRole("table", { name: "Jobs in progress" }).getByRole("row", { name: new RegExp("^" + numbered.number + " ") })).toContainText("Your turn");
   await page.getByRole("link", { name: /6 sorted into 5 buckets/ }).click();
-  await expect(page.getByRole("list", { name: "Job steps" }).locator('[aria-current="step"]')).toContainText("Clean up");
-  const cleanTable = page.getByRole("table", { name: "Clean up Spam and Trash" });
-  await expect(cleanTable).toContainText("Spam (2 senders, 4 emails)");
-  await expect(cleanTable).toContainText("Trash (325 emails, 300 older than 30 days)");
-  await expect(page.getByLabel("Action for junk@spam.example")).toHaveValue("block");
+  await expect(page.getByRole("list", { name: "Job steps" }).locator('[aria-current="step"]')).toContainText("Spam");
+  // Two buckets: Sure spam (marked Spam) and Check these (reason up front).
+  const spamTable = page.getByRole("table", { name: "Review the spam" });
+  await expect(page.locator('tbody[aria-label="Sure spam"]')).toContainText("Sure spam (1 sender, 3 emails)");
+  await expect(page.locator('tbody[aria-label="Sure spam"]')).toContainText("can unsubscribe");
+  await expect(page.locator('tbody[aria-label="Check these"]')).toContainText("Check these (2 senders, 3 emails)");
+  await expect(spamTable).toContainText("Trash (325 emails, 300 older than 30 days)");
+  await expect(page.getByLabel("Action for junk@spam.example")).toHaveValue("spam");
   await expect(page.getByLabel("Action for ap@vendor.example")).toHaveValue("keep");
+  await expect(page.getByLabel("Action for odd@maybe.example")).toHaveValue("leave");
   await expect(page.getByRole("img", { name: "Why: Lottery spam" })).toBeVisible();
+  await expect(page.getByText(/Spam: 1 sender blocked in Zoho, unsubscribe from 1, 3 emails to Trash\. Not spam: 1 sender back to Inbox and never blocked\. 1 sender left to decide later/)).toBeVisible();
+  // Emptying Trash needs its own Approve tick.
+  await expect(page.getByText(/Approve: permanently delete/)).toHaveCount(0);
   await page.getByLabel("What to do with Trash").selectOption("older30");
-  await expect(page.getByText(/Clean up will block 1 senders forever; put 1 senders back in Inbox and never block them; delete 303 emails\./)).toBeVisible();
-  // Deleting needs the Approve tick, which names exactly what goes.
-  await expect(page.getByText(/Approve: permanently delete 3 emails from the senders I block and 300 emails from Trash/)).toBeVisible();
+  await expect(page.getByText(/Approve: permanently delete 300 emails from Trash/)).toBeVisible();
   await page.getByRole("checkbox", { name: /Approve: permanently delete/ }).check();
-  await page.getByRole("button", { name: "Start clean up" }).click();
+  await page.getByRole("button", { name: "Confirm" }).click();
   await expect.poll(async () => Boolean(await db.donnaJob.findFirst(pendingClean))).toBe(true);
   const cleanJob4 = await db.donnaJob.findFirstOrThrow(pendingClean);
   assert.deepEqual(cleanJob4.options, {
     previewJobId: stepOne.id,
     cleanup: true,
     senders: [
-      { sender: "junk@spam.example", action: "block" },
+      { sender: "junk@spam.example", action: "spam" },
       { sender: "ap@vendor.example", action: "keep" },
     ],
     trash: "older30",
@@ -626,15 +632,17 @@ try {
     where: { id: cleanJob4.id },
     data: { status: "done", result: { at: new Date().toISOString(), reviewed: 0, cleanupRun: true,
       blocked: [{ subject: "3 from junk@spam.example", from: "junk@spam.example" }],
+      unsubscribed: [{ subject: "junk@spam.example", from: "junk@spam.example", reason: "unsubscribed" }],
+      trashed: 3,
       rescued: [{ subject: "1 from ap@vendor.example", from: "ap@vendor.example", folder: "Spam" }],
-      emptied: { Spam: 3, Trash: 300 } } },
+      emptied: { Trash: 300 } } },
   });
   // Completed jobs: one row per job, steps 3 and 4 folded in.
   await page.goto(base + "/donna/jobs");
   const jobs = page.getByRole("table", { name: "Completed jobs" });
   await expect(jobs).toContainText("Inbox job: sort, choose, do");
   await expect(jobs.getByRole("row", { name: new RegExp("^" + numbered.number + " ") })).toContainText("Finished");
-  await expect(jobs).toContainText("6 sorted into 5 buckets · moved 1 · tagged 1 · rescued 1 · blocked 1 · emptied 303");
+  await expect(jobs).toContainText("6 sorted into 5 buckets · moved 1 · tagged 1 · rescued 1 · spam 1 · unsubscribed 1 · to Trash 3 · emptied 300");
   await expect(jobs).not.toContainText("Step 3: do what you chose");
   await jobs.getByRole("link", { name: /6 sorted into 5 buckets/ }).click();
   await expect(page.getByRole("list", { name: "Job steps" })).toContainText("Done · moved 1 · tagged 1");
@@ -661,6 +669,20 @@ try {
   // Reopen puts it back to Tom's turn.
   await closedRow.getByRole("button", { name: "Reopen" }).click();
   await expect(page.getByRole("list", { name: "Job steps" }).locator('[aria-current="step"]')).toContainText("Your turn");
+  // All the Inbox mail was spam: step 2 has nothing to do, so go straight to Spam.
+  const allSpam = await db.donnaJob.create({
+    data: { mailboxId: box.id, kind: "clean", eventKey: "ui-all-spam", status: "done", completedAt: new Date(),
+      options: { preview: true, buckets: true, limit: 25 },
+      result: { preview: true, at: new Date().toISOString(), reviewed: 1, sorted: [], empty: { Spam: 1, Trash: 0 },
+        cleanup: { spam: [{ sender: "s@spam.example", count: 1, samples: ["Win"], verdict: "block", why: "Spam", sure: true, where: ["INBOX"] }],
+          trash: { total: 0, older30: 0 } } } },
+  });
+  await page.goto(base + "/donna/cleans/" + allSpam.id);
+  await page.getByRole("button", { name: "Nothing to do here: go to the Spam step" }).click();
+  await expect(page.getByRole("table", { name: "Review the spam" })).toBeVisible();
+  await expect(page.getByRole("list", { name: "Job steps" })).toContainText("Nothing to do");
+  await db.donnaJob.update({ where: { id: allSpam.id }, data: { options: { preview: true, buckets: true, limit: 25, closed: true } } });
+  await page.goto(base + "/donna/cleans/" + closing.id);
   // A sort from before Junk existed offers to sort again with today's rules.
   await page.getByRole("button", { name: "Sort again with the new rules" }).click();
   await expect.poll(async () => Boolean(await db.donnaJob.findFirst(pendingClean))).toBe(true);

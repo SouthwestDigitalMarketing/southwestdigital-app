@@ -12,6 +12,7 @@ import {
   cleanupHasWork,
   cleanupPlan,
   cleanupSkipped,
+  chooseSkipped,
   cleanIsPreview,
   cleanIsSort,
   cleanReport,
@@ -27,6 +28,7 @@ import {
   skipCleanup,
   approveClean,
   closeSort,
+  skipChoose,
   resortJob,
   undoFiled,
 } from "../../actions";
@@ -290,7 +292,8 @@ function jobSteps(
     0,
   );
   const closed = cleanIsClosed(sort.options);
-  const doneDo = doJob && doJob.status === "done";
+  const skippedChoose = chooseSkipped(sort.options);
+  const doneDo = (doJob && doJob.status === "done") || skippedChoose;
   const plan = cleanupPlan(sort.result);
   return [
     {
@@ -303,14 +306,20 @@ function jobSteps(
     },
     {
       label: "Choose",
-      state: running(sort) ? "todo" : doJob || closed ? "done" : "yours",
+      state: running(sort)
+        ? "todo"
+        : doJob || closed || skippedChoose
+          ? "done"
+          : "yours",
       note: running(sort)
         ? "After sorting"
-        : doJob
-          ? "Chosen"
-          : closed
-            ? "Closed, nothing changed"
-            : "Your turn",
+        : skippedChoose
+          ? "Nothing to do"
+          : doJob
+            ? "Chosen"
+            : closed
+              ? "Closed, nothing changed"
+              : "Your turn",
       href: sort.id === job.id ? undefined : href(sort.id),
     },
     {
@@ -319,7 +328,7 @@ function jobSteps(
         ? running(doJob)
           ? "current"
           : "done"
-        : closed
+        : closed || skippedChoose
           ? "skipped"
           : "todo",
       note: doJob
@@ -328,13 +337,13 @@ function jobSteps(
             ? progressNote
             : "Running"
           : `${doJob.status === "cancelled" ? "Stopped" : "Done"} · ${outcome(doJob)}`
-        : closed
+        : closed || skippedChoose
           ? "Skipped"
           : "Not started",
       href: doJob && doJob.id !== job.id ? href(doJob.id) : undefined,
     },
     {
-      label: "Clean up",
+      label: "Spam",
       state: cleanupJob
         ? running(cleanupJob)
           ? "current"
@@ -421,7 +430,7 @@ export default async function CleanPage({
   const cleanupTurn =
     sort &&
     plan !== null &&
-    job.follow?.status === "done" &&
+    (job.follow?.status === "done" || chooseSkipped(job.options)) &&
     !job.cleanupJob &&
     !cleanupSkipped(job.options) &&
     !cleanIsClosed(job.options) &&
@@ -494,6 +503,15 @@ export default async function CleanPage({
               }
               action={applyBuckets}
             />
+            <form action={skipChoose}>
+              <input type="hidden" name="jobId" value={job.id} />
+              <button
+                type="submit"
+                className="text-xs text-slate-500 underline"
+              >
+                Nothing to do here: go to the Spam step
+              </button>
+            </form>
             <form action={closeSort}>
               <input type="hidden" name="jobId" value={job.id} />
               <button
@@ -507,9 +525,11 @@ export default async function CleanPage({
         ) : cleanupTurn && plan ? (
           <>
             <p className="text-sm text-slate-600">
-              Step 4: Spam and Trash. Each Spam sender has Donna&apos;s verdict
-              and a starting action; change any you disagree with. Nothing is
-              deleted without your Approve tick.
+              Step 4: Spam. Everything Donna found as spam, one row per sender:
+              the ones she is sure of first, then the ones to check. Spam
+              senders are unsubscribed where it is safe, blocked in Zoho, and
+              their mail goes to Trash. Emptying Trash needs its own Approve
+              tick.
             </p>
             <CleanupChooser
               jobId={job.id}
@@ -527,7 +547,7 @@ export default async function CleanPage({
                 type="submit"
                 className="text-xs text-slate-500 underline"
               >
-                Skip clean up this time
+                Skip the Spam step this time
               </button>
             </form>
           </>
@@ -551,7 +571,15 @@ export default async function CleanPage({
             items={report.rescued}
             extra={(item) => item.folder}
           />
-          <Items title="Blocked forever" items={report.blocked} />
+          <Items
+            title="Marked spam: blocked, mail to Trash"
+            items={report.blocked}
+          />
+          <Items
+            title="Unsubscribe"
+            items={report.unsubscribed}
+            extra={(item) => item.reason}
+          />
           <Emptied report={report} />
           <Items
             title="Left in Inbox"
@@ -605,7 +633,15 @@ export default async function CleanPage({
             items={report.rescued}
             extra={(item) => item.folder}
           />
-          <Items title="Blocked forever" items={report.blocked} />
+          <Items
+            title="Marked spam: blocked, mail to Trash"
+            items={report.blocked}
+          />
+          <Items
+            title="Unsubscribe"
+            items={report.unsubscribed}
+            extra={(item) => item.reason}
+          />
           <Emptied report={report} />
           <Items
             title="Waiting"
