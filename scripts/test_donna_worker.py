@@ -708,6 +708,8 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual(json.loads(always.read_text())["senders"], ["junk@spam.example"])
             self.assertEqual(json.loads(never.read_text())["senders"], ["ap@vendor.example"])
             self.assertEqual(deleted, [])  # not approved: nothing deleted
+            block = next(d for op, d in calls if op == "block")
+            self.assertEqual((block["spam"], block["allow"]), (["junk@spam.example"], ["ap@vendor.example"]))
             done = next(d["result"]["report"] for op, d in calls if op == "complete")
             self.assertEqual(len(done["blocked"]), 1)
             with patch.object(donna, "ALWAYS_BLOCK", always), patch.object(donna, "NEVER_BLOCK", never):

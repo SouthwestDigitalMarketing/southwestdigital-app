@@ -372,6 +372,7 @@ describe("honest health and counts", () => {
       empty: null,
       emptied: null,
       emptyError: null,
+      zoho: null,
       waiting: [{ subject: "Bank login", from: "", waitingOn: "Client" }],
       needsYou: [
         {

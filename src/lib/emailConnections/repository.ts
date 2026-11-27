@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { decryptSecret, encryptSecret } from "@/lib/secrets/encryption";
 import { parseZohoRegion, type ZohoRegionKey } from "./providers";
 import { refreshZohoAccessToken, ZohoApiError } from "./zohoMail";
-import { zohoCanTag } from "./zohoOAuth";
+import { zohoCanBlock, zohoCanTag } from "./zohoOAuth";
 
 export type PublicEmailConnection = {
   id: string;
@@ -19,6 +19,8 @@ export type PublicEmailConnection = {
   connectedAt: Date;
   /** Granted read/update/tags, so Donna can tag mail in this mailbox. */
   canTag: boolean;
+  /** Granted the organization spam list, so Block forever reaches Zoho itself. */
+  canBlock: boolean;
 };
 
 export function toPublicConnection(row: EmailConnection): PublicEmailConnection {
@@ -33,6 +35,7 @@ export function toPublicConnection(row: EmailConnection): PublicEmailConnection 
     lastVerifiedAt: row.lastVerifiedAt,
     connectedAt: row.createdAt,
     canTag: row.provider === EmailConnectionProvider.ZOHO && zohoCanTag(row.scopes),
+    canBlock: row.provider === EmailConnectionProvider.ZOHO && zohoCanBlock(row.scopes),
   };
 }
 

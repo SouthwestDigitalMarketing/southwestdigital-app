@@ -67,7 +67,13 @@ approved}`: Not spam rescues that sender's Spam mail and adds them to never-bloc
 Block forever adds them to always-spam; only with the Approve tick does it delete
 the blocked senders' snapshot mail and the chosen Trash. Senders left in Spam are
 never deleted. "Skip clean up this time" sets `cleanupSkipped`. A job is Finished
-only after step 4 (or a skip, or nothing to clean). Zoho filters are not created yet.
+only after step 4 (or a skip, or nothing to clean). Zoho's API has no per-mailbox filters, so Block forever also lists the
+sender on the Zoho **organization** spam list (`spamEmail`: their mail lands in Spam,
+Tom 2026-11-28: never reject) and Not spam lists them on `whiteListEmail`, through the
+worker's `block` op and `src/lib/donna/zohoBlock.ts`. Needs scope
+`ZohoMail.organization.spam.ALL` and an org admin connection (Settings shows
+**Reconnect so Donna can tag and block**). The zoid comes from `GET /api/organization`
+or the account's `policyId.zoid`, checked by reading the spam list before any write.
 
 **Email types (Tom, 2026-11-26).** Step 1 gives each email a short type
 (`EMAIL_TYPES` in the worker: People, Money, Systems, Marketing, Unwanted groups,

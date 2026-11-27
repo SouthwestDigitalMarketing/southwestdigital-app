@@ -16,14 +16,16 @@ export const PROVIDER_INFO: Record<EmailConnectionProvider, ProviderInfo> = {
     label: "Zoho Mail",
     status: "available",
     tagline: "Send from your Zoho mailbox with a single sign-in.",
-    helpText: "Emails you send in the app land in your Zoho Sent folder and thread with client replies.",
+    helpText:
+      "Emails you send in the app land in your Zoho Sent folder and thread with client replies.",
   },
   GMAIL: {
     provider: "GMAIL",
     label: "Gmail",
     status: "coming-soon",
     tagline: "One-click Gmail connection.",
-    helpText: "Google requires an extra verification step; we'll enable this once verification is complete.",
+    helpText:
+      "Google requires an extra verification step; we'll enable this once verification is complete.",
   },
   MICROSOFT: {
     provider: "MICROSOFT",
@@ -37,11 +39,17 @@ export const PROVIDER_INFO: Record<EmailConnectionProvider, ProviderInfo> = {
     label: "Other (SMTP)",
     status: "coming-soon",
     tagline: "For any other provider via SMTP + app password.",
-    helpText: "Fallback for Fastmail, ProtonMail Bridge, cPanel, and self-hosted mail. Coming after the OAuth providers.",
+    helpText:
+      "Fallback for Fastmail, ProtonMail Bridge, cPanel, and self-hosted mail. Coming after the OAuth providers.",
   },
 };
 
-export const PROVIDER_ORDER: EmailConnectionProvider[] = ["ZOHO", "GMAIL", "MICROSOFT", "SMTP"];
+export const PROVIDER_ORDER: EmailConnectionProvider[] = [
+  "ZOHO",
+  "GMAIL",
+  "MICROSOFT",
+  "SMTP",
+];
 
 export function isProviderAvailable(provider: EmailConnectionProvider) {
   return PROVIDER_INFO[provider].status === "available";
@@ -60,10 +68,30 @@ export type ZohoRegionConfig = {
 };
 
 export const ZOHO_REGIONS: Record<ZohoRegionKey, ZohoRegionConfig> = {
-  US: { key: "US", label: "United States (zoho.com)", accountsHost: "accounts.zoho.com", mailApiHost: "mail.zoho.com" },
-  EU: { key: "EU", label: "Europe (zoho.eu)", accountsHost: "accounts.zoho.eu", mailApiHost: "mail.zoho.eu" },
-  IN: { key: "IN", label: "India (zoho.in)", accountsHost: "accounts.zoho.in", mailApiHost: "mail.zoho.in" },
-  AU: { key: "AU", label: "Australia (zoho.com.au)", accountsHost: "accounts.zoho.com.au", mailApiHost: "mail.zoho.com.au" },
+  US: {
+    key: "US",
+    label: "United States (zoho.com)",
+    accountsHost: "accounts.zoho.com",
+    mailApiHost: "mail.zoho.com",
+  },
+  EU: {
+    key: "EU",
+    label: "Europe (zoho.eu)",
+    accountsHost: "accounts.zoho.eu",
+    mailApiHost: "mail.zoho.eu",
+  },
+  IN: {
+    key: "IN",
+    label: "India (zoho.in)",
+    accountsHost: "accounts.zoho.in",
+    mailApiHost: "mail.zoho.in",
+  },
+  AU: {
+    key: "AU",
+    label: "Australia (zoho.com.au)",
+    accountsHost: "accounts.zoho.com.au",
+    mailApiHost: "mail.zoho.com.au",
+  },
 };
 
 export const ZOHO_REGION_ORDER: ZohoRegionKey[] = ["US", "EU", "IN", "AU"];
