@@ -1157,7 +1157,7 @@ def process_job(client, store, work, max_threads, clean_threads=100):
             # Step 4, Clean up (Tom, 2026-11-28): only what Tom chose, sender by sender.
             progress.update(total=max(len(options.get("senders") or []), 1), done=0, phase="working")
             heartbeat(True)
-            run_cleanup(store, work, report, progress, heartbeat, cancelled, lease_errors)
+            run_cleanup(client, store, work, report, progress, heartbeat, cancelled, lease_errors)
             coverage.update({"threads_reviewed_this_pass": 0, "sending_enabled": False,
                              "clean": report, "mode": "clean"})
             client.call("complete", result={"jobId": job["id"], "leaseToken": job["leaseToken"],
@@ -1484,7 +1484,7 @@ why is one short plain sentence. Senders: """ + json.dumps(rows)
     return out
 
 
-def run_cleanup(store, work, report, progress, heartbeat, cancelled, lease_errors):
+def run_cleanup(client, store, work, report, progress, heartbeat, cancelled, lease_errors):
     """Step 4: rescue the senders Tom marked not spam, block the ones he marked block, then
     (only with his approval) permanently delete their Spam mail and the Trash he chose."""
     job = work["job"]
@@ -1525,6 +1525,20 @@ def run_cleanup(store, work, report, progress, heartbeat, cancelled, lease_error
             blocked_keys.update(keys[sender])
             report["blocked"].append({"subject": "%d from %s" % (len(keys[sender]), sender), "from": sender})
             note(progress, sender, "Blocked forever")
+    # Zoho itself (Tom, 2026-11-28): blocked senders onto the organization spam list
+    # (their mail lands in Spam), not-spam senders onto its allow list.
+    spam_list = [b["from"] for b in report["blocked"]]
+    allow_list = [r["from"] for r in report["rescued"]]
+    if spam_list or allow_list:
+        heartbeat(True)
+        try:
+            answer = client.call("block", jobId=job["id"], leaseToken=job["leaseToken"],
+                                 spam=spam_list, allow=allow_list)
+            report["zoho"] = {k: answer.get(k) for k in ("spam", "allow", "error") if answer.get(k) is not None}
+        except DonnaAPIError as error:
+            if error.status == 409:
+                raise LeaseLost("Job was paused or reclaimed; stopping.") from None
+            report["zoho"] = {"error": "SWapp could not reach Zoho"}
     if options.get("approved") is not True or cancelled.is_set():
         return
     trash = options.get("trash")

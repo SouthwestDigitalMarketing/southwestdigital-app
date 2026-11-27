@@ -164,21 +164,40 @@ function Emptied({
 }: {
   report: NonNullable<ReturnType<typeof cleanReport>>;
 }) {
+  const zoho = report.zoho ? (
+    report.zoho.error ? (
+      <p role="alert" className="text-sm text-amber-700">
+        Zoho was not updated: {report.zoho.error}
+      </p>
+    ) : (
+      <p className="text-sm text-slate-700">
+        In Zoho: {report.zoho.spam} blocked sender
+        {report.zoho.spam === 1 ? "" : "s"} now go straight to Spam;{" "}
+        {report.zoho.allow} on the allow list.
+      </p>
+    )
+  ) : null;
   if (report.emptyError)
     return (
-      <p role="alert" className="text-sm text-rose-700">
-        Emptying Spam and Trash stopped: {report.emptyError}
-      </p>
+      <>
+        {zoho}
+        <p role="alert" className="text-sm text-rose-700">
+          Emptying Spam and Trash stopped: {report.emptyError}
+        </p>
+      </>
     );
-  if (!report.emptied) return null;
+  if (!report.emptied) return zoho;
   return (
-    <p className="text-sm text-slate-700">
-      Emptied with your approval:{" "}
-      {Object.entries(report.emptied)
-        .map(([folder, n]) => `${folder} ${n.toLocaleString("en-US")}`)
-        .join(", ")}
-      .
-    </p>
+    <>
+      {zoho}
+      <p className="text-sm text-slate-700">
+        Emptied with your approval:{" "}
+        {Object.entries(report.emptied)
+          .map(([folder, n]) => `${folder} ${n.toLocaleString("en-US")}`)
+          .join(", ")}
+        .
+      </p>
+    </>
   );
 }
 

@@ -709,6 +709,8 @@ export type CleanReport = {
   empty: Record<string, number> | null;
   emptied: Record<string, number> | null;
   emptyError: string | null;
+  /** Step 4 in Zoho's organization lists: how many went on spam / allow, or why not. */
+  zoho: { spam: number; allow: number; error: string | null } | null;
   waiting: CleanReportItem[];
   needsYou: CleanReportItem[];
   skipped: CleanReportItem[];
@@ -799,6 +801,17 @@ export function cleanReport(raw: unknown): CleanReport | null {
     emptied: folderCounts(c.emptied),
     emptyError:
       typeof c.emptyError === "string" ? c.emptyError.slice(0, 200) : null,
+    zoho:
+      c.zoho && typeof c.zoho === "object" && !Array.isArray(c.zoho)
+        ? {
+            spam: Number((c.zoho as { spam?: unknown }).spam) || 0,
+            allow: Number((c.zoho as { allow?: unknown }).allow) || 0,
+            error:
+              typeof (c.zoho as { error?: unknown }).error === "string"
+                ? String((c.zoho as { error: string }).error).slice(0, 200)
+                : null,
+          }
+        : null,
     waiting: cleanItems(c.waiting).slice(0, 50),
     needsYou: cleanItems(c.needsYou).slice(0, 50),
     skipped: cleanItems(c.skipped).slice(0, 50),
@@ -1117,11 +1130,7 @@ export function jobOutcome(
     const n = buckets.reduce((sum, b) => sum + b.items.length, 0);
     const sorted = `${n} sorted into ${buckets.length} bucket${buckets.length === 1 ? "" : "s"}`;
     if (follow)
-      return [
-        sorted,
-        jobOutcome(follow),
-        cleanup ? jobOutcome(cleanup) : "",
-      ]
+      return [sorted, jobOutcome(follow), cleanup ? jobOutcome(cleanup) : ""]
         .filter(Boolean)
         .join(" · ");
     if (cleanIsClosed(job.options))
