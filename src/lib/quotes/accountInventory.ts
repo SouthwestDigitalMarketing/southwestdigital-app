@@ -45,6 +45,11 @@ function trimmedText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function normalizeMonthlyTransactions(value: unknown): number {
+  const count = typeof value === "number" ? value : typeof value === "string" ? Number(value) : 0;
+  return Number.isFinite(count) ? Math.trunc(Math.min(1_000_000, Math.max(0, count))) : 0;
+}
+
 /** Stored rows need a stable ID and a recognized kind; incomplete fields get safe defaults. */
 export function normalizeAccountEntry(raw: unknown): AccountEntry | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
@@ -53,11 +58,6 @@ export function normalizeAccountEntry(raw: unknown): AccountEntry | null {
   if (!id || !ACCOUNT_KINDS.includes(row.kind as AccountKind)) return null;
 
   const kind = row.kind as AccountKind;
-  const count = typeof row.monthlyTransactions === "number"
-    ? row.monthlyTransactions
-    : typeof row.monthlyTransactions === "string"
-      ? Number(row.monthlyTransactions)
-      : 0;
   const last4 = trimmedText(row.last4).replace(/\D/g, "").slice(-4);
   const source = trimmedText(row.source).slice(0, 120).trim();
 
@@ -67,7 +67,7 @@ export function normalizeAccountEntry(raw: unknown): AccountEntry | null {
     label: trimmedText(row.label) || ACCOUNT_KIND_LABELS[kind],
     ...(last4 ? { last4 } : {}),
     status: row.status === "closed" ? "closed" : "open",
-    monthlyTransactions: Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0,
+    monthlyTransactions: normalizeMonthlyTransactions(row.monthlyTransactions),
     basis: row.basis === "measured" ? "measured" : "estimated",
     ...(source ? { source } : {}),
   };
@@ -75,7 +75,32 @@ export function normalizeAccountEntry(raw: unknown): AccountEntry | null {
 
 export function normalizeAccountInventory(raw: unknown): AccountEntry[] {
   if (!Array.isArray(raw)) return [];
-  return raw.map(normalizeAccountEntry).filter((row): row is AccountEntry => row !== null);
+  const entries = raw.flatMap((value: unknown) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+    const row = value as Record<string, unknown>;
+    const originalId = trimmedText(row.id);
+    const entry = normalizeAccountEntry({ ...row, id: originalId || "account" });
+    return entry ? [{ entry, originalId }] : [];
+  });
+  // Reserve stored IDs before allocating replacements, so a generated suffix
+  // cannot take the ID of a real account later in the list.
+  const reservedIds = new Set(entries.map(({ originalId }) => originalId).filter(Boolean));
+  const usedIds = new Set<string>();
+  const nextSuffix = new Map<string, number>();
+  return entries.map(({ entry, originalId }) => {
+    if (!originalId || usedIds.has(originalId)) {
+      const base = originalId || "account";
+      let id = base;
+      let suffix = nextSuffix.get(base) ?? 2;
+      while (reservedIds.has(id) || usedIds.has(id)) {
+        id = `${base}-${suffix++}`;
+      }
+      nextSuffix.set(base, suffix);
+      entry.id = id;
+    }
+    usedIds.add(entry.id);
+    return entry;
+  });
 }
 
 export function bandForMonthlyTotal(total: number): InventoryBand {
@@ -109,8 +134,10 @@ export interface AccountInventorySummary {
 export function summarizeAccountInventory(accounts: AccountEntry[]): AccountInventorySummary {
   const openAccounts = accounts.filter((account) => account.status === "open");
   const closedAccounts = accounts.filter((account) => account.status === "closed");
-  const openMonthlyTotal = openAccounts.reduce((total, account) => total + account.monthlyTransactions, 0);
-  const closedMonthlyTotal = closedAccounts.reduce((total, account) => total + account.monthlyTransactions, 0);
+  // Bound each contribution even for callers that bypass row normalization.
+  // At this cap, even the maximum JavaScript array length has a safe total.
+  const openMonthlyTotal = openAccounts.reduce((total, account) => total + normalizeMonthlyTransactions(account.monthlyTransactions), 0);
+  const closedMonthlyTotal = closedAccounts.reduce((total, account) => total + normalizeMonthlyTransactions(account.monthlyTransactions), 0);
   const hasInventory = openAccounts.length > 0;
   const hasEstimated = openAccounts.some((account) => account.basis === "estimated");
   const closedOnly = !hasInventory && closedAccounts.length > 0;

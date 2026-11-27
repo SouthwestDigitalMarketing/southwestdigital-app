@@ -2,6 +2,7 @@ import {
   ANNUAL_PREPAID_CLEANUP_START_TEXT, ANNUAL_PREPAID_START_TEXT,
   CLEANUP_APPROVAL_TEXT, CLEANUP_MONTHLY_START_TEXT, NO_CLEANUP_MONTHLY_START_TEXT,
 } from "@/lib/quotes/paymentSchedule";
+import { volumeClauseText, type AccountBasis } from "@/lib/quotes/accountInventory";
 
 const DIVIDER = "─".repeat(62);
 
@@ -17,6 +18,7 @@ export const AGREEMENT_TEMPLATE_TOKENS = [
   "{{packageName}}",
   "{{scopeOfWork}}",
   "{{feeStructure}}",
+  "{{volumeClause}}",
 ] as const;
 
 export const DEFAULT_BOOKKEEPING_AGREEMENT_TEMPLATE = `BOOKKEEPING SERVICES AGREEMENT
@@ -155,11 +157,35 @@ export type AgreementRenderInput = {
   /** Required one-time services (already inside additionalOneTimeTotal), listed by name rather than as selected add-ons. */
   requiredOneTime?: { name: string; price: number }[];
   includedServices?: { name: string; description: string }[];
+  volumeMonthlyTotal?: number | null;
+  volumeBasis?: AccountBasis | null;
+  /** Fixed-fee bookkeeping defaults to including the clause; hourly callers must opt out. */
+  includeVolumeClause?: boolean;
   date?: Date;
 };
 
 function formatCurrency(value: number) {
   return value.toLocaleString("en-US", { style: "currency", currency: "USD" });
+}
+
+function insertVolumeClauseAfterGuarantee(rendered: string, volumeClause: string): string | null {
+  const heading = /^(\d+)\.[ \t]+Service and Price Guarantee[ \t]*$/m.exec(rendered);
+  if (!heading) return null;
+  const guaranteeNumber = Number(heading[1]);
+  const afterHeading = rendered.slice(heading.index + heading[0].length);
+  const nextHeading = /^(\d+)\.[ \t]+/m.exec(afterHeading);
+  const insertAt = nextHeading
+    ? heading.index + heading[0].length + nextHeading.index
+    : rendered.length;
+  const head = rendered.slice(0, insertAt).replace(/\s+$/, "");
+  const tail = rendered
+    .slice(insertAt)
+    .replace(/^(\d+)\. /gm, (line, number: string) => (
+      Number(number) > guaranteeNumber ? `${Number(number) + 1}. ` : line
+    ));
+  const tailText = tail.replace(/^\s+/, "");
+  const clause = `${guaranteeNumber + 1}. Volume-Based Pricing\n${volumeClause}`;
+  return tailText ? `${head}\n\n${clause}\n\n${tailText}` : `${head}\n\n${clause}`;
 }
 
 export function renderAgreementTemplate(template: string, input: AgreementRenderInput) {
@@ -234,6 +260,13 @@ export function renderAgreementTemplate(template: string, input: AgreementRender
     "Recurring monthly services are billed according to the selected term. Any change to scope or pricing requires written agreement.",
   ].filter((line): line is string => Boolean(line));
   const feeStructure = feeLines.join("\n");
+  const includeVolumeClause = input.includeVolumeClause !== false;
+  const volumeClause = includeVolumeClause
+    ? volumeClauseText({ monthlyTotal: input.volumeMonthlyTotal, basis: input.volumeBasis, brandName: input.brandName })
+      .replace(/^Volume-based pricing\. /, "")
+    : "";
+  // With includeVolumeClause:false the token renders empty and the stored
+  // numbering is left untouched: nothing is inserted or removed.
 
   const values: Record<(typeof AGREEMENT_TEMPLATE_TOKENS)[number], string> = {
     "{{brandName}}": input.brandName,
@@ -244,6 +277,7 @@ export function renderAgreementTemplate(template: string, input: AgreementRender
     "{{packageName}}": packageName,
     "{{scopeOfWork}}": scopeOfWork,
     "{{feeStructure}}": feeStructure,
+    "{{volumeClause}}": volumeClause,
   };
 
   const rendered = AGREEMENT_TEMPLATE_TOKENS.reduce(
@@ -252,7 +286,10 @@ export function renderAgreementTemplate(template: string, input: AgreementRender
   );
   // Custom templates may omit the dynamic scope or fees. Always include the
   // agreed schedule for new selections; signed agreement text is never rebuilt.
-  return staged && (!template.includes("{{scopeOfWork}}") || !template.includes("{{feeStructure}}"))
+  const withSchedule = staged && (!template.includes("{{scopeOfWork}}") || !template.includes("{{feeStructure}}"))
     ? `${rendered}\n\nSELECTED SERVICES AND PAYMENT SCHEDULE\n${DIVIDER}\n${scopeOfWork}\n\n${feeStructure}`
     : rendered;
+  if (!includeVolumeClause || template.includes("{{volumeClause}}")) return withSchedule;
+  return insertVolumeClauseAfterGuarantee(withSchedule, volumeClause)
+    ?? `${withSchedule}\n\nVOLUME-BASED PRICING\n${DIVIDER}\n${volumeClause}`;
 }

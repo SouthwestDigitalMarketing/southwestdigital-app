@@ -108,6 +108,8 @@ describe("normalizeAccountEntry", () => {
     [-12, 0], [-0.9, 0], [0, 0], [12.9, 12], ["42.8", 42], ["-1.2", 0],
     [Number.NaN, 0], [Infinity, 0], [-Infinity, 0], ["no count", 0],
     [null, 0], [undefined, 0], [true, 0], [{}, 0],
+    [1_000_000, 1_000_000], [1_000_001, 1_000_000], [1e308, 1_000_000],
+    [Number.MAX_SAFE_INTEGER + 1, 1_000_000], ["1e9", 1_000_000],
   ])("normalizes transaction count %j to %s", (monthlyTransactions, expected) => {
     expect(normalizeAccountEntry({ ...account(), monthlyTransactions })?.monthlyTransactions).toBe(expected);
   });
@@ -141,6 +143,31 @@ describe("normalizeAccountEntry", () => {
 });
 
 describe("normalizeAccountInventory", () => {
+  it("keeps colliding real accounts with deterministic unique IDs and counts each once", () => {
+    const raw = [
+      account({ id: "same", monthlyTransactions: 60 }),
+      account({ id: " same ", label: "Other checking", monthlyTransactions: 70 }),
+      account({ id: "same-2", monthlyTransactions: 80 }),
+      account({ id: "", monthlyTransactions: 90 }),
+      account({ id: "  ", status: "closed", monthlyTransactions: 100 }),
+      account({ id: "account", monthlyTransactions: 110 }),
+      { ...account(), id: undefined, monthlyTransactions: 120 },
+    ];
+    const before = structuredClone(raw);
+    const normalized = normalizeAccountInventory(raw);
+    expect(normalized.map((row) => row.id))
+      .toEqual(["same", "same-3", "same-2", "account-2", "account-3", "account", "account-4"]);
+    expect(normalized).toHaveLength(raw.length);
+    expect(normalizeAccountInventory(raw)).toEqual(normalized);
+    expect(normalizeAccountInventory(normalized)).toEqual(normalized);
+    expect(raw).toEqual(before);
+    expect(summarizeAccountInventory(normalized)).toMatchObject({
+      openMonthlyTotal: 530, closedMonthlyTotal: 100, derivedBand: "500-999",
+      derivedCounts: { ...zeroCounts, bankAccountsCount: 6 },
+    });
+    expect(toPublicAccountInventory(raw)).toMatchObject({ monthlyTotal: 530 });
+  });
+
   it.each([undefined, null, {}, "[]", 10])("returns an empty list for non-array input %j", (raw) => {
     expect(normalizeAccountInventory(raw)).toEqual([]);
   });
@@ -153,6 +180,14 @@ describe("normalizeAccountInventory", () => {
 });
 
 describe("summarizeAccountInventory", () => {
+  it("keeps totals safe even when callers supply unnormalized large counts", () => {
+    expect(summarizeAccountInventory([
+      account({ monthlyTransactions: 1e308 }),
+      account({ id: "second", monthlyTransactions: Number.MAX_SAFE_INTEGER + 1 }),
+      account({ id: "closed", status: "closed", monthlyTransactions: 1e308 }),
+    ])).toMatchObject({ openMonthlyTotal: 2_000_000, closedMonthlyTotal: 1_000_000 });
+  });
+
   it("counts only open accounts, with checking and savings combined", () => {
     const open = ACCOUNT_KINDS.map((kind, index) => account({ id: `open-${kind}`, kind, monthlyTransactions: index + 1 }));
     const closed = ACCOUNT_KINDS.map((kind) => account({ id: `closed-${kind}`, kind, status: "closed", monthlyTransactions: 500 }));
@@ -319,6 +354,17 @@ describe("resolveTransactionBand", () => {
 });
 
 describe("toPublicAccountInventory", () => {
+  it.each([1e308, Number.MAX_SAFE_INTEGER + 1, "1e9"])("publishes finite safe totals for oversized counts %s", (monthlyTransactions) => {
+    const result = toPublicAccountInventory([
+      { ...account(), monthlyTransactions },
+      { ...account({ id: "second" }), monthlyTransactions },
+    ])!;
+    expect(result.accounts.map((row) => row.monthlyTransactions)).toEqual([1_000_000, 1_000_000]);
+    expect(result.monthlyTotal).toBe(2_000_000);
+    expect(Number.isSafeInteger(result.monthlyTotal)).toBe(true);
+    expect(JSON.parse(JSON.stringify(result))).toEqual(result);
+  });
+
   it("publishes only whitelisted open account fields with sanitized last4", () => {
     const result = toPublicAccountInventory([
       { ...account(), last4: "12345678", internalMemo: "private" },

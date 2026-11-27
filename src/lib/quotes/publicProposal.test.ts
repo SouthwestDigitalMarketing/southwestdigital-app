@@ -6,6 +6,54 @@ import {
 } from "./publicProposal";
 
 describe("public proposal data boundary", () => {
+  const pricing = { maintain: { monthly: 500 }, improve: { monthly: 600 }, grow: { monthly: 750 } };
+
+  it("exposes only whitelisted open-account fields and keeps the assessment private", () => {
+    const privateValue = "PRIVATE_ACCOUNT_SENTINEL";
+    const result = toPublicBookkeepingProposal({
+      assessment: {
+        bankAccountsCount: 99, assessmentNotes: privateValue,
+        accounts: [
+          { id: privateValue, kind: "checking", label: "Chase", last4: "1234", status: "open", monthlyTransactions: 80, basis: "measured", source: privateValue, secret: privateValue },
+          { id: "card", kind: "credit_card", label: "Visa", status: "open", monthlyTransactions: 25, basis: "estimated", source: privateValue },
+          { id: "closed", kind: "checking", label: privateValue, last4: "9999", status: "closed", monthlyTransactions: 9000, basis: "measured" },
+        ],
+      },
+      pricing,
+    });
+    expect(result.accountInventory).toEqual({
+      accounts: [
+        { kind: "checking", kindLabel: "Checking", label: "Chase", last4: "1234", monthlyTransactions: 80, basis: "measured" },
+        { kind: "credit_card", kindLabel: "Credit card", label: "Visa", monthlyTransactions: 25, basis: "estimated" },
+      ],
+      monthlyTotal: 105, basis: "estimated", hasEstimated: true,
+    });
+    expect(JSON.stringify(result)).not.toContain(privateValue);
+    expect(result.assessment).not.toHaveProperty("accounts");
+    expect(result.assessment).not.toHaveProperty("bankAccountsCount");
+  });
+
+  it.each([
+    { accounts: undefined }, { accounts: null }, { accounts: [] },
+    { accounts: [{ id: "closed", kind: "checking", status: "closed", monthlyTransactions: 100, basis: "measured" }] },
+  ])("returns no public inventory without open accounts ($accounts)", ({ accounts }) => {
+    const result = toPublicBookkeepingProposal({ assessment: { accounts }, pricing });
+    expect(result.accountInventory).toBeNull();
+  });
+
+  it("keeps a legacy snapshot's existing payload and stored data unchanged", () => {
+    const snapshot = { assessment: { introHeadline: "Legacy plan", bankAccountsCount: 3 }, pricing };
+    const before = structuredClone(snapshot);
+    const result = toPublicBookkeepingProposal(snapshot);
+    expect(result).toEqual({
+      accountInventory: null,
+      assessment: { introHeadline: "Legacy plan", historicalCleanupPeriods: [], additionalOptions: [], bonuses: [] },
+      pricing,
+      contactInfo: { companyName: "", owners: [], primaryContact: { firstName: "", lastName: "", email: "", sameAsOwner: false, ownerId: "", phone: "", role: "" } },
+    });
+    expect(snapshot).toEqual(before);
+  });
+
   it("keeps published prices and excludes internal data at every nesting level", () => {
     const privateValue = "PRIVATE_SENTINEL_DO_NOT_PUBLISH";
     const result = toPublicBookkeepingProposal({
