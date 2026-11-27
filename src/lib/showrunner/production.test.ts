@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { VideoCard } from "@/components/showrunner/VideosInProgress";
-import { productionItem, stageProgress } from "./production";
+import { isWaitingForYou, productionItem, stageProgress } from "./production";
 
 const base: VideoCard = { batch: "b1", project: "TREB 261125 New Video", state: "episode", stage: null, steps: null, render: null, url: null, title: null, thumbnail: null, details: null };
 
@@ -51,6 +51,13 @@ describe("productionItem", () => {
       step: null,
       progress: 0.4,
     });
+  });
+});
+
+describe("isWaitingForYou", () => {
+  it("reads the stage line when steps are not loaded yet", () => {
+    expect(isWaitingForYou(null, "Step 6 of 14: Waiting for you: add clips or finish")).toBe(true);
+    expect(isWaitingForYou(null, "Sending 1 of 9 — 54%")).toBe(false);
   });
 });
 

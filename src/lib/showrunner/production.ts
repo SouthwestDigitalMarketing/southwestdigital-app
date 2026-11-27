@@ -16,8 +16,12 @@ export type ProductionItem = {
 };
 
 /** True while the autopilot is at the gate waiting for more clips or Finish. */
-export function isWaitingForYou(steps: { state: string; label: string }[] | null | undefined): boolean {
-  return Boolean(steps?.some((step) => step.state === "now" && step.label.startsWith("Waiting for you")));
+export function isWaitingForYou(
+  steps?: { state: string; label: string }[] | null,
+  stage?: string | null,
+): boolean {
+  if (steps?.some((step) => step.state === "now" && step.label.startsWith("Waiting for you"))) return true;
+  return Boolean(stage?.includes("Waiting for you"));
 }
 
 /** Percent from a phone-send stage line ("Sending 1 of 9 — 54%"), else 0. */
@@ -38,16 +42,17 @@ export function productionItem(video: VideoCard): ProductionItem | null {
   const steps = video.steps ?? [];
   if (steps.length === 0) {
     const label = video.stage ?? "On its way to ripley";
+    const finishing = Boolean(video.finishRequestedAt);
     return {
       batch: video.batch,
       name,
-      label,
+      label: finishing ? "Starting the build" : label,
       step: null,
       steps: null,
       progress: stageProgress(label),
       stopped: false,
-      waiting: false,
-      finishing: Boolean(video.finishRequestedAt),
+      waiting: !finishing && isWaitingForYou(null, label),
+      finishing,
     };
   }
   const stopped = steps.find((step) => step.state === "stopped");

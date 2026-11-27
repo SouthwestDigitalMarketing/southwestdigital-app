@@ -27,8 +27,10 @@ export default async function ProductionPage({ params }: { params: Promise<{ bat
         <ChevronLeft size={16} aria-hidden="true" /> Showrunner
       </Link>
       <h1 className="sr-only">Video production</h1>
-      {isWaitingForYou(video.steps) || video.finishRequestedAt ? (
-        <WaitingActions batch={video.batch} finishing={Boolean(video.finishRequestedAt)} />
+      {isWaitingForYou(video.steps, video.stage) || video.finishRequestedAt ? (
+        <div className="mt-3 max-w-3xl rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <WaitingActions batch={video.batch} finishing={Boolean(video.finishRequestedAt)} />
+        </div>
       ) : null}
       <VideosInProgress videos={[video, ...others]} />
     </div>

@@ -22,6 +22,7 @@ export default async function EditEpisodePage({ params }: { params: Promise<{ ba
   if (!episode) notFound();
   const waiting = isWaitingForYou(
     Array.isArray(episode.steps) ? (episode.steps as { state: string; label: string }[]) : null,
+    episode.stage,
   );
   const finishing = Boolean(episode.finishRequestedAt);
   return (
@@ -42,8 +43,12 @@ export default async function EditEpisodePage({ params }: { params: Promise<{ ba
             Watch on YouTube
           </a>
         ) : null}
+        {!episode.url && (waiting || finishing) ? (
+          <div className="-mx-4 -mb-4 mt-4 rounded-b-2xl border-t border-amber-200 bg-amber-50 px-4 pb-4">
+            <WaitingActions batch={episode.batch} finishing={finishing} />
+          </div>
+        ) : null}
       </div>
-      {!episode.url && (waiting || finishing) ? <WaitingActions batch={episode.batch} finishing={finishing} /> : null}
       {episode.url ? (
         <form action={requestReview.bind(null, episode.batch)} className="mt-4 flex max-w-3xl items-center gap-3">
           <button

@@ -10,13 +10,13 @@ export function WaitingActions({
 }) {
   if (finishing) {
     return (
-      <p className="mt-4 max-w-3xl rounded-xl bg-slate-50 p-4 text-sm text-slate-700">
+      <p className="mt-4 text-sm text-slate-700">
         Starting the build. Takes about a minute.
       </p>
     );
   }
   return (
-    <form action={requestFinish} className="mt-4 max-w-3xl rounded-2xl border border-amber-200 bg-amber-50 p-4">
+    <form action={requestFinish} className="mt-4">
       <input type="hidden" name="batch" value={batch} />
       <p className="text-sm font-semibold text-amber-950">Waiting on you</p>
       <p className="mt-1 text-sm text-amber-900">Send b-roll, or tap Finish to build this video now.</p>
