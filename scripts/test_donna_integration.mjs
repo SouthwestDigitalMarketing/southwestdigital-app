@@ -490,6 +490,9 @@ try {
   const blocked = await call({ op: "block", ...lease(stepClaim), spam: ["a@spam.example"], allow: [] });
   assert.equal(blocked.status, 200);
   assert.match(blocked.body.error, /Zoho is not connected/, "Blocking in Zoho needs SWapp's Zoho connection.");
+  const status = await call({ op: "zoho-status" });
+  assert.equal(status.status, 200);
+  assert.equal(status.body.organizationFound, false);
   const badLease = { jobId: stepOne.id, leaseToken: "wrong" };
   assert.equal((await call({ op: "tag", ...badLease, items: [{ thread: "ab12", tag: "Acme", messages: [{ id: "<m@x.com>", from: "", subject: "", at: "" }] }] })).status, 409);
   await db.donnaMailbox.update({ where: { id: box.id }, data: { paused: true } });

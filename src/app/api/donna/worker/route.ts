@@ -14,7 +14,7 @@ import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { checkRateLimit } from "@/lib/simpleRateLimit";
 import { donnaSettings, type DonnaSettings } from "@/lib/donna/domain";
 import { tagThreads } from "@/lib/donna/tags";
-import { blockInZoho } from "@/lib/donna/zohoBlock";
+import { blockInZoho, zohoStatus } from "@/lib/donna/zohoBlock";
 
 /** Mark undone (or failed) filed items on the clean job that filed them. */
 async function recordUndo(
@@ -127,6 +127,25 @@ export async function POST(request: Request) {
       );
       return NextResponse.json(
         await tagThreads(auth.context.brandId, address, input.items),
+      );
+    }
+    if (body.op === "zoho-status") {
+      // Read-only: is the mailbox's Zoho connection able to tag and block?
+      const box = await withBrandDataTransaction(auth.context, (tx) =>
+        tx.donnaMailbox.findFirst({
+          where: { brandId: auth.context.brandId, key: "zoho" },
+          select: { address: true },
+        }),
+      );
+      return NextResponse.json(
+        box
+          ? await zohoStatus(auth.context.brandId, box.address)
+          : {
+              connected: false,
+              canTag: false,
+              canBlock: false,
+              organizationFound: false,
+            },
       );
     }
     if (body.op === "block") {
