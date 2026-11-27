@@ -248,18 +248,21 @@ function ProviderCard({
         </form>
       ) : null}
 
-      {provider === "ZOHO" && !disabled && connection && !connection.canTag ? (
+      {provider === "ZOHO" &&
+      !disabled &&
+      connection &&
+      (!connection.canTag || !connection.canBlock) ? (
         <form method="post" action="/api/email-connections/zoho/connect" className="space-y-1">
           <input type="hidden" name="region" value={connection.region ?? region} />
           <button
             type="submit"
             className="ui-action-primary w-full rounded-lg px-3 py-2 text-sm font-semibold"
           >
-            Reconnect so Donna can tag mail
+            Reconnect so Donna can tag and block
           </button>
           <p className="text-xs text-slate-500">
-            Zoho asks you to allow reading and tagging mail. Sending keeps working; nothing changes until you
-            choose a step in Donna.
+            Zoho asks you to allow reading and tagging mail, and editing your organization&apos;s spam list (for
+            senders you block forever). Sending keeps working; nothing changes until you choose a step in Donna.
           </p>
         </form>
       ) : null}

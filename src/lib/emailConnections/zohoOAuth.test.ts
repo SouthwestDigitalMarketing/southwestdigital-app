@@ -10,12 +10,15 @@ import {
 
 function signZohoPayload(payload: object) {
   const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const signature = createHmac("sha256", process.env.AUTH_SECRET!).update(encoded).digest("base64url");
+  const signature = createHmac("sha256", process.env.AUTH_SECRET!)
+    .update(encoded)
+    .digest("base64url");
   return `${encoded}.${signature}`;
 }
 
 beforeAll(() => {
-  process.env.AUTH_SECRET = process.env.AUTH_SECRET || "test-only-secret-do-not-use-in-prod";
+  process.env.AUTH_SECRET =
+    process.env.AUTH_SECRET || "test-only-secret-do-not-use-in-prod";
 });
 
 describe("buildZohoAuthorizationUrl", () => {
@@ -23,7 +26,8 @@ describe("buildZohoAuthorizationUrl", () => {
     const url = buildZohoAuthorizationUrl({
       region: "EU",
       clientId: "1000.TEST",
-      redirectUri: "https://app.example.com/api/email-connections/zoho/callback",
+      redirectUri:
+        "https://app.example.com/api/email-connections/zoho/callback",
       state: "abc.def",
     });
     const parsed = new URL(url);
@@ -34,7 +38,9 @@ describe("buildZohoAuthorizationUrl", () => {
     expect(parsed.searchParams.get("access_type")).toBe("offline");
     expect(parsed.searchParams.get("prompt")).toBe("consent");
     expect(parsed.searchParams.get("state")).toBe("abc.def");
-    expect(parsed.searchParams.get("redirect_uri")).toBe("https://app.example.com/api/email-connections/zoho/callback");
+    expect(parsed.searchParams.get("redirect_uri")).toBe(
+      "https://app.example.com/api/email-connections/zoho/callback",
+    );
     expect(parsed.searchParams.get("scope")).toBe(ZOHO_MAIL_SCOPES.join(","));
   });
 });
@@ -45,7 +51,12 @@ describe("OAuth state round-trip", () => {
   const returnOrigin = "http://localhost:3000";
 
   it("round-trips a valid state and reads back matching fields", () => {
-    const state = createZohoOAuthState({ membershipId, brandId, region: "US", returnOrigin });
+    const state = createZohoOAuthState({
+      membershipId,
+      brandId,
+      region: "US",
+      returnOrigin,
+    });
     const parsed = readZohoOAuthState(state);
     expect(parsed).not.toBeNull();
     expect(parsed?.membershipId).toBe(membershipId);
@@ -55,30 +66,81 @@ describe("OAuth state round-trip", () => {
   });
 
   it("verify accepts a matching membership+brand+origin", () => {
-    const state = createZohoOAuthState({ membershipId, brandId, region: "US", returnOrigin });
-    expect(verifyZohoOAuthState(state, { membershipId, brandId, returnOrigin })).not.toBeNull();
+    const state = createZohoOAuthState({
+      membershipId,
+      brandId,
+      region: "US",
+      returnOrigin,
+    });
+    expect(
+      verifyZohoOAuthState(state, { membershipId, brandId, returnOrigin }),
+    ).not.toBeNull();
   });
 
   it("verify rejects a state that belongs to a different membership", () => {
-    const state = createZohoOAuthState({ membershipId, brandId, region: "US", returnOrigin });
-    expect(verifyZohoOAuthState(state, { membershipId: "another_membership", brandId, returnOrigin })).toBeNull();
+    const state = createZohoOAuthState({
+      membershipId,
+      brandId,
+      region: "US",
+      returnOrigin,
+    });
+    expect(
+      verifyZohoOAuthState(state, {
+        membershipId: "another_membership",
+        brandId,
+        returnOrigin,
+      }),
+    ).toBeNull();
   });
 
   it("verify rejects a state that belongs to a different brand", () => {
-    const state = createZohoOAuthState({ membershipId, brandId, region: "US", returnOrigin });
-    expect(verifyZohoOAuthState(state, { membershipId, brandId: "brand_other", returnOrigin })).toBeNull();
+    const state = createZohoOAuthState({
+      membershipId,
+      brandId,
+      region: "US",
+      returnOrigin,
+    });
+    expect(
+      verifyZohoOAuthState(state, {
+        membershipId,
+        brandId: "brand_other",
+        returnOrigin,
+      }),
+    ).toBeNull();
   });
 
   it("verify rejects a state with a different return origin", () => {
-    const state = createZohoOAuthState({ membershipId, brandId, region: "US", returnOrigin });
-    expect(verifyZohoOAuthState(state, { membershipId, brandId, returnOrigin: "https://evil.example.com" })).toBeNull();
+    const state = createZohoOAuthState({
+      membershipId,
+      brandId,
+      region: "US",
+      returnOrigin,
+    });
+    expect(
+      verifyZohoOAuthState(state, {
+        membershipId,
+        brandId,
+        returnOrigin: "https://evil.example.com",
+      }),
+    ).toBeNull();
   });
 
   it("rejects a tampered payload (signature mismatch)", () => {
-    const state = createZohoOAuthState({ membershipId, brandId, region: "US", returnOrigin });
+    const state = createZohoOAuthState({
+      membershipId,
+      brandId,
+      region: "US",
+      returnOrigin,
+    });
     const [payload, signature] = state.split(".");
     const tamperedPayload = Buffer.from(
-      JSON.stringify({ membershipId: "evil", brandId, region: "US", returnOrigin, exp: Date.now() + 60_000 }),
+      JSON.stringify({
+        membershipId: "evil",
+        brandId,
+        region: "US",
+        returnOrigin,
+        exp: Date.now() + 60_000,
+      }),
     ).toString("base64url");
     expect(readZohoOAuthState(`${tamperedPayload}.${signature}`)).toBeNull();
     expect(readZohoOAuthState(`${payload}.deadbeef`)).toBeNull();
@@ -86,7 +148,13 @@ describe("OAuth state round-trip", () => {
 
   it("rejects a state whose region is unknown", () => {
     const badPayload = Buffer.from(
-      JSON.stringify({ membershipId, brandId, region: "XX", returnOrigin, exp: Date.now() + 60_000 }),
+      JSON.stringify({
+        membershipId,
+        brandId,
+        region: "XX",
+        returnOrigin,
+        exp: Date.now() + 60_000,
+      }),
     ).toString("base64url");
     expect(readZohoOAuthState(`${badPayload}.whatever`)).toBeNull();
   });
@@ -94,21 +162,40 @@ describe("OAuth state round-trip", () => {
   it("rejects expired state before it can supply a relay destination", () => {
     vi.useFakeTimers();
     try {
-      const state = createZohoOAuthState({ membershipId, brandId, region: "US", returnOrigin });
+      const state = createZohoOAuthState({
+        membershipId,
+        brandId,
+        region: "US",
+        returnOrigin,
+      });
       vi.advanceTimersByTime(11 * 60_000);
       expect(readZohoOAuthState(state)).toBeNull();
-    } finally { vi.useRealTimers(); }
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("rejects unsigned relay payloads and extra state segments", () => {
-    const unsigned = Buffer.from(JSON.stringify({ returnOrigin: "https://attacker.example" })).toString("base64url");
+    const unsigned = Buffer.from(
+      JSON.stringify({ returnOrigin: "https://attacker.example" }),
+    ).toString("base64url");
     expect(readZohoOAuthState(unsigned)).toBeNull();
-    const state = createZohoOAuthState({ membershipId, brandId, region: "US", returnOrigin });
+    const state = createZohoOAuthState({
+      membershipId,
+      brandId,
+      region: "US",
+      returnOrigin,
+    });
     expect(readZohoOAuthState(`${state}.extra`)).toBeNull();
   });
 
   it("rejects signed insecure remote origins", () => {
-    const state = createZohoOAuthState({ membershipId, brandId, region: "US", returnOrigin: "http://remote.example" });
+    const state = createZohoOAuthState({
+      membershipId,
+      brandId,
+      region: "US",
+      returnOrigin: "http://remote.example",
+    });
     expect(readZohoOAuthState(state)).toBeNull();
   });
 
@@ -116,14 +203,17 @@ describe("OAuth state round-trip", () => {
     "javascript:alert(1)",
     "https://user:secret@firm.example.test",
     "https://firm.example.test/path",
-  ])("rejects HMAC-valid javascript, userinfo, and path-in-origin return origins: %s", (returnOrigin) => {
-    const state = signZohoPayload({
-      membershipId,
-      brandId,
-      region: "US",
-      returnOrigin,
-      exp: Date.now() + 60_000,
-    });
-    expect(readZohoOAuthState(state)).toBeNull();
-  });
+  ])(
+    "rejects HMAC-valid javascript, userinfo, and path-in-origin return origins: %s",
+    (returnOrigin) => {
+      const state = signZohoPayload({
+        membershipId,
+        brandId,
+        region: "US",
+        returnOrigin,
+        exp: Date.now() + 60_000,
+      });
+      expect(readZohoOAuthState(state)).toBeNull();
+    },
+  );
 });

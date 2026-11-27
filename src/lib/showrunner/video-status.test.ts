@@ -53,6 +53,21 @@ describe("parseVideoStatus", () => {
     expect(row?.sentAt?.getTime()).toBe(1794850000 * 1000);
   });
 
+  it("keeps the transcript and a few thumbnail wordings", () => {
+    const row = parseVideoStatus({
+      batch: "b6",
+      state: "episode",
+      transcript: "  able to give them three years of bookkeeping with solid reporting.  ",
+      thumbnailText: " SOLID / REPORTING ",
+      thumbnailOptions: ["SOLID REPORTING", "EVERYTHING RECONCILED", "  ", 12],
+      thumbnailBusy: true,
+    });
+    expect(row?.transcript).toBe("able to give them three years of bookkeeping with solid reporting.");
+    expect(row?.thumbnailText).toBe("SOLID / REPORTING");
+    expect(row?.thumbnailOptions).toEqual(["SOLID REPORTING", "EVERYTHING RECONCILED"]);
+    expect(row?.thumbnailBusy).toBe(true);
+  });
+
   it("keeps the YouTube link and a stopped step's reason", () => {
     const row = parseVideoStatus({
       batch: "b1", state: "episode", url: "https://www.youtube.com/watch?v=g-S6zVZycr4",

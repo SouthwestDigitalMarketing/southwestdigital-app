@@ -35,24 +35,61 @@ export type VideoStatusRow = {
   thumbnail: string | null;
   details: unknown;
   updatedAt: Date;
+  finishRequestedAt: Date | null;
+  transcript: string | null;
+  thumbnailText: string | null;
+  thumbnailOptions: unknown;
+  thumbnailBusy: boolean;
+  thumbnailRequestedAt: Date | null;
 };
 
-/** Videos ripley is still making, and ones published in the last day, newest first. */
+const VIDEO_STATUS_SELECT = {
+  batch: true,
+  project: true,
+  state: true,
+  stage: true,
+  steps: true,
+  render: true,
+  url: true,
+  title: true,
+  thumbnail: true,
+  details: true,
+  updatedAt: true,
+  finishRequestedAt: true,
+  transcript: true,
+  thumbnailText: true,
+  thumbnailOptions: true,
+  thumbnailBusy: true,
+  thumbnailRequestedAt: true,
+} as const;
+
+/**
+ * Videos ripley is still making, then ones published in the last day.
+ * Unpublished rows are loaded on their own: ripley upserts the live send first, then every published
+ * row, so a mixed take:12 by updatedAt drops the send (Tom, 2026-11-27, batch mwzglzlj-5643aa).
+ */
 export async function loadVideoStatus(context: BrandDataContext): Promise<VideoStatusRow[]> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  return withBrandDataTransaction(context, (tx) =>
-    tx.showrunnerVideoStatus.findMany({
-      where: { brandId: context.brandId, OR: [{ url: null }, { updatedAt: { gte: since } }] },
+  return withBrandDataTransaction(context, async (tx) => {
+    const unpublished = await tx.showrunnerVideoStatus.findMany({
+      where: { brandId: context.brandId, url: null },
+      orderBy: { updatedAt: "desc" },
+      take: 50,
+      select: VIDEO_STATUS_SELECT,
+    });
+    const published = await tx.showrunnerVideoStatus.findMany({
+      where: { brandId: context.brandId, url: { not: null }, updatedAt: { gte: since } },
       orderBy: { updatedAt: "desc" },
       take: 12,
-      select: { batch: true, project: true, state: true, stage: true, steps: true, render: true, url: true, title: true, thumbnail: true, details: true, updatedAt: true },
-    }),
-  );
+      select: VIDEO_STATUS_SELECT,
+    });
+    return [...unpublished, ...published];
+  });
 }
 
-/** loadVideoStatus shaped for the VideosInProgress cards (Showrunner and YouTube pages). */
-export async function loadVideoCards(context: BrandDataContext): Promise<VideoCard[]> {
-  return (await loadVideoStatus(context)).map((row) => ({
+/** One ShowrunnerVideoStatus row as a VideosInProgress card. */
+export function videoCardFromStatus(row: VideoStatusRow): VideoCard {
+  return {
     batch: row.batch,
     project: row.project,
     state: row.state,
@@ -63,10 +100,25 @@ export async function loadVideoCards(context: BrandDataContext): Promise<VideoCa
     title: row.title,
     thumbnail: row.thumbnail,
     details: row.details && typeof row.details === "object" ? (row.details as VideoDetails) : null,
-  }));
+    finishRequestedAt: row.finishRequestedAt,
+    transcript: row.transcript,
+    thumbnailText: row.thumbnailText,
+    thumbnailOptions: Array.isArray(row.thumbnailOptions) ? (row.thumbnailOptions as string[]) : null,
+    thumbnailBusy: row.thumbnailBusy || Boolean(row.thumbnailRequestedAt),
+  };
 }
 
-export type EpisodeRow = VideoStatusRow & { review: VideoReview | null; reviewRequestedAt: Date | null };
+/** loadVideoStatus shaped for the VideosInProgress cards (Showrunner and YouTube pages). */
+export async function loadVideoCards(context: BrandDataContext): Promise<VideoCard[]> {
+  return (await loadVideoStatus(context)).map(videoCardFromStatus);
+}
+
+export type EpisodeRow = VideoStatusRow & {
+  review: VideoReview | null;
+  reviewRequestedAt: Date | null;
+  finishRequestedAt: Date | null;
+  finishNote: string | null;
+};
 
 /** Every episode ripley has reported, newest first, for the Videos tab, with its scorecard (Tom, 2026-11-25). */
 export async function loadEpisodes(context: BrandDataContext): Promise<EpisodeRow[]> {
@@ -78,6 +130,8 @@ export async function loadEpisodes(context: BrandDataContext): Promise<EpisodeRo
       select: {
         batch: true, project: true, state: true, stage: true, steps: true, render: true, url: true, title: true,
         thumbnail: true, details: true, updatedAt: true, review: true, reviewRequestedAt: true,
+        finishRequestedAt: true, finishNote: true, transcript: true, thumbnailText: true,
+        thumbnailOptions: true, thumbnailBusy: true, thumbnailRequestedAt: true,
       },
     }),
   );

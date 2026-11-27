@@ -7,9 +7,23 @@ export const ZOHO_OAUTH_STATE_COOKIE = "swd-zoho-oauth-state";
 // Read, update and tags let Donna find a message and tag it with a client
 // (Tom, 2026-11-26). Connections made before that lack them until reconnected.
 export const ZOHO_TAG_SCOPES = ["ZohoMail.messages.READ", "ZohoMail.messages.UPDATE", "ZohoMail.tags.ALL"];
-export const ZOHO_MAIL_SCOPES = ["ZohoMail.messages.CREATE", "ZohoMail.accounts.READ", ...ZOHO_TAG_SCOPES];
+// Block forever also lists the sender in the Zoho organization's spam list
+// (Tom, 2026-11-28: send to Spam, not reject). Needs an org admin to connect.
+export const ZOHO_BLOCK_SCOPES = ["ZohoMail.organization.spam.ALL"];
+export const ZOHO_MAIL_SCOPES = [
+  "ZohoMail.messages.CREATE",
+  "ZohoMail.accounts.READ",
+  ...ZOHO_TAG_SCOPES,
+  ...ZOHO_BLOCK_SCOPES,
+];
 
 /** True when a stored Zoho grant includes what tagging needs (ALL covers READ/UPDATE). */
+/** True when a stored Zoho grant can edit the organization's spam lists. */
+export function zohoCanBlock(scopes: string | null | undefined) {
+  const granted = (scopes ?? "").toLowerCase();
+  return ZOHO_BLOCK_SCOPES.every((scope) => granted.includes(scope.toLowerCase()));
+}
+
 export function zohoCanTag(scopes: string | null | undefined) {
   const granted = new Set((scopes ?? "").split(/[\s,]+/).map((s) => s.trim().toLowerCase()).filter(Boolean));
   const has = (scope: string) =>
