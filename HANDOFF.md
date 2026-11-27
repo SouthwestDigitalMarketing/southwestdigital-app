@@ -1,4 +1,11 @@
 # SWapp handoff
+## 2026-11-27 — Render bars on the production page (Johnny)
+
+The step list already had cut / whole-video bars under the current step when
+ripley sends `render`. Layout now stacks on a phone (label above the bar) and
+the page refreshes every 4s. Pair with showrunner-app `johnny/render-progress`,
+which writes those numbers while ffmpeg is encoding.
+
 ## 2026-11-27 — Add clips on every episode (Johnny)
 
 Tom: future uploads should not wait for more clips. Add clips stays available
