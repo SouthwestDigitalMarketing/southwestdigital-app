@@ -88,12 +88,9 @@ export function BucketChooser({
   folders,
   blocked,
   action,
-  empty,
 }: {
   jobId: string;
   buckets: Bucket[];
-  /** What step 3 would permanently delete from Spam and Trash, counted in step 1. */
-  empty: Record<string, number> | null;
   /** STEP_FOLDERS, passed in so this client file does not import server code. */
   folders: readonly string[];
   blocked: string | null;
@@ -171,10 +168,6 @@ export function BucketChooser({
   }
 
   const doing = summary.reduce((n, [, c]) => n + c, 0);
-  const [emptyOn, setEmptyOn] = useState(false);
-  const toDelete = Object.entries(empty ?? {})
-    .map(([folder, n]) => `${folder} (${n.toLocaleString("en-US")})`)
-    .join(" and ");
   return (
     <form ref={form} action={action} onChange={recount} className="space-y-3">
       <input type="hidden" name="jobId" value={jobId} />
@@ -200,7 +193,9 @@ export function BucketChooser({
                 aria-label={`Bucket ${bucket.name}`}
                 className="divide-y divide-slate-100"
               >
-                <tr className={`border-t-2 border-t-slate-700 ${rowTint(b, 1)}`}>
+                <tr
+                  className={`border-t-2 border-t-slate-700 ${rowTint(b, 1)}`}
+                >
                   <td className={td}>
                     <input
                       type="checkbox"
@@ -285,27 +280,10 @@ export function BucketChooser({
         </table>
       </div>
       <div className="sticky bottom-0 space-y-2 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm shadow-sm">
-        {toDelete ? (
-          // Emptying is the one step that cannot be undone: it needs Tom's own tick.
-          <label className="flex items-start gap-2 rounded-lg bg-rose-50 px-2 py-1.5 text-rose-900">
-            <input
-              type="checkbox"
-              name="empty"
-              checked={emptyOn}
-              onChange={(e) => setEmptyOn(e.target.checked)}
-              className="mt-0.5 h-3.5 w-3.5"
-            />
-            <span>
-              <span className="font-semibold">Approve:</span> then permanently
-              delete everything in {toDelete}, plus anything this job moves
-              there. Rescued emails go back first. This cannot be undone.
-            </span>
-          </label>
-        ) : null}
         <div className="flex flex-wrap items-center gap-3">
           <span className="min-w-0 flex-1 text-slate-700">
-            {doing || emptyOn
-              ? `Step 3 will ${[...summary.map(([what, n]) => `${what}: ${n}`), ...(emptyOn ? ["then empty Spam and Trash"] : [])].join("; ")}. Unticked emails stay as they are.`
+            {doing
+              ? `Step 3 will ${summary.map(([what, n]) => `${what}: ${n}`).join("; ")}. Unticked emails stay as they are.`
               : "Nothing ticked yet. Tick the emails (or a whole bucket) to do in step 3."}
           </span>
           {blocked ? (
@@ -313,7 +291,7 @@ export function BucketChooser({
           ) : (
             <button
               type="submit"
-              disabled={!doing && !emptyOn}
+              disabled={!doing}
               className="rounded-lg bg-slate-900 px-4 py-2 text-white disabled:opacity-40"
             >
               Start step 3
