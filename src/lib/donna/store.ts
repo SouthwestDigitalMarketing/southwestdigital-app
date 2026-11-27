@@ -9,6 +9,7 @@ import {
 } from "@/lib/tenancy/context";
 import {
   activityCounts,
+  cleanIsCleanup,
   cleanIsDo,
   cleanIsSort,
   jobEnd,
@@ -144,30 +145,47 @@ export async function loadClean(context: BrandDataContext, id: string) {
       },
     });
     if (!job) return null;
-    // The real clean started from this preview (step 3 of a sort), if Tom started it.
-    const approved = await tx.donnaJob.findFirst({
-      where: {
-        mailboxId: job.mailboxId,
-        kind: "clean",
-        options: { path: ["previewJobId"], equals: job.id },
-      },
-      orderBy: { receivedAt: "desc" },
-      select: { id: true, status: true, result: true, completedAt: true },
-    });
-    // Step 3 shows its Inbox job's number (the sort it came from).
+    // A step 3 or step 4 page belongs to its Inbox job: the sort it came from.
     const from = (job.options as { previewJobId?: unknown } | null)
       ?.previewJobId;
     const parent =
       typeof from === "string"
         ? await tx.donnaJob.findFirst({
             where: { id: from, mailboxId: job.mailboxId },
-            select: { number: true },
+            select: {
+              id: true,
+              number: true,
+              status: true,
+              options: true,
+              result: true,
+            },
           })
         : null;
+    const sortId = parent?.id ?? job.id;
+    // The sort's later steps: step 3 (Do) and step 4 (Clean up), if started.
+    const later = await tx.donnaJob.findMany({
+      where: {
+        mailboxId: job.mailboxId,
+        kind: "clean",
+        options: { path: ["previewJobId"], equals: sortId },
+      },
+      orderBy: { receivedAt: "desc" },
+      select: {
+        id: true,
+        status: true,
+        options: true,
+        result: true,
+        completedAt: true,
+      },
+    });
+    const approved = later.find((j) => !cleanIsCleanup(j.options)) ?? null;
+    const cleanupJob = later.find((j) => cleanIsCleanup(j.options)) ?? null;
     return {
       ...job,
       approvedJobId: approved?.id ?? null,
-      follow: approved ?? null,
+      follow: approved,
+      cleanupJob,
+      parent,
       jobNumber: parent?.number ?? job.number,
     };
   });
@@ -266,22 +284,33 @@ async function loadJobRows(context: BrandDataContext, take: number) {
       where: {
         mailbox: { brandId: context.brandId },
         kind: "clean",
-        options: { path: ["buckets"], equals: true },
+        // Step 3 jobs carry buckets: true; step 4 jobs carry cleanup: true.
+        OR: [
+          { options: { path: ["buckets"], equals: true } },
+          { options: { path: ["cleanup"], equals: true } },
+        ],
       },
       select: JOB_ROW,
     });
-    const byPreview = new Map(
-      follows.flatMap((f) => {
-        const from = (f.options as { previewJobId?: unknown } | null)
-          ?.previewJobId;
-        return typeof from === "string" && cleanIsDo(f.options)
-          ? [[from, f] as const]
-          : [];
-      }),
-    );
+    const linked = (keep: (options: unknown) => boolean) =>
+      new Map(
+        follows.flatMap((f) => {
+          const from = (f.options as { previewJobId?: unknown } | null)
+            ?.previewJobId;
+          return typeof from === "string" && keep(f.options)
+            ? [[from, f] as const]
+            : [];
+        }),
+      );
+    const doJobs = linked(cleanIsDo);
+    const cleanups = linked(cleanIsCleanup);
     return rows
-      .filter((job) => !cleanIsDo(job.options))
-      .map((job) => ({ ...job, follow: byPreview.get(job.id) ?? null }));
+      .filter((job) => !cleanIsDo(job.options) && !cleanIsCleanup(job.options))
+      .map((job) => ({
+        ...job,
+        follow: doJobs.get(job.id) ?? null,
+        cleanup: cleanups.get(job.id) ?? null,
+      }));
   });
 }
 
@@ -291,7 +320,7 @@ export type JobRow = Awaited<ReturnType<typeof loadJobRows>>[number];
 export async function loadJobs(context: BrandDataContext, take = 100) {
   const rows = await loadJobRows(context, take);
   return rows
-    .filter((job) => jobEnd(job, job.follow).label === "Finished")
+    .filter((job) => jobEnd(job, job.follow, job.cleanup).label === "Finished")
     .slice(0, take);
 }
 
@@ -302,7 +331,7 @@ export async function loadJobsInProgress(
 ) {
   const rows = await loadJobRows(context, take);
   return rows
-    .filter((job) => jobEnd(job, job.follow).label !== "Finished")
+    .filter((job) => jobEnd(job, job.follow, job.cleanup).label !== "Finished")
     .slice(0, take);
 }
 

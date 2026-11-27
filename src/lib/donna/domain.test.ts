@@ -12,6 +12,7 @@ import {
   cleanIsPreview,
   cleanIsSort,
   cleanBuckets,
+  cleanupPlan,
   jobEnd,
   donnaSettings,
   cleanBarStatus,
@@ -367,6 +368,7 @@ describe("honest health and counts", () => {
       ],
       tagged: [],
       rescued: [],
+      blocked: [],
       empty: null,
       emptied: null,
       emptyError: null,
@@ -587,5 +589,60 @@ describe("job end labels", () => {
     expect(jobEnd({ status: "done", options: { manual: true } }).label).toBe(
       "Finished",
     );
+  });
+});
+
+describe("clean up (step 4)", () => {
+  const sort = { preview: true, buckets: true };
+  const withWork = {
+    cleanup: {
+      spam: [{ sender: "a@x.com", count: 3, verdict: "block", why: "Spam" }],
+      trash: { total: 10, older30: 4 },
+    },
+  };
+  it("reads the plan Donna made in step 1", () => {
+    expect(cleanupPlan(withWork)).toEqual({
+      spam: [
+        {
+          sender: "a@x.com",
+          name: "",
+          count: 3,
+          samples: [],
+          verdict: "block",
+          why: "Spam",
+        },
+      ],
+      trash: { total: 10, older30: 4 },
+    });
+    expect(cleanupPlan({})).toBeNull();
+  });
+  it("is the last step before a job is finished", () => {
+    const done = { status: "done" };
+    expect(
+      jobEnd({ status: "done", options: sort, result: withWork }, done).label,
+    ).toBe("Waiting");
+    expect(
+      jobEnd({ status: "done", options: sort, result: withWork }, done, {
+        status: "leased",
+      }).label,
+    ).toBe("Running");
+    expect(
+      jobEnd({ status: "done", options: sort, result: withWork }, done, done)
+        .label,
+    ).toBe("Finished");
+    expect(
+      jobEnd(
+        {
+          status: "done",
+          options: { ...sort, cleanupSkipped: true },
+          result: withWork,
+        },
+        done,
+      ).label,
+    ).toBe("Finished");
+    // Older sorts without a clean up plan finish at step 3.
+    expect(
+      jobEnd({ status: "done", options: sort, result: {} }, done).label,
+    ).toBe("Finished");
   });
 });

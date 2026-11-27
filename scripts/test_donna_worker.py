@@ -15,6 +15,8 @@ import donna_worker as donna
 donna.SORT_RULES = Path("/nonexistent/mail-sort-rules.json")
 donna.NEVER_BLOCK = Path("/nonexistent/spam-never-block.json")
 donna.ALWAYS_BLOCK = Path("/nonexistent/spam-always-block.json")
+# Tests never call the real sender reviewer.
+donna.judge_senders = lambda batch, root: {}
 
 
 def message(key, subject="Question", reply_to=None, sender="client@example.com"):
@@ -662,6 +664,56 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual(moved, {"Spam": [], "Trash": ["<scam@bad.example>"]})
             done = next(d["result"]["report"] for op, d in calls if op == "complete")
             self.assertEqual(done["emptied"], {"Spam": 1, "Trash": 2})
+            store.db.close()
+
+    def test_step_one_groups_spam_by_sender_with_verdicts_for_clean_up(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = self.junk_fixture(tmp)
+            store.save("box", "Spam", "7", 33, message("<junk2@example.com>", "Win more", sender="junk@spam.example").as_bytes(),
+                       "ours@example.com", Helper)
+            store.db.commit()
+            verdicts = lambda batch, root: {g["sender"]: ("block", "Lottery spam") for g in batch}
+            with patch.dict(self.BY_SENDER, {"scam@bad.example": self.SCAM, "junk@spam.example": self.SCAM,
+                                             "x@trash.example": self.SCAM}), patch.object(donna, "judge_senders", verdicts):
+                report = next(d["result"]["report"] for op, d in self.run_clean(store, {}, settings={}) if op == "complete")
+            spam = report["cleanup"]["spam"]
+            # The client's email in Spam is a rescue, never a sender to block.
+            self.assertEqual([g["sender"] for g in spam], ["junk@spam.example"])
+            self.assertEqual((spam[0]["count"], spam[0]["verdict"], spam[0]["why"]), (2, "block", "Lottery spam"))
+            self.assertEqual(sorted(spam[0]["samples"]), ["Win big", "Win more"])
+            self.assertEqual(report["cleanup"]["trash"]["total"], 1)
+            store.db.close()
+
+    def test_clean_up_rescues_blocks_and_deletes_only_with_approval(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = self.junk_fixture(tmp)
+            store.save("box", "Spam", "7", 34, message("<real@vendor.example>", "Invoice 12", sender="ap@vendor.example").as_bytes(),
+                       "ours@example.com", Helper)
+            store.db.commit()
+            always, never = Path(tmp) / "always.json", Path(tmp) / "never.json"
+            with patch.dict(self.BY_SENDER, {"scam@bad.example": self.SCAM, "junk@spam.example": self.SCAM,
+                                             "x@trash.example": self.SCAM}), \
+                    patch.object(donna, "ALWAYS_BLOCK", always), patch.object(donna, "NEVER_BLOCK", never):
+                self.run_clean(store, {}, settings={})
+                senders = [{"sender": "junk@spam.example", "action": "block"},
+                           {"sender": "ap@vendor.example", "action": "keep"}]
+                back, deleted = [], []
+                def run(**extra):
+                    with patch.object(donna, "rescue_via_imap", lambda f, k: back.append((f, k))), \
+                            patch.object(donna, "empty_via_imap", lambda snap, moved, rescued: deleted.append(sorted(k for *_, k in snap)) or {"Spam": len(snap)}):
+                        return self.run_clean(store, {"previewJobId": "j", "cleanup": True, "senders": senders, **extra},
+                                              job_id="clean", settings={})
+                calls = run(trash="all")
+            self.assertEqual(back, [("Spam", "<real@vendor.example>")])
+            self.assertEqual(json.loads(always.read_text())["senders"], ["junk@spam.example"])
+            self.assertEqual(json.loads(never.read_text())["senders"], ["ap@vendor.example"])
+            self.assertEqual(deleted, [])  # not approved: nothing deleted
+            done = next(d["result"]["report"] for op, d in calls if op == "complete")
+            self.assertEqual(len(done["blocked"]), 1)
+            with patch.object(donna, "ALWAYS_BLOCK", always), patch.object(donna, "NEVER_BLOCK", never):
+                calls = run(trash="all", approved=True)
+            # Only the blocked sender's Spam and all of Trash; never the rescued or unreviewed mail.
+            self.assertEqual(deleted, [["<junk@example.com>", "<old@trash.example>"]])
             store.db.close()
 
     def test_cancel_stops_before_the_next_move_and_reports_what_moved(self):

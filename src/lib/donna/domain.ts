@@ -316,6 +316,90 @@ export function cleanIsDo(options: unknown): boolean {
   );
 }
 
+/** Step 4 of a stepped job: Spam and Trash, sender by sender (Tom, 2026-11-28). */
+export function cleanIsCleanup(options: unknown): boolean {
+  return Boolean(
+    options &&
+    typeof options === "object" &&
+    !Array.isArray(options) &&
+    (options as { cleanup?: unknown }).cleanup === true,
+  );
+}
+
+/** Tom chose not to clean up Spam and Trash for this job. */
+export function cleanupSkipped(options: unknown): boolean {
+  return Boolean(
+    options &&
+    typeof options === "object" &&
+    !Array.isArray(options) &&
+    (options as { cleanupSkipped?: unknown }).cleanupSkipped === true,
+  );
+}
+
+export type SpamSender = {
+  sender: string;
+  name: string;
+  count: number;
+  samples: string[];
+  verdict: "block" | "keep" | "unsure";
+  why: string;
+};
+
+export type CleanupPlan = {
+  spam: SpamSender[];
+  trash: { total: number; older30: number };
+};
+
+/** Step 1's plan for step 4: Spam grouped by sender with Donna's verdict, and Trash by age. */
+export function cleanupPlan(result: unknown): CleanupPlan | null {
+  const raw =
+    result && typeof result === "object" && !Array.isArray(result)
+      ? (result as { cleanup?: unknown }).cleanup
+      : null;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const c = raw as { spam?: unknown; trash?: unknown };
+  const num = (v: unknown) =>
+    typeof v === "number" && Number.isFinite(v)
+      ? Math.max(0, Math.trunc(v))
+      : 0;
+  const spam = (Array.isArray(c.spam) ? c.spam : []).flatMap(
+    (item): SpamSender[] => {
+      if (!item || typeof item !== "object") return [];
+      const r = item as Record<string, unknown>;
+      const sender = typeof r.sender === "string" ? r.sender.slice(0, 320) : "";
+      if (!sender) return [];
+      return [
+        {
+          sender,
+          name: typeof r.name === "string" ? r.name.slice(0, 120) : "",
+          count: num(r.count),
+          samples: Array.isArray(r.samples)
+            ? r.samples
+                .filter((x): x is string => typeof x === "string")
+                .slice(0, 3)
+                .map((x) => x.slice(0, 140))
+            : [],
+          verdict:
+            r.verdict === "block" || r.verdict === "keep"
+              ? r.verdict
+              : "unsure",
+          why: typeof r.why === "string" ? r.why.slice(0, 200) : "",
+        },
+      ];
+    },
+  );
+  const t =
+    c.trash && typeof c.trash === "object"
+      ? (c.trash as Record<string, unknown>)
+      : {};
+  return { spam, trash: { total: num(t.total), older30: num(t.older30) } };
+}
+
+export function cleanupHasWork(result: unknown): boolean {
+  const plan = cleanupPlan(result);
+  return Boolean(plan && (plan.spam.length > 0 || plan.trash.total > 0));
+}
+
 /** Tom closed this sort without changing anything (step 2 done, step 3 skipped). */
 export function cleanIsClosed(options: unknown): boolean {
   return Boolean(
@@ -543,12 +627,14 @@ export function cleanBarStatus(
     etaLabel = formatCleanEta((elapsed / done) * (total - done));
   }
   const title = cleanIsSort(job.options)
-    ? "Step 1 of 3: Sort"
+    ? "Step 1 of 4: Sort"
     : cleanIsDo(job.options)
-      ? "Step 3 of 3: Do"
-      : cleanIsPreview(job.options)
-        ? "Checking inbox"
-        : "Cleaning inbox";
+      ? "Step 3 of 4: Do"
+      : cleanIsCleanup(job.options)
+        ? "Step 4 of 4: Clean up"
+        : cleanIsPreview(job.options)
+          ? "Checking inbox"
+          : "Cleaning inbox";
   return {
     id: job.id,
     title,
@@ -617,6 +703,8 @@ export type CleanReport = {
   filed: CleanReportItem[];
   tagged: CleanReportItem[];
   rescued: CleanReportItem[];
+  /** Step 4: senders blocked forever. */
+  blocked: CleanReportItem[];
   /** Step 1: what emptying would delete. Step 3: what it deleted. */
   empty: Record<string, number> | null;
   emptied: Record<string, number> | null;
@@ -706,6 +794,7 @@ export function cleanReport(raw: unknown): CleanReport | null {
     filed: cleanItems(c.filed).slice(0, 200),
     tagged: cleanItems(c.tagged).slice(0, 200),
     rescued: cleanItems(c.rescued).slice(0, 200),
+    blocked: cleanItems(c.blocked).slice(0, 500),
     empty: folderCounts(c.empty),
     emptied: folderCounts(c.emptied),
     emptyError:
@@ -926,8 +1015,10 @@ export function donnaNow(input: {
  * "finished"). A stepped job is judged by its sort and its step 3 together.
  */
 export function jobEnd(
-  job: { status: string; options: unknown },
+  job: { status: string; options: unknown; result?: unknown },
   follow?: { status: string } | null,
+  /** Step 4 (Clean up) of a sort, if Tom started it. */
+  cleanup?: { status: string } | null,
 ): { label: string; detail: string } {
   if (["pending", "leased"].includes(job.status))
     return { label: "Running", detail: "In progress" };
@@ -935,9 +1026,9 @@ export function jobEnd(
     if (follow) {
       if (["pending", "leased"].includes(follow.status))
         return { label: "Running", detail: "Step 3 in progress" };
-      return follow.status === "cancelled"
-        ? { label: "Stopped", detail: "Stopped during step 3" }
-        : { label: "Finished", detail: "All three steps done" };
+      if (follow.status === "cancelled")
+        return { label: "Stopped", detail: "Stopped during step 3" };
+      return cleanupEnd(job, cleanup);
     }
     if (cleanIsClosed(job.options))
       return { label: "Closed", detail: "Closed at step 2, nothing changed" };
@@ -948,10 +1039,33 @@ export function jobEnd(
   if (cleanIsDo(job.options))
     return job.status === "cancelled"
       ? { label: "Stopped", detail: "Stopped during step 3" }
-      : { label: "Finished", detail: "All three steps done" };
+      : { label: "Finished", detail: "Steps done" };
+  if (cleanIsCleanup(job.options))
+    return job.status === "cancelled"
+      ? { label: "Stopped", detail: "Stopped during step 4" }
+      : { label: "Finished", detail: "All four steps done" };
   return job.status === "cancelled"
     ? { label: "Stopped", detail: "Stopped" }
     : { label: "Finished", detail: "Finished" };
+}
+
+/** After step 3: step 4 (Clean up) decides whether the job is finished. */
+function cleanupEnd(
+  sort: { options: unknown; result?: unknown },
+  cleanup?: { status: string } | null,
+): { label: string; detail: string } {
+  if (cleanup) {
+    if (["pending", "leased"].includes(cleanup.status))
+      return { label: "Running", detail: "Step 4 in progress" };
+    return cleanup.status === "cancelled"
+      ? { label: "Stopped", detail: "Stopped during step 4" }
+      : { label: "Finished", detail: "All four steps done" };
+  }
+  if (cleanupSkipped(sort.options))
+    return { label: "Finished", detail: "Done; clean up skipped" };
+  return cleanupHasWork(sort.result)
+    ? { label: "Waiting", detail: "Your turn: clean up Spam and Trash" }
+    : { label: "Finished", detail: "All steps done" };
 }
 
 /** What a job was, in Tom's words, for the Jobs tab. */
@@ -990,6 +1104,8 @@ export function jobOutcome(
   job: OutcomeJob,
   /** Step 3 of a sort, folded into the sort's line. */
   follow?: OutcomeJob | null,
+  /** Step 4 of a sort, folded in too. */
+  cleanup?: OutcomeJob | null,
 ): string {
   if (job.status === "pending") return "Waiting to start";
   if (job.kind === "undo") {
@@ -1000,7 +1116,14 @@ export function jobOutcome(
     const buckets = cleanBuckets(job.result);
     const n = buckets.reduce((sum, b) => sum + b.items.length, 0);
     const sorted = `${n} sorted into ${buckets.length} bucket${buckets.length === 1 ? "" : "s"}`;
-    if (follow) return `${sorted} · ${jobOutcome(follow)}`;
+    if (follow)
+      return [
+        sorted,
+        jobOutcome(follow),
+        cleanup ? jobOutcome(cleanup) : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
     if (cleanIsClosed(job.options))
       return `${sorted} · closed, nothing changed`;
     return sorted;
@@ -1013,6 +1136,7 @@ export function jobOutcome(
       : "",
     report.tagged.length ? `tagged ${report.tagged.length}` : "",
     report.rescued.length ? `rescued ${report.rescued.length}` : "",
+    report.blocked.length ? `blocked ${report.blocked.length}` : "",
     report.emptied
       ? `emptied ${Object.values(report.emptied).reduce((a, b) => a + b, 0)}`
       : "",

@@ -14,6 +14,10 @@ import {
   RESCUE_ACTIONS,
   RESCUE_BUCKET,
   cleanBuckets,
+  cleanIsCleanup,
+  cleanIsDo,
+  cleanupPlan,
+  cleanupSkipped,
   cleanIsClosed,
   cleanIsSort,
   cleanReport,
@@ -544,6 +548,107 @@ export async function reopenSort(form: FormData) {
   });
   refresh();
   redirect(`/donna/cleans/${encodeURIComponent(id)}`);
+}
+
+/** The sort a step 4 belongs to, ready for Clean up: step 3 finished, no step 4 yet. */
+async function sortReadyForCleanup(
+  tx: Prisma.TransactionClient,
+  brandId: string,
+  id: string,
+) {
+  const sort = await tx.donnaJob.findFirst({
+    where: { id, kind: "clean", mailbox: { brandId } },
+    include: { mailbox: true },
+  });
+  if (!sort || !cleanIsSort(sort.options) || cleanupSkipped(sort.options))
+    return null;
+  const later = await tx.donnaJob.findMany({
+    where: {
+      mailboxId: sort.mailboxId,
+      kind: "clean",
+      options: { path: ["previewJobId"], equals: sort.id },
+    },
+    select: { id: true, status: true, options: true },
+  });
+  if (later.some((j) => cleanIsCleanup(j.options))) return null;
+  const done = later.find((j) => cleanIsDo(j.options));
+  if (!done || done.status !== "done") return null;
+  return sort;
+}
+
+/**
+ * Step 4, Clean up (Tom, 2026-11-28): Tom's choice per Spam sender (block forever,
+ * not spam, or leave) and for Trash. Nothing is deleted without his Approve tick.
+ */
+export async function applyCleanup(form: FormData) {
+  const { dataContext, session } = await requireDonna();
+  const sortId = z.string().min(1).parse(form.get("jobId"));
+  const jobId = await withBrandDataTransaction(dataContext, async (tx) => {
+    const sort = await sortReadyForCleanup(tx, dataContext.brandId, sortId);
+    if (!sort || sort.mailbox.paused) return null;
+    const plan = cleanupPlan(sort.result);
+    if (!plan) return null;
+    const senders = plan.spam.flatMap((s, i) => {
+      const action = String(form.get(`sender-${i}`) ?? "leave");
+      return action === "block" || action === "keep"
+        ? [{ sender: s.sender, action }]
+        : [];
+    });
+    const trashChoice = String(form.get("trash") ?? "leave");
+    const trash =
+      trashChoice === "all" || trashChoice === "older30"
+        ? trashChoice
+        : "leave";
+    const approved = form.get("approved") === "on";
+    if (!senders.length && trash === "leave") return null;
+    const job = await tx.donnaJob.create({
+      data: {
+        mailboxId: sort.mailboxId,
+        kind: "clean",
+        eventKey: `clean:${randomUUID()}`,
+        options: {
+          previewJobId: sort.id,
+          cleanup: true,
+          senders,
+          trash,
+          approved,
+        },
+      },
+    });
+    await resetCleanProgress(tx, sort.mailbox, Math.max(senders.length, 1));
+    const blocks = senders.filter((s) => s.action === "block").length;
+    await cleanControl(
+      tx,
+      sort.mailboxId,
+      session.user.id,
+      `Step 4 started: block ${blocks}, not spam ${senders.length - blocks}, trash ${trash}${approved ? ", deletion approved" : ", no deletion"}.`,
+    );
+    return job.id;
+  });
+  refresh();
+  redirect(`/donna/cleans/${encodeURIComponent(jobId ?? sortId)}`);
+}
+
+/** Finish a job without cleaning up Spam and Trash this time. */
+export async function skipCleanup(form: FormData) {
+  const { dataContext, session } = await requireDonna();
+  const sortId = z.string().min(1).parse(form.get("jobId"));
+  await withBrandDataTransaction(dataContext, async (tx) => {
+    const sort = await sortReadyForCleanup(tx, dataContext.brandId, sortId);
+    if (!sort) return;
+    await tx.donnaJob.update({
+      where: { id: sort.id },
+      data: {
+        options: {
+          ...(sort.options as Record<string, unknown>),
+          cleanupSkipped: true,
+        } as Prisma.InputJsonObject,
+      },
+    });
+    await cleanControl(tx, sort.mailboxId, session.user.id, "Step 4 skipped.");
+  });
+  refresh();
+  redirect(`/donna/cleans/${encodeURIComponent(sortId)}`);
 }
 
 /** Stop a clean. A running worker finishes the move in hand, then reports what it filed. */
