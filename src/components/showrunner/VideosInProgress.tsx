@@ -29,12 +29,14 @@ const TONE: Record<VideoStep["state"], string> = {
 function Bar({ label, share }: { label: string; share: number }) {
   const pct = Math.floor(100 * Math.min(1, Math.max(0, share)));
   return (
-    <div className="mt-2 flex items-center gap-3 text-sm text-slate-600">
-      <span className="w-36 shrink-0">{label}</span>
-      <div className="h-2.5 flex-1 rounded-full bg-slate-200">
+    <div className="mt-2">
+      <div className="flex items-center justify-between gap-3 text-sm text-slate-600">
+        <span className="min-w-0 truncate">{label}</span>
+        <span className="shrink-0 font-semibold tabular-nums text-slate-900">{pct}%</span>
+      </div>
+      <div className="mt-1 h-2.5 rounded-full bg-slate-200">
         <div className="h-2.5 rounded-full bg-slate-900" style={{ width: `${pct}%` }} />
       </div>
-      <span className="w-10 text-right font-semibold text-slate-900">{pct}%</span>
     </div>
   );
 }
@@ -66,17 +68,19 @@ function Steps({ video }: { video: VideoCard }) {
           <span className="mr-2 inline-block w-4">{MARK[step.state]}</span>
           {step.label}
           {step.state === "stopped" && step.message ? <p className="ml-6 text-sm">{step.message}</p> : null}
-          {step.state === "now" && video.render?.total !== undefined ? (
+          {step.state === "now" && (video.render?.total !== undefined || video.render?.piece) ? (
             <div className="ml-6 font-normal">
               {video.render.piece && video.render.pieces ? (
                 <Bar
-                  label={`${video.render.pieceLabel ?? "Piece"} ${video.render.piece} of ${video.render.pieces}`}
+                  label={`${video.render.pieceLabel ?? "Cut"} ${video.render.piece} of ${video.render.pieces}`}
                   share={video.render.pieceShare ?? 0}
                 />
               ) : null}
               {video.render.pieceName ? <p className="mt-1 text-sm text-slate-500">Now: {video.render.pieceName}</p> : null}
-              <Bar label="Whole video" share={video.render.total} />
-              {video.render.minutesLeft ? <p className="mt-1 text-sm text-slate-500">About {video.render.minutesLeft} min left</p> : null}
+              {video.render.total !== undefined ? <Bar label="Whole video" share={video.render.total} /> : null}
+              {video.render.minutesLeft ? (
+                <p className="mt-1 text-sm text-slate-500">About {video.render.minutesLeft} min left</p>
+              ) : null}
             </div>
           ) : null}
         </li>
@@ -92,7 +96,7 @@ function Steps({ video }: { video: VideoCard }) {
 export function VideosInProgress({ videos }: { videos: VideoCard[] }) {
   const router = useRouter();
   useEffect(() => {
-    const timer = setInterval(() => router.refresh(), 10_000);
+    const timer = setInterval(() => router.refresh(), 4_000);
     return () => clearInterval(timer);
   }, [router]);
 
