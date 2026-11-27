@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { VideoCard } from "@/components/showrunner/VideosInProgress";
-import { isWaitingForYou, productionItem, stageProgress } from "./production";
+import { episodeHref, isWaitingForYou, productionItem, stageProgress } from "./production";
 
 const base: VideoCard = { batch: "b1", project: "TREB 261125 New Video", state: "episode", stage: null, steps: null, render: null, url: null, title: null, thumbnail: null, details: null };
+
+describe("episodeHref", () => {
+  it("is the Videos episode page, which the status bar also opens", () => {
+    expect(episodeHref("mwzglzlj-5643aa")).toBe("/showrunner/editor/mwzglzlj-5643aa");
+  });
+});
 
 describe("productionItem", () => {
   it("leaves published videos out", () => {

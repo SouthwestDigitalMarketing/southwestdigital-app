@@ -15,6 +15,11 @@ export type ProductionItem = {
   finishing: boolean;
 };
 
+/** The one episode screen: status bar and the Videos card both go here (Tom, 2026-11-27). */
+export function episodeHref(batch: string): string {
+  return `/showrunner/editor/${encodeURIComponent(batch)}`;
+}
+
 /** True while the autopilot is at the gate waiting for more clips or Finish. */
 export function isWaitingForYou(
   steps?: { state: string; label: string }[] | null,

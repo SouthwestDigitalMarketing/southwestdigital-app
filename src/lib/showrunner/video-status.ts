@@ -35,6 +35,10 @@ export type VideoStatusInput = {
   title: string | null;
   thumbnail: string | null;
   details: VideoDetails | null;
+  transcript: string | null;
+  thumbnailText: string | null;
+  thumbnailOptions: string[] | null;
+  thumbnailBusy: boolean;
   sentAt: Date | null;
 };
 
@@ -102,6 +106,14 @@ export function parseVideoStatus(raw: unknown): VideoStatusInput | null {
     details = Object.keys(kept).length > 0 ? kept : null;
   }
   const created = typeof row.created === "number" && row.created > 0 ? new Date(row.created * 1000) : null;
+  const thumbnailOptions = Array.isArray(row.thumbnailOptions)
+    ? row.thumbnailOptions
+        .slice(0, 8)
+        .flatMap((option) => {
+          const value = text(option, 80);
+          return value ? [value] : [];
+        })
+    : null;
   return {
     batch,
     project: text(row.project, 200),
@@ -113,6 +125,10 @@ export function parseVideoStatus(raw: unknown): VideoStatusInput | null {
     title: text(row.title, 200),
     thumbnail,
     details,
+    transcript: text(row.transcript, 80_000),
+    thumbnailText: text(row.thumbnailText, 80),
+    thumbnailOptions: thumbnailOptions && thumbnailOptions.length > 0 ? thumbnailOptions : null,
+    thumbnailBusy: row.thumbnailBusy === true,
     sentAt: created && !Number.isNaN(created.getTime()) ? created : null,
   };
 }

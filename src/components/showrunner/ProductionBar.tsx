@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { requestFinish } from "@/app/(app)/showrunner/editor/actions";
-import type { ProductionItem } from "@/lib/showrunner/production";
+import { episodeHref, type ProductionItem } from "@/lib/showrunner/production";
 
 /**
  * One thin row on every page while ripley is making a video (Tom, 2026-11-25): the step it is on and a progress
@@ -43,7 +43,7 @@ export function ProductionBar() {
 
   const video = videos[0];
   if (!video) return null;
-  const href = `/showrunner/production/${encodeURIComponent(video.batch)}`;
+  const href = episodeHref(video.batch);
   const pct = Math.floor(video.progress * 100);
   const countLabel = video.step && video.steps ? `${video.step} of ${video.steps}` : null;
   const extra = videos.length > 1 ? `+${videos.length - 1} more` : null;

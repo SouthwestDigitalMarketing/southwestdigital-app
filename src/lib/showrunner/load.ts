@@ -36,6 +36,11 @@ export type VideoStatusRow = {
   details: unknown;
   updatedAt: Date;
   finishRequestedAt: Date | null;
+  transcript: string | null;
+  thumbnailText: string | null;
+  thumbnailOptions: unknown;
+  thumbnailBusy: boolean;
+  thumbnailRequestedAt: Date | null;
 };
 
 const VIDEO_STATUS_SELECT = {
@@ -51,6 +56,11 @@ const VIDEO_STATUS_SELECT = {
   details: true,
   updatedAt: true,
   finishRequestedAt: true,
+  transcript: true,
+  thumbnailText: true,
+  thumbnailOptions: true,
+  thumbnailBusy: true,
+  thumbnailRequestedAt: true,
 } as const;
 
 /**
@@ -77,9 +87,9 @@ export async function loadVideoStatus(context: BrandDataContext): Promise<VideoS
   });
 }
 
-/** loadVideoStatus shaped for the VideosInProgress cards (Showrunner and YouTube pages). */
-export async function loadVideoCards(context: BrandDataContext): Promise<VideoCard[]> {
-  return (await loadVideoStatus(context)).map((row) => ({
+/** One ShowrunnerVideoStatus row as a VideosInProgress card. */
+export function videoCardFromStatus(row: VideoStatusRow): VideoCard {
+  return {
     batch: row.batch,
     project: row.project,
     state: row.state,
@@ -91,7 +101,16 @@ export async function loadVideoCards(context: BrandDataContext): Promise<VideoCa
     thumbnail: row.thumbnail,
     details: row.details && typeof row.details === "object" ? (row.details as VideoDetails) : null,
     finishRequestedAt: row.finishRequestedAt,
-  }));
+    transcript: row.transcript,
+    thumbnailText: row.thumbnailText,
+    thumbnailOptions: Array.isArray(row.thumbnailOptions) ? (row.thumbnailOptions as string[]) : null,
+    thumbnailBusy: row.thumbnailBusy || Boolean(row.thumbnailRequestedAt),
+  };
+}
+
+/** loadVideoStatus shaped for the VideosInProgress cards (Showrunner and YouTube pages). */
+export async function loadVideoCards(context: BrandDataContext): Promise<VideoCard[]> {
+  return (await loadVideoStatus(context)).map(videoCardFromStatus);
 }
 
 export type EpisodeRow = VideoStatusRow & {
@@ -111,7 +130,8 @@ export async function loadEpisodes(context: BrandDataContext): Promise<EpisodeRo
       select: {
         batch: true, project: true, state: true, stage: true, steps: true, render: true, url: true, title: true,
         thumbnail: true, details: true, updatedAt: true, review: true, reviewRequestedAt: true,
-        finishRequestedAt: true, finishNote: true,
+        finishRequestedAt: true, finishNote: true, transcript: true, thumbnailText: true,
+        thumbnailOptions: true, thumbnailBusy: true, thumbnailRequestedAt: true,
       },
     }),
   );

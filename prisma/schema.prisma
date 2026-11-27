@@ -2159,6 +2159,16 @@ model ShowrunnerVideoStatus {
   /// Finish tapped in SWapp while the video waits for Tom; ripley writes .finish.json and clears this.
   finishRequestedAt DateTime?
   finishNote String? @db.Text
+  /// Full episode transcript from ripley, for the production-page accordion.
+  transcript String? @db.Text
+  /// Current thumbnail wording ("SOLID / REPORTING").
+  thumbnailText String?
+  /// Three to five other wordings Tom can tap; remakes the thumbnail.
+  thumbnailOptions Json?
+  thumbnailBusy Boolean @default(false)
+  /// Tom picked new thumbnail words; ripley remakes the picture and clears this.
+  thumbnailRequestedAt DateTime?
+  thumbnailRequestText String?
   updatedAt DateTime  @default(now()) @updatedAt
   brand     Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
