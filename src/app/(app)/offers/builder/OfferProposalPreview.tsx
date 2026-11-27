@@ -2,6 +2,12 @@
 
 import { pricingCardServices } from "./pricingCardServices";
 import ProposalPaymentPlan from "./ProposalPaymentPlan";
+import HowWeSizedThis from "./HowWeSizedThis";
+import {
+  toPublicAccountInventory,
+  type AccountBasis,
+  type PublicAccountInventory,
+} from "@/lib/quotes/accountInventory";
 import { proposalPaymentSchedule } from "@/lib/quotes/paymentSchedule";
 
 import { useSearchParams } from "next/navigation";
@@ -707,6 +713,7 @@ export default function OfferProposalPreview(props: OfferProposalPreviewProps = 
         assessment={props.publicProposal.assessment}
         contactInfo={props.publicProposal.contactInfo}
         publishedPricing={props.publicProposal.pricing}
+        publicAccountInventory={(props.publicProposal as { accountInventory?: PublicAccountInventory | null }).accountInventory}
         livePublic
       />
     );
@@ -761,12 +768,17 @@ function OfferProposalPreviewView({
   proposalToken = null,
   publishedPricing,
   livePublic = false,
+  publicAccountInventory,
 }: Omit<OfferProposalPreviewProps, "assessment" | "initialAssessment" | "initialContactInfo" | "publicProposal"> & {
   assessment: PreviewAssessment | AssessmentState;
   contactInfo: PreviewContactInfo;
   livePublic?: boolean;
+  publicAccountInventory?: PublicAccountInventory | null;
 }) {
   const { brand } = useBrand();
+  const accountInventory: PublicAccountInventory | null | undefined = livePublic
+    ? publicAccountInventory
+    : toPublicAccountInventory((assessment as Partial<AssessmentState>).accounts);
   const searchParams = useSearchParams();
   const contractFollowsPayment = (assessment as { contractFollowsPayment?: boolean }).contractFollowsPayment === true;
   const isSimulation = isProposalPreviewSimulation({ live, embedded, isStaffPreview });
@@ -1392,11 +1404,21 @@ function OfferProposalPreviewView({
     agreementTemplate?.name
     ?? assessment.agreementTemplateName
     ?? DEFAULT_AGREEMENT_TEMPLATE_NAME;
+  const volumeInput: {
+    volumeMonthlyTotal: number | null;
+    volumeBasis: AccountBasis | null;
+    includeVolumeClause: boolean;
+  } = {
+    volumeMonthlyTotal: accountInventory?.monthlyTotal ?? null,
+    volumeBasis: accountInventory?.basis ?? null,
+    includeVolumeClause: Boolean(accountInventory?.accounts.length),
+  };
   const embeddedAgreementText = renderAgreementTemplate(
     agreementTemplate?.content
       ?? assessment.agreementTemplateContent
       ?? DEFAULT_BOOKKEEPING_AGREEMENT_TEMPLATE,
     {
+      ...volumeInput,
       brandName: brand.name,
       clientName: companyName,
       primaryContactName: contactName || null,
@@ -1992,6 +2014,8 @@ function OfferProposalPreviewView({
                   );
                 })}
               </div>
+
+              <HowWeSizedThis inventory={accountInventory} brandName={brand.name} />
 
               {/* Mobile checkout bar: what's due today for the package in view, and its Select button */}
               {showMobileSelectBar ? (

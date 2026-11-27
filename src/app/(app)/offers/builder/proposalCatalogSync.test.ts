@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ProposalOptionCatalogItem } from "@/lib/quotes/catalog";
 import {
+  proposalCatalogOptionPrice,
   reconcileProposalAssessmentWithCatalog,
   type ProposalCatalogSyncAssessment,
 } from "./proposalCatalogSync";
@@ -98,6 +99,54 @@ describe("proposal catalog synchronization", () => {
     })]);
     expect(result.bonusPackageSelections).toEqual({ current: ["maintain"] });
     expect(result.optionsCatalogOrder).toEqual(["new-option", "current"]);
+  });
+});
+
+describe("effective transaction band pricing", () => {
+  const receiptItem = catalogItem("advanced-receipt-management", {
+    defaultInclusion: "optional",
+    defaultPackageIds: ["maintain"],
+    defaultPrice: 50,
+  });
+  const inventory1100 = [
+    { id: "checking", kind: "checking", label: "Chase checking", status: "open", monthlyTransactions: 1100, basis: "measured" },
+  ];
+
+  it("prices the derived band when the manual band is stale", () => {
+    expect(
+      proposalCatalogOptionPrice(receiptItem, assessment({ transactionBand: "0-99", accounts: inventory1100 })),
+    ).toBe(1000);
+  });
+
+  it("initializes catalog options at the derived band with an inventory", () => {
+    const result = reconcileProposalAssessmentWithCatalog(
+      assessment({ transactionBand: "0-99", accounts: inventory1100 }),
+      [receiptItem],
+    );
+    expect(result.additionalOptions).toEqual([expect.objectContaining({
+      id: "advanced-receipt-management",
+      monthlyPrice: 1000,
+    })]);
+  });
+
+  it("honors a valid band override over the derived band", () => {
+    const result = reconcileProposalAssessmentWithCatalog(
+      assessment({
+        transactionBand: "0-99",
+        accounts: inventory1100,
+        bandOverride: { band: "0-99", reason: "Client confirmed low volume" },
+      }),
+      [receiptItem],
+    );
+    expect(result.additionalOptions).toEqual([expect.objectContaining({ monthlyPrice: 99 })]);
+  });
+
+  it("keeps legacy raw-band pricing without an inventory", () => {
+    const result = reconcileProposalAssessmentWithCatalog(
+      assessment({ transactionBand: "0-99" }),
+      [receiptItem],
+    );
+    expect(result.additionalOptions).toEqual([expect.objectContaining({ monthlyPrice: 99 })]);
   });
 });
 
