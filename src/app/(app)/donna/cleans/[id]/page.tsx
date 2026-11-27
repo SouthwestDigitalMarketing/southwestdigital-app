@@ -6,8 +6,12 @@ import {
   STEP_FOLDERS,
   cleanBarStatus,
   cleanBuckets,
+  cleanIsCleanup,
   cleanIsClosed,
   cleanIsDo,
+  cleanupHasWork,
+  cleanupPlan,
+  cleanupSkipped,
   cleanIsPreview,
   cleanIsSort,
   cleanReport,
@@ -19,12 +23,15 @@ import {
 } from "@/lib/donna/domain";
 import {
   applyBuckets,
+  applyCleanup,
+  skipCleanup,
   approveClean,
   closeSort,
   resortJob,
   undoFiled,
 } from "../../actions";
 import { SortedTable } from "@/components/donna/sortTable";
+import { CleanupChooser } from "@/components/donna/CleanupChooser";
 import { Stepper, type Step } from "@/components/donna/Stepper";
 import { BucketChooser } from "@/components/donna/BucketChooser";
 import { DonnaFrame, shortTime } from "../../DonnaFrame";
@@ -244,76 +251,106 @@ function jobSteps(
   job: Awaited<ReturnType<typeof loadClean>> & object,
   now: { countLabel: string; paused: boolean },
 ): Step[] | null {
-  const active = ["pending", "leased"].includes(job.status);
-  if (cleanIsSort(job.options)) {
-    const buckets = cleanBuckets(job.result);
-    const sorted = buckets.reduce((n, b) => n + b.items.length, 0);
-    const follow = job.follow;
-    const closed = cleanIsClosed(job.options);
-    const followActive =
-      follow && ["pending", "leased"].includes(follow.status);
-    const doHref = follow
-      ? `/donna/cleans/${encodeURIComponent(follow.id)}`
-      : undefined;
-    return [
-      {
-        label: "Sort",
-        state: active ? "current" : "done",
-        note: active
-          ? `${now.countLabel}${now.paused ? " · paused" : ""}`
-          : `${sorted} sorted${job.status === "cancelled" ? " · stopped" : ""}`,
-      },
-      {
-        label: "Choose",
-        state: active ? "todo" : follow || closed ? "done" : "yours",
-        note: active
-          ? "After sorting"
-          : follow
-            ? "Chosen"
-            : closed
-              ? "Closed, nothing changed"
-              : "Your turn",
-      },
-      {
-        label: "Do",
-        state: follow
-          ? followActive
-            ? "current"
-            : "done"
+  // Whichever record is open, the job is its sort plus steps 3 and 4.
+  const sort = cleanIsSort(job.options)
+    ? job
+    : job.parent && cleanIsSort(job.parent.options)
+      ? job.parent
+      : null;
+  if (!sort) return null;
+  const doJob = cleanIsDo(job.options) ? job : job.follow;
+  const cleanupJob = cleanIsCleanup(job.options) ? job : job.cleanupJob;
+  const running = (j: { status: string } | null | undefined) =>
+    Boolean(j && ["pending", "leased"].includes(j.status));
+  const progressNote = `${now.countLabel}${now.paused ? " · paused" : ""}`;
+  const href = (id: string) => `/donna/cleans/${encodeURIComponent(id)}`;
+  const outcome = (j: { status: string; options: unknown; result: unknown }) =>
+    jobOutcome({ ...j, kind: "clean", error: null });
+  const sorted = cleanBuckets(sort.result).reduce(
+    (n, b) => n + b.items.length,
+    0,
+  );
+  const closed = cleanIsClosed(sort.options);
+  const doneDo = doJob && doJob.status === "done";
+  const plan = cleanupPlan(sort.result);
+  return [
+    {
+      label: "Sort",
+      state: running(sort) ? "current" : "done",
+      note: running(sort)
+        ? progressNote
+        : `${sorted} sorted${sort.status === "cancelled" ? " · stopped" : ""}`,
+      href: sort.id === job.id ? undefined : href(sort.id),
+    },
+    {
+      label: "Choose",
+      state: running(sort) ? "todo" : doJob || closed ? "done" : "yours",
+      note: running(sort)
+        ? "After sorting"
+        : doJob
+          ? "Chosen"
           : closed
-            ? "skipped"
+            ? "Closed, nothing changed"
+            : "Your turn",
+      href: sort.id === job.id ? undefined : href(sort.id),
+    },
+    {
+      label: "Do",
+      state: doJob
+        ? running(doJob)
+          ? "current"
+          : "done"
+        : closed
+          ? "skipped"
+          : "todo",
+      note: doJob
+        ? running(doJob)
+          ? doJob.id === job.id
+            ? progressNote
+            : "Running"
+          : `${doJob.status === "cancelled" ? "Stopped" : "Done"} · ${outcome(doJob)}`
+        : closed
+          ? "Skipped"
+          : "Not started",
+      href: doJob && doJob.id !== job.id ? href(doJob.id) : undefined,
+    },
+    {
+      label: "Clean up",
+      state: cleanupJob
+        ? running(cleanupJob)
+          ? "current"
+          : "done"
+        : closed || cleanupSkipped(sort.options)
+          ? "skipped"
+          : doneDo
+            ? cleanupHasWork(sort.result)
+              ? "yours"
+              : "done"
             : "todo",
-        note: follow
-          ? followActive
-            ? "Running"
-            : `Done · ${jobOutcome({ ...follow, kind: "clean", options: { plan: [] }, error: null })}`
-          : closed
-            ? "Skipped"
-            : "Not started",
-        href: doHref,
-      },
-    ];
-  }
-  if (cleanIsDo(job.options)) {
-    const from = String(
-      (job.options as { previewJobId?: unknown }).previewJobId ?? "",
-    );
-    const sortHref = from
-      ? `/donna/cleans/${encodeURIComponent(from)}`
-      : undefined;
-    return [
-      { label: "Sort", state: "done", note: "Sorted", href: sortHref },
-      { label: "Choose", state: "done", note: "Chosen", href: sortHref },
-      {
-        label: "Do",
-        state: active ? "current" : "done",
-        note: active
-          ? `${now.countLabel}${now.paused ? " · paused" : ""}`
-          : `${job.status === "cancelled" ? "Stopped" : "Done"} · ${jobOutcome(job)}`,
-      },
-    ];
-  }
-  return null;
+      note: cleanupJob
+        ? running(cleanupJob)
+          ? cleanupJob.id === job.id
+            ? progressNote
+            : "Running"
+          : `${cleanupJob.status === "cancelled" ? "Stopped" : "Done"} · ${outcome(cleanupJob)}`
+        : closed || cleanupSkipped(sort.options)
+          ? "Skipped"
+          : doneDo
+            ? cleanupHasWork(sort.result)
+              ? "Your turn"
+              : "Nothing to clean"
+            : plan
+              ? `Spam ${plan.spam.reduce((n, x) => n + x.count, 0)} · Trash ${plan.trash.total}`
+              : "Not started",
+      href: cleanupJob
+        ? cleanupJob.id === job.id
+          ? undefined
+          : href(cleanupJob.id)
+        : doneDo && sort.id !== job.id
+          ? href(sort.id)
+          : undefined,
+    },
+  ];
 }
 
 export default async function CleanPage({
@@ -347,14 +384,37 @@ export default async function CleanPage({
     job.mailbox.heartbeatAt,
   );
   const steps = jobSteps(job, progress);
+  // How the whole job stands (its sort with steps 3 and 4), whichever page is open.
+  const sortRec = cleanIsSort(job.options)
+    ? job
+    : job.parent && cleanIsSort(job.parent.options)
+      ? job.parent
+      : null;
+  const end = sortRec
+    ? jobEnd(
+        sortRec,
+        cleanIsDo(job.options) ? job : job.follow,
+        cleanIsCleanup(job.options) ? job : job.cleanupJob,
+      )
+    : jobEnd(job, job.follow);
+  // Step 4 waits for Tom on the sort's page once step 3 is done.
+  const plan = sort ? cleanupPlan(job.result) : null;
+  const cleanupTurn =
+    sort &&
+    plan !== null &&
+    job.follow?.status === "done" &&
+    !job.cleanupJob &&
+    !cleanupSkipped(job.options) &&
+    !cleanIsClosed(job.options) &&
+    cleanupHasWork(job.result);
   return (
     <DonnaFrame
-      active={jobEnd(job, job.follow).label === "Finished" ? "jobs" : "current"}
+      active={end.label === "Finished" ? "jobs" : "current"}
       refreshEvery={active ? 3000 : undefined}
     >
       <p className="text-xs font-medium tabular-nums text-slate-500">
         Job #{job.jobNumber}
-        {active ? "" : ` · ${jobEnd(job, job.follow).detail}`}
+        {active ? "" : ` · ${end.detail}`}
       </p>
       {steps ? (
         <Stepper steps={steps} />
@@ -425,6 +485,33 @@ export default async function CleanPage({
               </button>
             </form>
           </>
+        ) : cleanupTurn && plan ? (
+          <>
+            <p className="text-sm text-slate-600">
+              Step 4: Spam and Trash. Each Spam sender has Donna&apos;s verdict
+              and a starting action; change any you disagree with. Nothing is
+              deleted without your Approve tick.
+            </p>
+            <CleanupChooser
+              jobId={job.id}
+              plan={plan}
+              blocked={
+                paused
+                  ? "Donna is paused. Resume her on the top bar to clean up."
+                  : null
+              }
+              action={applyCleanup}
+            />
+            <form action={skipCleanup}>
+              <input type="hidden" name="jobId" value={job.id} />
+              <button
+                type="submit"
+                className="text-xs text-slate-500 underline"
+              >
+                Skip clean up this time
+              </button>
+            </form>
+          </>
         ) : (
           <SortedTable buckets={cleanBuckets(job.result)} />
         )
@@ -445,6 +532,7 @@ export default async function CleanPage({
             items={report.rescued}
             extra={(item) => item.folder}
           />
+          <Items title="Blocked forever" items={report.blocked} />
           <Emptied report={report} />
           <Items
             title="Left in Inbox"
@@ -498,6 +586,7 @@ export default async function CleanPage({
             items={report.rescued}
             extra={(item) => item.folder}
           />
+          <Items title="Blocked forever" items={report.blocked} />
           <Emptied report={report} />
           <Items
             title="Waiting"

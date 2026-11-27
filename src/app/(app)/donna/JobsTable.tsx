@@ -38,8 +38,8 @@ export function JobsTable({ label, jobs }: { label: string; jobs: JobRow[] }) {
               job.kind === "clean"
                 ? `/donna/cleans/${encodeURIComponent(job.id)}`
                 : null;
-            const outcome = jobOutcome(job, job.follow);
-            const end = jobEnd(job, job.follow);
+            const outcome = jobOutcome(job, job.follow, job.cleanup);
+            const end = jobEnd(job, job.follow, job.cleanup);
             return (
               <tr
                 key={job.id}

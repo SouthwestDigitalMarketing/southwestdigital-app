@@ -20,7 +20,7 @@ export default async function JobsInProgressPage() {
     if (!storageMissing(e)) throw e;
   }
   const running = jobs.some(
-    (job) => jobEnd(job, job.follow).label === "Running",
+    (job) => jobEnd(job, job.follow, job.cleanup).label === "Running",
   );
   return (
     <DonnaFrame active="current" refreshEvery={running ? 5000 : undefined}>

@@ -54,6 +54,21 @@ if Tom ticked the **Approve** box in step 2 (`options.empty`), permanently delet
 snapshot (minus rescues) plus what the job moved to Spam/Trash; mail that arrived after
 step 1 is never deleted unseen. Unsubscribe is not built.
 
+**Step 4, Clean up (Tom, 2026-11-28).** Deleting moved out of Choose: approving the
+deletion of 600+ Spam/Trash emails Tom never saw was backwards. Jobs are now Sort,
+Choose, Do, Clean up. Step 1 also groups Spam (minus guarded mail, which is a rescue)
+by sender (`cleanup_senders`) and asks the model for a verdict per sender, 25 per
+review (`judge_senders`: block / keep / unsure), and counts Trash and Trash older
+than 30 days (`report.cleanup`). After step 3 the job is Tom's turn again: the sort's
+page shows one row per Spam sender (Block forever / Not spam: back to Inbox / Leave
+in Spam, preset from the verdict) and one Trash row (leave / older than 30 days /
+all). Start clean up creates a job `{previewJobId, cleanup, senders, trash,
+approved}`: Not spam rescues that sender's Spam mail and adds them to never-block;
+Block forever adds them to always-spam; only with the Approve tick does it delete
+the blocked senders' snapshot mail and the chosen Trash. Senders left in Spam are
+never deleted. "Skip clean up this time" sets `cleanupSkipped`. A job is Finished
+only after step 4 (or a skip, or nothing to clean). Zoho filters are not created yet.
+
 **Email types (Tom, 2026-11-26).** Step 1 gives each email a short type
 (`EMAIL_TYPES` in the worker: People, Money, Systems, Marketing, Unwanted groups,
 e.g. Quote, To pay, Phish, Pitch) with hover text and a group colour dot on the

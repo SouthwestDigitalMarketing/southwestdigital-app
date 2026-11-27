@@ -450,7 +450,7 @@ try {
   const stepOne = await db.donnaJob.findFirstOrThrow(pendingClean);
   assert.deepEqual(stepOne.options, { preview: true, buckets: true, limit: 25 });
   await page.goto(base + "/donna");
-  await expect(page.getByRole("link", { name: /Step 1 of 3: Sort/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Step 1 of 4: Sort/ })).toBeVisible();
   // The bar shows what Donna just did with each email.
   await db.donnaMailbox.update({
     where: { id: box.id },
@@ -458,7 +458,7 @@ try {
       recent: [{ subject: "Example progress update", result: "Clients (Rodan Properties): From Rodan Properties, a client in SWapp" }] } } },
   });
   await page.reload();
-  const barLink = page.getByRole("link", { name: /Step 1 of 3: Sort/ });
+  const barLink = page.getByRole("link", { name: /Step 1 of 4: Sort/ });
   await expect(barLink).toContainText("Example progress update → Clients (Rodan Properties)");
   await expect(barLink).not.toContainText("a client in SWapp");
   // One row: the whole bar stays short.
@@ -488,14 +488,14 @@ try {
   await expect(page.getByRole("table", { name: "Sorted emails" })).not.toContainText("Store promo email");
   await page.goto(base + "/donna");
   // Pause/Resume and Stop sit in the top status bar.
-  const bar = page.locator("div", { has: page.getByRole("link", { name: /Step 1 of 3: Sort/ }) }).last();
+  const bar = page.locator("div", { has: page.getByRole("link", { name: /Step 1 of 4: Sort/ }) }).last();
   await bar.getByRole("button", { name: "Pause" }).click();
   await expect.poll(async () => (await db.donnaMailbox.findUnique({ where: { id: box.id } })).paused).toBe(true);
   await bar.getByRole("button", { name: "Resume" }).click();
   await expect.poll(async () => (await db.donnaMailbox.findUnique({ where: { id: box.id } })).paused).toBe(false);
   await bar.getByRole("button", { name: "Stop" }).click();
   await expect.poll(async () => (await db.donnaJob.findUnique({ where: { id: stepOne.id } })).status).toBe("cancelled");
-  await expect(page.getByRole("link", { name: /Step 1 of 3: Sort/ })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Step 1 of 4: Sort/ })).toHaveCount(0);
   const [notice, promoA, promoB, rodan] = ["c3".repeat(32), "d4".repeat(32), "e5".repeat(32), "f6".repeat(32)];
   await db.donnaJob.update({
     where: { id: stepOne.id },
@@ -514,6 +514,13 @@ try {
           { thread: "b8".repeat(32), subject: "Example lost report", from: "client@example.com", bucket: "Rescue from Spam/Trash", why: "From someone in your SWapp contacts (now in Spam)", suggest: null, action: "inbox", folder: "Spam" },
         ],
         empty: { Spam: 214, Trash: 325 },
+        cleanup: {
+          spam: [
+            { sender: "junk@spam.example", name: "Junk Co", count: 3, samples: ["Win big"], verdict: "block", why: "Lottery spam" },
+            { sender: "ap@vendor.example", name: "", count: 1, samples: ["Invoice 12"], verdict: "keep", why: "Looks like a vendor invoice" },
+          ],
+          trash: { total: 325, older30: 300 },
+        },
       },
     },
   });
@@ -582,19 +589,56 @@ try {
     where: { id: stepTwo.id },
     data: { status: "done", result: { at: new Date().toISOString(), reviewed: 0, filed: [{ thread: promoA, subject: "Example sale A", folder: "Newsletter" }], tagged: [{ thread: rodan, subject: "Example progress update", tag: "Rodan Properties" }] } },
   });
-  // Completed jobs: one row per job, step 3 folded in.
+  // Step 4, Clean up: after step 3 the job is Tom's turn again, on its own page.
+  const numbered = await db.donnaJob.findUniqueOrThrow({ where: { id: stepOne.id } });
+  await page.goto(base + "/donna/jobs");
+  await expect(page.getByRole("table", { name: "Completed jobs" })).not.toContainText("6 sorted into 5 buckets");
+  await page.goto(base + "/donna/current");
+  await expect(page.getByRole("table", { name: "Jobs in progress" }).getByRole("row", { name: new RegExp("^" + numbered.number + " ") })).toContainText("Your turn");
+  await page.getByRole("link", { name: /6 sorted into 5 buckets/ }).click();
+  await expect(page.getByRole("list", { name: "Job steps" }).locator('[aria-current="step"]')).toContainText("Clean up");
+  const cleanTable = page.getByRole("table", { name: "Clean up Spam and Trash" });
+  await expect(cleanTable).toContainText("Spam (2 senders, 4 emails)");
+  await expect(cleanTable).toContainText("Trash (325 emails, 300 older than 30 days)");
+  await expect(page.getByLabel("Action for junk@spam.example")).toHaveValue("block");
+  await expect(page.getByLabel("Action for ap@vendor.example")).toHaveValue("keep");
+  await expect(page.getByRole("img", { name: "Why: Lottery spam" })).toBeVisible();
+  await page.getByLabel("What to do with Trash").selectOption("older30");
+  await expect(page.getByText(/Clean up will block 1 senders forever; put 1 senders back in Inbox and never block them; delete 303 emails\./)).toBeVisible();
+  // Deleting needs the Approve tick, which names exactly what goes.
+  await expect(page.getByText(/Approve: permanently delete 3 emails from the senders I block and 300 emails from Trash/)).toBeVisible();
+  await page.getByRole("checkbox", { name: /Approve: permanently delete/ }).check();
+  await page.getByRole("button", { name: "Start clean up" }).click();
+  await expect.poll(async () => Boolean(await db.donnaJob.findFirst(pendingClean))).toBe(true);
+  const cleanJob4 = await db.donnaJob.findFirstOrThrow(pendingClean);
+  assert.deepEqual(cleanJob4.options, {
+    previewJobId: stepOne.id,
+    cleanup: true,
+    senders: [
+      { sender: "junk@spam.example", action: "block" },
+      { sender: "ap@vendor.example", action: "keep" },
+    ],
+    trash: "older30",
+    approved: true,
+  });
+  await expect(page).toHaveURL(new RegExp("/donna/cleans/" + cleanJob4.id));
+  await db.donnaJob.update({
+    where: { id: cleanJob4.id },
+    data: { status: "done", result: { at: new Date().toISOString(), reviewed: 0, cleanupRun: true,
+      blocked: [{ subject: "3 from junk@spam.example", from: "junk@spam.example" }],
+      rescued: [{ subject: "1 from ap@vendor.example", from: "ap@vendor.example", folder: "Spam" }],
+      emptied: { Spam: 3, Trash: 300 } } },
+  });
+  // Completed jobs: one row per job, steps 3 and 4 folded in.
   await page.goto(base + "/donna/jobs");
   const jobs = page.getByRole("table", { name: "Completed jobs" });
   await expect(jobs).toContainText("Inbox job: sort, choose, do");
-  // Every job has a number; step 3 carries its Inbox job's number.
-  const numbered = await db.donnaJob.findUniqueOrThrow({ where: { id: stepOne.id } });
-  await expect(jobs.getByRole("row", { name: new RegExp("^" + numbered.number + " ") })).toContainText("Inbox job");
   await expect(jobs.getByRole("row", { name: new RegExp("^" + numbered.number + " ") })).toContainText("Finished");
-  await expect(jobs).toContainText("6 sorted into 5 buckets · moved 1 · tagged 1");
+  await expect(jobs).toContainText("6 sorted into 5 buckets · moved 1 · tagged 1 · rescued 1 · blocked 1 · emptied 303");
   await expect(jobs).not.toContainText("Step 3: do what you chose");
   await jobs.getByRole("link", { name: /6 sorted into 5 buckets/ }).click();
   await expect(page.getByRole("list", { name: "Job steps" })).toContainText("Done · moved 1 · tagged 1");
-  await expect(page.getByText("Job #" + numbered.number + " · All three steps done")).toBeVisible();
+  await expect(page.getByText("Job #" + numbered.number + " · All four steps done")).toBeVisible();
   await expect(page.getByRole("table", { name: "Sorted emails" })).toBeVisible();
   // Closing at step 2 changes nothing; the job stays in Jobs in progress as Closed, with Reopen.
   const closing = await db.donnaJob.create({
