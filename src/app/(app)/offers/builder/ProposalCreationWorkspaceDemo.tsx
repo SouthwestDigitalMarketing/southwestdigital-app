@@ -3,6 +3,14 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import AssessmentCardSection from "./AssessmentCardSection";
+import AccountInventoryEditor from "./AccountInventoryEditor";
+import { effectiveAssessment } from "./effectiveAssessment";
+import {
+  normalizeAccountInventory,
+  validateBandOverride,
+  type AccountEntry,
+  type BandOverride,
+} from "@/lib/quotes/accountInventory";
 import type { ProposalOptionCatalogItem } from "@/lib/quotes/catalog";
 import ProposalAppDemoHeader from "./ProposalAppDemoHeader";
 import PricingSnapshotSidebar from "./PricingSnapshotSidebar";
@@ -256,6 +264,8 @@ export type AssessmentState = {
   bookSetType: BookSetType;
   realEstateOperations: RealEstateOperation[];
   transactionBand: TransactionBand;
+  accounts: AccountEntry[];
+  bandOverride: BandOverride | null;
   entityType: EntityType;
   taxElection: TaxElection;
   booksOverTwoMonthsBehind: boolean | null;
@@ -431,6 +441,8 @@ const INITIAL_ASSESSMENT: AssessmentState = {
   bookSetType: "",
   realEstateOperations: [],
   transactionBand: "",
+  accounts: [],
+  bandOverride: null,
   entityType: "",
   taxElection: "",
   booksOverTwoMonthsBehind: null,
@@ -545,6 +557,7 @@ const ADVANCED_RECEIPT_MANAGEMENT_PRICING: Record<TransactionBand, number> = {
 };
 
 export function getAdvancedReceiptManagementPrice(assessment: AssessmentState) {
+  assessment = effectiveAssessment(assessment);
   const minimumPrice = ADVANCED_RECEIPT_MANAGEMENT_PRICING[assessment.transactionBand];
   return assessment.advancedReceiptManagementPriceOverride === null
     ? minimumPrice
@@ -1183,6 +1196,10 @@ function roundUpToNearestIncrement(value: number, increment = 5) {
 function withComplexityUnknownDefaults(assessment: AssessmentState): AssessmentState {
   return {
     ...assessment,
+    accounts: normalizeAccountInventory(assessment.accounts),
+    bandOverride: validateBandOverride(assessment.bandOverride).ok
+      ? assessment.bandOverride
+      : null,
     packageNames: normalizeProposalPackageNames(assessment.packageNames),
     payrollProvider: assessment.payrollProvider || "unknown",
     payCadence: assessment.payCadence || "unknown",
@@ -1201,6 +1218,10 @@ function baseAssessment(initialAssessment?: Partial<AssessmentState>) {
   return {
     ...INITIAL_ASSESSMENT,
     ...initialAssessment,
+    accounts: normalizeAccountInventory(initialAssessment?.accounts),
+    bandOverride: validateBandOverride(initialAssessment?.bandOverride).ok
+      ? initialAssessment?.bandOverride ?? null
+      : null,
     annualSavingsPercent: getAnnualSavingsPercent({
       annualSavingsPercent:
         typeof initialAssessment?.annualSavingsPercent === "number"
@@ -1483,6 +1504,7 @@ function hasComplexRealEstateOperations(assessment: AssessmentState) {
 }
 
 function hasMonthlyPricingInputs(assessment: AssessmentState) {
+  assessment = effectiveAssessment(assessment);
   return Boolean(
     assessment.bookSetType ||
       assessment.transactionBand ||
@@ -1832,6 +1854,7 @@ function buildRecommendation(assessment: AssessmentState): RecommendationSummary
 }
 
 export function getProposalPricingSnapshotData(assessment: AssessmentState) {
+  assessment = effectiveAssessment(assessment);
   const cleanupMonths = hasCatchUpPricingInputs(assessment)
     ? calculateInclusiveMonths(assessment.cleanupStartMonth, assessment.cleanupEndMonth)
     : 0;
@@ -1962,6 +1985,8 @@ export default function ProposalCreationWorkspaceDemo({
     toggleBankUsed,
     togglePayrollPaymentMethod,
   } = useProposalAssessmentDemoState();
+  const pricingAssessment = effectiveAssessment(assessment);
+  const hasAccountInventory = assessment.accounts.some((account) => account.status === "open");
   const isScaleStep = step === "scale";
   const isComplexityStep = step === "complexity";
   const isAdjustmentsStep = step === "adjustments";
@@ -2025,7 +2050,7 @@ export default function ProposalCreationWorkspaceDemo({
   const { packagePricing } = getProposalPricingSnapshotData(assessment);
   const maintainPricing = packagePricing.maintain;
   const { baseItems: maintainBaseItems, adjustmentItems: maintainAdjustmentItems } =
-    getMonthlyRateBreakdown(MAINTAIN_PACKAGE, assessment, maintainPricing.complexityLevel);
+    getMonthlyRateBreakdown(MAINTAIN_PACKAGE, pricingAssessment, maintainPricing.complexityLevel);
   const maintainBaseMonthlyTotal = maintainBaseItems.reduce((sum, item) => sum + item.amount, 0);
   const labelFor = (options: readonly { value: string; label: string }[], value: string) =>
     value ? options.find((option) => option.value === value)?.label ?? value : "Not set";
@@ -2040,7 +2065,7 @@ export default function ProposalCreationWorkspaceDemo({
       ["Book set", labelFor(BOOK_SET_OPTIONS, assessment.bookSetType)],
     ],
     "Monthly Activity": [
-      ["Average monthly volume", labelFor(TRANSACTION_BANDS, assessment.transactionBand)],
+      ["Average monthly volume", labelFor(TRANSACTION_BANDS, pricingAssessment.transactionBand)],
       ["Books over two months behind", yesNo(assessment.booksOverTwoMonthsBehind)],
     ],
     "Historical Cleanup": [
@@ -2051,9 +2076,9 @@ export default function ProposalCreationWorkspaceDemo({
       ["Platform migration", assessment.platformMigrationEnabled ? `Enabled · ${assessment.platformMigrationEffectiveMonth || "Date not set"}` : "Not enabled"],
     ],
     "Connected Accounts": [
-      ["Bank accounts", String(assessment.bankAccountsCount)],
-      ["Credit cards", String(assessment.creditCardsCount)],
-      ["Lines of credit", String(assessment.linesOfCreditCount)],
+      ["Bank accounts", String(pricingAssessment.bankAccountsCount)],
+      ["Credit cards", String(pricingAssessment.creditCardsCount)],
+      ["Lines of credit", String(pricingAssessment.linesOfCreditCount)],
     ],
     "Unconnected Accounts That Require Reconciliation": [
       ["Bank accounts", String(assessment.unconnectedBankAccountsCount)],
@@ -2065,8 +2090,8 @@ export default function ProposalCreationWorkspaceDemo({
       ["Pass through accounts", String(assessment.zeroBalancePlatformCount)],
     ],
     "Additional Liabilities": [
-      ["Loans", String(assessment.loansCount)],
-      ["Vehicle / equipment notes", String(assessment.vehicleNotesCount)],
+      ["Loans", String(pricingAssessment.loansCount)],
+      ["Vehicle / equipment notes", String(pricingAssessment.vehicleNotesCount)],
     ],
     "Payroll & Contractors": [
       ["W-2 employees", String(assessment.employeesCount)],
@@ -2155,7 +2180,8 @@ export default function ProposalCreationWorkspaceDemo({
                         <input
                           type="number"
                           min={0}
-                          value={assessment.bankAccountsCount}
+                          value={pricingAssessment.bankAccountsCount}
+                          disabled={hasAccountInventory}
                           onChange={(event) =>
                             updateAssessment(
                               "bankAccountsCount",
@@ -2169,7 +2195,8 @@ export default function ProposalCreationWorkspaceDemo({
                         <input
                           type="number"
                           min={0}
-                          value={assessment.creditCardsCount}
+                          value={pricingAssessment.creditCardsCount}
+                          disabled={hasAccountInventory}
                           onChange={(event) =>
                             updateAssessment(
                               "creditCardsCount",
@@ -2183,7 +2210,8 @@ export default function ProposalCreationWorkspaceDemo({
                         <input
                           type="number"
                           min={0}
-                          value={assessment.linesOfCreditCount}
+                          value={pricingAssessment.linesOfCreditCount}
+                          disabled={hasAccountInventory}
                           onChange={(event) =>
                             updateAssessment(
                               "linesOfCreditCount",
@@ -2311,7 +2339,8 @@ export default function ProposalCreationWorkspaceDemo({
                         <input
                           type="number"
                           min={0}
-                          value={assessment.loansCount}
+                          value={pricingAssessment.loansCount}
+                          disabled={hasAccountInventory}
                           onChange={(event) =>
                             updateAssessment("loansCount", parseCountInput(event.target.value))
                           }
@@ -2322,7 +2351,8 @@ export default function ProposalCreationWorkspaceDemo({
                         <input
                           type="number"
                           min={0}
-                          value={assessment.vehicleNotesCount}
+                          value={pricingAssessment.vehicleNotesCount}
+                          disabled={hasAccountInventory}
                           onChange={(event) =>
                             updateAssessment(
                               "vehicleNotesCount",
@@ -2852,6 +2882,12 @@ export default function ProposalCreationWorkspaceDemo({
                     onCancel={setAssessment}
                     summary={summaries["Monthly Activity"]}
                   >
+                    <AccountInventoryEditor
+                      accounts={assessment.accounts}
+                      bandOverride={assessment.bandOverride}
+                      onAccountsChange={(accounts) => updateAssessment("accounts", accounts)}
+                      onOverrideChange={(override) => updateAssessment("bandOverride", override)}
+                    />
                     <div className="grid gap-4 md:grid-cols-2">
                       <FieldLabel
                         label={
@@ -2876,7 +2912,8 @@ export default function ProposalCreationWorkspaceDemo({
                         }
                       >
                         <select
-                          value={assessment.transactionBand}
+                          value={pricingAssessment.transactionBand}
+                          disabled={hasAccountInventory}
                           onChange={(event) =>
                             updateAssessment("transactionBand", event.target.value as TransactionBand)
                           }

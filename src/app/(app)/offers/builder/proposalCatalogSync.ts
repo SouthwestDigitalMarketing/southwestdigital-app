@@ -1,4 +1,8 @@
 import type { ProposalOptionCatalogItem } from "@/lib/quotes/catalog";
+import {
+  resolveTransactionBand,
+  type BandOverride,
+} from "@/lib/quotes/accountInventory";
 import { type PackageId } from "./proposalPackageNames";
 import { normalizeTierPackageIds } from "./proposalTierRanges";
 
@@ -35,6 +39,8 @@ export type SyncedProposalBonus = {
 export type ProposalCatalogSyncAssessment = {
   servicesInitialized?: boolean;
   transactionBand: string;
+  accounts?: unknown;
+  bandOverride?: BandOverride | null;
   advancedReceiptManagementPriceOverride: number | null;
   projectTrackingPriceOverride: number | null;
   budgetReportingPriceOverride: number | null;
@@ -70,7 +76,10 @@ export function proposalCatalogOptionPrice(
   assessment: ProposalCatalogSyncAssessment,
 ) {
   if (item.offerKey === "advanced-receipt-management") {
-    const minimum = RECEIPT_MANAGEMENT_MINIMUMS[assessment.transactionBand] ?? item.defaultPrice;
+    // One shared resolution: with an inventory, price the derived/overridden
+    // band instead of the stale manual band (same rule as the receipt price).
+    const band = resolveTransactionBand(assessment).band;
+    const minimum = RECEIPT_MANAGEMENT_MINIMUMS[band] ?? item.defaultPrice;
     return assessment.advancedReceiptManagementPriceOverride == null
       ? minimum
       : Math.max(minimum, assessment.advancedReceiptManagementPriceOverride);

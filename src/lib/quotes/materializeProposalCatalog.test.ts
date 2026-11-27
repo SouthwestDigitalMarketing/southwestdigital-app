@@ -181,6 +181,40 @@ describe("catalog materialization", () => {
       bonuses: [expect.objectContaining({ id: "reports", description: "" })],
     });
   });
+  it("prices catalog options at the effective band when an inventory exists", async () => {
+    findMany.mockResolvedValue([
+      {
+        ...service,
+        offerKey: "advanced-receipt-management",
+        code: "advanced-receipt-management",
+        name: "Advanced Receipt Management",
+        defaultPrice: 50,
+      },
+    ]);
+    const inventory = [
+      { id: "checking", kind: "checking", label: "Chase", status: "open", monthlyTransactions: 1100, basis: "measured" },
+    ];
+    const withInventory = await materializeProposalCatalog("brand-test", {
+      transactionBand: "0-99",
+      accounts: inventory,
+      bandOverride: null,
+    });
+    expect(withInventory).toMatchObject({
+      additionalOptions: [{ id: "advanced-receipt-management", monthlyPrice: 1000 }],
+    });
+    const overridden = await materializeProposalCatalog("brand-test", {
+      transactionBand: "0-99",
+      accounts: inventory,
+      bandOverride: { band: "0-99", reason: "Client confirmed low volume" },
+    });
+    expect(overridden).toMatchObject({
+      additionalOptions: [{ id: "advanced-receipt-management", monthlyPrice: 99 }],
+    });
+    const legacy = await materializeProposalCatalog("brand-test", { transactionBand: "0-99" });
+    expect(legacy).toMatchObject({
+      additionalOptions: [{ id: "advanced-receipt-management", monthlyPrice: 99 }],
+    });
+  });
   it("leaves legacy schema snapshots alone without querying unavailable tables", async () => {
     findMany.mockClear();
     capabilities.mockResolvedValue({ proposalCatalog: false });
