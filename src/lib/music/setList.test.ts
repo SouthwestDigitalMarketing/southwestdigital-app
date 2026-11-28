@@ -7,7 +7,8 @@ const id = () => `s${++n}`;
 describe("set list songs", () => {
   it("starts from the website draft, all suggested", () => {
     const songs = starterSongs(id);
-    expect(songs).toHaveLength(26);
+    expect(songs).toHaveLength(27);
+    expect(songs.some((song) => song.title === "Sweet Caroline")).toBe(false);
     expect(songs.every((song) => song.status === "Suggested" && song.suggestedBy === "Website draft")).toBe(true);
   });
 

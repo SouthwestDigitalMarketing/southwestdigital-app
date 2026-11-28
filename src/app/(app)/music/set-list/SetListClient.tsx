@@ -19,7 +19,7 @@ export function SetListClient({ songs }: { songs: Song[] | null }) {
     return (
       <div className="p-4 sm:p-8">
         <h1 className="text-2xl font-semibold text-slate-900">Set list</h1>
-        <p className="mt-2 max-w-2xl text-sm text-slate-600">Start from the 26 songs drafted for easyweddingband.com/music, all marked Suggested.</p>
+        <p className="mt-2 max-w-2xl text-sm text-slate-600">Start from the 27 songs drafted for easyweddingband.com/music, all marked Suggested.</p>
         <button type="button" disabled={pending} onClick={() => run(startSetListAction)} className="mt-4 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60">
           {pending ? "Starting…" : "Start the set list"}
         </button>
