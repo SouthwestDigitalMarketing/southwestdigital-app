@@ -305,7 +305,13 @@ async function loadJobRows(context: BrandDataContext, take: number) {
     const doJobs = linked(cleanIsDo);
     const cleanups = linked(cleanIsCleanup);
     return rows
-      .filter((job) => !cleanIsDo(job.options) && !cleanIsCleanup(job.options))
+      .filter(
+        (job) =>
+          !cleanIsDo(job.options) &&
+          !cleanIsCleanup(job.options) &&
+          // Discarded by Tom: off both lists (Tom, 2026-11-28).
+          (job.options as { discarded?: unknown } | null)?.discarded !== true,
+      )
       .map((job) => ({
         ...job,
         follow: doJobs.get(job.id) ?? null,

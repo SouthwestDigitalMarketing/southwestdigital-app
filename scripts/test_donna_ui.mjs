@@ -691,6 +691,14 @@ try {
   await expect(page).toHaveURL(new RegExp("/donna/cleans/" + resorted.id));
   assert.equal((await db.donnaJob.findUniqueOrThrow({ where: { id: closing.id } })).options.closed, true);
   await db.donnaJob.update({ where: { id: resorted.id }, data: { status: "cancelled" } });
+  // Discard takes an unfinished job off the lists; nothing it did is undone.
+  await page.goto(base + "/donna/current");
+  const discardRow = page.getByRole("table", { name: "Jobs in progress" }).getByRole("row", { name: new RegExp("^" + closedNo + " ") });
+  await discardRow.getByRole("button", { name: "Discard" }).click();
+  await expect(discardRow).toHaveCount(0);
+  assert.equal((await db.donnaJob.findUniqueOrThrow({ where: { id: closing.id } })).options.discarded, true);
+  await page.goto(base + "/donna/jobs");
+  await expect(page.getByRole("table", { name: "Completed jobs" }).getByRole("row", { name: new RegExp("^" + closedNo + " ") })).toHaveCount(0);
   for (const size of [
     { width: 360, height: 640 },
     { width: 412, height: 915 },
