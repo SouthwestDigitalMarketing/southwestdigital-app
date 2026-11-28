@@ -13,6 +13,13 @@ import {
   readCleanupInstallments,
   readCleanupPlan,
 } from "@/lib/quotes/cleanupPlan";
+import {
+  annualServiceStartText,
+  firstMonthFullText,
+  isServiceStartMonth,
+  serviceStartText,
+} from "@/lib/quotes/serviceStart";
+import { creditAppliedLabel, remainingCreditLine } from "@/lib/quotes/serviceStartDisplay";
 import type { CleanupInstallment, CleanupPlan } from "@/lib/quotes/cleanupPlan";
 // The one strict Spec 04 validators live in cleanupPlan and are shared with
 // the checkout parser (and through it the receipt); re-exported here so
@@ -232,6 +239,23 @@ export type AgreementRenderInput = {
    * still render the right rate.
    */
   monthlyRate?: number | null;
+  /**
+   * Spec 06 service start month ("YYYY-MM"). When valid on a staged (v2)
+   * agreement it replaces the "confirmed during onboarding" start sentence
+   * and adds the full-first-month line; with a cleanup plan the wrap-up
+   * rule stays and the month line joins it (same month, exact wording
+   * only — pre-selection length wording shows no month). Absent or junk
+   * renders byte-identical to today.
+   */
+  serviceStartMonth?: string | null;
+  /** Client-readable reason for the applied credit; the default label when absent. */
+  firstPaymentCreditReason?: string | null;
+  /**
+   * Remainder of the first-payment credit for the next invoice, with its
+   * reason. Shown as its own fee line only when above zero (legacy: absent).
+   */
+  creditRemaining?: number | null;
+  creditRemainingReason?: string | null;
   date?: Date;
 };
 
@@ -334,6 +358,22 @@ export function renderAgreementTemplate(template: string, input: AgreementRender
     : input.hasCleanup
     ? "Historical Cleanup + Monthly Bookkeeping"
     : "Monthly Bookkeeping";
+  // Spec 06: a valid start month on a staged agreement replaces the
+  // "confirmed during onboarding" start sentence. With a cleanup plan the
+  // wrap-up rule stays and the month line joins it (the checkout derives
+  // the month from the wrap-up, so the two name the same month); under
+  // pre-selection length wording no month is shown at all.
+  const displayStartMonth = staged && isServiceStartMonth(input.serviceStartMonth) ? input.serviceStartMonth : null;
+  const showStartMonth = displayStartMonth !== null && input.wrapUpDateWording !== "length";
+  const ongoingStartText = cleanupPlan
+    ? input.wrapUpDateWording === "length"
+      ? monthlyStartLengthText({ hasCleanup: true, plan: cleanupPlan, prepaidAnnual: input.agreementTerm === "12-month" })
+      : `${monthlyStartText({ hasCleanup: true, plan: cleanupPlan, prepaidAnnual: input.agreementTerm === "12-month" })}${showStartMonth && displayStartMonth ? ` ${serviceStartText(displayStartMonth)}` : ""}`
+    : showStartMonth && displayStartMonth
+      ? (input.agreementTerm === "12-month" ? annualServiceStartText(displayStartMonth) : serviceStartText(displayStartMonth))
+      : input.agreementTerm === "12-month"
+        ? (input.hasCleanup ? ANNUAL_PREPAID_CLEANUP_START_TEXT : ANNUAL_PREPAID_START_TEXT)
+        : (input.hasCleanup ? CLEANUP_MONTHLY_START_TEXT : NO_CLEANUP_MONTHLY_START_TEXT);
   const scopeLines = [
     `${input.brandName} will provide the ${packageName} for ${input.clientName}.`,
     staged && input.hasCleanup
@@ -352,15 +392,8 @@ export function renderAgreementTemplate(template: string, input: AgreementRender
       ? `Included package services:\n${input.includedServices.map((item) => `  • ${item.name}${item.description ? `: ${item.description}` : ""}`).join("\n")}` : null,
     staged ? "Stage 1 — Onboarding: provide account access and required records. We confirm receipt and readiness before service work begins." : null,
     staged && input.hasCleanup ? `Stage 2 — Discovery and cleanup approval: ${CLEANUP_APPROVAL_TEXT}` : null,
-    staged ? `${input.hasCleanup ? "Stage 3" : "Stage 2"} — Ongoing bookkeeping: ${
-      cleanupPlan
-        ? input.wrapUpDateWording === "length"
-          ? monthlyStartLengthText({ hasCleanup: true, plan: cleanupPlan, prepaidAnnual: input.agreementTerm === "12-month" })
-          : monthlyStartText({ hasCleanup: true, plan: cleanupPlan, prepaidAnnual: input.agreementTerm === "12-month" })
-        : input.agreementTerm === "12-month"
-          ? (input.hasCleanup ? ANNUAL_PREPAID_CLEANUP_START_TEXT : ANNUAL_PREPAID_START_TEXT)
-          : (input.hasCleanup ? CLEANUP_MONTHLY_START_TEXT : NO_CLEANUP_MONTHLY_START_TEXT)
-    }` : null,
+    staged ? `${input.hasCleanup ? "Stage 3" : "Stage 2"} — Ongoing bookkeeping: ${ongoingStartText}` : null,
+    staged && showStartMonth ? firstMonthFullText() : null,
   ].filter((line): line is string => Boolean(line));
   const scopeOfWork = scopeLines.join("\n\n");
   // Spec 03 complexity add lives inside cleanupTotal: itemize it so the
@@ -393,8 +426,9 @@ export function renderAgreementTemplate(template: string, input: AgreementRender
       : null,
     ...(staged ? (input.requiredOneTime ?? []).map((row) => `${row.name} (due today): ${formatCurrency(row.price)}`) : []),
     staged && selectedOneTimeTotal > 0 ? `Selected One-Time Add-ons (due today): ${formatCurrency(selectedOneTimeTotal)}` : null,
-    (input.creditApplied ?? 0) > 0 ? `Credit for work already paid: -${formatCurrency(input.creditApplied ?? 0)}` : null,
+    (input.creditApplied ?? 0) > 0 ? `${creditAppliedLabel(input.firstPaymentCreditReason)}: -${formatCurrency(input.creditApplied ?? 0)}` : null,
     `Total Due Upon Signing: ${formatCurrency(input.amountDueNow ?? 0)}`,
+    remainingCreditLine(input.creditRemaining, input.creditRemainingReason),
     staged && input.agreementTerm === "12-month"
       ? input.hasCleanup
         ? `12-Month Service Total: ${formatCurrency(input.recurringMonthlyTotal ?? 0)} × 12 months = ${formatCurrency(Math.round((input.recurringMonthlyTotal ?? 0) * 1200) / 100)}. Not due today; billed at the discounted annual rate when monthly service begins after cleanup is complete. Excludes onboarding, cleanup, and one-time add-ons.`

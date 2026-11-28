@@ -36,6 +36,7 @@ vi.mock("@/app/(app)/offers/who/actions", () => ({
 }));
 
 import OfferProposalPreview from "@/app/(app)/offers/builder/OfferProposalPreview";
+import { firstMonthFullText, serviceStartText } from "@/lib/quotes/serviceStart";
 import { HourlyPublicView } from "./HourlyPublicView";
 
 const brandValue: BrandContextValue = {
@@ -172,6 +173,66 @@ describe("public proposal HTML", () => {
     expect(html).not.toContain("2026-02-14");
     expect(html).not.toContain("wrapUpSource");
     expect(html).not.toContain(PRIVATE_SENTINEL);
+  });
+
+  it("pre-selection public cards state the start month and the credit remainder", () => {
+    viewState.pricingStep = true;
+    const snapshot = sentinelBookkeepingSnapshot();
+    const withStart = {
+      ...snapshot,
+      assessment: {
+        ...snapshot.assessment,
+        firstPaymentCredit: 5000,
+        firstPaymentCreditReason: "Credit for October work already paid",
+        serviceStartMonth: "2026-12",
+      },
+    };
+    const html = renderLiveBookkeeping(
+      toPublicBookkeepingProposal(withStart, catalogCopyFromRows(sentinelCatalogRows)),
+    );
+    expect(html).toContain(serviceStartText("2026-12"));
+    expect(html).toContain(firstMonthFullText());
+    expect(html).toContain("Credit for October work already paid");
+    expect(html).toContain("will be applied to your next invoice.");
+    // Static markup escapes the apostrophe, so match the apostrophe-free tail.
+    expect(html).not.toContain("includes your first month");
+    expect(html).not.toContain(PRIVATE_SENTINEL);
+  });
+
+  it("pre-selection cleanup keeps only the relative start wording even with a staff month", () => {
+    viewState.pricingStep = true;
+    const snapshot = sentinelBookkeepingSnapshot();
+    const withPlan = {
+      ...snapshot,
+      assessment: {
+        ...snapshot.assessment,
+        booksOverTwoMonthsBehind: true,
+        cleanupStartMonth: "2025-01",
+        cleanupEndMonth: "2025-12",
+        serviceStartMonth: "2026-12",
+        cleanupPlan: {
+          caughtUpThrough: "2025-12",
+          startDate: "2026-02-14",
+          wrapUpDate: "2026-05-14",
+          wrapUpSource: "default",
+          paymentPlan: "monthly",
+        },
+      },
+    };
+    const html = renderLiveBookkeeping(
+      toPublicBookkeepingProposal(withPlan, catalogCopyFromRows(sentinelCatalogRows)),
+    );
+    expect(html).toContain("about 13 weeks after you accept");
+    expect(html).not.toContain("Service starts");
+    expect(html).not.toContain(firstMonthFullText());
+  });
+
+  it("legacy public cards keep the confirmation wording with no start month", () => {
+    viewState.pricingStep = true;
+    const html = renderLiveBookkeeping(publicBookkeeping());
+    expect(html).not.toContain("Service starts");
+    expect(html).not.toContain("Remaining credit");
+    expect(html).toContain("includes your first month");
   });
 
   it("pre-selection public estimate itemizes the complexity add and always adds up", () => {

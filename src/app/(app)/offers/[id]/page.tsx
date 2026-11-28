@@ -10,6 +10,7 @@ import { resumeOfferHref } from "@/lib/quotes/kinds";
 import { markQuoteSentAction } from "../actions";
 import { updateProposalValidityAction } from "./actions";
 import { DuplicateOfferButton } from "../DuplicateOfferButton";
+import StaffCreditNotice from "./StaffCreditNotice";
 import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { quoteContactSummaryFromSnapshot } from "@/lib/quotes/clientInfo";
 import { proposalValidityDaysFromSnapshot } from "@/lib/quotes/proposalValidity";
@@ -95,6 +96,7 @@ export default async function QuoteDetailPage({ params, searchParams }: PageProp
       <div className="mx-auto max-w-4xl space-y-6 p-8">
         <Link href="/offers" className="text-sm underline">← All Offers</Link>
         <h1 className="text-2xl font-semibold">{quote.client.name} — accepted offer</h1>
+        <StaffCreditNotice onboardingData={quote.engagement?.onboardingData} />
         {copyControls}
       </div>
     );
@@ -144,6 +146,8 @@ export default async function QuoteDetailPage({ params, searchParams }: PageProp
             {banner.msg}
           </div>
         )}
+
+        <StaffCreditNotice onboardingData={quote.engagement?.onboardingData} />
 
         {!frozen && (
           <section className="rounded-xl border border-slate-200 bg-white p-6">

@@ -32,6 +32,11 @@ import {
   type PublicAccountInventory,
 } from "@/lib/quotes/accountInventory";
 import { proposalPaymentSchedule } from "@/lib/quotes/paymentSchedule";
+import {
+  creditAppliedLabel,
+  resolveDisplayServiceStartMonth,
+} from "@/lib/quotes/serviceStartDisplay";
+import { serviceStartText } from "@/lib/quotes/serviceStart";
 import { addDaysIso, buildCleanupInstallments, cleanupWeeksBetween } from "@/lib/quotes/cleanupPlan";
 import type { CleanupInstallment, CleanupPlan } from "@/lib/quotes/cleanupPlan";
 import { resolvePreviewCleanupDisplay } from "./previewCleanupPlan";
@@ -267,6 +272,11 @@ type CheckoutSummary = {
   cleanupInstallments?: CleanupInstallment[];
   /** Spec 03 complexity cleanup weight inside cleanupTotal (stored checkout). */
   complexityCleanupAdd?: number;
+  /** Spec 06 frozen start month + carry-over (stored checkout, post-selection). */
+  serviceStartMonth?: string;
+  creditRemaining?: number;
+  creditRemainingReason?: string;
+  firstPaymentCreditReason?: string;
 };
 
 // ─── Static data ──────────────────────────────────────────────────────────────
@@ -1337,6 +1347,20 @@ function OfferProposalPreviewView({
   }
   const annualSavingsPercent = getAnnualSavingsPercent(assessment);
   const firstPaymentCredit = Math.max(0, Number((assessment as { firstPaymentCredit?: number }).firstPaymentCredit) || 0);
+  // Spec 06: the frozen checkout month wins post-selection, else the explicit
+  // staff month. A live "next month" default is never shown on surfaces (it
+  // would go stale; legacy quotes stay byte-identical) — only the builder
+  // input previews the resolved default.
+  const displayServiceStartMonth = resolveDisplayServiceStartMonth(
+    (checkoutSummary as { serviceStartMonth?: unknown } | null)?.serviceStartMonth,
+    (assessment as { serviceStartMonth?: unknown }).serviceStartMonth,
+  );
+  const assessmentCreditReason = (assessment as { firstPaymentCreditReason?: unknown }).firstPaymentCreditReason;
+  const displayCreditReason = (
+    typeof checkoutSummary?.firstPaymentCreditReason === "string" && checkoutSummary.firstPaymentCreditReason.trim()
+      ? checkoutSummary.firstPaymentCreditReason
+      : typeof assessmentCreditReason === "string" ? assessmentCreditReason : ""
+  ).trim() || null;
   const recurringDiscountMultiplier = hasTwelveMonthAgreement
     ? 1 - annualSavingsPercent / 100
     : 1;
@@ -1586,6 +1610,17 @@ function OfferProposalPreviewView({
   const chargeOnboarding = selectedOnboardingFee ?? 0;
   const calculatedChargeAmount = currentSchedule.amountDueNow;
   const chargeAmount = isTestProposal ? 1 : checkoutSummary?.amountDueNow ?? calculatedChargeAmount;
+  // Spec 06 remainder for the selected summary: the frozen checkout
+  // carry-over post-selection, else the live excess of the credit over the
+  // selected tier's capped deduction. Test proposals never carry credit.
+  const summaryCreditRemaining = isTestProposal
+    ? 0
+    : checkoutSummary && typeof checkoutSummary.creditRemaining === "number"
+      ? checkoutSummary.creditRemaining
+      : Math.max(0, Math.round((firstPaymentCredit - currentSchedule.creditApplied) * 100) / 100);
+  const summaryCreditRemainingReason = checkoutSummary && typeof checkoutSummary.creditRemainingReason === "string"
+    ? checkoutSummary.creditRemainingReason
+    : typeof assessmentCreditReason === "string" ? assessmentCreditReason : "";
   const stagedPayment = !checkoutSummary || checkoutSummary.paymentScheduleVersion === 2;
   const chargeIsFirstMonth = chargeFirstMonth > 0;
   const requiresOnboardingPayment = chargeAmount > 0;
@@ -1607,9 +1642,9 @@ function OfferProposalPreviewView({
     : selectedCleanupTotal > 0
       ? "Covers the selected cleanup work and onboarding so work can begin."
       : chargeOnboarding > 0 && chargeFirstMonth > 0
-    ? "Covers onboarding and prepays your first month. We confirm your service start date after receiving the required access and records."
+    ? `Covers onboarding and prepays your first month. ${displayServiceStartMonth ? serviceStartText(displayServiceStartMonth) : "We confirm your service start date after receiving the required access and records."}`
     : chargeIsFirstMonth
-      ? "Prepays your first month. We confirm your service start date during onboarding."
+      ? `Prepays your first month. ${displayServiceStartMonth ? serviceStartText(displayServiceStartMonth) : "We confirm your service start date during onboarding."}`
       : "Covers onboarding, document collection, and discovery. Earned upon signing and non-refundable.";
   const clientSteps = [
     "Cover",
@@ -1647,6 +1682,11 @@ function OfferProposalPreviewView({
       recurringMonthlyTotal: selectedMonthlyCharge,
       cleanupTotal: selectedCleanupTotal,
       amountDueNow: chargeAmount,
+      creditApplied: isTestProposal ? 0 : checkoutSummary?.creditApplied ?? (checkoutSummary ? 0 : firstPaymentCredit),
+      serviceStartMonth: displayServiceStartMonth,
+      firstPaymentCreditReason: displayCreditReason,
+      creditRemaining: summaryCreditRemaining,
+      creditRemainingReason: summaryCreditRemainingReason,
       agreementTerm: hasTwelveMonthAgreement ? "12-month" : "month-to-month",
       selectedCleanupPeriods: cleanupPeriods
         .filter((period) => selectedOptionId && cleanupIsSelected(selectedOptionId, `${period.year}-${period.startMonth}-${period.endMonth}`))
@@ -1705,6 +1745,10 @@ function OfferProposalPreviewView({
       annual={checkoutSummary?.hasTwelveMonthAgreement ?? hasTwelveMonthAgreement}
       amountDueNow={chargeAmount}
       annualSavingsPercent={annualSavingsPercent}
+      creditLabel={creditAppliedLabel(displayCreditReason)}
+      serviceStartMonth={displayServiceStartMonth}
+      creditRemaining={summaryCreditRemaining}
+      creditRemainingReason={summaryCreditRemainingReason}
       creditApplied={isTestProposal ? 0 : checkoutSummary?.creditApplied ?? (checkoutSummary ? 0 : firstPaymentCredit)}
       originalOnboardingFee={assessment.showOriginalOneTimePrices !== false && isOnboardingFeeWaived(assessment)
         ? getListedOnboardingFee({
@@ -2237,6 +2281,10 @@ function OfferProposalPreviewView({
                             annual={hasTwelveMonthAgreement} amountDueNow={isTestProposal ? 1 : undefined}
                             annualSavingsPercent={annualSavingsPercent}
                             originalOnboardingFee={assessment.showOriginalOneTimePrices !== false && onboardingWaived ? originalOnboardingFee : undefined}
+                            creditLabel={creditAppliedLabel(displayCreditReason)}
+                            serviceStartMonth={displayServiceStartMonth}
+                            creditRemaining={isTestProposal ? 0 : Math.max(0, Math.round((firstPaymentCredit - schedule.creditApplied) * 100) / 100)}
+                            creditRemainingReason={typeof assessmentCreditReason === "string" ? assessmentCreditReason : ""}
                             creditApplied={isTestProposal ? 0 : firstPaymentCredit}
                             cleanupPlan={displayCleanupPlan}
                             cleanupInstallments={cardLiveSchedule?.installments
