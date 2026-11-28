@@ -9,8 +9,8 @@ import {
 } from "@/lib/quotes/companyBundle";
 
 const companies = [
-  { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing" as const, locationsCount: 2, accounts: [], complexity: null },
-  { id: "beta", name: "Beta", ownQboFile: true, fileStatus: "new_file" as const, locationsCount: 0, accounts: [], complexity: null },
+  { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing" as const, locationsCount: 2, propertiesCount: 0, accounts: [], complexity: null },
+  { id: "beta", name: "Beta", ownQboFile: true, fileStatus: "new_file" as const, locationsCount: 0, propertiesCount: 0, accounts: [], complexity: null },
 ];
 
 function priced() {
@@ -50,11 +50,27 @@ describe("CompanyBundleSummary", () => {
     expect(html).toContain("$500.00");
   });
 
+  it("flags desktop-to-online companies as priced separately without charging them", () => {
+    const pricedMigration = priceCompanyBundle({
+      companies: [
+        companies[0],
+        { id: "beta", name: "Beta", ownQboFile: true, fileStatus: "desktop_to_online" as const, locationsCount: 0, propertiesCount: 0, accounts: [], complexity: null },
+      ],
+      packageId: "maintain",
+      baseAssessment: {},
+      options: DEFAULT_BUNDLE_PRICING_OPTIONS,
+    });
+    const html = renderToStaticMarkup(createElement(CompanyBundleSummary, { priced: pricedMigration }));
+    expect(html).toContain("Desktop → Online migration (priced separately)");
+    // Empty Beta file at 20% off plus the main file and its 2 locations: 200 + 250 + 50.
+    expect(html).toContain("$500.00");
+  });
+
   it("marks location-only companies as having no QuickBooks file", () => {
     const pricedTag = priceCompanyBundle({
       companies: [
         companies[0],
-        { id: "tag", name: "Downtown", ownQboFile: false, fileStatus: "existing" as const, locationsCount: 0, accounts: [], complexity: null },
+        { id: "tag", name: "Downtown", ownQboFile: false, fileStatus: "existing" as const, locationsCount: 0, propertiesCount: 0, accounts: [], complexity: null },
       ],
       packageId: "maintain",
       baseAssessment: {},

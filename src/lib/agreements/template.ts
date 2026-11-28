@@ -3,6 +3,7 @@ import {
   CLEANUP_APPROVAL_TEXT, CLEANUP_MONTHLY_START_TEXT, NO_CLEANUP_MONTHLY_START_TEXT,
 } from "@/lib/quotes/paymentSchedule";
 import { volumeClauseText, type AccountBasis } from "@/lib/quotes/accountInventory";
+import type { CompanyBundleFeeLine } from "@/lib/quotes/companyBundle";
 
 const DIVIDER = "─".repeat(62);
 
@@ -161,9 +162,10 @@ export type AgreementRenderInput = {
    * Spec 02 company bundle fee lines (companyBundleFeeLines output). When
    * present and non-empty, the fee structure lists one line per company plus
    * the locations and setup lines, and the monthly total equals the bundle
-   * monthly. Absent (or empty) renders byte-identical to today.
+   * monthly. Absent (or empty) renders byte-identical to today. Grouping
+   * keys on the structured `kind`, never on the label text.
    */
-  companyFeeLines?: { label: string; amount: number; cadence: "monthly" | "one-time" }[];
+  companyFeeLines?: CompanyBundleFeeLine[];
   volumeMonthlyTotal?: number | null;
   volumeBasis?: AccountBasis | null;
   /** Fixed-fee bookkeeping defaults to including the clause; hourly callers must opt out. */
@@ -243,11 +245,23 @@ export function renderAgreementTemplate(template: string, input: AgreementRender
   ].filter((line): line is string => Boolean(line));
   const scopeOfWork = scopeLines.join("\n\n");
   const companyFeeLines = (input.companyFeeLines ?? []).filter(
-    (line): line is { label: string; amount: number; cadence: "monthly" | "one-time" } =>
-      !!line && typeof line.label === "string" && typeof line.amount === "number",
+    (line): line is CompanyBundleFeeLine =>
+      !!line &&
+      typeof line === "object" &&
+      typeof (line as CompanyBundleFeeLine).label === "string" &&
+      typeof (line as CompanyBundleFeeLine).amount === "number" &&
+      typeof (line as CompanyBundleFeeLine).companyName === "string" &&
+      typeof (line as CompanyBundleFeeLine).kind === "string",
   );
-  const companyMonthlyLines = companyFeeLines.filter((line) => line.cadence === "monthly");
-  const companyOneTimeLines = companyFeeLines.filter((line) => line.cadence !== "monthly");
+  // Group by the structured kind (never by label text): monthly kinds roll
+  // into the monthly total; everything else lists as a one-time line. An
+  // unknown kind falls back to its cadence so forward-compatible lines still
+  // land on the right side.
+  const isMonthlyLine = (line: CompanyBundleFeeLine) =>
+    line.kind === "company-monthly" || line.kind === "tag" || line.kind === "locations" ||
+    (line.kind !== "setup" && line.kind !== "migration" && line.cadence === "monthly");
+  const companyMonthlyLines = companyFeeLines.filter(isMonthlyLine);
+  const companyOneTimeLines = companyFeeLines.filter((line) => !isMonthlyLine(line));
   const companyMonthlyTotal = companyMonthlyLines.reduce((total, line) => total + line.amount, 0);
   const feeLines = [
     ...companyMonthlyLines.map((line) => `${line.label}: ${formatCurrency(line.amount)} per month`),

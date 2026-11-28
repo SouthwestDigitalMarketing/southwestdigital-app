@@ -37,7 +37,7 @@ function mainCompany(overrides: Partial<CompanyEntry> = {}): CompanyEntry {
     name: "Main Co",
     ownQboFile: true,
     fileStatus: "existing",
-    locationsCount: 0,
+    locationsCount: 0, propertiesCount: 0,
     accounts: [],
     complexity: null,
     ...overrides,
@@ -97,13 +97,30 @@ describe("spec 02 wiring: company bundle in builder package totals", () => {
     const assessment: AssessmentState = {
       ...fresh,
       companies: [
-        mainCompany({ locationsCount: 2, fileStatus: "new_file" }),
+        mainCompany({ locationsCount: 2, propertiesCount: 0, fileStatus: "new_file" }),
         mainCompany({ id: "b", name: "Beta" }),
       ],
     };
     const data = getProposalPricingSnapshotData(assessment);
     // 250 + 200 + 2 x 25 locations = 500 (setup is one-time, not monthly).
     expect(data.packagePricing.maintain.monthly).toBe(500);
+  });
+
+  it("names the bundle instead of the entity charge in the recommendation rationale", () => {
+    const fresh = freshAssessment();
+    const assessment: AssessmentState = {
+      ...fresh,
+      numberOfEntities: 3,
+      companies: [mainCompany(), mainCompany({ id: "b", name: "Beta" })],
+    };
+    const data = getProposalPricingSnapshotData(assessment);
+    expect(data.recommendation.rationale).toContain("2 companies priced as a bundle.");
+    expect(data.recommendation.rationale.join(" ")).not.toContain("entities increase");
+    // Legacy proposals keep citing the entity charge.
+    const legacy = getProposalPricingSnapshotData({ ...fresh, numberOfEntities: 3 });
+    expect(legacy.recommendation.rationale).toContain(
+      "3 entities increase coordination and reporting complexity.",
+    );
   });
 
   it("keeps backlog and cleanup on the entities-zeroed base when bundled", () => {

@@ -9,7 +9,6 @@ vi.mock("../who/actions", () => ({
 }));
 
 import CompanyBundleEditor, {
-  resolveBundlePricingOptions,
   withSyncedMainAccounts,
   type CompanyBundleEditorProps,
 } from "./CompanyBundleEditor";
@@ -22,6 +21,7 @@ import {
 import { effectiveAssessment } from "./effectiveAssessment";
 import {
   DEFAULT_BUNDLE_PRICING_OPTIONS,
+  resolveBundlePricingOptions,
   type CompanyEntry,
 } from "@/lib/quotes/companyBundle";
 import type { AccountEntry } from "@/lib/quotes/accountInventory";
@@ -42,7 +42,7 @@ function mainCompany(overrides: Partial<CompanyEntry> = {}): CompanyEntry {
     name: "Main Co",
     ownQboFile: true,
     fileStatus: "existing",
-    locationsCount: 0,
+    locationsCount: 0, propertiesCount: 0,
     accounts: [],
     complexity: null,
     ...overrides,
@@ -57,7 +57,7 @@ function editorHtml(props: Partial<CompanyBundleEditorProps> = {}) {
       companyName: "Acme LLC",
       mainAccounts: [],
       baseAssessment: effectiveAssessment(fresh),
-      bundleOptions: resolveBundlePricingOptions(undefined),
+      bundleOptions: resolveBundlePricingOptions({}),
       legacyEntitiesField: createElement("span", { id: "legacy-entities" }, "legacy entities input"),
       onCompaniesChange: () => {},
       onBundleOptionsChange: () => {},
@@ -68,14 +68,16 @@ function editorHtml(props: Partial<CompanyBundleEditorProps> = {}) {
 
 describe("resolveBundlePricingOptions", () => {
   it("returns the proposed defaults for missing or garbage input", () => {
-    expect(resolveBundlePricingOptions(undefined)).toEqual(DEFAULT_BUNDLE_PRICING_OPTIONS);
+    expect(resolveBundlePricingOptions({})).toEqual(DEFAULT_BUNDLE_PRICING_OPTIONS);
     expect(resolveBundlePricingOptions(null)).toEqual(DEFAULT_BUNDLE_PRICING_OPTIONS);
     expect(resolveBundlePricingOptions("bundle")).toEqual(DEFAULT_BUNDLE_PRICING_OPTIONS);
     expect(resolveBundlePricingOptions([])).toEqual(DEFAULT_BUNDLE_PRICING_OPTIONS);
   });
 
-  it("merges a partial override over the defaults", () => {
-    expect(resolveBundlePricingOptions({ additionalCompanyDiscountPct: 30 })).toEqual({
+  it("merges a partial per-proposal override over the template defaults", () => {
+    expect(
+      resolveBundlePricingOptions({ bundlePricingOptions: { additionalCompanyDiscountPct: 30 } }),
+    ).toEqual({
       additionalCompanyDiscountPct: 30,
       locationMonthlyCharge: 25,
       newFileSetupCharge: 150,
@@ -85,15 +87,25 @@ describe("resolveBundlePricingOptions", () => {
   it("clamps the discount and floors charges, keeping non-finite fields at defaults", () => {
     expect(
       resolveBundlePricingOptions({
-        additionalCompanyDiscountPct: 150,
-        locationMonthlyCharge: -5,
-        newFileSetupCharge: Number.NaN,
+        bundlePricingOptions: {
+          additionalCompanyDiscountPct: 150,
+          locationMonthlyCharge: -5,
+          newFileSetupCharge: Number.NaN,
+        },
       }),
     ).toEqual({ additionalCompanyDiscountPct: 100, locationMonthlyCharge: 0, newFileSetupCharge: 150 });
-    expect(resolveBundlePricingOptions({ additionalCompanyDiscountPct: -5 })).toEqual({
+    expect(resolveBundlePricingOptions({ bundlePricingOptions: { additionalCompanyDiscountPct: -5 } })).toEqual({
       ...DEFAULT_BUNDLE_PRICING_OPTIONS,
       additionalCompanyDiscountPct: 0,
     });
+  });
+
+  it("reads the brand catalog new-file price when the template leaves the default", () => {
+    const bonuses = [{ id: "new-quickbooks-file", name: "Setup", description: "", archived: false, addOnPrice: 99 }];
+    expect(resolveBundlePricingOptions({ bonuses }).newFileSetupCharge).toBe(99);
+    expect(
+      resolveBundlePricingOptions({ bonuses, bundlePricingDefaults: { newFileSetupCharge: 80 } }).newFileSetupCharge,
+    ).toBe(80);
   });
 });
 
@@ -155,7 +167,7 @@ describe("CompanyBundleEditor states", () => {
   it("shows locations and one-time setup lines", () => {
     const html = editorHtml({
       companies: [
-        mainCompany({ locationsCount: 2, fileStatus: "new_file" }),
+        mainCompany({ locationsCount: 2, propertiesCount: 0, fileStatus: "new_file" }),
         mainCompany({ id: "b", name: "Beta" }),
       ],
     });
@@ -169,7 +181,38 @@ describe("CompanyBundleEditor states", () => {
     const html = editorHtml({
       companies: [mainCompany(), mainCompany({ id: "b", name: "Beta", ownQboFile: false })],
     });
-    expect(html).toContain("included with the main file, no separate monthly price");
+    expect(html).toContain("Shares the main file — priced as part of the main company, not on its own.");
+  });
+
+  it("keeps the legacy entities field for a tag-only addition (no bundle)", () => {
+    // F2: ownQboFile=false rows never activate the bundle, so the legacy
+    // per-entity charge (and its input) survives the tag.
+    const html = editorHtml({
+      companies: [mainCompany(), mainCompany({ id: "b", name: "Beta", ownQboFile: false })],
+    });
+    expect(html).toContain("legacy entities input");
+    expect(html).not.toContain("Priced per company below");
+    expect(html).not.toContain("Bundle price (read-only)");
+  });
+
+  it("offers locations only on the main company, never on added companies", () => {
+    // F3: only companies[0].locationsCount is charged, so only the main card
+    // renders a locations input.
+    const html = editorHtml({
+      companies: [mainCompany(), mainCompany({ id: "b", name: "Beta" })],
+    });
+    expect(html.match(/Locations in the main file/g)).toHaveLength(1);
+  });
+
+  it("edits properties on added companies while the main file keeps the existing input", () => {
+    // R1: the main company prices its properties through the existing
+    // assessment properties input, so only added files get their own field.
+    const html = editorHtml({
+      companies: [mainCompany(), mainCompany({ id: "b", name: "Beta", propertiesCount: 3 })],
+    });
+    expect(html).toContain("Properties in this file");
+    expect(html.match(/Properties in this file/g)).toHaveLength(1);
+    expect(html).toContain("3 properties");
   });
 
   it("flags Desktop-to-Online instead of pricing it", () => {
@@ -243,7 +286,7 @@ describe("saved-state load and normalize", () => {
           name: "",
           ownQboFile: true,
           fileStatus: "new_file",
-          locationsCount: 1,
+          locationsCount: 1, propertiesCount: 0,
           accounts: [storedAccount],
           complexity: null,
         },

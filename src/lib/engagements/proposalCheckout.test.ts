@@ -7,6 +7,10 @@ import {
   resolveAmountDueNow,
   resolveBundleCheckoutAmounts,
 } from "./proposalCheckout";
+import {
+  buildCompanyBundleSnapshot,
+  DEFAULT_BUNDLE_PRICING_OPTIONS,
+} from "@/lib/quotes/companyBundle";
 
 const snapshot = {
   assessment: {
@@ -294,8 +298,8 @@ describe("first-payment credit", () => {
 
 describe("company bundle checkout", () => {
   const bundleCompanies = [
-    { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 0, accounts: [] },
-    { id: "b", name: "B Co", ownQboFile: true, fileStatus: "new_file", locationsCount: 0, accounts: [] },
+    { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 0, propertiesCount: 0, accounts: [] },
+    { id: "b", name: "B Co", ownQboFile: true, fileStatus: "new_file", locationsCount: 0, propertiesCount: 0, accounts: [] },
   ];
   // Bundle monthlies baked by the P1 snapshot wiring (empty files, defaults):
   // maintain 250 + 200, improve 250 + 200, grow 375 + 300; setup 150.
@@ -357,6 +361,22 @@ describe("company bundle checkout", () => {
     const result = buildProposalCheckoutSummary(stale, sel("maintain"));
     expect(result.baseMonthlyTotal).toBe(450);
     expect(result.amountDueNow).toBe(500 + 150 + 450);
+  });
+
+  it("reads the selected tier from the snapshot bundle object", () => {
+    const companyBundle = buildCompanyBundleSnapshot({
+      companies: bundleCompanies,
+      baseAssessment: bundleSnapshot.assessment,
+      options: DEFAULT_BUNDLE_PRICING_OPTIONS,
+    });
+    const withObject = {
+      ...bundleSnapshot,
+      pricing: { ...bundleSnapshot.pricing, companyBundle },
+    };
+    expect(resolveBundleCheckoutAmounts(withObject, "grow")).toEqual({ bundleMonthly: 675, setupTotal: 150 });
+    const result = buildProposalCheckoutSummary(withObject, sel("grow"));
+    expect(result.baseMonthlyTotal).toBe(675);
+    expect(result.amountDueNow).toBe(500 + 150 + 675);
   });
 
   it("reads the per-proposal bundle override from options, never hard-coded", () => {

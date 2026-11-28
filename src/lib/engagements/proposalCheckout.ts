@@ -2,11 +2,9 @@ import { createHash } from "node:crypto";
 import { effectiveAssessment } from "@/app/(app)/offers/builder/effectiveAssessment";
 import type { AssessmentState } from "@/app/(app)/offers/builder/ProposalCreationWorkspaceDemo";
 import {
-  hasCompanyBundle,
-  normalizeCompanyBundle,
-  priceCompanyBundle,
+  resolveBundlePricingOptions,
+  resolveCompanyBundleForTier,
 } from "@/lib/quotes/companyBundle";
-import { resolveAssessmentBundlePricingOptions } from "@/lib/quotes/publicProposal";
 import { proposalIncludedServices, proposalServiceAddOns } from "@/lib/quotes/proposalServices";
 import { proposalPaymentSchedule } from "@/lib/quotes/paymentSchedule";
 
@@ -145,15 +143,14 @@ export interface BundleCheckoutAmounts {
 }
 
 /**
- * Spec 02 bundle amounts for a published snapshot (one shared function, no
- * duplication with the builder). Returns null for legacy proposals so they
- * price exactly as today.
+ * Spec 02 bundle amounts for a published snapshot. Returns null for legacy
+ * proposals so they price exactly as today.
  *
  * The monthly obligation is the tier's bundleMonthly, already baked into
- * published pricing by the snapshot wiring — verified here against the
- * published monthly. When they disagree the snapshot predates the bundle
- * wiring (or was hand-edited), so the server-computed bundleMonthly wins
- * over a stale published number.
+ * published pricing by the snapshot wiring — read from the snapshot's one
+ * bundle object and verified against the published monthly. When they
+ * disagree the snapshot predates the bundle wiring (or was hand-edited), so
+ * the recomputed bundleMonthly wins over a stale published number.
  */
 export function resolveBundleCheckoutAmounts(
   publishedSnapshot: unknown,
@@ -161,19 +158,20 @@ export function resolveBundleCheckoutAmounts(
 ): BundleCheckoutAmounts | null {
   if (!isRecord(publishedSnapshot)) return null;
   const assessment = isRecord(publishedSnapshot.assessment) ? publishedSnapshot.assessment : {};
-  if (!hasCompanyBundle(assessment)) return null;
   const pricing = isRecord(publishedSnapshot.pricing) ? publishedSnapshot.pricing : {};
   const tierPricing = isRecord(pricing[tier]) ? pricing[tier] : {};
   const publishedMonthly = money(finiteNumber(tierPricing.monthly));
-  const priced = priceCompanyBundle({
-    companies: normalizeCompanyBundle(assessment.companies),
+  const resolved = resolveCompanyBundleForTier({
+    pricing,
     packageId: tier,
+    companies: assessment.companies,
     baseAssessment: effectiveAssessment(assessment as unknown as AssessmentState),
-    options: resolveAssessmentBundlePricingOptions(assessment),
+    options: resolveBundlePricingOptions(assessment),
   });
+  if (!resolved) return null;
   return {
-    bundleMonthly: priced.bundleMonthly === publishedMonthly ? publishedMonthly : priced.bundleMonthly,
-    setupTotal: priced.setupTotal,
+    bundleMonthly: resolved.bundleMonthly === publishedMonthly ? publishedMonthly : resolved.bundleMonthly,
+    setupTotal: resolved.setupTotal,
   };
 }
 

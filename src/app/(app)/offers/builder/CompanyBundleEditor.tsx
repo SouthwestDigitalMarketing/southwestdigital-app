@@ -10,6 +10,8 @@ import {
   type CompanyEntry,
   type CompanyFileStatus,
 } from "@/lib/quotes/companyBundle";
+// Note: per-proposal option resolution lives in companyBundle
+// (`resolveBundlePricingOptions`); this editor only edits the values.
 import type { AccountEntry } from "@/lib/quotes/accountInventory";
 import type { PackageId } from "@/lib/quotes/packagePricing";
 import AccountInventoryEditor from "./AccountInventoryEditor";
@@ -47,36 +49,6 @@ let companyIdCounter = 0;
 function newCompanyId(): string {
   companyIdCounter += 1;
   return `company-${Date.now().toString(36)}-${companyIdCounter}`;
-}
-
-/**
- * Per-proposal override of the three bundle pricing values. Missing or bad
- * fields fall back to the proposed defaults (read from options, never
- * hard-coded here beyond the imported default object). `priceCompanyBundle`
- * re-sanitizes before pricing, so this only settles what the UI shows.
- */
-export function resolveBundlePricingOptions(raw: unknown): BundlePricingOptions {
-  const fallback = DEFAULT_BUNDLE_PRICING_OPTIONS;
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { ...fallback };
-  const source = raw as Partial<BundlePricingOptions>;
-  const discount =
-    typeof source.additionalCompanyDiscountPct === "number" &&
-    Number.isFinite(source.additionalCompanyDiscountPct)
-      ? Math.min(100, Math.max(0, source.additionalCompanyDiscountPct))
-      : fallback.additionalCompanyDiscountPct;
-  const location =
-    typeof source.locationMonthlyCharge === "number" && Number.isFinite(source.locationMonthlyCharge)
-      ? Math.max(0, source.locationMonthlyCharge)
-      : fallback.locationMonthlyCharge;
-  const setup =
-    typeof source.newFileSetupCharge === "number" && Number.isFinite(source.newFileSetupCharge)
-      ? Math.max(0, source.newFileSetupCharge)
-      : fallback.newFileSetupCharge;
-  return {
-    additionalCompanyDiscountPct: discount,
-    locationMonthlyCharge: location,
-    newFileSetupCharge: setup,
-  };
 }
 
 /**
@@ -155,6 +127,7 @@ export default function CompanyBundleEditor({
         ownQboFile: true,
         fileStatus: "existing",
         locationsCount: 0,
+        propertiesCount: 0,
         accounts: mainAccounts,
         complexity: null,
       },
@@ -170,6 +143,7 @@ export default function CompanyBundleEditor({
         ownQboFile: true,
         fileStatus: "existing",
         locationsCount: 0,
+        propertiesCount: 0,
         accounts: [],
         complexity: null,
       },
@@ -316,6 +290,24 @@ export default function CompanyBundleEditor({
                     ))}
                   </select>
                 </label>
+                {company.ownQboFile ? (
+                  <label className="text-xs font-medium text-slate-700">
+                    Properties in this file
+                    <input
+                      className={inputClass}
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={company.propertiesCount}
+                      onChange={(event) => {
+                        const parsed = Number(event.target.value);
+                        updateCompany(company.id, {
+                          propertiesCount: Number.isFinite(parsed) ? Math.max(0, Math.trunc(parsed)) : 0,
+                        });
+                      }}
+                    />
+                  </label>
+                ) : null}
               </div>
               {company.fileStatus === "desktop_to_online" ? (
                 <p className="mt-2 text-xs text-slate-500">
@@ -435,7 +427,11 @@ export default function CompanyBundleEditor({
                   }
                   return (
                     <li key={entry.company.id} className="text-sm text-slate-700">
-                      {label} — {FILE_STATUS_LABELS[entry.company.fileStatus]} · standalone{" "}
+                      {label} — {FILE_STATUS_LABELS[entry.company.fileStatus]}
+                      {entry.company.ownQboFile && entry.company.propertiesCount > 0 ? (
+                        <> · {entry.company.propertiesCount} {entry.company.propertiesCount === 1 ? "property" : "properties"}</>
+                      ) : null}{" "}
+                      · standalone{" "}
                       {perPackageLine(standalone)} per month
                       {entry.isMain ? (
                         <> · main company, full price → {perPackageLine(discounted)} per month</>

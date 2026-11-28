@@ -179,8 +179,8 @@ describe("renderAgreementTemplate", () => {
   it("lists one fee line per company plus locations and setup lines with the bundle monthly total", () => {
     const priced = priceCompanyBundle({
       companies: [
-        { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 2, accounts: [], complexity: null },
-        { id: "beta", name: "Beta", ownQboFile: true, fileStatus: "new_file", locationsCount: 0, accounts: [], complexity: null },
+        { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 2, propertiesCount: 0, accounts: [], complexity: null },
+        { id: "beta", name: "Beta", ownQboFile: true, fileStatus: "new_file", locationsCount: 0, propertiesCount: 0, accounts: [], complexity: null },
       ],
       packageId: "maintain",
       baseAssessment: {},
@@ -197,6 +197,18 @@ describe("renderAgreementTemplate", () => {
     expect(text).toContain("Locations — location reporting: $50.00 per month");
     expect(text).toContain(`Ongoing Monthly Services: $${priced.bundleMonthly.toFixed(2)} per month`);
     expect(priced.bundleMonthly).toBe(500);
+  });
+
+  it("groups fee lines by kind even when labels mislead (F6)", () => {
+    const text = renderAgreementTemplate(DEFAULT_BOOKKEEPING_AGREEMENT_TEMPLATE, {
+      ...stagedInput,
+      companyFeeLines: [
+        { companyName: "X", kind: "company-monthly", label: "Not really a monthly line", amount: 100, cadence: "one-time" },
+        { companyName: "Y", kind: "setup", label: "Not really a one-time line", amount: 50, cadence: "monthly" },
+      ],
+    });
+    expect(text).toContain("Ongoing Monthly Services: $100.00 per month");
+    expect(text).toContain("Not really a one-time line: $50.00 (one-time)");
   });
 
   it("renders proposal-specific agreement fields without unresolved supported tokens", () => {

@@ -10,6 +10,7 @@ type SummaryRow = {
   monthly: number;
   setupOneTime: number;
   discountNote: string | null;
+  migrationNote: string | null;
 };
 
 function fmt(value: number) {
@@ -31,6 +32,10 @@ function summarize(priced: BundlePricing): {
       discountNote:
         !entry.isMain && entry.company.ownQboFile && entry.discountPct > 0
           ? `${entry.discountPct}% bundle discount`
+          : null,
+      migrationNote:
+        entry.company.fileStatus === "desktop_to_online"
+          ? "Desktop → Online migration (priced separately)"
           : null,
     })),
     locationsCount: priced.perCompany[0]?.company.locationsCount ?? 0,
@@ -54,6 +59,7 @@ function summarizePublic(bundle: PublicCompanyBundle): {
       // The public payload carries no pricing options, so the exact discount
       // percent is unknown here; staff preview shows the percent from options.
       discountNote: index > 0 && company.ownQboFile ? "bundle discount applied" : null,
+      migrationNote: company.migrationFlagged ? "Desktop → Online migration (priced separately)" : null,
     })),
     locationsCount: bundle.locationsCount,
     locationsMonthly: bundle.locationsMonthly,
@@ -92,6 +98,7 @@ export default function CompanyBundleSummary(props: CompanyBundleSummaryProps) {
                   {fmt(row.monthly)}
                   <span className="text-slate-500">/mo</span>
                   {row.discountNote ? <span className="block text-xs font-semibold text-emerald-700">{row.discountNote}</span> : null}
+                  {row.migrationNote ? <span className="block text-xs font-medium text-slate-500">{row.migrationNote}</span> : null}
                 </td>
               </tr>
             ))}

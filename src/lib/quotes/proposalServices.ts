@@ -1,5 +1,10 @@
 import { extraIsRealEstateSpecific } from "./catalog";
 import { serviceLevelTitle } from "./serviceLevels";
+import {
+  hasCompanyBundle,
+  NEW_QUICKBOOKS_FILE_SERVICE_ID,
+  normalizeCompanyBundle,
+} from "./companyBundle";
 
 // Shared by preview and checkout: eligibility must not depend on browser state.
 export const SERVICE_TIERS = ["maintain", "improve", "grow"] as const;
@@ -96,6 +101,11 @@ export function proposalServiceAddOns(
   assessmentValue: unknown,
 ): ProposalServiceAddOn[] {
   const assessment = record(assessmentValue);
+  // Spec 02 R2: when the bundle already charges a per-file new-QuickBooks
+  // setup, the legacy catalog line for the same work must not charge again.
+  const bundleOwnsNewFileSetup =
+    hasCompanyBundle({ companies: assessment.companies }) &&
+    normalizeCompanyBundle(assessment.companies).some((company) => company.fileStatus === "new_file");
   const selections = record(assessment.bonusPackageSelections);
   const result = new Map<string, ProposalServiceAddOn>();
   const append = (
@@ -104,6 +114,7 @@ export function proposalServiceAddOns(
     packages: ServiceTier[],
     fallbackCadence: "monthly" | "one-time",
   ) => {
+    if (bundleOwnsNewFileSetup && item.id === NEW_QUICKBOOKS_FILE_SERVICE_ID) return;
     if (
       typeof item.id !== "string" ||
       item.archived === true ||

@@ -119,8 +119,8 @@ describe("public proposal select API", () => {
 
 describe("select API with a company bundle", () => {
   const bundleCompanies = [
-    { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 0, accounts: [] },
-    { id: "b", name: "B Co", ownQboFile: true, fileStatus: "new_file", locationsCount: 0, accounts: [] },
+    { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 0, propertiesCount: 0, accounts: [] },
+    { id: "b", name: "B Co", ownQboFile: true, fileStatus: "new_file", locationsCount: 0, propertiesCount: 0, accounts: [] },
   ];
 
   function bundleEngagementRow() {
@@ -178,6 +178,45 @@ describe("select API with a company bundle", () => {
     expect(body.checkout?.additionalOneTimeTotal).toBe(150);
     expect(body.checkout?.onboardingFee).toBe(500);
     expect(body.checkout?.amountDueNow).toBe(1100);
+  });
+
+  it("reads the selected tier from the snapshot bundle object", async () => {
+    const { buildCompanyBundleSnapshot, DEFAULT_BUNDLE_PRICING_OPTIONS } =
+      await import("@/lib/quotes/companyBundle");
+    const stored = {
+      annualSavingsPercent: 20,
+      historicalCleanupPeriods: [],
+      additionalOptions: [],
+      companies: bundleCompanies,
+    };
+    const companyBundle = buildCompanyBundleSnapshot({
+      companies: bundleCompanies,
+      baseAssessment: stored,
+      options: DEFAULT_BUNDLE_PRICING_OPTIONS,
+    });
+    mocks.engagement.mockResolvedValue({
+      ...engagementRow(),
+      quotes: [{
+        publishedSnapshotJson: null,
+        revisions: [{
+          snapshotJson: {
+            assessment: stored,
+            pricing: {
+              maintain: { monthly: 450 },
+              improve: { monthly: 450 },
+              grow: { monthly: 675 },
+              companyBundle,
+            },
+          },
+        }],
+      }],
+    });
+    const response = await selectTier("grow");
+    expect(response.status).toBe(200);
+    const body = await response.json() as { ok?: boolean; checkout?: Record<string, number> };
+    expect(body.checkout?.baseMonthlyTotal).toBe(675);
+    expect(body.checkout?.additionalOneTimeTotal).toBe(150);
+    expect(body.checkout?.amountDueNow).toBe(500 + 150 + 675);
   });
 
   it("leaves a legacy selection identical (no setup, published monthly)", async () => {

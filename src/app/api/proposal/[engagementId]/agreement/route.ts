@@ -13,11 +13,8 @@ import { isQuoteFrozen } from "@/lib/quotes/isQuoteFrozen";
 import type { Prisma } from "@prisma/client";
 import {
   companyBundleFeeLines,
-  DEFAULT_BUNDLE_PRICING_OPTIONS,
-  hasCompanyBundle,
-  normalizeCompanyBundle,
-  priceCompanyBundle,
-  type BundlePricingOptions,
+  resolveBundlePricingOptions,
+  resolveCompanyBundleForTier,
 } from "@/lib/quotes/companyBundle";
 import { effectiveAssessment } from "@/app/(app)/offers/builder/effectiveAssessment";
 import type { AssessmentState } from "@/app/(app)/offers/builder/ProposalCreationWorkspaceDemo";
@@ -48,6 +45,17 @@ export async function GET(
       agreementManagerStatus: true,
       agreementCancellationRequestedAt: true,
       isTestProposal: true,
+      quotes: {
+        take: 1,
+        select: {
+          publishedSnapshotJson: true,
+          revisions: {
+            take: 1,
+            orderBy: { version: "desc" },
+            select: { snapshotJson: true },
+          },
+        },
+      },
     },
   });
   if (!engagement) {
@@ -105,17 +113,21 @@ export async function GET(
   // Spec 02: one fee line per company when the stored assessment has a
   // bundle. Signed/stored text is never rebuilt, so this only affects newly
   // generated agreements; legacy assessments pass nothing (byte-identical).
-  const bundlePricingOptions: BundlePricingOptions =
-    (assessment as { bundlePricingOptions?: BundlePricingOptions }).bundlePricingOptions
-    ?? DEFAULT_BUNDLE_PRICING_OPTIONS;
-  const companyFeeLines = hasCompanyBundle(assessment)
-    ? companyBundleFeeLines(priceCompanyBundle({
-        companies: normalizeCompanyBundle(assessment.companies),
-        packageId: checkout?.tier ?? "maintain",
-        baseAssessment: effectiveAssessment(assessment as unknown as AssessmentState),
-        options: bundlePricingOptions,
-      }))
+  // The selected tier reads the snapshot's one bundle object; old snapshots
+  // without it fall back to a fresh priceCompanyBundle for that tier.
+  const quote = engagement.quotes?.[0];
+  const publishedSnapshot = quote?.revisions?.[0]?.snapshotJson ?? quote?.publishedSnapshotJson;
+  const snapshotPricing = isRecord(publishedSnapshot) && isRecord(publishedSnapshot.pricing)
+    ? publishedSnapshot.pricing
     : undefined;
+  const companyBundle = resolveCompanyBundleForTier({
+    pricing: snapshotPricing,
+    packageId: checkout?.tier ?? "maintain",
+    companies: assessment.companies,
+    baseAssessment: effectiveAssessment(assessment as unknown as AssessmentState),
+    options: resolveBundlePricingOptions(assessment),
+  });
+  const companyFeeLines = companyBundle ? companyBundleFeeLines(companyBundle) : undefined;
   const renderInput = {
     brandName: brand?.name ?? "Bookkeeping Conroe",
     clientName: engagement.clientName || "Client",

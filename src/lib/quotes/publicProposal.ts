@@ -4,16 +4,15 @@ import { z } from "zod";
 import { slugifyTagKey } from "@/lib/contacts/tags";
 import { toPublicAccountInventory, type PublicAccountInventory } from "@/lib/quotes/accountInventory";
 import {
+  buildCompanyBundleSnapshot,
   hasCompanyBundle,
-  normalizeCompanyBundle,
-  priceCompanyBundle,
-  toPublicCompanyBundle,
+  resolveBundlePricingOptions as resolveCanonicalBundlePricingOptions,
+  toPublicCompanyBundleMap,
   type BundlePricingOptions,
-  type PublicCompanyBundle,
+  type PublicCompanyBundleMap,
 } from "@/lib/quotes/companyBundle";
 import { effectiveAssessment } from "@/app/(app)/offers/builder/effectiveAssessment";
 import type { AssessmentState } from "@/app/(app)/offers/builder/ProposalCreationWorkspaceDemo";
-import { sanitizeBundlePricingDefaults } from "@/lib/quotes/optionsTemplates";
 
 const tier = z.enum(["maintain", "improve", "grow"]);
 const text = z.string().max(100_000);
@@ -136,34 +135,31 @@ function remapPublicDescription<T extends { id: string; description: string }>(
 /**
  * Resolve the Spec 02 bundle options for a stored assessment: the
  * per-proposal `bundlePricingOptions` override wins, then the template
- * `bundlePricingDefaults` applied to the proposal, then the proposed
- * defaults from companyBundle. Never hard-codes amounts here.
+ * `bundlePricingDefaults` applied to the proposal, then the brand catalog
+ * `new-quickbooks-file` price (when above zero), then the proposed defaults.
+ * Never hard-codes amounts here. Delegates to the one canonical resolver.
  */
 export function resolveAssessmentBundlePricingOptions(assessment: unknown): BundlePricingOptions {
-  const source = record(assessment);
-  return sanitizeBundlePricingDefaults(
-    source.bundlePricingOptions ?? source.bundlePricingDefaults,
-  );
+  return resolveCanonicalBundlePricingOptions(assessment);
 }
 
 /**
- * Public bundle for a stored snapshot, or null for legacy proposals without
- * one. Priced from the maintain tier off the effective assessment — the same
- * inputs P1's snapshot wiring uses — so the public per-company lines add up
- * to the published maintain monthly. Raw companies (account ids, sources)
+ * Whitelisted per-tier public bundle for a stored snapshot, or null for
+ * legacy proposals without one. Built from the same one bundle object the
+ * snapshot publishes, so the public per-company lines add up to the
+ * published monthly of each tier. Raw companies (account ids, sources)
  * never leave this function; only whitelisted names and amounts do.
  */
-export function publicCompanyBundleForSnapshot(snapshotValue: unknown): PublicCompanyBundle | null {
+export function publicCompanyBundleForSnapshot(snapshotValue: unknown): PublicCompanyBundleMap | null {
   const snapshot = record(snapshotValue);
   const rawAssessment = record(snapshot.assessment);
   if (!hasCompanyBundle(rawAssessment)) return null;
-  const priced = priceCompanyBundle({
-    companies: normalizeCompanyBundle(rawAssessment.companies),
-    packageId: "maintain",
+  const bundle = buildCompanyBundleSnapshot({
+    companies: rawAssessment.companies,
     baseAssessment: effectiveAssessment(rawAssessment as unknown as AssessmentState),
     options: resolveAssessmentBundlePricingOptions(rawAssessment),
   });
-  return toPublicCompanyBundle(rawAssessment.companies, priced);
+  return toPublicCompanyBundleMap(rawAssessment.companies, bundle);
 }
 
 export function toPublicBookkeepingProposal(

@@ -261,7 +261,7 @@ describe("public proposal data boundary", () => {
     const result = toPublicBookkeepingProposal({
       assessment: {
         companies: [
-          { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 0, accounts: [] },
+          { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 0, propertiesCount: 0, accounts: [] },
         ],
       },
       pricing,
@@ -281,7 +281,7 @@ describe("public proposal data boundary", () => {
             name: "Main Co",
             ownQboFile: true,
             fileStatus: "existing",
-            locationsCount: 0,
+            locationsCount: 0, propertiesCount: 0,
             accounts: [
               { id: privateValue, kind: "checking", label: "Chase", last4: "1234", status: "open", monthlyTransactions: 80, basis: "measured", source: privateValue, secret: privateValue },
             ],
@@ -291,7 +291,7 @@ describe("public proposal data boundary", () => {
             name: "Second Co",
             ownQboFile: true,
             fileStatus: "new_file",
-            locationsCount: 0,
+            locationsCount: 0, propertiesCount: 0,
             accounts: [
               { id: privateValue, kind: "checking", label: "Second", status: "open", monthlyTransactions: 10, basis: "measured", source: privateValue },
             ],
@@ -306,13 +306,33 @@ describe("public proposal data boundary", () => {
       pricing: { maintain: { monthly: 450 }, improve: { monthly: 600 }, grow: { monthly: 750 } },
     });
     expect(result.companyBundle).toEqual({
-      companies: [
-        { name: "Main Co", ownQboFile: true, monthly: 250, setupOneTime: 0 },
-        { name: "Second Co", ownQboFile: true, monthly: 200, setupOneTime: 150 },
-      ],
-      locationsCount: 0,
-      locationsMonthly: 0,
-      bundleMonthly: 450,
+      maintain: {
+        companies: [
+          { name: "Main Co", ownQboFile: true, monthly: 250, setupOneTime: 0, migrationFlagged: false },
+          { name: "Second Co", ownQboFile: true, monthly: 200, setupOneTime: 150, migrationFlagged: false },
+        ],
+        locationsCount: 0,
+        locationsMonthly: 0,
+        bundleMonthly: 450,
+      },
+      improve: {
+        companies: [
+          { name: "Main Co", ownQboFile: true, monthly: 250, setupOneTime: 0, migrationFlagged: false },
+          { name: "Second Co", ownQboFile: true, monthly: 200, setupOneTime: 150, migrationFlagged: false },
+        ],
+        locationsCount: 0,
+        locationsMonthly: 0,
+        bundleMonthly: 450,
+      },
+      grow: {
+        companies: [
+          { name: "Main Co", ownQboFile: true, monthly: 375, setupOneTime: 0, migrationFlagged: false },
+          { name: "Second Co", ownQboFile: true, monthly: 300, setupOneTime: 150, migrationFlagged: false },
+        ],
+        locationsCount: 0,
+        locationsMonthly: 0,
+        bundleMonthly: 675,
+      },
     });
     expect(JSON.stringify(result)).not.toContain(privateValue);
     expect(JSON.stringify(result)).not.toContain("second-secret-id");
@@ -323,8 +343,8 @@ describe("public proposal data boundary", () => {
 
   it("reads the per-proposal bundle override before template defaults", () => {
     const companies = [
-      { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 0, accounts: [] },
-      { id: "b", name: "B Co", ownQboFile: true, fileStatus: "existing", locationsCount: 0, accounts: [] },
+      { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 0, propertiesCount: 0, accounts: [] },
+      { id: "b", name: "B Co", ownQboFile: true, fileStatus: "existing", locationsCount: 0, propertiesCount: 0, accounts: [] },
     ];
     const overridden = toPublicBookkeepingProposal({
       assessment: {
@@ -334,7 +354,7 @@ describe("public proposal data boundary", () => {
       },
       pricing,
     });
-    expect(overridden.companyBundle?.bundleMonthly).toBe(375);
+    expect(overridden.companyBundle?.maintain.bundleMonthly).toBe(375);
     const fromDefaults = toPublicBookkeepingProposal({
       assessment: {
         companies,
@@ -342,7 +362,7 @@ describe("public proposal data boundary", () => {
       },
       pricing,
     });
-    expect(fromDefaults.companyBundle?.bundleMonthly).toBe(450);
+    expect(fromDefaults.companyBundle?.maintain.bundleMonthly).toBe(450);
   });
 
   it("blanks public description when catalog clientBenefit is empty and snapshot description equals internalDescription", () => {

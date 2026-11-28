@@ -230,8 +230,8 @@ describe("catalog materialization", () => {
     const bundled = {
       ...saved,
       companies: [
-        { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 0, accounts: [] },
-        { id: "b", name: "B Co", ownQboFile: true, fileStatus: "new_file", locationsCount: 0, accounts: [] },
+        { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 0, propertiesCount: 0, accounts: [] },
+        { id: "b", name: "B Co", ownQboFile: true, fileStatus: "new_file", locationsCount: 0, propertiesCount: 0, accounts: [] },
       ],
       bundlePricingOptions: { additionalCompanyDiscountPct: 20, locationMonthlyCharge: 25, newFileSetupCharge: 150 },
       bundlePricingDefaults: { additionalCompanyDiscountPct: 15, locationMonthlyCharge: 30, newFileSetupCharge: 99 },

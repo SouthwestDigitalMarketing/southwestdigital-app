@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
+  asPublicCompanyBundleMap,
+  buildCompanyBundleSnapshot,
   companyBundleFeeLines,
   DEFAULT_BUNDLE_PRICING_OPTIONS,
   hasCompanyBundle,
   normalizeCompanyBundle,
   priceCompanyBundle,
+  resolveBundlePricingOptions,
+  resolveCompanyBundleForTier,
   toPublicCompanyBundle,
+  toPublicCompanyBundleMap,
   type BundlePricingOptions,
   type CompanyEntry,
 } from "./companyBundle";
@@ -22,6 +27,7 @@ function company(overrides: Partial<CompanyEntry> = {}): CompanyEntry {
     ownQboFile: true,
     fileStatus: "existing",
     locationsCount: 0,
+    propertiesCount: 0,
     accounts: [],
     complexity: null,
     ...overrides,
@@ -46,6 +52,7 @@ describe("normalizeCompanyBundle", () => {
         ownQboFile: true,
         fileStatus: "existing",
         locationsCount: 0,
+        propertiesCount: 0,
         accounts: [],
         complexity: null,
       },
@@ -60,10 +67,11 @@ describe("normalizeCompanyBundle", () => {
         ownQboFile: false,
         fileStatus: "new_file",
         locationsCount: "3",
+        propertiesCount: "4",
         accounts: [{ ...account("a1", 50) }, { id: "bad", kind: "bogus" }],
         complexity: { drivers: 2 },
       },
-      { id: "a", fileStatus: "desktop", locationsCount: -4, accounts: "nope", complexity: [1] },
+      { id: "a", fileStatus: "desktop", locationsCount: -4, propertiesCount: -2, accounts: "nope", complexity: [1] },
     ]);
     expect(normalized).toEqual([
       {
@@ -72,6 +80,7 @@ describe("normalizeCompanyBundle", () => {
         ownQboFile: false,
         fileStatus: "new_file",
         locationsCount: 3,
+        propertiesCount: 4,
         accounts: [account("a1", 50)],
         complexity: { drivers: 2 },
       },
@@ -81,6 +90,7 @@ describe("normalizeCompanyBundle", () => {
         ownQboFile: true,
         fileStatus: "existing",
         locationsCount: 0,
+        propertiesCount: 0,
         accounts: [],
         complexity: null,
       },
@@ -115,6 +125,48 @@ describe("hasCompanyBundle", () => {
     expect(hasCompanyBundle({ companies: [company(), company({ id: "b", name: "B" })] })).toBe(true);
     expect(hasCompanyBundle({ companies: [company({ locationsCount: 2 })] })).toBe(true);
     expect(hasCompanyBundle({ companies: [company({ fileStatus: "new_file" })] })).toBe(true);
+  });
+
+  it("ignores tag-only additions so the legacy per-entity charge survives", () => {
+    expect(
+      hasCompanyBundle({ companies: [company(), company({ id: "tag", name: "Downtown", ownQboFile: false })] }),
+    ).toBe(false);
+    expect(
+      hasCompanyBundle({
+        companies: [
+          company(),
+          company({ id: "t1", name: "Tag 1", ownQboFile: false }),
+          company({ id: "t2", name: "Tag 2", ownQboFile: false }),
+        ],
+      }),
+    ).toBe(false);
+    // One owned second file among tags still activates the bundle.
+    expect(
+      hasCompanyBundle({
+        companies: [
+          company(),
+          company({ id: "tag", name: "Downtown", ownQboFile: false }),
+          company({ id: "b", name: "B" }),
+        ],
+      }),
+    ).toBe(true);
+  });
+
+  it("prices a solo main company with ownQboFile=false like the main file", () => {
+    // The main row is always the main file; the flag only matters past index 0.
+    expect(hasCompanyBundle({ companies: [company({ ownQboFile: false })] })).toBe(false);
+    const priced = priceCompanyBundle({
+      companies: [company({ ownQboFile: false })],
+      packageId: "maintain",
+      baseAssessment: {},
+      options: OPTIONS,
+    });
+    expect(priced.perCompany[0]).toMatchObject({
+      isMain: true,
+      standaloneMonthly: 250,
+      discountedMonthly: 250,
+    });
+    expect(priced.bundleMonthly).toBe(250);
   });
 
   it("treats desktop_to_online as flagged only, not a bundle", () => {
@@ -252,6 +304,26 @@ describe("priceCompanyBundle", () => {
     expect(priced.perCompany[0].standaloneMonthly).toBeGreaterThan(250);
     expect(priced.perCompany[1].standaloneMonthly).toBe(250);
   });
+
+  it("prices an added company's properties through the per-property rules", () => {
+    // 4 properties x $50 recurringPerProperty on an empty file: 250 + 200 = 450 standalone.
+    const priced = priceCompanyBundle({
+      companies: [company(), company({ id: "b", name: "Beta", propertiesCount: 4 })],
+      packageId: "maintain",
+      baseAssessment: { numberOfProperties: 9 },
+      options: OPTIONS,
+    });
+    expect(priced.perCompany[1]).toMatchObject({
+      isMain: false,
+      standaloneMonthly: 450,
+      discountPct: 20,
+      // 450 x 0.8 = 360, already on the $5 grid.
+      discountedMonthly: 360,
+    });
+    expect(priced.discountTotal).toBe(90);
+    // The main file still prices its own 9 properties from the base assessment.
+    expect(priced.perCompany[0].standaloneMonthly).toBe(250 + 9 * 50);
+  });
 });
 
 describe("companyBundleFeeLines", () => {
@@ -267,11 +339,45 @@ describe("companyBundleFeeLines", () => {
       options: OPTIONS,
     });
     expect(companyBundleFeeLines(priced)).toEqual([
-      { label: "Main Co — monthly bookkeeping", amount: 250, cadence: "monthly" },
-      { label: "Beta — monthly bookkeeping (bundle, 20% off)", amount: 200, cadence: "monthly" },
-      { label: "Beta — new QuickBooks file setup", amount: 150, cadence: "one-time" },
-      { label: "Downtown — location (included with main file)", amount: 0, cadence: "monthly" },
-      { label: "Locations — location reporting", amount: 50, cadence: "monthly" },
+      { companyName: "Main Co", kind: "company-monthly", label: "Main Co — monthly bookkeeping", amount: 250, cadence: "monthly" },
+      { companyName: "Beta", kind: "company-monthly", label: "Beta — monthly bookkeeping (bundle, 20% off)", amount: 200, cadence: "monthly" },
+      { companyName: "Beta", kind: "setup", label: "Beta — new QuickBooks file setup", amount: 150, cadence: "one-time" },
+      { companyName: "Downtown", kind: "tag", label: "Downtown — location (included with main file)", amount: 0, cadence: "monthly" },
+      { companyName: "Main Co", kind: "locations", label: "Locations — location reporting", amount: 50, cadence: "monthly" },
+    ]);
+  });
+
+  it("marks a desktop-to-online company as priced separately without charging it", () => {
+    const priced = priceCompanyBundle({
+      companies: [
+        company({ name: "Main Co" }),
+        company({ id: "b", name: "Beta", fileStatus: "desktop_to_online" }),
+      ],
+      packageId: "maintain",
+      baseAssessment: {},
+      options: OPTIONS,
+    });
+    const lines = companyBundleFeeLines(priced);
+    expect(lines).toContainEqual({
+      companyName: "Beta",
+      kind: "migration",
+      label: "Beta — Desktop → Online migration (priced separately)",
+      amount: 0,
+      cadence: "one-time",
+    });
+    expect(priced.setupTotal).toBe(0);
+    expect(priced.bundleMonthly).toBe(450);
+  });
+
+  it("keys the main line on the company even when its own-file flag is false", () => {
+    const priced = priceCompanyBundle({
+      companies: [company({ name: "Main Co", ownQboFile: false })],
+      packageId: "maintain",
+      baseAssessment: {},
+      options: OPTIONS,
+    });
+    expect(companyBundleFeeLines(priced)).toEqual([
+      { companyName: "Main Co", kind: "company-monthly", label: "Main Co — monthly bookkeeping", amount: 250, cadence: "monthly" },
     ]);
   });
 });
@@ -291,12 +397,158 @@ describe("toPublicCompanyBundle", () => {
     const pricing = priceCompanyBundle({ companies: raw, packageId: "maintain", baseAssessment: {}, options: OPTIONS });
     expect(toPublicCompanyBundle(raw, pricing)).toEqual({
       companies: [
-        { name: "Main Co", ownQboFile: true, monthly: 250, setupOneTime: 0 },
-        { name: "Beta", ownQboFile: true, monthly: 200, setupOneTime: 150 },
+        { name: "Main Co", ownQboFile: true, monthly: 250, setupOneTime: 0, migrationFlagged: false },
+        { name: "Beta", ownQboFile: true, monthly: 200, setupOneTime: 150, migrationFlagged: false },
       ],
       locationsCount: 2,
       locationsMonthly: 50,
       bundleMonthly: 500,
     });
+  });
+
+  it("flags desktop-to-online companies in the public shape", () => {
+    const raw = [
+      company({ name: "Main Co" }),
+      company({ id: "b", name: "Beta", fileStatus: "desktop_to_online" }),
+    ];
+    const pricing = priceCompanyBundle({ companies: raw, packageId: "maintain", baseAssessment: {}, options: OPTIONS });
+    expect(toPublicCompanyBundle(raw, pricing)?.companies[1]).toMatchObject({
+      name: "Beta",
+      monthly: 200,
+      setupOneTime: 0,
+      migrationFlagged: true,
+    });
+  });
+});
+
+describe("buildCompanyBundleSnapshot", () => {
+  it("returns null when no bundle is active", () => {
+    expect(buildCompanyBundleSnapshot({ companies: [], baseAssessment: {}, options: OPTIONS })).toBeNull();
+    expect(
+      buildCompanyBundleSnapshot({
+        companies: [company(), company({ id: "tag", name: "Tag", ownQboFile: false })],
+        baseAssessment: {},
+        options: OPTIONS,
+      }),
+    ).toBeNull();
+  });
+
+  it("prices every tier once with a single options resolution", () => {
+    const snapshot = buildCompanyBundleSnapshot({
+      companies: [company(), company({ id: "b", name: "Beta" })],
+      baseAssessment: {},
+      options: OPTIONS,
+    });
+    expect(snapshot).not.toBeNull();
+    // Empty files: main 250/250/375, Beta 200/200/300.
+    expect(snapshot!.maintain.bundleMonthly).toBe(450);
+    expect(snapshot!.improve.bundleMonthly).toBe(450);
+    expect(snapshot!.grow.bundleMonthly).toBe(675);
+    expect(snapshot!.maintain.discountTotal).toBe(50);
+  });
+});
+
+describe("resolveCompanyBundleForTier", () => {
+  const companies = [company(), company({ id: "b", name: "Beta" })];
+
+  it("reads the published snapshot object instead of recomputing", () => {
+    const snapshot = buildCompanyBundleSnapshot({ companies, baseAssessment: {}, options: OPTIONS });
+    const pricing = { maintain: { monthly: 1 }, improve: { monthly: 2 }, grow: { monthly: 3 }, companyBundle: snapshot };
+    const resolved = resolveCompanyBundleForTier({ pricing, packageId: "grow", companies: [], options: OPTIONS });
+    // Empty fallback companies prove nothing was recomputed: the snapshot wins.
+    expect(resolved?.bundleMonthly).toBe(675);
+  });
+
+  it("falls back to priceCompanyBundle for old snapshots without the object", () => {
+    const resolved = resolveCompanyBundleForTier({
+      pricing: { maintain: { monthly: 999 } },
+      packageId: "maintain",
+      companies,
+      baseAssessment: {},
+      options: OPTIONS,
+    });
+    expect(resolved?.bundleMonthly).toBe(450);
+  });
+
+  it("returns null for legacy assessments either way", () => {
+    expect(resolveCompanyBundleForTier({ pricing: {}, packageId: "maintain", companies: [] })).toBeNull();
+    expect(
+      resolveCompanyBundleForTier({ pricing: { companyBundle: { bogus: true } }, packageId: "maintain", companies: [] }),
+    ).toBeNull();
+  });
+});
+
+describe("resolveBundlePricingOptions", () => {
+  it("prefers the per-proposal override, then template defaults, then the proposed default", () => {
+    expect(resolveBundlePricingOptions({})).toEqual(DEFAULT_BUNDLE_PRICING_OPTIONS);
+    expect(
+      resolveBundlePricingOptions({
+        bundlePricingDefaults: { additionalCompanyDiscountPct: 10, locationMonthlyCharge: 5, newFileSetupCharge: 99 },
+      }),
+    ).toEqual({ additionalCompanyDiscountPct: 10, locationMonthlyCharge: 5, newFileSetupCharge: 99 });
+    expect(
+      resolveBundlePricingOptions({
+        bundlePricingOptions: { additionalCompanyDiscountPct: 30, locationMonthlyCharge: 5, newFileSetupCharge: 99 },
+        bundlePricingDefaults: { additionalCompanyDiscountPct: 10, locationMonthlyCharge: 5, newFileSetupCharge: 11 },
+      }),
+    ).toEqual({ additionalCompanyDiscountPct: 30, locationMonthlyCharge: 5, newFileSetupCharge: 99 });
+    // Partial override: set fields win, the rest fall through to template defaults.
+    expect(
+      resolveBundlePricingOptions({
+        bundlePricingOptions: { additionalCompanyDiscountPct: 50 },
+        bundlePricingDefaults: { additionalCompanyDiscountPct: 10, locationMonthlyCharge: 7, newFileSetupCharge: 77 },
+      }),
+    ).toEqual({ additionalCompanyDiscountPct: 50, locationMonthlyCharge: 7, newFileSetupCharge: 77 });
+  });
+
+  it("uses the brand catalog new-quickbooks-file price above zero before the $150 fallback", () => {
+    const bonuses = [{ id: "new-quickbooks-file", name: "New QuickBooks Setup", description: "", archived: false, addOnPrice: 99, addOnPackageIds: [] }];
+    expect(
+      resolveBundlePricingOptions({ bonuses }).newFileSetupCharge,
+    ).toBe(99);
+    // The seed row is $0.00: no price carried, so the proposed $150 applies.
+    const zeroed = [{ id: "new-quickbooks-file", name: "New QuickBooks Setup", description: "", archived: false }];
+    expect(resolveBundlePricingOptions({ bonuses: zeroed }).newFileSetupCharge).toBe(150);
+    // An explicit override still beats the catalog.
+    expect(
+      resolveBundlePricingOptions({ bonuses, bundlePricingOptions: { newFileSetupCharge: 40 } }).newFileSetupCharge,
+    ).toBe(40);
+    // Template defaults beat the catalog too.
+    expect(
+      resolveBundlePricingOptions({ bonuses, bundlePricingDefaults: { newFileSetupCharge: 80 } }).newFileSetupCharge,
+    ).toBe(80);
+  });
+});
+
+describe("toPublicCompanyBundleMap", () => {
+  it("maps every tier so the public block can show the selected tab", () => {
+    const raw = [
+      company({ name: "Main Co" }),
+      company({ id: "b", name: "Beta", fileStatus: "new_file" }),
+    ];
+    const snapshot = buildCompanyBundleSnapshot({ companies: raw, baseAssessment: {}, options: OPTIONS });
+    const mapped = toPublicCompanyBundleMap(raw, snapshot);
+    expect(mapped?.maintain.bundleMonthly).toBe(450);
+    expect(mapped?.improve.bundleMonthly).toBe(450);
+    expect(mapped?.grow.bundleMonthly).toBe(675);
+    expect(mapped?.grow.companies[1]).toMatchObject({ name: "Beta", monthly: 300, setupOneTime: 150 });
+  });
+
+  it("returns null without a snapshot", () => {
+    expect(toPublicCompanyBundleMap([company()], null)).toBeNull();
+  });
+
+  it("reads a legacy single-tier payload as every tier", () => {
+    const single = toPublicCompanyBundle([company(), company({ id: "b", name: "Beta" })], priceCompanyBundle({
+      companies: [company(), company({ id: "b", name: "Beta" })],
+      packageId: "maintain",
+      baseAssessment: {},
+      options: OPTIONS,
+    }));
+    const mapped = asPublicCompanyBundleMap(single);
+    expect(mapped?.maintain.bundleMonthly).toBe(450);
+    expect(mapped?.grow.bundleMonthly).toBe(450);
+    expect(asPublicCompanyBundleMap(null)).toBeNull();
+    expect(asPublicCompanyBundleMap({ bogus: true })).toBeNull();
   });
 });

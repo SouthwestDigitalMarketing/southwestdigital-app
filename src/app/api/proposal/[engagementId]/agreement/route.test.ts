@@ -244,8 +244,8 @@ describe("public proposal agreement API", () => {
 
   it("lists one fee line per company with the bundle monthly total for a bundled assessment", async () => {
     const companies = [
-      { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 1, accounts: [], complexity: null },
-      { id: "beta", name: "Beta LLC", ownQboFile: true, fileStatus: "new_file", locationsCount: 0, accounts: [], complexity: null },
+      { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 1, propertiesCount: 0, accounts: [], complexity: null },
+      { id: "beta", name: "Beta LLC", ownQboFile: true, fileStatus: "new_file", locationsCount: 0, propertiesCount: 0, accounts: [], complexity: null },
     ];
     const base = rowWithAccounts(accounts);
     const storedAssessment = { ...base.onboardingData.proposalBuilderState.assessment, companies };
@@ -279,6 +279,50 @@ describe("public proposal agreement API", () => {
     });
   });
 
+  it("reads the selected tier from the snapshot bundle object", async () => {
+    const companies = [
+      { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 0, propertiesCount: 0, accounts: [], complexity: null },
+      { id: "beta", name: "Beta LLC", ownQboFile: true, fileStatus: "new_file", locationsCount: 0, propertiesCount: 0, accounts: [], complexity: null },
+    ];
+    const base = rowWithAccounts(accounts);
+    const storedAssessment = { ...base.onboardingData.proposalBuilderState.assessment, companies };
+    const priced = (packageId: "maintain" | "improve" | "grow") => priceCompanyBundle({
+      companies: normalizeCompanyBundle(companies),
+      packageId,
+      baseAssessment: effectiveAssessment(storedAssessment as unknown as AssessmentState),
+      options: DEFAULT_BUNDLE_PRICING_OPTIONS,
+    });
+    // Hand-adjusted improve tier: the route must read this object, not recompute it.
+    const tamperedImprove = priced("improve");
+    tamperedImprove.perCompany[1] = { ...tamperedImprove.perCompany[1], standaloneMonthly: 260, discountedMonthly: 210 };
+    tamperedImprove.bundleMonthly = 550;
+    const snapshotPricing = {
+      maintain: { monthly: 450 },
+      improve: { monthly: 550 },
+      grow: { monthly: 675 },
+      companyBundle: { maintain: priced("maintain"), improve: tamperedImprove, grow: priced("grow") },
+    };
+    mocks.engagement.mockResolvedValue({
+      ...base,
+      agreementText: null,
+      onboardingData: {
+        ...base.onboardingData,
+        proposalBuilderState: { ...base.onboardingData.proposalBuilderState, assessment: storedAssessment },
+      },
+      quotes: [{
+        publishedSnapshotJson: null,
+        revisions: [{ snapshotJson: { assessment: storedAssessment, pricing: snapshotPricing } }],
+      }],
+    });
+    const body = await (await call()).json();
+    // Main prices $340 from the inventoried accounts; Beta reads the tampered
+    // $210 object line (a recompute would print $200.00 instead).
+    expect(body.text).toContain("Main Co — monthly bookkeeping: $340.00 per month");
+    expect(body.text).toContain("Beta LLC — monthly bookkeeping (bundle, 20% off): $210.00");
+    expect(body.text).toContain("Ongoing Monthly Services: $550.00 per month");
+    expect(body.text).not.toContain("$200.00 per month");
+  });
+
   it("does not rebuild a bundled signed agreement", async () => {
     const storedText = "Signed bundled agreement\r\n  Preserve whitespace verbatim.\n";
     mocks.engagement.mockResolvedValue({
@@ -290,8 +334,8 @@ describe("public proposal agreement API", () => {
           assessment: {
             accounts,
             companies: [
-              { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 0, accounts: [], complexity: null },
-              { id: "beta", name: "Beta LLC", ownQboFile: true, fileStatus: "existing", locationsCount: 0, accounts: [], complexity: null },
+              { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 0, propertiesCount: 0, accounts: [], complexity: null },
+              { id: "beta", name: "Beta LLC", ownQboFile: true, fileStatus: "existing", locationsCount: 0, propertiesCount: 0, accounts: [], complexity: null },
             ],
           },
           services: {},

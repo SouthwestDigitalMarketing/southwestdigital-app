@@ -77,16 +77,16 @@ import {
   type PackagePricingSummary,
 } from "@/lib/quotes/packagePricing";
 import {
+  buildCompanyBundleSnapshot,
   hasCompanyBundle,
   normalizeCompanyBundle,
-  priceCompanyBundle,
+  resolveBundlePricingOptions,
+  sanitizeBundlePricingOverride,
   type BundlePricingOptions,
+  type CompanyBundleSnapshot,
   type CompanyEntry,
 } from "@/lib/quotes/companyBundle";
-import CompanyBundleEditor, {
-  resolveBundlePricingOptions,
-  withSyncedMainAccounts,
-} from "./CompanyBundleEditor";
+import CompanyBundleEditor, { withSyncedMainAccounts } from "./CompanyBundleEditor";
 
 export {
   reconcileProposalAssessmentWithCatalog,
@@ -296,6 +296,8 @@ export type AssessmentState = {
   companies?: CompanyEntry[];
   /** Per-proposal override of the three BundlePricingOptions values; omitted means defaults. */
   bundlePricingOptions?: BundlePricingOptions;
+  /** Options-template defaults applied to the proposal; the per-proposal override wins. */
+  bundlePricingDefaults?: BundlePricingOptions;
   entityType: EntityType;
   taxElection: TaxElection;
   booksOverTwoMonthsBehind: boolean | null;
@@ -1104,7 +1106,11 @@ function withComplexityUnknownDefaults(assessment: AssessmentState): AssessmentS
     bundlePricingOptions:
       assessment.bundlePricingOptions === undefined
         ? undefined
-        : resolveBundlePricingOptions(assessment.bundlePricingOptions),
+        : sanitizeBundlePricingOverride(assessment.bundlePricingOptions),
+    bundlePricingDefaults:
+      assessment.bundlePricingDefaults === undefined
+        ? undefined
+        : sanitizeBundlePricingOverride(assessment.bundlePricingDefaults),
     bandOverride: validateBandOverride(assessment.bandOverride).ok
       ? assessment.bandOverride
       : null,
@@ -1478,7 +1484,14 @@ function buildRecommendation(assessment: AssessmentState): RecommendationSummary
   if (txScore >= 2) {
     rationale.push(`The transaction profile (${assessment.transactionBand}) suggests a heavier monthly workload.`);
   }
-  if (countValue(assessment.numberOfEntities) > 1) {
+  // When bundled, the per-entity charge is gone, so the rationale must not
+  // cite entities as a cost driver — it names the bundle instead.
+  const bundleCompanyCount = hasCompanyBundle(assessment)
+    ? normalizeCompanyBundle(assessment.companies).length
+    : 0;
+  if (bundleCompanyCount > 1) {
+    rationale.push(`${bundleCompanyCount} companies priced as a bundle.`);
+  } else if (countValue(assessment.numberOfEntities) > 1) {
     rationale.push(`${countValue(assessment.numberOfEntities)} entities increase coordination and reporting complexity.`);
   }
   if (countValue(assessment.numberOfProperties) > 0) {
@@ -1558,16 +1571,20 @@ export function getProposalPricingSnapshotData(assessment: AssessmentState) {
     ) as Record<PackageId, PackagePricingSummary>,
   );
 
-  if (bundleActive) {
-    const bundleCompanies = normalizeCompanyBundle(assessment.companies);
-    for (const pkg of PACKAGES) {
-      const bundle = priceCompanyBundle({
-        companies: bundleCompanies,
-        packageId: pkg.id,
+  // The one bundle object (F1): per-tier BundlePricing published on the
+  // snapshot when active, null for legacy. Every consumer — preview, public
+  // payload, agreement route, checkout — reads this object; direct
+  // priceCompanyBundle calls are only the fallback for old snapshots.
+  const companyBundle: CompanyBundleSnapshot | null = bundleActive
+    ? buildCompanyBundleSnapshot({
+        companies: assessment.companies,
         baseAssessment: pricingAssessment,
-        options: resolveBundlePricingOptions(assessment.bundlePricingOptions),
-      });
-      packagePricing[pkg.id] = { ...packagePricing[pkg.id], monthly: bundle.bundleMonthly };
+        options: resolveBundlePricingOptions(assessment),
+      })
+    : null;
+  if (companyBundle) {
+    for (const pkg of PACKAGES) {
+      packagePricing[pkg.id] = { ...packagePricing[pkg.id], monthly: companyBundle[pkg.id].bundleMonthly };
     }
   }
 
@@ -1591,8 +1608,19 @@ export function getProposalPricingSnapshotData(assessment: AssessmentState) {
     cleanupMonths,
     recommendation,
     packagePricing,
+    companyBundle,
     hasCatchUpPricing: hasCatchUpPricingInputs(assessment),
   };
+}
+
+/**
+ * Persisted `pricing` for a snapshot: per-tier monthlies plus the one bundle
+ * object when a bundle is active. Legacy snapshots carry no `companyBundle`
+ * key, so their stored JSON is byte-identical to before.
+ */
+export function getProposalPricingSnapshotPricing(assessment: AssessmentState) {
+  const { packagePricing, companyBundle } = getProposalPricingSnapshotData(assessment);
+  return companyBundle ? { ...packagePricing, companyBundle } : packagePricing;
 }
 
 export function getProposalPricingSnapshotItems(assessment: AssessmentState) {
@@ -1896,7 +1924,7 @@ export default function ProposalCreationWorkspaceDemo({
                       companyName={assessment.companyName}
                       mainAccounts={assessment.accounts}
                       baseAssessment={pricingAssessment}
-                      bundleOptions={resolveBundlePricingOptions(assessment.bundlePricingOptions)}
+                      bundleOptions={resolveBundlePricingOptions(assessment)}
                       legacyEntitiesField={
                         <div className="max-w-[280px]">
                           <FieldLabel label="Number of Entities">
