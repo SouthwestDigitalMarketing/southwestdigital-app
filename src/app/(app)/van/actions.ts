@@ -25,7 +25,7 @@ export async function startVanAction(mode: "shortlist" | "empty"): Promise<{ err
       update: {},
     }));
   } catch (error) { return { error: reason(error) }; }
-  revalidatePath("/van");
+  revalidatePath("/van", "layout");
   return {};
 }
 
@@ -42,6 +42,6 @@ export async function changeVanAction(change: unknown): Promise<{ error?: string
       await tx.vanHunt.update({ where: { id: row.id }, data: { plan: plan as unknown as Prisma.InputJsonValue } });
     });
   } catch (error) { return { error: reason(error) }; }
-  revalidatePath("/van");
+  revalidatePath("/van", "layout");
   return {};
 }

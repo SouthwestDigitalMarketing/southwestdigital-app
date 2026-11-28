@@ -51,6 +51,10 @@ export function starterPlan(shortlist = true): VanPlan {
     .map((name) => parseItem("needs", { id: randomUUID(), name }));
   plan.sections.costs = ["Insurance", "Registration", "Inspection", "Maintenance", "Upgrades"]
     .map((name) => parseItem("costs", { id: randomUUID(), name, amount: null }));
-  if (shortlist) plan.sections.candidates = CANDIDATES.map((item) => parseItem("candidates", { id: randomUUID(), ...item, status: "Watching" }));
+  if (shortlist) {
+    plan.sections.candidates = CANDIDATES.map((item) => parseItem("candidates", { id: randomUUID(), ...item, status: "Watching" }));
+    // Donna's #1 (the 2018 ProMaster, Austin) opens as the top pick.
+    plan.topPickId = plan.sections.candidates[0].id;
+  }
   return plan;
 }
