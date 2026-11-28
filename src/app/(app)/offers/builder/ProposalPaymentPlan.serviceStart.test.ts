@@ -66,6 +66,24 @@ describe("spec 06 proposal payment plan", () => {
     expect(html).toContain(firstMonthFullText());
   });
 
+  it("uses the annual start text on cleanup with a 12-month term", () => {
+    const html = render({
+      cleanupMonths: 5, serviceStartMonth: "2026-05", cleanupPlan: plan, annual: true,
+    });
+    expect(html).toContain("Your 12 months of service begin on May 14, 2026");
+    expect(html).toContain(annualServiceStartText("2026-05"));
+    expect(html).toContain(firstMonthFullText());
+    expect(html).not.toContain("Billing is on the 1st of each month after.");
+  });
+
+  it("ignores a passed explicit month on cleanup and names only the wrap-up month", () => {
+    const html = render({
+      cleanupMonths: 5, serviceStartMonth: "2026-09", cleanupPlan: plan,
+    });
+    expect(html).toContain(serviceStartText("2026-05"));
+    expect(html).not.toContain("September");
+  });
+
   it("shows no month under pre-selection length wording", () => {
     const html = render({
       cleanupMonths: 5, serviceStartMonth: "2026-05", cleanupPlan: plan,

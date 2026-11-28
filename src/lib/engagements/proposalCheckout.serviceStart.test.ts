@@ -58,21 +58,43 @@ describe("spec 06 checkout service start month", () => {
     expect(parseStoredProposalCheckout(JSON.parse(JSON.stringify(result)))).toEqual(result);
   });
 
-  it("lets an explicit staff month win over the wrap-up month", () => {
+  it("ignores an explicit staff month when a cleanup plan was selected", () => {
     const result = buildProposalCheckoutSummary({
       ...snapshot,
       assessment: { ...snapshot.assessment, serviceStartMonth: "2026-09", cleanupPlan: { ...plan } },
     }, { ...sel, selectedCleanupPeriodKeys: ["2026-1-3"] }, { todayISO: "2026-02-01" });
-    expect(result.serviceStartMonth).toBe("2026-09");
+    // Refreshed start 2026-02-15, 3 backlog months -> wrap-up 2026-03-17.
+    expect(result.cleanupPlan?.wrapUpDate).toBe("2026-03-17");
+    expect(result.serviceStartMonth).toBe("2026-03");
   });
 
-  it("stores no start month on legacy snapshots, even with cleanup selected", () => {
-    const result = buildProposalCheckoutSummary(snapshot, {
-      ...sel, selectedCleanupPeriodKeys: ["2026-1-3"],
-    });
-    expect(result).not.toHaveProperty("serviceStartMonth");
-    expect(result).not.toHaveProperty("creditRemaining");
-    expect(result).not.toHaveProperty("firstPaymentCreditReason");
+  it("freezes the selection-date Chicago default on a plain monthly quote", () => {
+    // No explicit month, no cleanup plan: the stored month is the default
+    // for the selection date, so the agreement and receipt name it.
+    const result = buildProposalCheckoutSummary(snapshot, { ...sel }, { todayISO: "2026-11-27" });
+    expect(result.serviceStartMonth).toBe("2026-12");
+    expect(result.amountDueNow).toBe(800);
+    expect(parseStoredProposalCheckout(JSON.parse(JSON.stringify(result)))).toEqual(result);
+  });
+
+  it("rolls the frozen default to January after a December selection", () => {
+    const result = buildProposalCheckoutSummary(snapshot, { ...sel }, { todayISO: "2026-12-15" });
+    expect(result.serviceStartMonth).toBe("2027-01");
+  });
+
+  it("leaves legacy stored checkouts without a month key on the legacy text", () => {
+    const saved = {
+      tier: "maintain", tierLabel: "Maintain", hasTwelveMonthAgreement: false,
+      selectedCleanupPeriodKeys: ["2026-1-3"], selectedAdditionalOptionIds: [],
+      baseMonthlyTotal: 300, recurringMonthlyTotal: 300, cleanupTotal: 900,
+      onboardingFee: 560, oneTimeTotal: 860, amountDueNow: 860,
+      chargeKind: "onboarding_and_first_month", selectionHash: "legacy-hash",
+      paymentScheduleVersion: 2, cleanupMonths: 3, cleanupMonthlyRate: 300,
+      additionalOneTimeTotal: 0, prepaidMonths: 1, includedServices: [],
+    };
+    const parsed = parseStoredProposalCheckout(JSON.parse(JSON.stringify(saved)));
+    expect(parsed).toEqual(saved);
+    expect(parsed).not.toHaveProperty("serviceStartMonth");
   });
 
   it("drops a malformed stored month but keeps the checkout", () => {
@@ -113,15 +135,24 @@ describe("spec 06 checkout credit carry-over", () => {
     expect(parseStoredProposalCheckout(JSON.parse(JSON.stringify(result)))).toEqual(result);
   });
 
-  it("stores no carry-over keys when the credit only covers today's amount", () => {
+  it("stores the reason without carry-over keys when the credit only covers today's amount", () => {
     const exact = buildProposalCheckoutSummary(withCredit(1100, "Credit"), { ...sel });
     expect(exact.amountDueNow).toBe(0);
     expect(exact).not.toHaveProperty("creditRemaining");
-    expect(exact).not.toHaveProperty("firstPaymentCreditReason");
+    // The reason rides along even with no remainder, so a later waiver keeps it.
+    expect(exact.firstPaymentCreditReason).toBe("Credit");
     const under = buildProposalCheckoutSummary(withCredit(300, "Credit"), { ...sel });
     expect(under.amountDueNow).toBe(800);
     expect(under.creditApplied).toBe(300);
     expect(under).not.toHaveProperty("creditRemaining");
+    expect(under.firstPaymentCreditReason).toBe("Credit");
+    expect(parseStoredProposalCheckout(JSON.parse(JSON.stringify(under)))).toEqual(under);
+  });
+
+  it("stores no reason key when the credit has no reason", () => {
+    const exact = buildProposalCheckoutSummary(withCredit(1100), { ...sel });
+    expect(exact.amountDueNow).toBe(0);
+    expect(exact).not.toHaveProperty("firstPaymentCreditReason");
   });
 
   it("stores the remainder without a reason key when no reason was given", () => {
@@ -134,16 +165,26 @@ describe("spec 06 checkout credit carry-over", () => {
 
   it("grows the carry-over when a later waiver shrinks today's amount", () => {
     const built = buildProposalCheckoutSummary(withCredit(1000, "Credit"), { ...sel });
-    // $1,100 due, $1,000 credit: $100 due, no remainder yet.
+    // $1,100 due, $1,000 credit: $100 due, no remainder yet — but the reason
+    // is already stored, so the waiver-created remainder keeps it.
     expect(built.amountDueNow).toBe(100);
     expect(built).not.toHaveProperty("creditRemaining");
+    expect(built.firstPaymentCreditReason).toBe("Credit");
     const waived = applyOnboardingWaiver(built);
     expect(waived.amountDueBeforeCredit).toBe(300);
     expect(waived.creditApplied).toBe(300);
     expect(waived.amountDueNow).toBe(0);
     expect(waived.creditRemaining).toBe(700);
-    // No reason was stored (there was no remainder at build), so the amount
-    // carries with an empty reason rather than vanishing.
+    expect(waived.creditRemainingReason).toBe("Credit");
+    expect(waived.firstPaymentCreditReason).toBe("Credit");
+    expect(parseStoredProposalCheckout(JSON.parse(JSON.stringify(waived)))).toEqual(waived);
+  });
+
+  it("waives a reason-free credit with an empty reason rather than dropping the amount", () => {
+    const built = buildProposalCheckoutSummary(withCredit(1000), { ...sel });
+    expect(built).not.toHaveProperty("firstPaymentCreditReason");
+    const waived = applyOnboardingWaiver(built);
+    expect(waived.creditRemaining).toBe(700);
     expect(waived.creditRemainingReason).toBe("");
     expect(waived).not.toHaveProperty("firstPaymentCreditReason");
     expect(parseStoredProposalCheckout(JSON.parse(JSON.stringify(waived)))).toEqual(waived);

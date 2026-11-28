@@ -315,9 +315,11 @@ export async function duplicateQuoteAction(formData: FormData) {
     // A duplicate is a fresh lead-facing proposal: a first-payment credit
     // must never apply twice, so the credit and its client-readable reason
     // are cleared here (both plain and replace duplicates set
-    // isFreshDuplicate below). Other terms (e.g. serviceStartMonth) carry.
+    // isFreshDuplicate below). A stored explicit start month would go stale,
+    // so it is cleared too — staff re-sets it. Other terms carry.
     delete freshAssessment.firstPaymentCredit;
     delete freshAssessment.firstPaymentCreditReason;
+    delete freshAssessment.serviceStartMonth;
   }
   const snapshot = {
     ...sourceSnapshot,

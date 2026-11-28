@@ -185,8 +185,9 @@ export async function GET(
     // none and render byte-identical.
     serviceStartMonth: checkout?.serviceStartMonth ?? null,
     // The applied-credit label reads the stored reason when one exists —
-    // the checkout carries it only with a remainder, so fall back to the
-    // stored assessment's reason for fully-applied credits.
+    // the checkout carries it whenever a credit with a reason exists; fall
+    // back to the stored assessment's reason for legacy checkouts that
+    // predate the carry.
     firstPaymentCreditReason: checkout?.firstPaymentCreditReason
       ?? (typeof assessment.firstPaymentCreditReason === "string" ? assessment.firstPaymentCreditReason : null),
     creditRemaining: checkout?.creditRemaining ?? null,

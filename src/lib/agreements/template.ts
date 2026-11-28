@@ -17,6 +17,7 @@ import {
   annualServiceStartText,
   firstMonthFullText,
   isServiceStartMonth,
+  serviceStartMonthForPlan,
   serviceStartText,
 } from "@/lib/quotes/serviceStart";
 import { creditAppliedLabel, remainingCreditLine } from "@/lib/quotes/serviceStartDisplay";
@@ -360,17 +361,22 @@ export function renderAgreementTemplate(template: string, input: AgreementRender
     : "Monthly Bookkeeping";
   // Spec 06: a valid start month on a staged agreement replaces the
   // "confirmed during onboarding" start sentence. With a cleanup plan the
-  // wrap-up rule stays and the month line joins it (the checkout derives
-  // the month from the wrap-up, so the two name the same month); under
-  // pre-selection length wording no month is shown at all.
-  const displayStartMonth = staged && isServiceStartMonth(input.serviceStartMonth) ? input.serviceStartMonth : null;
+  // month is always the wrap-up month — a stored explicit month is ignored,
+  // so the signed text can never name two different months — and the month
+  // line joins the wrap-up rule (annual variant on a 12-month term, matching
+  // the proposal payment plan). Under pre-selection length wording no month
+  // is shown at all. Absent or junk renders byte-identical to today.
+  const planStartMonth = cleanupPlan ? serviceStartMonthForPlan(cleanupPlan) : null;
+  const displayStartMonth = !staged ? null
+    : planStartMonth ?? (isServiceStartMonth(input.serviceStartMonth) ? input.serviceStartMonth : null);
   const showStartMonth = displayStartMonth !== null && input.wrapUpDateWording !== "length";
+  const termStartText = input.agreementTerm === "12-month" ? annualServiceStartText : serviceStartText;
   const ongoingStartText = cleanupPlan
     ? input.wrapUpDateWording === "length"
       ? monthlyStartLengthText({ hasCleanup: true, plan: cleanupPlan, prepaidAnnual: input.agreementTerm === "12-month" })
-      : `${monthlyStartText({ hasCleanup: true, plan: cleanupPlan, prepaidAnnual: input.agreementTerm === "12-month" })}${showStartMonth && displayStartMonth ? ` ${serviceStartText(displayStartMonth)}` : ""}`
+      : `${monthlyStartText({ hasCleanup: true, plan: cleanupPlan, prepaidAnnual: input.agreementTerm === "12-month" })}${showStartMonth && displayStartMonth ? ` ${termStartText(displayStartMonth)}` : ""}`
     : showStartMonth && displayStartMonth
-      ? (input.agreementTerm === "12-month" ? annualServiceStartText(displayStartMonth) : serviceStartText(displayStartMonth))
+      ? termStartText(displayStartMonth)
       : input.agreementTerm === "12-month"
         ? (input.hasCleanup ? ANNUAL_PREPAID_CLEANUP_START_TEXT : ANNUAL_PREPAID_START_TEXT)
         : (input.hasCleanup ? CLEANUP_MONTHLY_START_TEXT : NO_CLEANUP_MONTHLY_START_TEXT);

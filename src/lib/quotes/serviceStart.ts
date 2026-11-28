@@ -65,13 +65,14 @@ export type ServiceStartInput = {
 };
 
 /**
- * With cleanup, service starts in the wrap-up month — unless staff set an
- * explicit month, which always wins. Without cleanup, the stored month wins,
- * else the default (1st of next month).
+ * With cleanup, service starts in the wrap-up month — always. A stored
+ * explicit month is ignored on a cleanup proposal (the builder offers no
+ * override there), so display and agreement can never name two different
+ * months. Without cleanup, the stored month wins, else the default (1st of
+ * next month).
  */
 export function resolveServiceStartMonth(input: ServiceStartInput, opts?: { todayISO?: string }): string {
   if (input.hasCleanup && input.plan) {
-    if (isServiceStartMonth(input.startMonth)) return input.startMonth;
     return serviceStartMonthForPlan(input.plan);
   }
   return normalizeServiceStartMonth(input.startMonth, opts);

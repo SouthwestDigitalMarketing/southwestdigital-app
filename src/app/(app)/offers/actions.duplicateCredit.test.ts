@@ -66,8 +66,9 @@ describe("duplicate clears the first-payment credit", () => {
     const assessment = snapshot.assessment as Record<string, unknown>;
     expect(assessment).not.toHaveProperty("firstPaymentCredit");
     expect(assessment).not.toHaveProperty("firstPaymentCreditReason");
-    // Other terms still carry to the fresh duplicate.
-    expect(assessment.serviceStartMonth).toBe("2026-12");
+    // A stored explicit start month would go stale, so it is cleared too —
+    // staff re-sets it. Other terms still carry to the fresh duplicate.
+    expect(assessment).not.toHaveProperty("serviceStartMonth");
     expect(assessment.waiveOnboardingFee).toBe(false);
   });
 

@@ -67,9 +67,11 @@ export type ProposalCheckoutSummary = ProposalCheckoutSelection & {
   creditApplied?: number;
   amountDueBeforeCredit?: number;
   /**
-   * Spec 06 start month ("YYYY-MM"): the stored staff month, or the Spec 04
-   * wrap-up month when a cleanup plan was selected. Absent on legacy
-   * checkouts, whose stored terms stay byte-identical.
+   * Spec 06 start month ("YYYY-MM"): the explicit staff month, the Spec 04
+   * wrap-up month when a cleanup plan was selected (an explicit month is
+   * ignored then), or the frozen Chicago default for the selection date.
+   * Always present on round-2 checkouts; absent on legacy checkouts, whose
+   * stored terms stay byte-identical.
    */
   serviceStartMonth?: string;
   /**
@@ -79,7 +81,11 @@ export type ProposalCheckoutSummary = ProposalCheckoutSelection & {
    */
   creditRemaining?: number;
   creditRemainingReason?: string;
-  /** Client-readable reason for the first-payment credit. Absent unless carried over. */
+  /**
+   * Client-readable reason for the first-payment credit. Stored whenever a
+   * credit with a reason exists (even fully applied), so a later waiver
+   * that creates a remainder keeps it. Absent on legacy checkouts.
+   */
   firstPaymentCreditReason?: string;
   includedServices?: { name: string; description: string }[];
   chargeKind: "onboarding" | "first_month" | "cleanup" | "onboarding_and_first_month" | "onboarding_and_cleanup" | "onboarding_and_discovery";
@@ -446,17 +452,25 @@ export function buildProposalCheckoutSummary(
     amountDueBeforeCredit,
     reason: assessment.firstPaymentCreditReason,
   });
-  // Spec 06 start month: stored when the snapshot carries an explicit staff
-  // month, or derived from the wrap-up month when a cleanup plan was
-  // selected. Otherwise absent, so legacy checkouts hash exactly as before.
+  // Spec 06 start month: always frozen at selection time. An explicit staff
+  // month wins without cleanup; with a cleanup plan the wrap-up month always
+  // wins (an explicit month is ignored); otherwise the Chicago default for
+  // the selection date. Pre-selection surfaces never show a live default
+  // (staleness rule) — the frozen checkout month is the single source after
+  // selection. Legacy checkouts (stored before this shipped) carry no key.
   const hasExplicitStartMonth = isServiceStartMonth(assessment.serviceStartMonth);
-  const resolvedStartMonth = hasExplicitStartMonth || normalizedCleanupPlan
-    ? resolveServiceStartMonth({
-        hasCleanup: selectedCleanupMonths > 0,
-        plan: normalizedCleanupPlan,
-        startMonth: hasExplicitStartMonth ? (assessment.serviceStartMonth as string) : null,
-      }, { todayISO })
-    : null;
+  const resolvedStartMonth = resolveServiceStartMonth({
+    hasCleanup: selectedCleanupMonths > 0,
+    plan: normalizedCleanupPlan,
+    startMonth: hasExplicitStartMonth ? (assessment.serviceStartMonth as string) : null,
+  }, { todayISO });
+  // Spec 06 credit reason: the client-readable reason rides the checkout
+  // whenever a credit with a reason exists — even when fully applied with no
+  // remainder — so a later waiver that creates a remainder keeps it.
+  const storedCreditReason = typeof assessment.firstPaymentCreditReason === "string"
+    ? assessment.firstPaymentCreditReason.trim()
+    : "";
+  const hasCreditWithReason = money(finiteNumber(assessment.firstPaymentCredit)) > 0 && storedCreditReason.length > 0;
 
   const normalized = {
     tier: selection.tier,
@@ -480,10 +494,11 @@ export function buildProposalCheckoutSummary(
     ...(carry.creditRemaining > 0 ? {
       creditRemaining: carry.creditRemaining,
       creditRemainingReason: carry.creditRemainingReason,
-      ...(carry.creditRemainingReason ? { firstPaymentCreditReason: carry.creditRemainingReason } : {}),
     } : {}),
-    // Spec 06 start month (legacy: absent).
-    ...(resolvedStartMonth ? { serviceStartMonth: resolvedStartMonth } : {}),
+    // Spec 06 reason (legacy: absent unless a remainder carried one).
+    ...(hasCreditWithReason ? { firstPaymentCreditReason: storedCreditReason } : {}),
+    // Spec 06 start month, always frozen (legacy: absent).
+    serviceStartMonth: resolvedStartMonth,
     // Only present when a complexity cleanup add applies (legacy: absent).
     ...(complexityCleanupAdd > 0 ? { complexityCleanupAdd } : {}),
     // Only present when the snapshot had a cleanupPlan and months were
@@ -534,10 +549,14 @@ export function applyOnboardingWaiver(checkout: ProposalCheckoutSummary): Propos
         creditRemaining,
         // Always written with a remainder ("" when the remainder was created
         // by this waiver and no reason was stored), so the acceptance chain
-        // never loses the amount. firstPaymentCreditReason only when stored.
+        // never loses the amount. A waiver-created remainder inherits the
+        // carried credit reason when no remainder reason was stored.
+        // firstPaymentCreditReason only when stored.
         creditRemainingReason: typeof checkout.creditRemainingReason === "string"
           ? checkout.creditRemainingReason
-          : "",
+          : typeof checkout.firstPaymentCreditReason === "string"
+            ? checkout.firstPaymentCreditReason
+            : "",
         ...(typeof checkout.firstPaymentCreditReason === "string" && checkout.firstPaymentCreditReason
           ? { firstPaymentCreditReason: checkout.firstPaymentCreditReason }
           : {}),

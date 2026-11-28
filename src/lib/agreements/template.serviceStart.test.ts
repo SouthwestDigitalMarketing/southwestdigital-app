@@ -59,6 +59,36 @@ describe("spec 06 agreement start month and credit carry-over", () => {
     expect(text).not.toContain("confirm your service start date");
   });
 
+  it("appends the annual start text on cleanup with a 12-month term", () => {
+    const text = generateProposalAgreementText({
+      ...base,
+      hasCleanup: true, cleanupMonths: 3, cleanupMonthlyRate: 300, cleanupTotal: 900,
+      amountDueNow: 560, onboardingFee: 560,
+      cleanupPlan: cleanupPlanFixture, monthlyRate: 360,
+      serviceStartMonth: "2026-03", agreementTerm: "12-month",
+    });
+    // The annual wrap-up rule stays, joined by the annual month line —
+    // never the monthly-billing sentence.
+    expect(text).toContain("Your 12 months of service begin on");
+    expect(text).toContain(annualServiceStartText("2026-03"));
+    expect(text).toContain(firstMonthFullText());
+    expect(text).not.toContain("Billing is on the 1st of each month after.");
+    expect(text).not.toContain("confirm your service start date");
+  });
+
+  it("ignores a stored explicit month on cleanup and names only the wrap-up month", () => {
+    const text = generateProposalAgreementText({
+      ...base,
+      hasCleanup: true, cleanupMonths: 3, cleanupMonthlyRate: 300, cleanupTotal: 900,
+      amountDueNow: 560, onboardingFee: 560,
+      cleanupPlan: cleanupPlanFixture, monthlyRate: 360,
+      serviceStartMonth: "2026-09",
+    });
+    expect(text).toContain(serviceStartText("2026-03"));
+    expect(text).not.toContain("September 1, 2026");
+    expect(text).toContain(firstMonthFullText());
+  });
+
   it("shows no month under pre-selection length wording (the relative rule covers the start)", () => {
     const text = generateProposalAgreementText({
       ...base,

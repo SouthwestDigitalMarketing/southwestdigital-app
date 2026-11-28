@@ -404,10 +404,12 @@ export function publicFirstPaymentCreditReasonForSnapshot(snapshotValue: unknown
 }
 
 /**
- * Whitelisted Spec 06 remaining-credit subset for a stored checkout (the
- * frozen selection the client approved): only the amount and its reason
- * cross — never the applied/due internals. Null when no excess remains, so
- * the proposal can show "Remaining credit $X applied to your next invoice."
+ * Whitelisted Spec 06 remaining-credit subset for a stored checkout or
+ * acceptance (the frozen selection the client approved, or the acceptance
+ * frozen at signing): only the amount and its reason cross — never the
+ * applied/due internals. Null when no excess remains, so the receipt can
+ * show "Remaining credit $X applied to your next invoice." The receipt
+ * reads the acceptance first, then the stored checkout.
  */
 export type PublicCreditCarryover = {
   creditRemaining: number;

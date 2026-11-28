@@ -8,6 +8,7 @@ import {
   quoteAllowsPublicCapability,
 } from "@/lib/engagements/publicProposalAccess";
 import { readAcceptedPayment, readAcceptedSelection } from "@/lib/engagements/acceptedPayment";
+import { publicCreditCarryoverForCheckout } from "@/lib/quotes/publicProposal";
 import { remainingCreditLine } from "@/lib/quotes/serviceStartDisplay";
 import AgreementTextView from "@/app/(app)/offers/builder/AgreementTextView";
 import CleanupTermsBlock from "@/app/(app)/offers/builder/CleanupTermsBlock";
@@ -63,14 +64,13 @@ export default async function ProposalReceiptPage({ params }: { params: Promise<
   const acceptance = isRecord(onboardingData.proposalAcceptance) ? onboardingData.proposalAcceptance : {};
   // Spec 06: the remainder frozen at acceptance (falling back to the stored
   // checkout) is applied to the next invoice — never dropped, never messaged.
-  const carryLine = remainingCreditLine(
-    isRecord(acceptance) && typeof acceptance.creditRemaining === "number"
-      ? acceptance.creditRemaining
-      : checkout?.creditRemaining,
-    isRecord(acceptance) && typeof acceptance.creditRemainingReason === "string"
-      ? acceptance.creditRemainingReason
-      : checkout?.creditRemainingReason,
-  );
+  // Read through the one shared carry-over reader so this surface and the
+  // sign route can never disagree on what a stored remainder is.
+  const carryover = publicCreditCarryoverForCheckout(acceptance)
+    ?? publicCreditCarryoverForCheckout(checkout);
+  const carryLine = carryover
+    ? remainingCreditLine(carryover.creditRemaining, carryover.creditRemainingReason)
+    : null;
   const payment = isRecord(acceptance.payment) ? acceptance.payment : {};
   const paid = quote.engagement.onboardingFeeStatus === "PAID" || payment.status === "paid";
   const noPaymentRequired = quote.engagement.onboardingFeeStatus === "WAIVED" && readAcceptedPayment(onboardingData)?.amountInCents === 0;

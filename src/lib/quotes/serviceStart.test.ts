@@ -43,13 +43,15 @@ describe("service start month", () => {
     expect(serviceStartMonthForPlan({ ...plan })).toBe("2026-05");
   });
 
-  it("resolves cleanup to the wrap-up month unless staff set one explicitly", () => {
+  it("resolves cleanup to the wrap-up month even when staff set one explicitly", () => {
     expect(resolveServiceStartMonth(
       { hasCleanup: true, plan: { ...plan }, startMonth: null }, { todayISO: "2026-02-01" },
     )).toBe("2026-05");
+    // An explicit month on a cleanup proposal is ignored — the wrap-up month
+    // always wins, so display and agreement can never disagree.
     expect(resolveServiceStartMonth(
       { hasCleanup: true, plan: { ...plan }, startMonth: "2026-09" }, { todayISO: "2026-02-01" },
-    )).toBe("2026-09");
+    )).toBe("2026-05");
   });
 
   it("resolves no-cleanup to the stored month or the default", () => {

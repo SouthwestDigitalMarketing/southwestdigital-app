@@ -3473,10 +3473,31 @@ export default function ProposalCreationWorkspaceDemo({
                               const wrapMonth = storedPlan && getCleanupMonthCount(assessment) > 0
                                 ? serviceStartMonthForPlan(storedPlan)
                                 : null;
+                              // With a cleanup plan the start month is always
+                              // the wrap-up month: read-only, no override. A
+                              // stale explicit month stays stored but is
+                              // ignored everywhere (checkout, display,
+                              // agreement).
+                              if (wrapMonth) {
+                                return (<>
+                                  <FieldLabel label="Service starts">
+                                    <input
+                                      type="month"
+                                      value={wrapMonth}
+                                      disabled
+                                      aria-readonly="true"
+                                      className={`${INPUT_CLASS_NAME} cursor-not-allowed opacity-70`}
+                                    />
+                                  </FieldLabel>
+                                  <p className="mt-2 text-base text-slate-500">
+                                    {`From cleanup wrap-up (${formatServiceStartMonth(wrapMonth)}). Service always starts here while a cleanup plan is set.`}
+                                  </p>
+                                </>);
+                              }
                               const explicitMonth = isServiceStartMonth(assessment.serviceStartMonth)
                                 ? assessment.serviceStartMonth
                                 : null;
-                              const shownMonth = explicitMonth ?? wrapMonth ?? normalizeServiceStartMonth(null);
+                              const shownMonth = explicitMonth ?? normalizeServiceStartMonth(null);
                               return (<>
                                 <FieldLabel label="Service starts">
                                   <input
@@ -3489,11 +3510,7 @@ export default function ProposalCreationWorkspaceDemo({
                                   />
                                 </FieldLabel>
                                 <p className="mt-2 text-base text-slate-500">
-                                  {wrapMonth
-                                    ? explicitMonth
-                                      ? `Overriding the wrap-up month (${formatServiceStartMonth(wrapMonth)}). Reset to follow the wrap-up again.`
-                                      : `Wrap-up month (from cleanup): ${formatServiceStartMonth(wrapMonth)}.`
-                                    : "Defaults to the 1st of next month."}
+                                  {"Defaults to the 1st of next month."}
                                 </p>
                                 {explicitMonth ? (
                                   <button
@@ -3501,7 +3518,7 @@ export default function ProposalCreationWorkspaceDemo({
                                     onClick={() => updateAssessment("serviceStartMonth", "")}
                                     className="mt-2 text-sm font-semibold text-brandnavy underline underline-offset-2"
                                   >
-                                    {wrapMonth ? "Reset to the wrap-up month" : "Reset to the default"}
+                                    {"Reset to the default"}
                                   </button>
                                 ) : null}
                               </>);

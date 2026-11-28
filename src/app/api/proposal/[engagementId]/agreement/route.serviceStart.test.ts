@@ -138,9 +138,27 @@ describe("public proposal agreement API (spec 06 start month and credit carry-ov
     expect(body.text).not.toContain("Remaining credit");
   });
 
-  it("renders legacy text without a start month or credit reason", async () => {
+  it("freezes the selection-date default month on a plain monthly checkout", async () => {
     const checkout = checkoutFor({});
+    // A fresh selection always stores a month now (the Chicago default for
+    // the selection date), so the agreement names it with the first-month line.
+    expect(checkout.serviceStartMonth).toMatch(/^\d{4}-(0[1-9]|1[0-2])$/);
     mocks.engagement.mockResolvedValue(engagementRow({}, JSON.parse(JSON.stringify(checkout))));
+    const body = await (await call()).json();
+    expect(body.text).toContain("Service starts");
+    expect(body.text).toContain(firstMonthFullText());
+    expect(body.text).not.toContain("confirm your service start date");
+  });
+
+  it("renders legacy text for a stored checkout without a start month or credit reason", async () => {
+    const checkout = checkoutFor({});
+    // Simulate a legacy stored checkout (made before the start month
+    // shipped): no month key, no credit keys — terms stay byte-identical.
+    const legacy: Record<string, unknown> = JSON.parse(JSON.stringify(checkout));
+    delete legacy.serviceStartMonth;
+    delete legacy.firstPaymentCreditReason;
+    expect(legacy).not.toHaveProperty("serviceStartMonth");
+    mocks.engagement.mockResolvedValue(engagementRow({}, JSON.parse(JSON.stringify(legacy))));
     const body = await (await call()).json();
     expect(body.text).not.toContain("Service starts");
     expect(body.text).not.toContain(firstMonthFullText());

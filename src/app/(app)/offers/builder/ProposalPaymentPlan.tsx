@@ -14,6 +14,7 @@ import {
   annualServiceStartText,
   firstMonthFullText,
   isServiceStartMonth,
+  serviceStartMonthForPlan,
   serviceStartText,
 } from "@/lib/quotes/serviceStart";
 import { remainingCreditLine } from "@/lib/quotes/serviceStartDisplay";
@@ -93,11 +94,11 @@ export default function ProposalPaymentPlan({
   /**
    * Spec 06 service start month ("YYYY-MM"). A valid month replaces the
    * "confirmed during onboarding" start rule (annual: the annual variant)
-   * and adds the full-first-month line. With a cleanup plan the Spec 04
-   * wrap-up rule stays and the month joins it as its own line — only with
-   * exact (post-selection) dates; under pre-selection length wording the
-   * relative rule covers the start and no month is shown. Absent or junk
-   * renders exactly as today.
+   * and adds the full-first-month line. With a cleanup plan the month is
+   * always the wrap-up month (this prop is ignored) and joins the Spec 04
+   * wrap-up rule as its own line — only with exact (post-selection) dates;
+   * under pre-selection length wording the relative rule covers the start
+   * and no month is shown. Absent or junk renders exactly as today.
    */
   serviceStartMonth?: string | null;
   /**
@@ -138,10 +139,13 @@ export default function ProposalPaymentPlan({
   const wordingPlan = showLengthWording && cleanupPlan !== null && lengthWeeks !== null
     ? { ...cleanupPlan, startDate: addDaysIso(cleanupPlan.wrapUpDate, -lengthWeeks * 7) }
     : cleanupPlan;
-  const displayStartMonth = isServiceStartMonth(serviceStartMonth) ? serviceStartMonth : null;
-  // With a cleanup plan the wrap-up rule stays; the month joins it only with
-  // exact (post-selection) dates. Under pre-selection length wording the
-  // relative rule covers the start and no month is shown (it would go stale).
+  // With a cleanup plan the month is always the wrap-up month — a stored
+  // explicit month is ignored, so display can never name two different
+  // months. The month joins the wrap-up rule only with exact (post-selection)
+  // dates. Under pre-selection length wording the relative rule covers the
+  // start and no month is shown (it would go stale).
+  const planStartMonth = withCleanupPlan && cleanupPlan ? serviceStartMonthForPlan(cleanupPlan) : null;
+  const displayStartMonth = planStartMonth ?? (isServiceStartMonth(serviceStartMonth) ? serviceStartMonth : null);
   const showMonthLine = displayStartMonth !== null && !(withCleanupPlan && showLengthWording);
   const monthLine = showMonthLine && displayStartMonth
     ? (annual ? annualServiceStartText(displayStartMonth) : serviceStartText(displayStartMonth))
