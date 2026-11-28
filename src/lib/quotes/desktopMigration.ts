@@ -117,7 +117,9 @@ const BANDS: readonly DesktopMigrationBand[] = ["0-99", "100-499", "500-999", "1
 export const DESKTOP_MIGRATION_OPTION_ROLE = "desktop-migration";
 
 /** Normalized-name content match for the legacy flat migration option. */
-const FLAT_MIGRATION_NAME_PATTERN = /desktop.*online.*migration/i;
+// Whole name only: "QuickBooks Desktop to Online Migration", "Desktop → Online migration".
+// A sibling like "Desktop training for Online Migration course" must not match.
+const FLAT_MIGRATION_NAME_PATTERN = /^(?:quickbooks )?desktop(?: to | ?(?:→|->|-) ?| )(?:quickbooks )?online migration$/i;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);

@@ -1,4 +1,9 @@
 # SWapp handoff
+## 2026-11-27 — Proposal builder spec 05: Desktop -> Online migration priced by size (Ummon)
+- `src/lib/quotes/desktopMigration.ts`: none / Fresh start ($640) / Full history ($640 + $150/yr up to 5 + band add $0/150/300/500); add-ons payroll history $150, inventory $200, open jobs $150, each extra Desktop file (spec 02 companies) $250; balance check included. Placeholders pending Tom; editable in options templates.
+- The flat $640 option lives only in the DB (options template row). Legacy proposals keep it via their snapshot. New proposals detect it by exact-name match or `role: "desktop-migration"` (options-templates editor) and suppress it when a sized migration is chosen: never stacks. No DB reads were used.
+- Open minors: role-tagged option suppressed even if monthly; invalid text in override inputs clears the saved override.
+
 ## 2026-11-27 — Proposal builder spec 04: cleanup wrap-up date, fixed monthly start, payment plan (Ummon)
 - `src/lib/quotes/cleanupPlan.ts`: per-proposal cleanup plan (created only by explicit staff action). Wrap-up default = start + max(30 d, ceil(backlog months / 3) months), Chicago calendar. Before selection surfaces show "about N weeks after you accept"; at selection start = +14 d, default recomputed, stale overrides reset with a staff flag.
 - Monthly start = wrap-up date or cleanup completion, whichever first. New clause "Cleanup Wrap-Up and Extension": client delay billed at the monthly rate (replaces the $150 file fee that month), our delay free.
