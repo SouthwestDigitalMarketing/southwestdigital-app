@@ -18,4 +18,8 @@ describe("public site labels", () => {
       "thomasgrantmacdonald.com",
     ]);
   });
+
+  it("connects the wedding band site to its GA4 property", () => {
+    expect(MUSIC_SITES.find((site) => site.host === "easyweddingband.com")?.ga4PropertyId).toBe("566101201");
+  });
 });

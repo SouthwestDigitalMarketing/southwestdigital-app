@@ -89,10 +89,11 @@ export default async function WebsitePage({ searchParams }: { searchParams: Prom
   const goal = ordered.reduce((total, item) => total + (item?.theme?.websiteEngagedSessionsGoal ?? 500), 0);
   const musicReports = await Promise.all(MUSIC_SITES.map((site): Promise<WebsiteReportData> => {
     const theme = ga4Themes.find((row) => row.ga4HostName && publicHost(row.ga4HostName) === site.host);
-    if (!theme?.ga4PropertyId) {
+    const propertyId = theme?.ga4PropertyId ?? site.ga4PropertyId;
+    if (!propertyId) {
       return Promise.resolve({ health: null, trendRows: [], error: `${site.host} analytics is not connected yet.` });
     }
-    return loadReport(theme.ga4PropertyId, theme.ga4HostName, period, config);
+    return loadReport(propertyId, theme?.ga4HostName ?? site.host, period, config);
   }));
   const views = [
     { key: "combined", name: "Combined", palette: NEUTRAL_SWIPE_PALETTE, content: <WebsiteReport brandId={null} goal={goal} editable={false} data={combined} config={config} /> },
