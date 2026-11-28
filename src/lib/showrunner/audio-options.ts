@@ -9,6 +9,24 @@ const TREB_261127 = "mwzglzlj-5643aa";
 
 const TREB_261127_OPTIONS: AudioOption[] = [
   {
+    id: "sm7b",
+    label: "5 · Studio SM7B (no extra EQ)",
+    blurb: "The take you liked. Speech-to-speech through the SM7B clone, Isolator off.",
+    src: "/showrunner/audio-ab/5-studio-sm7b.mp3",
+  },
+  {
+    id: "sm7b-chest",
+    label: "6 · SM7B + chest bass",
+    blurb: "+5 dB at 110 Hz, +2.5 dB at 200 Hz, a little 400 Hz cut. More body, still your voice.",
+    src: "/showrunner/audio-ab/6-sm7b-chest.mp3",
+  },
+  {
+    id: "sm7b-stern",
+    label: "7 · SM7B + Stern punch",
+    blurb: "More proximity bass, tighter radio compression, a bit of 3.5 kHz bite. Howard Stern desk energy.",
+    src: "/showrunner/audio-ab/7-sm7b-stern.mp3",
+  },
+  {
     id: "original",
     label: "1 · Your Pixel, untouched",
     blurb: "The WAV off the phone. Quiet on purpose. Almost no noise.",
@@ -31,12 +49,6 @@ const TREB_261127_OPTIONS: AudioOption[] = [
     label: "4 · Light studio chain",
     blurb: "High-pass 80 Hz, gentle compressor, −14 LUFS. Your voice, slightly tighter. No ElevenLabs.",
     src: "/showrunner/audio-ab/4-light-studio-chain.mp3",
-  },
-  {
-    id: "sm7b",
-    label: "5 · Studio SM7B (ElevenLabs the right way)",
-    blurb: "Speech-to-speech through your SM7B clone. Keeps the take, recasts it on the studio mic. Isolator off.",
-    src: "/showrunner/audio-ab/5-studio-sm7b.mp3",
   },
 ];
 
