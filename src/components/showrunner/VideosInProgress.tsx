@@ -146,6 +146,7 @@ export function VideosInProgress({
                     thumbnailText={video.thumbnailText ?? null}
                     thumbnailOptions={video.thumbnailOptions ?? null}
                     busy={Boolean(video.thumbnailBusy)}
+                    published={Boolean(video.url)}
                   />
                 ) : null}
               </div>

@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * One episode (Tom, 2026-11-27): the Videos card and the top status bar both open this page.
- * Steps and render bars, thumbnail wording, transcript, Add clips, and the scorecard once it is live.
+ * Steps and render bars, optional thumbnail wording change, transcript, Add clips, and the scorecard once it is live.
  */
 export default async function EditEpisodePage({ params }: { params: Promise<{ batch: string }> }) {
   const { batch } = await params;

@@ -7,75 +7,87 @@ function sameWording(a: string, b: string) {
   return a.replace(/\s*\/\s*/g, " ").trim().toUpperCase() === b.replace(/\s*\/\s*/g, " ").trim().toUpperCase();
 }
 
-/** Pick one of the suggested wordings, or type another; remakes the thumbnail while the video encodes. */
+/** Optional later edit. Autopilot already ships Johnny's pick; Tom can change wording here, including after YouTube. */
 export function ThumbnailCopy({
   batch,
   thumbnailText,
   thumbnailOptions,
   busy,
+  published = false,
 }: {
   batch: string;
   thumbnailText: string | null;
   thumbnailOptions: string[] | null;
   busy: boolean;
+  published?: boolean;
 }) {
   const options = thumbnailOptions ?? [];
   const current = thumbnailText ?? "";
+  const display = current.replace(/\s*\/\s*/g, " ");
   const listed = options.some((option) => sameWording(option, current));
   const [choice, setChoice] = useState(listed || !current ? options[0] ?? "custom" : "custom");
-  const [custom, setCustom] = useState(listed ? "" : current.replace(/\s*\/\s*/g, " "));
+  const [custom, setCustom] = useState(listed ? "" : display);
 
   if (options.length === 0 && !current && !busy) return null;
   if (busy) {
     return (
       <p className="mt-3 text-sm text-slate-700">
-        Remaking the thumbnail{current ? ` with ${current.replace(/\s*\/\s*/g, " ")}` : ""}. The video keeps rendering.
+        Remaking the thumbnail{display ? ` with ${display}` : ""}.
+        {published ? " YouTube will get the new picture." : " The video keeps rendering."}
       </p>
     );
   }
   return (
-    <form action={requestThumbnailText} className="mt-3">
-      <input type="hidden" name="batch" value={batch} />
-      <p className="text-sm font-semibold text-slate-900">Thumbnail text</p>
-      <p className="mt-1 text-sm text-slate-600">Pick one, or type your own. The picture remakes; the video keeps rendering.</p>
-      {choice !== "custom" ? <input type="hidden" name="text" value={choice} /> : <input type="hidden" name="custom" value={custom} />}
-      <ul className="mt-2 space-y-1.5">
-        {options.map((option) => (
-          <li key={option}>
+    <details className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+      <summary className="cursor-pointer text-sm font-semibold text-slate-900">
+        Change thumbnail text{display ? ` · ${display}` : ""}
+      </summary>
+      <form action={requestThumbnailText} className="mt-3">
+        <input type="hidden" name="batch" value={batch} />
+        <p className="text-sm text-slate-600">
+          {published
+            ? "Already on YouTube with this wording. Change it here and the thumbnail updates there too."
+            : "Already using this wording. Change it here anytime; the picture remakes and the video keeps rendering."}
+        </p>
+        {choice !== "custom" ? <input type="hidden" name="text" value={choice} /> : <input type="hidden" name="custom" value={custom} />}
+        <ul className="mt-2 space-y-1.5">
+          {options.map((option) => (
+            <li key={option}>
+              <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-800">
+                <input type="radio" checked={choice === option} onChange={() => setChoice(option)} className="mt-0.5" />
+                <span>
+                  {option}
+                  {current && sameWording(option, current) ? (
+                    <span className="ml-1 text-xs font-semibold uppercase tracking-wide text-slate-500">now</span>
+                  ) : null}
+                </span>
+              </label>
+            </li>
+          ))}
+          <li>
             <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-800">
-              <input type="radio" checked={choice === option} onChange={() => setChoice(option)} className="mt-0.5" />
-              <span>
-                {option}
-                {current && sameWording(option, current) ? (
-                  <span className="ml-1 text-xs font-semibold uppercase tracking-wide text-slate-500">now</span>
-                ) : null}
+              <input type="radio" checked={choice === "custom"} onChange={() => setChoice("custom")} className="mt-0.5" />
+              <span className="min-w-0 flex-1">
+                Write your own
+                <input
+                  value={custom}
+                  onChange={(event) => {
+                    setCustom(event.target.value);
+                    setChoice("custom");
+                  }}
+                  maxLength={60}
+                  placeholder="THREE YEARS CLEAN"
+                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                />
               </span>
             </label>
           </li>
-        ))}
-        <li>
-          <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-800">
-            <input type="radio" checked={choice === "custom"} onChange={() => setChoice("custom")} className="mt-0.5" />
-            <span className="min-w-0 flex-1">
-              Write your own
-              <input
-                value={custom}
-                onChange={(event) => {
-                  setCustom(event.target.value);
-                  setChoice("custom");
-                }}
-                maxLength={60}
-                placeholder="THREE YEARS CLEAN"
-                className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-              />
-            </span>
-          </label>
-        </li>
-      </ul>
-      <button type="submit" className="mt-3 rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white">
-        Use this text
-      </button>
-    </form>
+        </ul>
+        <button type="submit" className="mt-3 rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white">
+          Remake thumbnail
+        </button>
+      </form>
+    </details>
   );
 }
 
