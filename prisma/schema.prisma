@@ -3645,3 +3645,23 @@ model ScanReviewItem {
   @@index([review, status])
   @@map("ScanReviewItem")
 }
+
+/// ChatGPT <-> Herdr Gmail bridge ON/OFF switch (Tom, 2026-11-28). One row, key "chatgpt-bridge".
+/// Tom flips `enabled` in /settings/bridge; ripley's bridged.py reads it through
+/// /api/operations/bridge and reports its heartbeat here. Off = ripley does not touch Gmail.
+model BridgeSwitch {
+  key            String    @id
+  enabled        Boolean   @default(false)
+  changedAt      DateTime?
+  changedBy      String?
+  /// What ripley last reported: off | active | idle | error
+  mode           String?
+  heartbeatAt    DateTime?
+  lastCheckAt    DateTime?
+  lastMessageAt  DateTime?
+  lastMessageUid Int?
+  lastError      String?
+  updatedAt      DateTime  @updatedAt
+
+  @@map("BridgeSwitch")
+}

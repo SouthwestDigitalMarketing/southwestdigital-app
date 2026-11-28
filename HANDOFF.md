@@ -1157,6 +1157,21 @@ private local DB (`swapp_travel`, port 3120): starter, add budget line, tick a c
 delete trip; 1280 and 412 px, no page errors, no sideways scroll.
 Open: Showrunner tie-in (trip videos to a series) is Johnny's call; not built.
 
+## 2026-11-28 — ChatGPT bridge ON/OFF switch (Ummon)
+
+Tom: an easy switch for the ChatGPT Voice <-> Herdr Gmail bridge, from his phone. Settings > **Bridge**
+tab (platform operators only; `settings/layout.tsx` is now async to know that). `/settings/bridge` shows
+the state (Off / Turning on / On, fast / On, idle / failing / Ripley not answering), when ripley last
+checked in, the last Gmail check, the last bridge message (Gmail UID) and who switched it; one big
+Turn on / Turn off button; refreshes every 10 s. Model `BridgeSwitch` (migration
+`20261128150000_bridge_switch`, additive, no row = off). API `/api/operations/bridge` with the existing
+operations token (no new secret): ripley POSTs its heartbeat and gets `{ enabled }`; `turnOff` only.
+Ripley side: `ripley:~/controllers/chatgpt-bridge` (`bridged.py`). Checks: tsc clean, eslint (one old
+warning in BrandAppearanceForm.tsx), vitest 2452 passed (13 new), `next build` ok; local preview on a
+copy of the dev DB (`swapp_bridge_preview`, port 3141) at 412 px with a real ripley test daemon: tap
+Turn on -> ripley on and Gmail connected within ~15 s, page "On, fast"; test message showed as Gmail
+#147252; Turn off -> ripley closed Gmail 16 s later.
+
 ## Lessons and open follow-ups (Ummon, 2026-11-22 wrapup)
 
 - Before telling Tom a video is stuck, re-read live status (production `ShowrunnerVideoStatus`
