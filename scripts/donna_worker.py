@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Donna's email desk worker. Webhook and Clean jobs drive work.
 
-Reuses Mailroom's existing account/credential connection. Raw mail and model
+Reuses the mail tool's account/credential connection (SWapp tools/mail). Raw mail and model
 context stay on Ripley. Only request summaries, evidence excerpts and prepared
 replies go to SWapp. Reconcile and incoming jobs are read-only IMAP. A Clean
 job works in steps (Tom, 2026-11-26): step 1 sorts Inbox into buckets and moves
@@ -70,9 +70,12 @@ def thread_identity(message, key):
     return digest((refs or parent or [key])[0])
 
 
+# The mail tool (SWapp tools/mail, installed by tools/mail/install.sh; Mailroom retired 2026-11-28).
+MAIL_BIN = Path(os.environ.get("DONNA_MAIL_BIN", str(Path.home() / ".local/share/swapp-mail/bin/mail")))
+
+
 def mail_module():
-    path = Path.home() / "projects/mailroom-app/bin/mail"
-    loader = importlib.machinery.SourceFileLoader("donna_mailroom", str(path))
+    loader = importlib.machinery.SourceFileLoader("donna_mailroom", str(MAIL_BIN))
     spec = importlib.util.spec_from_loader(loader.name, loader)
     module = importlib.util.module_from_spec(spec)
     loader.exec_module(module)
@@ -264,7 +267,7 @@ class LocalStore:
         helper = mail_module()
         config = helper.accounts()
         if "zoho" not in config or config["zoho"]["user"].lower() != address.lower():
-            raise RuntimeError("Mailbox address does not match Mailroom's existing Zoho account.")
+            raise RuntimeError("Mailbox address does not match the mail tool's Zoho account (~/.config/mailroom/accounts.json).")
         conn, _ = helper.connect("zoho")
         folders = []
         gaps = []
@@ -514,7 +517,7 @@ def filing_plan(assessments, messages, contacts, folders):
 
 
 SORT_RULES = Path(os.environ.get(
-    "DONNA_SORT_RULES", str(Path.home() / "projects/mailroom-app/config/mail-sort-rules.json")))
+    "DONNA_SORT_RULES", str(Path.home() / ".config/mailroom/mail-sort-rules.json")))
 CONTACT_FIELDS = ("email", "secondaryEmail", "businessEmail", "personalEmail")
 
 
@@ -597,7 +600,7 @@ def email_type(assessment, store=None):
 
 # Mailroom's own lists (Tom, 2026-11-26): never-block wins; always-spam senders are known junk.
 NEVER_BLOCK = Path(os.environ.get(
-    "DONNA_NEVER_BLOCK", str(Path.home() / "projects/mailroom-app/config/spam-never-block.json")))
+    "DONNA_NEVER_BLOCK", str(Path.home() / ".config/mailroom/spam-never-block.json")))
 ALWAYS_BLOCK = Path(os.environ.get(
     "DONNA_ALWAYS_BLOCK", str(Path.home() / ".local/state/mailroom/spam-always-block.json")))
 MONEY_TYPES = {"To pay", "Paid", "Receipt", "Bill", "Renewal", "Declined", "Past due", "Legal"}

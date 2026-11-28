@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+"""Keep only the last N calendar months in chosen Zoho folders.
+
+Rules: config/folder-retention.json, {"Payments": {"keep_months": 2}}.
+keep_months 2 on 2026-11-01 keeps October and November: anything received
+before 2026-10-01 moves to Trash (Zoho keeps Trash 30 days; this never
+purges). Dry run unless --apply. Daily at 03:15 (systemd/mail-retain.timer).
+"""
+import argparse, datetime, importlib.machinery, json, os, sys
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+CONFIG = os.path.join(HERE, "..", "config", "folder-retention.json")
+ACCOUNT = "zoho"
+MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+mail = importlib.machinery.SourceFileLoader(
+    "mail", os.path.join(HERE, "mail")).load_module()
+
+
+def cutoff(today, keep_months):
+    """First day of the oldest month still kept."""
+    index = today.year * 12 + today.month - 1 - (keep_months - 1)
+    return datetime.date(index // 12, index % 12 + 1, 1)
+
+
+def imap_date(day):
+    return "%d-%s-%d" % (day.day, MONTHS[day.month - 1], day.year)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--apply", action="store_true")
+    args = ap.parse_args()
+    with open(CONFIG) as fh:
+        rules = {k: v for k, v in json.load(fh).items() if not k.startswith("_")}
+    conn, acct = mail.connect(ACCOUNT)
+    trash = mail.find_trash(conn, acct.get("trash"))
+    if not trash or "MOVE" not in mail.caps(conn):
+        sys.exit("mail-retain: no Trash or MOVE; doing nothing")
+    for box, rule in rules.items():
+        day = cutoff(datetime.date.today(), int(rule["keep_months"]))
+        typ, _ = conn.select(mail.quote(box), readonly=not args.apply)
+        if typ != "OK":
+            print("%s: folder not found, skipped" % box)
+            continue
+        typ, data = conn.uid("SEARCH", None, "BEFORE", imap_date(day))
+        uids = data[0].decode().split() if typ == "OK" and data[0] else []
+        print("%s: %d message(s) before %s %s" % (
+            box, len(uids), day, "-> Trash" if args.apply else "(dry run)"))
+        for i in range(0, len(uids), 100):
+            if args.apply:
+                typ, data = conn.uid("MOVE", ",".join(uids[i:i + 100]),
+                                     mail.quote(trash))
+                if typ != "OK":
+                    sys.exit("mail-retain: move failed: %s" % data)
+    conn.logout()
+
+
+if __name__ == "__main__":
+    main()

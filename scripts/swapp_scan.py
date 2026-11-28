@@ -31,7 +31,6 @@ import urllib.request
 
 from swapp_scan_review import run_reviews
 from swapp_quo_intake import execute as quo_intake
-import swapp_scan_mailreviews as mailreviews
 
 CONFIG = os.environ.get("SWAPP_SCAN_CONFIG") or os.path.expanduser("~/.config/swapp-scan/env")
 STATE = os.environ.get("SWAPP_SCAN_STATE") or os.path.expanduser("~/.local/share/swapp-scan/state.json")
@@ -422,9 +421,6 @@ def zoho_mail(seen, rules):
 EMAIL_ONLY_SMS = re.compile(r"^[\w.+-]+@[\w-]+\.[\w.]+$")
 
 
-MAIL_SPAM_PATROL = os.path.expanduser("~/projects/mailroom-app/bin/mail-spam-patrol")
-
-
 SHARED_PROVIDERS = {"gmail.com", "outlook.com", "hotmail.com", "yahoo.com", "aol.com", "icloud.com", "proton.me", "zoho.com"}
 
 ALWAYS_BLOCK_PATH = os.path.expanduser("~/.local/state/mailroom/spam-always-block.json")
@@ -466,50 +462,6 @@ def sync_always_spam(rules):
     except (OSError, ValueError) as error:
         auto.append("always-spam sync skipped (%s)" % str(error)[:80])
     return auto
-
-
-def housekeeping(manual):
-    """Clean house with ripley's existing tools — never anything new, never
-    a permanent delete. mail-sort moves between folders (undoable); sweep
-    moves always-spam to Spam (Tom's hourly review decides). The AI patrol
-    costs a model call, so it runs on manual scans only; its hourly timer
-    covers the rest."""
-    findings = []
-    stats = {}
-    try:
-        code, out = run(["mail-sort", "--apply"], timeout=180)
-        moved = re.search(r"moved (\d+)", out or "")
-        stats["mail_sort"] = {"moved": int(moved.group(1)) if moved else 0, "exit": code}
-        if moved and int(moved.group(1)) > 0:
-            findings.append({"kind": "zoho", "text": "Inbox cleanup — %s sorted (folders only, undo with mail-sort --undo)" % moved.group(1)})
-    except Exception as error:
-        stats["mail_sort"] = {"error": str(error)[:200]}
-    try:
-        code, out = run([MAIL_SPAM_PATROL, "sweep"], timeout=120)
-        moved = re.search(r"swept (\d+)", out or "")
-        stats["sweep"] = {"moved": int(moved.group(1)) if moved else 0, "exit": code}
-        if moved and int(moved.group(1)) > 0:
-            findings.append({"kind": "zoho", "text": "Inbox cleanup — %s to Spam (waiting in Tom's review)" % moved.group(1)})
-    except Exception as error:
-        stats["sweep"] = {"error": str(error)[:200]}
-    if manual:
-        try:
-            code, out = run([MAIL_SPAM_PATROL, "run"], timeout=600)
-            judged = re.search(r"(\d+) to judge", out or "")
-            filed = re.search(r"ledgered (\d+)", out or "")
-            stats["patrol"] = {
-                "judged": int(judged.group(1)) if judged else 0,
-                "filed": int(filed.group(1)) if filed else 0,
-                "exit": code,
-            }
-            if filed and int(filed.group(1)) > 0:
-                findings.append({"kind": "zoho", "text": "Spam patrol judged %s, %s to Spam (waiting in Tom's review)" % (
-                    judged.group(1) if judged else "?", filed.group(1))})
-        except Exception as error:
-            stats["patrol"] = {"error": str(error)[:200]}
-    else:
-        stats["patrol"] = {"skipped": "hourly timer covers auto scans"}
-    return findings, stats
 
 
 def gather(state, post, rules):
@@ -563,18 +515,10 @@ def scan_once(swapp_url, token):
     if status != 200:
         print("pending check failed: HTTP %d" % status, flush=True)
         return False
-    # Tom's answers from the Scanner's mail reviews apply on every poll (10 s),
-    # not only when a scan is due.
-    try:
-        mailreviews.apply_answers(swapp_url, token, api, run)
-    except Exception as error:
-        print("mail review apply failed: %s" % error, flush=True)
     state = load_state()
     run_id = since = None
     # Only 'requested' runs come from Tom pressing Scan (auto runs claim
-    # straight to running). Manual scans get the full AI patrol; auto scans
-    # get the cheap sweep and the hourly timer covers the rest.
-    manual = pending.get("requested") is not None
+    # straight to running).
     if pending.get("requested"):
         status, claimed = api(swapp_url + "/api/scan/claim", token, "POST", body={})
         if status == 409:
@@ -629,21 +573,8 @@ def scan_once(swapp_url, token):
             post(key, "needs-you", "Quo sync failed — check the Quo session, then Scan again")
     leads, findings, hints, review, summary, auto = gather(state, post, scan_rules)
     auto_labels.extend(auto)
-    clean_findings, clean_stats = housekeeping(manual)
-    findings.extend(clean_findings)
-    summary["cleanup"] = clean_stats
-    try:
-        waiting = mailreviews.push_lists(swapp_url, token, api, run)
-    except Exception as error:
-        waiting = {"error": str(error)[:200]}
-    summary["mailReviews"] = waiting
-    parts = []
-    if isinstance(waiting.get("spam"), int) and waiting["spam"]:
-        parts.append("%d spam" % waiting["spam"])
-    if isinstance(waiting.get("newsletter"), int) and waiting["newsletter"]:
-        parts.append("%d newsletter sender%s" % (waiting["newsletter"], "" if waiting["newsletter"] == 1 else "s"))
-    if parts:
-        findings.append({"kind": "zoho", "text": "Mail reviews — %s waiting (Scanner)" % ", ".join(parts)})
+    # Mail is Donna's job now (Tom, 2026-11-28): the Scanner never sorts, sweeps
+    # or reviews mail; Mailroom's spam patrol and mail-sort are retired.
     source_reviews, review_changes = run_reviews(run_id, summary, post)
     native_leads = quo_intake("lead_exports", destination=swapp_url)[:max(0, 20 - len(leads))]
     leads = [*leads, *native_leads]

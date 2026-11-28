@@ -6,7 +6,7 @@ import subprocess
 import sys
 
 SALES = Path.home() / "projects/sales/bin"
-MAIL = Path.home() / "projects/mailroom-app/bin/mail"
+MAIL = Path.home() / ".local/share/swapp-mail/bin/mail"
 VERBS = {
     "quo": ("status", "list", "help"),
     "sms": ("ls", "show", "status", "help"),
