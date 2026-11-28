@@ -437,19 +437,48 @@ export function cleanIsClosed(options: unknown): boolean {
  * A finished (or stopped) sort with emails in it, no step 3 yet and not closed:
  * it is Tom's turn (step 2), so it belongs on Current job, not Completed jobs.
  */
-export function sortAwaitsTom(
+/** Steps are Sort, Spam, Choose, Do (Tom, 2026-11-28: spam first). */
+function sortOpen(job: { status: string; options: unknown }) {
+  return (
+    cleanIsSort(job.options) &&
+    ["done", "cancelled"].includes(job.status) &&
+    !cleanIsClosed(job.options)
+  );
+}
+
+/** Step 2 is Tom's turn: spam to review, not reviewed or skipped yet. */
+export function spamTurn(
+  job: { status: string; options: unknown; result: unknown },
+  cleanup: unknown,
+): boolean {
+  return (
+    sortOpen(job) &&
+    !cleanup &&
+    !cleanupSkipped(job.options) &&
+    cleanupHasWork(job.result)
+  );
+}
+
+/** Step 3 is Tom's turn: real mail to choose for, and no step 4 yet. */
+export function chooseTurn(
   job: { status: string; options: unknown; result: unknown },
   follow: unknown,
 ): boolean {
   return (
-    cleanIsSort(job.options) &&
-    ["done", "cancelled"].includes(job.status) &&
+    sortOpen(job) &&
     !follow &&
-    !cleanIsClosed(job.options) &&
     !chooseSkipped(job.options) &&
-    // Real mail to choose, or only spam to review (then step 2 is just "go to Spam").
-    (cleanBuckets(job.result).length > 0 || cleanupHasWork(job.result))
+    cleanBuckets(job.result).length > 0
   );
+}
+
+/** Tom's turn on this sort, at the Spam step or the Choose step. */
+export function sortAwaitsTom(
+  job: { status: string; options: unknown; result: unknown },
+  follow: unknown,
+  cleanup?: unknown,
+): boolean {
+  return spamTurn(job, cleanup) || chooseTurn(job, follow);
 }
 
 /** Folders step 3 may move mail to; anything else stays in Inbox. */
@@ -654,9 +683,9 @@ export function cleanBarStatus(
   const title = cleanIsSort(job.options)
     ? "Step 1 of 4: Sort"
     : cleanIsDo(job.options)
-      ? "Step 3 of 4: Do"
+      ? "Step 4 of 4: Do"
       : cleanIsCleanup(job.options)
-        ? "Step 4 of 4: Clean up"
+        ? "Step 2 of 4: Spam"
         : cleanIsPreview(job.options)
           ? "Checking inbox"
           : "Cleaning inbox";
@@ -1063,57 +1092,50 @@ export function donnaNow(input: {
  */
 export function jobEnd(
   job: { status: string; options: unknown; result?: unknown },
+  /** Step 4 (Do) of a sort, if Tom started it. */
   follow?: { status: string } | null,
-  /** Step 4 (Clean up) of a sort, if Tom started it. */
+  /** Step 2 (Spam) of a sort, if Tom started it. */
   cleanup?: { status: string } | null,
 ): { label: string; detail: string } {
-  if (["pending", "leased"].includes(job.status))
-    return { label: "Running", detail: "In progress" };
+  const running = (j?: { status: string } | null) =>
+    Boolean(j && ["pending", "leased"].includes(j.status));
+  if (running(job)) return { label: "Running", detail: "In progress" };
   if (cleanIsSort(job.options)) {
-    if (follow) {
-      if (["pending", "leased"].includes(follow.status))
-        return { label: "Running", detail: "Step 3 in progress" };
-      if (follow.status === "cancelled")
-        return { label: "Stopped", detail: "Stopped during step 3" };
-      return cleanupEnd(job, cleanup);
-    }
     if (cleanIsClosed(job.options))
-      return { label: "Closed", detail: "Closed at step 2, nothing changed" };
-    if (chooseSkipped(job.options)) return cleanupEnd(job, cleanup);
-    return job.status === "cancelled"
-      ? { label: "Stopped", detail: "Stopped during step 1" }
-      : { label: "Waiting", detail: "Waiting for your choices" };
+      return { label: "Closed", detail: "Closed, nothing changed" };
+    if (job.status === "cancelled" && !follow && !cleanup)
+      return { label: "Stopped", detail: "Stopped while sorting" };
+    // Step 2, Spam.
+    if (running(cleanup))
+      return { label: "Running", detail: "Spam step in progress" };
+    if (cleanup?.status === "cancelled")
+      return { label: "Stopped", detail: "Stopped during the spam step" };
+    if (!cleanup && !cleanupSkipped(job.options) && cleanupHasWork(job.result))
+      return { label: "Waiting", detail: "Your turn: the spam" };
+    // Steps 3 and 4, Choose and Do.
+    if (running(follow))
+      return { label: "Running", detail: "Doing your choices" };
+    if (follow?.status === "cancelled")
+      return { label: "Stopped", detail: "Stopped while doing your choices" };
+    if (
+      follow ||
+      chooseSkipped(job.options) ||
+      cleanBuckets(job.result).length === 0
+    )
+      return { label: "Finished", detail: "All steps done" };
+    return { label: "Waiting", detail: "Your turn: choose" };
   }
   if (cleanIsDo(job.options))
     return job.status === "cancelled"
-      ? { label: "Stopped", detail: "Stopped during step 3" }
+      ? { label: "Stopped", detail: "Stopped while doing your choices" }
       : { label: "Finished", detail: "Steps done" };
   if (cleanIsCleanup(job.options))
     return job.status === "cancelled"
-      ? { label: "Stopped", detail: "Stopped during step 4" }
-      : { label: "Finished", detail: "All four steps done" };
+      ? { label: "Stopped", detail: "Stopped during the spam step" }
+      : { label: "Finished", detail: "Spam step done" };
   return job.status === "cancelled"
     ? { label: "Stopped", detail: "Stopped" }
     : { label: "Finished", detail: "Finished" };
-}
-
-/** After step 3: step 4 (Clean up) decides whether the job is finished. */
-function cleanupEnd(
-  sort: { options: unknown; result?: unknown },
-  cleanup?: { status: string } | null,
-): { label: string; detail: string } {
-  if (cleanup) {
-    if (["pending", "leased"].includes(cleanup.status))
-      return { label: "Running", detail: "Step 4 in progress" };
-    return cleanup.status === "cancelled"
-      ? { label: "Stopped", detail: "Stopped during step 4" }
-      : { label: "Finished", detail: "All four steps done" };
-  }
-  if (cleanupSkipped(sort.options))
-    return { label: "Finished", detail: "Done; clean up skipped" };
-  return cleanupHasWork(sort.result)
-    ? { label: "Waiting", detail: "Your turn: review the spam" }
-    : { label: "Finished", detail: "All steps done" };
 }
 
 /** What a job was, in Tom's words, for the Jobs tab. */

@@ -357,14 +357,16 @@ export async function loadAwaitingSort(context: BrandDataContext) {
     });
     for (const sort of sorts) {
       if (!cleanIsSort(sort.options)) continue;
-      const follow = await tx.donnaJob.findFirst({
+      const later = await tx.donnaJob.findMany({
         where: {
           kind: "clean",
           options: { path: ["previewJobId"], equals: sort.id },
         },
-        select: { id: true },
+        select: { id: true, options: true },
       });
-      if (sortAwaitsTom(sort, follow)) return sort;
+      const follow = later.find((j) => !cleanIsCleanup(j.options));
+      const cleanup = later.find((j) => cleanIsCleanup(j.options));
+      if (sortAwaitsTom(sort, follow, cleanup)) return sort;
     }
     return null;
   });

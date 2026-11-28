@@ -15,10 +15,8 @@ import {
   RESCUE_BUCKET,
   cleanBuckets,
   cleanIsCleanup,
-  cleanIsDo,
   cleanupPlan,
   cleanupSkipped,
-  chooseSkipped,
   cleanIsClosed,
   cleanIsSort,
   cleanReport,
@@ -366,6 +364,8 @@ export async function applyBuckets(form: FormData) {
         mailboxId: sort.mailboxId,
         kind: "clean",
         options: { path: ["previewJobId"], equals: sort.id },
+        // The Spam step (cleanup: true) comes first and is not step 4.
+        NOT: { options: { path: ["cleanup"], equals: true } },
       },
       select: { id: true },
     });
@@ -607,11 +607,13 @@ async function sortReadyForCleanup(
     },
     select: { id: true, status: true, options: true },
   });
+  // The Spam step is step 2 (Tom, 2026-11-28): right after the sort, once.
   if (later.some((j) => cleanIsCleanup(j.options))) return null;
-  // The Spam step follows step 3, or step 2 when Tom had nothing to do there.
-  if (chooseSkipped(sort.options)) return sort;
-  const done = later.find((j) => cleanIsDo(j.options));
-  if (!done || done.status !== "done") return null;
+  if (
+    cleanIsClosed(sort.options) ||
+    !["done", "cancelled"].includes(sort.status)
+  )
+    return null;
   return sort;
 }
 
@@ -688,6 +690,8 @@ export async function skipChoose(form: FormData) {
         mailboxId: sort.mailboxId,
         kind: "clean",
         options: { path: ["previewJobId"], equals: sort.id },
+        // The Spam step (cleanup: true) comes first and is not step 4.
+        NOT: { options: { path: ["cleanup"], equals: true } },
       },
       select: { id: true },
     });
