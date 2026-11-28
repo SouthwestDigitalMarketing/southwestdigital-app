@@ -1,4 +1,10 @@
 # SWapp handoff
+## 2026-11-27 — Proposal builder spec 06: start on the 1st, full first month, credits carry over (Ummon)
+- `src/lib/quotes/serviceStart.ts`: `serviceStartMonth` (default 1st of next month, Chicago; with a cleanup plan always the wrap-up month), frozen at selection. Proposal/agreement/receipt: "Service starts <Month 1, YYYY>. Billing is on the 1st of each month after." Live defaults never shown to clients before selection.
+- "The first month is billed in full..." line; no proration.
+- Credit reason shown to client; remainder above today's payment stored at signing in `proposalAcceptance.creditRemaining` (+ reason), shown to staff on the offer page for the next invoice (SWapp does not bill monthly; applied by hand). Duplicate/replace clears credit, reason and explicit start month.
+- Follow-up: no "Mark credit applied" step yet.
+
 ## 2026-11-27 — Hear the voice on the episode page (Johnny)
 
 TREB 261127 (`mwzglzlj-5643aa`) episode page plays five 20-second treatments
