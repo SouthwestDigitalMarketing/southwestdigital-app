@@ -282,6 +282,52 @@ describe("public proposal agreement API", () => {
     });
   });
 
+  it("lists one sized migration line from the stored snapshot, never in requiredOneTime", async () => {
+    const base = rowWithAccounts(accounts);
+    const storedAssessment = {
+      ...base.onboardingData.proposalBuilderState.assessment,
+      additionalOptions: [{
+        id: "migration",
+        name: "QuickBooks Desktop to Online Migration",
+        description: "Legacy flat row.",
+        monthlyPrice: 640,
+        showInProposal: true,
+        archived: false,
+        billingCadence: "one-time",
+        packageIds: ["maintain"],
+        required: true,
+      }],
+      desktopMigration: { choice: "fresh_start" },
+    };
+    const priced = {
+      lines: [
+        { label: "Desktop migration — fresh start", amount: 640 },
+        { label: "Trial-balance tie-out (included)", amount: 0 },
+      ],
+      total: 640,
+    };
+    mocks.engagement.mockResolvedValue({
+      ...base,
+      agreementText: null,
+      onboardingData: {
+        proposalBuilderState: {
+          assessment: storedAssessment,
+          // The stored checkout already carries the sized total (checkout
+          // auto-added nothing: the flat option is suppressed).
+          services: { ...checkout, additionalOneTimeTotal: 640, selectedAdditionalOptionIds: [] },
+        },
+      },
+      quotes: [{
+        publishedSnapshotJson: null,
+        revisions: [{ snapshotJson: { assessment: storedAssessment, pricing: { desktopMigration: priced } } }],
+      }],
+    });
+    const body = await (await call()).json();
+    expect(body.text).toContain("QuickBooks Desktop to Online Migration — Fresh start: $640.00 (one-time)");
+    expect(body.text.match(/QuickBooks Desktop to Online Migration — Fresh start/g)).toHaveLength(1);
+    expect(body.text).not.toContain("QuickBooks Desktop to Online Migration (due today)");
+  });
+
   it("tier-filters required one-time lines so no uncharged line appears", async () => {
     const base = rowWithAccounts(accounts);
     const tieredOptions = [

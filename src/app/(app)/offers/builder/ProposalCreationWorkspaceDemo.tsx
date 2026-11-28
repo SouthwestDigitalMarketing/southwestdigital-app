@@ -89,6 +89,7 @@ import {
 } from "@/lib/quotes/companyBundle";
 import CompanyBundleEditor, { withSyncedMainAccounts } from "./CompanyBundleEditor";
 import ComplexityChecklist from "./ComplexityChecklist";
+import DesktopMigrationEditor from "./DesktopMigrationEditor";
 import {
   COMPLEXITY_DRIVER_IDS,
   complexityDriverDefs,
@@ -98,6 +99,17 @@ import {
   type ComplexityDriverDefaultsPatch,
   type ComplexitySelection,
 } from "@/lib/quotes/complexityDrivers";
+import {
+  findSuppressedFlatMigrationOptions,
+  normalizeDesktopMigrationSelection,
+  sanitizeDesktopMigrationDefaults,
+  toPublicDesktopMigration,
+  type DesktopMigrationPricingOptions,
+  type DesktopMigrationSelection,
+} from "@/lib/quotes/desktopMigration";
+import {
+  resolveDesktopMigrationPrice,
+} from "@/lib/quotes/desktopMigrationWiring";
 import {
   sanitizeBundlePricingDefaults,
   type OptionsTemplateAssessmentSlice,
@@ -333,6 +345,14 @@ export type AssessmentState = {
   complexity?: ComplexitySelection;
   /** Options-template complexity driver defaults applied to the proposal. */
   complexityDriverDefaults?: ComplexityDriverDefaultsPatch;
+  /**
+   * Spec 05 QuickBooks Desktop → Online migration selection, written
+   * normalized by the builder section and normalized again at pricing;
+   * absent on legacy proposals.
+   */
+  desktopMigration?: DesktopMigrationSelection | null;
+  /** Options-template Desktop-migration money defaults applied to the proposal. */
+  desktopMigrationDefaults?: Partial<DesktopMigrationPricingOptions>;
   entityType: EntityType;
   taxElection: TaxElection;
   booksOverTwoMonthsBehind: boolean | null;
@@ -1212,11 +1232,23 @@ function withComplexityUnknownDefaults(assessment: AssessmentState): AssessmentS
     assessment.complexity === undefined
       ? undefined
       : normalizeComplexitySelection(assessment.complexity);
+  // Spec 05: the migration selection normalizes tolerantly (junk drops to
+  // no choice). Load never invents one: an absent key stays absent so
+  // legacy drafts never gain a migration on load.
+  const desktopMigration =
+    assessment.desktopMigration === undefined || assessment.desktopMigration === null
+      ? assessment.desktopMigration
+      : normalizeDesktopMigrationSelection(assessment.desktopMigration);
   return {
     ...assessment,
     accounts: companies ? companies[0].accounts : normalizeAccountInventory(assessment.accounts),
     companies,
     complexity,
+    desktopMigration,
+    desktopMigrationDefaults:
+      assessment.desktopMigrationDefaults === undefined
+        ? undefined
+        : sanitizeDesktopMigrationDefaults(assessment.desktopMigrationDefaults),
     complexityDriverDefaults:
       assessment.complexityDriverDefaults === undefined
         ? undefined
@@ -1356,12 +1388,26 @@ export function applyOptionsTemplateSlice(
       };
     }
   }
+  // Spec 05: same field-by-field merge for the Desktop-migration money
+  // defaults — template-set fields win, template-unset fields keep what
+  // the proposal has.
+  const savedMigration = sanitizeDesktopMigrationDefaults(saved.desktopMigrationDefaults);
+  const templateMigration = sanitizeDesktopMigrationDefaults(slice.desktopMigrationDefaults);
+  const mergedMigration: Partial<DesktopMigrationPricingOptions> = { ...savedMigration };
+  for (const [key, value] of Object.entries(templateMigration)) {
+    if (value !== undefined) {
+      (mergedMigration as Record<string, number>)[key] = value;
+    }
+  }
   const next = { ...saved, ...slice };
   if (slice.bundlePricingDefaults !== undefined || saved.bundlePricingDefaults !== undefined) {
     next.bundlePricingDefaults = merged;
   }
   if (slice.complexityDriverDefaults !== undefined || saved.complexityDriverDefaults !== undefined) {
     next.complexityDriverDefaults = mergedComplexity;
+  }
+  if (slice.desktopMigrationDefaults !== undefined || saved.desktopMigrationDefaults !== undefined) {
+    next.desktopMigrationDefaults = mergedMigration;
   }
   return next;
 }
@@ -1402,6 +1448,42 @@ export function hasCatchUpPricingInputs(assessment: {
  * snapshots that predate normalization — raw values show through rather
  * than throwing.
  */
+/**
+ * Spec 05 collapsed-section row for the Desktop → Online migration:
+ * "Not selected" on legacy assessments, otherwise "<choice> · $X".
+ */
+export function desktopMigrationSummaryText(assessment: AssessmentState): string {
+  const priced = resolveDesktopMigrationPrice(assessment);
+  if (!priced) return "Not selected";
+  return `${priced.choiceLabel} · ${formatCurrency(priced.total)}`;
+}
+
+/** Read-only extra Desktop file names (beyond the main file) for the builder section. */
+export function desktopMigrationExtraFileNames(assessment: AssessmentState): string[] {
+  const companies = normalizeCompanyBundle(assessment.companies);
+  const flagged = companies.filter((company) => company.fileStatus === "desktop_to_online");
+  if (flagged.length === 0) return [];
+  const mainIsFlagged = companies[0]?.fileStatus === "desktop_to_online";
+  return (mainIsFlagged ? flagged.slice(1) : flagged).map((company) => company.name);
+}
+
+/** Names of the flat migration options suppressed by the sized migration. */
+export function desktopMigrationSuppressedNames(assessment: AssessmentState): string[] {
+  const suppressed = findSuppressedFlatMigrationOptions(
+    assessment.additionalOptions,
+    assessment.desktopMigration,
+  );
+  const rows = new Map(
+    assessment.additionalOptions
+      .filter((option): option is typeof option & { id: string } => typeof option.id === "string")
+      .map((option) => [option.id, option.name] as const),
+  );
+  return suppressed.suppressedIds.map((id) => {
+    const name = rows.get(id);
+    return typeof name === "string" && name.trim().length > 0 ? name.trim() : id;
+  });
+}
+
 export function cleanupPlanSummaryRows(plan: CleanupPlan | null | undefined): Array<[string, string]> {
   if (!plan || typeof plan !== "object") return [];
   let wrapUp = plan.wrapUpDate;
@@ -1809,11 +1891,20 @@ export function getProposalPricingSnapshotData(assessment: AssessmentState) {
     }
   }
 
+  // Spec 05: the one priced migration object, read by checkout, the public
+  // payload and the agreement route instead of recomputing. Null for
+  // legacy assessments (no choice), so their snapshots stay byte-identical.
+  const desktopMigrationPriced = resolveDesktopMigrationPrice(assessment);
+  const desktopMigration = desktopMigrationPriced
+    ? toPublicDesktopMigration({ lines: desktopMigrationPriced.lines, total: desktopMigrationPriced.total })
+    : null;
+
   return {
     cleanupMonths,
     recommendation,
     packagePricing,
     companyBundle,
+    ...(desktopMigration ? { desktopMigration } : {}),
     hasCatchUpPricing: hasCatchUpPricingInputs(assessment),
   };
 }
@@ -1824,8 +1915,9 @@ export function getProposalPricingSnapshotData(assessment: AssessmentState) {
  * key, so their stored JSON is byte-identical to before.
  */
 export function getProposalPricingSnapshotPricing(assessment: AssessmentState) {
-  const { packagePricing, companyBundle } = getProposalPricingSnapshotData(assessment);
-  return companyBundle ? { ...packagePricing, companyBundle } : packagePricing;
+  const { packagePricing, companyBundle, desktopMigration } = getProposalPricingSnapshotData(assessment);
+  const pricing = companyBundle ? { ...packagePricing, companyBundle } : packagePricing;
+  return desktopMigration ? { ...pricing, desktopMigration } : pricing;
 }
 
 export function getProposalPricingSnapshotItems(assessment: AssessmentState) {
@@ -2090,6 +2182,9 @@ export default function ProposalCreationWorkspaceDemo({
       ...cleanupPlanSummaryRows(assessment.cleanupPlan),
       ["Ongoing platform", bookkeepingPlatformLabel(assessment.ongoingBookkeepingPlatform)],
       ["Platform migration", assessment.platformMigrationEnabled ? `Enabled · ${assessment.platformMigrationEffectiveMonth || "Date not set"}` : "Not enabled"],
+    ],
+    "Desktop → Online migration": [
+      ["Migration", desktopMigrationSummaryText(assessment)],
     ],
     "Connected Accounts": [
       ["Bank accounts", String(pricingAssessment.bankAccountsCount)],
@@ -3209,6 +3304,23 @@ export default function ProposalCreationWorkspaceDemo({
                             </FieldLabel>
                           ) : null}
                     </div>
+                  </AssessmentCardSection>
+                ) : null}
+
+                {isScaleStep ? (
+                  <AssessmentCardSection
+                    title="QuickBooks Desktop → Online migration"
+                    assessment={assessment}
+                    onCancel={setAssessment}
+                    summary={summaries["Desktop → Online migration"]}
+                  >
+                    <DesktopMigrationEditor
+                      selection={assessment.desktopMigration}
+                      extraFileNames={desktopMigrationExtraFileNames(assessment)}
+                      suppressedNames={desktopMigrationSuppressedNames(assessment)}
+                      priced={resolveDesktopMigrationPrice(assessment)}
+                      onChange={(next) => updateAssessment("desktopMigration", next)}
+                    />
                   </AssessmentCardSection>
                 ) : null}
 

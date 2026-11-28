@@ -21,6 +21,13 @@ import {
   renderAgreementTemplate,
 } from "@/lib/agreements/template";
 import { requiredOneTimeAddOnsForTier } from "@/lib/quotes/proposalServices";
+import { normalizeDesktopMigrationSelection } from "@/lib/quotes/desktopMigration";
+import {
+  desktopMigrationChoiceLabel,
+  desktopMigrationFeeLabel,
+  withSizedMigrationFeeLines,
+} from "@/lib/quotes/desktopMigrationWiring";
+import { storedDesktopMigrationForSnapshot } from "@/lib/quotes/publicProposal";
 import { effectiveAssessment } from "@/app/(app)/offers/builder/effectiveAssessment";
 import type { AssessmentState } from "@/app/(app)/offers/builder/ProposalCreationWorkspaceDemo";
 
@@ -139,7 +146,25 @@ export async function GET(
     baseAssessment: effectiveAssessment(assessment as unknown as AssessmentState),
     options: resolveBundlePricingOptions(assessment),
   });
-  const companyFeeLines = companyBundle ? companyBundleFeeLines(companyBundle) : undefined;
+  // Spec 05: the sized migration is exactly one fee line in the company
+  // bucket — never also in requiredOneTime, so the itemized sum still
+  // equals the total. Legacy snapshots (no choice) price exactly as today.
+  const migrationChoice = normalizeDesktopMigrationSelection(
+    isRecord(publishedSnapshot) && isRecord(publishedSnapshot.assessment)
+      ? publishedSnapshot.assessment.desktopMigration
+      : null,
+  ).choice;
+  const storedMigration = storedDesktopMigrationForSnapshot(publishedSnapshot);
+  const sizedMigrationLine = migrationChoice !== null && storedMigration
+    ? {
+        label: desktopMigrationFeeLabel(desktopMigrationChoiceLabel(migrationChoice) ?? "Desktop migration"),
+        amount: storedMigration.total,
+      }
+    : null;
+  const companyFeeLines = withSizedMigrationFeeLines(
+    companyBundle ? companyBundleFeeLines(companyBundle) : undefined,
+    sizedMigrationLine,
+  );
   const renderInput = {
     brandName: brand?.name ?? "Bookkeeping Conroe",
     clientName: engagement.clientName || "Client",

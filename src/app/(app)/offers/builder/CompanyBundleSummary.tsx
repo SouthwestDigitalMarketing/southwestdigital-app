@@ -1,8 +1,8 @@
 import type { BundlePricing, PublicCompanyBundle } from "@/lib/quotes/companyBundle";
 
 export type CompanyBundleSummaryProps =
-  | { priced: BundlePricing; caption?: string }
-  | { publicBundle: PublicCompanyBundle; caption?: string };
+  | { priced: BundlePricing; caption?: string; migrationSized?: boolean }
+  | { publicBundle: PublicCompanyBundle; caption?: string; migrationSized?: boolean };
 
 type SummaryRow = {
   name: string;
@@ -17,7 +17,7 @@ function fmt(value: number) {
   return value.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function summarize(priced: BundlePricing): {
+function summarize(priced: BundlePricing, migrationSized: boolean): {
   rows: SummaryRow[];
   locationsCount: number;
   locationsMonthly: number;
@@ -35,7 +35,7 @@ function summarize(priced: BundlePricing): {
           : null,
       migrationNote:
         entry.company.fileStatus === "desktop_to_online"
-          ? "Desktop → Online migration (priced separately)"
+          ? migrationNoteText(migrationSized)
           : null,
     })),
     locationsCount: priced.perCompany[0]?.company.locationsCount ?? 0,
@@ -44,7 +44,17 @@ function summarize(priced: BundlePricing): {
   };
 }
 
-function summarizePublic(bundle: PublicCompanyBundle): {
+/**
+ * Spec 05: once a sized migration is chosen the per-file $0 marker reads
+ * as included; legacy (no choice) keeps "priced separately".
+ */
+function migrationNoteText(migrationSized: boolean): string {
+  return migrationSized
+    ? "Desktop → Online migration (included in Desktop → Online migration)"
+    : "Desktop → Online migration (priced separately)";
+}
+
+function summarizePublic(bundle: PublicCompanyBundle, migrationSized: boolean): {
   rows: SummaryRow[];
   locationsCount: number;
   locationsMonthly: number;
@@ -59,7 +69,7 @@ function summarizePublic(bundle: PublicCompanyBundle): {
       // The public payload carries no pricing options, so the exact discount
       // percent is unknown here; staff preview shows the percent from options.
       discountNote: index > 0 && company.ownQboFile ? "bundle discount applied" : null,
-      migrationNote: company.migrationFlagged ? "Desktop → Online migration (priced separately)" : null,
+      migrationNote: company.migrationFlagged ? migrationNoteText(migrationSized) : null,
     })),
     locationsCount: bundle.locationsCount,
     locationsMonthly: bundle.locationsMonthly,
@@ -76,8 +86,9 @@ function summarizePublic(bundle: PublicCompanyBundle): {
  */
 export default function CompanyBundleSummary(props: CompanyBundleSummaryProps) {
   const caption = "caption" in props ? props.caption : undefined;
+  const migrationSized = "migrationSized" in props && props.migrationSized === true;
   const summary =
-    "priced" in props ? summarize(props.priced) : summarizePublic(props.publicBundle);
+    "priced" in props ? summarize(props.priced, migrationSized) : summarizePublic(props.publicBundle, migrationSized);
   const setupRows = summary.rows.filter((row) => row.setupOneTime > 0);
   return (
     <section className="my-6 rounded-2xl border border-slate-200 bg-white p-4 text-slate-900 sm:p-6" aria-label="Companies in this proposal">
