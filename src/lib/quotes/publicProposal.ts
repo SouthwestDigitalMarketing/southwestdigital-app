@@ -14,6 +14,10 @@ import {
 } from "@/lib/quotes/desktopMigration";
 import { desktopMigrationChoiceLabel } from "@/lib/quotes/desktopMigrationWiring";
 import {
+  isServiceStartMonth,
+  readCreditCarryover,
+} from "@/lib/quotes/serviceStart";
+import {
   buildCleanupInstallments,
   cleanupWeeksBetween,
   normalizeCleanupPlan,
@@ -377,6 +381,44 @@ export function publicDesktopMigrationChoiceForSnapshot(snapshotValue: unknown):
 }
 
 /**
+ * Whitelisted Spec 06 service start month for a stored snapshot, or null for
+ * legacy snapshots without one. Only a valid "YYYY-MM" crosses — staff-only
+ * junk never publishes, and legacy payloads stay byte-identical.
+ */
+export function publicServiceStartMonthForSnapshot(snapshotValue: unknown): string | null {
+  const rawAssessment = record(record(snapshotValue).assessment);
+  return isServiceStartMonth(rawAssessment.serviceStartMonth) ? rawAssessment.serviceStartMonth : null;
+}
+
+/**
+ * Whitelisted Spec 06 client-readable credit reason for a stored snapshot, or
+ * null when none was stored. Trimmed and capped; empty or non-string reasons
+ * never publish.
+ */
+export function publicFirstPaymentCreditReasonForSnapshot(snapshotValue: unknown): string | null {
+  const rawAssessment = record(record(snapshotValue).assessment);
+  const reason = rawAssessment.firstPaymentCreditReason;
+  if (typeof reason !== "string") return null;
+  const trimmed = reason.trim().slice(0, 500);
+  return trimmed ? trimmed : null;
+}
+
+/**
+ * Whitelisted Spec 06 remaining-credit subset for a stored checkout (the
+ * frozen selection the client approved): only the amount and its reason
+ * cross — never the applied/due internals. Null when no excess remains, so
+ * the proposal can show "Remaining credit $X applied to your next invoice."
+ */
+export type PublicCreditCarryover = {
+  creditRemaining: number;
+  creditRemainingReason: string;
+};
+
+export function publicCreditCarryoverForCheckout(checkoutValue: unknown): PublicCreditCarryover | null {
+  return readCreditCarryover(checkoutValue);
+}
+
+/**
  * Whitelisted Spec 05 priced migration for the select route's checkout
  * reconstruction. The public pricing schema strips `pricing.desktopMigration`,
  * so carry the validated object back in — same trust level as the bundle
@@ -418,10 +460,16 @@ export function toPublicBookkeepingProposal(
   const accountInventory: PublicAccountInventory | null = toPublicAccountInventory(record(snapshot.assessment).accounts);
   const cleanupPlan = publicCleanupPlanForSnapshot(snapshotValue);
   const desktopMigration = publicDesktopMigrationForSnapshot(snapshotValue);
+  // Spec 06 start month + credit reason; spread only when present so legacy
+  // payloads stay byte-identical (the legacy toEqual test pins the shape).
+  const serviceStartMonth = publicServiceStartMonthForSnapshot(snapshotValue);
+  const firstPaymentCreditReason = publicFirstPaymentCreditReasonForSnapshot(snapshotValue);
   return {
     accountInventory,
     assessment: {
       ...assessment,
+      ...(serviceStartMonth !== null ? { serviceStartMonth } : {}),
+      ...(firstPaymentCreditReason !== null ? { firstPaymentCreditReason } : {}),
       additionalOptions: remapPublicDescription(assessment.additionalOptions, catalogCopy),
       bonuses: remapPublicDescription(assessment.bonuses, catalogCopy),
     },

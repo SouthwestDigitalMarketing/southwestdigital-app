@@ -9,6 +9,7 @@ import { checkRateLimit } from "@/lib/simpleRateLimit";
 import { getSelectedProposalTier } from "@/lib/engagements/proposalSelection";
 import { hasPublicProposalAccess, publicProposalNotFound } from "@/lib/engagements/publicProposalAccess";
 import { buildAcceptedPayment } from "@/lib/engagements/acceptedPayment";
+import { readCreditCarryover } from "@/lib/quotes/serviceStart";
 import { lockQuoteMutation, QuoteMutationConflictError } from "@/lib/quotes/mutationLock";
 
 function isValidEmail(value: string) {
@@ -93,6 +94,11 @@ export async function POST(
   const services = isRecord(builderState.services) ? builderState.services : {};
   const paymentObligation = buildAcceptedPayment(services, engagement.isTestProposal);
   if (!paymentObligation) return NextResponse.json({ error: "The pricing could not be frozen. Please reload and select the published offer again." }, { status: 409 });
+  // Spec 06: when the stored checkout carries an excess credit, freeze the
+  // remainder on the acceptance so whoever sends the next invoice applies it.
+  // Written atomically with the acceptance (same guards/transaction), never
+  // on a frozen/already-signed re-run, and with no new client message.
+  const creditCarryover = readCreditCarryover(services);
   const proposalAcceptance = {
     version: 2,
     signedAt: signedAt.toISOString(),
@@ -100,6 +106,10 @@ export async function POST(
     agreementTextHash,
     selection: services,
     paymentObligation,
+    ...(creditCarryover ? {
+      creditRemaining: creditCarryover.creditRemaining,
+      creditRemainingReason: creditCarryover.creditRemainingReason,
+    } : {}),
     signer: {
       name: signerName,
       title: signerTitle || null,

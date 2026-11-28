@@ -15,6 +15,11 @@ import {
   type CleanupPlan,
 } from "@/lib/quotes/cleanupPlan";
 import { staffDateKey } from "@/lib/quotes/staffDates";
+import {
+  creditCarryover,
+  isServiceStartMonth,
+  resolveServiceStartMonth,
+} from "@/lib/quotes/serviceStart";
 import { proposalIncludedServices, proposalServiceAddOns } from "@/lib/quotes/proposalServices";
 import { toPublicDesktopMigration } from "@/lib/quotes/desktopMigration";
 import { proposalPaymentSchedule } from "@/lib/quotes/paymentSchedule";
@@ -61,6 +66,21 @@ export type ProposalCheckoutSummary = ProposalCheckoutSelection & {
   /** Credit for money already paid, deducted from amountDueNow. Absent when there is none. */
   creditApplied?: number;
   amountDueBeforeCredit?: number;
+  /**
+   * Spec 06 start month ("YYYY-MM"): the stored staff month, or the Spec 04
+   * wrap-up month when a cleanup plan was selected. Absent on legacy
+   * checkouts, whose stored terms stay byte-identical.
+   */
+  serviceStartMonth?: string;
+  /**
+   * Spec 06 remainder when the first-payment credit exceeded today's amount.
+   * Applied only against the next Donna-sent invoice. Absent unless the
+   * remainder is above zero (legacy: absent).
+   */
+  creditRemaining?: number;
+  creditRemainingReason?: string;
+  /** Client-readable reason for the first-payment credit. Absent unless carried over. */
+  firstPaymentCreditReason?: string;
   includedServices?: { name: string; description: string }[];
   chargeKind: "onboarding" | "first_month" | "cleanup" | "onboarding_and_first_month" | "onboarding_and_cleanup" | "onboarding_and_discovery";
   selectionHash: string;
@@ -157,6 +177,25 @@ export function parseStoredProposalCheckout(value: unknown): ProposalCheckoutSum
       && typeof value.amountDueBeforeCredit === "number" && Number.isFinite(value.amountDueBeforeCredit) ? {
       creditApplied: value.creditApplied,
       amountDueBeforeCredit: value.amountDueBeforeCredit,
+    } : {}),
+    // Spec 06 start month: a malformed stored month reads as legacy (absent).
+    ...(typeof value.serviceStartMonth === "string" && isServiceStartMonth(value.serviceStartMonth) ? {
+      serviceStartMonth: value.serviceStartMonth,
+    } : {}),
+    // Spec 06 carry-over: only a positive remainder parses; a stray reason
+    // without an amount reads as no carry-over. Malformed values never fail
+    // the checkout — it still parses as a legacy no-carry-over checkout.
+    ...(() => {
+      if (typeof value.creditRemaining !== "number" || !Number.isFinite(value.creditRemaining) || value.creditRemaining <= 0) {
+        return {};
+      }
+      return {
+        creditRemaining: value.creditRemaining,
+        ...(typeof value.creditRemainingReason === "string" ? { creditRemainingReason: value.creditRemainingReason } : {}),
+      };
+    })(),
+    ...(typeof value.firstPaymentCreditReason === "string" && value.firstPaymentCreditReason.length > 0 ? {
+      firstPaymentCreditReason: value.firstPaymentCreditReason,
     } : {}),
     ...(typeof value.complexityCleanupAdd === "number" && Number.isFinite(value.complexityCleanupAdd) && value.complexityCleanupAdd > 0 ? {
       complexityCleanupAdd: value.complexityCleanupAdd,
@@ -383,11 +422,14 @@ export function buildProposalCheckoutSummary(
   // and installments are cut from the stored cleanup total, complexity add
   // included. amountDueNow semantics are untouched — nothing for cleanup
   // is charged today.
+  // Firm-Chicago calendar date anchors both the plan refresh and the Spec 06
+  // start-month default, so the two can never disagree within one selection.
+  const todayISO = opts?.todayISO ?? staffDateKey(new Date());
   const normalizedCleanupPlan = rawCleanupPlan && selectedCleanupMonths > 0
     ? refreshCleanupPlanAtSelection(rawCleanupPlan, {
         backlogMonths: selectedCleanupMonths,
         selectedKeys: selectedCleanupPeriodKeys,
-        todayISO: opts?.todayISO ?? staffDateKey(new Date()),
+        todayISO,
       })
     : null;
   const storedCleanupInstallments = normalizedCleanupPlan
@@ -396,6 +438,25 @@ export function buildProposalCheckoutSummary(
   const chargeKind: ProposalCheckoutSummary["chargeKind"] = selectedCleanupMonths > 0
     ? "onboarding_and_discovery"
     : onboardingFee > 0 ? "onboarding_and_first_month" : "first_month";
+
+  // Spec 06 carry-over: the capped deduction stays today's payment (math
+  // unchanged); the excess is stored for the next invoice instead of dropped.
+  const carry = creditCarryover({
+    firstPaymentCredit: finiteNumber(assessment.firstPaymentCredit),
+    amountDueBeforeCredit,
+    reason: assessment.firstPaymentCreditReason,
+  });
+  // Spec 06 start month: stored when the snapshot carries an explicit staff
+  // month, or derived from the wrap-up month when a cleanup plan was
+  // selected. Otherwise absent, so legacy checkouts hash exactly as before.
+  const hasExplicitStartMonth = isServiceStartMonth(assessment.serviceStartMonth);
+  const resolvedStartMonth = hasExplicitStartMonth || normalizedCleanupPlan
+    ? resolveServiceStartMonth({
+        hasCleanup: selectedCleanupMonths > 0,
+        plan: normalizedCleanupPlan,
+        startMonth: hasExplicitStartMonth ? (assessment.serviceStartMonth as string) : null,
+      }, { todayISO })
+    : null;
 
   const normalized = {
     tier: selection.tier,
@@ -413,6 +474,16 @@ export function buildProposalCheckoutSummary(
     prepaidMonths,
     // Only present when a credit applies, so selections without one hash exactly as before.
     ...(creditApplied > 0 ? { creditApplied, amountDueBeforeCredit } : {}),
+    // Spec 06: stored only when an excess remains (legacy: absent).
+    // amountDueNow is unchanged — the capped deduction above is still today's
+    // payment.
+    ...(carry.creditRemaining > 0 ? {
+      creditRemaining: carry.creditRemaining,
+      creditRemainingReason: carry.creditRemainingReason,
+      ...(carry.creditRemainingReason ? { firstPaymentCreditReason: carry.creditRemainingReason } : {}),
+    } : {}),
+    // Spec 06 start month (legacy: absent).
+    ...(resolvedStartMonth ? { serviceStartMonth: resolvedStartMonth } : {}),
     // Only present when a complexity cleanup add applies (legacy: absent).
     ...(complexityCleanupAdd > 0 ? { complexityCleanupAdd } : {}),
     // Only present when the snapshot had a cleanupPlan and months were
@@ -444,13 +515,34 @@ export function resolveAmountDueNow(input: {
 export function applyOnboardingWaiver(checkout: ProposalCheckoutSummary): ProposalCheckoutSummary {
   if (checkout.onboardingFee <= 0) return checkout;
   const beforeCredit = money((checkout.amountDueBeforeCredit ?? checkout.amountDueNow) - checkout.onboardingFee);
-  const creditApplied = Math.min(checkout.creditApplied ?? 0, beforeCredit);
+  // Spec 06: the gross credit is applied + remainder, so a waiver that
+  // shrinks today's amount re-caps the deduction AND grows the carry-over
+  // instead of dropping the difference. Legacy credit checkouts (no
+  // remainder) re-cap exactly as before.
+  const grossCredit = money((checkout.creditApplied ?? 0) + (checkout.creditRemaining ?? 0));
+  const creditApplied = Math.min(grossCredit, beforeCredit);
+  const creditRemaining = money(grossCredit - creditApplied);
   const waived = {
     ...checkout,
     onboardingFee: 0,
     oneTimeTotal: money(checkout.oneTimeTotal - checkout.onboardingFee),
     amountDueNow: money(beforeCredit - creditApplied),
-    ...(checkout.creditApplied ? { creditApplied, amountDueBeforeCredit: beforeCredit } : {}),
+    ...(checkout.creditApplied || checkout.creditRemaining ? {
+      creditApplied,
+      amountDueBeforeCredit: beforeCredit,
+      ...(creditRemaining > 0 ? {
+        creditRemaining,
+        // Always written with a remainder ("" when the remainder was created
+        // by this waiver and no reason was stored), so the acceptance chain
+        // never loses the amount. firstPaymentCreditReason only when stored.
+        creditRemainingReason: typeof checkout.creditRemainingReason === "string"
+          ? checkout.creditRemainingReason
+          : "",
+        ...(typeof checkout.firstPaymentCreditReason === "string" && checkout.firstPaymentCreditReason
+          ? { firstPaymentCreditReason: checkout.firstPaymentCreditReason }
+          : {}),
+      } : {}),
+    } : {}),
     chargeKind: (checkout.paymentScheduleVersion === 2 && (checkout.cleanupMonths ?? 0) > 0
       ? "onboarding_and_discovery"
       : checkout.cleanupTotal > 0 ? "cleanup" : "first_month") as ProposalCheckoutSummary["chargeKind"],

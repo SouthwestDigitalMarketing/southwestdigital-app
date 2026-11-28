@@ -308,9 +308,17 @@ export async function duplicateQuoteAction(formData: FormData) {
 
   const sourceSnapshot = quote.snapshotJson as Record<string, unknown>;
   const sourceAssessment = sourceSnapshot.assessment;
-  const freshAssessment = sourceAssessment && typeof sourceAssessment === "object" && !Array.isArray(sourceAssessment)
+  const freshAssessment: Record<string, unknown> | null = sourceAssessment && typeof sourceAssessment === "object" && !Array.isArray(sourceAssessment)
     ? { ...(sourceAssessment as Record<string, unknown>), waiveOnboardingFee: false }
     : null;
+  if (freshAssessment) {
+    // A duplicate is a fresh lead-facing proposal: a first-payment credit
+    // must never apply twice, so the credit and its client-readable reason
+    // are cleared here (both plain and replace duplicates set
+    // isFreshDuplicate below). Other terms (e.g. serviceStartMonth) carry.
+    delete freshAssessment.firstPaymentCredit;
+    delete freshAssessment.firstPaymentCreditReason;
+  }
   const snapshot = {
     ...sourceSnapshot,
     // Duplicates are fresh lead-facing proposals and must not inherit
