@@ -123,6 +123,7 @@ const STARTER: Array<[Moment, string, string]> = [
   ["First dance and parent dances", "My Girl", "The Temptations"],
   ["First dance and parent dances", "Have I Told You Lately", "Van Morrison"],
   ["Dance floor", "Brown Eyed Girl", "Van Morrison"],
+  ["Dance floor", "Refugee", "Tom Petty and the Heartbreakers"],
   ["Dance floor", "Mustang Sally", "Wilson Pickett"],
   ["Dance floor", "Sweet Home Alabama", "Lynyrd Skynyrd"],
   ["Dance floor", "Oh, Pretty Woman", "Roy Orbison"],
@@ -130,7 +131,8 @@ const STARTER: Array<[Moment, string, string]> = [
   ["Dance floor", "Shout", "The Isley Brothers"],
   ["Dance floor", "Start Me Up", "The Rolling Stones"],
   ["Dance floor", "Proud Mary", "Creedence Clearwater Revival"],
-  ["Last dance", "Sweet Caroline", "Neil Diamond"],
+  // Never Sweet Caroline (Tom, 2026-11-28); he loves Tom Petty.
+  ["Last dance", "American Girl", "Tom Petty and the Heartbreakers"],
   ["Last dance", "Don't Stop Believin'", "Journey"],
 ];
 
