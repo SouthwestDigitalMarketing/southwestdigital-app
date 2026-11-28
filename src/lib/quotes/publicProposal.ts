@@ -4,6 +4,11 @@ import { z } from "zod";
 import { slugifyTagKey } from "@/lib/contacts/tags";
 import { toPublicAccountInventory, type PublicAccountInventory } from "@/lib/quotes/accountInventory";
 import {
+  hasComplexitySelection,
+  toPublicComplexityWhy,
+  type ComplexityPublicWhy,
+} from "@/lib/quotes/complexityDrivers";
+import {
   asCompanyBundleSnapshot,
   buildCompanyBundleSnapshot,
   hasCompanyBundle,
@@ -167,6 +172,31 @@ export function publicCompanyBundleForSnapshot(snapshotValue: unknown): PublicCo
   return toPublicCompanyBundleMap(rawAssessment.companies, bundle);
 }
 
+export type { ComplexityPublicWhy };
+
+/**
+ * Spec 03 client-facing "Why this price" list for a stored snapshot, or null
+ * for legacy proposals without a complexity selection.
+ *
+ * Read from the published snapshot's maintain-tier priced lines — the same
+ * object checkout and the agreement read — so the public page never
+ * recomputes driver money. Only labels, plain reasons and monthly amounts
+ * leave this function (the contract's whitelist); an included (or
+ * waiting-on-a-line) driver publishes `monthly: null`. Tier amounts differ
+ * per tab, but the driver list is tier-invariant, so the single maintain-tier
+ * (base package) list is published.
+ */
+export function publicComplexityWhyForSnapshot(snapshotValue: unknown): ComplexityPublicWhy[] | null {
+  const snapshot = record(snapshotValue);
+  const rawAssessment = record(snapshot.assessment);
+  if (!hasComplexitySelection(rawAssessment.complexity)) return null;
+  const pricing = record(snapshot.pricing);
+  const maintain = record(pricing.maintain);
+  const stored = record(maintain.complexity);
+  if (!Array.isArray(stored.lines)) return null;
+  return toPublicComplexityWhy(stored.lines);
+}
+
 export function toPublicBookkeepingProposal(
   snapshotValue: unknown,
   catalogCopy?: PublicCatalogCopy,
@@ -192,6 +222,9 @@ export function toPublicBookkeepingProposal(
     // Legacy proposals (no bundle) get null; `assessment.companies` itself
     // stays stripped by the allowlisted schema above.
     companyBundle: publicCompanyBundleForSnapshot(snapshotValue),
+    // Legacy proposals (no complexity selection) get null; the raw selection
+    // (names, overrides) never leaves the snapshot — only the whitelist above.
+    complexityWhy: publicComplexityWhyForSnapshot(snapshotValue),
     contactInfo: {
       companyName: typeof contact.companyName === "string" ? contact.companyName : "",
       owners: [] as Array<never>,

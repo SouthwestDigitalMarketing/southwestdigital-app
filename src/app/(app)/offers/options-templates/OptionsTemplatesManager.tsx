@@ -17,9 +17,18 @@ import {
   type OptionsTemplateListItem,
 } from "./actions";
 import {
+  COMPLEXITY_TEMPLATE_DRIVER_IDS,
   parseBundlePricingDefaultsInputs,
+  parseComplexityDriverDefaultsInputs,
   type OptionsTemplateAssessmentSlice,
 } from "@/lib/quotes/optionsTemplates";
+import {
+  DEFAULT_COMPLEXITY_DRIVER_DEFAULTS,
+  complexityDriverDefs,
+  type ComplexityDriverId,
+} from "@/lib/quotes/complexityDrivers";
+
+type ComplexityEditorPair = { monthly: string; cleanupPerMonth: string };
 
 type EditingState = {
   id: string;
@@ -28,9 +37,15 @@ type EditingState = {
   discountPct: string;
   locationCharge: string;
   setupCharge: string;
+  complexityDefaults: Partial<Record<ComplexityDriverId, ComplexityEditorPair>>;
   slice: OptionsTemplateAssessmentSlice | null;
   sliceError: string | null;
 };
+
+const COMPLEXITY_DEFS = complexityDriverDefs();
+const COMPLEXITY_LABELS: Record<ComplexityDriverId, string> = Object.fromEntries(
+  COMPLEXITY_DEFS.map((def) => [def.id, def.label]),
+) as Record<ComplexityDriverId, string>;
 
 export default function OptionsTemplatesManager({
   templates,
@@ -69,6 +84,7 @@ export default function OptionsTemplatesManager({
       discountPct: "",
       locationCharge: "",
       setupCharge: "",
+      complexityDefaults: {},
       slice: null,
       sliceError: null,
     });
@@ -84,6 +100,17 @@ export default function OptionsTemplatesManager({
           return;
         }
         const defaults = result.slice.bundlePricingDefaults;
+        const complexity = result.slice.complexityDriverDefaults ?? {};
+        const complexityDefaults: EditingState["complexityDefaults"] = {};
+        for (const id of COMPLEXITY_TEMPLATE_DRIVER_IDS) {
+          const entry = complexity[id];
+          if (entry?.monthly !== undefined || entry?.cleanupPerMonth !== undefined) {
+            complexityDefaults[id] = {
+              monthly: String(entry?.monthly ?? ""),
+              cleanupPerMonth: String(entry?.cleanupPerMonth ?? ""),
+            };
+          }
+        }
         setEditing((prev) =>
           prev && prev.id === template.id
             ? {
@@ -92,6 +119,7 @@ export default function OptionsTemplatesManager({
                 discountPct: String(defaults?.additionalCompanyDiscountPct ?? ""),
                 locationCharge: String(defaults?.locationMonthlyCharge ?? ""),
                 setupCharge: String(defaults?.newFileSetupCharge ?? ""),
+                complexityDefaults,
               }
             : prev,
         );
@@ -120,6 +148,11 @@ export default function OptionsTemplatesManager({
       setError("Enter valid non-negative numbers for the bundle pricing defaults (blank clears a default).");
       return;
     }
+    const complexityDriverDefaults = parseComplexityDriverDefaultsInputs(snapshot.complexityDefaults);
+    if (!complexityDriverDefaults) {
+      setError("Enter valid non-negative numbers for the complexity driver defaults (blank uses the code default).");
+      return;
+    }
     run(
       async () => {
         await updateOptionsTemplateAction(snapshot.id, {
@@ -129,6 +162,7 @@ export default function OptionsTemplatesManager({
         await overwriteOptionsTemplateSnapshotAction(snapshot.id, {
           ...snapshot.slice as OptionsTemplateAssessmentSlice,
           bundlePricingDefaults,
+          complexityDriverDefaults,
         });
       },
       () => setEditing(null),
@@ -384,6 +418,71 @@ export default function OptionsTemplatesManager({
                 Leave setup blank to use the brand catalog new-file price when set (otherwise
                 the $150 placeholder). A stored value — including 150 — is an explicit
                 template default and wins over the catalog.
+              </p>
+            </fieldset>
+            <fieldset className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+              <legend className="px-1 text-sm font-semibold text-slate-700">
+                Complexity driver defaults
+              </legend>
+              {!editing.slice ? (
+                <p className="pb-2 text-sm text-slate-500">Loading complexity defaults…</p>
+              ) : (
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      <th className="py-1 pr-2">Driver</th>
+                      <th className="py-1 pr-2">Monthly ($)</th>
+                      <th className="py-1">Cleanup add ($/mo)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {COMPLEXITY_TEMPLATE_DRIVER_IDS.map((id) => {
+                      const pair = editing.complexityDefaults[id] ?? { monthly: "", cleanupPerMonth: "" };
+                      const codeDefault = DEFAULT_COMPLEXITY_DRIVER_DEFAULTS[id];
+                      const setPair = (next: ComplexityEditorPair) =>
+                        setEditing({ ...editing, complexityDefaults: { ...editing.complexityDefaults, [id]: next } });
+                      return (
+                        <tr key={id} className="border-t border-slate-100">
+                          <td className="py-1 pr-2 font-medium text-slate-700">
+                            {COMPLEXITY_LABELS[id]}
+                            {id === "filing_1099" ? " (per payee)" : null}
+                          </td>
+                          <td className="py-1 pr-2">
+                            <input
+                              type="number"
+                              min={0}
+                              step="any"
+                              value={pair.monthly}
+                              disabled={!editing.slice}
+                              placeholder={`Default ${codeDefault.monthly}`}
+                              aria-label={`${COMPLEXITY_LABELS[id]} monthly default`}
+                              onChange={(e) => setPair({ ...pair, monthly: e.target.value })}
+                              className="w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm disabled:opacity-50"
+                            />
+                          </td>
+                          <td className="py-1">
+                            <input
+                              type="number"
+                              min={0}
+                              step="any"
+                              value={pair.cleanupPerMonth}
+                              disabled={!editing.slice}
+                              placeholder={`Default ${codeDefault.cleanupPerMonth}`}
+                              aria-label={`${COMPLEXITY_LABELS[id]} cleanup add default`}
+                              onChange={(e) => setPair({ ...pair, cleanupPerMonth: e.target.value })}
+                              className="w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm disabled:opacity-50"
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+              <p className="pb-2 pt-1 text-xs text-slate-500">
+                Blank uses the code default (shown). A stored value wins over it for
+                proposals made from this template; a per-proposal override on the
+                checklist row still wins over both.
               </p>
             </fieldset>
             <div className="flex justify-end gap-2 pt-2">

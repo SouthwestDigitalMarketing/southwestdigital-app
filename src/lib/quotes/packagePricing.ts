@@ -11,7 +11,19 @@
  * `proposalPackageNames.ts` instead of importing that UI module: the two
  * unions are structurally identical, so any drift fails to compile at the
  * call sites that pass one where the other is expected.
+ *
+ * Spec 03 imports the complexity-drivers contract (`complexityDrivers.ts`),
+ * which itself imports this module's constants for tier scaling — a cycle
+ * that is safe because both sides only call across it inside functions,
+ * never at module-eval time.
  */
+import {
+  hasComplexitySelection,
+  normalizeComplexitySelection,
+  priceComplexityDrivers,
+  type ComplexityDriverDefaultsPatch,
+  type ComplexityPriceResult,
+} from "./complexityDrivers";
 export type PackageId = "grow" | "improve" | "maintain";
 
 export type CountValue = number | "";
@@ -40,6 +52,13 @@ export interface DemoPricingConfig {
 
 /** Pricing-relevant slice of the builder assessment (structural: the full AssessmentState satisfies it). */
 export interface PackagePricingInputs {
+  /** Spec 03 main-company (or synthetic per-company) complexity selection, raw. Absent = legacy pricing. */
+  complexity?: unknown;
+  /** Spec 03 options-template complexity driver defaults applied to the proposal (sparse patch). */
+  complexityDriverDefaults?: unknown;
+  /** Spec 03 presence inputs for existing-line drivers. Omitted = present (legacy "Included" behaviour). */
+  offerSalesTaxFiling?: boolean;
+  offerProjectTracking?: boolean;
   bookSetType: string;
   realEstateOperations: string[];
   transactionBand: string;
@@ -77,6 +96,13 @@ export interface PackagePricingSummary {
   assessmentOneTimeAdjustments: number;
   totalOneTimeBeforeManual: number;
   totalOneTime: number;
+  /**
+   * Spec 03 priced complexity lines for this tier. Present ONLY when the
+   * assessment carries a complexity selection with at least one checked
+   * driver — legacy pricing objects never gain this key, so golden
+   * snapshots stay byte-identical.
+   */
+  complexity?: ComplexityPriceResult;
 }
 
 export interface MonthlyRateBreakdownItem {
@@ -235,7 +261,7 @@ export function reconciliationAccountCount(assessment: PackagePricingInputs) {
 
 export function paymentPlatformComplexityCount(assessment: PackagePricingInputs) {
   return (
-    assessment.paymentPlatforms.filter((platform) => platform !== "unknown").length +
+    effectiveKnownPlatforms(assessment).filter((platform) => platform !== "unknown").length +
     countValue(assessment.zeroBalancePlatformCount)
   );
 }
@@ -245,7 +271,93 @@ export function knownRealEstateOperationCount(assessment: PackagePricingInputs) 
 }
 
 export function knownPaymentPlatformCount(assessment: PackagePricingInputs) {
-  return assessment.paymentPlatforms.filter((platform) => platform !== "unknown").length;
+  return effectiveKnownPlatforms(assessment).filter((platform) => platform !== "unknown").length;
+}
+
+/**
+ * Spec 03 payout-channel guard: when the online-store driver names the
+ * store's own payout channel and that channel is also listed as a payment
+ * platform (e.g. the store runs on Stripe and Stripe is ticked under
+ * platforms), the platform is counted ONCE — on the store driver — so it is
+ * excluded from the platform count here. Returns the matched platform value
+ * (the Builder C checklist uses this for its counted-once hint), or null.
+ *
+ * Matching is deliberately narrow: the normalized store name must equal a
+ * normalized platform value/label, or contain one (`stripe` in "Stripe
+ * payouts"). `other`/`unknown` never match — they carry no channel identity.
+ */
+export function onlineStorePayoutOverlap(input: {
+  paymentPlatforms: readonly unknown[];
+  complexity: unknown;
+}): string | null {
+  const platforms = Array.isArray(input.paymentPlatforms) ? input.paymentPlatforms : [];
+  const selection = normalizeComplexitySelection(input.complexity);
+  const store = selection.drivers.online_store;
+  if (store.checked !== true || !store.name) return null;
+  const name = store.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (!name) return null;
+  for (const platform of platforms) {
+    if (typeof platform !== "string") continue;
+    if (platform === "unknown" || platform === "other") continue;
+    const token = platform.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (!token) continue;
+    if (name === token || (token.length >= 4 && name.includes(token))) return platform;
+  }
+  return null;
+}
+
+/** Payment platforms minus a counted-once store payout channel (legacy: unchanged). */
+function effectiveKnownPlatforms(assessment: PackagePricingInputs): string[] {
+  const overlap = onlineStorePayoutOverlap({
+    paymentPlatforms: assessment.paymentPlatforms,
+    complexity: assessment.complexity,
+  });
+  return overlap
+    ? assessment.paymentPlatforms.filter((platform) => platform !== overlap)
+    : assessment.paymentPlatforms;
+}
+
+/**
+ * Spec 03 presence for existing-line drivers, from the assessment slice the
+ * pipeline already carries. Omitted add-on flags default to present (the
+ * contract's legacy "Included" behaviour); the books-type and staffing lines
+ * derive from the pricing inputs themselves, so synthetic per-company inputs
+ * (no headcount, no books type) honestly report those lines absent.
+ */
+function complexityExistingPresence(assessment: PackagePricingInputs): {
+  salesTaxAddon: boolean;
+  projectTrackingAddon: boolean;
+  mixedBooks: boolean;
+  staffingHeadcount: number;
+} {
+  return {
+    salesTaxAddon: assessment.offerSalesTaxFiling ?? true,
+    projectTrackingAddon: assessment.offerProjectTracking ?? true,
+    mixedBooks: assessment.bookSetType === "mixed-books",
+    staffingHeadcount: countValue(assessment.employeesCount) + countValue(assessment.contractorsCount),
+  };
+}
+
+/**
+ * The one additive Spec 03 hook: null when the assessment carries no
+ * complexity selection (legacy path, byte-identical), otherwise the priced
+ * result for this tier. New-driver monthlies add into the base monthly;
+ * grow tier pricing flows through the existing grow override downstream.
+ */
+function priceComplexityForInputs(
+  packageId: PackageId,
+  assessment: PackagePricingInputs,
+  cleanupMonths: number,
+): ComplexityPriceResult | null {
+  if (!hasComplexitySelection(assessment.complexity)) return null;
+  return priceComplexityDrivers(normalizeComplexitySelection(assessment.complexity), {
+    packageId,
+    // Sanitized inside `resolveComplexityDriverDefaults`; the cast only
+    // bridges the unknown-typed assessment slice.
+    defaults: assessment.complexityDriverDefaults as ComplexityDriverDefaultsPatch | undefined,
+    cleanupMonths,
+    existing: complexityExistingPresence(assessment),
+  });
 }
 
 export function derivedPricingComplexityLevel(assessment: PackagePricingInputs): DemoComplexityLevel {
@@ -316,6 +428,10 @@ export function getMonthlyRateBreakdown(
     : !hasComplexOperations && multipleOperations
       ? pkg.pricing.multiOperationMonthly
       : 0;
+  // Spec 03: new-driver monthlies add into the base monthly. Null on legacy
+  // assessments (no selection), so the total below is unchanged for them.
+  const complexity = priceComplexityForInputs(pkg.id, assessment, 0);
+  const complexityMonthly = complexity?.monthlyTotal ?? 0;
   const baseMonthly =
     pkg.monthlyPrice +
     propertyCount * pkg.pricing.recurringPerProperty +
@@ -327,7 +443,8 @@ export function getMonthlyRateBreakdown(
     platformAmount +
     passThroughAmount +
     booksTypeAmount +
-    operationsAmount;
+    operationsAmount +
+    complexityMonthly;
   const multiplierDeltaAmount =
     Math.round((baseMonthly * assessment.discretionaryMultiplier - baseMonthly) * 100) / 100;
 
@@ -352,6 +469,12 @@ export function getMonthlyRateBreakdown(
     { label: "Pass-through accounts", amount: passThroughAmount },
     { label: "Books type adjustment", amount: booksTypeAmount },
     { label: "Operations adjustment", amount: operationsAmount },
+    // Spec 03: one breakdown row per charged driver ("Why this price" names
+    // the same labels). Included/waiting existing-line drivers price $0 and
+    // stay out of the breakdown. Legacy: no items, list identical.
+    ...(complexity?.lines ?? [])
+      .filter((line) => line.monthly > 0)
+      .map((line) => ({ label: `Complexity — ${line.label}`, amount: line.monthly })),
   ].filter((item) => item.amount > 0);
 
   const adjustmentItems: MonthlyRateBreakdownItem[] = [
@@ -390,6 +513,10 @@ export function buildPackagePricing(
         assessment.transactionBand as keyof DemoPricingConfig["transactionBandMonthly"]
       ]
     : 0;
+  // Spec 03: the one additive hook (null on legacy assessments, so the math
+  // below is unchanged for them). The same result rides on the summary so
+  // snapshots carry the priced lines per tier.
+  const complexity = priceComplexityForInputs(pkg.id, assessment, cleanupMonths);
   const baseMonthly =
     pkg.monthlyPrice +
     propertyCount * pkg.pricing.recurringPerProperty +
@@ -407,7 +534,10 @@ export function buildPackagePricing(
         ? pkg.pricing.nonReBusinessMonthly
         : 0) +
     (hasComplexOperations ? pkg.pricing.complexOperationsMonthly : 0) +
-    (!hasComplexOperations && multipleOperations ? pkg.pricing.multiOperationMonthly : 0);
+    (!hasComplexOperations && multipleOperations ? pkg.pricing.multiOperationMonthly : 0) +
+    // New-driver monthlies add into the base monthly; grow flows through the
+    // existing grow override below.
+    (complexity?.monthlyTotal ?? 0);
   const monthly = roundUpToNearestIncrement(baseMonthly * assessment.discretionaryMultiplier);
 
   const catchUpBase = monthly * cleanupMonths;
@@ -420,6 +550,10 @@ export function buildPackagePricing(
     catchUpBase + assessmentOneTimeAdjustments,
   );
 
+  // The priced lines for this tier ride on the summary so the published
+  // snapshot, the public payload and the agreement read them instead of
+  // recomputing. The key is spread in ONLY when a selection exists — legacy
+  // summaries keep their exact shape.
   return {
     packageId: pkg.id,
     complexityLevel,
@@ -428,6 +562,7 @@ export function buildPackagePricing(
     assessmentOneTimeAdjustments,
     totalOneTimeBeforeManual,
     totalOneTime: roundUpToNearestIncrement(totalOneTimeBeforeManual + manualAdjustmentAmount),
+    ...(complexity ? { complexity } : {}),
   };
 }
 

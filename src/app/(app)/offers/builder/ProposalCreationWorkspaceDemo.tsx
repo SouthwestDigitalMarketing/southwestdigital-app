@@ -92,6 +92,11 @@ import {
   sanitizeBundlePricingDefaults,
   type OptionsTemplateAssessmentSlice,
 } from "@/lib/quotes/optionsTemplates";
+import {
+  normalizeComplexitySelection,
+  sanitizeComplexityDriverDefaults,
+  type ComplexityDriverDefaultsPatch,
+} from "@/lib/quotes/complexityDrivers";
 
 export {
   reconcileProposalAssessmentWithCatalog,
@@ -303,6 +308,13 @@ export type AssessmentState = {
   bundlePricingOptions?: Partial<BundlePricingOptions>;
   /** Options-template defaults applied to the proposal; set fields beat the catalog, omitted fields fall through. */
   bundlePricingDefaults?: Partial<BundlePricingOptions>;
+  /**
+   * Spec 03 main-company complexity selection (raw checklist state; Builder C
+   * owns the checklist UI). Normalized at pricing; absent on legacy proposals.
+   */
+  complexity?: unknown;
+  /** Options-template complexity driver defaults applied to the proposal. */
+  complexityDriverDefaults?: ComplexityDriverDefaultsPatch;
   entityType: EntityType;
   taxElection: TaxElection;
   booksOverTwoMonthsBehind: boolean | null;
@@ -1104,10 +1116,30 @@ function withComplexityUnknownDefaults(assessment: AssessmentState): AssessmentS
   const normalizedBundle =
     storedCompanies === undefined ? undefined : normalizeCompanyBundle(storedCompanies);
   const companies = normalizedBundle && normalizedBundle.length > 0 ? normalizedBundle : undefined;
+  // Spec 03: the checklist selection normalizes tolerantly (junk drops to
+  // unchecked). A ticked sales-tax / project-tracking driver turns its
+  // existing add-on line ON here — the single source of truth, in the
+  // assessment normalization step, never in render. Payroll and mixed books
+  // never auto-change headcount or bookSetType; they price a "requires" line.
+  const complexity =
+    assessment.complexity === undefined
+      ? undefined
+      : normalizeComplexitySelection(assessment.complexity);
+  const offerSalesTaxFiling =
+    complexity?.drivers.sales_tax.checked === true ? true : assessment.offerSalesTaxFiling;
+  const offerProjectTracking =
+    complexity?.drivers.job_tracking.checked === true ? true : assessment.offerProjectTracking;
   return {
     ...assessment,
     accounts: companies ? companies[0].accounts : normalizeAccountInventory(assessment.accounts),
     companies,
+    complexity,
+    offerSalesTaxFiling,
+    offerProjectTracking,
+    complexityDriverDefaults:
+      assessment.complexityDriverDefaults === undefined
+        ? undefined
+        : sanitizeComplexityDriverDefaults(assessment.complexityDriverDefaults),
     bundlePricingOptions:
       assessment.bundlePricingOptions === undefined
         ? undefined
@@ -1222,9 +1254,25 @@ export function applyOptionsTemplateSlice(
       (merged as Record<string, number>)[key] = value;
     }
   }
+  // Spec 03: same field-by-field merge for the complexity driver defaults —
+  // template-set fields win, template-unset fields keep what the proposal has.
+  const savedComplexity = sanitizeComplexityDriverDefaults(saved.complexityDriverDefaults);
+  const templateComplexity = sanitizeComplexityDriverDefaults(slice.complexityDriverDefaults);
+  const mergedComplexity: ComplexityDriverDefaultsPatch = { ...savedComplexity };
+  for (const [driverId, entry] of Object.entries(templateComplexity)) {
+    if (entry !== undefined) {
+      mergedComplexity[driverId as keyof ComplexityDriverDefaultsPatch] = {
+        ...mergedComplexity[driverId as keyof ComplexityDriverDefaultsPatch],
+        ...entry,
+      };
+    }
+  }
   const next = { ...saved, ...slice };
   if (slice.bundlePricingDefaults !== undefined || saved.bundlePricingDefaults !== undefined) {
     next.bundlePricingDefaults = merged;
+  }
+  if (slice.complexityDriverDefaults !== undefined || saved.complexityDriverDefaults !== undefined) {
+    next.complexityDriverDefaults = mergedComplexity;
   }
   return next;
 }
@@ -1623,10 +1671,11 @@ export function getProposalPricingSnapshotData(assessment: AssessmentState) {
 
   // Test proposals exercise the complete signing and payment flow with a
   // single-dollar charge (see resolveAmountDueNow). Nothing recurs, so
-  // monthly is $0 and the entire one-time total collapses to $1.
+  // monthly is $0 and the entire one-time total collapses to $1. Complexity
+  // lines are stripped with the monthlies so test snapshots stay trivial.
   if (assessment.isTestProposal) {
     for (const pkg of PACKAGES) {
-      packagePricing[pkg.id] = {
+      const priced = {
         ...packagePricing[pkg.id],
         monthly: 0,
         catchUpBase: 0,
@@ -1634,6 +1683,8 @@ export function getProposalPricingSnapshotData(assessment: AssessmentState) {
         totalOneTimeBeforeManual: 1,
         totalOneTime: 1,
       };
+      delete priced.complexity;
+      packagePricing[pkg.id] = priced;
     }
   }
 
@@ -1684,20 +1735,38 @@ export function getProposalPricingSnapshotCleanupCard(assessment: AssessmentStat
     : assessment.onboardingFeeOverride !== null
       ? Math.max(0, assessment.onboardingFeeOverride)
       : getStandardOnboardingFee(getCleanupMonthCount(assessment));
-  const totalOneTime = maintainPricing.totalOneTime + onboardingFee;
+  // Spec 03: commingling + loans/MCA cleanup weight rides its own line, only
+  // when cleanup months exist. The monthly complexity money is already inside
+  // maintainPricing.monthly (and therefore catchUpBase); this is the extra
+  // per-cleanup-month add. Legacy proposals (no selection) add zero.
+  const staged = hasCatchUpPricing && cleanupMonths > 0;
+  const complexityCleanup = staged ? maintainPricing.complexity : undefined;
+  const complexityCleanupPerMonth = complexityCleanup?.cleanupPerMonthTotal ?? 0;
+  const complexityCleanupTotal = complexityCleanup?.cleanupTotal ?? 0;
+  const totalOneTime = maintainPricing.totalOneTime + onboardingFee + complexityCleanupTotal;
 
   if (totalOneTime <= 0) return undefined;
 
   // This total is the one-time value of the deal, not the signing charge. The
   // client pays onboarding/discovery at signing; cleanup is an estimate they
   // approve after discovery. Label the rows so staff read the same split.
-  const staged = hasCatchUpPricing && cleanupMonths > 0;
   const detailRows: string[] = [];
   if (staged) {
     detailRows.push(
       `Cleanup estimate (not charged at signing): ${formatCurrency(maintainPricing.monthly)} x ${cleanupMonths} ${
         cleanupMonths === 1 ? "month" : "months"
       } = ${formatCurrency(maintainPricing.catchUpBase)}`,
+    );
+  }
+  if (staged && complexityCleanupTotal > 0) {
+    const drivers = (complexityCleanup?.lines ?? [])
+      .filter((line) => line.cleanupPerMonth > 0)
+      .map((line) => line.label)
+      .join(", ");
+    detailRows.push(
+      `Complexity cleanup add (${drivers}, not charged at signing): ${formatCurrency(complexityCleanupPerMonth)} x ${cleanupMonths} ${
+        cleanupMonths === 1 ? "month" : "months"
+      } = ${formatCurrency(complexityCleanupTotal)}`,
     );
   }
   if (maintainPricing.assessmentOneTimeAdjustments > 0) {
