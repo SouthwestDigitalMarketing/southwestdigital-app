@@ -8,19 +8,14 @@ import type { Bucket, SortedItem } from "@/lib/donna/domain";
  * text, the reason behind an info icon. Shared by the live sort and the Choose step.
  */
 
-export const BUCKET_TINTS = [
-  ["bg-sky-50", "bg-sky-100/60"],
-  ["bg-amber-50", "bg-amber-100/60"],
-  ["bg-emerald-50", "bg-emerald-100/60"],
-  ["bg-violet-50", "bg-violet-100/60"],
-  ["bg-rose-50", "bg-rose-100/60"],
-  ["bg-teal-50", "bg-teal-100/60"],
-  ["bg-orange-50", "bg-orange-100/60"],
-  ["bg-indigo-50", "bg-indigo-100/60"],
-];
-
+/** A row's tint: the bucket's hue, alternate rows a shade deeper (globals.css, both themes). */
 export function rowTint(bucket: number, row: number) {
-  return BUCKET_TINTS[bucket % BUCKET_TINTS.length][row % 2];
+  return `donna-tint donna-hue-${bucket % 8}${row % 2 ? " donna-alt" : ""}`;
+}
+
+/** A bucket header row: the same hue, stronger. */
+export function headTint(bucket: number | "slate") {
+  return `donna-tint donna-head donna-hue-${bucket === "slate" ? "slate" : bucket % 8}`;
 }
 
 /** One colour per type group, so a scam or a money email stands out. */
@@ -92,21 +87,33 @@ export function EmailCells({
 }) {
   return (
     <>
-      <td className={`max-w-[16rem] truncate ${td}`}>{item.subject}</td>
-      <td className={`whitespace-nowrap ${td} text-slate-600`}>
+      <td data-cell="subject" className={`max-w-[16rem] truncate ${td}`}>
+        {item.subject}
+      </td>
+      <td data-cell="type" className={`whitespace-nowrap ${td} text-slate-600`}>
         <TypeCell item={item} />
       </td>
       <td
+        data-cell="from"
+        data-label="From"
         className={`max-w-[12rem] truncate ${td} text-slate-600`}
         title={item.from}
       >
         {senderName(item.from)}
       </td>
-      <td className={`whitespace-nowrap ${td} text-slate-600`}>
+      <td
+        data-cell="client"
+        data-label="Client"
+        className={`whitespace-nowrap ${td} text-slate-600`}
+      >
         {item.client ?? ""}
       </td>
-      {action !== undefined ? <td className={td}>{action}</td> : null}
-      <td className={`${td} text-slate-400`}>
+      {action !== undefined ? (
+        <td data-cell="action" className={td}>
+          {action}
+        </td>
+      ) : null}
+      <td data-cell="why" className={`${td} text-slate-400`}>
         <WhyCell why={item.why} />
       </td>
     </>
@@ -137,10 +144,10 @@ export function SortedTable({ buckets }: { buckets: Bucket[] }) {
       </p>
     );
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+    <div className="donna-ui overflow-x-auto rounded-xl border border-slate-200 bg-white">
       <table
         aria-label="Sorted emails"
-        className="w-full min-w-[640px] text-left text-xs"
+        className="donna-cards w-full min-w-[640px] text-left text-xs"
       >
         <thead className="uppercase tracking-wide text-slate-500">
           <tr className="border-b border-slate-200">
@@ -152,7 +159,10 @@ export function SortedTable({ buckets }: { buckets: Bucket[] }) {
           {buckets.flatMap((bucket, b) =>
             bucket.items.map((item, i) => (
               <tr key={item.thread} className={`align-top ${rowTint(b, i)}`}>
-                <td className={`whitespace-nowrap ${td} font-medium`}>
+                <td
+                  data-cell="bucket"
+                  className={`whitespace-nowrap ${td} font-medium`}
+                >
                   {i ? "" : `${bucket.name} (${bucket.items.length})`}
                 </td>
                 <EmailCells item={item} />

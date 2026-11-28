@@ -539,7 +539,8 @@ def rule_matches(rule, sender, subject):
                          for f in froms):
         return False
     try:
-        return not subjects or any(re.search(p, subject or "", re.IGNORECASE) for p in subjects)
+        # Whole words only (Tom, 2026-11-28): "lien" must not match "client".
+        return not subjects or any(re.search(r"\b(?:%s)\b" % p, subject or "", re.IGNORECASE) for p in subjects)
     except re.error:
         return False
 
@@ -625,7 +626,8 @@ def on_never_list(sender, subject, lists):
         if (p.startswith("@") and (domain == p[1:] or domain.endswith("." + p[1:]))) or sender == p:
             return True
     try:
-        return any(re.search(rx, subject or "", re.IGNORECASE) for rx in (lists or {}).get("never_subjects") or [])
+        return any(re.search(r"\b(?:%s)\b" % rx, subject or "", re.IGNORECASE)
+                   for rx in (lists or {}).get("never_subjects") or [])
     except re.error:
         return False
 

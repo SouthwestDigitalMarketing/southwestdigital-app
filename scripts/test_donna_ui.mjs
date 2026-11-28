@@ -534,7 +534,33 @@ try {
   await expect(page).toHaveURL(new RegExp("/donna/cleans/" + stepOne.id));
   const steps = page.getByRole("list", { name: "Job steps" });
   await expect(steps).toContainText("Sort");
-  await expect(steps).toContainText("6 sorted");
+  await expect(steps).toContainText("3 read");
+  await expect(page.getByText(/3 read\. Spam is in step 4\./)).toBeVisible();
+  // Phone: the Choose table becomes cards; every action is on screen.
+  {
+    const was = page.viewportSize();
+    await page.setViewportSize({ width: 390, height: 844 });
+    const box = await page.getByLabel("Action for Example sale A").boundingBox();
+    assert.ok(box && box.x >= 0 && box.x + box.width <= 390, "Action dropdown is off-screen on a phone: " + JSON.stringify(box));
+    // Dark mode: bucket rows stay dark under light text.
+    await page.evaluate(() => document.querySelector("[data-theme]")?.setAttribute("data-theme", "dark"));
+    const contrast = await page.getByLabel("Action for Example sale A").evaluate((el) => {
+      const row = el.closest("tr");
+      // Paint the colour on a 1x1 canvas so any CSS colour format reads back as RGB.
+      const lum = (c) => {
+        const ctx = Object.assign(document.createElement("canvas"), { width: 1, height: 1 }).getContext("2d");
+        ctx.fillStyle = c;
+        ctx.fillRect(0, 0, 1, 1);
+        const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+        return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+      };
+      const subject = row.querySelector('td[data-cell="subject"]');
+      return { bg: lum(getComputedStyle(row).backgroundColor), fg: lum(getComputedStyle(subject).color) };
+    });
+    assert.ok(contrast.bg < 0.35 && contrast.fg > 0.6, "Dark mode row is not readable: " + JSON.stringify(contrast));
+    if (was) await page.setViewportSize(was);
+    await page.reload();
+  }
   // Junk is the first bucket, rescues from Spam/Trash the last.
   const bucketNames = await page.locator('tbody[aria-label^="Bucket "]').evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")));
   assert.equal(bucketNames[0], "Bucket Junk");
