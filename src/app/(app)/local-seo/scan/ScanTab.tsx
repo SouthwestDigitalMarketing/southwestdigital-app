@@ -85,6 +85,7 @@ export function ScanTab({ initialSettings, initialScans }: { initialSettings: Gr
               <div key={scan.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 py-2 text-sm">
                 <span className="text-slate-800">{dateTime(scan.startedAt)} · {scan.source === "weekly" ? "Weekly" : "Manual"}</span>
                 <span className="text-xs text-slate-600">{scan.status} · {scan.cells.filter((cell) => cell.status === "complete").length}/{scan.cells.length} points · billed {money(scan.actualCostUsd)}</span>
+                {scan.error ? <span className="w-full text-xs text-red-700">{scan.error}</span> : null}
               </div>
             ))}
           </div>

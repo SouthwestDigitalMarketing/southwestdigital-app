@@ -3,10 +3,10 @@
 import { useMemo } from "react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { KeywordPicker, useKeyword } from "../KeywordPicker";
-import { scanStats, type Scan } from "../stats";
+import { hasResults, scanStats, type Scan } from "../stats";
 
 export function TrendsTab({ scans, keywords }: { scans: Scan[]; keywords: string[] }) {
-  const latest = scans[0];
+  const latest = scans.find(hasResults) ?? scans[0];
   const phrases = latest?.keywords.length ? latest.keywords : keywords;
   const keyword = useKeyword(phrases);
   const visibleCells = scanStats(latest, keyword).cells;
@@ -18,7 +18,7 @@ export function TrendsTab({ scans, keywords }: { scans: Scan[]; keywords: string
     }
     return [...counts.values()].sort((a, b) => b.appearances - a.appearances || a.bestRank - b.bestRank).slice(0, 6);
   }, [visibleCells]);
-  const history = scans.filter((scan) => scan.status !== "queued" && scan.keywords.includes(keyword)).slice().reverse().map((scan) => {
+  const history = scans.filter((scan) => hasResults(scan) && scan.keywords.includes(keyword)).slice().reverse().map((scan) => {
     const stats = scanStats(scan, keyword);
     return {
       date: new Date(scan.startedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }),

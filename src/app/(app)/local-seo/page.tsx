@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { SEO_GOAL_KEYWORD, SEO_PLAN, SEO_PLAN_AS_OF, SEO_SCORE } from "@/lib/localSeo/seoPlan";
 import { loadLocalSeoData, scanStats } from "./data";
+import { hasResults } from "./stats";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,7 @@ const fmtDate = (value: string) => new Date(`${value}T12:00:00`).toLocaleDateStr
 
 export default async function LocalSeoOverviewPage() {
   const { scans } = await loadLocalSeoData();
-  const latest = scans.find((scan) => scan.status !== "queued" && scan.keywords.includes(SEO_GOAL_KEYWORD));
+  const latest = scans.find((scan) => hasResults(scan) && scan.keywords.includes(SEO_GOAL_KEYWORD));
   const stats = scanStats(latest, SEO_GOAL_KEYWORD);
   const items = SEO_PLAN.flatMap((section) => section.items);
   const done = items.filter((item) => item.status === "done").length;

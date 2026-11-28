@@ -3,12 +3,14 @@
 import { useCallback, useState } from "react";
 import { KeywordPicker, useKeyword } from "../KeywordPicker";
 import { LocalSeoMap } from "../LocalSeoMap";
-import { scanStats, type Scan } from "../stats";
+import { hasResults, scanStats, type Scan } from "../stats";
 
 const dateTime = (value: string) => new Date(value).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 
 export function MapTab({ scans, keywords }: { scans: Scan[]; keywords: string[] }) {
-  const latest = scans[0];
+  // Show the newest scan that has results; say so when a newer attempt failed (2026-11-23 weekly: DataForSEO 402).
+  const latest = scans.find(hasResults) ?? scans[0];
+  const newerFailed = scans[0] && scans[0] !== latest && scans[0].status === "failed" ? scans[0] : null;
   const phrases = latest?.keywords.length ? latest.keywords : keywords;
   const keyword = useKeyword(phrases);
   const stats = scanStats(latest, keyword);
@@ -24,7 +26,8 @@ export function MapTab({ scans, keywords }: { scans: Scan[]; keywords: string[] 
         <KeywordPicker keywords={phrases} value={keyword} />
         <Stat label="Top 3" value={stats.topThreeShare === null ? "—" : `${Math.round(stats.topThreeShare * 100)}%`} detail={`${stats.topThree} of ${stats.complete} points`} />
         <Stat label="Average rank" value={stats.averageRank === null ? "—" : stats.averageRank.toFixed(1)} detail="where we appear" />
-        <Stat label="Scan" value={latest ? latest.status : "none"} detail={latest ? dateTime(latest.startedAt) : "run one on Scan"} />
+        <Stat label="Results from" value={latest ? dateTime(latest.startedAt) : "no scan"} detail={latest ? latest.status : "run one on Scan"} />
+        {newerFailed ? <p className="text-xs font-medium text-red-700">Newer scan failed {dateTime(newerFailed.startedAt)}; see Scan.</p> : null}
       </div>
       <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4" data-no-swipe>
         {latest && cells.length > 0 && !mapUnavailable ? <LocalSeoMap cells={cells} onUnavailable={markMapUnavailable} /> : null}

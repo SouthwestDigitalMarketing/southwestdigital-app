@@ -15,7 +15,7 @@ export type SeoPlanItem = {
 
 export type SeoPlanSection = { title: string; items: SeoPlanItem[] };
 
-export const SEO_PLAN_AS_OF = "2026-11-24";
+export const SEO_PLAN_AS_OF = "2026-11-28";
 
 export const SEO_PLAN_STATUS_LABEL: Record<SeoPlanStatus, string> = {
   done: "Done",
@@ -57,7 +57,7 @@ export const SEO_PLAN: SeoPlanSection[] = [
         title: "Schema: profile link, listings, Thomas",
         status: "done",
         what: "The page code now links the Google profile (static map link), Manta, ChamberofCommerce.com and Pinterest, and describes Thomas as the founder.",
-        next: "Add each new listing (Apple, Yelp, Bing) to sameAs once it goes live.",
+        next: "Add Yelp and Bing (both live since 2026-11-26/27) to sameAs on the homepage; Apple when approved.",
       },
       {
         title: "Homepage H1: bookkeeper, Conroe",
@@ -103,10 +103,9 @@ export const SEO_PLAN: SeoPlanSection[] = [
       },
       {
         title: "Stop form spam",
-        status: "todo",
-        what: "Since the move to Vercel (2026-11-19) every website form fill has been spam: about 27 from one bot, 10 sales pitches, a few gibberish. A real lead would be buried.",
-        next: "Add a silent filter in /api/forms (too-fast submits, the known bot message, gibberish).",
-        blocker: "Waiting on Tom's go.",
+        status: "done",
+        what: "Cloudflare human check, fill-time and content checks on every website form (bookkeepingconroe-web PRs #94-#96, 2026-11-25). Bot fills still arrive, marked \"[Possible spam]\" in the subject.",
+        next: "Glance at [Possible spam] mail now and then for a real person caught by mistake.",
       },
     ],
   },
@@ -117,25 +116,26 @@ export const SEO_PLAN: SeoPlanSection[] = [
         title: "Posts every other day",
         status: "ongoing",
         what: "One post per money page, each linking to that page, scheduled in Google with the Schedule switch.",
-        next: "Scheduled through 2026-12-09. Write and schedule the next batch before 2026-12-05.",
+        next: "Scheduled through 2026-12-09. The next batch (4 posts: payroll, a town page, real estate, CFO advisory) is not written yet; schedule it before 2026-12-05.",
       },
       {
         title: "Categories, services, products",
         status: "check",
-        what: "One main category matching the homepage. Services = only ones with a site page; remove ones Google added. Products named \"service + town\", each linking its page.",
-        next: "Confirm what was saved on 2026-11-18 (products were being added that day) and finish any gaps.",
-        blocker: "No written record of what got saved.",
+        what: "One main category matching the homepage. Services = only ones with a site page; remove ones Google added. Products named \"service + town\", each linking its page. Checked 2026-11-28 from Google's public data: one category, \"Bookkeeping service\", no extras (good).",
+        next: "Services and products only show in the profile dashboard: open it and confirm what was saved on 2026-11-18.",
+        blocker: "Needs the profile dashboard in a browser signed in to Google.",
       },
       {
         title: "Trim the service area",
         status: "check",
         what: "Houston, Huntsville and New Waverly are listed but have no pages and sit 25+ miles out. Keep the county and the towns we have pages for.",
         next: "Open the profile and check; remove the three if still there.",
+        blocker: "Service area only shows in the profile dashboard.",
       },
       {
         title: "Replace stock and wrong-office photos",
         status: "todo",
-        what: "The profile has a stock-looking high-five photo and an office photo that is not our office. Six real stills from our videos are ready on Nostromo (listing-stills-2026-11-21).",
+        what: "The profile has a stock-looking high-five photo and an office photo that is not our office (14 photos in all, 2026-11-28). Six real stills from our videos are ready on Nostromo (listing-stills-2026-11-21).",
         next: "Remove the two bad photos; upload the real stills.",
       },
       {
@@ -147,7 +147,7 @@ export const SEO_PLAN: SeoPlanSection[] = [
       {
         title: "No UTM tag on the website link",
         status: "done",
-        what: "Palmer says tracking tags on the profile link hurt. Ours is the plain URL.",
+        what: "Palmer says tracking tags on the profile link hurt. Ours is the plain URL (checked 2026-11-28).",
       },
     ],
   },
@@ -162,33 +162,32 @@ export const SEO_PLAN: SeoPlanSection[] = [
       {
         title: "Apple Maps (Apple Business)",
         status: "waiting",
-        what: "Organization \"Lochside LLC\" sent for Apple's review 2026-11-20 (up to 5 business days).",
-        next: "When the approval email reaches tmacdonald7@gmail.com, add the Beach Walk location.",
+        what: "Organization \"Lochside LLC\" sent for Apple's review 2026-11-20 (up to 5 business days). No approval email by 2026-11-28, past that window.",
+        next: "Check the status at business.apple.com; once approved, add the Beach Walk location.",
         blocker: "Apple's review.",
       },
       {
         title: "Bing Places",
-        status: "check",
-        what: "Synced from Google 2026-11-15, was pending publish.",
-        next: "Check it is live; add it to schema sameAs.",
+        status: "done",
+        what: "Live: Bing emailed \"Your business is live on Bing\" on 2026-11-27.",
+        next: "Add it to schema sameAs.",
       },
       {
         title: "Yelp",
-        status: "check",
-        what: "Claimed 2026-11-15, was pending moderation.",
-        next: "Check it is live.",
-        blocker: "Yelp's SMS codes do not reach the Quo line.",
+        status: "done",
+        what: "Live: Yelp reported page visits from 2026-11-19 and more activity on 2026-11-26.",
+        next: "Add it to schema sameAs. Ignore Yelp's paid-ads pitches.",
       },
       {
         title: "Data Axle",
         status: "waiting",
-        what: "No self-serve add; asked by email 2026-11-16.",
+        what: "No self-serve add; asked by email 2026-11-16. No reply by 2026-11-28.",
         next: "Follow up around 2026-11-30 if not added.",
       },
       {
         title: "BBB, Hotfrog, Foursquare",
         status: "waiting",
-        what: "Submitted 2026-11-16, pending their review. Foursquare claim ($20) skipped.",
+        what: "Submitted 2026-11-16, pending their review; no email from any of them by 2026-11-28. Foursquare claim ($20) skipped.",
         next: "Check each is live.",
       },
       {
@@ -215,7 +214,7 @@ export const SEO_PLAN: SeoPlanSection[] = [
       {
         title: "Steady review asks",
         status: "todo",
-        what: "A few a month, never a burst. Clients say in their own words which service and which town. From their own phone. We have 10 Google reviews.",
+        what: "A few a month, never a burst. Clients say in their own words which service and which town. From their own phone. Still 10 Google reviews on 2026-11-28; no asks sent yet.",
         next: "Personal ask after each finished month-end report.",
         blocker: "Each ask needs Tom's yes before it is sent.",
       },
@@ -250,18 +249,18 @@ export const SEO_PLAN: SeoPlanSection[] = [
         title: "Map grid scan every 2 weeks",
         status: "ongoing",
         what: "Baseline 2026-11-21: top 3 in 63% of points for \"bookkeeper\"; we drop off about 8 miles south (The Woodlands, Spring). Goal: push the south edge.",
-        next: "Next scan around 2026-12-05.",
+        next: "The weekly scan on 2026-11-23 failed (DataForSEO \"payment required\", 402); balance is $54.67 on 2026-11-28. Check the 2026-11-30 weekly scan ran.",
       },
       {
         title: "Scoreboard: calls, form fills",
         status: "todo",
         what: "Palmer's scorecard is calls, form fills and reviews, not rank. One table for Tom each month.",
-        blocker: "Form fills are all spam right now (see Website: Stop form spam).",
+        next: "First table in the first week of December. Spam is now flagged, so real form fills can be counted.",
       },
       {
         title: "Microsoft Clarity heatmaps",
         status: "todo",
-        what: "Free. Shows where visitors click and stop, and whether phone and form are seen above the fold.",
+        what: "Free. Shows where visitors click and stop, and whether phone and form are seen above the fold. Not on bookkeepingconroe.com yet (2026-11-28); the Clarity account has a \"Proposals\" project only.",
       },
     ],
   },
@@ -269,8 +268,8 @@ export const SEO_PLAN: SeoPlanSection[] = [
 
 // Numbers SWapp cannot read yet; update with the date when they change.
 export const SEO_SCORE = {
-  googleReviews: { value: 10, asOf: "2026-11-15", note: "on the Google profile; 2 are from family" },
-  realFormLeads: { value: 0, of: 42, from: "2026-11-19", to: "2026-11-24", note: "every website form fill was spam or a test" },
+  googleReviews: { value: 10, asOf: "2026-11-28", note: "on the Google profile; 2 are from family" },
+  realFormLeads: { value: 0, of: 48, from: "2026-11-19", to: "2026-11-28", note: "spam, sales pitches or our own tests" },
 };
 
 /** Words used for the top-3 share on the Overview: Palmer's broad term, searched from the office. */
