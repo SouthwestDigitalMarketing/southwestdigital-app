@@ -16,7 +16,7 @@ const fmt = (value: number) => value.toLocaleString("en-US", { style: "currency"
 
 export default function ProposalPaymentPlan({
   cleanupMonths, cleanupMonthlyRate, onboardingFee, recurringMonthlyTotal,
-  additionalOneTimeTotal, requiredOneTime = [], annual, amountDueNow, creditApplied = 0, creditLabel = "Credit for work already paid", originalOnboardingFee, annualSavingsPercent = 0, showStages = false,
+  additionalOneTimeTotal, requiredOneTime = [], migrationOneTime = null, annual, amountDueNow, creditApplied = 0, creditLabel = "Credit for work already paid", originalOnboardingFee, annualSavingsPercent = 0, showStages = false,
   cleanupPlan = null, cleanupInstallments, brandName = "us", complexityCleanupAdd = 0, cleanupIsEstimate = false,
   cleanupLengthWeeks = null, mentionFileFee,
 }: {
@@ -27,6 +27,13 @@ export default function ProposalPaymentPlan({
   additionalOneTimeTotal: number;
   /** Required one-time services (e.g. a platform migration), listed by name instead of as a selected add-on. Already included in additionalOneTimeTotal. */
   requiredOneTime?: Array<{ name: string; price: number }>;
+  /**
+   * Spec 05 sized Desktop → Online migration charge, itemized on its own
+   * line. Already included in additionalOneTimeTotal; the residual
+   * Selected one-time add-ons line excludes it. Null (legacy or no choice)
+   * renders exactly as today.
+   */
+  migrationOneTime?: { name: string; price: number } | null;
   annual: boolean;
   amountDueNow?: number;
   /** Dollars credited against today's payment; the line appears only when the schedule can apply some. */
@@ -120,7 +127,10 @@ export default function ProposalPaymentPlan({
   const grossRecurringDueNow = Math.round(grossMonthly * schedule.prepaidMonths * 100) / 100;
   const annualSavings = discountFactor < 1 ? Math.round((grossRecurringDueNow - schedule.recurringDueNow) * 100) / 100 : 0;
   const requiredTotal = requiredOneTime.reduce((total, row) => total + row.price, 0);
-  const selectedOneTimeTotal = Math.max(0, Math.round((additionalOneTimeTotal - requiredTotal) * 100) / 100);
+  const migrationOneTimeTotal = migrationOneTime && Number.isFinite(migrationOneTime.price) && migrationOneTime.price > 0
+    ? migrationOneTime.price
+    : 0;
+  const selectedOneTimeTotal = Math.max(0, Math.round((additionalOneTimeTotal - requiredTotal - migrationOneTimeTotal) * 100) / 100);
   return (
     <section aria-label="Payment plan" className="space-y-4 text-sm text-slate-700">
       <div className="rounded-xl bg-slate-50 p-4">
@@ -137,6 +147,7 @@ export default function ProposalPaymentPlan({
             </div>
           )}
           {requiredOneTime.map((row) => <div key={row.name} className="flex justify-between gap-3"><dt>{row.name}</dt><dd>{fmt(row.price)}</dd></div>)}
+          {migrationOneTimeTotal > 0 && migrationOneTime ? <div className="flex justify-between gap-3"><dt>{migrationOneTime.name}</dt><dd>{fmt(migrationOneTime.price)}</dd></div> : null}
           {selectedOneTimeTotal > 0 ? <div className="flex justify-between gap-3"><dt>Selected one-time add-ons</dt><dd>{fmt(selectedOneTimeTotal)}</dd></div> : null}
           {schedule.creditApplied > 0 ? <div className="flex justify-between gap-3 rounded bg-emerald-100 px-2 py-1 font-semibold text-emerald-800"><dt>{creditLabel}</dt><dd>{`-${fmt(schedule.creditApplied)}`}</dd></div> : null}
           <div className="flex justify-between gap-3 border-t border-slate-200 pt-2 font-bold"><dt>Total due today</dt><dd>{fmt(amountDueNow ?? schedule.amountDueNow)}</dd></div>

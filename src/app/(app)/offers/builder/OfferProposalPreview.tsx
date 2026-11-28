@@ -5,6 +5,13 @@ import ProposalPaymentPlan from "./ProposalPaymentPlan";
 import HowWeSizedThis from "./HowWeSizedThis";
 import CompanyBundleSummary from "./CompanyBundleSummary";
 import ComplexityWhyList from "./ComplexityWhyList";
+import DesktopMigrationSummary from "./DesktopMigrationSummary";
+import {
+  desktopMigrationChoiceLabel,
+  desktopMigrationFeeLabel,
+  resolveDesktopMigrationPrice,
+  withSizedMigrationFeeLines,
+} from "@/lib/quotes/desktopMigrationWiring";
 import {
   hasComplexitySelection,
   normalizeComplexitySelection,
@@ -109,6 +116,7 @@ import type {
   ComplexityWhyByTier,
   PublicBookkeepingProposal,
   PublicCleanupPlan,
+  PublicDesktopMigration,
   PublicProposalPricing,
 } from "@/lib/quotes/publicProposal";
 import { resolveProposalPackageName } from "./proposalPackageNames";
@@ -754,6 +762,7 @@ export default function OfferProposalPreview(props: OfferProposalPreviewProps = 
         publicComplexityWhyByTier={props.publicProposal.complexityWhyByTier}
         publicComplexityWhy={props.publicProposal.complexityWhy}
         publicCleanupPlan={props.publicProposal.cleanupPlan ?? null}
+        publicDesktopMigration={props.publicProposal.desktopMigration ?? null}
         livePublic
       />
     );
@@ -813,6 +822,7 @@ function OfferProposalPreviewView({
   publicComplexityWhyByTier = null,
   publicComplexityWhy: legacyPublicComplexityWhy = null,
   publicCleanupPlan = null,
+  publicDesktopMigration = null,
 }: Omit<OfferProposalPreviewProps, "assessment" | "initialAssessment" | "initialContactInfo" | "publicProposal"> & {
   assessment: PreviewAssessment | AssessmentState;
   contactInfo: PreviewContactInfo;
@@ -838,6 +848,11 @@ function OfferProposalPreviewView({
    * pre-selection labelled as an estimate. Null (legacy) shows legacy terms.
    */
   publicCleanupPlan?: PublicCleanupPlan | null;
+  /**
+   * Whitelisted Spec 05 priced migration for the public page. Null (legacy
+   * or no choice) hides the block and charges nothing.
+   */
+  publicDesktopMigration?: PublicDesktopMigration | null;
 }) {
   const { brand } = useBrand();
   const accountInventory: PublicAccountInventory | null | undefined = livePublic
@@ -1390,6 +1405,35 @@ function OfferProposalPreviewView({
     ? (publicComplexityWhyByTier?.[bundleTier] ?? legacyPublicComplexityWhy)
     : null;
 
+  // Spec 05 sized migration: the staff preview prices the live assessment
+  // (the same source the snapshot builder reads); the public page renders
+  // the whitelisted priced object plus the whitelisted choice label. Either
+  // side with no choice prices nothing and hides the block (legacy).
+  const staffMigrationPriced = !livePublic
+    ? resolveDesktopMigrationPrice(assessment as AssessmentState)
+    : null;
+  const publicMigrationChoice = livePublic
+    ? desktopMigrationChoiceLabel(
+        (assessment as { desktopMigration?: { choice?: unknown } }).desktopMigration?.choice,
+      )
+    : null;
+  const desktopMigrationBlock =
+    !livePublic && staffMigrationPriced
+      ? { choice: staffMigrationPriced.choiceLabel, lines: staffMigrationPriced.lines, total: staffMigrationPriced.total }
+      : livePublic && publicDesktopMigration && publicMigrationChoice
+        ? { choice: publicMigrationChoice, lines: publicDesktopMigration.lines, total: publicDesktopMigration.total }
+        : null;
+  const desktopMigrationTotal = desktopMigrationBlock?.total ?? 0;
+  // The priced line lives in the company bucket (agreement route + embedded
+  // agreement), never in requiredOneTime, so the itemized sum still equals
+  // the total. The payment plan shows the same charge as its own line.
+  const desktopMigrationFeeLine = desktopMigrationBlock
+    ? { label: desktopMigrationFeeLabel(desktopMigrationBlock.choice), amount: desktopMigrationTotal }
+    : null;
+  const desktopMigrationPlanLine = desktopMigrationBlock
+    ? { name: desktopMigrationFeeLabel(desktopMigrationBlock.choice), price: desktopMigrationTotal }
+    : null;
+
   const cleanupKey = (optionId: OptionId, periodKey: string) => `${optionId}:${periodKey}`;
   const cleanupIsSelected = (optionId: OptionId, periodKey: string) => cleanupSelections[cleanupKey(optionId, periodKey)] !== false;
 
@@ -1455,10 +1499,13 @@ function OfferProposalPreviewView({
         0,
       )
     : 0;
+  // Spec 05: the sized migration total is due today like the flat option
+  // was; the suppressed flat option never stacks (proposalServiceAddOns
+  // drops it, so the rows above cannot contain it when a choice is set).
   const selectedAdditionalOneTimeTotal = selectedOptionId
     ? additionalOptionRowsFor(selectedOptionId).reduce(
         (total, row) => total + (!row.billEvery && additionalOptionSelections[selectedOptionId][row.id] ? row.price : 0),
-        0,
+        desktopMigrationTotal,
       )
     : 0;
   const selectedMonthlyCharge = selectedOptionId
@@ -1629,7 +1676,12 @@ function OfferProposalPreviewView({
       ].map((row) => ({ name: serviceLevelTitle(row.serviceName), description: row.note ?? "" })) : [],
       // Staff preview agreement keys on the structured tier bundle (F6); the
       // public page renders the agreement from the server route instead.
-      companyFeeLines: staffBundlePriced ? companyBundleFeeLines(staffBundlePriced) : undefined,
+      // Spec 05: the sized migration is exactly one fee line in the company
+      // bucket — never also in requiredOneTime, so the itemized sum still
+      // equals the total.
+      companyFeeLines: staffBundlePriced
+        ? withSizedMigrationFeeLines(companyBundleFeeLines(staffBundlePriced), desktopMigrationFeeLine)
+        : withSizedMigrationFeeLines(undefined, desktopMigrationFeeLine),
     },
   );
   const displayedAgreementText = engagementId ? agreementText : embeddedAgreementText;
@@ -1649,6 +1701,7 @@ function OfferProposalPreviewView({
       brandName={brand.name}
       additionalOneTimeTotal={checkoutSummary?.additionalOneTimeTotal ?? selectedAdditionalOneTimeTotal}
       requiredOneTime={additionalOptionRowsFor(selectedOptionId).filter((row) => row.required && !row.billEvery).map((row) => ({ name: row.serviceName, price: row.price * row.quantity }))}
+      migrationOneTime={desktopMigrationPlanLine}
       annual={checkoutSummary?.hasTwelveMonthAgreement ?? hasTwelveMonthAgreement}
       amountDueNow={chargeAmount}
       annualSavingsPercent={annualSavingsPercent}
@@ -2026,7 +2079,9 @@ function OfferProposalPreviewView({
                     historicalCleanupPeriods: assessment.historicalCleanupPeriods ?? [],
                   }, selectedCleanupMonths);
                   const onboardingFee = getOnboardingFee(assessment, selectedCleanupMonths);
-                  const additionalOneTimeTotal = sectionTotal(selectedOneTimeAdditionalRows);
+                  // Spec 05: the sized migration total is due today on every
+                  // package card, like the flat option was.
+                  const additionalOneTimeTotal = sectionTotal(selectedOneTimeAdditionalRows) + desktopMigrationTotal;
                   const schedule = proposalPaymentSchedule({
                     cleanupMonths: selectedCleanupMonths, cleanupMonthlyRate: options.maintain.monthlyPrice,
                     onboardingFee, recurringMonthlyTotal: recurringTotal, additionalOneTimeTotal,
@@ -2129,7 +2184,7 @@ function OfferProposalPreviewView({
                       <section className="border-t border-slate-200">
                         <p className={sectionLabelClass}>One-time services</p>
                         <div className="px-5 py-4">
-                          {requiredOnboard.length || requiredAddOnRows.length ? <div className="mt-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Required to get started</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{requiredOnboard.map((row) => <ServiceLine key={row.id} row={{ ...row, serviceName: schedule.hasCleanup ? "Onboarding + Discovery" : "Onboarding", note: schedule.hasCleanup ? "Account access, document collection, and discovery to confirm the cleanup scope and estimate. Cleanup work is approved separately afterward." : "Account access, document collection, and setup for ongoing bookkeeping." }} originalPrice={assessment.showOriginalOneTimePrices !== false && isOnboarding(row) && originalOnboardingFee > row.price ? originalOnboardingFee : undefined} waivedLabel={onboardingWaived && isOnboarding(row) ? "Waived" : undefined} />)}{requiredAddOnRows.map((row) => <ServiceLine key={row.id} row={{ ...row, id: `${id}-${row.id}` }} priceSuffix={row.billEvery ? "/mo" : undefined} />)}</ul></div> : null}
+                          {requiredOnboard.length || requiredAddOnRows.length || desktopMigrationPlanLine ? <div className="mt-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Required to get started</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{requiredOnboard.map((row) => <ServiceLine key={row.id} row={{ ...row, serviceName: schedule.hasCleanup ? "Onboarding + Discovery" : "Onboarding", note: schedule.hasCleanup ? "Account access, document collection, and discovery to confirm the cleanup scope and estimate. Cleanup work is approved separately afterward." : "Account access, document collection, and setup for ongoing bookkeeping." }} originalPrice={assessment.showOriginalOneTimePrices !== false && isOnboarding(row) && originalOnboardingFee > row.price ? originalOnboardingFee : undefined} waivedLabel={onboardingWaived && isOnboarding(row) ? "Waived" : undefined} />)}{requiredAddOnRows.map((row) => <ServiceLine key={row.id} row={{ ...row, id: `${id}-${row.id}` }} priceSuffix={row.billEvery ? "/mo" : undefined} />)}{desktopMigrationPlanLine ? <ServiceLine key={`${id}-desktop-migration`} row={{ id: "desktop-migration", serviceName: desktopMigrationPlanLine.name, billStart: "On Acceptance", billEnd: "-", invoiceType: "Automatic", priceType: "Fixed", quantity: 1, price: desktopMigrationPlanLine.price, required: true }} /> : null}</ul></div> : null}
                           {optionalCleanup.length ? <div className="mt-5 border-t border-slate-200 pt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Cleanup estimate</p><p className="mt-2 text-xs leading-5 text-slate-600">Select the periods to estimate. Cleanup is not charged today; final scope, price, and payment milestones are confirmed after discovery.</p><ul className="mt-4 space-y-7 text-sm text-slate-600">{optionalCleanup.map((row) => <ServiceLine key={row.id} row={row} selected={cleanupIsSelected(id, row.cleanupPeriodKey!)} onToggle={(checked) => setCleanupSelections((prev) => ({ ...prev, [cleanupKey(id, row.cleanupPeriodKey!)]: checked }))} showPriceWhenUnselected />)}</ul></div> : null}
                           {additionalSetup.length ? <div className="mt-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-700">Additional setup</p><ul className="mt-2 space-y-2 text-sm text-slate-600">{additionalSetup.map((row) => <ServiceLine key={row.id} row={row} />)}</ul></div> : null}
                         </div>
@@ -2178,6 +2233,7 @@ function OfferProposalPreviewView({
                           <ProposalPaymentPlan cleanupMonths={selectedCleanupMonths} cleanupMonthlyRate={options.maintain.monthlyPrice}
                             onboardingFee={onboardingFee} recurringMonthlyTotal={recurringTotal} additionalOneTimeTotal={additionalOneTimeTotal}
                             requiredOneTime={requiredAddOnRows.filter((row) => !row.billEvery).map((row) => ({ name: row.serviceName, price: row.price * row.quantity }))}
+                            migrationOneTime={desktopMigrationPlanLine}
                             annual={hasTwelveMonthAgreement} amountDueNow={isTestProposal ? 1 : undefined}
                             annualSavingsPercent={annualSavingsPercent}
                             originalOnboardingFee={assessment.showOriginalOneTimePrices !== false && onboardingWaived ? originalOnboardingFee : undefined}
@@ -2224,12 +2280,14 @@ function OfferProposalPreviewView({
                 <CompanyBundleSummary
                   priced={staffBundlePriced}
                   caption={`Monthly amounts for the ${options[bundleTier].name} package.`}
+                  migrationSized={desktopMigrationBlock !== null}
                 />
               ) : null}
               {livePublic && publicBundleForTier ? (
                 <CompanyBundleSummary
                   publicBundle={publicBundleForTier}
                   caption={`Monthly amounts for the ${options[bundleTier].name} package.`}
+                  migrationSized={desktopMigrationBlock !== null}
                 />
               ) : null}
 
@@ -2237,6 +2295,8 @@ function OfferProposalPreviewView({
                 lines={livePublic ? publicComplexityWhy : staffComplexityWhy}
                 tierName={options[bundleTier].name}
               />
+
+              <DesktopMigrationSummary migration={desktopMigrationBlock} />
 
               <HowWeSizedThis inventory={accountInventory} brandName={brand.name} companies={companyInventories} />
 

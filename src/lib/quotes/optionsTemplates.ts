@@ -4,10 +4,22 @@ import {
   type ComplexityDriverDefaultsPatch,
   type ComplexityDriverId,
 } from "@/lib/quotes/complexityDrivers";
+import {
+  sanitizeDesktopMigrationDefaults,
+  type DesktopMigrationPricingKey,
+  type DesktopMigrationPricingOptions,
+} from "@/lib/quotes/desktopMigration";
 
 export const OPTIONS_TEMPLATE_SNAPSHOT_VERSION = 1;
 
 export type OptionsTemplatePackageId = "grow" | "improve" | "maintain";
+
+/**
+ * Staff-set marker for the legacy flat Desktop→Online migration option.
+ * When the sized migration is chosen, options carrying this role are
+ * suppressed so the flat price never stacks with the sized price.
+ */
+export type OptionsTemplateAdditionalOptionRole = "desktop-migration";
 
 export type OptionsTemplateAdditionalOption = {
   id: string;
@@ -21,6 +33,7 @@ export type OptionsTemplateAdditionalOption = {
   packageIds?: OptionsTemplatePackageId[];
   required?: boolean;
   realEstateSpecific?: boolean;
+  role?: OptionsTemplateAdditionalOptionRole;
 };
 
 export type OptionsTemplateBonus = {
@@ -65,6 +78,16 @@ export type OptionsTemplateSnapshot = {
    * `monthlyOverride` on the selection wins over it.
    */
   complexityDriverDefaults?: ComplexityDriverDefaultsPatch;
+  /**
+   * Spec 05 brand-level defaults for Desktop-migration money. Additive and
+   * optional like the other defaults, so snapshots written before Spec 05
+   * (which omit it) still parse at version 1. Each field is optional:
+   * omitted fields fall through to the code defaults at resolution time.
+   * When a template is applied to a proposal it lands on the assessment as
+   * `desktopMigrationDefaults`; per-proposal `overrides` on the selection
+   * win over it.
+   */
+  desktopMigrationDefaults?: Partial<DesktopMigrationPricingOptions>;
 };
 
 export type OptionsTemplateAssessmentSlice = {
@@ -74,6 +97,7 @@ export type OptionsTemplateAssessmentSlice = {
   bonusPackageSelections: Record<string, OptionsTemplatePackageId[]>;
   bundlePricingDefaults?: Partial<BundlePricingOptions>;
   complexityDriverDefaults?: ComplexityDriverDefaultsPatch;
+  desktopMigrationDefaults?: Partial<DesktopMigrationPricingOptions>;
 };
 
 const VALID_PACKAGES: readonly OptionsTemplatePackageId[] = ["grow", "improve", "maintain"];
@@ -167,6 +191,7 @@ function sanitizeAdditionalOption(raw: unknown): OptionsTemplateAdditionalOption
     packageIds: Array.isArray(record.packageIds) ? sanitizePackageIds(record.packageIds) : undefined,
     required: record.required === true ? true : undefined,
     realEstateSpecific: record.realEstateSpecific === true ? true : undefined,
+    role: record.role === "desktop-migration" ? "desktop-migration" : undefined,
   };
 }
 
@@ -273,6 +298,50 @@ export function parseComplexityDriverDefaultsInputs(
   return patch;
 }
 
+/**
+ * Editor rows for the Spec 05 migration defaults table: key, staff-facing
+ * label, and the code default shown as the input placeholder (blank = use
+ * it). Order matches the agreement line order: base, history, volume, add-ons.
+ */
+export const DESKTOP_MIGRATION_DEFAULT_FIELDS: readonly {
+  key: DesktopMigrationPricingKey;
+  label: string;
+}[] = [
+  { key: "baseAmount", label: "Fresh-start base / full-history base ($)" },
+  { key: "historyPerYear", label: "History price, per year ($)" },
+  { key: "historyYearCap", label: "History year cap (years)" },
+  { key: "bandAdd0to99", label: "Volume add, 0–99 / mo ($)" },
+  { key: "bandAdd100to499", label: "Volume add, 100–499 / mo ($)" },
+  { key: "bandAdd500to999", label: "Volume add, 500–999 / mo ($)" },
+  { key: "bandAdd1000plus", label: "Volume add, 1000+ / mo ($)" },
+  { key: "payrollHistoryAdd", label: "Payroll history add-on ($)" },
+  { key: "inventoryAdd", label: "Inventory add-on ($)" },
+  { key: "openJobsAdd", label: "Open jobs/projects add-on ($)" },
+  { key: "extraFileAdd", label: "Each additional Desktop file ($)" },
+];
+
+/**
+ * Parse the manager's migration-defaults text inputs. A blank (or missing)
+ * input DELETES its key so the field falls back down the resolution chain
+ * (per-proposal override, then the code default) — it never saves
+ * `Number("")` (0). A non-blank input must be a finite non-negative number
+ * (the year cap truncates); returns null when any non-blank input is
+ * invalid.
+ */
+export function parseDesktopMigrationDefaultsInputs(
+  values: Partial<Record<DesktopMigrationPricingKey, string>>,
+): Partial<DesktopMigrationPricingOptions> | null {
+  const parsed: Partial<DesktopMigrationPricingOptions> = {};
+  for (const { key } of DESKTOP_MIGRATION_DEFAULT_FIELDS) {
+    const raw = values[key];
+    if (raw === undefined || raw.trim() === "") continue;
+    const value = Number(raw.trim());
+    if (!Number.isFinite(value) || value < 0) return null;
+    parsed[key] = key === "historyYearCap" ? Math.trunc(value) : value;
+  }
+  return parsed;
+}
+
 export function buildOptionsTemplateSnapshot(
   slice: OptionsTemplateAssessmentSlice,
 ): OptionsTemplateSnapshot {
@@ -299,6 +368,7 @@ export function buildOptionsTemplateSnapshot(
     bonusPackageSelections,
     bundlePricingDefaults: sanitizeBundlePricingDefaults(slice.bundlePricingDefaults),
     complexityDriverDefaults: sanitizeComplexityDriverDefaults(slice.complexityDriverDefaults),
+    desktopMigrationDefaults: sanitizeDesktopMigrationDefaults(slice.desktopMigrationDefaults),
   };
 }
 
@@ -334,6 +404,9 @@ export function parseOptionsTemplateSnapshot(raw: unknown): OptionsTemplateSnaps
     // casts only bridge the unknown-typed record.
     bundlePricingDefaults: record.bundlePricingDefaults as Partial<BundlePricingOptions> | undefined,
     complexityDriverDefaults: record.complexityDriverDefaults as ComplexityDriverDefaultsPatch | undefined,
+    desktopMigrationDefaults: record.desktopMigrationDefaults as
+      | Partial<DesktopMigrationPricingOptions>
+      | undefined,
   });
 }
 
@@ -376,6 +449,8 @@ export function reconcileOptionsTemplateSnapshot(
       bundlePricingDefaults: sanitizeBundlePricingDefaults(snapshot.bundlePricingDefaults),
       // Same for the Spec 03 complexity defaults: not catalog items, never dropped.
       complexityDriverDefaults: sanitizeComplexityDriverDefaults(snapshot.complexityDriverDefaults),
+      // Same for the Spec 05 migration defaults: not catalog items, never dropped.
+      desktopMigrationDefaults: sanitizeDesktopMigrationDefaults(snapshot.desktopMigrationDefaults),
     },
     skippedIds,
   };

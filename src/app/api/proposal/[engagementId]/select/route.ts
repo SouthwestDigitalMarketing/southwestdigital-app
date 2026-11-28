@@ -8,7 +8,7 @@ import {
 } from "@/lib/engagements/proposalCheckout";
 import { resolveOnboardingWaiverForEngagement } from "@/lib/discounts/resolveOnboardingWaiver";
 import { hasPublicProposalAccess, publicProposalNotFound } from "@/lib/engagements/publicProposalAccess";
-import { catalogCopyFromRows, storedCleanupPlanInputForSnapshot, storedComplexityCleanupPerMonthForSnapshot, toPublicBookkeepingProposal } from "@/lib/quotes/publicProposal";
+import { catalogCopyFromRows, storedCleanupPlanInputForSnapshot, storedComplexityCleanupPerMonthForSnapshot, storedDesktopMigrationForSnapshot, toPublicBookkeepingProposal } from "@/lib/quotes/publicProposal";
 import { staffDateKey } from "@/lib/quotes/staffDates";
 import { asCompanyBundleSnapshot } from "@/lib/quotes/companyBundle";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
@@ -107,6 +107,10 @@ export async function POST(
     // always stores `complexityCleanupAdd: undefined`. Only the number the
     // checkout reads crosses — never the raw complexity selection.
     const complexityCleanupPerMonth = storedComplexityCleanupPerMonthForSnapshot(publishedSnapshot);
+    // Spec 05: the public pricing strips the priced `desktopMigration`
+    // object, so carry the validated lines + total back in or the real
+    // select flow always stores the one-time total without the migration.
+    const storedMigration = storedDesktopMigrationForSnapshot(publishedSnapshot);
     checkout = buildProposalCheckoutSummary(
       {
         assessment: {
@@ -124,6 +128,9 @@ export async function POST(
           ...(complexityCleanupPerMonth > 0
             ? { maintain: { ...publicProposal.pricing.maintain, complexity: { cleanupPerMonthTotal: complexityCleanupPerMonth } } }
             : {}),
+          // The public pricing strips the priced migration object; restore
+          // the whitelisted lines + total for the checkout math.
+          ...(storedMigration ? { desktopMigration: storedMigration } : {}),
         },
         // The public view strips staff-only fields; the test flag still decides the $1 test checkout.
         isTestProposal: isRecord(publishedSnapshot) && publishedSnapshot.isTestProposal === true,

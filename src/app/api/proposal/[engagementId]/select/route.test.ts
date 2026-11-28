@@ -243,6 +243,54 @@ describe("select API with a company bundle", () => {
     expect(body.checkout?.additionalOneTimeTotal).toBe(0);
   });
 
+  it("carries the sized migration through the real reconstruction without stacking the role-marked flat", async () => {
+    mocks.engagement.mockResolvedValue({
+      ...engagementRow(),
+      quotes: [{
+        publishedSnapshotJson: null,
+        revisions: [{
+          snapshotJson: {
+            assessment: {
+              annualSavingsPercent: 20,
+              historicalCleanupPeriods: [],
+              additionalOptions: [{
+                id: "flat-fee",
+                name: "Migration flat fee",
+                description: "Legacy flat row.",
+                monthlyPrice: 640,
+                showInProposal: true,
+                archived: false,
+                billingCadence: "one-time",
+                packageIds: ["maintain"],
+                required: true,
+                role: "desktop-migration",
+              }],
+              desktopMigration: { choice: "fresh_start" },
+            },
+            pricing: {
+              maintain: { monthly: 450 },
+              improve: { monthly: 450 },
+              grow: { monthly: 675 },
+              desktopMigration: {
+                lines: [
+                  { label: "Desktop migration — fresh start", amount: 640 },
+                  { label: "Trial-balance tie-out (included)", amount: 0 },
+                ],
+                total: 640,
+              },
+            },
+          },
+        }],
+      }],
+    });
+    const response = await selectTier("maintain");
+    expect(response.status).toBe(200);
+    const body = await response.json() as { ok?: boolean; checkout?: Record<string, number> };
+    // Sized migration only: the role-marked flat $640 is suppressed through
+    // the public reconstruction, never stacked.
+    expect(body.checkout?.additionalOneTimeTotal).toBe(640);
+  });
+
   it("stores no plan keys for a snapshot without a plan, even with cleanup selected", async () => {
     const response = await POST(
       new Request("https://firm.example.test/api/proposal/eng/select", {

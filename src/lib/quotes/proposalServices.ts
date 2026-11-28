@@ -1,4 +1,5 @@
 import { extraIsRealEstateSpecific } from "./catalog";
+import { findSuppressedFlatMigrationOptions } from "./desktopMigration";
 import { serviceLevelTitle } from "./serviceLevels";
 import {
   hasCompanyBundle,
@@ -106,6 +107,15 @@ export function proposalServiceAddOns(
   const bundleOwnsNewFileSetup =
     hasCompanyBundle({ companies: assessment.companies }) &&
     normalizeCompanyBundle(assessment.companies).some((company) => company.fileStatus === "new_file");
+  // Spec 05: when the sized Desktop migration is chosen, the legacy flat
+  // migration option never stacks with it. Legacy proposals (no selection)
+  // suppress nothing, so the flat $640 charges byte-identical.
+  const suppressedFlatMigrationIds = new Set(
+    findSuppressedFlatMigrationOptions(
+      assessment.additionalOptions,
+      record(assessment.desktopMigration),
+    ).suppressedIds,
+  );
   const selections = record(assessment.bonusPackageSelections);
   const result = new Map<string, ProposalServiceAddOn>();
   const append = (
@@ -145,6 +155,7 @@ export function proposalServiceAddOns(
   };
   for (const option of records(assessment.additionalOptions)) {
     if (option.showInProposal !== true) continue;
+    if (typeof option.id === "string" && suppressedFlatMigrationIds.has(option.id)) continue;
     append(
       option,
       option.monthlyPrice,

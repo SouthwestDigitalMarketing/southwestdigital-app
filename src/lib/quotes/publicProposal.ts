@@ -9,6 +9,11 @@ import {
   type ComplexityPublicWhy,
 } from "@/lib/quotes/complexityDrivers";
 import {
+  normalizeDesktopMigrationSelection,
+  toPublicDesktopMigration,
+} from "@/lib/quotes/desktopMigration";
+import { desktopMigrationChoiceLabel } from "@/lib/quotes/desktopMigrationWiring";
+import {
   buildCleanupInstallments,
   cleanupWeeksBetween,
   normalizeCleanupPlan,
@@ -50,6 +55,15 @@ const option = z.object({
   includedPlacement: z.enum(["main", "included"]).optional(),
   packageIds: z.array(tier).optional(),
   required: z.boolean().optional(),
+  /**
+   * Spec 05 staff marker for the legacy flat Desktop → Online migration
+   * option. Whitelisted (like the Spec 02/03 staff knobs the public page
+   * needs) so the public page and the select route suppress the flat
+   * option exactly like the staff preview — otherwise a role-marked row
+   * would stack with the sized migration after publish. Absent on legacy
+   * rows, so legacy payloads stay byte-identical.
+   */
+  role: z.enum(["desktop-migration"]).optional(),
 });
 const bonus = z.object({
   id: z.string(), name: text, description: text, archived: z.boolean(),
@@ -99,6 +113,13 @@ const publicAssessmentSchema = z.object({
   contractFollowsPayment: z.boolean().optional(),
   ongoingBookkeepingPlatform: z.enum(["qbo", "stessa", "sage"]).optional(),
   platformMigrationEnabled: z.boolean().optional(),
+  /**
+   * Spec 05 migration choice only — the money knobs (years, add-ons,
+   * overrides) never publish. zod strips every other key, so the stored
+   * selection's overrides cannot leak. The choice lets the public page
+   * suppress the legacy flat option exactly like the staff preview.
+   */
+  desktopMigration: z.object({ choice: z.enum(["fresh_start", "full_history"]).nullable() }).nullable().optional(),
 });
 
 const price = z.object({ monthly: money });
@@ -325,6 +346,47 @@ export function storedCleanupPlanInputForSnapshot(snapshotValue: unknown): Recor
 }
 
 /**
+ * Whitelisted Spec 05 priced migration for a stored snapshot, or null for
+ * legacy snapshots without one. Read from the snapshot's one priced
+ * `pricing.desktopMigration` object — the same object checkout and the
+ * agreement route read — so the public block, checkout and agreement can
+ * never disagree. Only labels and amounts cross.
+ */
+export type PublicDesktopMigration = {
+  lines: Array<{ label: string; amount: number }>;
+  total: number;
+};
+
+export function publicDesktopMigrationForSnapshot(snapshotValue: unknown): PublicDesktopMigration | null {
+  const snapshot = record(snapshotValue);
+  const pricing = record(snapshot.pricing);
+  return toPublicDesktopMigration(pricing.desktopMigration);
+}
+
+/**
+ * Spec 05 choice label for a stored snapshot, or null for legacy snapshots
+ * without a choice. Read from the stored assessment selection (the money
+ * knobs stay staff-only); the priced object above carries lines + total.
+ */
+export function publicDesktopMigrationChoiceForSnapshot(snapshotValue: unknown): string | null {
+  const snapshot = record(snapshotValue);
+  const selection = normalizeDesktopMigrationSelection(record(snapshot.assessment).desktopMigration);
+  if (selection.choice === null) return null;
+  if (!publicDesktopMigrationForSnapshot(snapshotValue)) return null;
+  return desktopMigrationChoiceLabel(selection.choice);
+}
+
+/**
+ * Whitelisted Spec 05 priced migration for the select route's checkout
+ * reconstruction. The public pricing schema strips `pricing.desktopMigration`,
+ * so carry the validated object back in — same trust level as the bundle
+ * object the route already carries.
+ */
+export function storedDesktopMigrationForSnapshot(snapshotValue: unknown): PublicDesktopMigration | null {
+  return publicDesktopMigrationForSnapshot(snapshotValue);
+}
+
+/**
  * Whitelisted Spec 03 complexity cleanup rate for the select route's
  * checkout reconstruction. The public pricing schema strips the priced
  * `maintain.complexity` object, so without this the real select flow always
@@ -355,6 +417,7 @@ export function toPublicBookkeepingProposal(
   const assessment = publicAssessmentSchema.parse(snapshot.assessment);
   const accountInventory: PublicAccountInventory | null = toPublicAccountInventory(record(snapshot.assessment).accounts);
   const cleanupPlan = publicCleanupPlanForSnapshot(snapshotValue);
+  const desktopMigration = publicDesktopMigrationForSnapshot(snapshotValue);
   return {
     accountInventory,
     assessment: {
@@ -372,6 +435,8 @@ export function toPublicBookkeepingProposal(
     // Spec 04 wrap-up plan; spread only when present so legacy payloads stay
     // byte-identical (the legacy toEqual test pins the full shape).
     ...(cleanupPlan !== null ? { cleanupPlan } : {}),
+    // Spec 05 sized migration; same conditional-spread rule as the plan.
+    ...(desktopMigration !== null ? { desktopMigration } : {}),
     // Per-tier Why lists for the tier tabs (selected tab's amounts); null for
     // legacy. `complexityWhy` stays as the maintain-tier alias.
     complexityWhyByTier: publicComplexityWhyByTierForSnapshot(snapshotValue),

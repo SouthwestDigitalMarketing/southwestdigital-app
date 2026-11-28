@@ -16,6 +16,7 @@ import {
 } from "@/lib/quotes/cleanupPlan";
 import { staffDateKey } from "@/lib/quotes/staffDates";
 import { proposalIncludedServices, proposalServiceAddOns } from "@/lib/quotes/proposalServices";
+import { toPublicDesktopMigration } from "@/lib/quotes/desktopMigration";
 import { proposalPaymentSchedule } from "@/lib/quotes/paymentSchedule";
 
 const TIER_IDS = ["maintain", "improve", "grow"] as const;
@@ -295,6 +296,15 @@ export function buildProposalCheckoutSummary(
     },
     0,
   );
+  // Spec 05: the sized migration total rides the snapshot's one priced
+  // object (never recomputed). Legacy snapshots carry none and add zero.
+  // The suppressed flat option can never stack: it is absent from
+  // `availableAdditionalOptions` (proposalServiceAddOns), so the id filter
+  // above drops it even when a stored selection still lists it.
+  const storedMigration = toPublicDesktopMigration(
+    isRecord(pricing) ? pricing.desktopMigration : null,
+  );
+  const migrationOneTimeTotal = storedMigration?.total ?? 0;
   const additionalOneTimeTotal = selectedAdditionalOptionIds.reduce(
     (total, id) => {
       const option = availableAdditionalOptions.get(id);
@@ -303,7 +313,7 @@ export function buildProposalCheckoutSummary(
         : total;
     },
     // One-time new-file setup charges are due today alongside onboarding.
-    bundle ? bundle.setupTotal : 0,
+    (bundle ? bundle.setupTotal : 0) + migrationOneTimeTotal,
   );
   const recurringMonthlyTotal = money((baseMonthlyTotal + additionalMonthlyTotal) * annualDiscountMultiplier);
 

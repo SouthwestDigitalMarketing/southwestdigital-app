@@ -335,6 +335,62 @@ describe("public proposal receipt page", () => {
     expect(html).toContain("Complexity adjustment: $195.00. Estimated Cleanup Total: $1,095.00.");
   });
 
+  it("receipt initial payment carries the sized migration total exactly once", async () => {
+    const withMigration = buildProposalCheckoutSummary({
+      assessment: {
+        annualSavingsPercent: 20,
+        waiveOnboardingFee: false,
+        onboardingFeeOverride: null,
+        historicalCleanupPeriods: [],
+        additionalOptions: [{
+          id: "migration",
+          name: "QuickBooks Desktop to Online Migration",
+          description: "Legacy flat row.",
+          monthlyPrice: 640,
+          showInProposal: true,
+          archived: false,
+          billingCadence: "one-time" as const,
+          packageIds: ["maintain", "improve", "grow"] as const,
+          required: true,
+        }],
+        desktopMigration: { choice: "full_history", historyYears: 2 },
+      },
+      pricing: {
+        maintain: { monthly: 300 },
+        improve: { monthly: 450 },
+        grow: { monthly: 600 },
+        desktopMigration: {
+          lines: [
+            { label: "Desktop migration — full history base", amount: 640 },
+            { label: "Full history — 2 years × $150", amount: 300 },
+            { label: "Trial-balance tie-out (included)", amount: 0 },
+          ],
+          total: 940,
+        },
+      },
+    }, {
+      tier: "maintain",
+      hasTwelveMonthAgreement: false,
+      selectedCleanupPeriodKeys: [],
+      selectedAdditionalOptionIds: [],
+    });
+    // The suppressed flat $640 never stacks: the stored one-time total is
+    // the sized migration alone.
+    expect(withMigration.additionalOneTimeTotal).toBe(940);
+    mocks.quoteFindFirst.mockResolvedValue(signedReceiptRow({
+      engagement: {
+        ...signedReceiptRow().engagement,
+        onboardingData: {
+          proposalAcceptance: { selection: JSON.parse(JSON.stringify(withMigration)) },
+        },
+        agreementText: "QuickBooks Desktop to Online Migration — Full history: $940.00 (one-time). Signed.",
+      },
+    }));
+    const html = renderToStaticMarkup(await openReceipt());
+    // First month $300 + onboarding $500 + sized migration $940, due today.
+    expect(html).toContain("Initial payment: $1,740.00.");
+  });
+
   it("renders the legacy cleanup equation without complexity lines when the add is absent", async () => {
     mocks.quoteFindFirst.mockResolvedValue(signedReceiptRow({
       engagement: {
