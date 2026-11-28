@@ -25,6 +25,13 @@ import {
 import { supersedeReplacedQuoteOnWrite } from "@/lib/quotes/supersedeReplaced";
 import { snapshotWithPromoStamp } from "@/lib/quotes/proposalValidity";
 import { applyTagPipelineAutomation } from "@/lib/contacts/automation";
+import { supportCopyForPublish } from "@/lib/quotes/serviceLevels";
+import {
+  promiseBlockMessage,
+  readPromiseConfirmations,
+  unresolvedSnapshotPromiseHits,
+  validatePromiseConfirmations,
+} from "@/lib/quotes/promiseCheck";
 
 export type OfferAudienceContact = {
   id: string;
@@ -68,6 +75,23 @@ function asJsonObject(value: unknown): Prisma.InputJsonObject {
     if (error instanceof Error && error.message === "Offer data must be a JSON object.") throw error;
     throw new Error("Offer data could not be saved.");
   }
+}
+
+// Spec 07 promise check (server-side): scan the stored assessment free text
+// (intro, bonus/option descriptions, custom notes) against the snapshot's
+// "Keep this wording" confirmations. Cover-letter bodies are ephemeral and
+// enforced client-side; publish/send refuse here on what the snapshot holds.
+function mergePromiseConfirmations(previous: unknown, incoming: unknown) {
+  const merged = new Map<string, ReturnType<typeof validatePromiseConfirmations>[number]>();
+  for (const confirmation of [...readPromiseConfirmations(previous), ...validatePromiseConfirmations(incoming)]) {
+    merged.set(`${confirmation.where}${confirmation.phrase}${confirmation.textHash}`, confirmation);
+  }
+  return [...merged.values()];
+}
+
+function assertNoUnresolvedPromiseHits(snapshot: unknown) {
+  const unresolved = unresolvedSnapshotPromiseHits(snapshot);
+  if (unresolved.length > 0) throw new Error(promiseBlockMessage(unresolved));
 }
 
 async function ensureExclusiveQuoteClient(
@@ -323,7 +347,7 @@ export async function startOfferDraftAction(kind: OfferKindKey, contactIds: stri
 
 export async function saveOfferDraftAction(
   offerId: string,
-  state: { contactInfo?: unknown; assessment?: unknown; pricing?: unknown; isTestProposal?: boolean },
+  state: { contactInfo?: unknown; assessment?: unknown; pricing?: unknown; isTestProposal?: boolean; promiseConfirmations?: unknown },
 ) {
   const { brand } = await requireQuoteStaffOrThrow();
   const existing = await prisma.quote.findFirst({
@@ -357,6 +381,9 @@ export async function saveOfferDraftAction(
     assessment,
     pricing: state.pricing ?? previous.pricing,
     isTestProposal: state.isTestProposal ?? previous.isTestProposal,
+    // Drafts never stamp supportCopy (publish does that); "Keep this wording"
+    // confirmations persist here so publish/send can enforce them.
+    promiseConfirmations: mergePromiseConfirmations(previous, state.promiseConfirmations),
   });
 
   await prisma.$transaction(async (tx) => {
@@ -381,7 +408,7 @@ export async function saveOfferDraftAction(
 
 export async function publishOfferChangesAction(
   offerId: string,
-  state: { contactInfo?: unknown; assessment?: unknown; pricing?: unknown; isTestProposal?: boolean },
+  state: { contactInfo?: unknown; assessment?: unknown; pricing?: unknown; isTestProposal?: boolean; promiseConfirmations?: unknown },
 ) {
   const { brand } = await requireQuoteStaffOrThrow();
   const existing = await prisma.quote.findFirst({
@@ -417,7 +444,15 @@ export async function publishOfferChangesAction(
     assessment,
     pricing: state.pricing ?? previous.pricing,
     isTestProposal: state.isTestProposal ?? previous.isTestProposal,
+    // New publishes freeze the current support wording into the snapshot, so
+    // accepted/old proposals keep rendering what the client saw. Drafts and
+    // legacy snapshots carry none and render the legacy map.
+    supportCopy: supportCopyForPublish(),
+    promiseConfirmations: mergePromiseConfirmations(previous, state.promiseConfirmations),
   });
+  // Publish refuses while flagged promise wording is neither edited nor
+  // confirmed ("Keep this wording"). Frozen quotes are refused below.
+  assertNoUnresolvedPromiseHits(baseSnapshot);
   const publicToken = existing.publicToken ?? randomBytes(32).toString("base64url");
   const { quoteRevisions, quoteEngagement } = await getSchemaCapabilities();
   const publishedAt = new Date();

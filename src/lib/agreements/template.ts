@@ -201,6 +201,13 @@ export type AgreementRenderInput = {
   requiredOneTime?: { name: string; price: number }[];
   includedServices?: { name: string; description: string }[];
   /**
+   * Spec 07 WHAT'S INCLUDED section (all agreements, staged or not): the
+   * selected package's included services plus the support level title +
+   * meaning, from the same resolved copy the proposal shows. Absent (legacy
+   * snapshots without stored support copy) renders byte-identical to today.
+   */
+  whatsIncluded?: { name: string; description: string }[] | null;
+  /**
    * Spec 02 company bundle fee lines (companyBundleFeeLines output). When
    * present and non-empty, the fee structure lists one line per company plus
    * the locations and setup lines, and the monthly total equals the bundle
@@ -396,6 +403,12 @@ export function renderAgreementTemplate(template: string, input: AgreementRender
     "The specific accounts, reporting schedule, and delivery details will be confirmed during onboarding without changing the package and prices stated below unless both parties approve a written change.",
     staged && input.includedServices?.length
       ? `Included package services:\n${input.includedServices.map((item) => `  • ${item.name}${item.description ? `: ${item.description}` : ""}`).join("\n")}` : null,
+    // Spec 07 WHAT'S INCLUDED: the selected package's included services plus
+    // the support level title + meaning, on ALL agreements (staged or not).
+    // Scope text, never a numbered clause, so Spec 01/04 clause numbering is
+    // untouched. Absent renders byte-identical to today.
+    input.whatsIncluded?.length
+      ? `WHAT'S INCLUDED\n${input.whatsIncluded.map((item) => `  • ${item.name}${item.description ? `: ${item.description}` : ""}`).join("\n")}` : null,
     staged ? "Stage 1 — Onboarding: provide account access and required records. We confirm receipt and readiness before service work begins." : null,
     staged && input.hasCleanup ? `Stage 2 — Discovery and cleanup approval: ${CLEANUP_APPROVAL_TEXT}` : null,
     staged ? `${input.hasCleanup ? "Stage 3" : "Stage 2"} — Ongoing bookkeeping: ${ongoingStartText}` : null,

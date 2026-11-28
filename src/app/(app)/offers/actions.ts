@@ -17,6 +17,18 @@ import {
 } from "@/lib/quotes/clientInfo";
 import { resolveSendExpiry } from "@/lib/quotes/sendExpiry";
 import { supersedeReplacedQuoteOnWrite } from "@/lib/quotes/supersedeReplaced";
+import {
+  promiseBlockMessage,
+  unresolvedSnapshotPromiseHits,
+} from "@/lib/quotes/promiseCheck";
+
+// Spec 07: sending refuses while flagged promise wording is neither edited
+// nor confirmed. Cover-letter bodies are ephemeral and enforced client-side;
+// send refuses here on what the stored snapshot holds.
+function assertSnapshotPromisesResolved(snapshot: unknown) {
+  const unresolved = unresolvedSnapshotPromiseHits(snapshot);
+  if (unresolved.length > 0) throw new Error(promiseBlockMessage(unresolved));
+}
 export async function markQuoteSentAction(formData: FormData) {
   const { brand } = await requireQuoteStaffOrThrow();
   const id = (formData.get("id") as string | null)?.trim() ?? "";
@@ -31,6 +43,7 @@ export async function markQuoteSentAction(formData: FormData) {
   if (quote.status !== "draft" && quote.status !== "completed") {
     throw new Error("Only unsent offers can be marked sent");
   }
+  assertSnapshotPromisesResolved(quote.snapshotJson);
 
   const now = new Date();
   const send = await resolveSendExpiry({
@@ -76,6 +89,7 @@ export async function resendQuoteAction(formData: FormData) {
   if (quote.status === "draft" || quote.status === "archived") {
     throw new Error("Only sent offers can be resent");
   }
+  assertSnapshotPromisesResolved(quote.snapshotJson);
 
   const now = new Date();
   const send = await resolveSendExpiry({
@@ -472,6 +486,7 @@ export async function setOfferStatusAction(formData: FormData) {
   });
   if (!quote) throw new Error("Not found");
   assertQuoteNotFrozen(quote);
+  if (status === "sent") assertSnapshotPromisesResolved(quote.snapshotJson);
 
   const revokePublicLink = status === "archived" && !quote.engagement?.signedAt;
   const sentAt = status === "sent" ? new Date() : null;

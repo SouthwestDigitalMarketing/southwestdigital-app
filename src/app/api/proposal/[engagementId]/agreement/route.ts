@@ -4,7 +4,7 @@ import { generateProposalAgreementText } from "@/lib/engagements/agreementGenera
 import { hasPublicProposalAccess, publicProposalNotFound } from "@/lib/engagements/publicProposalAccess";
 import { readAcceptedSelection } from "@/lib/engagements/acceptedPayment";
 import { parseStoredProposalCheckout } from "@/lib/engagements/proposalCheckout";
-import { serviceLevelDescription } from "@/lib/quotes/serviceLevels";
+import { hasStoredSupportCopy, resolveSupportCopy, serviceLevelDescription } from "@/lib/quotes/serviceLevels";
 import { normalizeAccountInventory, summarizeAccountInventory } from "@/lib/quotes/accountInventory";
 import { isHourlyOfferKind } from "@/lib/quotes/kinds";
 import { lockQuoteMutation, QuoteMutationConflictError } from "@/lib/quotes/mutationLock";
@@ -20,7 +20,7 @@ import {
   readCleanupPlan,
   renderAgreementTemplate,
 } from "@/lib/agreements/template";
-import { requiredOneTimeAddOnsForTier } from "@/lib/quotes/proposalServices";
+import { agreementWhatsIncluded, requiredOneTimeAddOnsForTier } from "@/lib/quotes/proposalServices";
 import { normalizeDesktopMigrationSelection } from "@/lib/quotes/desktopMigration";
 import {
   desktopMigrationChoiceLabel,
@@ -136,6 +136,10 @@ export async function GET(
   // without it fall back to a fresh priceCompanyBundle for that tier.
   const quote = engagement.quotes?.[0];
   const publishedSnapshot = quote?.revisions?.[0]?.snapshotJson ?? quote?.publishedSnapshotJson;
+  // Spec 07: new publishes render their frozen support copy; legacy snapshots
+  // (no stored copy) render the legacy map, exactly as before.
+  const storedSupportCopy = isRecord(publishedSnapshot) ? publishedSnapshot.supportCopy : undefined;
+  const resolvedSupportCopy = resolveSupportCopy(storedSupportCopy);
   const snapshotPricing = isRecord(publishedSnapshot) && isRecord(publishedSnapshot.pricing)
     ? publishedSnapshot.pricing
     : undefined;
@@ -211,11 +215,18 @@ export async function GET(
       selectedAdditionalOptionIds,
       checkout?.tier ?? "maintain",
     ),
-    // Stored at selection time; re-resolve so support-level wording is current.
+    // Stored at selection time; re-resolve to the snapshot's frozen copy so
+    // the wording matches the proposal the client saw.
     includedServices: checkout?.includedServices?.map((item) => ({
       ...item,
-      description: serviceLevelDescription(item.name, item.description),
+      description: serviceLevelDescription(item.name, item.description, resolvedSupportCopy),
     })),
+    // Spec 07 WHAT'S INCLUDED on every freshly generated agreement — new
+    // publishes only, from the same resolved copy the proposal shows. Legacy
+    // snapshots (no stored copy) omit it; stored text is never rebuilt.
+    whatsIncluded: hasStoredSupportCopy(storedSupportCopy)
+      ? agreementWhatsIncluded(assessment, checkout?.tier ?? "maintain", resolvedSupportCopy)
+      : null,
   };
 
   let text = engagement.agreementText ?? "";

@@ -1,6 +1,6 @@
 import { extraIsRealEstateSpecific } from "./catalog";
 import { findSuppressedFlatMigrationOptions } from "./desktopMigration";
-import { serviceLevelTitle } from "./serviceLevels";
+import { serviceLevelDescription, serviceLevelTitle, type StoredSupportCopy } from "./serviceLevels";
 import {
   hasCompanyBundle,
   NEW_QUICKBOOKS_FILE_SERVICE_ID,
@@ -88,15 +88,41 @@ export type ProposalServiceAddOn = {
   required?: boolean;
 };
 
-export function proposalIncludedServices(assessmentValue: unknown, tier: ServiceTier) {
+export function proposalIncludedServices(assessmentValue: unknown, tier: ServiceTier, copy?: StoredSupportCopy) {
   const assessment = record(assessmentValue);
   return records(assessment.bonuses)
     .filter((item) => item.archived !== true && serviceIsApplicable(assessment, item)
       && includedServicePackages(assessment, item).includes(tier))
     .map((item) => ({
-      name: serviceLevelTitle(typeof item.name === "string" ? item.name : String(item.id)),
+      name: serviceLevelTitle(typeof item.name === "string" ? item.name : String(item.id), copy),
       description: typeof item.description === "string" ? item.description : "",
     }));
+}
+
+// The agreement's WHAT'S INCLUDED section (all agreements, staged or not):
+// the selected package's included services, with each support level carrying
+// the resolved copy's title + meaning — the same data the proposal shows.
+// Returns null when the tier includes nothing, so legacy agreements without
+// the new data render byte-identical (the caller also gates on the snapshot
+// carrying stored support copy).
+export function agreementWhatsIncluded(
+  assessmentValue: unknown,
+  tier: ServiceTier,
+  copy?: StoredSupportCopy,
+): Array<{ name: string; description: string }> | null {
+  const assessment = record(assessmentValue);
+  const items = records(assessment.bonuses)
+    .filter((item) => item.archived !== true && serviceIsApplicable(assessment, item)
+      && includedServicePackages(assessment, item).includes(tier))
+    .map((item) => {
+      const rawName = typeof item.name === "string" ? item.name : String(item.id);
+      const description = typeof item.description === "string" ? item.description : "";
+      if (rawName.endsWith("Client Support")) {
+        return { name: serviceLevelTitle(rawName, copy), description: serviceLevelDescription(rawName, description, copy) };
+      }
+      return { name: serviceLevelTitle(rawName, copy), description };
+    });
+  return items.length > 0 ? items : null;
 }
 export function proposalServiceAddOns(
   assessmentValue: unknown,

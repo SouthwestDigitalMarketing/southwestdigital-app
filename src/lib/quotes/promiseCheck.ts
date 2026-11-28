@@ -89,3 +89,99 @@ export function unresolvedPromiseHits(hits: PromiseHit[], confirmations: Promise
       && confirmation.textHash === hit.textHash,
   ));
 }
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function records(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.map(record) : [];
+}
+
+function textOf(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+// Every staff-editable free-text surface the promise check scans: the intro,
+// bonus and additional-option descriptions, and the custom notes staff can
+// type on the offer. Cover-letter email/SMS bodies are ephemeral (never stored
+// in the snapshot), so the caller appends them as { where, text } fields.
+export function collectPromiseFieldsFromAssessment(assessmentValue: unknown): PromiseField[] {
+  const assessment = record(assessmentValue);
+  const fields: PromiseField[] = [];
+  const introHeadline = textOf(assessment.introHeadline);
+  if (introHeadline) fields.push({ where: "Intro headline", text: introHeadline });
+  const introBody = textOf(assessment.introBody);
+  if (introBody) fields.push({ where: "Intro body", text: introBody });
+  for (const item of records(assessment.bonuses)) {
+    const description = textOf(item.description);
+    if (!description || item.archived === true) continue;
+    const name = typeof item.name === "string" && item.name ? item.name : String(item.id ?? "bonus");
+    fields.push({ where: `Bonus: ${name}`, text: description });
+  }
+  for (const item of records(assessment.additionalOptions)) {
+    const description = textOf(item.description);
+    if (!description || item.archived === true) continue;
+    const name = typeof item.name === "string" && item.name ? item.name : String(item.id ?? "option");
+    fields.push({ where: `Additional option: ${name}`, text: description });
+  }
+  const discretionaryNote = textOf(assessment.discretionaryMultiplierNote);
+  if (discretionaryNote) fields.push({ where: "Custom note", text: discretionaryNote });
+  const assessmentNotes = textOf(assessment.assessmentNotes);
+  if (assessmentNotes) fields.push({ where: "Assessment notes", text: assessmentNotes });
+  return fields;
+}
+
+function isPromiseConfirmation(value: unknown): value is PromiseConfirmation {
+  if (typeof value !== "object" || value === null) return false;
+  const entry = value as Record<string, unknown>;
+  return typeof entry.where === "string"
+    && typeof entry.phrase === "string"
+    && typeof entry.textHash === "string"
+    && typeof entry.confirmedAt === "string";
+}
+
+// "Keep this wording" confirmations stored on the quote snapshot
+// (`snapshot.promiseConfirmations`, no migration). Anything malformed reads
+// as no confirmation, so publish/send stay blocked.
+export function readPromiseConfirmations(snapshotValue: unknown): PromiseConfirmation[] {
+  const snapshot = record(snapshotValue);
+  const raw = snapshot.promiseConfirmations;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(isPromiseConfirmation).map((entry) => ({
+    where: entry.where,
+    phrase: entry.phrase,
+    textHash: entry.textHash,
+    confirmedAt: entry.confirmedAt,
+    ...(typeof entry.confirmedBy === "string" ? { confirmedBy: entry.confirmedBy } : {}),
+  }));
+}
+
+export function validatePromiseConfirmations(value: unknown): PromiseConfirmation[] {
+  return Array.isArray(value) ? value.filter(isPromiseConfirmation) : [];
+}
+
+// Every unresolved hit for a stored snapshot: the assessment free text plus
+// any caller-supplied ephemeral fields (cover-letter bodies), against the
+// snapshot's "Keep this wording" confirmations.
+export function unresolvedSnapshotPromiseHits(snapshotValue: unknown, extraFields: PromiseField[] = []): PromiseHit[] {
+  const snapshot = record(snapshotValue);
+  return unresolvedPromiseHits(
+    scanPromiseRisks([...collectPromiseFieldsFromAssessment(snapshot.assessment), ...extraFields]),
+    readPromiseConfirmations(snapshot),
+  );
+}
+
+// Thrown (and mapped to a 409 with the message) when publish/send refuses
+// over unresolved promise hits. Carries no state — the message names the fix.
+export class PromiseBlockedError extends Error {}
+
+// The server-side publish/send refusal. Names each unresolved hit's place so
+// staff know what to edit or confirm in the finalize step.
+export function promiseBlockMessage(unresolved: PromiseHit[]): string {
+  const places = [...new Set(unresolved.map((hit) => hit.where))];
+  return `This proposal has wording that may promise more than the agreement covers (${places.join("; ")}). `
+    + "Edit the flagged text or confirm “Keep this wording” in the finalize step before publishing or sending.";
+}

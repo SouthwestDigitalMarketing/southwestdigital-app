@@ -10,8 +10,14 @@ import {
   EmailConnectionRegionInvalidError,
   sendFromMembership,
 } from "@/lib/emailConnections/send";
+import { normalizeCoverTextForScan } from "@/app/(app)/offers/builder/coverLetterState";
 import { resolveSendExpiry } from "@/lib/quotes/sendExpiry";
 import { supersedeReplacedQuoteOnWrite } from "@/lib/quotes/supersedeReplaced";
+import {
+  PromiseBlockedError,
+  promiseBlockMessage,
+  unresolvedSnapshotPromiseHits,
+} from "@/lib/quotes/promiseCheck";
 
 function trim(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -49,6 +55,13 @@ export async function POST(request: Request) {
     if (offerId) {
       await prisma.$transaction(async (tx) => {
         const quote = await lockQuoteMutation(tx, ctx.brand.id, offerId, "send");
+        // Spec 07: the proposal email refuses while flagged promise wording
+        // is neither edited nor confirmed — the submitted cover body plus the
+        // snapshot's stored free text, against its confirmations.
+        const unresolved = unresolvedSnapshotPromiseHits(quote.snapshotJson, [
+          { where: "Cover email", text: normalizeCoverTextForScan(`${subject}\n\n${bodyText}`) },
+        ]);
+        if (unresolved.length > 0) throw new PromiseBlockedError(promiseBlockMessage(unresolved));
         await tx.quote.update({ where: { id: offerId }, data: { snapshotJson: {
           ...asRecord(quote.snapshotJson), proposalSendClaim: { id: claimId, state: "sending", startedAt: new Date().toISOString() },
         } as Prisma.InputJsonValue } });
@@ -112,6 +125,9 @@ export async function POST(request: Request) {
     if (delivered) return NextResponse.json({ ok: true, deliveryRecorded: false,
       warning: "Email was sent, but its offer stamp failed. Staff must check delivery; do not resend." });
     if (error instanceof QuoteMutationConflictError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
+    if (error instanceof PromiseBlockedError) {
       return NextResponse.json({ error: error.message }, { status: 409 });
     }
     if (error instanceof EmailConnectionMissingError) {

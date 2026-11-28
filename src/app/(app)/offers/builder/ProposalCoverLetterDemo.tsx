@@ -13,26 +13,13 @@ import { useBrand } from "@/lib/brands/context";
 import { getOfferKindAction, getOfferPublicPathAction } from "../who/actions";
 import { markQuoteSentAction } from "../actions";
 import { MessageTemplateManager, type MessageTemplate } from "./MessageTemplateManager";
-
-function defaultCopyForKind(kind: string | null, args: { brandName: string; companyName: string; recipientFirstName: string; proposalUrl: string }) {
-  const url = args.proposalUrl || "[Publish changes to generate the proposal link]";
-  if (kind === "consulting") {
-    return {
-      subject: `Consulting proposal for ${args.companyName}`,
-      body: `Hi ${args.recipientFirstName},\n\nThanks for reaching out. I put together a consulting proposal outlining the scope, hours, and rate.\n\nReview it here:\n${url}\n\nOnce you sign and pay, we'll schedule the first session.\n\nThank you,\n${args.brandName}`,
-    };
-  }
-  if (kind === "coaching") {
-    return {
-      subject: `Coaching proposal for ${args.recipientFirstName}`,
-      body: `Hi ${args.recipientFirstName},\n\nHere's the coaching proposal we discussed. It shows the session count, pace, and total investment.\n\nReview it here:\n${url}\n\nOnce you sign and pay, we can book your first session and start.\n\nThank you,\n${args.brandName}`,
-    };
-  }
-  return {
-    subject: `Your bookkeeping proposal for ${args.companyName}`,
-    body: `Hi ${args.recipientFirstName},\n\nThank you for taking the time to meet with me. I put together a bookkeeping proposal for ${args.companyName}.\n\nYou can review it here:\n${url}\n\nThe proposal shows your service options, what each option includes, and the price. You can pick the option that works best for you.\n\n${args.brandName} would be glad to help you get clear, organized books and reach your goals.\n\nThank you,\n${args.brandName}`,
-  };
-}
+import {
+  defaultCoverEmailForKind,
+  defaultCoverSmsBody,
+  readCoverLetterOverrides,
+  restampCoverLinks,
+  writeCoverLetterOverrides,
+} from "./coverLetterState";
 
 type FollowUpKind = "unviewed" | "unsigned" | "unpaid";
 
@@ -118,7 +105,7 @@ export default function ProposalCoverLetterDemo() {
         recipientFirstName,
         proposalUrl,
       })
-    : defaultCopyForKind(offerKind, {
+    : defaultCoverEmailForKind(offerKind, {
         brandName: brand.name,
         companyName,
         recipientFirstName,
@@ -127,9 +114,7 @@ export default function ProposalCoverLetterDemo() {
   const subject = kindDefaults.subject;
   const defaultEmailBody = kindDefaults.body;
   const [emailBody, setEmailBody] = useState<string | null>(null);
-  const effectiveEmailBody = emailBody ?? defaultEmailBody;
   const [emailSubject, setEmailSubject] = useState<string | null>(null);
-  const effectiveEmailSubject = emailSubject ?? subject;
   const ownersWithPhones = contactInfo.owners.filter((owner) => owner.phone.trim());
   const ownerNames = ownersWithPhones
     .map((owner) => formatPersonName(owner.firstName, owner.lastName))
@@ -137,14 +122,43 @@ export default function ProposalCoverLetterDemo() {
   const smsRecipients = ownersWithPhones
     .map((owner) => owner.phone.replace(/[^+\d]/g, ""))
     .filter(Boolean);
-  const defaultSmsBody = `Hi ${ownerNames.join(" and ") || "there"},
-
-I put together a bookkeeping proposal for ${companyName}. You can review it here:
-${proposalUrl || "[Publish changes to generate the proposal link]"}
-
-${brand.name}`;
+  const defaultSmsBody = defaultCoverSmsBody({
+    brandName: brand.name,
+    companyName,
+    recipientFirstName: ownerNames.join(" and ") || "there",
+    proposalUrl,
+  });
   const [smsBody, setSmsBody] = useState<string | null>(null);
-  const effectiveSmsBody = smsBody ?? defaultSmsBody;
+  const [storedCoverUrl, setStoredCoverUrl] = useState<string | undefined>(undefined);
+  // The finalize step scans these same bodies: hydrate staff edits made in
+  // this tab earlier, and persist every edit so finalize sees them.
+  useEffect(() => {
+    const overrides = readCoverLetterOverrides();
+    if (!overrides) return;
+    // Hydrate the client-only cover-letter store after the browser is available.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (overrides.emailSubject !== undefined) setEmailSubject(overrides.emailSubject);
+    if (overrides.emailBody !== undefined) setEmailBody(overrides.emailBody);
+    if (overrides.smsBody !== undefined) setSmsBody(overrides.smsBody);
+    setStoredCoverUrl(overrides.proposalUrl);
+  }, []);
+  useEffect(() => {
+    // Follow-up variants are ephemeral reminders, never scanned or persisted.
+    if (followUp) return;
+    if (emailSubject === null && emailBody === null && smsBody === null) return;
+    writeCoverLetterOverrides({
+      ...(emailSubject !== null ? { emailSubject } : {}),
+      ...(emailBody !== null ? { emailBody } : {}),
+      ...(smsBody !== null ? { smsBody } : {}),
+      proposalUrl: proposalUrl || undefined,
+    });
+  }, [followUp, emailSubject, emailBody, smsBody, proposalUrl]);
+  // Persisted bodies keep the link they were written against; re-stamp just
+  // that link to today's URL once the public path loads.
+  const restamp = (text: string) => restampCoverLinks(text, proposalUrl, storedCoverUrl);
+  const effectiveEmailBody = restamp(emailBody ?? defaultEmailBody);
+  const effectiveEmailSubject = restamp(emailSubject ?? subject);
+  const effectiveSmsBody = restamp(smsBody ?? defaultSmsBody);
   const smsHref = proposalUrl && smsRecipients.length
     ? `sms:${smsRecipients.join(",")}?body=${encodeURIComponent(effectiveSmsBody)}`
     : "";

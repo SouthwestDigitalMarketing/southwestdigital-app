@@ -51,6 +51,18 @@ export function supportCopyForPublish(): StoredSupportCopy {
   return { version: SUPPORT_COPY_VERSION, levels: copyLevels(SUPPORT_COPY) };
 }
 
+// True when a snapshot carries its own frozen support copy (a Spec 07
+// publish). Snapshots without one render the legacy map and, for the
+// agreement, omit the WHAT'S INCLUDED section so old text stays byte-identical.
+export function hasStoredSupportCopy(stored: unknown): boolean {
+  if (typeof stored !== "object" || stored === null) return false;
+  const candidate = stored as { version?: unknown; levels?: unknown };
+  if (typeof candidate.version !== "number" || !Number.isFinite(candidate.version)) return false;
+  if (typeof candidate.levels !== "object" || candidate.levels === null) return false;
+  const entries = Object.entries(candidate.levels as Record<string, unknown>);
+  return entries.length > 0 && entries.every(([, copy]) => isSupportLevelCopy(copy));
+}
+
 // The stored copy for rendering a snapshot. Returns the stored copy when it is
 // a well-formed { version, levels } map, else the frozen legacy copy — never
 // the current wording, so snapshots without copy look exactly as before.

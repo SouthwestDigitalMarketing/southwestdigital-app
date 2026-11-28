@@ -21,6 +21,7 @@ import {
   resolveServiceStartMonth,
 } from "@/lib/quotes/serviceStart";
 import { proposalIncludedServices, proposalServiceAddOns } from "@/lib/quotes/proposalServices";
+import { resolveSupportCopy } from "@/lib/quotes/serviceLevels";
 import { toPublicDesktopMigration } from "@/lib/quotes/desktopMigration";
 import { proposalPaymentSchedule } from "@/lib/quotes/paymentSchedule";
 
@@ -286,6 +287,13 @@ export function buildProposalCheckoutSummary(
   const baseMonthlyTotal = money(bundle ? bundle.bundleMonthly : finiteNumber(tierPricing.monthly));
   const isTestProposal = publishedSnapshot.isTestProposal === true || assessment.isTestProposal === true;
 
+  // Spec 07: included-service names freeze to the snapshot's stored copy (new
+  // publishes) or the legacy map (old snapshots), so the agreement and
+  // receipt never drift when the module copy changes.
+  const supportCopy = resolveSupportCopy(
+    isRecord(publishedSnapshot) ? (publishedSnapshot as Record<string, unknown>).supportCopy : undefined,
+  );
+
   // Test proposals intentionally have no recurring price. They still exercise
   // the full public selection/signing flow with a one-dollar charge.
   if (isTestProposal) {
@@ -306,7 +314,7 @@ export function buildProposalCheckoutSummary(
       cleanupMonths: 0,
       cleanupMonthlyRate: 0,
       additionalOneTimeTotal: 0,
-      includedServices: proposalIncludedServices(assessment, selection.tier),
+      includedServices: proposalIncludedServices(assessment, selection.tier, supportCopy),
     };
     const selectionHash = createHash("sha256").update(JSON.stringify(normalized)).digest("hex");
     return { ...normalized, selectionHash };
@@ -510,7 +518,7 @@ export function buildProposalCheckoutSummary(
     cleanupMonths: selectedCleanupMonths,
     cleanupMonthlyRate: maintainMonthly,
     additionalOneTimeTotal: money(additionalOneTimeTotal),
-    includedServices: proposalIncludedServices(assessment, selection.tier),
+    includedServices: proposalIncludedServices(assessment, selection.tier, supportCopy),
   };
   const selectionHash = createHash("sha256").update(JSON.stringify(normalized)).digest("hex");
   return { ...normalized, selectionHash };

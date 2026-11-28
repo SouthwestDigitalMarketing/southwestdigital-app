@@ -72,7 +72,7 @@ import {
   type ProposalMode,
 } from "./proposalThemes";
 import { ProposalReviewsSection } from "./ProposalReviewsSection";
-import { SERVICE_LEVEL_COPY, serviceLevelTitle, splitServiceLevelMeaning } from "@/lib/quotes/serviceLevels";
+import { LEGACY_SUPPORT_COPY_VERSION, resolveSupportCopy, serviceLevelTitle, splitServiceLevelMeaning, supportCopyForPublish } from "@/lib/quotes/serviceLevels";
 import AgreementTextView from "./AgreementTextView";
 import DepositPaymentForm from "./DepositPaymentForm";
 import { waitForRecordedProposalPayment } from "@/lib/engagements/waitForRecordedProposalPayment";
@@ -123,9 +123,10 @@ import type {
   PublicCleanupPlan,
   PublicDesktopMigration,
   PublicProposalPricing,
+  PublicSupportCopy,
 } from "@/lib/quotes/publicProposal";
 import { resolveProposalPackageName } from "./proposalPackageNames";
-import { includedServicePackages, proposalServiceAddOns, serviceIsApplicable } from "@/lib/quotes/proposalServices";
+import { agreementWhatsIncluded, includedServicePackages, proposalServiceAddOns, serviceIsApplicable } from "@/lib/quotes/proposalServices";
 
 type CloudflareStreamEvent = "play" | "pause" | "ended";
 
@@ -773,6 +774,7 @@ export default function OfferProposalPreview(props: OfferProposalPreviewProps = 
         publicComplexityWhy={props.publicProposal.complexityWhy}
         publicCleanupPlan={props.publicProposal.cleanupPlan ?? null}
         publicDesktopMigration={props.publicProposal.desktopMigration ?? null}
+        publicSupportCopy={props.publicProposal.supportCopy ?? null}
         livePublic
       />
     );
@@ -833,6 +835,7 @@ function OfferProposalPreviewView({
   publicComplexityWhy: legacyPublicComplexityWhy = null,
   publicCleanupPlan = null,
   publicDesktopMigration = null,
+  publicSupportCopy = null,
 }: Omit<OfferProposalPreviewProps, "assessment" | "initialAssessment" | "initialContactInfo" | "publicProposal"> & {
   assessment: PreviewAssessment | AssessmentState;
   contactInfo: PreviewContactInfo;
@@ -863,6 +866,11 @@ function OfferProposalPreviewView({
    * or no choice) hides the block and charges nothing.
    */
   publicDesktopMigration?: PublicDesktopMigration | null;
+  /**
+   * Whitelisted Spec 07 frozen support copy for the public page. Null
+   * (legacy) renders the legacy map; a stored copy renders frozen wording.
+   */
+  publicSupportCopy?: PublicSupportCopy | null;
 }) {
   const { brand } = useBrand();
   const accountInventory: PublicAccountInventory | null | undefined = livePublic
@@ -1659,6 +1667,15 @@ function OfferProposalPreviewView({
     "Agreement",
     "Payment",
   ] as const;
+  // Spec 07 frozen copy: the public page renders the snapshot's stored copy
+  // (legacy map when the snapshot predates the wiring); staff/draft preview
+  // renders the current wording, which the next publish freezes.
+  const resolvedSupportCopy = livePublic ? resolveSupportCopy(publicSupportCopy) : supportCopyForPublish();
+  // New publishes only: the controls line and WHAT'S INCLUDED render when a
+  // stored copy exists, so old proposals look exactly as before.
+  const showNewPublishCopy = livePublic
+    ? resolvedSupportCopy.version !== LEGACY_SUPPORT_COPY_VERSION
+    : true;
   const agreementTitle =
     agreementTemplate?.name
     ?? assessment.agreementTemplateName
@@ -1720,7 +1737,13 @@ function OfferProposalPreviewView({
       includedServices: selectedOptionId ? [
         ...options[selectedOptionId].recurringRows,
         ...options[selectedOptionId].oneTimeRows.filter((row) => row.price === 0 && !row.cleanupPeriodKey && !isOnboarding(row)),
-      ].map((row) => ({ name: serviceLevelTitle(row.serviceName), description: row.note ?? "" })) : [],
+      ].map((row) => ({ name: serviceLevelTitle(row.serviceName, resolvedSupportCopy), description: row.note ?? "" })) : [],
+      // Staff preview (never a stored/signed text): the selected package's
+      // included services plus the support title + meaning, like the client
+      // sees on the cards. The public page renders the server agreement.
+      whatsIncluded: selectedOptionId
+        ? agreementWhatsIncluded(assessment, selectedOptionId, resolvedSupportCopy)
+        : null,
       // Staff preview agreement keys on the structured tier bundle (F6); the
       // public page renders the agreement from the server route instead.
       // Spec 05: the sized migration is exactly one fee line in the company
@@ -2167,9 +2190,9 @@ function OfferProposalPreviewView({
                           <span role="tooltip" className="ui-tooltip pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-64 rounded-lg px-3 py-2 text-left text-xs font-normal leading-5 shadow-lg group-hover:block group-focus-within:block">{getTooltip(row)}</span>
                         </span>
                         <span>
-                          {serviceLevelTitle(row.serviceName)}
+                          {serviceLevelTitle(row.serviceName, resolvedSupportCopy)}
                           {/* Support levels carry their time promise inline, e.g. "White-Glove Concierge · 24/7". */}
-                          {SERVICE_LEVEL_COPY[row.serviceName] ? <> · <strong className="font-bold">{SERVICE_LEVEL_COPY[row.serviceName].emphasis}</strong></> : null}
+                          {resolvedSupportCopy.levels[row.serviceName] ? <> · <strong className="font-bold">{resolvedSupportCopy.levels[row.serviceName].emphasis}</strong></> : null}
                         </span>
                         {row.platformTag ? <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800">{row.platformTag}</span> : null}
                       </span>
@@ -2217,11 +2240,11 @@ function OfferProposalPreviewView({
                                   <span role="img" aria-label={`${SERVICE_LEVEL_STARS[id]} of 3 stars`} className="inline-flex shrink-0 gap-0.5" style={{ color: "#f4b422" }}>
                                     {Array.from({ length: SERVICE_LEVEL_STARS[id] }, (_, i) => <Star key={i} aria-hidden="true" className="h-4 w-4 fill-current" />)}
                                   </span>
-                                  {SERVICE_LEVEL_COPY[row.serviceName]?.title ?? row.serviceName}
+                                  {resolvedSupportCopy.levels[row.serviceName]?.title ?? row.serviceName}
                                 </p>
                                 {/* Only real copy earns this space; the tooltip fallback is filler. */}
-                                {(SERVICE_LEVEL_COPY[row.serviceName]?.meaning ?? row.note) ? <p className="mt-1 text-sm leading-6 text-slate-600">{(() => {
-                                  const copy = SERVICE_LEVEL_COPY[row.serviceName];
+                                {(resolvedSupportCopy.levels[row.serviceName]?.meaning ?? row.note) ? <p className="mt-1 text-sm leading-6 text-slate-600">{(() => {
+                                  const copy = resolvedSupportCopy.levels[row.serviceName];
                                   const parts = copy ? splitServiceLevelMeaning(copy.meaning, copy.emphasis) : null;
                                   return parts ? <>{parts.before}<strong className="font-bold text-slate-800">{parts.emphasis}</strong>{parts.after}</> : (copy?.meaning ?? row.note);
                                 })()}</p> : null}
@@ -2354,6 +2377,13 @@ function OfferProposalPreviewView({
               <DesktopMigrationSummary migration={desktopMigrationBlock} />
 
               <HowWeSizedThis inventory={accountInventory} brandName={brand.name} companies={companyInventories} />
+
+              {/* New publishes only: old proposals look exactly as before. */}
+              {showNewPublishCopy ? (
+                <p className="text-center text-xs text-slate-500">
+                  The service agreement controls if anything here differs.
+                </p>
+              ) : null}
 
               {/* Mobile checkout bar: what's due today for the package in view, and its Select button */}
               {showMobileSelectBar ? (

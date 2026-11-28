@@ -128,6 +128,10 @@ const publicAssessmentSchema = z.object({
 
 const price = z.object({ monthly: money });
 const publishedPricingSchema = z.object({ maintain: price, improve: price, grow: price });
+// Spec 07 frozen support copy: only the client-facing title/meaning/emphasis
+// cross — never the version plumbing or anything else on the snapshot.
+const supportLevelCopySchema = z.object({ title: z.string(), meaning: z.string(), emphasis: z.string() });
+const supportCopySchema = z.object({ version: z.number(), levels: z.record(z.string(), supportLevelCopySchema) });
 const person = z.object({ firstName: z.string().default(""), lastName: z.string().default(""), email: z.string().default("") });
 
 export type PublicProposalPricing = z.infer<typeof publishedPricingSchema>;
@@ -361,6 +365,20 @@ export type PublicDesktopMigration = {
   total: number;
 };
 
+/**
+ * Whitelisted Spec 07 frozen support copy for a stored snapshot, or null for
+ * legacy snapshots without one. Only title/meaning/emphasis per level cross
+ * (validated by the schema above); anything malformed reads as legacy.
+ */
+export type PublicSupportCopy = z.infer<typeof supportCopySchema>;
+
+export function publicSupportCopyForSnapshot(snapshotValue: unknown): PublicSupportCopy | null {
+  const stored = record(snapshotValue).supportCopy;
+  const parsed = supportCopySchema.safeParse(stored);
+  if (!parsed.success || Object.keys(parsed.data.levels).length === 0) return null;
+  return parsed.data;
+}
+
 export function publicDesktopMigrationForSnapshot(snapshotValue: unknown): PublicDesktopMigration | null {
   const snapshot = record(snapshotValue);
   const pricing = record(snapshot.pricing);
@@ -466,6 +484,8 @@ export function toPublicBookkeepingProposal(
   // payloads stay byte-identical (the legacy toEqual test pins the shape).
   const serviceStartMonth = publicServiceStartMonthForSnapshot(snapshotValue);
   const firstPaymentCreditReason = publicFirstPaymentCreditReasonForSnapshot(snapshotValue);
+  // Spec 07 frozen support copy; same conditional-spread rule as the plan.
+  const supportCopy = publicSupportCopyForSnapshot(snapshotValue);
   return {
     accountInventory,
     assessment: {
@@ -487,6 +507,8 @@ export function toPublicBookkeepingProposal(
     ...(cleanupPlan !== null ? { cleanupPlan } : {}),
     // Spec 05 sized migration; same conditional-spread rule as the plan.
     ...(desktopMigration !== null ? { desktopMigration } : {}),
+    // Spec 07 frozen support copy; null (legacy) omits the key entirely.
+    ...(supportCopy !== null ? { supportCopy } : {}),
     // Per-tier Why lists for the tier tabs (selected tab's amounts); null for
     // legacy. `complexityWhy` stays as the maintain-tier alias.
     complexityWhyByTier: publicComplexityWhyByTierForSnapshot(snapshotValue),
