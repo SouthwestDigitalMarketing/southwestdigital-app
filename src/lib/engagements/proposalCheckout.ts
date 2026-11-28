@@ -1,4 +1,12 @@
 import { createHash } from "node:crypto";
+import { effectiveAssessment } from "@/app/(app)/offers/builder/effectiveAssessment";
+import type { AssessmentState } from "@/app/(app)/offers/builder/ProposalCreationWorkspaceDemo";
+import {
+  hasCompanyBundle,
+  normalizeCompanyBundle,
+  priceCompanyBundle,
+} from "@/lib/quotes/companyBundle";
+import { resolveAssessmentBundlePricingOptions } from "@/lib/quotes/publicProposal";
 import { proposalIncludedServices, proposalServiceAddOns } from "@/lib/quotes/proposalServices";
 import { proposalPaymentSchedule } from "@/lib/quotes/paymentSchedule";
 
@@ -129,6 +137,46 @@ export function parseStoredProposalCheckout(value: unknown): ProposalCheckoutSum
   };
 }
 
+export interface BundleCheckoutAmounts {
+  /** Monthly obligation for the selected tier: the tier's bundleMonthly. */
+  bundleMonthly: number;
+  /** One-time new-file setup charges, due today alongside onboarding. */
+  setupTotal: number;
+}
+
+/**
+ * Spec 02 bundle amounts for a published snapshot (one shared function, no
+ * duplication with the builder). Returns null for legacy proposals so they
+ * price exactly as today.
+ *
+ * The monthly obligation is the tier's bundleMonthly, already baked into
+ * published pricing by the snapshot wiring — verified here against the
+ * published monthly. When they disagree the snapshot predates the bundle
+ * wiring (or was hand-edited), so the server-computed bundleMonthly wins
+ * over a stale published number.
+ */
+export function resolveBundleCheckoutAmounts(
+  publishedSnapshot: unknown,
+  tier: ProposalCheckoutTier,
+): BundleCheckoutAmounts | null {
+  if (!isRecord(publishedSnapshot)) return null;
+  const assessment = isRecord(publishedSnapshot.assessment) ? publishedSnapshot.assessment : {};
+  if (!hasCompanyBundle(assessment)) return null;
+  const pricing = isRecord(publishedSnapshot.pricing) ? publishedSnapshot.pricing : {};
+  const tierPricing = isRecord(pricing[tier]) ? pricing[tier] : {};
+  const publishedMonthly = money(finiteNumber(tierPricing.monthly));
+  const priced = priceCompanyBundle({
+    companies: normalizeCompanyBundle(assessment.companies),
+    packageId: tier,
+    baseAssessment: effectiveAssessment(assessment as unknown as AssessmentState),
+    options: resolveAssessmentBundlePricingOptions(assessment),
+  });
+  return {
+    bundleMonthly: priced.bundleMonthly === publishedMonthly ? publishedMonthly : priced.bundleMonthly,
+    setupTotal: priced.setupTotal,
+  };
+}
+
 export function buildProposalCheckoutSummary(
   publishedSnapshot: unknown,
   selection: ProposalCheckoutSelection,
@@ -139,7 +187,8 @@ export function buildProposalCheckoutSummary(
   const selectedTierPricing = pricing[selection.tier];
   const tierPricing: Record<string, unknown> = isRecord(selectedTierPricing) ? selectedTierPricing : {};
   const maintainPricing: Record<string, unknown> = isRecord(pricing.maintain) ? pricing.maintain : {};
-  const baseMonthlyTotal = money(finiteNumber(tierPricing.monthly));
+  const bundle = resolveBundleCheckoutAmounts(publishedSnapshot, selection.tier);
+  const baseMonthlyTotal = money(bundle ? bundle.bundleMonthly : finiteNumber(tierPricing.monthly));
   const isTestProposal = publishedSnapshot.isTestProposal === true || assessment.isTestProposal === true;
 
   // Test proposals intentionally have no recurring price. They still exercise
@@ -204,7 +253,8 @@ export function buildProposalCheckoutSummary(
         ? total + finiteNumber(option.monthlyPrice)
         : total;
     },
-    0,
+    // One-time new-file setup charges are due today alongside onboarding.
+    bundle ? bundle.setupTotal : 0,
   );
   const recurringMonthlyTotal = money((baseMonthlyTotal + additionalMonthlyTotal) * annualDiscountMultiplier);
 

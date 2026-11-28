@@ -84,9 +84,20 @@ export async function POST(
       publishedSnapshot,
       catalogCopyFromRows(catalogRows),
     );
+    // The public assessment strips the raw companies and bundle options, so
+    // hand them to checkout from the stored snapshot: checkout needs them to
+    // price the bundle monthly and the one-time setup charges.
+    const storedAssessment = isRecord(publishedSnapshot) && isRecord(publishedSnapshot.assessment)
+      ? publishedSnapshot.assessment
+      : {};
     checkout = buildProposalCheckoutSummary(
       {
-        assessment: publicProposal.assessment,
+        assessment: {
+          ...publicProposal.assessment,
+          companies: storedAssessment.companies,
+          bundlePricingOptions: storedAssessment.bundlePricingOptions,
+          bundlePricingDefaults: storedAssessment.bundlePricingDefaults,
+        },
         pricing: publicProposal.pricing,
         // The public view strips staff-only fields; the test flag still decides the $1 test checkout.
         isTestProposal: isRecord(publishedSnapshot) && publishedSnapshot.isTestProposal === true,

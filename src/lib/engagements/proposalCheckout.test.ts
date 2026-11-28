@@ -5,6 +5,7 @@ import {
   parseProposalCheckoutSelection,
   parseStoredProposalCheckout,
   resolveAmountDueNow,
+  resolveBundleCheckoutAmounts,
 } from "./proposalCheckout";
 
 const snapshot = {
@@ -288,5 +289,89 @@ describe("first-payment credit", () => {
     const parsed = parseStoredProposalCheckout(JSON.parse(JSON.stringify(built)));
     expect(parsed?.creditApplied).toBe(100);
     expect(parsed?.amountDueNow).toBe(700);
+  });
+});
+
+describe("company bundle checkout", () => {
+  const bundleCompanies = [
+    { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 0, accounts: [] },
+    { id: "b", name: "B Co", ownQboFile: true, fileStatus: "new_file", locationsCount: 0, accounts: [] },
+  ];
+  // Bundle monthlies baked by the P1 snapshot wiring (empty files, defaults):
+  // maintain 250 + 200, improve 250 + 200, grow 375 + 300; setup 150.
+  const bundleSnapshot = {
+    assessment: {
+      annualSavingsPercent: 20,
+      waiveOnboardingFee: false,
+      onboardingFeeOverride: null,
+      historicalCleanupPeriods: [],
+      additionalOptions: [],
+      companies: bundleCompanies,
+    },
+    pricing: {
+      maintain: { monthly: 450 },
+      improve: { monthly: 450 },
+      grow: { monthly: 675 },
+    },
+  };
+  const sel = (tier: "maintain" | "improve" | "grow") => ({
+    tier, hasTwelveMonthAgreement: false, selectedCleanupPeriodKeys: [], selectedAdditionalOptionIds: [],
+  });
+
+  it("returns null bundle amounts for a legacy snapshot", () => {
+    expect(resolveBundleCheckoutAmounts(snapshot, "maintain")).toBeNull();
+    expect(resolveBundleCheckoutAmounts(null, "maintain")).toBeNull();
+  });
+
+  it("charges the published bundle monthly and the one-time setup today", () => {
+    const resolved = resolveBundleCheckoutAmounts(bundleSnapshot, "maintain");
+    expect(resolved).toEqual({ bundleMonthly: 450, setupTotal: 150 });
+    const result = buildProposalCheckoutSummary(bundleSnapshot, sel("maintain"));
+    expect(result.baseMonthlyTotal).toBe(450);
+    expect(result.recurringMonthlyTotal).toBe(450);
+    expect(result.additionalOneTimeTotal).toBe(150);
+    expect(result.onboardingFee).toBe(500);
+    expect(result.oneTimeTotal).toBe(650);
+    expect(result.amountDueNow).toBe(1100);
+    expect(result.chargeKind).toBe("onboarding_and_first_month");
+    expect(parseStoredProposalCheckout(JSON.parse(JSON.stringify(result)))).toEqual(result);
+  });
+
+  it("prices each tier from that tier's bundle monthly", () => {
+    const grow = buildProposalCheckoutSummary(bundleSnapshot, sel("grow"));
+    expect(grow.baseMonthlyTotal).toBe(675);
+    expect(grow.additionalOneTimeTotal).toBe(150);
+    expect(grow.amountDueNow).toBe(500 + 150 + 675);
+  });
+
+  it("recomputes server-side when published pricing predates the bundle wiring", () => {
+    const stale = {
+      ...bundleSnapshot,
+      pricing: {
+        maintain: { monthly: 999 },
+        improve: { monthly: 999 },
+        grow: { monthly: 999 },
+      },
+    };
+    expect(resolveBundleCheckoutAmounts(stale, "maintain")).toEqual({ bundleMonthly: 450, setupTotal: 150 });
+    const result = buildProposalCheckoutSummary(stale, sel("maintain"));
+    expect(result.baseMonthlyTotal).toBe(450);
+    expect(result.amountDueNow).toBe(500 + 150 + 450);
+  });
+
+  it("reads the per-proposal bundle override from options, never hard-coded", () => {
+    const overridden = {
+      ...bundleSnapshot,
+      assessment: {
+        ...bundleSnapshot.assessment,
+        bundlePricingOptions: { additionalCompanyDiscountPct: 50, locationMonthlyCharge: 25, newFileSetupCharge: 150 },
+      },
+      pricing: {
+        maintain: { monthly: 375 },
+        improve: { monthly: 375 },
+        grow: { monthly: 565 },
+      },
+    };
+    expect(resolveBundleCheckoutAmounts(overridden, "maintain")).toEqual({ bundleMonthly: 375, setupTotal: 150 });
   });
 });

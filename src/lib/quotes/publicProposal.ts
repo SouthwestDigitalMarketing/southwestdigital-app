@@ -3,6 +3,17 @@ import "server-only";
 import { z } from "zod";
 import { slugifyTagKey } from "@/lib/contacts/tags";
 import { toPublicAccountInventory, type PublicAccountInventory } from "@/lib/quotes/accountInventory";
+import {
+  hasCompanyBundle,
+  normalizeCompanyBundle,
+  priceCompanyBundle,
+  toPublicCompanyBundle,
+  type BundlePricingOptions,
+  type PublicCompanyBundle,
+} from "@/lib/quotes/companyBundle";
+import { effectiveAssessment } from "@/app/(app)/offers/builder/effectiveAssessment";
+import type { AssessmentState } from "@/app/(app)/offers/builder/ProposalCreationWorkspaceDemo";
+import { sanitizeBundlePricingDefaults } from "@/lib/quotes/optionsTemplates";
 
 const tier = z.enum(["maintain", "improve", "grow"]);
 const text = z.string().max(100_000);
@@ -122,6 +133,39 @@ function remapPublicDescription<T extends { id: string; description: string }>(
   });
 }
 
+/**
+ * Resolve the Spec 02 bundle options for a stored assessment: the
+ * per-proposal `bundlePricingOptions` override wins, then the template
+ * `bundlePricingDefaults` applied to the proposal, then the proposed
+ * defaults from companyBundle. Never hard-codes amounts here.
+ */
+export function resolveAssessmentBundlePricingOptions(assessment: unknown): BundlePricingOptions {
+  const source = record(assessment);
+  return sanitizeBundlePricingDefaults(
+    source.bundlePricingOptions ?? source.bundlePricingDefaults,
+  );
+}
+
+/**
+ * Public bundle for a stored snapshot, or null for legacy proposals without
+ * one. Priced from the maintain tier off the effective assessment — the same
+ * inputs P1's snapshot wiring uses — so the public per-company lines add up
+ * to the published maintain monthly. Raw companies (account ids, sources)
+ * never leave this function; only whitelisted names and amounts do.
+ */
+export function publicCompanyBundleForSnapshot(snapshotValue: unknown): PublicCompanyBundle | null {
+  const snapshot = record(snapshotValue);
+  const rawAssessment = record(snapshot.assessment);
+  if (!hasCompanyBundle(rawAssessment)) return null;
+  const priced = priceCompanyBundle({
+    companies: normalizeCompanyBundle(rawAssessment.companies),
+    packageId: "maintain",
+    baseAssessment: effectiveAssessment(rawAssessment as unknown as AssessmentState),
+    options: resolveAssessmentBundlePricingOptions(rawAssessment),
+  });
+  return toPublicCompanyBundle(rawAssessment.companies, priced);
+}
+
 export function toPublicBookkeepingProposal(
   snapshotValue: unknown,
   catalogCopy?: PublicCatalogCopy,
@@ -144,6 +188,9 @@ export function toPublicBookkeepingProposal(
       bonuses: remapPublicDescription(assessment.bonuses, catalogCopy),
     },
     pricing: publishedPricingSchema.parse(snapshot.pricing),
+    // Legacy proposals (no bundle) get null; `assessment.companies` itself
+    // stays stripped by the allowlisted schema above.
+    companyBundle: publicCompanyBundleForSnapshot(snapshotValue),
     contactInfo: {
       companyName: typeof contact.companyName === "string" ? contact.companyName : "",
       owners: [] as Array<never>,

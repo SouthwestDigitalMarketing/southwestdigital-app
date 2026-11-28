@@ -1,3 +1,8 @@
+import {
+  DEFAULT_BUNDLE_PRICING_OPTIONS,
+  type BundlePricingOptions,
+} from "@/lib/quotes/companyBundle";
+
 export const OPTIONS_TEMPLATE_SNAPSHOT_VERSION = 1;
 
 export type OptionsTemplatePackageId = "grow" | "improve" | "maintain";
@@ -36,6 +41,15 @@ export type OptionsTemplateSnapshot = {
   additionalOptions: OptionsTemplateAdditionalOption[];
   bonuses: OptionsTemplateBonus[];
   bonusPackageSelections: Record<string, OptionsTemplatePackageId[]>;
+  /**
+   * Spec 02 brand-level defaults for BundlePricingOptions. Additive and
+   * optional so snapshots written before Spec 02 (which omit it) still parse
+   * at version 1 and fall back to {@link DEFAULT_BUNDLE_PRICING_OPTIONS}.
+   * When a template is applied to a proposal it lands on the assessment as
+   * `bundlePricingDefaults`; a per-proposal `bundlePricingOptions` override
+   * on the assessment wins over it.
+   */
+  bundlePricingDefaults?: BundlePricingOptions;
 };
 
 export type OptionsTemplateAssessmentSlice = {
@@ -43,6 +57,7 @@ export type OptionsTemplateAssessmentSlice = {
   additionalOptions: OptionsTemplateAdditionalOption[];
   bonuses: OptionsTemplateBonus[];
   bonusPackageSelections: Record<string, OptionsTemplatePackageId[]>;
+  bundlePricingDefaults?: BundlePricingOptions;
 };
 
 const VALID_PACKAGES: readonly OptionsTemplatePackageId[] = ["grow", "improve", "maintain"];
@@ -55,6 +70,34 @@ const DOCUMENT_ORGANIZATION_DESCRIPTION =
 
 function isPackageId(value: unknown): value is OptionsTemplatePackageId {
   return typeof value === "string" && (VALID_PACKAGES as readonly string[]).includes(value);
+}
+
+function finiteCharge(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : fallback;
+}
+
+/**
+ * Canonical Spec 02 bundle defaults for storage. Finite values are kept
+ * (discount clamped to 0–100, charges floored at 0); anything else falls
+ * back to {@link DEFAULT_BUNDLE_PRICING_OPTIONS} per field.
+ */
+export function sanitizeBundlePricingDefaults(value: unknown): BundlePricingOptions {
+  const source = (value && typeof value === "object" ? value : {}) as Partial<BundlePricingOptions>;
+  const discount = typeof source.additionalCompanyDiscountPct === "number" &&
+    Number.isFinite(source.additionalCompanyDiscountPct)
+    ? Math.min(100, Math.max(0, source.additionalCompanyDiscountPct))
+    : DEFAULT_BUNDLE_PRICING_OPTIONS.additionalCompanyDiscountPct;
+  return {
+    additionalCompanyDiscountPct: discount,
+    locationMonthlyCharge: finiteCharge(
+      source.locationMonthlyCharge,
+      DEFAULT_BUNDLE_PRICING_OPTIONS.locationMonthlyCharge,
+    ),
+    newFileSetupCharge: finiteCharge(
+      source.newFileSetupCharge,
+      DEFAULT_BUNDLE_PRICING_OPTIONS.newFileSetupCharge,
+    ),
+  };
 }
 
 function sanitizePackageIds(value: unknown): OptionsTemplatePackageId[] {
@@ -164,6 +207,7 @@ export function buildOptionsTemplateSnapshot(
     additionalOptions,
     bonuses,
     bonusPackageSelections,
+    bundlePricingDefaults: sanitizeBundlePricingDefaults(slice.bundlePricingDefaults),
   };
 }
 
@@ -195,6 +239,7 @@ export function parseOptionsTemplateSnapshot(raw: unknown): OptionsTemplateSnaps
             ]),
           )
         : {},
+    bundlePricingDefaults: sanitizeBundlePricingDefaults(record.bundlePricingDefaults),
   });
 }
 
@@ -232,6 +277,9 @@ export function reconcileOptionsTemplateSnapshot(
       additionalOptions,
       bonuses,
       bonusPackageSelections,
+      // Brand-level bundle defaults are not catalog items, so reconciliation
+      // never drops them — they always travel with the slice.
+      bundlePricingDefaults: sanitizeBundlePricingDefaults(snapshot.bundlePricingDefaults),
     },
     skippedIds,
   };

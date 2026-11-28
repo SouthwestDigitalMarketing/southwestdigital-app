@@ -3,6 +3,9 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
 import {
+  DEFAULT_BUNDLE_PRICING_OPTIONS,
+} from "@/lib/quotes/companyBundle";
+import {
   buildOptionsTemplateSnapshot,
   type OptionsTemplateAssessmentSlice,
   type OptionsTemplatePackageId,
@@ -422,6 +425,7 @@ function buildSliceFromConfig(
     additionalOptions,
     bonuses,
     bonusPackageSelections,
+    bundlePricingDefaults: { ...DEFAULT_BUNDLE_PRICING_OPTIONS },
   };
 }
 

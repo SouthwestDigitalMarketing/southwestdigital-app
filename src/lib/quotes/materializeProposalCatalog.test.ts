@@ -221,4 +221,32 @@ describe("catalog materialization", () => {
     expect(await materializeProposalCatalog("brand-test", saved)).toBe(saved);
     expect(findMany).not.toHaveBeenCalled();
   });
+  it("keeps the company bundle and its pricing options through draft and publish materialization", async () => {
+    capabilities.mockResolvedValue({
+      proposalCatalog: true,
+      proposalPackageDefaults: true,
+      catalogProductKind: true,
+    });
+    const bundled = {
+      ...saved,
+      companies: [
+        { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 0, accounts: [] },
+        { id: "b", name: "B Co", ownQboFile: true, fileStatus: "new_file", locationsCount: 0, accounts: [] },
+      ],
+      bundlePricingOptions: { additionalCompanyDiscountPct: 20, locationMonthlyCharge: 25, newFileSetupCharge: 150 },
+      bundlePricingDefaults: { additionalCompanyDiscountPct: 15, locationMonthlyCharge: 30, newFileSetupCharge: 99 },
+    };
+    const draft = await materializeProposalCatalog("brand-test", bundled);
+    expect(draft).toMatchObject({
+      companies: bundled.companies,
+      bundlePricingOptions: bundled.bundlePricingOptions,
+      bundlePricingDefaults: bundled.bundlePricingDefaults,
+    });
+    const published = await materializeProposalCatalog("brand-test", draft, { freezeApplicability: true });
+    expect(published).toMatchObject({
+      companies: bundled.companies,
+      bundlePricingOptions: bundled.bundlePricingOptions,
+      bundlePricingDefaults: bundled.bundlePricingDefaults,
+    });
+  });
 });
