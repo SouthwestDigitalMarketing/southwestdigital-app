@@ -35,4 +35,13 @@ describe("options template seed bundle defaults", () => {
     const snapshot = buildOptionsTemplateSnapshot(slice);
     expect(snapshot.bundlePricingDefaults).toEqual(slice.bundlePricingDefaults);
   });
+
+  it("omits desktop-migration defaults so the code defaults win", async () => {
+    const slice = await buildDefaultBookkeepingSlice("brand-test");
+    // No migration keys are seeded: resolution falls through to the code
+    // defaults (fresh start $640, history $150/yr capped at 5, band adds).
+    expect(slice.desktopMigrationDefaults).toBeUndefined();
+    const snapshot = buildOptionsTemplateSnapshot(slice);
+    expect(snapshot.desktopMigrationDefaults).toEqual({});
+  });
 });

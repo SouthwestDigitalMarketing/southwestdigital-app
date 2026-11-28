@@ -18,8 +18,11 @@ import {
 } from "./actions";
 import {
   COMPLEXITY_TEMPLATE_DRIVER_IDS,
+  DESKTOP_MIGRATION_DEFAULT_FIELDS,
   parseBundlePricingDefaultsInputs,
   parseComplexityDriverDefaultsInputs,
+  parseDesktopMigrationDefaultsInputs,
+  type OptionsTemplateAdditionalOption,
   type OptionsTemplateAssessmentSlice,
 } from "@/lib/quotes/optionsTemplates";
 import {
@@ -27,6 +30,10 @@ import {
   complexityDriverDefs,
   type ComplexityDriverId,
 } from "@/lib/quotes/complexityDrivers";
+import {
+  DEFAULT_DESKTOP_MIGRATION_OPTIONS,
+  type DesktopMigrationPricingKey,
+} from "@/lib/quotes/desktopMigration";
 
 type ComplexityEditorPair = { monthly: string; cleanupPerMonth: string };
 
@@ -38,8 +45,24 @@ type EditingState = {
   locationCharge: string;
   setupCharge: string;
   complexityDefaults: Partial<Record<ComplexityDriverId, ComplexityEditorPair>>;
+  migration: Record<DesktopMigrationPricingKey, string>;
+  additionalOptions: OptionsTemplateAdditionalOption[];
   slice: OptionsTemplateAssessmentSlice | null;
   sliceError: string | null;
+};
+
+const EMPTY_MIGRATION_INPUTS: Record<DesktopMigrationPricingKey, string> = {
+  baseAmount: "",
+  historyPerYear: "",
+  historyYearCap: "",
+  bandAdd0to99: "",
+  bandAdd100to499: "",
+  bandAdd500to999: "",
+  bandAdd1000plus: "",
+  payrollHistoryAdd: "",
+  inventoryAdd: "",
+  openJobsAdd: "",
+  extraFileAdd: "",
 };
 
 const COMPLEXITY_DEFS = complexityDriverDefs();
@@ -85,6 +108,8 @@ export default function OptionsTemplatesManager({
       locationCharge: "",
       setupCharge: "",
       complexityDefaults: {},
+      migration: { ...EMPTY_MIGRATION_INPUTS },
+      additionalOptions: [],
       slice: null,
       sliceError: null,
     });
@@ -111,6 +136,11 @@ export default function OptionsTemplatesManager({
             };
           }
         }
+        const storedMigration = result.slice.desktopMigrationDefaults ?? {};
+        const migration: EditingState["migration"] = { ...EMPTY_MIGRATION_INPUTS };
+        for (const { key } of DESKTOP_MIGRATION_DEFAULT_FIELDS) {
+          if (storedMigration[key] !== undefined) migration[key] = String(storedMigration[key]);
+        }
         setEditing((prev) =>
           prev && prev.id === template.id
             ? {
@@ -120,6 +150,8 @@ export default function OptionsTemplatesManager({
                 locationCharge: String(defaults?.locationMonthlyCharge ?? ""),
                 setupCharge: String(defaults?.newFileSetupCharge ?? ""),
                 complexityDefaults,
+                migration,
+                additionalOptions: result.slice.additionalOptions.map((option) => ({ ...option })),
               }
             : prev,
         );
@@ -153,6 +185,11 @@ export default function OptionsTemplatesManager({
       setError("Enter valid non-negative numbers for the complexity driver defaults (blank uses the code default).");
       return;
     }
+    const desktopMigrationDefaults = parseDesktopMigrationDefaultsInputs(snapshot.migration);
+    if (!desktopMigrationDefaults) {
+      setError("Enter valid non-negative numbers for the Desktop migration defaults (blank uses the code default).");
+      return;
+    }
     run(
       async () => {
         await updateOptionsTemplateAction(snapshot.id, {
@@ -161,8 +198,10 @@ export default function OptionsTemplatesManager({
         });
         await overwriteOptionsTemplateSnapshotAction(snapshot.id, {
           ...snapshot.slice as OptionsTemplateAssessmentSlice,
+          additionalOptions: snapshot.additionalOptions,
           bundlePricingDefaults,
           complexityDriverDefaults,
+          desktopMigrationDefaults,
         });
       },
       () => setEditing(null),
@@ -483,6 +522,114 @@ export default function OptionsTemplatesManager({
                 Blank uses the code default (shown). A stored value wins over it for
                 proposals made from this template; a per-proposal override on the
                 checklist row still wins over both.
+              </p>
+            </fieldset>
+            <fieldset className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+              <legend className="px-1 text-sm font-semibold text-slate-700">
+                Desktop migration defaults
+              </legend>
+              {!editing.slice ? (
+                <p className="pb-2 text-sm text-slate-500">Loading migration defaults…</p>
+              ) : (
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      <th className="py-1 pr-2">Setting</th>
+                      <th className="py-1">Amount ($ / years)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {DESKTOP_MIGRATION_DEFAULT_FIELDS.map(({ key, label }) => (
+                      <tr key={key} className="border-t border-slate-100">
+                        <td className="py-1 pr-2 font-medium text-slate-700">{label}</td>
+                        <td className="py-1">
+                          <input
+                            type="number"
+                            min={0}
+                            step="any"
+                            value={editing.migration[key]}
+                            disabled={!editing.slice}
+                            placeholder={`Default ${DEFAULT_DESKTOP_MIGRATION_OPTIONS[key]}`}
+                            aria-label={`${label} default`}
+                            onChange={(e) =>
+                              setEditing({ ...editing, migration: { ...editing.migration, [key]: e.target.value } })
+                            }
+                            className="w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm disabled:opacity-50"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              <p className="pb-2 pt-1 text-xs text-slate-500">
+                Blank uses the code default (shown). A stored value wins over it for
+                proposals made from this template; a per-proposal override on the
+                migration selection still wins over both.
+              </p>
+            </fieldset>
+            <fieldset className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+              <legend className="px-1 text-sm font-semibold text-slate-700">
+                Additional options
+              </legend>
+              {!editing.slice ? (
+                <p className="pb-2 text-sm text-slate-500">Loading additional options…</p>
+              ) : editing.additionalOptions.length === 0 ? (
+                <p className="pb-2 text-sm text-slate-500">No additional options on this template.</p>
+              ) : (
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      <th className="py-1 pr-2">Option</th>
+                      <th className="py-1">Role</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {editing.additionalOptions.map((option) => (
+                      <tr key={option.id} className="border-t border-slate-100">
+                        <td className="py-1 pr-2 font-medium text-slate-700">
+                          {option.name || option.id}
+                          <span className="ml-2 text-xs font-normal text-slate-500">
+                            {option.required === true ? "required" : "optional"}
+                            {option.billingCadence === "one-time" ? " · one-time" : null}
+                            {typeof option.monthlyPrice === "number" ? ` · $${option.monthlyPrice}` : null}
+                          </span>
+                        </td>
+                        <td className="py-1">
+                          <select
+                            value={option.role ?? ""}
+                            disabled={!editing.slice}
+                            aria-label={`${option.name || option.id} role`}
+                            onChange={(e) =>
+                              setEditing({
+                                ...editing,
+                                additionalOptions: editing.additionalOptions.map((item) =>
+                                  item.id === option.id
+                                    ? {
+                                        ...item,
+                                        role: e.target.value === "desktop-migration"
+                                          ? "desktop-migration"
+                                          : undefined,
+                                      }
+                                    : item,
+                                ),
+                              })
+                            }
+                            className="w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm disabled:opacity-50"
+                          >
+                            <option value="">No special role</option>
+                            <option value="desktop-migration">Desktop migration (flat option)</option>
+                          </select>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              <p className="pb-2 pt-1 text-xs text-slate-500">
+                Mark the flat Desktop migration option so the sized migration
+                suppresses it instead of stacking. Options without a role are
+                matched by name only when required and one-time.
               </p>
             </fieldset>
             <div className="flex justify-end gap-2 pt-2">
