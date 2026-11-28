@@ -1,22 +1,34 @@
+function verifiedLabel(iso: string | null) {
+  if (!iso) return null;
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return null;
+  return at.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
 export function YouTubeIntegrationForm({
   status,
+  brandName,
   channelName,
   channelId,
+  lastVerifiedAt,
   notice,
   reason,
 }: {
   status: "missing" | "active" | "error";
+  brandName: string;
   channelName: string | null;
   channelId: string | null;
+  lastVerifiedAt?: string | null;
   notice?: string | null;
   reason?: string | null;
 }) {
-  const statusLabel = status === "active" ? "Connected" : status === "error" ? "Needs attention" : "Not connected";
+  const statusLabel = status === "active" ? `Connected for ${brandName}` : status === "error" ? "Needs attention" : "Not connected";
+  const verified = verifiedLabel(lastVerifiedAt ?? null);
   return (
     <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-6">
       <div>
         <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">YouTube Analytics</h2>
-        <p className="mt-1 text-base text-slate-500">Connect the YouTube channel used by this brand. The refresh token is encrypted and stays server-side.</p>
+        <p className="mt-1 text-base text-slate-500">Connect the YouTube channel used by {brandName}. Reconnecting here also updates any other brand that already uses this same channel. The refresh token is encrypted and stays server-side.</p>
       </div>
       {notice === "connected" ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">YouTube is connected and analytics can refresh.</p> : null}
       {notice === "disconnected" ? <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">YouTube has been disconnected. Analytics will pause until it is reconnected.</p> : null}
@@ -33,6 +45,7 @@ export function YouTubeIntegrationForm({
         <div>
           <p className="text-sm font-semibold text-slate-900">{statusLabel}</p>
           {channelName ? <p className="mt-0.5 text-xs text-slate-500">{channelName}{channelId ? ` · ${channelId}` : ""}</p> : null}
+          {verified ? <p className="mt-0.5 text-xs text-slate-500">Last verified {verified}</p> : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {status === "active" ? (

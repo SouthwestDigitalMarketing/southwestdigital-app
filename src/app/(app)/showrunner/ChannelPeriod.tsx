@@ -20,6 +20,7 @@ import { DomainPurpose } from "@prisma/client";
 import { LinkClicksTable } from "./LinkClicksTable";
 import { ReleaseCalendar } from "./ReleaseCalendar";
 import { getYouTubeRefreshToken } from "@/lib/youtube/credentials";
+import { markYouTubeAuthError } from "@/lib/youtube/saveConnection";
 import { VideoList } from "./VideoList";
 import Link from "next/link";
 import { Plus } from "lucide-react";
@@ -184,6 +185,9 @@ export async function ChannelPeriod({ period }: { period: Period }) {
     const message = err instanceof Error ? err.message : String(err);
     console.warn("[youtube] API skipped:", message);
     error = message;
+    if (/refresh token (expired|revoked)/i.test(message)) {
+      await markYouTubeAuthError(brand.id, "invalid_grant");
+    }
   }
 
   // Click tracking — independent of YouTube Analytics; failures don't block the page

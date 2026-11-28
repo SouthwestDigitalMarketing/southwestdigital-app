@@ -1,4 +1,16 @@
 # SWapp handoff
+## 2026-11-28 — YouTube reconnect vs Showrunner (Johnny)
+
+Settings “connected” was Bookkeeping Conroe’s YouTube row; Showrunner
+Overview always reads The Real Estate Bookkeeper (`showChannelBrand`).
+Reconnecting from Settings while on BKC saved a new refresh token on BKC
+and left TREB on the old one (`invalid_grant`). Prod copy 2026-11-28
+17:19Z: TREB ciphertext now matches BKC (channel `UCK8UR3T14CPAH-XeX_eBTKA`).
+Code: reconnect fans the token out to every brand already on that channel;
+disconnect revokes at Google only if no sibling remains; expired analytics
+marks TREB ERROR so Settings can show Needs attention. Branch
+`johnny/youtube-share`.
+
 ## 2026-11-28 — Mailroom retired; mail tools live in `tools/mail` (Ummon)
 
 Tom retired Mailroom. PR #357 moved `mail`, `zoho-html-draft`, `text`, `calendar`/`cal`,
