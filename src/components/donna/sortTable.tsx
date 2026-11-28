@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Info } from "lucide-react";
 import type { Bucket, SortedItem } from "@/lib/donna/domain";
+import { EmailPreview } from "./EmailPreview";
 
 /*
  * The sorted-email table (Tom, 2026-11-26): one row per email, grouped by bucket,
@@ -88,7 +89,14 @@ export function EmailCells({
   return (
     <>
       <td data-cell="subject" className={`max-w-[16rem] truncate ${td}`}>
-        {item.subject}
+        <EmailPreview
+          subject={item.subject}
+          from={item.from}
+          at={item.at}
+          body={item.body}
+        >
+          {item.subject}
+        </EmailPreview>
       </td>
       <td data-cell="type" className={`whitespace-nowrap ${td} text-slate-600`}>
         <TypeCell item={item} />

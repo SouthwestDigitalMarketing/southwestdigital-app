@@ -691,6 +691,15 @@ class WorkerTests(unittest.TestCase):
         self.assertTrue(donna.rule_matches(rule, "a@x.com", "Your account is PAST DUE"))
         self.assertTrue(donna.rule_matches(rule, "a@x.com", "Payment declined for card"))
 
+    def test_body_preview_is_short_plain_text_of_the_latest_inbound_email(self):
+        messages = [{"body": "old", "outgoing": False}, {"body": "Hi\r\n\n\n\nThere  \n" + "x" * 3000},
+                    {"body": "my reply", "outgoing": True}]
+        text = donna.body_preview(donna.latest_inbound(messages))
+        self.assertTrue(text.startswith("Hi\n\nThere\n"))
+        self.assertEqual(len(text), donna.PREVIEW_CHARS + 1)
+        self.assertTrue(text.endswith("…"))
+        self.assertEqual(donna.body_preview({"body": "short"}), "short")
+
     def test_cancel_stops_before_the_next_move_and_reports_what_moved(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = self.clean_fixture(tmp)

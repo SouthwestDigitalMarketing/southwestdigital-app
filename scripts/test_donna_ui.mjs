@@ -506,7 +506,7 @@ try {
         preview: true, at: new Date().toISOString(), reviewed: 3, remaining: 0,
         filed: [], waiting: [], needsYou: [], skipped: [],
         sorted: [
-          { thread: promoA, subject: "Example sale A", from: "a@shop.example", bucket: "Newsletter", why: "Promo A", suggest: "Newsletter" },
+          { thread: promoA, subject: "Example sale A", from: "a@shop.example", bucket: "Newsletter", why: "Promo A", suggest: "Newsletter", body: "Half off everything.\n\nShop now at https://shop.example" },
           { thread: notice, subject: "Example final notice", from: "n@bank.example", bucket: "Money and legal", why: "Money or legal trouble", suggest: null },
           { thread: promoB, subject: "Example sale B", from: "b@shop.example", bucket: "Newsletter", why: "Promo B", suggest: "Newsletter" },
           { thread: rodan, subject: "Example progress update", from: "dan@rodan.example", bucket: "Clients", why: "From Rodan Properties, a client in SWapp", suggest: null, client: "Rodan Properties" },
@@ -516,7 +516,7 @@ try {
         empty: { Spam: 214, Trash: 325 },
         cleanup: {
           spam: [
-            { sender: "junk@spam.example", name: "Junk Co", count: 3, samples: ["Win big"], verdict: "block", why: "Lottery spam", sure: true, unsubscribe: true, where: ["Spam"] },
+            { sender: "junk@spam.example", name: "Junk Co", count: 3, samples: ["Win big"], verdict: "block", why: "Lottery spam", sure: true, unsubscribe: true, where: ["Spam"], body: "You won a prize. Claim it today.", bodySubject: "Win big" },
             { sender: "ap@vendor.example", name: "", count: 1, samples: ["Invoice 12"], verdict: "keep", why: "Looks like a vendor invoice", sure: false, unsubscribe: false, where: ["Spam"] },
             { sender: "odd@maybe.example", name: "", count: 2, samples: ["Quick question"], verdict: "unsure", why: "Could be a lead", sure: false, unsubscribe: false, where: ["INBOX"] },
           ],
@@ -548,6 +548,14 @@ try {
   await expect(page.getByLabel("Action for ap@vendor.example")).toHaveValue("keep");
   await expect(page.getByLabel("Action for odd@maybe.example")).toHaveValue("leave");
   await expect(page.getByRole("img", { name: "Why: Lottery spam" })).toBeVisible();
+  // Tap a sender to read one of their emails in a pop-up.
+  await page.getByRole("button", { name: "Read Win big" }).click();
+  const reading = page.getByRole("dialog", { name: "Win big" });
+  await expect(reading).toContainText("You won a prize. Claim it today.");
+  await expect(reading).toContainText("Junk Co <junk@spam.example>");
+  await expect(reading.getByRole("link")).toHaveCount(0);
+  await reading.getByRole("button", { name: "Close" }).click();
+  await expect(reading).toHaveCount(0);
   await expect(page.getByText(/Spam: 1 sender blocked in Zoho, unsubscribe from 1, 3 emails to Trash\. Not spam: 1 sender back to Inbox and never blocked\. 1 sender left to decide later/)).toBeVisible();
   // Emptying Trash needs its own Approve tick.
   await expect(page.getByText(/Approve: permanently delete/)).toHaveCount(0);
@@ -583,6 +591,25 @@ try {
   await page.getByRole("link", { name: "Spam done. Next: the rest of your mail" }).click();
   await expect(page).toHaveURL(new RegExp("/donna/cleans/" + stepOne.id));
   await expect(page.getByText(/3 read\. Now the rest of your mail/)).toBeVisible();
+  // Tap a subject to read the email; emails without saved text stay plain.
+  await page.getByRole("button", { name: "Read Example sale A" }).click();
+  await expect(page.getByRole("dialog", { name: "Example sale A" })).toContainText("Shop now at https://shop.example");
+  // Readable in dark mode: light text on a dark pop-up.
+  await page.evaluate(() => document.querySelector("[data-theme]")?.setAttribute("data-theme", "dark"));
+  const popup = await page.getByRole("dialog", { name: "Example sale A" }).locator("h2").evaluate((el) => {
+    const lum = (c) => {
+      const ctx = Object.assign(document.createElement("canvas"), { width: 1, height: 1 }).getContext("2d");
+      ctx.fillStyle = c;
+      ctx.fillRect(0, 0, 1, 1);
+      const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+      return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    };
+    return { bg: lum(getComputedStyle(el.closest("div.flex")).backgroundColor), fg: lum(getComputedStyle(el).color) };
+  });
+  assert.ok(popup.bg < 0.35 && popup.fg > 0.6, "Dark mode pop-up is not readable: " + JSON.stringify(popup));
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Read Example sale B" })).toHaveCount(0);
   // Phone: the Choose table becomes cards; every action is on screen.
   {
     const was = page.viewportSize();

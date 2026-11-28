@@ -359,7 +359,13 @@ export type SpamSender = {
   unsubscribe: boolean;
   /** Folders their mail is in: INBOX, Spam, Trash. */
   where: string[];
+  /** The start of one of their emails, and its subject, for the pop-up. */
+  body: string;
+  bodySubject: string;
 };
+
+/** The worker sends 1,500 characters plus an ellipsis. */
+const BODY_CHARS = 1600;
 
 export type CleanupPlan = {
   spam: SpamSender[];
@@ -407,6 +413,11 @@ export function cleanupPlan(result: unknown): CleanupPlan | null {
                 .filter((x): x is string => typeof x === "string")
                 .slice(0, 3)
             : ["Spam"],
+          body: typeof r.body === "string" ? r.body.slice(0, BODY_CHARS) : "",
+          bodySubject:
+            typeof r.bodySubject === "string"
+              ? r.bodySubject.slice(0, 200)
+              : "",
         },
       ];
     },
@@ -557,6 +568,8 @@ export type SortedItem = {
   action: string;
   /** Spam or Trash, for a rescue. */
   folder: string | null;
+  /** The start of the email's text, for the pop-up (Tom, 2026-11-28). */
+  body: string;
 };
 
 export type Bucket = {
@@ -594,6 +607,7 @@ function sortedItems(value: unknown): SortedItem[] {
         typeNew: raw.typeNew === true,
         action: text(raw.action, 40),
         folder: text(raw.folder, 40) || null,
+        body: text(raw.body, BODY_CHARS),
       },
     ];
   });
