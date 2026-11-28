@@ -170,6 +170,12 @@ export type AgreementRenderInput = {
   volumeBasis?: AccountBasis | null;
   /** Fixed-fee bookkeeping defaults to including the clause; hourly callers must opt out. */
   includeVolumeClause?: boolean;
+  /**
+   * Spec 03 complexity cleanup weight inside `cleanupTotal`, stored on the
+   * checkout. When positive, the fee line itemizes it so the months × rate
+   * equation adds up to the displayed total. Absent renders as today.
+   */
+  complexityCleanupAdd?: number | null;
   date?: Date;
 };
 
@@ -268,15 +274,25 @@ export function renderAgreementTemplate(template: string, input: AgreementRender
     }` : null,
   ].filter((line): line is string => Boolean(line));
   const scopeOfWork = scopeLines.join("\n\n");
+  // Spec 03 complexity add lives inside cleanupTotal: itemize it so the
+  // months × rate equation adds up to the displayed total.
+  const complexityAdd = typeof input.complexityCleanupAdd === "number" && Number.isFinite(input.complexityCleanupAdd) && input.complexityCleanupAdd > 0
+    ? Math.round(input.complexityCleanupAdd * 100) / 100
+    : 0;
+  const cleanupBaseTotal = staged && input.hasCleanup && complexityAdd > 0
+    ? Math.round(((input.cleanupTotal ?? 0) - complexityAdd) * 100) / 100
+    : (input.cleanupTotal ?? 0);
   const feeLines = [
     ...companyMonthlyLines.map((line) => `${line.label}: ${formatCurrency(line.amount)} per month`),
     `Ongoing Monthly Services: ${formatCurrency(companyMonthlyLines.length > 0 ? companyMonthlyTotal : (input.recurringMonthlyTotal ?? 0))} per month`,
     `Agreement Term:           ${input.agreementTerm === "12-month" ? "12 months" : "Month-to-month"}`,
     staged && input.hasCleanup
-      ? `Estimated Cleanup (not due today): ${input.cleanupMonths ?? 0} months × ${formatCurrency(input.cleanupMonthlyRate ?? 0)} = ${formatCurrency(input.cleanupTotal ?? 0)}`
+      ? `Estimated Cleanup (not due today): ${input.cleanupMonths ?? 0} months × ${formatCurrency(input.cleanupMonthlyRate ?? 0)} = ${formatCurrency(cleanupBaseTotal)}`
       : (input.cleanupTotal ?? 0) > 0
       ? `Selected Cleanup Work:  ${formatCurrency(input.cleanupTotal ?? 0)}`
       : null,
+    staged && input.hasCleanup && complexityAdd > 0 ? `Complexity adjustment: ${formatCurrency(complexityAdd)}` : null,
+    staged && input.hasCleanup && complexityAdd > 0 ? `Estimated Cleanup Total: ${formatCurrency(input.cleanupTotal ?? 0)}` : null,
     (input.onboardingFee ?? 0) > 0
       ? `${staged && input.hasCleanup ? "Onboarding + Discovery" : "Onboarding Fee"}:         ${formatCurrency(input.onboardingFee ?? 0)}`
       : `${staged && input.hasCleanup ? "Onboarding + Discovery" : "Onboarding Fee"}:         Waived`,

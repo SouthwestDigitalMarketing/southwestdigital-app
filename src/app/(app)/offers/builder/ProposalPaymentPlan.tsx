@@ -9,6 +9,7 @@ const fmt = (value: number) => value.toLocaleString("en-US", { style: "currency"
 export default function ProposalPaymentPlan({
   cleanupMonths, cleanupMonthlyRate, onboardingFee, recurringMonthlyTotal,
   additionalOneTimeTotal, requiredOneTime = [], annual, amountDueNow, creditApplied = 0, creditLabel = "Credit for work already paid", originalOnboardingFee, annualSavingsPercent = 0, showStages = false,
+  complexityCleanupAdd = 0,
 }: {
   cleanupMonths: number;
   cleanupMonthlyRate: number;
@@ -27,8 +28,18 @@ export default function ProposalPaymentPlan({
   /** The offer's 12-month saving, in percent. Annual mode only: shows the gross price and the saving. */
   annualSavingsPercent?: number;
   showStages?: boolean;
+  /**
+   * Spec 03 complexity cleanup weight inside the displayed cleanup total.
+   * When positive the estimate itemizes it so the months × rate equation
+   * adds up to the displayed total. Absent renders the legacy estimate.
+   */
+  complexityCleanupAdd?: number;
 }) {
   const schedule = proposalPaymentSchedule({ cleanupMonths, cleanupMonthlyRate, onboardingFee, recurringMonthlyTotal, additionalOneTimeTotal, annualPrepay: annual, creditApplied });
+  // Validated Spec 03 complexity add for the displayed estimate.
+  const cleanupComplexityAdd = typeof complexityCleanupAdd === "number" && Number.isFinite(complexityCleanupAdd) && complexityCleanupAdd > 0
+    ? Math.round(complexityCleanupAdd * 100) / 100
+    : 0;
   // recurringMonthlyTotal is already discounted on an annual term; back out the undiscounted price.
   const discountFactor = annual && annualSavingsPercent > 0 && annualSavingsPercent < 100 ? 1 - annualSavingsPercent / 100 : 1;
   const grossMonthly = Math.round(recurringMonthlyTotal / discountFactor * 100) / 100;
@@ -61,6 +72,8 @@ export default function ProposalPaymentPlan({
         <div className="rounded-xl border border-slate-200 p-4">
           <p className="font-semibold">Estimated cleanup — later</p>
           <p className="mt-2">{cleanupMonths} {cleanupMonths === 1 ? "month" : "months"} × {fmt(cleanupMonthlyRate)}/month = <strong>{fmt(schedule.cleanupTotal)}</strong></p>
+          {cleanupComplexityAdd > 0 ? <p className="mt-1">Complexity adjustment: {fmt(cleanupComplexityAdd)}</p> : null}
+          {cleanupComplexityAdd > 0 ? <p className="mt-1">Estimated cleanup total: <strong>{fmt(schedule.cleanupTotal + cleanupComplexityAdd)}</strong></p> : null}
           <p className="mt-2 text-xs leading-5 text-slate-600">Estimate only. Final scope, price, and payment milestones require your approval after discovery. Not charged today.</p>
         </div>
       ) : null}

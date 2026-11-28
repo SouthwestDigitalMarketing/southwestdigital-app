@@ -72,6 +72,24 @@ describe("renderAgreementTemplate", () => {
     expect(text).not.toContain("{{volumeClause}}");
   });
 
+  it("itemizes the complexity cleanup add so the estimate equation adds up", () => {
+    const text = generateProposalAgreementText({
+      ...stagedInput, cleanupTotal: 1095, complexityCleanupAdd: 195,
+    });
+    expect(text).toContain("Estimated Cleanup (not due today): 3 months × $300.00 = $900.00");
+    expect(text).toContain("Complexity adjustment: $195.00");
+    expect(text).toContain("Estimated Cleanup Total: $1,095.00");
+  });
+
+  it("renders the cleanup equation without complexity lines when the add is absent", () => {
+    for (const complexityCleanupAdd of [undefined, 0, null] as const) {
+      const text = generateProposalAgreementText({ ...stagedInput, complexityCleanupAdd });
+      expect(text).toContain("Estimated Cleanup (not due today): 3 months × $300.00 = $900.00");
+      expect(text).not.toContain("Complexity adjustment");
+      expect(text).not.toContain("Estimated Cleanup Total");
+    }
+  });
+
   it.each([undefined, null])("renders generic wording when volume is %s", (volumeMonthlyTotal) => {
     const text = generateProposalAgreementText({ ...stagedInput, volumeMonthlyTotal });
     expect(text).toContain("13. Volume-Based Pricing\nThe monthly fee is based on the transaction volume across the accounts listed.");

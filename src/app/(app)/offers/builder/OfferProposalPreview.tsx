@@ -248,6 +248,7 @@ type CheckoutSummary = {
   cleanupMonths?: number;
   cleanupMonthlyRate?: number;
   additionalOneTimeTotal?: number;
+  complexityCleanupAdd?: number;
   includedServices?: { name: string; description: string }[];
 };
 
@@ -1527,6 +1528,7 @@ function OfferProposalPreviewView({
       paymentScheduleVersion: stagedPayment ? 2 : undefined,
       cleanupMonths: selectedCleanupMonths,
       cleanupMonthlyRate: options.maintain.monthlyPrice,
+      complexityCleanupAdd: checkoutSummary?.complexityCleanupAdd,
       additionalOneTimeTotal: selectedAdditionalOneTimeTotal,
       requiredOneTime: selectedOptionId
         ? additionalOptionRowsFor(selectedOptionId)
@@ -1554,6 +1556,7 @@ function OfferProposalPreviewView({
       annual={checkoutSummary?.hasTwelveMonthAgreement ?? hasTwelveMonthAgreement}
       amountDueNow={chargeAmount}
       annualSavingsPercent={annualSavingsPercent}
+      complexityCleanupAdd={checkoutSummary?.complexityCleanupAdd}
       creditApplied={isTestProposal ? 0 : checkoutSummary?.creditApplied ?? (checkoutSummary ? 0 : firstPaymentCredit)}
       originalOnboardingFee={assessment.showOriginalOneTimePrices !== false && isOnboardingFeeWaived(assessment)
         ? getListedOnboardingFee({
@@ -2078,6 +2081,7 @@ function OfferProposalPreviewView({
                             annual={hasTwelveMonthAgreement} amountDueNow={isTestProposal ? 1 : undefined}
                             annualSavingsPercent={annualSavingsPercent}
                             originalOnboardingFee={assessment.showOriginalOneTimePrices !== false && onboardingWaived ? originalOnboardingFee : undefined}
+                            complexityCleanupAdd={checkoutSummary?.complexityCleanupAdd}
                             creditApplied={isTestProposal ? 0 : firstPaymentCredit} />
                         </div>
                         <button
