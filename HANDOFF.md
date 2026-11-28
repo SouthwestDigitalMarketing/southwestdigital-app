@@ -1,4 +1,24 @@
 # SWapp handoff
+## 2026-11-28 — Van: tabs, savings bar, one top pick (Donna)
+
+Tom: tabs like Showrunner, swipe between them; open on a savings status bar (target $40,000) and
+ONE top option. Tabs (`van/layout.tsx`, `SectionTabs` + `SwipeBetweenTabs`): **Overview** `/van` ·
+**Vans** `/van/vans` · **Checklist** `/van/checklist` · **Costs** `/van/costs` · **Must-haves**
+`/van/needs`; each page reads the hunt through `van/load.ts` and renders `VanClient` with a `view`.
+Overview: "Savings for the van" (saved, %, progress bar, "$X to go", top pick's cash needed;
+Update savings edits saved and target), then the top pick card. Plan JSON gains `savings`
+({target, saved}, default {40000, 0}) and `topPickId` (cleared if that van is removed; unknown ids
+read as null) — no migration, `parsePlan` fills both. Before a pick is chosen, Overview shows the
+first van not Passed and says so. The shortlist starter makes Donna's #1 (2018 ProMaster, Austin)
+the top pick. "Make top pick" on each van card. Checklist tab: one van's 16 ticks, open, starting
+on the top pick, with a van picker. Actions revalidate `/van` as a layout.
+Saved amount starts at $0: Tom enters it (no bank data is read).
+Checks: tsc clean; lint 0 errors (11 old warnings); vitest 2,508 passed / 5 skipped (52 van);
+`next build` ok (5 van routes). Headless at 412 px with touch on a private local DB (`swapp_van2`,
+port 3126, `connection_limit=3`): starter, savings $10,000 -> 25% (survives reload), swipe left
+Overview -> Vans -> Checklist, Make top pick then Overview shows it, checklist tick saves, swipe
+right on Overview stays, no sideways scroll on any tab, no page errors.
+
 ## 2026-11-28 — Van hunt menu (Donna; built by a Codex Worker, finished by Donna)
 
 Tom: a new menu item **Van** for the camper-van hunt, "use your best guess". Brief:

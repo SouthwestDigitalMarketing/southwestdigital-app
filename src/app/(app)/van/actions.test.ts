@@ -37,7 +37,7 @@ describe("Van server actions (isolated mocks, no database)", () => {
     expect(data.create.brandId).toBe("brand-a");
     expect(data.create.plan.sections.candidates).toHaveLength(5);
     expect(data.update).toEqual({});
-    expect(mocks.revalidate).toHaveBeenCalledWith("/van");
+    expect(mocks.revalidate).toHaveBeenCalledWith("/van", "layout");
   });
   it("supports an empty candidate list with needs and costs", async () => {
     expect(await startVanAction("empty")).toEqual({});

@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import { NAV_DESTINATIONS } from "@/lib/keyboard/commands";
 import {
   CHECK_ITEMS, MAX_ITEMS, STATUSES, cashNeeded, changePlan, costTotals,
-  emptyPlan, formatMoney, parseItem, parsePlan, sortedCandidates,
+  emptyPlan, formatMoney, parseItem, parsePlan, savingsProgress, sortedCandidates, topPick,
+  type VanPlan,
 } from "./plan";
 import { starterPlan } from "./starter";
 
@@ -27,7 +28,7 @@ describe("van lists", () => {
   it("fills missing lists and skips corrupt entries", () => {
     const valid = van();
     expect(parsePlan({ sections: { candidates: [valid, { ...valid, status: "unknown" }, null] } }))
-      .toEqual({ sections: { candidates: [valid], needs: [], costs: [] } });
+      .toEqual({ sections: { candidates: [valid], needs: [], costs: [] }, savings: { target: 40000, saved: 0 }, topPickId: null });
     expect(parsePlan(null)).toEqual(emptyPlan());
   });
   it("drops unknown keys and defaults new candidates to Watching with blank numbers", () => {
@@ -56,7 +57,7 @@ describe("van lists", () => {
   });
   it("keeps candidate checklists separate through edits and status changes", () => {
     const first = van(), second = van();
-    let plan = { sections: { ...emptyPlan().sections, candidates: [first, second] } };
+    let plan: VanPlan = { ...emptyPlan(), sections: { ...emptyPlan().sections, candidates: [first, second] } };
     plan = changePlan(plan, { kind: "check", id: first.id, key: "inspector", done: true });
     plan = changePlan(plan, { kind: "check", id: first.id, key: "coldStart", done: true });
     plan = changePlan(plan, { kind: "save", section: "candidates", item: { ...first, price: 40000 } });
@@ -94,7 +95,7 @@ describe("van lists", () => {
   });
   it("caps list growth but permits edits in a full list", () => {
     const items = Array.from({ length: MAX_ITEMS }, () => parseItem("needs", { id: randomUUID(), name: "Need" }));
-    const plan = { sections: { ...emptyPlan().sections, needs: items } };
+    const plan: VanPlan = { ...emptyPlan(), sections: { ...emptyPlan().sections, needs: items } };
     expect(() => changePlan(plan, { kind: "save", section: "needs", item: { id: randomUUID(), name: "Extra" } })).toThrow("full");
     expect(changePlan(plan, { kind: "save", section: "needs", item: { ...items[0], name: "Edited" } }).sections.needs).toHaveLength(MAX_ITEMS);
   });
@@ -151,5 +152,39 @@ describe("formatMoney", () => {
     expect(formatMoney(45000)).toBe("$45,000");
     expect(formatMoney(47845.5)).toBe("$47,845.50");
     expect(formatMoney(2812.5)).toBe("$2,812.50");
+  });
+});
+
+describe("savings and top pick", () => {
+  it("defaults to a $40,000 target and keeps edits through a round trip", () => {
+    let plan = emptyPlan();
+    expect(plan.savings).toEqual({ target: 40000, saved: 0 });
+    plan = changePlan(plan, { kind: "savings", target: 40000, saved: 12500.5 });
+    expect(parsePlan(JSON.parse(JSON.stringify(plan))).savings).toEqual({ target: 40000, saved: 12500.5 });
+    expect(() => changePlan(plan, { kind: "savings", target: 0, saved: 0 })).toThrow();
+    expect(() => changePlan(plan, { kind: "savings", target: 40000, saved: -1 })).toThrow();
+  });
+  it("reports whole-percent progress, capped at 100", () => {
+    expect(savingsProgress({ target: 40000, saved: 0 })).toEqual({ percent: 0, left: 40000 });
+    expect(savingsProgress({ target: 40000, saved: 10000 })).toEqual({ percent: 25, left: 30000 });
+    expect(savingsProgress({ target: 40000, saved: 39999 })).toEqual({ percent: 99, left: 1 });
+    expect(savingsProgress({ target: 40000, saved: 50000 })).toEqual({ percent: 100, left: 0 });
+  });
+  it("chooses, falls back and clears the top pick", () => {
+    const first = van({ status: "Passed" }), second = van(), third = van();
+    let plan: VanPlan = { ...emptyPlan(), sections: { ...emptyPlan().sections, candidates: [first, second, third] } };
+    expect(topPick(plan)).toEqual({ item: second, chosen: false });
+    plan = changePlan(plan, { kind: "top", id: third.id });
+    expect(topPick(plan)).toEqual({ item: third, chosen: true });
+    expect(parsePlan(JSON.parse(JSON.stringify(plan))).topPickId).toBe(third.id);
+    plan = changePlan(plan, { kind: "remove", section: "candidates", id: third.id });
+    expect(plan.topPickId).toBeNull();
+    expect(() => changePlan(plan, { kind: "top", id: third.id })).toThrow("That van no longer exists.");
+    expect(parsePlan({ ...plan, topPickId: "not-a-van" }).topPickId).toBeNull();
+  });
+  it("opens the shortlist with Donna's #1 as the top pick", () => {
+    const plan = starterPlan(true);
+    expect(topPick(plan)).toMatchObject({ chosen: true, item: { year: 2018, city: "Austin, TX", price: 44000 } });
+    expect(starterPlan(false).topPickId).toBeNull();
   });
 });

@@ -6,7 +6,10 @@ export type Status = (typeof STATUSES)[number];
 export type ItemValue = string | number | boolean | null;
 export type VanItem = { id: string } & Record<string, ItemValue>;
 export type SectionKey = "needs" | "candidates" | "costs";
-export type VanPlan = { sections: Record<SectionKey, VanItem[]> };
+/** Savings toward the van (Tom, 2026-11-28: target $40,000) and the one van shown first on Overview. */
+export type Savings = { target: number; saved: number };
+export type VanPlan = { sections: Record<SectionKey, VanItem[]>; savings: Savings; topPickId: string | null };
+export const DEFAULT_SAVINGS_TARGET = 40000;
 export type Field = {
   key: string;
   label: string;
@@ -111,8 +114,15 @@ export function parseItem(key: SectionKey, raw: unknown): VanItem {
 }
 
 /** Older / incomplete saved plans fill missing lists; malformed items cannot break the page. */
+const moneySchema = z.number().finite().min(0).max(9_999_999);
+const savingsSchema = z.object({ target: moneySchema, saved: moneySchema });
+
 export function parsePlan(raw: unknown): VanPlan {
-  const root = z.object({ sections: z.record(z.string(), z.unknown()).optional() }).safeParse(raw);
+  const root = z.object({
+    sections: z.record(z.string(), z.unknown()).optional(),
+    savings: z.unknown().optional(),
+    topPickId: z.unknown().optional(),
+  }).safeParse(raw);
   const sections = {} as VanPlan["sections"];
   for (const key of SECTION_KEYS) {
     const list = root.success ? root.data.sections?.[key] : undefined;
@@ -120,7 +130,17 @@ export function parsePlan(raw: unknown): VanPlan {
       try { return [parseItem(key, item)]; } catch { return []; }
     }) : [];
   }
-  return { sections };
+  const savings = savingsSchema.safeParse(root.success ? root.data.savings : undefined);
+  const top = root.success && typeof root.data.topPickId === "string" ? root.data.topPickId : null;
+  return {
+    sections,
+    savings: savings.success ? roundSavings(savings.data) : { target: DEFAULT_SAVINGS_TARGET, saved: 0 },
+    topPickId: top && sections.candidates.some((item) => item.id === top) ? top : null,
+  };
+}
+
+function roundSavings(savings: Savings): Savings {
+  return { target: Math.round(savings.target * 100) / 100, saved: Math.round(savings.saved * 100) / 100 };
 }
 
 export function emptyPlan(): VanPlan { return parsePlan({}); }
@@ -130,33 +150,58 @@ export const changeSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("remove"), section: z.enum(SECTION_KEYS), id: z.string().uuid() }),
   z.object({ kind: z.literal("status"), id: z.string().uuid(), status: z.enum(STATUSES) }),
   z.object({ kind: z.literal("check"), id: z.string().uuid(), key: z.enum(CHECK_KEYS as [string, ...string[]]), done: z.boolean() }),
+  z.object({ kind: z.literal("savings"), target: moneySchema.positive(), saved: moneySchema }),
+  z.object({ kind: z.literal("top"), id: z.string().uuid() }),
 ]);
 export type Change = z.infer<typeof changeSchema>;
 
 /** Apply one edit to the latest locked plan, preserving unrelated candidate checklist ticks. */
 export function changePlan(plan: VanPlan, raw: unknown): VanPlan {
   const change = changeSchema.parse(raw);
+  if (change.kind === "savings") return { ...plan, savings: roundSavings({ target: change.target, saved: change.saved }) };
+  if (change.kind === "top") {
+    if (!plan.sections.candidates.some((item) => item.id === change.id)) throw new Error("That van no longer exists.");
+    return { ...plan, topPickId: change.id };
+  }
   if (change.kind === "status" || change.kind === "check") {
     if (!plan.sections.candidates.some((item) => item.id === change.id)) throw new Error("That van no longer exists.");
-    return { sections: { ...plan.sections, candidates: plan.sections.candidates.map((item) => item.id !== change.id ? item : {
+    return { ...plan, sections: { ...plan.sections, candidates: plan.sections.candidates.map((item) => item.id !== change.id ? item : {
       ...item, ...(change.kind === "status" ? { status: change.status } : { [change.key]: change.done }),
     }) } };
   }
   const list = plan.sections[change.section];
-  if (change.kind === "remove") return { sections: { ...plan.sections, [change.section]: list.filter((item) => item.id !== change.id) } };
+  if (change.kind === "remove") return {
+    ...plan,
+    sections: { ...plan.sections, [change.section]: list.filter((item) => item.id !== change.id) },
+    topPickId: change.section === "candidates" && plan.topPickId === change.id ? null : plan.topPickId,
+  };
   const item = parseItem(change.section, change.item);
   const previous = list.find((entry) => entry.id === item.id);
   if (!previous && list.length >= MAX_ITEMS) throw new Error(`This list is full (${MAX_ITEMS} items).`);
   if (previous && change.section === "candidates") {
     for (const key of CHECK_KEYS) item[key] = previous[key];
   }
-  return { sections: { ...plan.sections, [change.section]: previous ? list.map((entry) => entry.id === item.id ? item : entry) : [...list, item] } };
+  return { ...plan, sections: { ...plan.sections, [change.section]: previous ? list.map((entry) => entry.id === item.id ? item : entry) : [...list, item] } };
 }
 
 export function sortedCandidates(items: VanItem[]): VanItem[] {
   return [...items].sort((a, b) => STATUSES.indexOf(a.status as Status) - STATUSES.indexOf(b.status as Status)
     || (typeof a.price === "number" ? a.price : Infinity) - (typeof b.price === "number" ? b.price : Infinity));
 }
+/** The chosen top pick; before one is chosen, the first van not passed on (the shortlist lists its #1 first). */
+export function topPick(plan: VanPlan): { item: VanItem; chosen: boolean } | null {
+  const chosen = plan.sections.candidates.find((item) => item.id === plan.topPickId);
+  if (chosen) return { item: chosen, chosen: true };
+  const first = plan.sections.candidates.find((item) => item.status !== "Passed");
+  return first ? { item: first, chosen: false } : null;
+}
+
+/** Share of the savings target reached, 0–100 (whole percent, capped). */
+export function savingsProgress(savings: Savings): { percent: number; left: number } {
+  const percent = savings.target > 0 ? Math.min(100, Math.floor((savings.saved / savings.target) * 100)) : 0;
+  return { percent, left: Math.max(0, Math.round((savings.target - savings.saved) * 100) / 100) };
+}
+
 export function candidateName(item: VanItem): string {
   return [item.year, item.make, item.model].filter((part) => part !== null && part !== "").join(" ");
 }
