@@ -95,6 +95,34 @@ export function sanitizeBundlePricingDefaults(value: unknown): Partial<BundlePri
   return partial;
 }
 
+/**
+ * Parse the manager's bundle-defaults text inputs. A blank input DELETES its
+ * key so the field falls back down the resolution chain (catalog, then the
+ * proposed defaults) — it never saves `Number("")` (0). A non-blank input
+ * must be a finite non-negative number. Returns null when any non-blank
+ * input is invalid.
+ */
+export function parseBundlePricingDefaultsInputs(values: {
+  discountPct: string;
+  locationCharge: string;
+  setupCharge: string;
+}): Partial<BundlePricingOptions> | null {
+  const parsed: Partial<BundlePricingOptions> = {};
+  const fields = [
+    ["discountPct", "additionalCompanyDiscountPct"],
+    ["locationCharge", "locationMonthlyCharge"],
+    ["setupCharge", "newFileSetupCharge"],
+  ] as const;
+  for (const [inputKey, optionKey] of fields) {
+    const raw = values[inputKey].trim();
+    if (raw === "") continue;
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value < 0) return null;
+    parsed[optionKey] = optionKey === "additionalCompanyDiscountPct" ? Math.min(100, value) : value;
+  }
+  return parsed;
+}
+
 function sanitizePackageIds(value: unknown): OptionsTemplatePackageId[] {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.filter(isPackageId))];

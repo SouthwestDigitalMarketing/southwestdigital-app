@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import {
+  applyBundleOptionEdit,
   DEFAULT_BUNDLE_PRICING_OPTIONS,
   hasCompanyBundle,
   normalizeCompanyBundle,
@@ -87,14 +88,17 @@ export interface CompanyBundleEditorProps {
   mainAccounts: AccountEntry[];
   /** Effective main assessment used for the read-only price summary. */
   baseAssessment: AssessmentState;
-  /** Effective (resolved) per-proposal bundle options. */
+  /** Effective (resolved) per-proposal bundle options; display only. */
   bundleOptions: BundlePricingOptions;
+  /** Raw stored per-proposal override; edits patch this, never the resolved object. */
+  storedBundleOptions: Partial<BundlePricingOptions>;
   /** Where the effective new-file setup charge came from; shown beside the override input. */
   newFileSetupSource: NewFileSetupChargeSource;
   /** Legacy entities input, rendered only while no bundle is active. */
   legacyEntitiesField: ReactNode;
   onCompaniesChange: (companies: CompanyEntry[] | undefined) => void;
-  onBundleOptionsChange: (options: BundlePricingOptions) => void;
+  /** Receives the new stored partial: only the edited field changes, blank deletes its key. */
+  onBundleOptionsChange: (options: Partial<BundlePricingOptions>) => void;
 }
 
 export default function CompanyBundleEditor({
@@ -103,6 +107,7 @@ export default function CompanyBundleEditor({
   mainAccounts,
   baseAssessment,
   bundleOptions,
+  storedBundleOptions,
   legacyEntitiesField,
   newFileSetupSource,
   onCompaniesChange,
@@ -172,10 +177,10 @@ export default function CompanyBundleEditor({
   }
 
   function updateOption(key: keyof BundlePricingOptions, raw: string) {
-    if (raw === "") return;
-    const parsed = Number(raw);
-    if (!Number.isFinite(parsed)) return;
-    onBundleOptionsChange({ ...bundleOptions, [key]: parsed });
+    // Patch the stored partial (blank deletes the key); display keeps
+    // reading the resolved `bundleOptions` + source label above.
+    const next = applyBundleOptionEdit(storedBundleOptions, key, raw);
+    if (next) onBundleOptionsChange(next);
   }
 
   const main = companies[0];

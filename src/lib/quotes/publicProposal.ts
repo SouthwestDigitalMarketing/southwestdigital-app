@@ -4,6 +4,7 @@ import { z } from "zod";
 import { slugifyTagKey } from "@/lib/contacts/tags";
 import { toPublicAccountInventory, type PublicAccountInventory } from "@/lib/quotes/accountInventory";
 import {
+  asCompanyBundleSnapshot,
   buildCompanyBundleSnapshot,
   hasCompanyBundle,
   resolveBundlePricingOptions as resolveCanonicalBundlePricingOptions,
@@ -145,15 +146,19 @@ export function resolveAssessmentBundlePricingOptions(assessment: unknown): Bund
 
 /**
  * Whitelisted per-tier public bundle for a stored snapshot, or null for
- * legacy proposals without one. Built from the same one bundle object the
- * snapshot publishes, so the public per-company lines add up to the
- * published monthly of each tier. Raw companies (account ids, sources)
- * never leave this function; only whitelisted names and amounts do.
+ * legacy proposals without one. Read from the snapshot's one published
+ * bundle object (the same object checkout, the agreement route and the
+ * freeze-select route resolve), so the public per-company lines add up to
+ * the published monthly of each tier. Recomputed only as a fallback for old
+ * snapshots that predate the bundle wiring. Raw companies (account ids,
+ * sources) never leave this function; only whitelisted names and amounts do.
  */
 export function publicCompanyBundleForSnapshot(snapshotValue: unknown): PublicCompanyBundleMap | null {
   const snapshot = record(snapshotValue);
   const rawAssessment = record(snapshot.assessment);
   if (!hasCompanyBundle(rawAssessment)) return null;
+  const stored = asCompanyBundleSnapshot(record(snapshot.pricing).companyBundle);
+  if (stored) return toPublicCompanyBundleMap(rawAssessment.companies, stored);
   const bundle = buildCompanyBundleSnapshot({
     companies: rawAssessment.companies,
     baseAssessment: effectiveAssessment(rawAssessment as unknown as AssessmentState),

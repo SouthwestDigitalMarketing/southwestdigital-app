@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyBundleOptionEdit,
   asPublicCompanyBundleMap,
   buildCompanyBundleSnapshot,
   companyBundleFeeLines,
@@ -592,5 +593,37 @@ describe("toPublicCompanyBundleMap", () => {
     expect(mapped?.grow.bundleMonthly).toBe(450);
     expect(asPublicCompanyBundleMap(null)).toBeNull();
     expect(asPublicCompanyBundleMap({ bogus: true })).toBeNull();
+  });
+});
+
+describe("applyBundleOptionEdit", () => {
+  it("patches only the edited field, leaving other stored keys alone", () => {
+    expect(
+      applyBundleOptionEdit({ newFileSetupCharge: 99 }, "additionalCompanyDiscountPct", "15"),
+    ).toEqual({ newFileSetupCharge: 99, additionalCompanyDiscountPct: 15 });
+  });
+
+  it("never stores the whole resolved object: an edit adds one key, not all three", () => {
+    const next = applyBundleOptionEdit({}, "additionalCompanyDiscountPct", "15");
+    expect(next).toEqual({ additionalCompanyDiscountPct: 15 });
+    expect(next).not.toHaveProperty("locationMonthlyCharge");
+    expect(next).not.toHaveProperty("newFileSetupCharge");
+  });
+
+  it("deletes the key on blank input so the field falls back down the chain", () => {
+    expect(
+      applyBundleOptionEdit(
+        { additionalCompanyDiscountPct: 30, newFileSetupCharge: 99 },
+        "additionalCompanyDiscountPct",
+        "",
+      ),
+    ).toEqual({ newFileSetupCharge: 99 });
+    expect(applyBundleOptionEdit({ newFileSetupCharge: 99 }, "newFileSetupCharge", "   ")).toEqual({});
+  });
+
+  it("ignores non-numeric input (null, no change)", () => {
+    const stored = { additionalCompanyDiscountPct: 30 };
+    expect(applyBundleOptionEdit(stored, "additionalCompanyDiscountPct", "abc")).toBeNull();
+    expect(applyBundleOptionEdit(stored, "additionalCompanyDiscountPct", "NaN")).toBeNull();
   });
 });

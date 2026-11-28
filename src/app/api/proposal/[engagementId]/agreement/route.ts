@@ -16,6 +16,7 @@ import {
   resolveBundlePricingOptions,
   resolveCompanyBundleForTier,
 } from "@/lib/quotes/companyBundle";
+import { requiredOneTimeAddOnsForTier } from "@/lib/quotes/proposalServices";
 import { effectiveAssessment } from "@/app/(app)/offers/builder/effectiveAssessment";
 import type { AssessmentState } from "@/app/(app)/offers/builder/ProposalCreationWorkspaceDemo";
 
@@ -152,11 +153,13 @@ export async function GET(
     cleanupMonths: checkout?.cleanupMonths,
     cleanupMonthlyRate: checkout?.cleanupMonthlyRate,
     additionalOneTimeTotal: checkout?.additionalOneTimeTotal,
-    requiredOneTime: additionalOptions
-      .filter((option) => option.required === true && option.billingCadence === "one-time"
-        && typeof option.id === "string" && selectedAdditionalOptionIds.includes(option.id)
-        && typeof option.monthlyPrice === "number")
-      .map((option) => ({ name: String(option.name ?? option.id), price: Number(option.monthlyPrice) })),
+    // Tier-filtered exactly like checkout, so no line appears that isn't
+    // charged on the selected tier.
+    requiredOneTime: requiredOneTimeAddOnsForTier(
+      assessment,
+      selectedAdditionalOptionIds,
+      checkout?.tier ?? "maintain",
+    ),
     // Stored at selection time; re-resolve so support-level wording is current.
     includedServices: checkout?.includedServices?.map((item) => ({
       ...item,

@@ -88,6 +88,10 @@ import {
   type CompanyEntry,
 } from "@/lib/quotes/companyBundle";
 import CompanyBundleEditor, { withSyncedMainAccounts } from "./CompanyBundleEditor";
+import {
+  sanitizeBundlePricingDefaults,
+  type OptionsTemplateAssessmentSlice,
+} from "@/lib/quotes/optionsTemplates";
 
 export {
   reconcileProposalAssessmentWithCatalog,
@@ -1197,6 +1201,34 @@ export function mergeStoredAssessment(
   }
 }
 
+/**
+ * The live options-template apply path (OptionsTemplatesToolbar on the
+ * Options step). Copies the template's `bundlePricingDefaults` onto the
+ * proposal assessment field by field: template-set fields win, template-unset
+ * fields keep what the proposal already has, and a template with no defaults
+ * at all never wipes existing proposal defaults. The per-proposal
+ * `bundlePricingOptions` override is never touched — it always wins at
+ * resolution time.
+ */
+export function applyOptionsTemplateSlice(
+  saved: AssessmentState,
+  slice: OptionsTemplateAssessmentSlice,
+): AssessmentState {
+  const savedDefaults = sanitizeBundlePricingOverride(saved.bundlePricingDefaults);
+  const templateDefaults = sanitizeBundlePricingDefaults(slice.bundlePricingDefaults);
+  const merged = { ...savedDefaults };
+  for (const [key, value] of Object.entries(templateDefaults)) {
+    if (value !== undefined) {
+      (merged as Record<string, number>)[key] = value;
+    }
+  }
+  const next = { ...saved, ...slice };
+  if (slice.bundlePricingDefaults !== undefined || saved.bundlePricingDefaults !== undefined) {
+    next.bundlePricingDefaults = merged;
+  }
+  return next;
+}
+
 function readStoredAssessment(
   storageKey: string,
   initialAssessment?: Partial<AssessmentState>,
@@ -1926,6 +1958,7 @@ export default function ProposalCreationWorkspaceDemo({
                       mainAccounts={assessment.accounts}
                       baseAssessment={pricingAssessment}
                       bundleOptions={resolveBundlePricingOptions(assessment)}
+                      storedBundleOptions={assessment.bundlePricingOptions ?? {}}
                       newFileSetupSource={describeNewFileSetupCharge(assessment).source}
                       legacyEntitiesField={
                         <div className="max-w-[280px]">

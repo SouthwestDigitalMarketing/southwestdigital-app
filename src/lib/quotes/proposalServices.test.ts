@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   includedServicePackages,
   proposalServiceAddOns,
+  requiredOneTimeAddOnsForTier,
   serviceIsApplicable,
 } from "./proposalServices";
 import { buildProposalCheckoutSummary } from "../engagements/proposalCheckout";
@@ -234,5 +235,46 @@ describe("shared service rules", () => {
     expect(proposalServiceAddOns(published.assessment)).toEqual(
       proposalServiceAddOns(assessment),
     );
+  });
+
+  it("lists required one-time add-ons only on tiers that charge them", () => {
+    const tiered = {
+      additionalOptions: [
+        {
+          id: "improve-filing",
+          name: "Improve Only Filing",
+          description: "File once",
+          monthlyPrice: 120,
+          showInProposal: true,
+          archived: false,
+          billingCadence: "one-time",
+          packageIds: ["improve"],
+          required: true,
+        },
+        {
+          id: "monthly-fee",
+          name: "Monthly Fee",
+          description: "Every month",
+          monthlyPrice: 30,
+          showInProposal: true,
+          archived: false,
+          billingCadence: "monthly",
+          packageIds: ["improve"],
+          required: true,
+        },
+      ],
+      bonuses: [],
+      bonusPackageSelections: {},
+    };
+    // Same tier checkout charges: the line appears.
+    expect(
+      requiredOneTimeAddOnsForTier(tiered, ["improve-filing"], "improve"),
+    ).toEqual([{ name: "Improve Only Filing", price: 120 }]);
+    // Another tier checkout does not charge it: no line appears.
+    expect(requiredOneTimeAddOnsForTier(tiered, ["improve-filing"], "grow")).toEqual([]);
+    expect(requiredOneTimeAddOnsForTier(tiered, ["improve-filing"], "maintain")).toEqual([]);
+    // Monthly cadence never lists, and unselected ids never list.
+    expect(requiredOneTimeAddOnsForTier(tiered, ["monthly-fee"], "improve")).toEqual([]);
+    expect(requiredOneTimeAddOnsForTier(tiered, [], "improve")).toEqual([]);
   });
 });

@@ -16,7 +16,10 @@ import {
   updateOptionsTemplateAction,
   type OptionsTemplateListItem,
 } from "./actions";
-import type { OptionsTemplateAssessmentSlice } from "@/lib/quotes/optionsTemplates";
+import {
+  parseBundlePricingDefaultsInputs,
+  type OptionsTemplateAssessmentSlice,
+} from "@/lib/quotes/optionsTemplates";
 
 type EditingState = {
   id: string;
@@ -105,13 +108,16 @@ export default function OptionsTemplatesManager({
   function handleSaveEdit() {
     if (!editing || !editing.slice) return;
     const snapshot = editing;
-    const discountPct = Number(snapshot.discountPct);
-    const locationCharge = Number(snapshot.locationCharge);
-    const setupBlank = snapshot.setupCharge.trim() === "";
-    const setupCharge = Number(snapshot.setupCharge);
-    if (![discountPct, locationCharge].every((n) => Number.isFinite(n) && n >= 0) ||
-      (!setupBlank && !(Number.isFinite(setupCharge) && setupCharge >= 0))) {
-      setError("Enter valid non-negative numbers for the bundle pricing defaults (setup may be blank).");
+    // A blank input clears that default so proposals fall through to the
+    // next source (catalog, then the $150 placeholder); any number —
+    // including 150 — is an explicit template default and beats the catalog.
+    const bundlePricingDefaults = parseBundlePricingDefaultsInputs({
+      discountPct: snapshot.discountPct,
+      locationCharge: snapshot.locationCharge,
+      setupCharge: snapshot.setupCharge,
+    });
+    if (!bundlePricingDefaults) {
+      setError("Enter valid non-negative numbers for the bundle pricing defaults (blank clears a default).");
       return;
     }
     run(
@@ -122,14 +128,7 @@ export default function OptionsTemplatesManager({
         });
         await overwriteOptionsTemplateSnapshotAction(snapshot.id, {
           ...snapshot.slice as OptionsTemplateAssessmentSlice,
-          // A blank setup stays unset so proposals fall through to the
-          // catalog price (or the $150 placeholder); any number — including
-          // 150 — is an explicit template default and beats the catalog.
-          bundlePricingDefaults: {
-            additionalCompanyDiscountPct: discountPct,
-            locationMonthlyCharge: locationCharge,
-            ...(setupBlank ? {} : { newFileSetupCharge: setupCharge }),
-          },
+          bundlePricingDefaults,
         });
       },
       () => setEditing(null),

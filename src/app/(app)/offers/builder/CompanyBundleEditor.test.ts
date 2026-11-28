@@ -22,6 +22,7 @@ import { effectiveAssessment } from "./effectiveAssessment";
 import {
   DEFAULT_BUNDLE_PRICING_OPTIONS,
   resolveBundlePricingOptions,
+  type BundlePricingOptions,
   type CompanyEntry,
 } from "@/lib/quotes/companyBundle";
 import type { AccountEntry } from "@/lib/quotes/accountInventory";
@@ -58,6 +59,7 @@ function editorHtml(props: Partial<CompanyBundleEditorProps> = {}) {
       mainAccounts: [],
       baseAssessment: effectiveAssessment(fresh),
       bundleOptions: resolveBundlePricingOptions({}),
+      storedBundleOptions: {},
       newFileSetupSource: "placeholder",
       legacyEntitiesField: createElement("span", { id: "legacy-entities" }, "legacy entities input"),
       onCompaniesChange: () => {},
@@ -65,6 +67,68 @@ function editorHtml(props: Partial<CompanyBundleEditorProps> = {}) {
       ...props,
     }),
   );
+}
+
+type OptionInput = {
+  value: number;
+  onChange: (event: { target: { value: string } }) => void;
+};
+
+function visitTree(node: unknown, visit: (element: { type?: unknown; props?: Record<string, unknown> }) => void): void {
+  if (!node || typeof node !== "object") return;
+  if (Array.isArray(node)) {
+    node.forEach((child) => visitTree(child, visit));
+    return;
+  }
+  const element = node as { type?: unknown; props?: Record<string, unknown> };
+  visit(element);
+  visitTree(element.props?.children, visit);
+}
+
+/** The three bundle-pricing override inputs inside the editor's details section, in order. */
+function bundleOptionInputs(tree: unknown): OptionInput[] {
+  let detailsChildren: unknown;
+  visitTree(tree, (element) => {
+    if (detailsChildren === undefined && element.type === "details") {
+      detailsChildren = element.props ? element.props.children : undefined;
+    }
+  });
+  expect(detailsChildren).toBeDefined();
+  const found: OptionInput[] = [];
+  visitTree(detailsChildren, (element) => {
+    if (
+      element.type === "input" &&
+      typeof element.props?.value === "number" &&
+      typeof element.props?.onChange === "function"
+    ) {
+      found.push({
+        value: element.props.value,
+        onChange: element.props.onChange as OptionInput["onChange"],
+      });
+    }
+  });
+  return found;
+}
+
+function renderEditorForPayload(props: Partial<CompanyBundleEditorProps> = {}) {
+  const fresh = freshAssessment();
+  const seen: Array<Partial<BundlePricingOptions>> = [];
+  const tree = CompanyBundleEditor({
+    companies: [mainCompany(), mainCompany({ id: "b", name: "Beta" })],
+    companyName: "Acme LLC",
+    mainAccounts: [],
+    baseAssessment: effectiveAssessment(fresh),
+    bundleOptions: resolveBundlePricingOptions({}),
+    storedBundleOptions: {},
+    newFileSetupSource: "placeholder",
+    legacyEntitiesField: createElement("span", { id: "legacy-entities" }, "legacy entities input"),
+    onCompaniesChange: () => {},
+    onBundleOptionsChange: (patch) => {
+      seen.push(patch);
+    },
+    ...props,
+  });
+  return { tree, seen };
 }
 
 describe("resolveBundlePricingOptions", () => {
@@ -264,6 +328,34 @@ describe("CompanyBundleEditor states", () => {
         newFileSetupSource: "template",
       }),
     ).toContain("effective $80 — template default");
+  });
+});
+
+describe("CompanyBundleEditor option change payload", () => {
+  it("sends a one-field stored patch when the discount changes, never the resolved object", () => {
+    const { tree, seen } = renderEditorForPayload({
+      storedBundleOptions: { newFileSetupCharge: 99 },
+    });
+    const inputs = bundleOptionInputs(tree);
+    // Display still shows the resolved values (20/25/150).
+    expect(inputs.map((input) => input.value)).toEqual([20, 25, 150]);
+    inputs[0].onChange({ target: { value: "15" } });
+    // Only the edited field joins the stored keys — no resolved-object freeze.
+    expect(seen).toEqual([{ newFileSetupCharge: 99, additionalCompanyDiscountPct: 15 }]);
+  });
+
+  it("deletes the setup key on blank so the charge falls back down the chain", () => {
+    const { tree, seen } = renderEditorForPayload({
+      storedBundleOptions: { newFileSetupCharge: 99 },
+    });
+    bundleOptionInputs(tree)[2].onChange({ target: { value: "" } });
+    expect(seen).toEqual([{}]);
+  });
+
+  it("sends nothing for non-numeric input", () => {
+    const { tree, seen } = renderEditorForPayload();
+    bundleOptionInputs(tree)[1].onChange({ target: { value: "abc" } });
+    expect(seen).toEqual([]);
   });
 });
 

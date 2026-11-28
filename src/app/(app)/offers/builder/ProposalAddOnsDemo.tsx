@@ -17,6 +17,7 @@ import {
   getOptionsCatalogOrder,
   getProposalAdditionalOptions,
   getProposalBonuses,
+  applyOptionsTemplateSlice,
   getProposalPricingSnapshotCleanupCard,
   getProposalPricingSnapshotItems,
   useProposalAssessmentDemoState,
@@ -543,7 +544,7 @@ export default function ProposalAddOnsDemo({
                     currentSlice={current}
                     hasCustomizedOptions
                     onApply={(slice) => {
-                      change((saved) => ({ ...saved, ...slice }));
+                      change((saved) => applyOptionsTemplateSlice(saved, slice));
                       setEditingId(null);
                     }}
                     middleSlot={

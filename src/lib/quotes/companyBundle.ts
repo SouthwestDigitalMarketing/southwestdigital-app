@@ -256,6 +256,29 @@ export function sanitizeBundlePricingOverride(raw: unknown): Partial<BundlePrici
   return partial;
 }
 
+/**
+ * One editor keystroke as a stored-partial patch. A blank input DELETES the
+ * key so the field falls back down the resolution chain (template, catalog,
+ * placeholder) — it never stores `Number("")` (0). Any other non-numeric
+ * input returns null (no change). The caller stores the returned partial
+ * as-is; only the edited field is ever added or removed, so a stored
+ * catalog-following setup charge is never frozen into an explicit override.
+ */
+export function applyBundleOptionEdit(
+  stored: Partial<BundlePricingOptions>,
+  key: keyof BundlePricingOptions,
+  raw: string,
+): Partial<BundlePricingOptions> | null {
+  if (raw.trim() === "") {
+    const next = { ...stored };
+    delete next[key];
+    return next;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return null;
+  return { ...stored, [key]: parsed };
+}
+
 function finiteNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }

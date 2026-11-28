@@ -280,6 +280,35 @@ describe("public proposal agreement API", () => {
     });
   });
 
+  it("tier-filters required one-time lines so no uncharged line appears", async () => {
+    const base = rowWithAccounts(accounts);
+    const tieredOptions = [
+      { id: "improve-filing", name: "Improve Only Filing", description: "File once", monthlyPrice: 120, showInProposal: true, archived: false, billingCadence: "one-time", packageIds: ["improve"], required: true },
+      { id: "grow-filing", name: "Grow Only Filing", description: "File once", monthlyPrice: 200, showInProposal: true, archived: false, billingCadence: "one-time", packageIds: ["grow"], required: true },
+    ];
+    // The stored checkout selects Improve: the improve-scoped line is charged
+    // and listed, while the grow-scoped line is not charged and stays out.
+    mocks.engagement.mockResolvedValue({
+      ...base,
+      onboardingData: {
+        ...base.onboardingData,
+        proposalBuilderState: {
+          ...base.onboardingData.proposalBuilderState,
+          assessment: { ...base.onboardingData.proposalBuilderState.assessment, additionalOptions: tieredOptions },
+          services: {
+            ...base.onboardingData.proposalBuilderState.services,
+            selectedAdditionalOptionIds: ["improve-filing", "grow-filing"],
+          },
+        },
+      },
+    });
+    const body = await (await call()).json();
+    // The charged tier's fee line appears; the uncharged tier leaves no fee line.
+    // (The scope section still names the client's full selection.)
+    expect(body.text).toContain("Improve Only Filing (due today): $120.00");
+    expect(body.text).not.toContain("Grow Only Filing (due today)");
+  });
+
   it("treats a bare status marker as frozen even with no other acceptance signal", async () => {
     // Only engagement.status marks this row: no signedAt, no stored text, no
     // PAID, no proposalAcceptance. The route select must fetch status for the

@@ -9,10 +9,12 @@ vi.mock("../who/actions", () => ({
 }));
 
 import {
+  applyOptionsTemplateSlice,
   getProposalPricingSnapshotData,
   useProposalAssessmentDemoState,
   type AssessmentState,
 } from "./ProposalCreationWorkspaceDemo";
+import type { OptionsTemplateAssessmentSlice } from "@/lib/quotes/optionsTemplates";
 import { effectiveAssessment } from "./effectiveAssessment";
 import {
   DEFAULT_BUNDLE_PRICING_OPTIONS,
@@ -144,5 +146,65 @@ describe("spec 02 wiring: company bundle in builder package totals", () => {
       zeroed.packagePricing.maintain.assessmentOneTimeAdjustments,
     );
     expect(data.packagePricing.maintain.monthly).toBe(zeroed.packagePricing.maintain.monthly + 200);
+  });
+});
+
+describe("spec 02 template apply: bundlePricingDefaults reach the proposal", () => {
+  const discount15Slice: OptionsTemplateAssessmentSlice = {
+    optionsCatalogOrder: [],
+    additionalOptions: [],
+    bonuses: [],
+    bonusPackageSelections: {},
+    // A manager-saved template default: 15% off each added file.
+    bundlePricingDefaults: { additionalCompanyDiscountPct: 15 },
+  };
+
+  it("prices the bundle at the applied template discount (15% -> maintain 465)", () => {
+    const fresh = freshAssessment();
+    const applied = applyOptionsTemplateSlice(
+      { ...fresh, companies: [mainCompany(), mainCompany({ id: "b", name: "Beta" })] },
+      discount15Slice,
+    );
+    expect(applied.bundlePricingDefaults).toEqual({ additionalCompanyDiscountPct: 15 });
+    const data = getProposalPricingSnapshotData(applied);
+    // Main 250 + Beta (250 at 15% off = 212.50, rounded up to 215).
+    expect(data.packagePricing.maintain.monthly).toBe(465);
+    // The snapshot publishes the template-priced bundle object.
+    expect(data.companyBundle?.maintain.bundleMonthly).toBe(465);
+    expect(data.companyBundle?.maintain.perCompany[1].discountedMonthly).toBe(215);
+  });
+
+  it("lets template-set fields win while the override and other defaults survive", () => {
+    const fresh = freshAssessment();
+    const applied = applyOptionsTemplateSlice(
+      {
+        ...fresh,
+        companies: [mainCompany(), mainCompany({ id: "b", name: "Beta" })],
+        bundlePricingOptions: { additionalCompanyDiscountPct: 30 },
+        bundlePricingDefaults: { newFileSetupCharge: 99 },
+      },
+      discount15Slice,
+    );
+    expect(applied.bundlePricingDefaults).toEqual({
+      newFileSetupCharge: 99,
+      additionalCompanyDiscountPct: 15,
+    });
+    // The per-proposal override is never touched by a template apply.
+    expect(applied.bundlePricingOptions).toEqual({ additionalCompanyDiscountPct: 30 });
+    // And the override still wins at pricing time: 250 + 175 = 425.
+    expect(getProposalPricingSnapshotData(applied).packagePricing.maintain.monthly).toBe(425);
+  });
+
+  it("keeps existing proposal defaults when the applied template has none", () => {
+    const fresh = freshAssessment();
+    const applied = applyOptionsTemplateSlice(
+      {
+        ...fresh,
+        companies: [mainCompany(), mainCompany({ id: "b", name: "Beta" })],
+        bundlePricingDefaults: { newFileSetupCharge: 99 },
+      },
+      { optionsCatalogOrder: [], additionalOptions: [], bonuses: [], bonusPackageSelections: {} },
+    );
+    expect(applied.bundlePricingDefaults).toEqual({ newFileSetupCharge: 99 });
   });
 });

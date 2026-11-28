@@ -3,6 +3,7 @@ import { DEFAULT_BUNDLE_PRICING_OPTIONS } from "./companyBundle";
 import {
   OPTIONS_TEMPLATE_SNAPSHOT_VERSION,
   buildOptionsTemplateSnapshot,
+  parseBundlePricingDefaultsInputs,
   parseOptionsTemplateSnapshot,
   reconcileOptionsTemplateSnapshot,
   sanitizeBundlePricingDefaults,
@@ -241,5 +242,31 @@ describe("bundle pricing defaults (Spec 02)", () => {
       ["stessa-migration"],
     );
     expect(missing.slice.bundlePricingDefaults).toEqual({});
+  });
+
+  it("parses the manager's text inputs, with blank clearing the key", () => {
+    expect(
+      parseBundlePricingDefaultsInputs({ discountPct: "15", locationCharge: "30", setupCharge: "99" }),
+    ).toEqual({ additionalCompanyDiscountPct: 15, locationMonthlyCharge: 30, newFileSetupCharge: 99 });
+    // Blank clears: no key saved, so the field falls back down the chain
+    // (never a Number("") 0).
+    expect(
+      parseBundlePricingDefaultsInputs({ discountPct: "", locationCharge: "", setupCharge: "" }),
+    ).toEqual({});
+    expect(
+      parseBundlePricingDefaultsInputs({ discountPct: "  ", locationCharge: "25", setupCharge: "" }),
+    ).toEqual({ locationMonthlyCharge: 25 });
+  });
+
+  it("rejects non-numeric and negative manager inputs, clamps the discount", () => {
+    expect(
+      parseBundlePricingDefaultsInputs({ discountPct: "abc", locationCharge: "25", setupCharge: "" }),
+    ).toBeNull();
+    expect(
+      parseBundlePricingDefaultsInputs({ discountPct: "10", locationCharge: "-5", setupCharge: "" }),
+    ).toBeNull();
+    expect(
+      parseBundlePricingDefaultsInputs({ discountPct: "150", locationCharge: "25", setupCharge: "200" }),
+    ).toEqual({ additionalCompanyDiscountPct: 100, locationMonthlyCharge: 25, newFileSetupCharge: 200 });
   });
 });

@@ -167,3 +167,27 @@ export function proposalServiceAddOns(
   }
   return [...result.values()];
 }
+
+/**
+ * Required one-time add-on lines for one tier, for the agreement fee
+ * section. Tier-filtered exactly like checkout (`packageIds.includes(tier)`),
+ * so no line appears that isn't charged on that tier. Only explicitly
+ * selected ids list — a required option the selection never picked stays a
+ * checkout charge, not an agreement line, matching the previous listing rule.
+ */
+export function requiredOneTimeAddOnsForTier(
+  assessmentValue: unknown,
+  selectedIds: readonly string[],
+  tier: ServiceTier,
+): Array<{ name: string; price: number }> {
+  const selected = new Set(selectedIds);
+  return proposalServiceAddOns(assessmentValue)
+    .filter(
+      (option) =>
+        option.required === true &&
+        option.billingCadence === "one-time" &&
+        option.packageIds.includes(tier) &&
+        selected.has(option.id),
+    )
+    .map((option) => ({ name: option.name, price: option.monthlyPrice }));
+}
