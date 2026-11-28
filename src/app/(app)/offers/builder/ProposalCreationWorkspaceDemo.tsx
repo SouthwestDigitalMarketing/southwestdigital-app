@@ -102,6 +102,19 @@ import {
   sanitizeBundlePricingDefaults,
   type OptionsTemplateAssessmentSlice,
 } from "@/lib/quotes/optionsTemplates";
+import {
+  formatCaughtUpThrough as formatCleanupCaughtUpThrough,
+  formatWrapUpDateLong as formatCleanupWrapUpDate,
+  type CleanupPlan,
+} from "@/lib/quotes/cleanupPlan";
+import {
+  ensureCleanupPlan,
+  nextCleanupPlanOnPeriodsChange,
+  resetCleanupWrapUp,
+  setCleanupPaymentPlan,
+  setCleanupWrapUpOverride,
+} from "./cleanupPlanState";
+import CleanupWrapUpCard from "./CleanupWrapUpCard";
 
 export {
   reconcileProposalAssessmentWithCatalog,
@@ -366,6 +379,13 @@ export type AssessmentState = {
   cleanupStartMonth: string;
   cleanupEndMonth: string;
   historicalCleanupPeriods: HistoricalCleanupPeriod[];
+  /**
+   * Spec 04 wrap-up plan (snapshot key `assessment.cleanupPlan`). Absent on
+   * legacy drafts; created only by explicit staff interaction (see
+   * cleanupPlanState.ts), never on load. Carries through save/publish
+   * untouched and prices nothing by itself.
+   */
+  cleanupPlan?: CleanupPlan | null;
   isTestProposal: boolean;
   waiveOnboardingFee: boolean;
   onboardingFeeOverride: number | null;
@@ -1279,6 +1299,14 @@ export function mergeStoredAssessment(
       historicalCleanupPeriods: Array.isArray(parsed.historicalCleanupPeriods)
         ? parsed.historicalCleanupPeriods
         : initialState.historicalCleanupPeriods,
+      // Spec 04: a stored plan passes through untouched; anything else stays
+      // absent so legacy drafts never gain a plan on load.
+      cleanupPlan:
+        parsed.cleanupPlan !== null &&
+        typeof parsed.cleanupPlan === "object" &&
+        !Array.isArray(parsed.cleanupPlan)
+          ? parsed.cleanupPlan
+          : initialState.cleanupPlan,
       optionsCatalogOrder: Array.isArray(parsed.optionsCatalogOrder)
         ? parsed.optionsCatalogOrder.filter((id): id is string => typeof id === "string")
         : initialState.optionsCatalogOrder,
@@ -1367,6 +1395,38 @@ export function hasCatchUpPricingInputs(assessment: {
     assessment.booksOverTwoMonthsBehind === true &&
     Boolean(assessment.cleanupStartMonth && assessment.cleanupEndMonth)
   );
+}
+
+/**
+ * Spec 04 collapsed-section rows for the wrap-up plan. Tolerant of stored
+ * snapshots that predate normalization — raw values show through rather
+ * than throwing.
+ */
+export function cleanupPlanSummaryRows(plan: CleanupPlan | null | undefined): Array<[string, string]> {
+  if (!plan || typeof plan !== "object") return [];
+  let wrapUp = plan.wrapUpDate;
+  try {
+    wrapUp = formatCleanupWrapUpDate(plan.wrapUpDate);
+  } catch {
+    // Fall through with the raw value.
+  }
+  let caughtUp = plan.caughtUpThrough || "—";
+  try {
+    if (plan.caughtUpThrough) caughtUp = formatCleanupCaughtUpThrough(plan.caughtUpThrough);
+  } catch {
+    // Fall through with the raw value.
+  }
+  const paymentLabel =
+    plan.paymentPlan === "full"
+      ? "Pay in full"
+      : plan.paymentPlan === "split_50_50"
+        ? "50-50"
+        : "Monthly installments";
+  return [
+    ["Caught up through", caughtUp],
+    [`Wrap-up date${plan.wrapUpSource === "override" ? " (override)" : ""}`, wrapUp],
+    ["Cleanup payment", paymentLabel],
+  ];
 }
 
 export function useProposalAssessmentDemoState({
@@ -1924,9 +1984,34 @@ export default function ProposalCreationWorkspaceDemo({
       .map((period) => `${period.year}-${String(period.endMonth).padStart(2, "0")}`)
       .sort();
 
-    updateAssessment("historicalCleanupPeriods", periods);
-    updateAssessment("cleanupStartMonth", sortedStarts[0] ?? "");
-    updateAssessment("cleanupEndMonth", sortedEnds.at(-1) ?? "");
+    // Spec 04: configuring periods is explicit staff interaction, so a plan
+    // is created on first configuration and refreshed after that. Loading a
+    // draft never reaches this function (see cleanupPlanState.ts).
+    setAssessment((current) => ({
+      ...current,
+      historicalCleanupPeriods: periods,
+      cleanupStartMonth: sortedStarts[0] ?? "",
+      cleanupEndMonth: sortedEnds.at(-1) ?? "",
+      cleanupPlan: nextCleanupPlanOnPeriodsChange(current.cleanupPlan, periods, {
+        booksOverTwoMonthsBehind: current.booksOverTwoMonthsBehind === true,
+      }),
+    }));
+  }
+
+  // Spec 04: answering "behind" with periods present configures cleanup, so a
+  // missing plan is created; answering otherwise drops the plan — without
+  // cleanup there is nothing to wrap up.
+  function setBooksOverTwoMonthsBehind(value: boolean | null) {
+    setAssessment((current) => {
+      const next = { ...current, booksOverTwoMonthsBehind: value };
+      if (value === true && !current.cleanupPlan && current.historicalCleanupPeriods.length > 0) {
+        next.cleanupPlan = ensureCleanupPlan(current.cleanupPlan, current.historicalCleanupPeriods);
+      }
+      if (value !== true) {
+        next.cleanupPlan = null;
+      }
+      return next;
+    });
   }
 
   function addHistoricalCleanupPeriod() {
@@ -2002,6 +2087,7 @@ export default function ProposalCreationWorkspaceDemo({
       ["Cleanup periods", assessment.historicalCleanupPeriods.map((period) =>
         `${MONTH_OPTIONS[period.startMonth - 1]}–${MONTH_OPTIONS[period.endMonth - 1]} ${period.year} · ${bookkeepingPlatformLabel(period.platform)} · ${period.purchasedOrSoldPropertiesCount || 0} properties bought/sold`,
       ).join("\n")],
+      ...cleanupPlanSummaryRows(assessment.cleanupPlan),
       ["Ongoing platform", bookkeepingPlatformLabel(assessment.ongoingBookkeepingPlatform)],
       ["Platform migration", assessment.platformMigrationEnabled ? `Enabled · ${assessment.platformMigrationEffectiveMonth || "Date not set"}` : "Not enabled"],
     ],
@@ -2919,7 +3005,7 @@ export default function ProposalCreationWorkspaceDemo({
                               type="radio"
                               name="books-over-two-months-behind"
                               checked={assessment.booksOverTwoMonthsBehind === true}
-                              onChange={() => updateAssessment("booksOverTwoMonthsBehind", true)}
+                              onChange={() => setBooksOverTwoMonthsBehind(true)}
                               className="h-4 w-4 border-slate-300 text-brandnavy focus:ring-brandnavy"
                             />
                             Yes
@@ -2929,7 +3015,7 @@ export default function ProposalCreationWorkspaceDemo({
                               type="radio"
                               name="books-over-two-months-behind"
                               checked={assessment.booksOverTwoMonthsBehind === false}
-                              onChange={() => updateAssessment("booksOverTwoMonthsBehind", false)}
+                              onChange={() => setBooksOverTwoMonthsBehind(false)}
                               className="h-4 w-4 border-slate-300 text-brandnavy focus:ring-brandnavy"
                             />
                             No
@@ -2939,7 +3025,7 @@ export default function ProposalCreationWorkspaceDemo({
                               type="radio"
                               name="books-over-two-months-behind"
                               checked={assessment.booksOverTwoMonthsBehind === null}
-                              onChange={() => updateAssessment("booksOverTwoMonthsBehind", null)}
+                              onChange={() => setBooksOverTwoMonthsBehind(null)}
                               className="h-4 w-4 border-slate-300 text-brandnavy focus:ring-brandnavy"
                             />
                             Unknown
@@ -3081,6 +3167,25 @@ export default function ProposalCreationWorkspaceDemo({
                                 </button>
                               </div>
                             ))}
+                            <div className="md:col-span-2 xl:col-span-4">
+                              <CleanupWrapUpCard
+                                plan={assessment.cleanupPlan ?? null}
+                                periods={assessment.historicalCleanupPeriods}
+                                onCreatePlan={() => updateAssessment("cleanupPlan", ensureCleanupPlan(assessment.cleanupPlan, assessment.historicalCleanupPeriods))}
+                                onWrapUpChange={(dateISO) => {
+                                  if (!assessment.cleanupPlan) return;
+                                  updateAssessment("cleanupPlan", setCleanupWrapUpOverride(assessment.cleanupPlan, dateISO, assessment.historicalCleanupPeriods));
+                                }}
+                                onResetWrapUp={() => {
+                                  if (!assessment.cleanupPlan) return;
+                                  updateAssessment("cleanupPlan", resetCleanupWrapUp(assessment.cleanupPlan, assessment.historicalCleanupPeriods));
+                                }}
+                                onPaymentPlanChange={(paymentPlan) => {
+                                  if (!assessment.cleanupPlan) return;
+                                  updateAssessment("cleanupPlan", setCleanupPaymentPlan(assessment.cleanupPlan, paymentPlan, assessment.historicalCleanupPeriods));
+                                }}
+                              />
+                            </div>
                           </div>
                           <FieldLabel label="Platform Change">
                             <label className="flex h-[50px] items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-base font-medium text-slate-700 shadow-sm">

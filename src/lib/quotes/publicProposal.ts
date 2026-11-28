@@ -9,6 +9,13 @@ import {
   type ComplexityPublicWhy,
 } from "@/lib/quotes/complexityDrivers";
 import {
+  buildCleanupInstallments,
+  cleanupWeeksBetween,
+  normalizeCleanupPlan,
+  type CleanupInstallmentDue,
+  type CleanupPaymentPlan,
+} from "@/lib/quotes/cleanupPlan";
+import {
   asCompanyBundleSnapshot,
   buildCompanyBundleSnapshot,
   hasCompanyBundle,
@@ -226,10 +233,102 @@ export function publicComplexityWhyByTierForSnapshot(snapshotValue: unknown): Co
 }
 
 /**
- * Spec 03 per-month complexity cleanup rate from a stored snapshot, for the
- * select route's checkout build. The public pricing schema strips the
- * priced `maintain.complexity` object, so without this the real select flow
- * always stores `complexityCleanupAdd: undefined`. Only the number the
+ * Whitelisted Spec 04 wrap-up plan for a stored snapshot, or null for
+ * legacy snapshots without one. Only client-visible fields leave this
+ * function: the caught-up-through month, the wrap-up date, the payment plan,
+ * and the installment preview (label, amount, due). The staff-only fields —
+ * start date, wrap-up source, installment due dates — never publish.
+ */
+export type PublicCleanupInstallment = {
+  label: string;
+  amountCents: number;
+  due: CleanupInstallmentDue;
+};
+
+export type PublicCleanupPlan = {
+  caughtUpThrough: string;
+  wrapUpDate: string;
+  paymentPlan: CleanupPaymentPlan;
+  installments: PublicCleanupInstallment[];
+  /**
+   * Whole weeks between the snapshot plan start and wrap-up (rounded up).
+   * The live pre-selection view shows this length instead of the wrap-up
+   * calendar date, which would go stale before the client selects. The
+   * staff-only start date itself never publishes.
+   */
+  wrapUpWeeks: number;
+};
+
+function isValidPeriodLike(value: unknown): value is { startMonth: number; endMonth: number } {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const period = value as Record<string, unknown>;
+  return (
+    Number.isInteger(period.startMonth) &&
+    Number.isInteger(period.endMonth) &&
+    (period.startMonth as number) >= 1 &&
+    (period.endMonth as number) >= (period.startMonth as number) &&
+    (period.endMonth as number) <= 12
+  );
+}
+
+export function publicCleanupPlanForSnapshot(snapshotValue: unknown): PublicCleanupPlan | null {
+  const snapshot = record(snapshotValue);
+  const rawAssessment = record(snapshot.assessment);
+  if (!rawAssessment.cleanupPlan || typeof rawAssessment.cleanupPlan !== "object") return null;
+  const periods = Array.isArray(rawAssessment.historicalCleanupPeriods)
+    ? rawAssessment.historicalCleanupPeriods.filter(isValidPeriodLike)
+    : [];
+  const backlogMonths = periods.reduce((total, period) => total + (period.endMonth - period.startMonth + 1), 0);
+  const pricing = record(snapshot.pricing);
+  const maintain = record(pricing.maintain);
+  const maintainMonthly = typeof maintain.monthly === "number" && Number.isFinite(maintain.monthly)
+    ? Math.max(0, maintain.monthly)
+    : 0;
+  const complexity = record(maintain.complexity);
+  const complexityPerMonth = typeof complexity.cleanupPerMonthTotal === "number" && Number.isFinite(complexity.cleanupPerMonthTotal)
+    ? Math.max(0, complexity.cleanupPerMonthTotal)
+    : 0;
+  // Same estimate the stored checkout freezes (base + Spec 03 add), summed
+  // over every snapshot period — the client refines it by selecting periods.
+  const totalCents = Math.round((maintainMonthly + complexityPerMonth) * backlogMonths * 100);
+  const plan = normalizeCleanupPlan(rawAssessment.cleanupPlan, { backlogMonths });
+  return {
+    caughtUpThrough: plan.caughtUpThrough,
+    wrapUpDate: plan.wrapUpDate,
+    wrapUpWeeks: cleanupWeeksBetween(plan.startDate, plan.wrapUpDate),
+    paymentPlan: plan.paymentPlan,
+    installments: buildCleanupInstallments(totalCents, plan).map((installment) => ({
+      label: installment.label,
+      amountCents: installment.amountCents,
+      due: installment.due,
+    })),
+  };
+}
+
+/**
+ * Whitelisted Spec 04 plan input for the select route's checkout
+ * reconstruction. The public assessment schema strips `cleanupPlan`, so the
+ * route carries these five staff-snapshot fields back in explicitly — same
+ * trust level as the companies it already carries. Refresh/normalize at
+ * checkout validates every field; junk still yields a usable plan.
+ */
+export function storedCleanupPlanInputForSnapshot(snapshotValue: unknown): Record<string, unknown> | null {
+  const snapshot = record(snapshotValue);
+  const rawAssessment = record(snapshot.assessment);
+  const raw = record(rawAssessment.cleanupPlan);
+  if (Object.keys(raw).length === 0) return null;
+  const picked: Record<string, unknown> = {};
+  for (const key of ["caughtUpThrough", "startDate", "wrapUpDate", "wrapUpSource", "paymentPlan"]) {
+    if (raw[key] !== undefined) picked[key] = raw[key];
+  }
+  return Object.keys(picked).length > 0 ? picked : null;
+}
+
+/**
+ * Whitelisted Spec 03 complexity cleanup rate for the select route's
+ * checkout reconstruction. The public pricing schema strips the priced
+ * `maintain.complexity` object, so without this the real select flow always
+ * stores `complexityCleanupAdd: undefined`. Only the per-month number the
  * checkout reads crosses — never the raw complexity selection.
  */
 export function storedComplexityCleanupPerMonthForSnapshot(snapshotValue: unknown): number {
@@ -255,6 +354,7 @@ export function toPublicBookkeepingProposal(
   const publicPerson = person.parse(selectedPerson);
   const assessment = publicAssessmentSchema.parse(snapshot.assessment);
   const accountInventory: PublicAccountInventory | null = toPublicAccountInventory(record(snapshot.assessment).accounts);
+  const cleanupPlan = publicCleanupPlanForSnapshot(snapshotValue);
   return {
     accountInventory,
     assessment: {
@@ -269,6 +369,9 @@ export function toPublicBookkeepingProposal(
     // Legacy proposals (no complexity selection) get null; the raw selection
     // (names, overrides) never leaves the snapshot — only the whitelist above.
     complexityWhy: publicComplexityWhyForSnapshot(snapshotValue),
+    // Spec 04 wrap-up plan; spread only when present so legacy payloads stay
+    // byte-identical (the legacy toEqual test pins the full shape).
+    ...(cleanupPlan !== null ? { cleanupPlan } : {}),
     // Per-tier Why lists for the tier tabs (selected tab's amounts); null for
     // legacy. `complexityWhy` stays as the maintain-tier alias.
     complexityWhyByTier: publicComplexityWhyByTierForSnapshot(snapshotValue),

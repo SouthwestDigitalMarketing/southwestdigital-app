@@ -3,13 +3,22 @@ import {
   CLEANUP_APPROVAL_TEXT, CLEANUP_MONTHLY_START_TEXT, NO_CLEANUP_MONTHLY_START_TEXT,
   proposalPaymentSchedule,
 } from "@/lib/quotes/paymentSchedule";
+import {
+  addDaysIso,
+  buildCleanupInstallments,
+  monthlyStartLengthText,
+  type CleanupInstallment,
+  type CleanupPlan,
+} from "@/lib/quotes/cleanupPlan";
+import CleanupTermsBlock from "./CleanupTermsBlock";
 
 const fmt = (value: number) => value.toLocaleString("en-US", { style: "currency", currency: "USD" });
 
 export default function ProposalPaymentPlan({
   cleanupMonths, cleanupMonthlyRate, onboardingFee, recurringMonthlyTotal,
   additionalOneTimeTotal, requiredOneTime = [], annual, amountDueNow, creditApplied = 0, creditLabel = "Credit for work already paid", originalOnboardingFee, annualSavingsPercent = 0, showStages = false,
-  complexityCleanupAdd = 0,
+  cleanupPlan = null, cleanupInstallments, brandName = "us", complexityCleanupAdd = 0, cleanupIsEstimate = false,
+  cleanupLengthWeeks = null, mentionFileFee,
 }: {
   cleanupMonths: number;
   cleanupMonthlyRate: number;
@@ -29,17 +38,82 @@ export default function ProposalPaymentPlan({
   annualSavingsPercent?: number;
   showStages?: boolean;
   /**
+   * Spec 04 wrap-up plan. Absent (legacy): the estimate block, start texts,
+   * and stages render exactly as today. Present with cleanup: the block adds
+   * the wrap-up line, the fixed monthly-start rule, the payment plan with
+   * installments, and the extension clause.
+   */
+  cleanupPlan?: CleanupPlan | null;
+  /**
+   * Frozen installments for the displayed cleanup total (the stored checkout
+   * carries these post-selection, complexity add included). Defaults to a
+   * fresh cut of the displayed estimate when omitted.
+   */
+  cleanupInstallments?: CleanupInstallment[];
+  /** Brand named in the extension clause ("delay caused by us" when omitted). */
+  brandName?: string;
+  /**
    * Spec 03 complexity cleanup weight inside the displayed cleanup total.
    * When positive the estimate itemizes it so the months × rate equation
-   * adds up to the displayed total. Absent renders the legacy estimate.
+   * adds up to the displayed total (which then equals the shown
+   * installments). Absent renders the legacy base-only estimate.
    */
   complexityCleanupAdd?: number;
+  /** Labels the cleanup terms as a pre-selection estimate. */
+  cleanupIsEstimate?: boolean;
+  /**
+   * Pre-selection length mode: whole weeks between plan start and wrap-up,
+   * shown instead of the wrap-up calendar date. Null (default) keeps the
+   * exact stored dates. The live public display plan carries a placeholder
+   * start, so its caller passes the server-computed weeks explicitly; a
+   * staff plan with a real start resolves them when omitted.
+   */
+  cleanupLengthWeeks?: number | null;
+  /**
+   * Whether the agreement carrying the extension clause charges the $150
+   * file-maintenance fee. Passed through to the terms block; undefined
+   * (default) names the fee, matching the default template.
+   */
+  mentionFileFee?: boolean;
 }) {
-  const schedule = proposalPaymentSchedule({ cleanupMonths, cleanupMonthlyRate, onboardingFee, recurringMonthlyTotal, additionalOneTimeTotal, annualPrepay: annual, creditApplied });
+  const schedule = proposalPaymentSchedule({
+    cleanupMonths, cleanupMonthlyRate, onboardingFee, recurringMonthlyTotal, additionalOneTimeTotal, annualPrepay: annual, creditApplied,
+    ...(cleanupPlan ? { cleanupPlan } : {}),
+  });
+  // The plan only takes effect alongside cleanup; a stray plan with zero
+  // months renders the legacy block (the schedule has no installments then).
+  const withCleanupPlan = Boolean(cleanupPlan) && schedule.hasCleanup && "cleanupInstallments" in schedule;
   // Validated Spec 03 complexity add for the displayed estimate.
   const cleanupComplexityAdd = typeof complexityCleanupAdd === "number" && Number.isFinite(complexityCleanupAdd) && complexityCleanupAdd > 0
     ? Math.round(complexityCleanupAdd * 100) / 100
     : 0;
+  // The fallback cut covers the whole displayed estimate: the schedule total
+  // is months × rate only, so the complexity add joins it here. Frozen
+  // post-selection installments already include the add and pass through.
+  const planInstallments = cleanupInstallments
+    ?? (withCleanupPlan && cleanupPlan
+      ? buildCleanupInstallments(Math.round((schedule.cleanupTotal + cleanupComplexityAdd) * 100), cleanupPlan)
+      : []);
+  // Pre-selection length mode: show "about N weeks after you accept" instead
+  // of the wrap-up calendar date, which would go stale before the client
+  // selects. The wording plan rewinds the start by the week count so the
+  // length builders resolve the same N for a placeholder-start public plan;
+  // installments keep cutting from the real plan above. Null (default) keeps
+  // the exact stored dates for post-selection views.
+  const lengthWeeks = typeof cleanupLengthWeeks === "number" && Number.isFinite(cleanupLengthWeeks) && cleanupLengthWeeks > 0
+    ? Math.max(1, Math.round(cleanupLengthWeeks))
+    : null;
+  const showLengthWording = withCleanupPlan && cleanupPlan !== null && lengthWeeks !== null;
+  const wordingPlan = showLengthWording && cleanupPlan !== null && lengthWeeks !== null
+    ? { ...cleanupPlan, startDate: addDaysIso(cleanupPlan.wrapUpDate, -lengthWeeks * 7) }
+    : cleanupPlan;
+  const monthlyStartRule = showLengthWording && wordingPlan
+    ? monthlyStartLengthText({ hasCleanup: schedule.hasCleanup, plan: wordingPlan, prepaidAnnual: annual })
+    : withCleanupPlan && "monthlyStartText" in schedule
+      ? schedule.monthlyStartText
+      : annual
+        ? (schedule.hasCleanup ? ANNUAL_PREPAID_CLEANUP_START_TEXT : ANNUAL_PREPAID_START_TEXT)
+        : (schedule.hasCleanup ? CLEANUP_MONTHLY_START_TEXT : NO_CLEANUP_MONTHLY_START_TEXT);
   // recurringMonthlyTotal is already discounted on an annual term; back out the undiscounted price.
   const discountFactor = annual && annualSavingsPercent > 0 && annualSavingsPercent < 100 ? 1 - annualSavingsPercent / 100 : 1;
   const grossMonthly = Math.round(recurringMonthlyTotal / discountFactor * 100) / 100;
@@ -75,17 +149,28 @@ export default function ProposalPaymentPlan({
           {cleanupComplexityAdd > 0 ? <p className="mt-1">Complexity adjustment: {fmt(cleanupComplexityAdd)}</p> : null}
           {cleanupComplexityAdd > 0 ? <p className="mt-1">Estimated cleanup total: <strong>{fmt(schedule.cleanupTotal + cleanupComplexityAdd)}</strong></p> : null}
           <p className="mt-2 text-xs leading-5 text-slate-600">Estimate only. Final scope, price, and payment milestones require your approval after discovery. Not charged today.</p>
+          {withCleanupPlan && wordingPlan ? (
+            <div className="mt-3 border-t border-slate-200 pt-3 text-xs leading-5 text-slate-600">
+              <CleanupTermsBlock
+                plan={wordingPlan}
+                installments={planInstallments}
+                monthlyRate={recurringMonthlyTotal}
+                brandName={brandName}
+                annual={annual}
+                isEstimate={cleanupIsEstimate}
+                dateWording={showLengthWording ? "length" : "exact"}
+                mentionFileFee={mentionFileFee}
+              />
+            </div>
+          ) : null}
         </div>
       ) : null}
       <div>
         <p className="font-semibold">Ongoing service: {discountFactor < 1 ? <span className="mr-1 font-normal text-slate-400 line-through">{fmt(grossMonthly)}</span> : null}{fmt(recurringMonthlyTotal)}/month</p>
         {annual ? <p className="mt-1">{fmt(recurringMonthlyTotal)} × 12 months = <strong>{fmt(schedule.annualTotal)}</strong></p> : null}
-        {annual ? <p className="mt-1 text-xs text-slate-600">12-month commitment, paid in full today. Excludes onboarding, cleanup, and one-time add-ons.</p> : null}
-        <p className="mt-2 text-xs leading-5 text-slate-600">{
-          annual
-            ? (schedule.hasCleanup ? ANNUAL_PREPAID_CLEANUP_START_TEXT : ANNUAL_PREPAID_START_TEXT)
-            : (schedule.hasCleanup ? CLEANUP_MONTHLY_START_TEXT : NO_CLEANUP_MONTHLY_START_TEXT)
-        }</p>
+        {annual && !schedule.hasCleanup ? <p className="mt-1 text-xs text-slate-600">12-month commitment, paid in full today. Excludes onboarding, cleanup, and one-time add-ons.</p> : null}
+        {annual && schedule.hasCleanup ? <p className="mt-1 text-xs text-slate-600">12-month commitment, not due today. Billed when monthly service begins after cleanup is complete. Excludes onboarding, cleanup, and one-time add-ons.</p> : null}
+        <p className="mt-2 text-xs leading-5 text-slate-600">{monthlyStartRule}</p>
       </div>
       {showStages ? (
         <div className="rounded-xl border border-slate-200 p-4">
@@ -93,11 +178,7 @@ export default function ProposalPaymentPlan({
           <ol className="mt-3 list-decimal space-y-3 pl-5 text-sm leading-6">
             <li><strong>Onboarding{schedule.hasCleanup ? " + Discovery" : ""}.</strong> After payment clears (or is waived), provide account access and required records. We confirm readiness and the service schedule.</li>
             {schedule.hasCleanup ? <li><strong>Cleanup approval and delivery.</strong> {CLEANUP_APPROVAL_TEXT}</li> : null}
-            <li><strong>Monthly bookkeeping.</strong> {
-              annual
-                ? (schedule.hasCleanup ? ANNUAL_PREPAID_CLEANUP_START_TEXT : ANNUAL_PREPAID_START_TEXT)
-                : (schedule.hasCleanup ? CLEANUP_MONTHLY_START_TEXT : NO_CLEANUP_MONTHLY_START_TEXT)
-            }</li>
+            <li><strong>Monthly bookkeeping.</strong> {monthlyStartRule}</li>
           </ol>
         </div>
       ) : null}

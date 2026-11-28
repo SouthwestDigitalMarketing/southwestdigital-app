@@ -10,6 +10,8 @@ import {
   DEFAULT_BUNDLE_PRICING_OPTIONS,
   priceCompanyBundle,
 } from "@/lib/quotes/companyBundle";
+import { FILE_MAINTENANCE_NO_STACKING_SENTENCE, agreementMentionsFileFee } from "./template";
+import type { CleanupInstallment, CleanupPlan } from "@/lib/quotes/cleanupPlan";
 
 describe("renderAgreementTemplate", () => {
   const stagedInput = {
@@ -88,6 +90,12 @@ describe("renderAgreementTemplate", () => {
       expect(text).not.toContain("Complexity adjustment");
       expect(text).not.toContain("Estimated Cleanup Total");
     }
+  });
+
+  it("detects the $150 file-maintenance fee the same way the renderer does", () => {
+    expect(agreementMentionsFileFee(DEFAULT_BOOKKEEPING_AGREEMENT_TEMPLATE)).toBe(true);
+    expect(agreementMentionsFileFee("Custom terms with no maintenance fee.")).toBe(false);
+    expect(agreementMentionsFileFee("")).toBe(false);
   });
 
   it.each([undefined, null])("renders generic wording when volume is %s", (volumeMonthlyTotal) => {
@@ -192,7 +200,9 @@ describe("renderAgreementTemplate", () => {
     expect(text).toContain("3 months × $300.00 = $900.00");
     expect(text).toContain("Total Due Upon Signing: $560.00");
     expect(text).toContain("$360.00 × 12 months = $4,320.00");
-    expect(text).toContain("Paid in full today at the discounted annual rate");
+    // Cleanup is outstanding: no service is paid in full today.
+    expect(text).toContain("Not due today; billed at the discounted annual rate when monthly service begins after cleanup is complete.");
+    expect(text).not.toContain("Paid in full today");
     expect(text).toContain("written approval before cleanup begins");
     expect(text).toContain("after approved cleanup is complete");
     expect(text).toContain("Priority Client Support: Same-business-day responses.");
@@ -336,6 +346,165 @@ describe("renderAgreementTemplate", () => {
     expect(text).toContain("Selected One-Time Add-ons (due today): $200.00");
     expect(dueTodayTotal(text)).toBe(totalDue(text));
     expect(totalDue(text)).toBe(1640);
+  });
+
+  describe("Spec 04 cleanup plan", () => {
+    const cleanupPlanFixture: CleanupPlan = {
+      caughtUpThrough: "2025-12",
+      startDate: "2026-01-05",
+      wrapUpDate: "2026-03-05",
+      wrapUpSource: "default",
+      paymentPlan: "monthly",
+    };
+    const withPlan = {
+      ...stagedInput,
+      cleanupPlan: cleanupPlanFixture,
+      monthlyRate: 360,
+    };
+
+    function headings(text: string): Array<[number, string]> {
+      return [...text.matchAll(/^(\d+)\. (.+)$/gm)].map((match) => [Number(match[1]), match[2]] as [number, string]);
+    }
+
+    it("inserts the wrap-up clause after volume pricing and renumbers through 20", () => {
+      const text = generateProposalAgreementText(withPlan);
+      expect(headings(text).map(([number]) => number)).toEqual(Array.from({ length: 20 }, (_, index) => index + 1));
+      expect(headings(text).slice(11)).toEqual([
+        [12, "Service and Price Guarantee"], [13, "Volume-Based Pricing"],
+        [14, "Cleanup Wrap-Up and Extension"], [15, "Indemnification"],
+        [16, "Limitation of Liability"], [17, "Governing Law, Venue, and Attorneys' Fees"],
+        [18, "Entire Agreement"], [19, "Severability"], [20, "Electronic Signature"],
+      ]);
+      expect(text).toContain("We will have your books caught up through December 2025 by March 5, 2026.");
+      expect(text).toContain("currently $360");
+      expect(text).toContain("the two are never charged together for the same month");
+      expect(text).toContain("there is no extra charge and the wrap-up date moves");
+    });
+
+    it("inserts the wrap-up clause at 13 when the volume clause is disabled", () => {
+      const text = generateProposalAgreementText({ ...withPlan, includeVolumeClause: false });
+      expect(headings(text).map(([number]) => number)).toEqual(Array.from({ length: 19 }, (_, index) => index + 1));
+      expect(headings(text).slice(11)).toEqual([
+        [12, "Service and Price Guarantee"], [13, "Cleanup Wrap-Up and Extension"],
+        [14, "Indemnification"], [15, "Limitation of Liability"],
+        [16, "Governing Law, Venue, and Attorneys' Fees"], [17, "Entire Agreement"],
+        [18, "Severability"], [19, "Electronic Signature"],
+      ]);
+      expect(text).not.toMatch(/volume|pricing band/i);
+    });
+
+    it("inserts the wrap-up clause after a custom numbered volume heading", () => {
+      const template = "Terms for {{clientName}}\n\n12. Service and Price Guarantee\nGuarantee body.\n\n13. Indemnification\nIndemnity body.";
+      const text = renderAgreementTemplate(template, { ...withPlan, paymentScheduleVersion: undefined, includeVolumeClause: false });
+      expect(text).toContain("12. Service and Price Guarantee\nGuarantee body.\n\n13. Cleanup Wrap-Up and Extension\nWe will have your books caught up");
+      expect(text).toContain("14. Indemnification\nIndemnity body.");
+    });
+
+    it("names the payment plan on the fee line and uses the wrap-up start rule in scope", () => {
+      const text = generateProposalAgreementText(withPlan);
+      expect(text).toContain("Estimated Cleanup (not due today): 3 months × $300.00 = $900.00. Cleanup is paid in 2 monthly installments of $450.00.");
+      expect(text).toContain("Your 12 months of service begin on March 5, 2026 or when cleanup is complete, whichever comes first.");
+      const monthly = generateProposalAgreementText({ ...withPlan, agreementTerm: "month-to-month" });
+      expect(monthly).toContain("Monthly service and billing begin on March 5, 2026 or when cleanup is complete, whichever comes first.");
+      expect(monthly).not.toContain("12 months of service begin");
+    });
+
+    it("shows the cleanup length instead of the wrap-up date in length wording", () => {
+      // Jan 5 -> Mar 5 is 59 days, rounded up to whole weeks.
+      const text = generateProposalAgreementText({ ...withPlan, wrapUpDateWording: "length" });
+      expect(text).toContain("We will have your books caught up through December 2025 about 9 weeks after you accept.");
+      expect(text).toContain("Your 12 months of service begin about 9 weeks after you accept, or when cleanup is complete, whichever comes first.");
+      const monthly = generateProposalAgreementText({ ...withPlan, wrapUpDateWording: "length", agreementTerm: "month-to-month" });
+      expect(monthly).toContain("Monthly service and billing begin about 9 weeks after you accept, or when cleanup is complete, whichever comes first.");
+      expect(monthly).not.toContain("March 5, 2026");
+      expect(text).toContain("If cleanup runs past the wrap-up date");
+    });
+
+    it("derives installments from the plan when stored installments are absent", () => {
+      const text = generateProposalAgreementText({ ...withPlan, cleanupInstallments: undefined });
+      expect(text).toContain("Cleanup is paid in 2 monthly installments of $450.00.");
+      expect(text).toContain("14. Cleanup Wrap-Up and Extension");
+    });
+
+    it("prefers stored installments over derived ones", () => {
+      const stored: CleanupInstallment[] = [
+        { label: "Cleanup payment in full", amountCents: 90000, due: "at-approval", dueDate: "2026-01-05" },
+      ];
+      const text = generateProposalAgreementText({
+        ...withPlan,
+        cleanupPlan: { ...cleanupPlanFixture, paymentPlan: "full" },
+        cleanupInstallments: stored,
+      });
+      expect(text).toContain("Cleanup is paid in full at approval: $900.00 due when cleanup is approved.");
+    });
+
+    it("appends the no-stacking sentence to the $150 bullet only with a plan", () => {
+      const text = generateProposalAgreementText(withPlan);
+      expect(text).toContain(`$150/month file-maintenance fee applies to keep the engagement open. ${FILE_MAINTENANCE_NO_STACKING_SENTENCE}`);
+      const legacy = generateProposalAgreementText(stagedInput);
+      expect(legacy).toContain("$150/month file-maintenance fee applies to keep the engagement open.");
+      expect(legacy).not.toContain(FILE_MAINTENANCE_NO_STACKING_SENTENCE);
+      expect(legacy).not.toContain("Wrap-Up");
+    });
+
+    it("itemizes the complexity cleanup add so the fee equation adds up", () => {
+      const text = generateProposalAgreementText({ ...withPlan, cleanupTotal: 1095, complexityCleanupAdd: 195 });
+      expect(text).toContain("Estimated Cleanup (not due today): 3 months × $300.00 = $900.00.");
+      expect(text).toContain("Complexity adjustment: $195.00");
+      expect(text).toContain("Estimated Cleanup Total: $1,095.00");
+      // Without the add the fee line renders exactly as before.
+      expect(generateProposalAgreementText(withPlan)).toContain("3 months × $300.00 = $900.00. Cleanup is paid in");
+      expect(generateProposalAgreementText(withPlan)).not.toContain("Complexity adjustment");
+    });
+
+    it("uses deferred annual wording only when cleanup is outstanding", () => {
+      const annual = generateProposalAgreementText({ ...withPlan, agreementTerm: "12-month" });
+      expect(annual).toContain("Not due today; billed at the discounted annual rate");
+      expect(annual).not.toContain("Paid in full today");
+      const noCleanup = generateProposalAgreementText({
+        ...stagedInput, hasCleanup: false, cleanupMonths: 0, cleanupTotal: 0, agreementTerm: "12-month",
+      });
+      expect(noCleanup).toContain("Paid in full today at the discounted annual rate");
+    });
+
+    it("names the $150 fee in the extension clause only for templates that charge it", () => {
+      const text = generateProposalAgreementText(withPlan);
+      expect(text).toContain("replaces the $150 file-maintenance fee");
+      const custom = renderAgreementTemplate("Custom agreement for {{clientName}}", withPlan);
+      expect(custom).toContain("replaces any file-maintenance fee for that month");
+      expect(custom).not.toContain("$150");
+    });
+
+    it("renders byte-identical text when the plan is absent, null, or junk", () => {
+      const baseline = generateProposalAgreementText(stagedInput);
+      expect(generateProposalAgreementText({ ...stagedInput, cleanupPlan: undefined })).toBe(baseline);
+      expect(generateProposalAgreementText({ ...stagedInput, cleanupPlan: null })).toBe(baseline);
+      expect(generateProposalAgreementText({
+        ...stagedInput,
+        cleanupPlan: { bogus: true } as unknown as CleanupPlan,
+        cleanupInstallments: ["nope"] as unknown as CleanupInstallment[],
+      })).toBe(baseline);
+      expect(generateProposalAgreementText({ ...stagedInput, hasCleanup: false, cleanupPlan: cleanupPlanFixture })).toBe(
+        generateProposalAgreementText({ ...stagedInput, hasCleanup: false }),
+      );
+    });
+
+    it("appends the cleanup block to custom templates without numbered headings", () => {
+      const text = renderAgreementTemplate("Custom agreement for {{clientName}}", withPlan);
+      expect(text).toContain("VOLUME-BASED PRICING");
+      expect(text).toContain("CLEANUP WRAP-UP AND EXTENSION");
+      expect(text).toContain("We will have your books caught up through December 2025 by March 5, 2026.");
+      expect(text).toContain("If the delay is caused by Example, there is no extra charge");
+      // Volume fallback first (inserted after the guarantee rule finds no
+      // headings), then the cleanup block appended after it.
+      expect(text.indexOf("VOLUME-BASED PRICING")).toBeLessThan(text.indexOf("CLEANUP WRAP-UP AND EXTENSION"));
+    });
+
+    it("appends the cleanup block when the volume clause renders inline from a token", () => {
+      const text = renderAgreementTemplate("Terms\n{{volumeClause}}", { ...withPlan, paymentScheduleVersion: undefined });
+      expect(text).toMatch(/^Terms\nThe monthly fee is based on/);
+      expect(text).toContain("CLEANUP WRAP-UP AND EXTENSION");
+    });
   });
 
   it("renders proposal-specific agreement fields without unresolved supported tokens", () => {

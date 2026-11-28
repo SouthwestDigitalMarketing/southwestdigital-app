@@ -2,10 +2,44 @@ import {
   ANNUAL_PREPAID_CLEANUP_START_TEXT, ANNUAL_PREPAID_START_TEXT,
   CLEANUP_APPROVAL_TEXT, CLEANUP_MONTHLY_START_TEXT, NO_CLEANUP_MONTHLY_START_TEXT,
 } from "@/lib/quotes/paymentSchedule";
+import {
+  buildCleanupInstallments,
+  cleanupExtensionClauseText,
+  cleanupPaymentPlanText,
+  cleanupWrapUpLengthText,
+  cleanupWrapUpText,
+  monthlyStartLengthText,
+  monthlyStartText,
+  readCleanupInstallments,
+  readCleanupPlan,
+} from "@/lib/quotes/cleanupPlan";
+import type { CleanupInstallment, CleanupPlan } from "@/lib/quotes/cleanupPlan";
+// The one strict Spec 04 validators live in cleanupPlan and are shared with
+// the checkout parser (and through it the receipt); re-exported here so
+// agreement callers keep their import site.
+export { readCleanupInstallments, readCleanupPlan };
 import { volumeClauseText, type AccountBasis } from "@/lib/quotes/accountInventory";
 import type { CompanyBundleFeeLine } from "@/lib/quotes/companyBundle";
 
 const DIVIDER = "─".repeat(62);
+
+/** The $150 file-maintenance sentence in the default agreement template. */
+export const FILE_MAINTENANCE_SENTENCE =
+  "$150/month file-maintenance fee applies to keep the engagement open.";
+
+/**
+ * Whether an agreement text charges the $150 file-maintenance fee — the
+ * same detection the template renderer uses to decide between naming the
+ * fee and generic wording in the extension clause. Proposal surfaces that
+ * quote the clause (terms blocks) reuse this so they never dangle.
+ */
+export function agreementMentionsFileFee(agreementText: string): boolean {
+  return agreementText.includes(FILE_MAINTENANCE_SENTENCE);
+}
+
+/** Appended to the $150 file-maintenance bullet only when a cleanup plan exists. */
+export const FILE_MAINTENANCE_NO_STACKING_SENTENCE =
+  "Once the wrap-up date has passed, the extension rate in the Cleanup Wrap-Up and Extension clause replaces this fee for that month; the two never apply to the same month.";
 
 export const DEFAULT_AGREEMENT_TEMPLATE_KEY = "bookkeeping-services";
 export const DEFAULT_AGREEMENT_TEMPLATE_NAME = "Bookkeeping Services Agreement";
@@ -171,11 +205,33 @@ export type AgreementRenderInput = {
   /** Fixed-fee bookkeeping defaults to including the clause; hourly callers must opt out. */
   includeVolumeClause?: boolean;
   /**
+   * Pre-selection staff preview shows the cleanup length instead of the
+   * wrap-up calendar date, which would go stale before the client selects.
+   * The server agreement route (stored checkout plan) never passes this, so
+   * signed text keeps the exact dates. Defaults to "exact".
+   */
+  wrapUpDateWording?: "exact" | "length";
+  /**
+   * Spec 04 cleanup plan snapshot (stored checkout `cleanupPlan`). When
+   * present with hasCleanup, the scope uses the fixed wrap-up start rule,
+   * the fee line names the payment plan, and a "Cleanup Wrap-Up and
+   * Extension" clause is inserted. Absent renders byte-identical to today.
+   */
+  cleanupPlan?: CleanupPlan | null;
+  /** Stored checkout `cleanupInstallments`; derived from the plan when absent. */
+  cleanupInstallments?: CleanupInstallment[] | null;
+  /**
    * Spec 03 complexity cleanup weight inside `cleanupTotal`, stored on the
    * checkout. When positive, the fee line itemizes it so the months × rate
    * equation adds up to the displayed total. Absent renders as today.
    */
   complexityCleanupAdd?: number | null;
+  /**
+   * Monthly service rate billed by the extension clause. Falls back to
+   * recurringMonthlyTotal so callers that only know the monthly total
+   * still render the right rate.
+   */
+  monthlyRate?: number | null;
   date?: Date;
 };
 
@@ -183,24 +239,40 @@ function formatCurrency(value: number) {
   return value.toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
 
-function insertVolumeClauseAfterGuarantee(rendered: string, volumeClause: string): string | null {
-  const heading = /^(\d+)\.[ \t]+Service and Price Guarantee[ \t]*$/m.exec(rendered);
-  if (!heading) return null;
-  const guaranteeNumber = Number(heading[1]);
-  const afterHeading = rendered.slice(heading.index + heading[0].length);
-  const nextHeading = /^(\d+)\.[ \t]+/m.exec(afterHeading);
-  const insertAt = nextHeading
-    ? heading.index + heading[0].length + nextHeading.index
-    : rendered.length;
-  const head = rendered.slice(0, insertAt).replace(/\s+$/, "");
-  const tail = rendered
-    .slice(insertAt)
-    .replace(/^(\d+)\. /gm, (line, number: string) => (
-      Number(number) > guaranteeNumber ? `${Number(number) + 1}. ` : line
-    ));
-  const tailText = tail.replace(/^\s+/, "");
-  const clause = `${guaranteeNumber + 1}. Volume-Based Pricing\n${volumeClause}`;
-  return tailText ? `${head}\n\n${clause}\n\n${tailText}` : `${head}\n\n${clause}`;
+/**
+ * Insert a numbered clause after the first heading matching one of the
+ * anchor titles, renumbering every later clause. Anchor titles are tried
+ * in order (e.g. a wrap-up clause goes after "Volume-Based Pricing" when
+ * present, else after "Service and Price Guarantee"). Returns null when no
+ * anchor heading exists so the caller can append the same fallback block.
+ */
+function insertNumberedClauseAfter(
+  rendered: string,
+  anchorTitles: [string, ...string[]],
+  clauseTitle: string,
+  clauseBody: string,
+): string | null {
+  for (const anchorTitle of anchorTitles) {
+    const escaped = anchorTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const heading = new RegExp(`^(\\d+)\\.[ \\t]+${escaped}[ \\t]*$`, "m").exec(rendered);
+    if (!heading) continue;
+    const anchorNumber = Number(heading[1]);
+    const afterHeading = rendered.slice(heading.index + heading[0].length);
+    const nextHeading = /^(\d+)\.[ \t]+/m.exec(afterHeading);
+    const insertAt = nextHeading
+      ? heading.index + heading[0].length + nextHeading.index
+      : rendered.length;
+    const head = rendered.slice(0, insertAt).replace(/\s+$/, "");
+    const tail = rendered
+      .slice(insertAt)
+      .replace(/^(\d+)\. /gm, (line, number: string) => (
+        Number(number) > anchorNumber ? `${Number(number) + 1}. ` : line
+      ));
+    const tailText = tail.replace(/^\s+/, "");
+    const clause = `${anchorNumber + 1}. ${clauseTitle}\n${clauseBody}`;
+    return tailText ? `${head}\n\n${clause}\n\n${tailText}` : `${head}\n\n${clause}`;
+  }
+  return null;
 }
 
 export function renderAgreementTemplate(template: string, input: AgreementRenderInput) {
@@ -218,6 +290,19 @@ export function renderAgreementTemplate(template: string, input: AgreementRender
     ? `${input.selectedTierLabel} package`
     : "Selected bookkeeping package";
   const staged = input.paymentScheduleVersion === 2;
+  // Spec 04: only a valid stored plan with cleanup changes anything; every
+  // other input renders byte-identical to today.
+  const cleanupPlan = input.hasCleanup ? readCleanupPlan(input.cleanupPlan) : null;
+  const monthlyRate = typeof input.monthlyRate === "number" && Number.isFinite(input.monthlyRate) && input.monthlyRate >= 0
+    ? input.monthlyRate
+    : null;
+  const extensionRate = monthlyRate ?? (typeof input.recurringMonthlyTotal === "number" && Number.isFinite(input.recurringMonthlyTotal)
+    ? Math.max(0, input.recurringMonthlyTotal)
+    : 0);
+  const cleanupInstallments = cleanupPlan
+    ? readCleanupInstallments(input.cleanupInstallments)
+      ?? buildCleanupInstallments(Math.round((input.cleanupTotal ?? 0) * 100), cleanupPlan)
+    : null;
   const companyFeeLines = (input.companyFeeLines ?? []).filter(
     (line): line is CompanyBundleFeeLine =>
       !!line &&
@@ -268,9 +353,13 @@ export function renderAgreementTemplate(template: string, input: AgreementRender
     staged ? "Stage 1 — Onboarding: provide account access and required records. We confirm receipt and readiness before service work begins." : null,
     staged && input.hasCleanup ? `Stage 2 — Discovery and cleanup approval: ${CLEANUP_APPROVAL_TEXT}` : null,
     staged ? `${input.hasCleanup ? "Stage 3" : "Stage 2"} — Ongoing bookkeeping: ${
-      input.agreementTerm === "12-month"
-        ? (input.hasCleanup ? ANNUAL_PREPAID_CLEANUP_START_TEXT : ANNUAL_PREPAID_START_TEXT)
-        : (input.hasCleanup ? CLEANUP_MONTHLY_START_TEXT : NO_CLEANUP_MONTHLY_START_TEXT)
+      cleanupPlan
+        ? input.wrapUpDateWording === "length"
+          ? monthlyStartLengthText({ hasCleanup: true, plan: cleanupPlan, prepaidAnnual: input.agreementTerm === "12-month" })
+          : monthlyStartText({ hasCleanup: true, plan: cleanupPlan, prepaidAnnual: input.agreementTerm === "12-month" })
+        : input.agreementTerm === "12-month"
+          ? (input.hasCleanup ? ANNUAL_PREPAID_CLEANUP_START_TEXT : ANNUAL_PREPAID_START_TEXT)
+          : (input.hasCleanup ? CLEANUP_MONTHLY_START_TEXT : NO_CLEANUP_MONTHLY_START_TEXT)
     }` : null,
   ].filter((line): line is string => Boolean(line));
   const scopeOfWork = scopeLines.join("\n\n");
@@ -287,7 +376,7 @@ export function renderAgreementTemplate(template: string, input: AgreementRender
     `Ongoing Monthly Services: ${formatCurrency(companyMonthlyLines.length > 0 ? companyMonthlyTotal : (input.recurringMonthlyTotal ?? 0))} per month`,
     `Agreement Term:           ${input.agreementTerm === "12-month" ? "12 months" : "Month-to-month"}`,
     staged && input.hasCleanup
-      ? `Estimated Cleanup (not due today): ${input.cleanupMonths ?? 0} months × ${formatCurrency(input.cleanupMonthlyRate ?? 0)} = ${formatCurrency(cleanupBaseTotal)}`
+      ? `Estimated Cleanup (not due today): ${input.cleanupMonths ?? 0} months × ${formatCurrency(input.cleanupMonthlyRate ?? 0)} = ${formatCurrency(cleanupBaseTotal)}${cleanupPlan && cleanupInstallments ? `. ${cleanupPaymentPlanText(cleanupPlan, cleanupInstallments)}` : ""}`
       : (input.cleanupTotal ?? 0) > 0
       ? `Selected Cleanup Work:  ${formatCurrency(input.cleanupTotal ?? 0)}`
       : null,
@@ -307,7 +396,9 @@ export function renderAgreementTemplate(template: string, input: AgreementRender
     (input.creditApplied ?? 0) > 0 ? `Credit for work already paid: -${formatCurrency(input.creditApplied ?? 0)}` : null,
     `Total Due Upon Signing: ${formatCurrency(input.amountDueNow ?? 0)}`,
     staged && input.agreementTerm === "12-month"
-      ? `12-Month Service Total: ${formatCurrency(input.recurringMonthlyTotal ?? 0)} × 12 months = ${formatCurrency(Math.round((input.recurringMonthlyTotal ?? 0) * 1200) / 100)}. Paid in full today at the discounted annual rate; excludes onboarding, cleanup, and one-time add-ons. The 12-month term begins on the confirmed service start date.` : null,
+      ? input.hasCleanup
+        ? `12-Month Service Total: ${formatCurrency(input.recurringMonthlyTotal ?? 0)} × 12 months = ${formatCurrency(Math.round((input.recurringMonthlyTotal ?? 0) * 1200) / 100)}. Not due today; billed at the discounted annual rate when monthly service begins after cleanup is complete. Excludes onboarding, cleanup, and one-time add-ons.`
+        : `12-Month Service Total: ${formatCurrency(input.recurringMonthlyTotal ?? 0)} × 12 months = ${formatCurrency(Math.round((input.recurringMonthlyTotal ?? 0) * 1200) / 100)}. Paid in full today at the discounted annual rate; excludes onboarding, cleanup, and one-time add-ons. The 12-month term begins on the confirmed service start date.` : null,
     "Recurring monthly services are billed according to the selected term. Any change to scope or pricing requires written agreement.",
   ].filter((line): line is string => Boolean(line));
   const feeStructure = feeLines.join("\n");
@@ -337,10 +428,31 @@ export function renderAgreementTemplate(template: string, input: AgreementRender
   );
   // Custom templates may omit the dynamic scope or fees. Always include the
   // agreed schedule for new selections; signed agreement text is never rebuilt.
-  const withSchedule = staged && (!template.includes("{{scopeOfWork}}") || !template.includes("{{feeStructure}}"))
+  let withSchedule = staged && (!template.includes("{{scopeOfWork}}") || !template.includes("{{feeStructure}}"))
     ? `${rendered}\n\nSELECTED SERVICES AND PAYMENT SCHEDULE\n${DIVIDER}\n${scopeOfWork}\n\n${feeStructure}`
     : rendered;
-  if (!includeVolumeClause || template.includes("{{volumeClause}}")) return withSchedule;
-  return insertVolumeClauseAfterGuarantee(withSchedule, volumeClause)
-    ?? `${withSchedule}\n\nVOLUME-BASED PRICING\n${DIVIDER}\n${volumeClause}`;
+  if (includeVolumeClause && !template.includes("{{volumeClause}}")) {
+    withSchedule = insertNumberedClauseAfter(withSchedule, ["Service and Price Guarantee"], "Volume-Based Pricing", volumeClause)
+      ?? `${withSchedule}\n\nVOLUME-BASED PRICING\n${DIVIDER}\n${volumeClause}`;
+  }
+  if (cleanupPlan && cleanupInstallments) {
+    // The monthly service rate replaces the $150 file-maintenance fee for
+    // any month past the wrap-up date billed under this clause; never both.
+    // Custom templates without that sentence keep generic clause wording.
+    const mentionsFileFee = agreementMentionsFileFee(withSchedule);
+    withSchedule = withSchedule.replace(
+      FILE_MAINTENANCE_SENTENCE,
+      `$& ${FILE_MAINTENANCE_NO_STACKING_SENTENCE}`,
+    );
+    const wrapUpLine = input.wrapUpDateWording === "length" ? cleanupWrapUpLengthText(cleanupPlan) : cleanupWrapUpText(cleanupPlan);
+    const cleanupClauseBody =
+      `${wrapUpLine}\n\n${cleanupExtensionClauseText({ monthlyRate: extensionRate, brandName: input.brandName, mentionFileFee: mentionsFileFee })}`;
+    withSchedule = insertNumberedClauseAfter(
+      withSchedule,
+      ["Volume-Based Pricing", "Service and Price Guarantee"],
+      "Cleanup Wrap-Up and Extension",
+      cleanupClauseBody,
+    ) ?? `${withSchedule}\n\nCLEANUP WRAP-UP AND EXTENSION\n${DIVIDER}\n${cleanupClauseBody}`;
+  }
+  return withSchedule;
 }

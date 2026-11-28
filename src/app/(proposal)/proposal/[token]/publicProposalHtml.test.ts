@@ -138,6 +138,78 @@ describe("public proposal HTML", () => {
     expect(html).toContain("Your bookkeeping plan");
   });
 
+  it("pre-selection public terms show the whitelisted plan as an estimate", () => {
+    viewState.pricingStep = true;
+    const snapshot = sentinelBookkeepingSnapshot();
+    const withPlan = {
+      ...snapshot,
+      assessment: {
+        ...snapshot.assessment,
+        booksOverTwoMonthsBehind: true,
+        cleanupStartMonth: "2025-01",
+        cleanupEndMonth: "2025-12",
+        cleanupPlan: {
+          caughtUpThrough: "2025-12",
+          startDate: "2026-02-14",
+          wrapUpDate: "2026-05-14",
+          wrapUpSource: "default",
+          paymentPlan: "monthly",
+        },
+      },
+    };
+    const html = renderLiveBookkeeping(
+      toPublicBookkeepingProposal(withPlan, catalogCopyFromRows(sentinelCatalogRows)),
+    );
+    // The per-tier cards carry the plan terms before any selection.
+    expect(html).toContain("12 months × $500.00/month");
+    expect(html).toContain("caught up through December 2025");
+    expect(html).toContain("Estimate \u2014");
+    expect(html).toContain("installment");
+    // Pre-selection reads the cleanup length, never the wrap-up calendar date.
+    expect(html).toContain("about 13 weeks after you accept");
+    expect(html).not.toContain("caught up through December 2025 by");
+    // Staff-only fields never reach the live view.
+    expect(html).not.toContain("2026-02-14");
+    expect(html).not.toContain("wrapUpSource");
+    expect(html).not.toContain(PRIVATE_SENTINEL);
+  });
+
+  it("pre-selection public estimate itemizes the complexity add and always adds up", () => {
+    viewState.pricingStep = true;
+    const snapshot = sentinelBookkeepingSnapshot();
+    const withComplexity = {
+      ...snapshot,
+      assessment: {
+        ...snapshot.assessment,
+        booksOverTwoMonthsBehind: true,
+        cleanupStartMonth: "2025-01",
+        cleanupEndMonth: "2025-12",
+        cleanupPlan: {
+          caughtUpThrough: "2025-12",
+          startDate: "2026-02-14",
+          wrapUpDate: "2026-05-14",
+          wrapUpSource: "default",
+          paymentPlan: "monthly",
+        },
+      },
+      pricing: {
+        ...snapshot.pricing,
+        maintain: {
+          ...snapshot.pricing.maintain,
+          complexity: { lines: [], monthlyTotal: 0, cleanupPerMonthTotal: 65, cleanupTotal: 780 },
+        },
+      },
+    };
+    const html = renderLiveBookkeeping(
+      toPublicBookkeepingProposal(withComplexity, catalogCopyFromRows(sentinelCatalogRows)),
+    );
+    // 12 months × $500 base + $780 complexity add = $6,780 schedule.
+    expect(html).toContain("Complexity adjustment: $780.00");
+    expect(html).toContain("Estimated cleanup total:");
+    expect(html).toContain("$6,780.00");
+    expect(html).toContain("Estimate \u2014");
+  });
+
   it("hourly public HTML omits sentinel internals", () => {
     const snapshot = sentinelHourlySnapshot();
     const html = renderToStaticMarkup(

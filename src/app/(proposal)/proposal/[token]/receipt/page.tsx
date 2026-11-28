@@ -9,6 +9,8 @@ import {
 } from "@/lib/engagements/publicProposalAccess";
 import { readAcceptedPayment, readAcceptedSelection } from "@/lib/engagements/acceptedPayment";
 import AgreementTextView from "@/app/(app)/offers/builder/AgreementTextView";
+import CleanupTermsBlock from "@/app/(app)/offers/builder/CleanupTermsBlock";
+import { agreementMentionsFileFee } from "@/lib/agreements/template";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -103,7 +105,20 @@ export default async function ProposalReceiptPage({ params }: { params: Promise<
               <h2 className="font-bold">Your agreed payment schedule</h2>
               <p>Initial payment: {formatUsd(checkout.amountDueNow)}.</p>
               {(checkout.cleanupMonths ?? 0) > 0 ? <p>Cleanup estimate: {checkout.cleanupMonths} months × {formatUsd(checkout.cleanupMonthlyRate ?? 0)} = {formatUsd(checkout.cleanupTotal - (checkout.complexityCleanupAdd ?? 0))}.{(checkout.complexityCleanupAdd ?? 0) > 0 ? ` Complexity adjustment: ${formatUsd(checkout.complexityCleanupAdd ?? 0)}. Estimated Cleanup Total: ${formatUsd(checkout.cleanupTotal)}.` : ""} This estimate was not part of the initial payment. Cleanup scope, price, and payment milestones require your approval after discovery.</p> : null}
-              {checkout.hasTwelveMonthAgreement ? <p>12-month service total: {formatUsd(checkout.recurringMonthlyTotal)} × 12 = {formatUsd(Math.round(checkout.recurringMonthlyTotal * 1200) / 100)}, paid monthly. Excludes onboarding, cleanup, and one-time add-ons.</p> : null}
+              {checkout.cleanupPlan && (checkout.cleanupMonths ?? 0) > 0 && checkout.cleanupInstallments ? (
+                <div className="space-y-2 border-t border-slate-200 pt-3">
+                  <CleanupTermsBlock
+                    plan={checkout.cleanupPlan}
+                    installments={checkout.cleanupInstallments}
+                    monthlyRate={checkout.recurringMonthlyTotal}
+                    brandName={brand.name}
+                    annual={checkout.hasTwelveMonthAgreement}
+                    mentionFileFee={agreementMentionsFileFee(quote.engagement.agreementText ?? "")}
+                  />
+                </div>
+              ) : null}
+              {checkout.hasTwelveMonthAgreement && (checkout.cleanupMonths ?? 0) === 0 ? <p>12-month service total: {formatUsd(checkout.recurringMonthlyTotal)} × 12 = {formatUsd(Math.round(checkout.recurringMonthlyTotal * 1200) / 100)}, paid monthly. Excludes onboarding, cleanup, and one-time add-ons.</p> : null}
+              {checkout.hasTwelveMonthAgreement && (checkout.cleanupMonths ?? 0) > 0 ? <p>12-month service total: {formatUsd(checkout.recurringMonthlyTotal)} × 12 = {formatUsd(Math.round(checkout.recurringMonthlyTotal * 1200) / 100)}. Not due today; billed when monthly service begins after cleanup is complete. Excludes onboarding, cleanup, and one-time add-ons.</p> : null}
               <p>See the signed agreement below for the service stages and monthly billing start.</p>
             </div>
           ) : null}
