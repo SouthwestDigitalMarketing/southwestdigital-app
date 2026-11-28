@@ -45,11 +45,13 @@ export function AccountInventoryOverrideForm({ initial, onApply, onCancel }: {
   );
 }
 
-export default function AccountInventoryEditor({ accounts, bandOverride, onAccountsChange, onOverrideChange }: {
+export default function AccountInventoryEditor({ accounts, bandOverride, onAccountsChange, onOverrideChange, allowBandOverride = true }: {
   accounts: AccountEntry[];
   bandOverride: BandOverride | null;
   onAccountsChange: (accounts: AccountEntry[]) => void;
   onOverrideChange: (override: BandOverride | null) => void;
+  /** Added-company inventories derive their band from accounts; the Spec 02 bundle pricer ignores overrides. */
+  allowBandOverride?: boolean;
 }) {
   const summary = summarizeAccountInventory(accounts);
   const resolved = resolveTransactionBand({ accounts, bandOverride });
@@ -88,18 +90,20 @@ export default function AccountInventoryEditor({ accounts, bandOverride, onAccou
         <div className="space-y-2 rounded-xl border border-slate-200 p-3">
           <p className="text-sm font-semibold text-slate-800">Band: {resolved.band} ({resolved.source === "override" ? `manual override; accounts say ${summary.derivedBand ?? ""}` : "from accounts"})</p>
           {bandOverride ? <p className="text-sm text-slate-600">Override reason: {bandOverride.reason}</p> : null}
-          <details open={editorOpen} onToggle={(event) => setEditorOpen(event.currentTarget.open)}>
-            <summary className="cursor-pointer text-sm font-medium text-slate-700">Override band</summary>
-            {editorOpen ? (
-              <AccountInventoryOverrideForm
-                key={overrideDraftKey(bandOverride)}
-                initial={initialOverrideDraft(bandOverride)}
-                onApply={(override) => { onOverrideChange(override); setEditorOpen(false); }}
-                onCancel={() => setEditorOpen(false)}
-              />
-            ) : null}
-          </details>
-          {bandOverride ? <button type="button" className="text-sm text-slate-600 underline" onClick={() => onOverrideChange(null)}>Use band from accounts</button> : null}
+          {allowBandOverride ? (
+            <details open={editorOpen} onToggle={(event) => setEditorOpen(event.currentTarget.open)}>
+              <summary className="cursor-pointer text-sm font-medium text-slate-700">Override band</summary>
+              {editorOpen ? (
+                <AccountInventoryOverrideForm
+                  key={overrideDraftKey(bandOverride)}
+                  initial={initialOverrideDraft(bandOverride)}
+                  onApply={(override) => { onOverrideChange(override); setEditorOpen(false); }}
+                  onCancel={() => setEditorOpen(false)}
+                />
+              ) : null}
+            </details>
+          ) : null}
+          {bandOverride && allowBandOverride ? <button type="button" className="text-sm text-slate-600 underline" onClick={() => onOverrideChange(null)}>Use band from accounts</button> : null}
         </div>
       ) : null}
     </div>

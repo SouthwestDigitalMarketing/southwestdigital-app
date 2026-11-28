@@ -77,12 +77,16 @@ import {
   type PackagePricingSummary,
 } from "@/lib/quotes/packagePricing";
 import {
-  DEFAULT_BUNDLE_PRICING_OPTIONS,
   hasCompanyBundle,
   normalizeCompanyBundle,
   priceCompanyBundle,
+  type BundlePricingOptions,
   type CompanyEntry,
 } from "@/lib/quotes/companyBundle";
+import CompanyBundleEditor, {
+  resolveBundlePricingOptions,
+  withSyncedMainAccounts,
+} from "./CompanyBundleEditor";
 
 export {
   reconcileProposalAssessmentWithCatalog,
@@ -290,6 +294,8 @@ export type AssessmentState = {
   bandOverride: BandOverride | null;
   /** Spec 02 company bundle (canonical when present); `accounts` mirrors companies[0].accounts. */
   companies?: CompanyEntry[];
+  /** Per-proposal override of the three BundlePricingOptions values; omitted means defaults. */
+  bundlePricingOptions?: BundlePricingOptions;
   entityType: EntityType;
   taxElection: TaxElection;
   booksOverTwoMonthsBehind: boolean | null;
@@ -1084,9 +1090,21 @@ function parseAnnualSavingsPercentInput(value: string) {
 }
 
 function withComplexityUnknownDefaults(assessment: AssessmentState): AssessmentState {
+  // Spec 02: a saved bundle is canonical — companies normalize tolerantly and
+  // `accounts` mirrors companies[0].accounts. Legacy snapshots (no `companies`
+  // key, or an empty list) keep `companies` unset and price exactly as before.
+  const storedCompanies = (assessment as { companies?: unknown }).companies;
+  const normalizedBundle =
+    storedCompanies === undefined ? undefined : normalizeCompanyBundle(storedCompanies);
+  const companies = normalizedBundle && normalizedBundle.length > 0 ? normalizedBundle : undefined;
   return {
     ...assessment,
-    accounts: normalizeAccountInventory(assessment.accounts),
+    accounts: companies ? companies[0].accounts : normalizeAccountInventory(assessment.accounts),
+    companies,
+    bundlePricingOptions:
+      assessment.bundlePricingOptions === undefined
+        ? undefined
+        : resolveBundlePricingOptions(assessment.bundlePricingOptions),
     bandOverride: validateBandOverride(assessment.bandOverride).ok
       ? assessment.bandOverride
       : null,
@@ -1547,7 +1565,7 @@ export function getProposalPricingSnapshotData(assessment: AssessmentState) {
         companies: bundleCompanies,
         packageId: pkg.id,
         baseAssessment: pricingAssessment,
-        options: DEFAULT_BUNDLE_PRICING_OPTIONS,
+        options: resolveBundlePricingOptions(assessment.bundlePricingOptions),
       });
       packagePricing[pkg.id] = { ...packagePricing[pkg.id], monthly: bundle.bundleMonthly };
     }
@@ -1652,7 +1670,31 @@ export default function ProposalCreationWorkspaceDemo({
     togglePayrollPaymentMethod,
   } = useProposalAssessmentDemoState();
   const pricingAssessment = effectiveAssessment(assessment);
+  const normalizedCompanies = normalizeCompanyBundle(assessment.companies);
   const hasAccountInventory = assessment.accounts.some((account) => account.status === "open");
+
+  function handleCompaniesChange(next: CompanyEntry[] | undefined) {
+    const normalized = next === undefined ? undefined : normalizeCompanyBundle(next);
+    const active = normalized && normalized.length > 0 ? normalized : undefined;
+    setAssessment((current) => ({
+      ...current,
+      companies: active,
+      // The main inventory stays the source of truth for the proposal-level
+      // fields, so a bundle edit never leaves the two mirrors diverged.
+      accounts: active ? active[0].accounts : current.accounts,
+    }));
+  }
+
+  function handleMainAccountsChange(accounts: AccountEntry[]) {
+    setAssessment((current) => {
+      const synced = withSyncedMainAccounts(normalizeCompanyBundle(current.companies), accounts);
+      return {
+        ...current,
+        accounts,
+        companies: synced.length > 0 ? synced : current.companies,
+      };
+    });
+  }
   const isScaleStep = step === "scale";
   const isComplexityStep = step === "complexity";
   const isAdjustmentsStep = step === "adjustments";
@@ -1730,6 +1772,14 @@ export default function ProposalCreationWorkspaceDemo({
       ["Properties", String(assessment.numberOfProperties)],
       ["Book set", labelFor(BOOK_SET_OPTIONS, assessment.bookSetType)],
     ],
+    "Companies": normalizedCompanies.length > 0
+      ? normalizedCompanies.map(
+          (company, index): [string, string] => [
+            index === 0 ? "Main company" : `Company ${index + 1}`,
+            company.name + (company.ownQboFile ? "" : " (shares the main file)"),
+          ],
+        )
+      : [["Entities", String(assessment.numberOfEntities)]],
     "Monthly Activity": [
       ["Average monthly volume", labelFor(TRANSACTION_BANDS, pricingAssessment.transactionBand)],
       ["Books over two months behind", yesNo(assessment.booksOverTwoMonthsBehind)],
@@ -1831,6 +1881,38 @@ export default function ProposalCreationWorkspaceDemo({
                     ) : (
                       <p className="text-base text-slate-500">Property count does not apply to the selected book-set type.</p>
                     )}
+                  </AssessmentCardSection>
+                ) : null}
+
+                {isScaleStep ? (
+                  <AssessmentCardSection
+                    title="Companies"
+                    assessment={assessment}
+                    onCancel={setAssessment}
+                    summary={summaries["Companies"]}
+                  >
+                    <CompanyBundleEditor
+                      companies={assessment.companies ?? []}
+                      companyName={assessment.companyName}
+                      mainAccounts={assessment.accounts}
+                      baseAssessment={pricingAssessment}
+                      bundleOptions={resolveBundlePricingOptions(assessment.bundlePricingOptions)}
+                      legacyEntitiesField={
+                        <div className="max-w-[280px]">
+                          <FieldLabel label="Number of Entities">
+                            <input
+                              type="number"
+                              min={0}
+                              value={assessment.numberOfEntities}
+                              onChange={(event) => updateAssessment("numberOfEntities", parseCountInput(event.target.value))}
+                              className={INPUT_CLASS_NAME}
+                            />
+                          </FieldLabel>
+                        </div>
+                      }
+                      onCompaniesChange={handleCompaniesChange}
+                      onBundleOptionsChange={(options) => updateAssessment("bundlePricingOptions", options)}
+                    />
                   </AssessmentCardSection>
                 ) : null}
 
@@ -2551,7 +2633,7 @@ export default function ProposalCreationWorkspaceDemo({
                     <AccountInventoryEditor
                       accounts={assessment.accounts}
                       bandOverride={assessment.bandOverride}
-                      onAccountsChange={(accounts) => updateAssessment("accounts", accounts)}
+                      onAccountsChange={handleMainAccountsChange}
                       onOverrideChange={(override) => updateAssessment("bandOverride", override)}
                     />
                     <div className="grid gap-4 md:grid-cols-2">
