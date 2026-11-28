@@ -619,6 +619,7 @@ model Brand {
   showrunnerFeedback      ShowrunnerFeedback[]
   showrunnerStudio        ShowrunnerStudio?
   trips                   Trip[]
+  vanHunt                 VanHunt?
   operationsClients       OperationsClient[]
   operationsEvidence      OperationsEvidence[]
   serviceRecords          ServiceRecord[]
@@ -2229,6 +2230,16 @@ model Trip {
   brand       Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
   @@unique([brandId, slug])
+}
+
+/// Van hunt: a single brand-scoped plan, with per-candidate inspection and drive ticks.
+model VanHunt {
+  id        String   @id @default(cuid())
+  brandId   String   @unique
+  plan      Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
 }
 
 model ShowrunnerStudio {
