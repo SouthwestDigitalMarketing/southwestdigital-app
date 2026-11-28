@@ -140,3 +140,22 @@ active today; a record starting later shows as "starting" and is not counted.
   deals moved to won with `--fix`), duplicate won deals (Kassad; Sales invoice rows, `amountKind = invoice`, are skipped in both), tag/record
   disagreements (agent with `--fix`; a hand-set tag with no record is Tom's).
   `--save` writes `~/.local/state/swapp/service-check.json` for the scan review.
+
+## ChatGPT bridge switch
+
+Tom's ON/OFF switch for the ChatGPT <-> Herdr Gmail bridge (2026-11-28): SWapp
+**Settings > Bridge** (platform operators only). One row in `BridgeSwitch`
+(key `chatgpt-bridge`); no row = off. Same operations token.
+
+- `POST /api/operations/bridge`: ripley's `bridged.py` heartbeat every ~30 s and
+  on each mode change: `mode` (`off` | `active` | `idle` | `error`), optional
+  `lastCheckAt`, `lastMessageAt` (ISO), `lastMessageUid`, `lastError`,
+  `reportedBy`. Answers `{ enabled, changedAt, changedBy }`: the switch ripley
+  follows. `turnOff: true` switches it off (agents: `bridgectl.py off`); the API
+  cannot switch it on, only Tom's tap can.
+- `GET /api/operations/bridge`: the switch plus ripley's last report as one
+  plain `state` (`off`, `turning-on`, `turning-off`, `active`, `idle`, `error`,
+  `not-answering` after 3 minutes without a heartbeat while on).
+
+Ripley side: `ripley:~/controllers/chatgpt-bridge` (README there). Off means
+ripley holds no Gmail connection; it only asks this endpoint every 30 s.
