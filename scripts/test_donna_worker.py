@@ -684,6 +684,13 @@ class WorkerTests(unittest.TestCase):
             with patch.object(donna, "CLAUDE_BIN", fake), self.assertRaisesRegex(RuntimeError, "usage limit"):
                 donna.review("hello", {"type": "object"}, tmp)
 
+    def test_keep_rules_match_whole_words_only(self):
+        rule = {"why": "Money or legal trouble", "subject": ["lien", "past due", "payment (failed|declined)"]}
+        self.assertFalse(donna.rule_matches(rule, "a@x.com", "Client calls during tax season"))
+        self.assertTrue(donna.rule_matches(rule, "a@x.com", "IRS lien notice"))
+        self.assertTrue(donna.rule_matches(rule, "a@x.com", "Your account is PAST DUE"))
+        self.assertTrue(donna.rule_matches(rule, "a@x.com", "Payment declined for card"))
+
     def test_cancel_stops_before_the_next_move_and_reports_what_moved(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = self.clean_fixture(tmp)

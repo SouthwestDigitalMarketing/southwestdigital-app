@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import type { CleanupPlan, SpamSender } from "@/lib/donna/domain";
-import { WhyCell, td, th } from "./sortTable";
+import { WhyCell, headTint, rowTint, td, th } from "./sortTable";
 
 const VERDICT: Record<SpamSender["verdict"], [string, string]> = {
   block: ["Spam", "text-rose-700"],
@@ -102,30 +102,51 @@ export function CleanupChooser({
     `${x.toLocaleString("en-US")} ${x === 1 ? one : many}`;
   const doing = tally.spam + tally.keep > 0 || tally.trashDelete > 0;
 
-  const rows = (list: Row[], group: string, tint: [string, string]) =>
+  const rows = (list: Row[], group: string, hue: number) =>
     list.length ? (
       list.map(({ s, i }, row) => (
-        <tr key={s.sender} className={`align-top ${tint[row % 2]}`}>
-          <td className={`max-w-[14rem] truncate ${td}`} title={s.sender}>
+        <tr key={s.sender} className={`align-top ${rowTint(hue, row)}`}>
+          <td
+            data-cell="subject"
+            className={`max-w-[14rem] truncate ${td}`}
+            title={s.sender}
+          >
             <span className="font-medium">{s.name || s.sender}</span>
             {s.name ? (
               <span className="block truncate text-slate-500">{s.sender}</span>
             ) : null}
           </td>
-          <td className={`${td} tabular-nums`}>{s.count}</td>
-          <td className={`whitespace-nowrap ${td} text-slate-600`}>
+          <td
+            data-cell="count"
+            data-label="Emails"
+            className={`${td} tabular-nums`}
+          >
+            {s.count}
+          </td>
+          <td
+            data-cell="where"
+            data-label="In"
+            className={`whitespace-nowrap ${td} text-slate-600`}
+          >
             {s.where.map((w) => WHERE[w] ?? w).join(", ")}
           </td>
-          <td className={`max-w-[16rem] truncate ${td} text-slate-600`}>
+          <td
+            data-cell="samples"
+            className={`max-w-[16rem] truncate ${td} text-slate-600`}
+          >
             {s.samples.join(" · ")}
           </td>
-          <td className={`whitespace-nowrap ${td} ${VERDICT[s.verdict][1]}`}>
+          <td
+            data-cell="verdict"
+            data-label="Donna"
+            className={`whitespace-nowrap ${td} ${VERDICT[s.verdict][1]}`}
+          >
             {VERDICT[s.verdict][0]}
             {s.unsubscribe ? (
               <span className="block text-slate-500">can unsubscribe</span>
             ) : null}
           </td>
-          <td className={td}>
+          <td data-cell="action" className={td}>
             <select
               name={`sender-${i}`}
               data-group={group}
@@ -138,7 +159,7 @@ export function CleanupChooser({
               <option value="leave">Decide later</option>
             </select>
           </td>
-          <td className={`${td} text-slate-400`}>
+          <td data-cell="why" className={`${td} text-slate-400`}>
             <WhyCell why={s.why} />
           </td>
         </tr>
@@ -155,11 +176,15 @@ export function CleanupChooser({
     label: string,
     list: Row[],
     group: string,
-    tone: string,
+    hue: number,
     hint: string,
   ) => (
-    <tr className={`border-t-2 border-t-slate-700 ${tone}`}>
-      <td colSpan={5} className={`${td} text-sm font-semibold`}>
+    <tr className={`border-t-2 border-t-slate-700 ${headTint(hue)}`}>
+      <td
+        data-cell="bucket"
+        colSpan={5}
+        className={`${td} text-sm font-semibold`}
+      >
         {label} ({n(list.length, "sender")},{" "}
         {n(
           list.reduce((x, { s }) => x + s.count, 0),
@@ -167,7 +192,7 @@ export function CleanupChooser({
         )}
         )<span className="ml-2 text-xs font-normal text-slate-600">{hint}</span>
       </td>
-      <td colSpan={2} className={td}>
+      <td data-cell="action" colSpan={2} className={td}>
         <select
           aria-label={`Set all in ${label} to`}
           defaultValue=""
@@ -189,10 +214,10 @@ export function CleanupChooser({
   return (
     <form ref={form} action={action} onChange={recount} className="space-y-3">
       <input type="hidden" name="jobId" value={jobId} />
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="donna-ui overflow-x-auto rounded-xl border border-slate-200 bg-white">
         <table
           aria-label="Review the spam"
-          className="w-full min-w-[820px] text-left text-xs"
+          className="donna-cards w-full min-w-[820px] text-left text-xs"
         >
           <thead className="uppercase tracking-wide text-slate-500">
             <tr className="border-b border-slate-200">
@@ -212,28 +237,34 @@ export function CleanupChooser({
               "Sure spam",
               sure,
               "sure",
-              "bg-rose-50",
+              4,
               "Scan it; change any that are not spam.",
             )}
-            {rows(sure, "sure", ["bg-white", "bg-rose-50/60"])}
+            {rows(sure, "sure", 4)}
           </tbody>
           <tbody aria-label="Check these" className="divide-y divide-slate-100">
             {header(
               "Check these",
               check,
               "check",
-              "bg-amber-50",
+              1,
               "Donna is not sure, or it may be real.",
             )}
-            {rows(check, "check", ["bg-white", "bg-amber-50/60"])}
+            {rows(check, "check", 1)}
           </tbody>
           <tbody aria-label="Trash">
-            <tr className="border-t-2 border-t-slate-700 bg-slate-100">
-              <td colSpan={5} className={`${td} text-sm font-semibold`}>
+            <tr
+              className={`border-t-2 border-t-slate-700 ${headTint("slate")}`}
+            >
+              <td
+                data-cell="bucket"
+                colSpan={5}
+                className={`${td} text-sm font-semibold`}
+              >
                 Trash ({n(plan.trash.total, "email")},{" "}
                 {plan.trash.older30.toLocaleString("en-US")} older than 30 days)
               </td>
-              <td colSpan={2} className={td}>
+              <td data-cell="action" colSpan={2} className={td}>
                 <select
                   name="trash"
                   defaultValue="leave"
@@ -272,7 +303,7 @@ export function CleanupChooser({
         </p>
         {tally.trashDelete ? (
           // Emptying Trash cannot be undone: it needs Tom's own tick, naming the count.
-          <label className="flex items-start gap-2 rounded-lg bg-rose-50 px-2 py-1.5 text-rose-900">
+          <label className="donna-ui donna-tint donna-head donna-hue-4 flex items-start gap-2 rounded-lg px-2 py-1.5 text-rose-900">
             <input
               type="checkbox"
               name="approved"

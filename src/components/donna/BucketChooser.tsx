@@ -22,7 +22,7 @@ const SUMMARY: Record<string, string> = {
   inbox: "put back in Inbox",
   "inbox-never": "put back in Inbox and never block",
 };
-import { EmailCells, EmailHeads, rowTint, td, th } from "./sortTable";
+import { EmailCells, EmailHeads, headTint, rowTint, td, th } from "./sortTable";
 
 /** Donna's pick for one email (from step 1), else her folder, a client tag, or leave. */
 function recommended(item: SortedItem) {
@@ -171,10 +171,10 @@ export function BucketChooser({
   return (
     <form ref={form} action={action} onChange={recount} className="space-y-3">
       <input type="hidden" name="jobId" value={jobId} />
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="donna-ui overflow-x-auto rounded-xl border border-slate-200 bg-white">
         <table
           aria-label="Choose what to do"
-          className="w-full min-w-[820px] text-left text-xs"
+          className="donna-cards w-full min-w-[820px] text-left text-xs"
         >
           <thead className="uppercase tracking-wide text-slate-500">
             <tr className="border-b border-slate-200">
@@ -193,10 +193,8 @@ export function BucketChooser({
                 aria-label={`Bucket ${bucket.name}`}
                 className="divide-y divide-slate-100"
               >
-                <tr
-                  className={`border-t-2 border-t-slate-700 ${rowTint(b, 1)}`}
-                >
-                  <td className={td}>
+                <tr className={`border-t-2 border-t-slate-700 ${headTint(b)}`}>
+                  <td data-cell="tick" className={td}>
                     <input
                       type="checkbox"
                       aria-label={`Select all in ${bucket.name}`}
@@ -208,10 +206,14 @@ export function BucketChooser({
                       className="mt-0.5 h-3.5 w-3.5"
                     />
                   </td>
-                  <td colSpan={4} className={`${td} text-sm font-semibold`}>
+                  <td
+                    data-cell="bucket"
+                    colSpan={4}
+                    className={`${td} text-sm font-semibold`}
+                  >
                     {bucket.name} ({count})
                   </td>
-                  <td colSpan={2} className={td}>
+                  <td data-cell="action" colSpan={2} className={td}>
                     <span className="flex items-center gap-1">
                       <select
                         data-bulk={b}
@@ -245,7 +247,7 @@ export function BucketChooser({
                     key={item.thread}
                     className={`align-top ${rowTint(b, i)}`}
                   >
-                    <td className={td}>
+                    <td data-cell="tick" className={td}>
                       <input
                         type="checkbox"
                         name="thread"

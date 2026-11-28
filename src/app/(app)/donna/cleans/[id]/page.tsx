@@ -301,7 +301,7 @@ function jobSteps(
       state: running(sort) ? "current" : "done",
       note: running(sort)
         ? progressNote
-        : `${sorted} sorted${sort.status === "cancelled" ? " · stopped" : ""}`,
+        : `${cleanReport(sort.result)?.reviewed ?? sorted} read${sort.status === "cancelled" ? " · stopped" : ""}`,
       href: sort.id === job.id ? undefined : href(sort.id),
     },
     {
@@ -368,7 +368,7 @@ function jobSteps(
               ? "Your turn"
               : "Nothing to clean"
             : plan
-              ? `Spam ${plan.spam.reduce((n, x) => n + x.count, 0)} · Trash ${plan.trash.total}`
+              ? "Next"
               : "Not started",
       href: cleanupJob
         ? cleanupJob.id === job.id
@@ -486,11 +486,11 @@ export default async function CleanPage({
               </form>
             ) : null}
             <p className="text-sm text-slate-600">
-              Donna sorted {report?.reviewed ?? 0} emails and moved nothing.
+              {(report?.reviewed ?? 0).toLocaleString("en-US")} read
               {report?.remaining
-                ? ` ${report.remaining.toLocaleString("en-US")} were not read this time.`
-                : ""}{" "}
-              Choose what to do with each bucket, then start step 3.
+                ? ` · ${report.remaining.toLocaleString("en-US")} left for the next job`
+                : ""}
+              . Spam is in step 4.
             </p>
             <BucketChooser
               jobId={job.id}

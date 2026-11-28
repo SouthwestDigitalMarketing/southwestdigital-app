@@ -1304,3 +1304,54 @@ tr.ui-row-cursor[data-keyboard-active="true"] > *:first-child {
 /* Brand pieces of the company dashboard's split bars (CompanyCarousel); lighter on dark so navy still shows. */
 .brand-split-seg { background: var(--seg); }
 [data-theme="dark"] .brand-split-seg { background: color-mix(in srgb, var(--seg) 55%, #ffffff); }
+
+/* ── Donna job tables (Tom, 2026-11-28) ─────────────────────────────────────
+   Bucket tints are a wash of each hue over the page surface, so rows stay
+   readable in light and dark mode. On a phone the tables become cards: every
+   cell stacks under the subject, the action is never off-screen. */
+.donna-tint { background-color: color-mix(in srgb, var(--donna-hue) 7%, var(--surface, #ffffff)); }
+.donna-tint.donna-alt { background-color: color-mix(in srgb, var(--donna-hue) 13%, var(--surface, #ffffff)); }
+.donna-tint.donna-head { background-color: color-mix(in srgb, var(--donna-hue) 20%, var(--surface, #ffffff)); }
+.donna-hue-0 { --donna-hue: #0ea5e9; }
+.donna-hue-1 { --donna-hue: #f59e0b; }
+.donna-hue-2 { --donna-hue: #10b981; }
+.donna-hue-3 { --donna-hue: #8b5cf6; }
+.donna-hue-4 { --donna-hue: #f43f5e; }
+.donna-hue-5 { --donna-hue: #14b8a6; }
+.donna-hue-6 { --donna-hue: #f97316; }
+.donna-hue-7 { --donna-hue: #6366f1; }
+.donna-hue-slate { --donna-hue: #64748b; }
+[data-theme="dark"] .donna-ui .text-rose-700,
+[data-theme="dark"] .donna-ui .text-rose-900 { color: #fda4af; }
+[data-theme="dark"] .donna-ui .text-amber-700 { color: #fcd34d; }
+[data-theme="dark"] .donna-ui .text-emerald-700 { color: #6ee7b7; }
+[data-theme="dark"] .donna-ui .text-sky-700 { color: #7dd3fc; }
+[data-theme="dark"] .donna-ui select { background-color: var(--surface); color: var(--text-primary); }
+
+@media (max-width: 767px) {
+  .donna-cards { min-width: 0 !important; }
+  .donna-cards thead { display: none; }
+  .donna-cards tbody { display: block; }
+  .donna-cards tr {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    column-gap: 0.5rem;
+    padding: 0.35rem 0.5rem;
+  }
+  .donna-cards td {
+    grid-column: 2;
+    max-width: none !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    padding: 0.05rem 0 !important;
+  }
+  .donna-cards td:empty { display: none; }
+  .donna-cards td[data-cell="tick"] { grid-column: 1; grid-row: 1 / span 8; }
+  .donna-cards td[data-cell="why"] { grid-column: 3; grid-row: 1; }
+  .donna-cards td[data-cell="subject"] { font-weight: 600; }
+  .donna-cards td[data-label]:not(:empty)::before {
+    content: attr(data-label) ": ";
+    color: var(--text-muted, #64748b);
+  }
+  .donna-cards td[data-cell="action"] select { max-width: none; margin-top: 0.15rem; }
+}
