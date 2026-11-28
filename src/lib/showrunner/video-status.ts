@@ -26,6 +26,25 @@ export type TranscriptCue = { start: number; end: number; text: string };
 /** Teaser before the title screen. `wanted` false means start on the title. */
 export type Teaser = { wanted: boolean; start: number | null; end: number | null; text: string | null };
 
+/** YouTube privacy as shown on the episode card. */
+export const YOUTUBE_VISIBILITY = ["private", "unlisted", "public", "scheduled"] as const;
+export type YoutubeVisibility = (typeof YOUTUBE_VISIBILITY)[number];
+
+export function parseVisibility(value: unknown): YoutubeVisibility | null {
+  return typeof value === "string" && (YOUTUBE_VISIBILITY as readonly string[]).includes(value)
+    ? (value as YoutubeVisibility)
+    : null;
+}
+
+export function youtubeVisibilityLabel(visibility: YoutubeVisibility | null, hasUrl: boolean): string | null {
+  if (!hasUrl && !visibility) return null;
+  if (visibility === "private") return "Private on YouTube";
+  if (visibility === "unlisted") return "Unlisted on YouTube";
+  if (visibility === "public") return "Public on YouTube";
+  if (visibility === "scheduled") return "Scheduled on YouTube";
+  return "On YouTube";
+}
+
 /** A JPEG thumbnail sent inline by ripley. */
 export const THUMBNAIL_PREFIX = "data:image/jpeg;base64,";
 const THUMBNAIL_MAX = 200 * 1024;
@@ -48,6 +67,8 @@ export type VideoStatusInput = {
   transcriptCues: TranscriptCue[] | null;
   teaser: Teaser | null;
   teaserBusy: boolean;
+  visibility: YoutubeVisibility | null;
+  visibilityBusy: boolean;
   sentAt: Date | null;
 };
 
@@ -164,6 +185,8 @@ export function parseVideoStatus(raw: unknown): VideoStatusInput | null {
     transcriptCues: transcriptCues && transcriptCues.length > 0 ? transcriptCues : null,
     teaser,
     teaserBusy: row.teaserBusy === true,
+    visibility: parseVisibility(row.visibility),
+    visibilityBusy: row.visibilityBusy === true,
     sentAt: created && !Number.isNaN(created.getTime()) ? created : null,
   };
 }

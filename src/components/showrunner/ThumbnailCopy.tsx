@@ -157,29 +157,35 @@ export function TranscriptAccordion({
           Remaking the opening.{published ? " YouTube will get the new cut." : " The rest of the video stays as it is."}
         </p>
       ) : null}
-      {timed && !busy ? (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <form action={requestTeaser}>
-            <input type="hidden" name="batch" value={batch} />
-            <input type="hidden" name="wanted" value="false" />
-            <button
-              type="submit"
-              className="rounded-full border border-slate-300 bg-white px-4 py-1.5 text-sm font-semibold text-slate-800"
-            >
-              {teaser?.wanted === false ? "Starts on the title" : "Start on the title — no teaser"}
-            </button>
-          </form>
-          {teaser?.wanted === false && teaser.start != null && teaser.end != null ? (
+      {timed ? (
+        <div className="mt-3">
+          {teaser?.wanted === false ? (
             <form action={requestTeaser}>
               <input type="hidden" name="batch" value={batch} />
               <input type="hidden" name="wanted" value="true" />
-              <input type="hidden" name="start" value={teaser.start} />
-              <input type="hidden" name="end" value={teaser.end} />
-              <button type="submit" className="rounded-full bg-slate-900 px-4 py-1.5 text-sm font-semibold text-white">
+              {teaser.start != null ? <input type="hidden" name="start" value={teaser.start} /> : null}
+              {teaser.end != null ? <input type="hidden" name="end" value={teaser.end} /> : null}
+              <button
+                type="submit"
+                disabled={busy}
+                className="w-full rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+              >
                 Put the teaser back
               </button>
             </form>
-          ) : null}
+          ) : (
+            <form action={requestTeaser}>
+              <input type="hidden" name="batch" value={batch} />
+              <input type="hidden" name="wanted" value="false" />
+              <button
+                type="submit"
+                disabled={busy}
+                className="w-full rounded-full border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800 disabled:opacity-60"
+              >
+                Start on the title — no teaser
+              </button>
+            </form>
+          )}
         </div>
       ) : null}
       {timed && !busy ? (

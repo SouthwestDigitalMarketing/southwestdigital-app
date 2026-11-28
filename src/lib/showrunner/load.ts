@@ -5,6 +5,7 @@ import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import type { VideoCard } from "@/components/showrunner/VideosInProgress";
 import { latestByTarget, type LatestFeedback } from "./feedback";
 import type { Teaser, TranscriptCue, VideoDetails, VideoRender, VideoStep } from "./video-status";
+import { parseVisibility } from "./video-status";
 import { parseWeek, type Week } from "./weekly";
 import { parseReview, type VideoReview } from "./review";
 
@@ -45,6 +46,9 @@ export type VideoStatusRow = {
   teaser: unknown;
   teaserBusy: boolean;
   teaserRequestedAt: Date | null;
+  visibility: string | null;
+  visibilityBusy: boolean;
+  visibilityRequestedAt: Date | null;
 };
 
 const VIDEO_STATUS_SELECT = {
@@ -69,6 +73,9 @@ const VIDEO_STATUS_SELECT = {
   teaser: true,
   teaserBusy: true,
   teaserRequestedAt: true,
+  visibility: true,
+  visibilityBusy: true,
+  visibilityRequestedAt: true,
 } as const;
 
 /**
@@ -116,6 +123,8 @@ export function videoCardFromStatus(row: VideoStatusRow): VideoCard {
     transcriptCues: Array.isArray(row.transcriptCues) ? (row.transcriptCues as TranscriptCue[]) : null,
     teaser: row.teaser && typeof row.teaser === "object" ? (row.teaser as Teaser) : null,
     teaserBusy: row.teaserBusy || Boolean(row.teaserRequestedAt),
+    visibility: parseVisibility(row.visibility),
+    visibilityBusy: row.visibilityBusy || Boolean(row.visibilityRequestedAt),
   };
 }
 
@@ -144,6 +153,7 @@ export async function loadEpisodes(context: BrandDataContext): Promise<EpisodeRo
         finishRequestedAt: true, finishNote: true, transcript: true, thumbnailText: true,
         thumbnailOptions: true, thumbnailBusy: true, thumbnailRequestedAt: true,
         transcriptCues: true, teaser: true, teaserBusy: true, teaserRequestedAt: true,
+        visibility: true, visibilityBusy: true, visibilityRequestedAt: true,
       },
     }),
   );

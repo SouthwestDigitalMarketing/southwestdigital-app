@@ -1,4 +1,15 @@
 # SWapp handoff
+## 2026-11-27 — Review privately, restore teaser, visibility (Johnny)
+
+Tom: Start on the title is full width; Put the teaser back is the same slot
+when it is off (visible while the remake runs). Published line names
+Private / Unlisted / Public. Watch is full width. Private / Unlisted /
+Public buttons change YouTube privacy. New uploads stay private until he
+okays them. Audio sample not built this round.
+
+Migration `20261128020000_showrunner_visibility`. Pair with showrunner-app
+`johnny/review-visibility`.
+
 ## 2026-11-27 — Proposal builder spec 08: expiry, replace, tests hidden, company warning (Ummon)
 - Every send/publish path stamps `expiresAt = min(sentAt + validity (default 30 d, editable 1-365 on the offer page), promo deadline)` via `src/lib/quotes/sendExpiry.ts`; re-send extends/revives; frozen quotes never get one. Expired unsigned page shows "This proposal has expired"; select/sign/pay refused server-side.
 - "Replace this proposal" (offer page): draft with `replacesQuoteId`; publishing/sending it expires the old one, whose page links to the new one. No email.
