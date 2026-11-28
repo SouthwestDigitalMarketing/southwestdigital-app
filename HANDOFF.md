@@ -1,4 +1,11 @@
 # SWapp handoff
+## 2026-11-27 — Thumbnail wording looks confirmed (Johnny)
+
+Tom's phone shot of the episode page showed radios and "Use this text",
+which read as an unconfirmed pick. The current line is already on the
+graphic. Resting state is now "{WORDING} — that's what's on the thumbnail."
+Alternatives sit behind **Use different wording**.
+
 ## 2026-11-27 — Thumbnail text ships without waiting (Johnny)
 
 Autopilot already publishes Johnny's pick. The episode page picker is a later
