@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { changeSongs, parseSongs, starterSongs } from "./setList";
+import { changeSongs, parsePastedSongs, parseSongs, starterSongs } from "./setList";
 
 let n = 0;
 const id = () => `s${++n}`;
@@ -29,4 +29,29 @@ describe("set list songs", () => {
     expect(parseSongs([{ id: "a", title: "At Last", moment: "Dinner" }, { title: "no id" }, "junk"])).toHaveLength(1);
     expect(parseSongs(null)).toEqual([]);
   });
+
+  it("parses a pasted ChatGPT list and skips the chatter", () => {
+    const text = `81. "I Gotta Feeling" – The Black Eyed Peas
+82. "Levels" – Avicii
+85. Last Dance: "Closing Time" – Semisonic (or "Don't Stop Me Now" – Queen)
+If you'd like to refine this list, let me know:
+• Genres to lean into or cut (e.g., more country)
+First dance: At Last - Etta James`;
+    expect(parsePastedSongs(text)).toEqual([
+      { title: "I Gotta Feeling", artist: "The Black Eyed Peas", moment: "Dance floor" },
+      { title: "Levels", artist: "Avicii", moment: "Dance floor" },
+      { title: "Closing Time", artist: "Semisonic", moment: "Last dance" },
+      { title: "At Last", artist: "Etta James", moment: "First dance and parent dances" },
+    ]);
+  });
+
+  it("adds many at once and skips songs already listed", () => {
+    const start = [{ id: "a", title: "Levels", artist: "Avicii", moment: "Dance floor" as const, status: "Play it" as const, suggestedBy: "" }];
+    const songs = changeSongs(start, { op: "addMany", songs: [
+      { title: "levels", artist: "avicii", moment: "Dance floor", suggestedBy: "ChatGPT" },
+      { title: "Wagon Wheel", artist: "Darius Rucker", moment: "Dance floor", suggestedBy: "ChatGPT" },
+    ] }, () => "b");
+    expect(songs.map((s) => s.title)).toEqual(["Levels", "Wagon Wheel"]);
+  });
 });
+

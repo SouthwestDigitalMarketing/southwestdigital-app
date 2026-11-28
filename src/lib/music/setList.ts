@@ -35,17 +35,69 @@ export const songChangeSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("add"), song: newSong }),
   z.object({ op: z.literal("update"), id: z.string().min(1), song: newSong.partial() }),
   z.object({ op: z.literal("remove"), id: z.string().min(1) }),
+  z.object({ op: z.literal("addMany"), songs: z.array(newSong).min(1).max(200) }),
 ]);
 export type SongChange = z.infer<typeof songChangeSchema>;
 
 const MAX_SONGS = 500;
 
 /** Applies one validated change; the id generator is injectable for tests. */
+/** Words at the start of a pasted line that name a part of the day ("Last Dance: ..."). */
+const MOMENT_PREFIXES: Array<[RegExp, Moment]> = [
+  [/^(ceremony|processional|recessional|walk(ing)? down the aisle)\b/i, "Ceremony"],
+  [/^cocktails?( hour)?\b/i, "Cocktail hour"],
+  [/^dinner\b/i, "Dinner"],
+  [/^(first dance|father[- ]daughter|mother[- ]son|parent dances?)\b/i, "First dance and parent dances"],
+  [/^(last dance|closing|send[- ]off)\b/i, "Last dance"],
+  [/^dance floor\b/i, "Dance floor"],
+];
+
+export type PastedSong = { title: string; artist: string; moment: Moment };
+
+/**
+ * Turns a pasted list (Tom, 2026-11-28: lists from ChatGPT like
+ * `81. "I Gotta Feeling" – The Black Eyed Peas`) into songs. A leading "Last Dance:" style
+ * label picks the part of the day, otherwise `fallback`. "(or ...)" alternatives are dropped.
+ */
+export function parsePastedSongs(text: string, fallback: Moment = "Dance floor"): PastedSong[] {
+  const songs: PastedSong[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    let line = raw.trim().replace(/^[-*•]\s*/, "").replace(/^\d+[.)]\s*/, "");
+    if (!line) continue;
+    let moment = fallback;
+    for (const [pattern, value] of MOMENT_PREFIXES) {
+      const match = line.match(new RegExp(pattern.source + "[^:]*:\\s*", "i"));
+      if (match && match.index === 0) {
+        moment = value;
+        line = line.slice(match[0].length);
+        break;
+      }
+    }
+    line = line.replace(/\s*\((or|alt)\b[^)]*\)\s*$/i, "").trim();
+    const quoted = line.match(/^["“”']([^"“”']+)["“”']\s*(?:[–—-]|by)?\s*(.*)$/);
+    const split = quoted ? null : line.match(/^(.+?)\s+[–—-]\s+(.+)$/);
+    const title = (quoted?.[1] ?? split?.[1] ?? line).trim();
+    const artist = (quoted?.[2] ?? split?.[2] ?? "").trim();
+    // Skip prose lines from a chat answer ("If you'd like to refine this list, let me know:").
+    if (!quoted && !split) continue;
+    if (title) songs.push({ title: title.slice(0, 160), artist: artist.slice(0, 160), moment });
+  }
+  return songs;
+}
+
 export function changeSongs(songs: Song[], change: unknown, makeId: () => string = () => crypto.randomUUID()): Song[] {
   const parsed = songChangeSchema.parse(change);
   if (parsed.op === "add") {
     if (songs.length >= MAX_SONGS) throw new Error(`The list holds up to ${MAX_SONGS} songs.`);
     return [...songs, songSchema.parse({ ...parsed.song, id: makeId() })];
+  }
+  if (parsed.op === "addMany") {
+    // Skip songs already on the list (same title and artist, any case).
+    const key = (s: { title: string; artist: string }) => `${s.title}|${s.artist}`.toLowerCase();
+    const seen = new Set(songs.map(key));
+    const fresh = parsed.songs.filter((s) => !seen.has(key(s)) && seen.add(key(s)));
+    if (songs.length + fresh.length > MAX_SONGS) throw new Error(`The list holds up to ${MAX_SONGS} songs.`);
+    return [...songs, ...fresh.map((s) => songSchema.parse({ ...s, id: makeId() }))];
   }
   if (!songs.some((song) => song.id === parsed.id)) throw new Error("That song is no longer on the list.");
   if (parsed.op === "remove") return songs.filter((song) => song.id !== parsed.id);

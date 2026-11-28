@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, type FormEvent } from "react";
-import { MOMENTS, SONG_STATUSES, type Moment, type Song } from "@/lib/music/setList";
+import { MOMENTS, SONG_STATUSES, parsePastedSongs, type Moment, type Song } from "@/lib/music/setList";
 import { changeSongAction, startSetListAction } from "./actions";
 
 const input = "rounded-md border border-slate-300 px-2 py-1.5 text-sm";
@@ -35,6 +35,7 @@ export function SetListClient({ songs }: { songs: Song[] | null }) {
       <h1 className="text-2xl font-semibold text-slate-900">Set list</h1>
       <p className="mt-1 text-sm text-slate-600">{counts}</p>
       {error ? <p className="mt-2 text-sm text-red-700" role="alert">{error}</p> : null}
+      <PasteList pending={pending} run={run} />
       {MOMENTS.map((moment) => (
         <MomentSection key={moment} moment={moment} songs={songs.filter((s) => s.moment === moment)} pending={pending} run={run} />
       ))}
@@ -95,5 +96,44 @@ function MomentSection({ moment, songs, pending, run }: { moment: Moment; songs:
         </button>
       </form>
     </section>
+  );
+}
+
+/** Paste a numbered list (e.g. from ChatGPT); each "Title" – Artist line becomes a Suggested song. */
+function PasteList({ pending, run }: { pending: boolean; run: (fn: () => Promise<{ error?: string }>) => void }) {
+  const [text, setText] = useState("");
+  const [from, setFrom] = useState("");
+  const [done, setDone] = useState<string | null>(null);
+  const found = parsePastedSongs(text);
+  const add = () =>
+    run(async () => {
+      const result = await changeSongAction({ op: "addMany", songs: found.map((s) => ({ ...s, suggestedBy: from })) });
+      if (!result.error) {
+        setDone(`Added up to ${found.length} songs (songs already on the list were skipped).`);
+        setText("");
+      }
+      return result;
+    });
+  return (
+    <details className="mt-6 max-w-4xl rounded-lg border border-slate-200 bg-white p-4">
+      <summary className="cursor-pointer text-sm font-medium text-slate-900">Paste a list</summary>
+      <p className="mt-2 text-sm text-slate-600">
+        One song per line, like <code>81. &quot;Levels&quot; – Avicii</code>. Start a line with &quot;Ceremony:&quot;, &quot;Dinner:&quot;, &quot;First dance:&quot; or &quot;Last dance:&quot; to file it there; the rest go to Dance floor.
+      </p>
+      <textarea
+        value={text}
+        onChange={(e) => { setText(e.target.value); setDone(null); }}
+        rows={8}
+        aria-label="Pasted song list"
+        className="mt-2 w-full rounded-md border border-slate-300 p-2 font-mono text-sm"
+      />
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <input value={from} onChange={(e) => setFrom(e.target.value)} placeholder="Suggested by (e.g. ChatGPT)" aria-label="Suggested by" className={`${input} w-56`} />
+        <button type="button" disabled={pending || found.length === 0} onClick={add} className="rounded-md bg-slate-900 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50">
+          {found.length ? `Add ${found.length} songs` : "Add songs"}
+        </button>
+        {done ? <span className="text-sm text-slate-600" role="status">{done}</span> : null}
+      </div>
+    </details>
   );
 }
