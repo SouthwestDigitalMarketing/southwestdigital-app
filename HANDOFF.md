@@ -1,4 +1,11 @@
 # SWapp handoff
+## 2026-11-27 — Proposal builder spec 04: cleanup wrap-up date, fixed monthly start, payment plan (Ummon)
+- `src/lib/quotes/cleanupPlan.ts`: per-proposal cleanup plan (created only by explicit staff action). Wrap-up default = start + max(30 d, ceil(backlog months / 3) months), Chicago calendar. Before selection surfaces show "about N weeks after you accept"; at selection start = +14 d, default recomputed, stale overrides reset with a staff flag.
+- Monthly start = wrap-up date or cleanup completion, whichever first. New clause "Cleanup Wrap-Up and Extension": client delay billed at the monthly rate (replaces the $150 file fee that month), our delay free.
+- Cleanup payment plan: monthly installments (default) / pay in full / 50-50; nothing charged today.
+- 12-month + cleanup agreements no longer claim service is "paid in full today" (it never was; recurringDueNow is 0 with cleanup).
+- Open minors: installment count can vary by start day for ~30-day plans; plan month count skips the legacy period availability filter.
+
 ## 2026-11-27 — Proposal builder spec 03: complexity checklist + "Why this price" (Ummon)
 - One checklist on the complexity step (`src/lib/quotes/complexityDrivers.ts`): inventory/COGS, POS, online store, MCA/loan splits, personal commingling, 1099 filing (new, priced; placeholders pending Tom), plus payroll / sales tax / project tracking / mixed books folded in as "Included in <line>" (no double charge).
 - Online store / POS rows have a "Payouts come through" picker; the chosen platform is counted once. Commingling and MCA/loans add a per-cleanup-month line only when there is cleanup.
