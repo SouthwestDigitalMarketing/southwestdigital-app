@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { slugifyTagKey } from "@/lib/contacts/tags";
+import { toPublicAccountInventory, type PublicAccountInventory } from "@/lib/quotes/accountInventory";
 
 const tier = z.enum(["maintain", "improve", "grow"]);
 const text = z.string().max(100_000);
@@ -134,7 +135,9 @@ export function toPublicBookkeepingProposal(
     : primary;
   const publicPerson = person.parse(selectedPerson);
   const assessment = publicAssessmentSchema.parse(snapshot.assessment);
+  const accountInventory: PublicAccountInventory | null = toPublicAccountInventory(record(snapshot.assessment).accounts);
   return {
+    accountInventory,
     assessment: {
       ...assessment,
       additionalOptions: remapPublicDescription(assessment.additionalOptions, catalogCopy),

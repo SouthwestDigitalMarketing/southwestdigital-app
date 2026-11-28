@@ -6,6 +6,8 @@ import { hasPublicProposalAccess, publicProposalNotFound } from "@/lib/engagemen
 import { readAcceptedSelection } from "@/lib/engagements/acceptedPayment";
 import { parseStoredProposalCheckout } from "@/lib/engagements/proposalCheckout";
 import { serviceLevelDescription } from "@/lib/quotes/serviceLevels";
+import { normalizeAccountInventory, summarizeAccountInventory } from "@/lib/quotes/accountInventory";
+import { isHourlyOfferKind } from "@/lib/quotes/kinds";
 import { lockQuoteMutation, QuoteMutationConflictError } from "@/lib/quotes/mutationLock";
 import { isQuoteFrozen } from "@/lib/quotes/isQuoteFrozen";
 import type { Prisma } from "@prisma/client";
@@ -21,6 +23,7 @@ export async function GET(
     where: { id: engagementId },
     select: {
       brandId: true,
+      productKind: true,
       updatedAt: true,
       clientName: true,
       primaryContactName: true,
@@ -88,9 +91,13 @@ export async function GET(
   const templateContent = typeof assessment.agreementTemplateContent === "string"
     ? assessment.agreementTemplateContent
     : null;
+  const inventory = summarizeAccountInventory(normalizeAccountInventory(assessment.accounts));
   const renderInput = {
     brandName: brand?.name ?? "Bookkeeping Conroe",
     clientName: engagement.clientName || "Client",
+    volumeMonthlyTotal: inventory.hasInventory ? inventory.openMonthlyTotal : null,
+    volumeBasis: inventory.basis,
+    includeVolumeClause: !isHourlyOfferKind(engagement.productKind),
     primaryContactName: engagement.primaryContactName,
     primaryContactEmail: engagement.primaryContactEmail,
     selectedTierLabel: tierLabel,

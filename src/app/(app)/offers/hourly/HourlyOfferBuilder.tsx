@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { buildHourlyCheckoutPresentation } from "@/lib/engagements/hourlyCheckoutPresentation";
+import { buildHourlyAgreementText } from "./hourlyAgreementText";
 import type { HourlyCatalogItem } from "@/lib/quotes/hourlyCatalog";
 import { publishHourlyOfferAction, saveHourlyOfferDraftAction, type HourlyOfferSnapshot } from "./actions";
 
@@ -111,7 +112,12 @@ export function HourlyOfferBuilder({ initial }: { initial: HourlyOfferInitialSta
       },
       agreementTemplateId: selectedAgreement?.id ?? null,
       agreementTemplateName: selectedAgreement?.name ?? null,
-      agreementText: selectedAgreement?.content ?? null,
+      agreementText: buildHourlyAgreementText(selectedAgreement?.content ?? null, {
+        companyName,
+        firstName,
+        lastName,
+        contactEmail,
+      }),
       isTestProposal,
     };
   }

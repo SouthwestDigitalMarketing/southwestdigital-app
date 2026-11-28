@@ -8,6 +8,7 @@ import {
 } from "@/lib/quotes/catalog";
 import { buildOptionsTemplateSnapshot } from "./optionsTemplates";
 import { reconcileProposalAssessmentWithCatalog } from "@/app/(app)/offers/builder/proposalCatalogSync";
+import type { BandOverride } from "./accountInventory";
 import { servicePackageIds } from "./proposalServices";
 import { slugifyTagKey } from "@/lib/contacts/tags";
 
@@ -145,6 +146,12 @@ export async function materializeProposalCatalog(
       servicesInitialized: value.servicesInitialized === true,
       transactionBand:
         typeof value.transactionBand === "string" ? value.transactionBand : "",
+      // Pass the inventory through so catalog option pricing resolves the
+      // same effective band as the builder (derived or overridden).
+      accounts: value.accounts,
+      bandOverride: isRecord(value.bandOverride)
+        ? (value.bandOverride as unknown as BandOverride)
+        : null,
       advancedReceiptManagementPriceOverride: numericValue(
         value,
         "advancedReceiptManagementPriceOverride",

@@ -1,6 +1,7 @@
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ESTIMATE_NOTICE_TEXT, toPublicAccountInventory } from "@/lib/quotes/accountInventory";
 import { BrandStatus } from "@prisma/client";
 import { BrandProvider, type BrandContextValue } from "@/lib/brands/context";
 import {
@@ -18,6 +19,16 @@ import {
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
+// SSR has no clicks: open the package step to exercise the client-visible table.
+const viewState = vi.hoisted(() => ({ pricingStep: false }));
+vi.mock("react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react")>();
+  return {
+    ...actual,
+    useState: ((initial: unknown) => actual.useState(viewState.pricingStep && initial === 0 ? 1 : initial)) as typeof actual.useState,
+  };
+});
+afterEach(() => { viewState.pricingStep = false; });
 vi.mock("@/app/(app)/offers/who/actions", () => ({
   getOfferBuilderContextAction: async () => null,
   saveOfferDraftAction: async () => undefined,
@@ -88,6 +99,38 @@ function renderLiveBookkeeping(publicProposal: ReturnType<typeof publicBookkeepi
 }
 
 describe("public proposal HTML", () => {
+  it("renders sizing and terms from the explicit public inventory field", () => {
+    viewState.pricingStep = true;
+    const publicProposal = {
+      ...publicBookkeeping(),
+      accountInventory: toPublicAccountInventory([
+        { id: "open", kind: "checking", label: "Public checking", last4: "1234", status: "open", monthlyTransactions: 150, basis: "estimated", source: PRIVATE_SENTINEL },
+        { id: "closed", kind: "savings", label: "Closed hidden bank", status: "closed", monthlyTransactions: 9000, basis: "measured" },
+      ]),
+    };
+    const html = renderLiveBookkeeping(publicProposal);
+    expect(html).toContain("How we sized this");
+    expect(html).toContain("Public checking ••1234");
+    expect(html).toContain("150");
+    expect(html).toContain(ESTIMATE_NOTICE_TEXT);
+    expect(html).toContain("Volume-based pricing.");
+    expect(html).not.toContain("Closed hidden bank");
+    expect(html).not.toContain(PRIVATE_SENTINEL);
+  });
+
+  it("never restores sizing from raw assessment fields when the public field is absent", () => {
+    viewState.pricingStep = true;
+    const publicProposal = publicBookkeeping();
+    Object.assign(publicProposal.assessment, {
+      accounts: [{ id: "private", kind: "checking", label: PRIVATE_SENTINEL, status: "open", monthlyTransactions: 150, basis: "measured" }],
+    });
+    const legacyPublicProposal = { ...publicProposal, accountInventory: null };
+    const html = renderLiveBookkeeping(legacyPublicProposal);
+    expect(html).not.toContain("How we sized this");
+    expect(html).not.toContain("Volume-based pricing.");
+    expect(html).not.toContain(PRIVATE_SENTINEL);
+  });
+
   it("bookkeeping public HTML omits sentinel internals", () => {
     const publicProposal = publicBookkeeping();
     const html = renderLiveBookkeeping(publicProposal);
