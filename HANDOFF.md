@@ -1,4 +1,10 @@
 # SWapp handoff
+## 2026-11-27 — Proposal builder spec 01: account inventory + volume clause (Ummon)
+- Builder Scale step: per-account inventory (kind, label, last 4, open/closed, monthly count, measured/estimated, source). Open total sets the transaction band everywhere (`src/app/(app)/offers/builder/effectiveAssessment.ts`); manual override needs a reason. Core: `src/lib/quotes/accountInventory.ts`.
+- Public/preview "How we sized this" table from the whitelisted `accountInventory` payload (open rows only, no ids/sources); shown only when the snapshot has open accounts.
+- Agreement: "Volume-Based Pricing" inserted at render time after "Service and Price Guarantee" (later clauses renumbered); not stored in the default template; hourly agreements never get it; signed text never rebuilt. Hourly builder strips raw `{{tokens}}`.
+- Open: hourly brand templates with fee tokens now show blanks; mobile table scrolls sideways at 390 px.
+
 ## 2026-11-27 — Proposal builder spec 00: accepted proposals frozen + saved copy (Ummon)
 - Rule (Tom, SJ Equity): an accepted, signed or paid quote is never changed, re-published, re-priced, expired, replaced, reminded or emailed by any code, job or migration. Guard: `src/lib/quotes/isQuoteFrozen.ts`, enforced under the row lock in `src/lib/quotes/mutationLock.ts`. No new code may send a client anything automatically.
 - Saved copy: `src/lib/quotes/acceptedCopy.ts` self-fetches the public page (`?internal=1` + internal-viewer cookie, no view logged) and stores gzip+base64 HTML + sha256 in `Engagement.onboardingData.acceptedProposalCopy` (set-if-absent). Made after signing; staff "Save accepted copy" backfills old ones on the offer page.

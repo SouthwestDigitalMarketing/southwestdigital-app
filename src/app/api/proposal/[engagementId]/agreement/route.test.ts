@@ -18,11 +18,23 @@ vi.mock("@/lib/engagements/publicProposalAccess", () => ({
   hasPublicProposalAccess: mocks.access,
   publicProposalNotFound: () => Response.json({}, { status: 404 }),
 }));
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
-    engagement: { findUnique: mocks.engagement, updateMany: mocks.update },
-    brand: { findUnique: mocks.brand },
-  },
+vi.mock("@/lib/prisma", () => {
+  const tx = {
+    quote: { findFirst: async () => ({ id: "quote" }) },
+    engagement: { updateMany: mocks.update },
+  };
+  return {
+    prisma: {
+      engagement: { findUnique: mocks.engagement, updateMany: mocks.update },
+      brand: { findUnique: mocks.brand },
+      $transaction: (fn: (client: typeof tx) => unknown) => fn(tx),
+    },
+  };
+});
+// The quote row lock is covered by mutationLock tests; here it always passes.
+vi.mock("@/lib/quotes/mutationLock", () => ({
+  lockQuoteMutation: async () => ({ id: "quote" }),
+  QuoteMutationConflictError: class QuoteMutationConflictError extends Error {},
 }));
 
 import { GET } from "./route";
@@ -124,7 +136,8 @@ describe("public proposal agreement API", () => {
     expect(body.text).toContain("Southwest will recheck");
     expect(body.text).toContain("13. Volume-Based Pricing");
     expect(mocks.update).toHaveBeenCalledWith({
-      where: { id: "eng", brandId: "brand", signedAt: null, updatedAt: engagementRow().updatedAt },
+      where: { id: "eng", brandId: "brand", signedAt: null, updatedAt: engagementRow().updatedAt,
+        onboardingData: { equals: expect.any(Object) } },
       data: { agreementText: body.text },
     });
   });
