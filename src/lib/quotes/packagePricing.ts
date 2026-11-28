@@ -1,0 +1,493 @@
+/**
+ * Pure package-pricing core for the offers builder (Spec 02 / P1).
+ *
+ * Moved verbatim out of `ProposalCreationWorkspaceDemo.tsx` (no behaviour
+ * change): per-package pricing configs, the ceil-to-$5 rounding, the monthly
+ * breakdown, the tier pricer, the derived complexity level, and the grow
+ * override (grow = ceil5(maintain x 1.5)). No React here, so the company
+ * bundle pricer and unit tests can reuse it without rendering anything.
+ *
+ * `PackageId` intentionally repeats the three literals from
+ * `proposalPackageNames.ts` instead of importing that UI module: the two
+ * unions are structurally identical, so any drift fails to compile at the
+ * call sites that pass one where the other is expected.
+ */
+export type PackageId = "grow" | "improve" | "maintain";
+
+export type CountValue = number | "";
+
+export type DemoComplexityLevel = "standard" | "complex" | "advanced";
+
+export type ThresholdAmount = Array<{ min: number; amount: number }>;
+
+export interface DemoPricingConfig {
+  recurringPerProperty: number;
+  recurringPerEntity: number;
+  recurringComplexity: Record<DemoComplexityLevel, number>;
+  transactionBandMonthly: Record<"0-99" | "100-499" | "500-999" | "1000+" | "unknown", number>;
+  staffingPerPerson: number;
+  reconciliationThresholds: ThresholdAmount;
+  platformThresholds: ThresholdAmount;
+  passThroughThresholds: ThresholdAmount;
+  mixedBooksMonthly: number;
+  nonReBusinessMonthly: number;
+  complexOperationsMonthly: number;
+  multiOperationMonthly: number;
+  backlogPerProperty: number;
+  backlogPerEntity: number;
+  catchUpComplexityMultiplier: Record<DemoComplexityLevel, number>;
+}
+
+/** Pricing-relevant slice of the builder assessment (structural: the full AssessmentState satisfies it). */
+export interface PackagePricingInputs {
+  bookSetType: string;
+  realEstateOperations: string[];
+  transactionBand: string;
+  numberOfProperties: CountValue;
+  numberOfEntities: CountValue;
+  employeesCount: CountValue;
+  contractorsCount: CountValue;
+  bankAccountsCount: CountValue;
+  creditCardsCount: CountValue;
+  unconnectedBankAccountsCount: CountValue;
+  unconnectedCreditCardsCount: CountValue;
+  paymentPlatforms: string[];
+  zeroBalancePlatformCount: CountValue;
+  loansCount: CountValue;
+  vehicleNotesCount: CountValue;
+  linesOfCreditCount: CountValue;
+  unconnectedLinesOfCreditCount: CountValue;
+  historicalCleanupPeriods: Array<{ purchasedOrSoldPropertiesCount?: CountValue }>;
+  cleanupPurchasedOrSoldPropertiesCount: CountValue;
+  discretionaryMultiplier: number;
+}
+
+/** Per-package price book (id + base monthly + tuning), without any presentation fields. */
+export interface PackagePricingSpec {
+  id: PackageId;
+  monthlyPrice: number;
+  pricing: DemoPricingConfig;
+}
+
+export interface PackagePricingSummary {
+  packageId: PackageId;
+  complexityLevel: DemoComplexityLevel;
+  monthly: number;
+  catchUpBase: number;
+  assessmentOneTimeAdjustments: number;
+  totalOneTimeBeforeManual: number;
+  totalOneTime: number;
+}
+
+export interface MonthlyRateBreakdownItem {
+  label: string;
+  amount: number;
+}
+
+export const GROW_PRICE_MULTIPLIER_FROM_MAINTAIN = 1.5;
+
+export const CLEANUP_PURCHASED_OR_SOLD_PROPERTY_COST = 200;
+
+export const PACKAGE_PRICING: Record<PackageId, PackagePricingSpec> = {
+  grow: {
+    id: "grow",
+    monthlyPrice: 250,
+    pricing: {
+      recurringPerProperty: 50,
+      recurringPerEntity: 175,
+      recurringComplexity: { standard: 0, complex: 275, advanced: 600 },
+      transactionBandMonthly: { "0-99": 0, "100-499": 120, "500-999": 260, "1000+": 480, unknown: 0 },
+      staffingPerPerson: 60,
+      reconciliationThresholds: [
+        { min: 6, amount: 90 },
+        { min: 12, amount: 180 },
+        { min: 20, amount: 320 },
+      ],
+      platformThresholds: [
+        { min: 1, amount: 70 },
+        { min: 3, amount: 140 },
+      ],
+      passThroughThresholds: [
+        { min: 1, amount: 85 },
+        { min: 3, amount: 170 },
+      ],
+      mixedBooksMonthly: 225,
+      nonReBusinessMonthly: 325,
+      complexOperationsMonthly: 190,
+      multiOperationMonthly: 110,
+      backlogPerProperty: 40,
+      backlogPerEntity: 100,
+      catchUpComplexityMultiplier: { standard: 0, complex: 0.2, advanced: 0.35 },
+    },
+  },
+  improve: {
+    id: "improve",
+    monthlyPrice: 250,
+    pricing: {
+      recurringPerProperty: 50,
+      recurringPerEntity: 125,
+      recurringComplexity: { standard: 0, complex: 200, advanced: 450 },
+      transactionBandMonthly: { "0-99": 0, "100-499": 90, "500-999": 200, "1000+": 360, unknown: 0 },
+      staffingPerPerson: 45,
+      reconciliationThresholds: [
+        { min: 6, amount: 70 },
+        { min: 12, amount: 140 },
+        { min: 20, amount: 260 },
+      ],
+      platformThresholds: [
+        { min: 1, amount: 55 },
+        { min: 3, amount: 110 },
+      ],
+      passThroughThresholds: [
+        { min: 1, amount: 65 },
+        { min: 3, amount: 140 },
+      ],
+      mixedBooksMonthly: 175,
+      nonReBusinessMonthly: 250,
+      complexOperationsMonthly: 150,
+      multiOperationMonthly: 90,
+      backlogPerProperty: 30,
+      backlogPerEntity: 75,
+      catchUpComplexityMultiplier: { standard: 0, complex: 0.15, advanced: 0.25 },
+    },
+  },
+  maintain: {
+    id: "maintain",
+    monthlyPrice: 250,
+    pricing: {
+      recurringPerProperty: 50,
+      recurringPerEntity: 100,
+      recurringComplexity: { standard: 0, complex: 150, advanced: 350 },
+      transactionBandMonthly: { "0-99": 0, "100-499": 70, "500-999": 150, "1000+": 280, unknown: 0 },
+      staffingPerPerson: 35,
+      reconciliationThresholds: [
+        { min: 6, amount: 50 },
+        { min: 12, amount: 110 },
+        { min: 20, amount: 200 },
+      ],
+      platformThresholds: [
+        { min: 1, amount: 40 },
+        { min: 3, amount: 80 },
+      ],
+      passThroughThresholds: [
+        { min: 1, amount: 50 },
+        { min: 3, amount: 110 },
+      ],
+      mixedBooksMonthly: 130,
+      nonReBusinessMonthly: 200,
+      complexOperationsMonthly: 120,
+      multiOperationMonthly: 70,
+      backlogPerProperty: 20,
+      backlogPerEntity: 50,
+      catchUpComplexityMultiplier: { standard: 0, complex: 0.1, advanced: 0.2 },
+    },
+  },
+};
+
+export function roundUpToNearestIncrement(value: number, increment = 5) {
+  if (!Number.isFinite(value) || increment <= 0) return value;
+  return Math.ceil(value / increment) * increment;
+}
+
+export function countValue(value: CountValue) {
+  return typeof value === "number" ? value : 0;
+}
+
+const TRANSACTION_BAND_SCORES: Array<{ value: string; score: number }> = [
+  { value: "", score: 0 },
+  { value: "0-99", score: 0 },
+  { value: "100-499", score: 1 },
+  { value: "500-999", score: 2 },
+  { value: "1000+", score: 3 },
+  { value: "unknown", score: 0 },
+];
+
+export function transactionBandScore(band: string) {
+  return TRANSACTION_BAND_SCORES.find((option) => option.value === band)?.score ?? 0;
+}
+
+export function amountForThreshold(value: number, thresholds: ThresholdAmount) {
+  return thresholds.reduce((current, threshold) => {
+    return value >= threshold.min ? threshold.amount : current;
+  }, 0);
+}
+
+export function hasComplexRealEstateOperations(assessment: PackagePricingInputs) {
+  return (
+    assessment.realEstateOperations.includes("short-term-rentals") ||
+    assessment.realEstateOperations.includes("flips") ||
+    assessment.realEstateOperations.includes("development")
+  );
+}
+
+export function reconciliationAccountCount(assessment: PackagePricingInputs) {
+  return (
+    countValue(assessment.bankAccountsCount) +
+    countValue(assessment.creditCardsCount) +
+    countValue(assessment.unconnectedBankAccountsCount) +
+    countValue(assessment.unconnectedCreditCardsCount) +
+    countValue(assessment.loansCount) +
+    countValue(assessment.vehicleNotesCount) +
+    countValue(assessment.linesOfCreditCount) +
+    countValue(assessment.unconnectedLinesOfCreditCount)
+  );
+}
+
+export function paymentPlatformComplexityCount(assessment: PackagePricingInputs) {
+  return (
+    assessment.paymentPlatforms.filter((platform) => platform !== "unknown").length +
+    countValue(assessment.zeroBalancePlatformCount)
+  );
+}
+
+export function knownRealEstateOperationCount(assessment: PackagePricingInputs) {
+  return assessment.realEstateOperations.filter((operation) => operation !== "unknown").length;
+}
+
+export function knownPaymentPlatformCount(assessment: PackagePricingInputs) {
+  return assessment.paymentPlatforms.filter((platform) => platform !== "unknown").length;
+}
+
+export function derivedPricingComplexityLevel(assessment: PackagePricingInputs): DemoComplexityLevel {
+  const txScore = transactionBandScore(assessment.transactionBand);
+  const headcount = countValue(assessment.employeesCount) + countValue(assessment.contractorsCount);
+  const reconciliationCount = reconciliationAccountCount(assessment);
+  const platformComplexity = paymentPlatformComplexityCount(assessment);
+  const hasComplexOperations = hasComplexRealEstateOperations(assessment);
+
+  let score = 0;
+  score += txScore;
+  if (countValue(assessment.numberOfProperties) >= 10) score += 2;
+  else if (countValue(assessment.numberOfProperties) >= 4) score += 1;
+  if (countValue(assessment.numberOfEntities) >= 3) score += 2;
+  else if (countValue(assessment.numberOfEntities) >= 2) score += 1;
+  if (headcount >= 8) score += 2;
+  else if (headcount >= 3) score += 1;
+  if (reconciliationCount >= 16) score += 2;
+  else if (reconciliationCount >= 8) score += 1;
+  if (platformComplexity >= 4) score += 2;
+  else if (platformComplexity >= 2) score += 1;
+  if (hasComplexOperations) score += 2;
+  else if (knownRealEstateOperationCount(assessment) >= 2) score += 1;
+  if (assessment.bookSetType === "mixed-books") score += 2;
+  if (assessment.bookSetType === "other-business") score += 1;
+
+  if (score >= 9) return "advanced";
+  if (score >= 4) return "complex";
+  return "standard";
+}
+
+export function getMonthlyRateBreakdown(
+  pkg: PackagePricingSpec,
+  assessment: PackagePricingInputs,
+  complexityLevel: DemoComplexityLevel,
+) {
+  const propertyCount = countValue(assessment.numberOfProperties);
+  const entityCount = countValue(assessment.numberOfEntities);
+  const headcount = countValue(assessment.employeesCount) + countValue(assessment.contractorsCount);
+  const reconciliationCount = reconciliationAccountCount(assessment);
+  const platformCount = knownPaymentPlatformCount(assessment);
+  const passThroughCount = countValue(assessment.zeroBalancePlatformCount);
+  const hasComplexOperations = hasComplexRealEstateOperations(assessment);
+  const multipleOperations = knownRealEstateOperationCount(assessment) >= 2;
+  const transactionBandMonthly = assessment.transactionBand
+    ? pkg.pricing.transactionBandMonthly[
+        assessment.transactionBand as keyof DemoPricingConfig["transactionBandMonthly"]
+      ]
+    : 0;
+  const staffingAmount = headcount * pkg.pricing.staffingPerPerson;
+  const reconciliationAmount = amountForThreshold(
+    reconciliationCount,
+    pkg.pricing.reconciliationThresholds,
+  );
+  const platformAmount = amountForThreshold(platformCount, pkg.pricing.platformThresholds);
+  const passThroughAmount = amountForThreshold(
+    passThroughCount,
+    pkg.pricing.passThroughThresholds,
+  );
+  const booksTypeAmount =
+    assessment.bookSetType === "mixed-books"
+      ? pkg.pricing.mixedBooksMonthly
+      : assessment.bookSetType === "other-business"
+        ? pkg.pricing.nonReBusinessMonthly
+        : 0;
+  const operationsAmount = hasComplexOperations
+    ? pkg.pricing.complexOperationsMonthly
+    : !hasComplexOperations && multipleOperations
+      ? pkg.pricing.multiOperationMonthly
+      : 0;
+  const baseMonthly =
+    pkg.monthlyPrice +
+    propertyCount * pkg.pricing.recurringPerProperty +
+    entityCount * pkg.pricing.recurringPerEntity +
+    pkg.pricing.recurringComplexity[complexityLevel] +
+    transactionBandMonthly +
+    staffingAmount +
+    reconciliationAmount +
+    platformAmount +
+    passThroughAmount +
+    booksTypeAmount +
+    operationsAmount;
+  const multiplierDeltaAmount =
+    Math.round((baseMonthly * assessment.discretionaryMultiplier - baseMonthly) * 100) / 100;
+
+  const baseItems: MonthlyRateBreakdownItem[] = [
+    { label: "Base monthly package", amount: pkg.monthlyPrice },
+    {
+      label: `${propertyCount} properties`,
+      amount: propertyCount * pkg.pricing.recurringPerProperty,
+    },
+    {
+      label: `${entityCount} additional entities`,
+      amount: entityCount * pkg.pricing.recurringPerEntity,
+    },
+    {
+      label: `Complexity (${complexityLevel})`,
+      amount: pkg.pricing.recurringComplexity[complexityLevel],
+    },
+    { label: "Transaction volume", amount: transactionBandMonthly },
+    { label: "Staffing", amount: staffingAmount },
+    { label: "Reconciliation load", amount: reconciliationAmount },
+    { label: "Connected platforms", amount: platformAmount },
+    { label: "Pass-through accounts", amount: passThroughAmount },
+    { label: "Books type adjustment", amount: booksTypeAmount },
+    { label: "Operations adjustment", amount: operationsAmount },
+  ].filter((item) => item.amount > 0);
+
+  const adjustmentItems: MonthlyRateBreakdownItem[] = [
+    {
+      label: `Discretionary multiplier (${assessment.discretionaryMultiplier.toFixed(2)}x)`,
+      amount: multiplierDeltaAmount,
+    },
+  ].filter((item) => item.amount !== 0);
+
+  return { baseItems, adjustmentItems };
+}
+
+export function buildPackagePricing(
+  pkg: PackagePricingSpec,
+  assessment: PackagePricingInputs,
+  cleanupMonths: number,
+  manualAdjustmentAmount: number,
+): PackagePricingSummary {
+  const complexityLevel = derivedPricingComplexityLevel(assessment);
+  const propertyCount = countValue(assessment.numberOfProperties);
+  const entityCount = countValue(assessment.numberOfEntities);
+  const reconciliationCount = reconciliationAccountCount(assessment);
+  const hasYearSpecificPropertyCounts = assessment.historicalCleanupPeriods.some(
+    (period) => period.purchasedOrSoldPropertiesCount !== undefined,
+  );
+  const cleanupPurchasedOrSoldPropertiesCount = hasYearSpecificPropertyCounts
+    ? assessment.historicalCleanupPeriods.reduce(
+        (total, period) => total + countValue(period.purchasedOrSoldPropertiesCount ?? 0),
+        0,
+      )
+    : countValue(assessment.cleanupPurchasedOrSoldPropertiesCount);
+  const hasComplexOperations = hasComplexRealEstateOperations(assessment);
+  const multipleOperations = knownRealEstateOperationCount(assessment) >= 2;
+  const transactionBandMonthly = assessment.transactionBand
+    ? pkg.pricing.transactionBandMonthly[
+        assessment.transactionBand as keyof DemoPricingConfig["transactionBandMonthly"]
+      ]
+    : 0;
+  const baseMonthly =
+    pkg.monthlyPrice +
+    propertyCount * pkg.pricing.recurringPerProperty +
+    entityCount * pkg.pricing.recurringPerEntity +
+    pkg.pricing.recurringComplexity[complexityLevel] +
+    transactionBandMonthly +
+    (countValue(assessment.employeesCount) + countValue(assessment.contractorsCount)) *
+      pkg.pricing.staffingPerPerson +
+    amountForThreshold(reconciliationCount, pkg.pricing.reconciliationThresholds) +
+    amountForThreshold(knownPaymentPlatformCount(assessment), pkg.pricing.platformThresholds) +
+    amountForThreshold(countValue(assessment.zeroBalancePlatformCount), pkg.pricing.passThroughThresholds) +
+    (assessment.bookSetType === "mixed-books"
+      ? pkg.pricing.mixedBooksMonthly
+      : assessment.bookSetType === "other-business"
+        ? pkg.pricing.nonReBusinessMonthly
+        : 0) +
+    (hasComplexOperations ? pkg.pricing.complexOperationsMonthly : 0) +
+    (!hasComplexOperations && multipleOperations ? pkg.pricing.multiOperationMonthly : 0);
+  const monthly = roundUpToNearestIncrement(baseMonthly * assessment.discretionaryMultiplier);
+
+  const catchUpBase = monthly * cleanupMonths;
+  const assessmentOneTimeAdjustments =
+    propertyCount * pkg.pricing.backlogPerProperty +
+    entityCount * pkg.pricing.backlogPerEntity +
+    cleanupPurchasedOrSoldPropertiesCount * CLEANUP_PURCHASED_OR_SOLD_PROPERTY_COST +
+    Math.round(catchUpBase * pkg.pricing.catchUpComplexityMultiplier[complexityLevel]);
+  const totalOneTimeBeforeManual = roundUpToNearestIncrement(
+    catchUpBase + assessmentOneTimeAdjustments,
+  );
+
+  return {
+    packageId: pkg.id,
+    complexityLevel,
+    monthly,
+    catchUpBase,
+    assessmentOneTimeAdjustments,
+    totalOneTimeBeforeManual,
+    totalOneTime: roundUpToNearestIncrement(totalOneTimeBeforeManual + manualAdjustmentAmount),
+  };
+}
+
+/**
+ * Grow override, extracted from the snapshot builder: grow is NOT priced
+ * bottom-up — every grow figure is ceil5(maintain x 1.5).
+ */
+export function applyGrowPriceOverride(
+  packagePricing: Record<PackageId, PackagePricingSummary>,
+): Record<PackageId, PackagePricingSummary> {
+  const maintainPricing = packagePricing.maintain;
+  return {
+    ...packagePricing,
+    grow: {
+      ...packagePricing.grow,
+      monthly: roundUpToNearestIncrement(
+        maintainPricing.monthly * GROW_PRICE_MULTIPLIER_FROM_MAINTAIN,
+      ),
+      catchUpBase: roundUpToNearestIncrement(
+        maintainPricing.catchUpBase * GROW_PRICE_MULTIPLIER_FROM_MAINTAIN,
+      ),
+      assessmentOneTimeAdjustments: roundUpToNearestIncrement(
+        maintainPricing.assessmentOneTimeAdjustments * GROW_PRICE_MULTIPLIER_FROM_MAINTAIN,
+      ),
+      totalOneTimeBeforeManual: roundUpToNearestIncrement(
+        maintainPricing.totalOneTimeBeforeManual * GROW_PRICE_MULTIPLIER_FROM_MAINTAIN,
+      ),
+      totalOneTime: roundUpToNearestIncrement(
+        maintainPricing.totalOneTime * GROW_PRICE_MULTIPLIER_FROM_MAINTAIN,
+      ),
+    },
+  };
+}
+
+/**
+ * Zero/default pricing inputs: the base for synthetic per-company
+ * assessments. A company's own accounts supply the band and counts; every
+ * other driver stays at zero so one file's volume never leaks into another.
+ */
+export function emptyPackagePricingInputs(): PackagePricingInputs {
+  return {
+    bookSetType: "",
+    realEstateOperations: [],
+    transactionBand: "",
+    numberOfProperties: 0,
+    numberOfEntities: 0,
+    employeesCount: 0,
+    contractorsCount: 0,
+    bankAccountsCount: 0,
+    creditCardsCount: 0,
+    unconnectedBankAccountsCount: 0,
+    unconnectedCreditCardsCount: 0,
+    paymentPlatforms: [],
+    zeroBalancePlatformCount: 0,
+    loansCount: 0,
+    vehicleNotesCount: 0,
+    linesOfCreditCount: 0,
+    unconnectedLinesOfCreditCount: 0,
+    historicalCleanupPeriods: [],
+    cleanupPurchasedOrSoldPropertiesCount: 0,
+    discretionaryMultiplier: 1,
+  };
+}
