@@ -18,8 +18,10 @@
  *   per-property rules `packagePricing` applies to the main assessment:
  *   `recurringPerProperty` monthly; backlog follows the same inputs), minus
  *   the bundle discount, rounded UP to $5 like builder prices. No other
- *   driver is inherited from the main company. Payroll and other per-company
- *   drivers arrive with spec 03; `complexity` stays reserved until then.
+ *   driver is inherited from the main company. Spec 03: an added company's own
+ *   `CompanyEntry.complexity` selection prices into its standalone monthly
+ *   (before discount); per-proposal overrides live on that selection and the
+ *   proposal-level `complexityDriverDefaults` act as its template source.
  * - A company with `ownQboFile: false` is a location-like tag: no standalone
  *   price, and tags alone never activate the bundle (adding a tag keeps the
  *   legacy per-entity charge). Locations are charged only via the main
@@ -382,11 +384,32 @@ export function describeNewFileSetupCharge(assessment: unknown): {
  * supplies the per-property rules; every other driver is zero so one file's
  * volume never leaks into another's price. Mirrors what
  * `effectiveAssessment` derives for inventory, without depending on it.
+ *
+ * Spec 03: the company's own `complexity` selection rides along, with the
+ * proposal-level `complexityDriverDefaults` as its template source (tag
+ * companies never reach this function with a priced selection — they price
+ * nothing). No headcount or add-on flags are synthesized, so per-company
+ * existing-line drivers honestly report their line absent (monthly $0).
  */
-function syntheticCompanyInputs(company: CompanyEntry): PackagePricingInputs {
+function syntheticCompanyInputs(
+  company: CompanyEntry,
+  baseAssessment?: unknown,
+): PackagePricingInputs {
   const summary = summarizeAccountInventory(normalizeAccountInventory(company.accounts));
+  const base = (
+    baseAssessment && typeof baseAssessment === "object" && !Array.isArray(baseAssessment)
+      ? (baseAssessment as Record<string, unknown>)
+      : {}
+  );
   return {
     ...emptyPackagePricingInputs(),
+    // No headcount or add-on flags are synthesized: per-company existing-line
+    // drivers honestly report their line absent (monthly $0 with
+    // `requiresExistingLine`), matching the per-company checklist display.
+    // Stated explicitly rather than relying on the `?? true` legacy default
+    // in `complexityExistingPresence`.
+    offerSalesTaxFiling: false,
+    offerProjectTracking: false,
     transactionBand: summary.hasInventory ? (summary.derivedBand ?? "") : "",
     numberOfProperties: company.propertiesCount,
     bankAccountsCount: summary.derivedCounts.bankAccountsCount,
@@ -394,12 +417,18 @@ function syntheticCompanyInputs(company: CompanyEntry): PackagePricingInputs {
     loansCount: summary.derivedCounts.loansCount,
     linesOfCreditCount: summary.derivedCounts.linesOfCreditCount,
     vehicleNotesCount: summary.derivedCounts.vehicleNotesCount,
+    complexity: company.complexity,
+    complexityDriverDefaults: base.complexityDriverDefaults,
   };
 }
 
 /** Standalone monthly for one owned file, with the same grow override the builder applies. */
-function standaloneCompanyMonthly(company: CompanyEntry, packageId: PackageId): number {
-  const inputs = syntheticCompanyInputs(company);
+function standaloneCompanyMonthly(
+  company: CompanyEntry,
+  packageId: PackageId,
+  baseAssessment?: unknown,
+): number {
+  const inputs = syntheticCompanyInputs(company, baseAssessment);
   const priced = applyGrowPriceOverride({
     grow: buildPackagePricing(PACKAGE_PRICING.grow, inputs, 0, 0),
     improve: buildPackagePricing(PACKAGE_PRICING.improve, inputs, 0, 0),
@@ -453,7 +482,7 @@ export function priceCompanyBundle(input: {
         setupOneTime: 0,
       };
     }
-    const standaloneMonthly = standaloneCompanyMonthly(company, packageId);
+    const standaloneMonthly = standaloneCompanyMonthly(company, packageId, input.baseAssessment);
     const discountPct = options.additionalCompanyDiscountPct;
     return {
       company,

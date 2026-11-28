@@ -4,6 +4,11 @@ import { z } from "zod";
 import { slugifyTagKey } from "@/lib/contacts/tags";
 import { toPublicAccountInventory, type PublicAccountInventory } from "@/lib/quotes/accountInventory";
 import {
+  hasComplexitySelection,
+  toPublicComplexityWhy,
+  type ComplexityPublicWhy,
+} from "@/lib/quotes/complexityDrivers";
+import {
   asCompanyBundleSnapshot,
   buildCompanyBundleSnapshot,
   hasCompanyBundle,
@@ -167,6 +172,59 @@ export function publicCompanyBundleForSnapshot(snapshotValue: unknown): PublicCo
   return toPublicCompanyBundleMap(rawAssessment.companies, bundle);
 }
 
+export type { ComplexityPublicWhy };
+
+/** Per-tier Spec 03 "Why this price" lists; null per tier means legacy (no lines stored). */
+export type ComplexityWhyByTier = {
+  maintain: ComplexityPublicWhy[] | null;
+  improve: ComplexityPublicWhy[] | null;
+  grow: ComplexityPublicWhy[] | null;
+};
+
+/**
+ * Spec 03 client-facing per-tier "Why this price" lists for a stored
+ * snapshot, or null for legacy proposals without a complexity selection.
+ *
+ * Read from the published snapshot's per-tier priced lines — the same
+ * objects checkout and the agreement read — so the public page never
+ * recomputes driver money and the Why list can show the SELECTED tier tab's
+ * amounts. Only labels, plain reasons and monthly amounts leave this
+ * function (the contract's whitelist); an included (or waiting-on-a-line)
+ * driver publishes `monthly: null` in every tier.
+ */
+export function publicComplexityWhyForSnapshot(snapshotValue: unknown): ComplexityPublicWhy[] | null {
+  const snapshot = record(snapshotValue);
+  const rawAssessment = record(snapshot.assessment);
+  if (!hasComplexitySelection(rawAssessment.complexity)) return null;
+  const pricing = record(snapshot.pricing);
+  const maintain = record(pricing.maintain);
+  const stored = record(maintain.complexity);
+  if (!Array.isArray(stored.lines)) return null;
+  return toPublicComplexityWhy(stored.lines);
+}
+
+/**
+ * Per-tier sibling of `publicComplexityWhyForSnapshot`: the whitelisted Why
+ * list for EACH tier tab, read from that tier's stored priced lines. All
+ * tiers are written by one snapshot version, so either every tier carries
+ * lines or the snapshot predates the wiring — a missing maintain-tier lines
+ * array means legacy and the whole map is null.
+ */
+export function publicComplexityWhyByTierForSnapshot(snapshotValue: unknown): ComplexityWhyByTier | null {
+  const snapshot = record(snapshotValue);
+  const rawAssessment = record(snapshot.assessment);
+  if (!hasComplexitySelection(rawAssessment.complexity)) return null;
+  const pricing = record(snapshot.pricing);
+  const maintainStored = record(record(pricing.maintain).complexity);
+  if (!Array.isArray(maintainStored.lines)) return null;
+  const forTier = (tier: "maintain" | "improve" | "grow"): ComplexityPublicWhy[] | null => {
+    const stored = record(record(pricing[tier]).complexity);
+    if (!Array.isArray(stored.lines)) return toPublicComplexityWhy(maintainStored.lines);
+    return toPublicComplexityWhy(stored.lines);
+  };
+  return { maintain: forTier("maintain"), improve: forTier("improve"), grow: forTier("grow") };
+}
+
 export function toPublicBookkeepingProposal(
   snapshotValue: unknown,
   catalogCopy?: PublicCatalogCopy,
@@ -192,6 +250,12 @@ export function toPublicBookkeepingProposal(
     // Legacy proposals (no bundle) get null; `assessment.companies` itself
     // stays stripped by the allowlisted schema above.
     companyBundle: publicCompanyBundleForSnapshot(snapshotValue),
+    // Legacy proposals (no complexity selection) get null; the raw selection
+    // (names, overrides) never leaves the snapshot — only the whitelist above.
+    complexityWhy: publicComplexityWhyForSnapshot(snapshotValue),
+    // Per-tier Why lists for the tier tabs (selected tab's amounts); null for
+    // legacy. `complexityWhy` stays as the maintain-tier alias.
+    complexityWhyByTier: publicComplexityWhyByTierForSnapshot(snapshotValue),
     contactInfo: {
       companyName: typeof contact.companyName === "string" ? contact.companyName : "",
       owners: [] as Array<never>,

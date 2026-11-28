@@ -17,6 +17,7 @@ import {
 import type { AccountEntry } from "@/lib/quotes/accountInventory";
 import type { PackageId } from "@/lib/quotes/packagePricing";
 import AccountInventoryEditor from "./AccountInventoryEditor";
+import ComplexityChecklist from "./ComplexityChecklist";
 import type { AssessmentState } from "./ProposalCreationWorkspaceDemo";
 
 const PACKAGE_IDS = ["grow", "improve", "maintain"] as const satisfies readonly PackageId[];
@@ -345,6 +346,38 @@ export default function CompanyBundleEditor({
                   Shares the main file — priced as part of the main company, not on its own.
                 </p>
               )}
+              {company.ownQboFile ? (
+                <div className="mt-3">
+                  <p className="text-xs font-semibold text-slate-700">
+                    Complexity drivers for this file
+                  </p>
+                  <div className="mt-2">
+                    <ComplexityChecklist
+                      compact
+                      selection={company.complexity}
+                      defaults={baseAssessment.complexityDriverDefaults}
+                      // Per-company pricing synthesizes its own inputs with no
+                      // add-ons, headcount, books type or payment platforms,
+                      // so every existing line reads absent here — matching
+                      // the priced `requiresExistingLine` notes ("Will add
+                      // <line>") — and no counted-once hint can fire.
+                      existing={{
+                        salesTaxAddon: false,
+                        projectTrackingAddon: false,
+                        mixedBooks: false,
+                        staffingHeadcount: 0,
+                      }}
+                      paymentPlatforms={[]}
+                      onChange={(next) =>
+                        // Spread: the normalized selection interface gains
+                        // an implicit index signature, matching
+                        // `CompanyEntry.complexity` (`Record<string, unknown> | null`).
+                        updateCompany(company.id, { complexity: { ...next } })
+                      }
+                    />
+                  </div>
+                </div>
+              ) : null}
               <button
                 type="button"
                 aria-label={`Remove ${company.name || `Company ${addedIndex + 2}`}`}

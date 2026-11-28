@@ -1,4 +1,9 @@
 import type { BundlePricingOptions } from "@/lib/quotes/companyBundle";
+import {
+  sanitizeComplexityDriverDefaults,
+  type ComplexityDriverDefaultsPatch,
+  type ComplexityDriverId,
+} from "@/lib/quotes/complexityDrivers";
 
 export const OPTIONS_TEMPLATE_SNAPSHOT_VERSION = 1;
 
@@ -49,6 +54,17 @@ export type OptionsTemplateSnapshot = {
    * `bundlePricingOptions` override on the assessment wins over it.
    */
   bundlePricingDefaults?: Partial<BundlePricingOptions>;
+  /**
+   * Spec 03 brand-level defaults for complexity-driver money: maintain-tier
+   * monthly (per-payee rate for 1099 filing) plus per-cleanup-month add.
+   * Additive and optional like `bundlePricingDefaults`, so snapshots written
+   * before Spec 03 (which omit it) still parse at version 1. Each driver and
+   * each field is optional: omitted fields fall through to the code defaults
+   * at resolution time. When a template is applied to a proposal it lands on
+   * the assessment as `complexityDriverDefaults`; a per-proposal
+   * `monthlyOverride` on the selection wins over it.
+   */
+  complexityDriverDefaults?: ComplexityDriverDefaultsPatch;
 };
 
 export type OptionsTemplateAssessmentSlice = {
@@ -57,6 +73,7 @@ export type OptionsTemplateAssessmentSlice = {
   bonuses: OptionsTemplateBonus[];
   bonusPackageSelections: Record<string, OptionsTemplatePackageId[]>;
   bundlePricingDefaults?: Partial<BundlePricingOptions>;
+  complexityDriverDefaults?: ComplexityDriverDefaultsPatch;
 };
 
 const VALID_PACKAGES: readonly OptionsTemplatePackageId[] = ["grow", "improve", "maintain"];
@@ -206,6 +223,56 @@ function sanitizeBonus(raw: unknown): OptionsTemplateBonus | null {
   return bonus;
 }
 
+/**
+ * The drivers the options-template editor prices: the new Spec 03 money
+ * drivers only (existing-line drivers are covered by their own lines and
+ * carry no template amount).
+ */
+export const COMPLEXITY_TEMPLATE_DRIVER_IDS: readonly ComplexityDriverId[] = [
+  "inventory_cogs",
+  "pos_system",
+  "online_store",
+  "loans_mca",
+  "personal_commingling",
+  "filing_1099",
+];
+
+/**
+ * Parse the manager's complexity-defaults text inputs (one monthly +
+ * cleanup-add pair per new driver). A blank input DELETES its field so the
+ * driver falls back to the code default — it never saves `Number("")` (0).
+ * A non-blank input must be a finite non-negative number (1099 monthly is
+ * the per-payee rate). Returns null when any non-blank input is invalid.
+ */
+export function parseComplexityDriverDefaultsInputs(
+  values: Partial<
+    Record<ComplexityDriverId, { monthly: string; cleanupPerMonth: string }>
+  >,
+): ComplexityDriverDefaultsPatch | null {
+  const patch: ComplexityDriverDefaultsPatch = {};
+  for (const id of COMPLEXITY_TEMPLATE_DRIVER_IDS) {
+    const pair = values[id];
+    if (!pair) continue;
+    const entry: { monthly?: number; cleanupPerMonth?: number } = {};
+    const monthlyRaw = pair.monthly.trim();
+    if (monthlyRaw !== "") {
+      const value = Number(monthlyRaw);
+      if (!Number.isFinite(value) || value < 0) return null;
+      entry.monthly = value;
+    }
+    const cleanupRaw = pair.cleanupPerMonth.trim();
+    if (cleanupRaw !== "") {
+      const value = Number(cleanupRaw);
+      if (!Number.isFinite(value) || value < 0) return null;
+      entry.cleanupPerMonth = value;
+    }
+    if (entry.monthly !== undefined || entry.cleanupPerMonth !== undefined) {
+      patch[id] = entry;
+    }
+  }
+  return patch;
+}
+
 export function buildOptionsTemplateSnapshot(
   slice: OptionsTemplateAssessmentSlice,
 ): OptionsTemplateSnapshot {
@@ -231,6 +298,7 @@ export function buildOptionsTemplateSnapshot(
     bonuses,
     bonusPackageSelections,
     bundlePricingDefaults: sanitizeBundlePricingDefaults(slice.bundlePricingDefaults),
+    complexityDriverDefaults: sanitizeComplexityDriverDefaults(slice.complexityDriverDefaults),
   };
 }
 
@@ -262,7 +330,10 @@ export function parseOptionsTemplateSnapshot(raw: unknown): OptionsTemplateSnaps
             ]),
           )
         : {},
-    bundlePricingDefaults: sanitizeBundlePricingDefaults(record.bundlePricingDefaults),
+    // Raw shapes are sanitized inside `buildOptionsTemplateSnapshot`; the
+    // casts only bridge the unknown-typed record.
+    bundlePricingDefaults: record.bundlePricingDefaults as Partial<BundlePricingOptions> | undefined,
+    complexityDriverDefaults: record.complexityDriverDefaults as ComplexityDriverDefaultsPatch | undefined,
   });
 }
 
@@ -303,6 +374,8 @@ export function reconcileOptionsTemplateSnapshot(
       // Brand-level bundle defaults are not catalog items, so reconciliation
       // never drops them — they always travel with the slice.
       bundlePricingDefaults: sanitizeBundlePricingDefaults(snapshot.bundlePricingDefaults),
+      // Same for the Spec 03 complexity defaults: not catalog items, never dropped.
+      complexityDriverDefaults: sanitizeComplexityDriverDefaults(snapshot.complexityDriverDefaults),
     },
     skippedIds,
   };

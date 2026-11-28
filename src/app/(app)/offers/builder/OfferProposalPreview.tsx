@@ -4,6 +4,14 @@ import { pricingCardServices } from "./pricingCardServices";
 import ProposalPaymentPlan from "./ProposalPaymentPlan";
 import HowWeSizedThis from "./HowWeSizedThis";
 import CompanyBundleSummary from "./CompanyBundleSummary";
+import ComplexityWhyList from "./ComplexityWhyList";
+import {
+  hasComplexitySelection,
+  normalizeComplexitySelection,
+  priceComplexityDrivers,
+  toPublicComplexityWhy,
+  type ComplexityPublicWhy,
+} from "@/lib/quotes/complexityDrivers";
 import {
   asPublicCompanyBundleMap,
   companyBundleFeeLines,
@@ -60,6 +68,7 @@ import {
   type ContactInfoState,
 } from "./ProposalContactInfoState";
 import {
+  complexityExistingPresence,
   getAnnualSavingsPercent,
   getListedOnboardingFee,
   getProposalAdditionalOptions,
@@ -92,7 +101,11 @@ import {
   isProposalPreviewSimulation,
   resolveProposalInteractionEngagementId,
 } from "@/lib/quotes/previewSafety";
-import type { PublicBookkeepingProposal, PublicProposalPricing } from "@/lib/quotes/publicProposal";
+import type {
+  ComplexityWhyByTier,
+  PublicBookkeepingProposal,
+  PublicProposalPricing,
+} from "@/lib/quotes/publicProposal";
 import { resolveProposalPackageName } from "./proposalPackageNames";
 import { includedServicePackages, proposalServiceAddOns, serviceIsApplicable } from "@/lib/quotes/proposalServices";
 
@@ -717,6 +730,9 @@ export default function OfferProposalPreview(props: OfferProposalPreviewProps = 
   if (props.live && props.publicProposal) {
     // Whitelisted per-tier Spec 02 bundle; legacy snapshots carry none.
     const publicBundle = props.publicProposal.companyBundle ?? null;
+    // Spec 03 whitelisted per-tier "Why this price" lists, typed from the
+    // public payload (no defensive cast); legacy snapshots carry none, which
+    // hides the list.
     return (
       <OfferProposalPreviewView
         {...props}
@@ -725,6 +741,8 @@ export default function OfferProposalPreview(props: OfferProposalPreviewProps = 
         publishedPricing={props.publicProposal.pricing}
         publicAccountInventory={props.publicProposal.accountInventory}
         publicCompanyBundle={publicBundle}
+        publicComplexityWhyByTier={props.publicProposal.complexityWhyByTier}
+        publicComplexityWhy={props.publicProposal.complexityWhy}
         livePublic
       />
     );
@@ -781,6 +799,8 @@ function OfferProposalPreviewView({
   livePublic = false,
   publicAccountInventory,
   publicCompanyBundle = null,
+  publicComplexityWhyByTier = null,
+  publicComplexityWhy: legacyPublicComplexityWhy = null,
 }: Omit<OfferProposalPreviewProps, "assessment" | "initialAssessment" | "initialContactInfo" | "publicProposal"> & {
   assessment: PreviewAssessment | AssessmentState;
   contactInfo: PreviewContactInfo;
@@ -791,6 +811,16 @@ function OfferProposalPreviewView({
    * single-tier payload is still tolerated and expanded to every tier.
    */
   publicCompanyBundle?: PublicCompanyBundleMap | null;
+  /**
+   * Whitelisted per-tier Spec 03 "Why this price" lists for the public page;
+   * the view shows the SELECTED tier tab's list. Null (legacy) hides the list.
+   */
+  publicComplexityWhyByTier?: ComplexityWhyByTier | null;
+  /**
+   * Maintain-tier alias of the field above, kept for payload shape compat.
+   * The per-tier map is preferred; this is only the fallback.
+   */
+  publicComplexityWhy?: ComplexityPublicWhy[] | null;
 }) {
   const { brand } = useBrand();
   const accountInventory: PublicAccountInventory | null | undefined = livePublic
@@ -900,6 +930,9 @@ function OfferProposalPreviewView({
     : null;
   const publicBundleMap = livePublic ? asPublicCompanyBundleMap(publicCompanyBundle) : null;
   const publicBundleForTier = publicBundleMap ? publicBundleMap[bundleTier] ?? null : null;
+  // Spec 03 "Why this price": the staff preview computation lives beside
+  // `cleanupPeriods` below (it needs the selected cleanup months); the
+  // public page renders the whitelisted field only.
   // On the public page the assessment strips the raw companies, so the
   // central add-on skip cannot see a new-file setup: drop the legacy
   // catalog line here instead, keyed on the whitelisted setup amounts.
@@ -1319,6 +1352,26 @@ function OfferProposalPreviewView({
       .filter((p) => periodMonthCount(p) > 0)
       .sort((a, b) => (a.year * 12 + a.startMonth) - (b.year * 12 + b.startMonth))
     : [];
+
+  // Spec 03 "Why this price": staff preview prices the full assessment for
+  // the selected tier; the public page renders the whitelisted per-tier field
+  // for the selected tier tab (no recompute). Either side with no selection
+  // renders nothing (legacy unchanged).
+  const staffComplexityAssessment = livePublic ? null : (assessment as AssessmentState);
+  const staffComplexityWhy =
+    staffComplexityAssessment !== null && hasComplexitySelection(staffComplexityAssessment.complexity)
+      ? toPublicComplexityWhy(
+          priceComplexityDrivers(normalizeComplexitySelection(staffComplexityAssessment.complexity), {
+            packageId: bundleTier,
+            defaults: staffComplexityAssessment.complexityDriverDefaults,
+            cleanupMonths: cleanupPeriods.reduce((total, period) => total + periodMonthCount(period), 0),
+            existing: complexityExistingPresence(staffComplexityAssessment),
+          }).lines,
+        )
+      : null;
+  const publicComplexityWhy = livePublic
+    ? (publicComplexityWhyByTier?.[bundleTier] ?? legacyPublicComplexityWhy)
+    : null;
 
   const cleanupKey = (optionId: OptionId, periodKey: string) => `${optionId}:${periodKey}`;
   const cleanupIsSelected = (optionId: OptionId, periodKey: string) => cleanupSelections[cleanupKey(optionId, periodKey)] !== false;
@@ -2063,6 +2116,11 @@ function OfferProposalPreviewView({
                   caption={`Monthly amounts for the ${options[bundleTier].name} package.`}
                 />
               ) : null}
+
+              <ComplexityWhyList
+                lines={livePublic ? publicComplexityWhy : staffComplexityWhy}
+                tierName={options[bundleTier].name}
+              />
 
               <HowWeSizedThis inventory={accountInventory} brandName={brand.name} companies={companyInventories} />
 

@@ -51,6 +51,8 @@ describe("public proposal data boundary", () => {
       assessment: { introHeadline: "Legacy plan", historicalCleanupPeriods: [], additionalOptions: [], bonuses: [] },
       pricing,
       companyBundle: null,
+      complexityWhy: null,
+      complexityWhyByTier: null,
       contactInfo: { companyName: "", owners: [], primaryContact: { firstName: "", lastName: "", email: "", sameAsOwner: false, ownerId: "", phone: "", role: "" } },
     });
     expect(snapshot).toEqual(before);

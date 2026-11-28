@@ -31,6 +31,8 @@ export type ProposalCheckoutSummary = ProposalCheckoutSelection & {
   cleanupMonths?: number;
   cleanupMonthlyRate?: number;
   additionalOneTimeTotal?: number;
+  /** Spec 03 complexity cleanup weight inside cleanupTotal; absent when none applies. */
+  complexityCleanupAdd?: number;
   /** Months of recurring service covered by today's payment: 1, or 12 on a prepaid annual term. */
   prepaidMonths?: number;
   /** Credit for money already paid, deducted from amountDueNow. Absent when there is none. */
@@ -118,6 +120,9 @@ export function parseStoredProposalCheckout(value: unknown): ProposalCheckoutSum
       && typeof value.amountDueBeforeCredit === "number" && Number.isFinite(value.amountDueBeforeCredit) ? {
       creditApplied: value.creditApplied,
       amountDueBeforeCredit: value.amountDueBeforeCredit,
+    } : {}),
+    ...(typeof value.complexityCleanupAdd === "number" && Number.isFinite(value.complexityCleanupAdd) && value.complexityCleanupAdd > 0 ? {
+      complexityCleanupAdd: value.complexityCleanupAdd,
     } : {}),
     ...(value.paymentScheduleVersion === 2 ? {
       paymentScheduleVersion: 2 as const,
@@ -284,12 +289,22 @@ export function buildProposalCheckoutSummary(
           ? override
           : 500 + selectedCleanupMonths * 20,
       );
+  // Spec 03: the complexity cleanup weight (commingling + loans/MCA) rides
+  // the checkout cleanup estimate as its own add, read from the published
+  // snapshot's maintain-tier lines — never recomputed. Only when the client
+  // selected cleanup months; amountDueNow semantics are unchanged (the
+  // estimate is never charged today).
+  const publishedMaintain = isRecord(pricing.maintain) ? pricing.maintain : {};
+  const publishedComplexity = isRecord(publishedMaintain.complexity) ? publishedMaintain.complexity : {};
+  const complexityCleanupPerMonth = finiteNumber(publishedComplexity.cleanupPerMonthTotal);
+  const complexityCleanupAdd = money(complexityCleanupPerMonth * selectedCleanupMonths);
   const { cleanupTotal, oneTimeTotal, amountDueNow, amountDueBeforeCredit, creditApplied, prepaidMonths } = proposalPaymentSchedule({
     cleanupMonths: selectedCleanupMonths, cleanupMonthlyRate: maintainMonthly,
     onboardingFee, additionalOneTimeTotal, recurringMonthlyTotal,
     annualPrepay: selection.hasTwelveMonthAgreement,
     creditApplied: money(finiteNumber(assessment.firstPaymentCredit)),
   });
+  const cleanupTotalWithComplexity = money(cleanupTotal + complexityCleanupAdd);
   const chargeKind: ProposalCheckoutSummary["chargeKind"] = selectedCleanupMonths > 0
     ? "onboarding_and_discovery"
     : onboardingFee > 0 ? "onboarding_and_first_month" : "first_month";
@@ -302,7 +317,7 @@ export function buildProposalCheckoutSummary(
     tierLabel: selection.tier[0].toUpperCase() + selection.tier.slice(1),
     baseMonthlyTotal,
     recurringMonthlyTotal,
-    cleanupTotal,
+    cleanupTotal: cleanupTotalWithComplexity,
     onboardingFee,
     oneTimeTotal,
     amountDueNow,
@@ -310,6 +325,8 @@ export function buildProposalCheckoutSummary(
     prepaidMonths,
     // Only present when a credit applies, so selections without one hash exactly as before.
     ...(creditApplied > 0 ? { creditApplied, amountDueBeforeCredit } : {}),
+    // Only present when a complexity cleanup add applies (legacy: absent).
+    ...(complexityCleanupAdd > 0 ? { complexityCleanupAdd } : {}),
     paymentScheduleVersion: 2 as const,
     cleanupMonths: selectedCleanupMonths,
     cleanupMonthlyRate: maintainMonthly,

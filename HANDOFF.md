@@ -1,4 +1,10 @@
 # SWapp handoff
+## 2026-11-27 — Proposal builder spec 03: complexity checklist + "Why this price" (Ummon)
+- One checklist on the complexity step (`src/lib/quotes/complexityDrivers.ts`): inventory/COGS, POS, online store, MCA/loan splits, personal commingling, 1099 filing (new, priced; placeholders pending Tom), plus payroll / sales tax / project tracking / mixed books folded in as "Included in <line>" (no double charge).
+- Online store / POS rows have a "Payouts come through" picker; the chosen platform is counted once. Commingling and MCA/loans add a per-cleanup-month line only when there is cleanup.
+- Client-facing "Why this price" per selected tier from the published snapshot; hidden for legacy proposals. Per-company checklists for added companies with own files. Defaults editable in options templates.
+- Open minors: Grow display lines can differ from the charged total when every driver has an exact override; no builder toggle yet for Sales Tax / Project Tracking add-ons.
+
 ## 2026-11-27 — Proposal builder spec 02: multiple companies as one bundle (Ummon)
 - Package pricing moved out of the builder into `src/lib/quotes/packagePricing.ts` (golden tests: 19 prices + thresholds identical); bundle math in `src/lib/quotes/companyBundle.ts`.
 - `assessment.companies` is canonical (`assessment.accounts` mirrors the main company). Added companies with their own QBO file are priced from their own accounts + properties, 20% off (rounded up to $5); locations $25/mo each; new-file setup one-time (override -> template -> catalog `new-quickbooks-file` if > $0 -> $150). Defaults editable under "Bundle pricing" in options templates; final amounts pending Tom.

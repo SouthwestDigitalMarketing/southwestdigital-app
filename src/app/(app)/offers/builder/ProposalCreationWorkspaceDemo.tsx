@@ -88,6 +88,16 @@ import {
   type CompanyEntry,
 } from "@/lib/quotes/companyBundle";
 import CompanyBundleEditor, { withSyncedMainAccounts } from "./CompanyBundleEditor";
+import ComplexityChecklist from "./ComplexityChecklist";
+import {
+  COMPLEXITY_DRIVER_IDS,
+  complexityDriverDefs,
+  hasComplexitySelection,
+  normalizeComplexitySelection,
+  sanitizeComplexityDriverDefaults,
+  type ComplexityDriverDefaultsPatch,
+  type ComplexitySelection,
+} from "@/lib/quotes/complexityDrivers";
 import {
   sanitizeBundlePricingDefaults,
   type OptionsTemplateAssessmentSlice,
@@ -303,6 +313,13 @@ export type AssessmentState = {
   bundlePricingOptions?: Partial<BundlePricingOptions>;
   /** Options-template defaults applied to the proposal; set fields beat the catalog, omitted fields fall through. */
   bundlePricingDefaults?: Partial<BundlePricingOptions>;
+  /**
+   * Spec 03 main-company complexity selection, written normalized by the
+   * checklist UI and normalized again at pricing; absent on legacy proposals.
+   */
+  complexity?: ComplexitySelection;
+  /** Options-template complexity driver defaults applied to the proposal. */
+  complexityDriverDefaults?: ComplexityDriverDefaultsPatch;
   entityType: EntityType;
   taxElection: TaxElection;
   booksOverTwoMonthsBehind: boolean | null;
@@ -1096,6 +1113,64 @@ function parseAnnualSavingsPercentInput(value: string) {
   return Math.min(100, Math.max(0, parsed));
 }
 
+/**
+ * Spec 03 sales-tax / project-tracking two-way binding (single source of
+ * truth for the live edit paths; load never heals either direction).
+ * Ticking the driver turns its existing add-on line ON; turning the add-on
+ * OFF unticks its driver in the same update (applyAddonFlagChange), so a
+ * stored OFF stays OFF across save/reload and never silently raises the
+ * price. Unticking the driver NEVER turns an add-on off, so an add-on the
+ * user chose independently (or that was on before the driver existed) is
+ * never silently removed. Payroll and mixed books never auto-change
+ * headcount or bookSetType; they price a "requires" line.
+ */
+export function complexityDriverAutoOn(
+  selection: ComplexitySelection,
+  flags: { offerSalesTaxFiling: boolean; offerProjectTracking: boolean },
+): { offerSalesTaxFiling: boolean; offerProjectTracking: boolean } {
+  return {
+    offerSalesTaxFiling: selection.drivers.sales_tax.checked === true ? true : flags.offerSalesTaxFiling,
+    offerProjectTracking: selection.drivers.job_tracking.checked === true ? true : flags.offerProjectTracking,
+  };
+}
+
+/**
+ * Live add-on toggle path: turning the sales-tax / project-tracking
+ * add-on OFF unticks its checklist driver in the same state update, so
+ * the checklist never prices a row for a line the proposal no longer
+ * carries. Turning the add-on ON leaves drivers alone — a ticked driver
+ * already implies ON via the live complexity path, and an unticked one
+ * must not self-check. The `flag` union is exactly the two add-ons with
+ * mapped drivers; nothing else routes through here.
+ */
+export function applyAddonFlagChange(
+  current: AssessmentState,
+  flag: "offerSalesTaxFiling" | "offerProjectTracking",
+  value: boolean,
+): AssessmentState {
+  if (value) return { ...current, [flag]: true };
+  if (current.complexity === undefined) return { ...current, [flag]: false };
+  const driverId = flag === "offerSalesTaxFiling" ? "sales_tax" : "job_tracking";
+  return {
+    ...current,
+    [flag]: false,
+    complexity: normalizeComplexitySelection({
+      drivers: { ...current.complexity.drivers, [driverId]: { checked: false } },
+    }),
+  };
+}
+
+/**
+ * Live complexity edit path: normalize the checklist selection and apply the
+ * auto-on rule in the same state update, so ticking sales-tax / job-tracking
+ * turns the add-on on immediately (not just on the next reload) and the
+ * checklist "Included in <line>" note agrees with pricing in the same render.
+ */
+export function applyComplexitySelection(current: AssessmentState, next: unknown): AssessmentState {
+  const complexity = normalizeComplexitySelection(next);
+  return { ...current, complexity, ...complexityDriverAutoOn(complexity, current) };
+}
+
 function withComplexityUnknownDefaults(assessment: AssessmentState): AssessmentState {
   // Spec 02: a saved bundle is canonical — companies normalize tolerantly and
   // `accounts` mirrors companies[0].accounts. Legacy snapshots (no `companies`
@@ -1104,10 +1179,28 @@ function withComplexityUnknownDefaults(assessment: AssessmentState): AssessmentS
   const normalizedBundle =
     storedCompanies === undefined ? undefined : normalizeCompanyBundle(storedCompanies);
   const companies = normalizedBundle && normalizedBundle.length > 0 ? normalizedBundle : undefined;
+  // Spec 03: the checklist selection normalizes tolerantly (junk drops to
+  // unchecked). Load NEVER heals flags or drivers: a stored add-on OFF
+  // stays OFF even when its driver is ticked (the checklist then prices a
+  // "Will add <line>" waiting row instead of charging), and a stored ON
+  // stays ON. The two-way binding lives in the live edit paths only —
+  // driver tick turns the add-on ON (applyComplexitySelection via
+  // complexityDriverAutoOn), add-on OFF unticks the driver
+  // (applyAddonFlagChange). Payroll and mixed books never auto-change
+  // headcount or bookSetType; they price a "requires" line.
+  const complexity =
+    assessment.complexity === undefined
+      ? undefined
+      : normalizeComplexitySelection(assessment.complexity);
   return {
     ...assessment,
     accounts: companies ? companies[0].accounts : normalizeAccountInventory(assessment.accounts),
     companies,
+    complexity,
+    complexityDriverDefaults:
+      assessment.complexityDriverDefaults === undefined
+        ? undefined
+        : sanitizeComplexityDriverDefaults(assessment.complexityDriverDefaults),
     bundlePricingOptions:
       assessment.bundlePricingOptions === undefined
         ? undefined
@@ -1222,9 +1315,25 @@ export function applyOptionsTemplateSlice(
       (merged as Record<string, number>)[key] = value;
     }
   }
+  // Spec 03: same field-by-field merge for the complexity driver defaults —
+  // template-set fields win, template-unset fields keep what the proposal has.
+  const savedComplexity = sanitizeComplexityDriverDefaults(saved.complexityDriverDefaults);
+  const templateComplexity = sanitizeComplexityDriverDefaults(slice.complexityDriverDefaults);
+  const mergedComplexity: ComplexityDriverDefaultsPatch = { ...savedComplexity };
+  for (const [driverId, entry] of Object.entries(templateComplexity)) {
+    if (entry !== undefined) {
+      mergedComplexity[driverId as keyof ComplexityDriverDefaultsPatch] = {
+        ...mergedComplexity[driverId as keyof ComplexityDriverDefaultsPatch],
+        ...entry,
+      };
+    }
+  }
   const next = { ...saved, ...slice };
   if (slice.bundlePricingDefaults !== undefined || saved.bundlePricingDefaults !== undefined) {
     next.bundlePricingDefaults = merged;
+  }
+  if (slice.complexityDriverDefaults !== undefined || saved.complexityDriverDefaults !== undefined) {
+    next.complexityDriverDefaults = mergedComplexity;
   }
   return next;
 }
@@ -1623,10 +1732,11 @@ export function getProposalPricingSnapshotData(assessment: AssessmentState) {
 
   // Test proposals exercise the complete signing and payment flow with a
   // single-dollar charge (see resolveAmountDueNow). Nothing recurs, so
-  // monthly is $0 and the entire one-time total collapses to $1.
+  // monthly is $0 and the entire one-time total collapses to $1. Complexity
+  // lines are stripped with the monthlies so test snapshots stay trivial.
   if (assessment.isTestProposal) {
     for (const pkg of PACKAGES) {
-      packagePricing[pkg.id] = {
+      const priced = {
         ...packagePricing[pkg.id],
         monthly: 0,
         catchUpBase: 0,
@@ -1634,6 +1744,8 @@ export function getProposalPricingSnapshotData(assessment: AssessmentState) {
         totalOneTimeBeforeManual: 1,
         totalOneTime: 1,
       };
+      delete priced.complexity;
+      packagePricing[pkg.id] = priced;
     }
   }
 
@@ -1684,20 +1796,38 @@ export function getProposalPricingSnapshotCleanupCard(assessment: AssessmentStat
     : assessment.onboardingFeeOverride !== null
       ? Math.max(0, assessment.onboardingFeeOverride)
       : getStandardOnboardingFee(getCleanupMonthCount(assessment));
-  const totalOneTime = maintainPricing.totalOneTime + onboardingFee;
+  // Spec 03: commingling + loans/MCA cleanup weight rides its own line, only
+  // when cleanup months exist. The monthly complexity money is already inside
+  // maintainPricing.monthly (and therefore catchUpBase); this is the extra
+  // per-cleanup-month add. Legacy proposals (no selection) add zero.
+  const staged = hasCatchUpPricing && cleanupMonths > 0;
+  const complexityCleanup = staged ? maintainPricing.complexity : undefined;
+  const complexityCleanupPerMonth = complexityCleanup?.cleanupPerMonthTotal ?? 0;
+  const complexityCleanupTotal = complexityCleanup?.cleanupTotal ?? 0;
+  const totalOneTime = maintainPricing.totalOneTime + onboardingFee + complexityCleanupTotal;
 
   if (totalOneTime <= 0) return undefined;
 
   // This total is the one-time value of the deal, not the signing charge. The
   // client pays onboarding/discovery at signing; cleanup is an estimate they
   // approve after discovery. Label the rows so staff read the same split.
-  const staged = hasCatchUpPricing && cleanupMonths > 0;
   const detailRows: string[] = [];
   if (staged) {
     detailRows.push(
       `Cleanup estimate (not charged at signing): ${formatCurrency(maintainPricing.monthly)} x ${cleanupMonths} ${
         cleanupMonths === 1 ? "month" : "months"
       } = ${formatCurrency(maintainPricing.catchUpBase)}`,
+    );
+  }
+  if (staged && complexityCleanupTotal > 0) {
+    const drivers = (complexityCleanup?.lines ?? [])
+      .filter((line) => line.cleanupPerMonth > 0)
+      .map((line) => line.label)
+      .join(", ");
+    detailRows.push(
+      `Complexity cleanup add (${drivers}, not charged at signing): ${formatCurrency(complexityCleanupPerMonth)} x ${cleanupMonths} ${
+        cleanupMonths === 1 ? "month" : "months"
+      } = ${formatCurrency(complexityCleanupTotal)}`,
     );
   }
   if (maintainPricing.assessmentOneTimeAdjustments > 0) {
@@ -1713,6 +1843,29 @@ export function getProposalPricingSnapshotCleanupCard(assessment: AssessmentStat
     amountLabel: formatCurrency(totalOneTime),
     detailRows,
   };
+}
+
+/**
+ * Which existing pricing lines are active, for the Spec 03 complexity
+ * checklist display ("Included in <line>" vs "will add <line>") and the
+ * staff "Why this price" computation. Shared by the checklist section, the
+ * per-company checklist, and the preview.
+ */
+export function complexityExistingPresence(assessment: AssessmentState) {
+  return {
+    salesTaxAddon: assessment.offerSalesTaxFiling,
+    projectTrackingAddon: assessment.offerProjectTracking,
+    mixedBooks: assessment.bookSetType === "mixed-books",
+    staffingHeadcount: countValue(assessment.employeesCount) + countValue(assessment.contractorsCount),
+  };
+}
+
+function complexityChecklistSummary(assessment: AssessmentState): string {
+  if (!hasComplexitySelection(assessment.complexity)) return "None";
+  const normalized = normalizeComplexitySelection(assessment.complexity);
+  const labels = Object.fromEntries(complexityDriverDefs().map((def) => [def.id, def.label]));
+  const checked = COMPLEXITY_DRIVER_IDS.filter((id) => normalized.drivers[id].checked === true);
+  return checked.map((id) => labels[id]).join(", ") || "None";
 }
 
 export default function ProposalCreationWorkspaceDemo({
@@ -1892,6 +2045,9 @@ export default function ProposalCreationWorkspaceDemo({
       ...(assessment.acceptsTipsForContractors ? [["Tips liability account", yesNo(assessment.hasTipsLiabilityAccount)] as [string, string]] : []),
       ["Banks used", selectedLabels(BANK_OPTIONS, assessment.banksUsed)],
       ["Delegate access", yesNo(assessment.banksAllowDelegateAccess)],
+    ],
+    "Complexity Checklist": [
+      ["Checked drivers", complexityChecklistSummary(assessment)],
     ],
     "Required Adjustments": [
       ["Calculated adjustments", maintainAdjustmentItems.map((item) => `${item.label}: ${formatCurrency(item.amount, "/mo")}`).join("\n") || "No adjustments applied"],
@@ -2683,6 +2839,24 @@ export default function ProposalCreationWorkspaceDemo({
                         </div>
                       </FieldLabel>
                     </div>
+                  </AssessmentCardSection>
+                ) : null}
+
+                {isComplexityStep ? (
+                  <AssessmentCardSection
+                    title="Complexity Checklist"
+                    assessment={assessment}
+                    onCancel={setAssessment}
+                    summary={summaries["Complexity Checklist"]}
+                  >
+                    <ComplexityChecklist
+                      selection={assessment.complexity}
+                      defaults={assessment.complexityDriverDefaults}
+                      existing={complexityExistingPresence(assessment)}
+                      paymentPlatforms={assessment.paymentPlatforms}
+                      paymentPlatformOptions={PAYMENT_PLATFORM_OPTIONS}
+                      onChange={(next) => setAssessment((current) => applyComplexitySelection(current, next))}
+                    />
                   </AssessmentCardSection>
                 ) : null}
 
