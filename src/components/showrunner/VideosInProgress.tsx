@@ -36,6 +36,7 @@ export type VideoCard = {
   titleScreenKind?: "daily" | "series" | null;
   titleScreenDay?: number | null;
   titleScreenApprovedAt?: Date | string | null;
+  titleScreenBusy?: boolean;
 };
 
 const MARK: Record<VideoStep["state"], string> = { done: "✓", now: "●", todo: "○", stopped: "✕" };
@@ -172,6 +173,7 @@ export function VideosInProgress({
                     kind={video.titleScreenKind ?? null}
                     day={video.titleScreenDay ?? null}
                     approvedAt={video.titleScreenApprovedAt ?? null}
+                    busy={Boolean(video.titleScreenBusy)}
                   />
                 ) : null}
                 {copy ? <AudioOptions batch={video.batch} /> : null}

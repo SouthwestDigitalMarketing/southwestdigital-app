@@ -55,6 +55,23 @@ export async function writeLocalTeaser(
   return true;
 }
 
+/** On ripley, leave .title-screen.json so the review timer recuts with the approved open. */
+export async function writeLocalTitleScreen(batch: string): Promise<boolean> {
+  const inbox = process.env.PHONE_INTAKE_INBOX ?? "";
+  if (!inbox || !BATCH.test(batch)) return false;
+  const folder = path.join(inbox, "done", batch);
+  try {
+    await access(folder);
+  } catch {
+    return false;
+  }
+  await writeFile(
+    path.join(folder, ".title-screen.json"),
+    JSON.stringify({ approved: true, at: Math.floor(Date.now() / 1000) }),
+  );
+  return true;
+}
+
 /** On ripley, leave .visibility.json so the review timer flips YouTube privacy. */
 export async function writeLocalVisibility(batch: string, visibility: "private" | "unlisted" | "public"): Promise<boolean> {
   const inbox = process.env.PHONE_INTAKE_INBOX ?? "";

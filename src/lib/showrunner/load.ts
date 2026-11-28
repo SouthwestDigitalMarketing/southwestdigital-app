@@ -53,6 +53,8 @@ export type VideoStatusRow = {
   titleScreenKind: string | null;
   titleScreenDay: number | null;
   titleScreenApprovedAt: Date | null;
+  titleScreenBusy: boolean;
+  titleScreenRecutRequestedAt: Date | null;
 };
 
 const VIDEO_STATUS_SELECT = {
@@ -84,6 +86,8 @@ const VIDEO_STATUS_SELECT = {
   titleScreenKind: true,
   titleScreenDay: true,
   titleScreenApprovedAt: true,
+  titleScreenBusy: true,
+  titleScreenRecutRequestedAt: true,
 } as const;
 
 /**
@@ -137,6 +141,7 @@ export function videoCardFromStatus(row: VideoStatusRow): VideoCard {
     titleScreenKind: row.titleScreenKind === "daily" || row.titleScreenKind === "series" ? (row.titleScreenKind as TitleScreenKind) : null,
     titleScreenDay: row.titleScreenDay,
     titleScreenApprovedAt: row.titleScreenApprovedAt,
+    titleScreenBusy: row.titleScreenBusy || Boolean(row.titleScreenRecutRequestedAt),
   };
 }
 
@@ -167,6 +172,7 @@ export async function loadEpisodes(context: BrandDataContext): Promise<EpisodeRo
         transcriptCues: true, teaser: true, teaserBusy: true, teaserRequestedAt: true,
         visibility: true, visibilityBusy: true, visibilityRequestedAt: true,
         titleScreen: true, titleScreenKind: true, titleScreenDay: true, titleScreenApprovedAt: true,
+        titleScreenBusy: true, titleScreenRecutRequestedAt: true,
       },
     }),
   );

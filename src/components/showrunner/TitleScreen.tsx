@@ -9,12 +9,14 @@ export function TitleScreen({
   kind,
   day,
   approvedAt,
+  busy,
 }: {
   batch: string;
   image: string | null;
   kind: "daily" | "series" | null;
   day: number | null;
   approvedAt?: Date | string | null;
+  busy?: boolean;
 }) {
   const approved = Boolean(approvedAt);
   return (
@@ -30,15 +32,17 @@ export function TitleScreen({
       )}
       {kind === "daily" ? (
         <p className="mt-2 text-sm text-slate-700">
-          {typeof day === "number" ? `Day ${day}. ` : null}
-          Same card each day — only the number changes.
+          Same open on every daily clip
+          {typeof day === "number" ? ` (day ${day}).` : "."}
         </p>
       ) : kind === "series" ? (
         <p className="mt-2 text-sm text-slate-700">Weekly series open — custom for this episode.</p>
       ) : (
         <p className="mt-2 text-sm text-slate-600">The card that plays at the start of the video.</p>
       )}
-      {approved ? (
+      {busy ? (
+        <p className="mt-2 text-sm font-semibold text-slate-900">Putting this title screen on the video…</p>
+      ) : approved ? (
         <p className="mt-2 text-sm font-semibold text-green-700">Title screen approved</p>
       ) : image ? (
         <form action={approveTitleScreen} className="mt-2">
