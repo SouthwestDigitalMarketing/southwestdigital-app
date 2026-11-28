@@ -4,6 +4,14 @@ import { pricingCardServices } from "./pricingCardServices";
 import ProposalPaymentPlan from "./ProposalPaymentPlan";
 import HowWeSizedThis from "./HowWeSizedThis";
 import CompanyBundleSummary from "./CompanyBundleSummary";
+import ComplexityWhyList from "./ComplexityWhyList";
+import {
+  hasComplexitySelection,
+  normalizeComplexitySelection,
+  priceComplexityDrivers,
+  toPublicComplexityWhy,
+  type ComplexityPublicWhy,
+} from "@/lib/quotes/complexityDrivers";
 import {
   asPublicCompanyBundleMap,
   companyBundleFeeLines,
@@ -60,6 +68,7 @@ import {
   type ContactInfoState,
 } from "./ProposalContactInfoState";
 import {
+  complexityExistingPresence,
   getAnnualSavingsPercent,
   getListedOnboardingFee,
   getProposalAdditionalOptions,
@@ -717,6 +726,9 @@ export default function OfferProposalPreview(props: OfferProposalPreviewProps = 
   if (props.live && props.publicProposal) {
     // Whitelisted per-tier Spec 02 bundle; legacy snapshots carry none.
     const publicBundle = props.publicProposal.companyBundle ?? null;
+    // Spec 03 whitelisted "Why this price" lines (Builder B adds the
+    // top-level field); legacy snapshots carry none, which hides the list.
+    const publicComplexityWhyRaw = (props.publicProposal as unknown as { complexityWhy?: unknown }).complexityWhy;
     return (
       <OfferProposalPreviewView
         {...props}
@@ -725,6 +737,7 @@ export default function OfferProposalPreview(props: OfferProposalPreviewProps = 
         publishedPricing={props.publicProposal.pricing}
         publicAccountInventory={props.publicProposal.accountInventory}
         publicCompanyBundle={publicBundle}
+        publicComplexityWhy={Array.isArray(publicComplexityWhyRaw) ? (publicComplexityWhyRaw as ComplexityPublicWhy[]) : null}
         livePublic
       />
     );
@@ -781,6 +794,7 @@ function OfferProposalPreviewView({
   livePublic = false,
   publicAccountInventory,
   publicCompanyBundle = null,
+  publicComplexityWhy = null,
 }: Omit<OfferProposalPreviewProps, "assessment" | "initialAssessment" | "initialContactInfo" | "publicProposal"> & {
   assessment: PreviewAssessment | AssessmentState;
   contactInfo: PreviewContactInfo;
@@ -791,6 +805,11 @@ function OfferProposalPreviewView({
    * single-tier payload is still tolerated and expanded to every tier.
    */
   publicCompanyBundle?: PublicCompanyBundleMap | null;
+  /**
+   * Whitelisted Spec 03 "Why this price" lines for the public page; null
+   * (legacy) hides the list.
+   */
+  publicComplexityWhy?: ComplexityPublicWhy[] | null;
 }) {
   const { brand } = useBrand();
   const accountInventory: PublicAccountInventory | null | undefined = livePublic
@@ -900,6 +919,9 @@ function OfferProposalPreviewView({
     : null;
   const publicBundleMap = livePublic ? asPublicCompanyBundleMap(publicCompanyBundle) : null;
   const publicBundleForTier = publicBundleMap ? publicBundleMap[bundleTier] ?? null : null;
+  // Spec 03 "Why this price": the staff preview computation lives beside
+  // `cleanupPeriods` below (it needs the selected cleanup months); the
+  // public page renders the whitelisted field only.
   // On the public page the assessment strips the raw companies, so the
   // central add-on skip cannot see a new-file setup: drop the legacy
   // catalog line here instead, keyed on the whitelisted setup amounts.
@@ -1319,6 +1341,22 @@ function OfferProposalPreviewView({
       .filter((p) => periodMonthCount(p) > 0)
       .sort((a, b) => (a.year * 12 + a.startMonth) - (b.year * 12 + b.startMonth))
     : [];
+
+  // Spec 03 "Why this price": staff preview prices the full assessment for
+  // the viewed tier; the public page renders the whitelisted field only.
+  // Either side with no selection renders nothing (legacy unchanged).
+  const staffComplexityAssessment = livePublic ? null : (assessment as AssessmentState);
+  const staffComplexityWhy =
+    staffComplexityAssessment !== null && hasComplexitySelection(staffComplexityAssessment.complexity)
+      ? toPublicComplexityWhy(
+          priceComplexityDrivers(normalizeComplexitySelection(staffComplexityAssessment.complexity), {
+            packageId: bundleTier,
+            defaults: staffComplexityAssessment.complexityDriverDefaults,
+            cleanupMonths: cleanupPeriods.reduce((total, period) => total + periodMonthCount(period), 0),
+            existing: complexityExistingPresence(staffComplexityAssessment),
+          }).lines,
+        )
+      : null;
 
   const cleanupKey = (optionId: OptionId, periodKey: string) => `${optionId}:${periodKey}`;
   const cleanupIsSelected = (optionId: OptionId, periodKey: string) => cleanupSelections[cleanupKey(optionId, periodKey)] !== false;
@@ -2063,6 +2101,11 @@ function OfferProposalPreviewView({
                   caption={`Monthly amounts for the ${options[bundleTier].name} package.`}
                 />
               ) : null}
+
+              <ComplexityWhyList
+                lines={livePublic ? publicComplexityWhy : staffComplexityWhy}
+                tierName={options[bundleTier].name}
+              />
 
               <HowWeSizedThis inventory={accountInventory} brandName={brand.name} companies={companyInventories} />
 

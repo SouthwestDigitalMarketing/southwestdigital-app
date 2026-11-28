@@ -88,6 +88,15 @@ import {
   type CompanyEntry,
 } from "@/lib/quotes/companyBundle";
 import CompanyBundleEditor, { withSyncedMainAccounts } from "./CompanyBundleEditor";
+import ComplexityChecklist from "./ComplexityChecklist";
+import {
+  COMPLEXITY_DRIVER_IDS,
+  complexityDriverDefs,
+  hasComplexitySelection,
+  normalizeComplexitySelection,
+  type ComplexityDriverDefaultsPatch,
+  type ComplexitySelection,
+} from "@/lib/quotes/complexityDrivers";
 import {
   sanitizeBundlePricingDefaults,
   type OptionsTemplateAssessmentSlice,
@@ -309,10 +318,10 @@ export type AssessmentState = {
   /** Options-template defaults applied to the proposal; set fields beat the catalog, omitted fields fall through. */
   bundlePricingDefaults?: Partial<BundlePricingOptions>;
   /**
-   * Spec 03 main-company complexity selection (raw checklist state; Builder C
-   * owns the checklist UI). Normalized at pricing; absent on legacy proposals.
+   * Spec 03 main-company complexity selection, written normalized by the
+   * checklist UI and normalized again at pricing; absent on legacy proposals.
    */
-  complexity?: unknown;
+  complexity?: ComplexitySelection;
   /** Options-template complexity driver defaults applied to the proposal. */
   complexityDriverDefaults?: ComplexityDriverDefaultsPatch;
   entityType: EntityType;
@@ -1784,6 +1793,29 @@ export function getProposalPricingSnapshotCleanupCard(assessment: AssessmentStat
   };
 }
 
+/**
+ * Which existing pricing lines are active, for the Spec 03 complexity
+ * checklist display ("Included in <line>" vs "will add <line>") and the
+ * staff "Why this price" computation. Shared by the checklist section, the
+ * per-company checklist, and the preview.
+ */
+export function complexityExistingPresence(assessment: AssessmentState) {
+  return {
+    salesTaxAddon: assessment.offerSalesTaxFiling,
+    projectTrackingAddon: assessment.offerProjectTracking,
+    mixedBooks: assessment.bookSetType === "mixed-books",
+    staffingHeadcount: countValue(assessment.employeesCount) + countValue(assessment.contractorsCount),
+  };
+}
+
+function complexityChecklistSummary(assessment: AssessmentState): string {
+  if (!hasComplexitySelection(assessment.complexity)) return "None";
+  const normalized = normalizeComplexitySelection(assessment.complexity);
+  const labels = Object.fromEntries(complexityDriverDefs().map((def) => [def.id, def.label]));
+  const checked = COMPLEXITY_DRIVER_IDS.filter((id) => normalized.drivers[id].checked === true);
+  return checked.map((id) => labels[id]).join(", ") || "None";
+}
+
 export default function ProposalCreationWorkspaceDemo({
   step = "scale",
 }: {
@@ -1961,6 +1993,9 @@ export default function ProposalCreationWorkspaceDemo({
       ...(assessment.acceptsTipsForContractors ? [["Tips liability account", yesNo(assessment.hasTipsLiabilityAccount)] as [string, string]] : []),
       ["Banks used", selectedLabels(BANK_OPTIONS, assessment.banksUsed)],
       ["Delegate access", yesNo(assessment.banksAllowDelegateAccess)],
+    ],
+    "Complexity Checklist": [
+      ["Checked drivers", complexityChecklistSummary(assessment)],
     ],
     "Required Adjustments": [
       ["Calculated adjustments", maintainAdjustmentItems.map((item) => `${item.label}: ${formatCurrency(item.amount, "/mo")}`).join("\n") || "No adjustments applied"],
@@ -2752,6 +2787,23 @@ export default function ProposalCreationWorkspaceDemo({
                         </div>
                       </FieldLabel>
                     </div>
+                  </AssessmentCardSection>
+                ) : null}
+
+                {isComplexityStep ? (
+                  <AssessmentCardSection
+                    title="Complexity Checklist"
+                    assessment={assessment}
+                    onCancel={setAssessment}
+                    summary={summaries["Complexity Checklist"]}
+                  >
+                    <ComplexityChecklist
+                      selection={assessment.complexity}
+                      defaults={assessment.complexityDriverDefaults}
+                      existing={complexityExistingPresence(assessment)}
+                      paymentPlatforms={assessment.paymentPlatforms}
+                      onChange={(next) => updateAssessment("complexity", normalizeComplexitySelection(next))}
+                    />
                   </AssessmentCardSection>
                 ) : null}
 
