@@ -20,6 +20,7 @@ import {
   Globe,
   Clapperboard,
   Music,
+  Caravan,
   Plane,
   DollarSign,
   Contact,
@@ -74,6 +75,7 @@ const NAV: Array<{
   { label: "Japan", href: "/travel", icon: Plane },
   // Music (Tom, 2026-11-28): overview page, one more tap opens easyweddingband.com.
   { label: "Music", href: "/music", icon: Music },
+  { label: "Van", href: "/van", icon: Caravan },
   { label: "Reviews", href: "/reviews", icon: Star, dividerAfter: true },
   { label: "Contacts", href: "/contacts", icon: Contact },
   { label: "CRM", href: "/pipeline", icon: TrendingUp },

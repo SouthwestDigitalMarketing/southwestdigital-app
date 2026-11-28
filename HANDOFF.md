@@ -1,4 +1,30 @@
 # SWapp handoff
+## 2026-11-28 — Van hunt menu (Donna; built by a Codex Worker, finished by Donna)
+
+Tom: a new menu item **Van** for the camper-van hunt, "use your best guess". Brief:
+`ripley:~/Documents/van/codex-brief.md`; research: `~/Documents/van/shortlist.md`. Added **Van**
+(`/van`, Caravan icon, `g v`, aliases van/camper/shortlist), modeled on Travel (#254): `VanHunt`
+is one brand-scoped JSON plan with forced RLS (migration `20261128160000_van_hunt`, additive, one
+table); staff-only reads and actions use the authorized brand transaction; edits lock the row
+before applying one change; status and checklist changes touch only that van; starting never
+overwrites an existing hunt.
+
+`src/lib/van/plan.ts`: must-haves, candidates, costs, seven statuses (Watching · Asked seller ·
+Going to see · Inspected · Offer made · Passed · Bought), 16 inspection / test-drive ticks per van
+(in a closed "Inspection & test drive · n / 16" section), validation, sort (status, then price),
+cash needed = price + 6.25% Texas tax + $33 title ("before registration, inspection, insurance";
+$44,000 -> $46,783), cost totals. `starter.ts`: Donna's 2026-11-28 five vans (3 picks, 2 backups),
+six must-haves, five unquoted cost lines; unknown specs stay blank. Plain listing links only; no
+contact or send features. `formatMoney` shows cents as two digits ($47,845.50, not $47,845.5).
+
+Checks: `tsc` clean; `npm run lint` 0 errors (11 old warnings); `vitest` 2,504 passed / 5 skipped
+(48 van tests); `next build` ok. Headless click-through on a private local DB (`swapp_van`, cloned
+from `swapp_travel`, port 3125, dev bypass): empty page offers the shortlist; starter shows 5 vans;
+status change and a checklist tick both survive reload; cash $46,783 shown; 412 px has no sideways
+scroll; no page errors. Note: the shared local Postgres on :5434 was full (`swapp_live` held 82
+connections from other dev servers); the preview used `connection_limit=3`. Codex's sandbox could
+not run `next build`, headless Chromium or git; those were done outside it.
+
 ## 2026-11-28 — Website traffic: domain links + all sites (Johnny)
 
 Traffic overview headings are the bare domain (`bookkeepingconroe.com`) and
