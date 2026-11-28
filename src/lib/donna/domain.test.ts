@@ -663,6 +663,8 @@ describe("clean up (step 4)", () => {
           sure: true,
           unsubscribe: false,
           where: ["Spam"],
+          body: "",
+          bodySubject: "",
         },
       ],
       trash: { total: 10, older30: 4 },

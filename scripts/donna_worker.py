@@ -1275,6 +1275,7 @@ def process_job(client, store, work, max_threads, clean_threads=100):
                                              "why": str(why)[:300], "suggest": suggest, "client": client_name,
                                              "type": kind[0], "typeGroup": kind[1], "typeHint": kind[2],
                                              "typeNew": kind[3],
+                                             "body": body_preview(latest_inbound(messages)),
                                              "action": recommended_action(bucket, suggest, client_name, kind[0])})
                     note(progress, subject, "%s%s: %s" % (bucket, " (%s)" % client_name if client_name else "", why))
                 elif is_clean:
@@ -1377,6 +1378,26 @@ SWEPT = ("Spam", "Trash")
 
 
 MARKETING_TYPES = {"News", "Promo", "Invite", "Survey"}
+PREVIEW_CHARS = 1500
+
+
+def body_preview(message):
+    """The start of one email's text for the pop-up on the job screens (Tom, 2026-11-28):
+    plain text only, blank runs squeezed, no attachments."""
+    body = str((message or {}).get("body") or "")
+    lines, blank = [], 0
+    for line in body.replace("\r", "").split("\n"):
+        line = line.rstrip()
+        blank = blank + 1 if not line.strip() else 0
+        if blank <= 1:
+            lines.append(line)
+    text = "\n".join(lines).strip()
+    return text[:PREVIEW_CHARS] + ("…" if len(text) > PREVIEW_CHARS else "")
+
+
+def latest_inbound(messages):
+    inbound = [m for m in messages if not m.get("outgoing")]
+    return (inbound or messages or [None])[-1]
 
 
 def inbox_junk(report, messages, subject, sender, why, kind_label):
@@ -1384,6 +1405,7 @@ def inbox_junk(report, messages, subject, sender, why, kind_label):
     report.setdefault("_junk", []).append({
         "from": sender, "subject": subject, "why": str(why)[:200],
         "unsubscribe": kind_label in MARKETING_TYPES,
+        "body": body_preview(latest_inbound(messages)),
         "keys": [["INBOX", m["key"]] for m in messages
                  if str(m.get("folder", "")).upper() == "INBOX" and not m.get("outgoing")]})
 
@@ -1400,7 +1422,8 @@ def sweep_spam_and_trash(store, job_id, mailbox, threads, contacts, lists, rules
         address = (address or sender_raw or "unknown").lower()
         return groups.setdefault(address, {
             "sender": address, "name": name[:120], "keys": [], "subjects": [],
-            "verdict": None, "why": "", "unsubscribe": False, "protected": False})
+            "verdict": None, "why": "", "unsubscribe": False, "protected": False,
+            "body": "", "bodySubject": ""})
 
     def add(g, folder, key, subject):
         if [folder, key] not in g["keys"]:
@@ -1414,6 +1437,8 @@ def sweep_spam_and_trash(store, job_id, mailbox, threads, contacts, lists, rules
         for folder, key in junk["keys"]:
             add(g, folder, key, junk["subject"])
         g["verdict"], g["why"] = "block", junk["why"]
+        if not g["body"] and junk.get("body"):
+            g["body"], g["bodySubject"] = junk["body"], junk["subject"]
         g["unsubscribe"] = g["unsubscribe"] or junk["unsubscribe"]
     for _, _, messages, _ in threads:
         if inbox_thread(messages):
@@ -1428,6 +1453,8 @@ def sweep_spam_and_trash(store, job_id, mailbox, threads, contacts, lists, rules
                 continue
             g = group(m.get("from"))
             add(g, m["folder"], m["key"], m.get("subject"))
+            if not g["body"]:
+                g["body"], g["bodySubject"] = body_preview(m), str(m.get("subject") or "")[:200]
             if reason:
                 g["protected"], g["verdict"], g["why"] = True, "keep", "%s (now in %s)" % (reason, m["folder"])
     # One review per 25 Spam senders nothing has decided yet.
@@ -1456,7 +1483,8 @@ def sweep_spam_and_trash(store, job_id, mailbox, threads, contacts, lists, rules
                      "samples": g["subjects"], "verdict": verdict, "why": why,
                      "sure": verdict == "block" and not g["protected"],
                      "unsubscribe": bool(g["unsubscribe"]) and verdict == "block",
-                     "where": sorted({f for f, _ in g["keys"]})})
+                     "where": sorted({f for f, _ in g["keys"]}),
+                     "body": g["body"], "bodySubject": g["bodySubject"]})
     store.db.commit()
     report["empty"] = {f: store.db.execute("SELECT COUNT(*) FROM empty_snapshot WHERE job=? AND folder=?",
                                            (job_id, f)).fetchone()[0] for f in SWEPT}

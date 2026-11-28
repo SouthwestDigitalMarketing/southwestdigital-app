@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import type { CleanupPlan, SpamSender } from "@/lib/donna/domain";
+import { EmailPreview } from "./EmailPreview";
 import { WhyCell, headTint, rowTint, td, th } from "./sortTable";
 
 const VERDICT: Record<SpamSender["verdict"], [string, string]> = {
@@ -111,7 +112,15 @@ export function CleanupChooser({
             className={`max-w-[14rem] truncate ${td}`}
             title={s.sender}
           >
-            <span className="font-medium">{s.name || s.sender}</span>
+            <span className="font-medium">
+              <EmailPreview
+                subject={s.bodySubject || s.samples[0] || s.sender}
+                from={s.name ? `${s.name} <${s.sender}>` : s.sender}
+                body={s.body}
+              >
+                {s.name || s.sender}
+              </EmailPreview>
+            </span>
             {s.name ? (
               <span className="block truncate text-slate-500">{s.sender}</span>
             ) : null}
