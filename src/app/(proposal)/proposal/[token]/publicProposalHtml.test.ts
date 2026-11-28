@@ -124,7 +124,7 @@ describe("public proposal HTML", () => {
     Object.assign(publicProposal.assessment, {
       accounts: [{ id: "private", kind: "checking", label: PRIVATE_SENTINEL, status: "open", monthlyTransactions: 150, basis: "measured" }],
     });
-    const legacyPublicProposal = { ...publicProposal, accountInventory: undefined };
+    const legacyPublicProposal = { ...publicProposal, accountInventory: null };
     const html = renderLiveBookkeeping(legacyPublicProposal);
     expect(html).not.toContain("How we sized this");
     expect(html).not.toContain("Volume-based pricing.");

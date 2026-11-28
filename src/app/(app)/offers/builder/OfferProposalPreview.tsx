@@ -5,7 +5,6 @@ import ProposalPaymentPlan from "./ProposalPaymentPlan";
 import HowWeSizedThis from "./HowWeSizedThis";
 import {
   toPublicAccountInventory,
-  type AccountBasis,
   type PublicAccountInventory,
 } from "@/lib/quotes/accountInventory";
 import { proposalPaymentSchedule } from "@/lib/quotes/paymentSchedule";
@@ -713,7 +712,7 @@ export default function OfferProposalPreview(props: OfferProposalPreviewProps = 
         assessment={props.publicProposal.assessment}
         contactInfo={props.publicProposal.contactInfo}
         publishedPricing={props.publicProposal.pricing}
-        publicAccountInventory={(props.publicProposal as { accountInventory?: PublicAccountInventory | null }).accountInventory}
+        publicAccountInventory={props.publicProposal.accountInventory}
         livePublic
       />
     );
@@ -1404,21 +1403,14 @@ function OfferProposalPreviewView({
     agreementTemplate?.name
     ?? assessment.agreementTemplateName
     ?? DEFAULT_AGREEMENT_TEMPLATE_NAME;
-  const volumeInput: {
-    volumeMonthlyTotal: number | null;
-    volumeBasis: AccountBasis | null;
-    includeVolumeClause: boolean;
-  } = {
-    volumeMonthlyTotal: accountInventory?.monthlyTotal ?? null,
-    volumeBasis: accountInventory?.basis ?? null,
-    includeVolumeClause: Boolean(accountInventory?.accounts.length),
-  };
   const embeddedAgreementText = renderAgreementTemplate(
     agreementTemplate?.content
       ?? assessment.agreementTemplateContent
       ?? DEFAULT_BOOKKEEPING_AGREEMENT_TEMPLATE,
     {
-      ...volumeInput,
+      volumeMonthlyTotal: accountInventory?.monthlyTotal ?? null,
+      volumeBasis: accountInventory?.basis ?? null,
+      includeVolumeClause: Boolean(accountInventory?.accounts.length),
       brandName: brand.name,
       clientName: companyName,
       primaryContactName: contactName || null,
