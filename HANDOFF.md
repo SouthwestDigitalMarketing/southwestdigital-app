@@ -1,4 +1,73 @@
 # SWapp handoff
+## 2026-11-27 — Thumbnail wording looks confirmed (Johnny)
+
+Tom's phone shot of the episode page showed radios and "Use this text",
+which read as an unconfirmed pick. The current line is already on the
+graphic. Resting state is now "{WORDING} — that's what's on the thumbnail."
+Alternatives sit behind **Use different wording**.
+
+## 2026-11-27 — Thumbnail text ships without waiting (Johnny)
+
+Autopilot already publishes Johnny's pick. The episode page picker is a later
+edit, collapsed under **Change thumbnail text**, available while encoding and
+after YouTube (ripley remakes the picture and calls `set_thumbnail`). Tom
+does not approve the wording to ship.
+
+## 2026-11-27 — Transcript + thumbnail text on the production page (Johnny)
+
+The top status bar and the Videos-in-production card open the same episode
+page (`/showrunner/editor/<batch>`; old `/showrunner/production/<batch>`
+redirects there). That page has the step list and render bars, the thumbnail,
+3–5 wording options plus a custom field, a transcript accordion, Add clips,
+and the scorecard once it is live. Picking new thumbnail words remakes the
+picture while the video keeps encoding (ripley `johnny/thumbnail-copy`).
+Migration `20261127233000_showrunner_thumbnail_copy`.
+
+## 2026-11-27 — Render bars on the production page (Johnny)
+
+The step list already had cut / whole-video bars under the current step when
+ripley sends `render`. Layout now stacks on a phone (label above the bar) and
+the page refreshes every 4s. Pair with showrunner-app `johnny/render-progress`,
+which writes those numbers while ffmpeg is encoding.
+
+## 2026-11-27 — Add clips on every episode (Johnny)
+
+Tom: future uploads should not wait for more clips. Add clips stays available
+at every production step, including after publish: recut, take down the current
+YouTube video, republish. **Add clips** is on the Videos episode page (published
+included), the production page, and the job bar. Finish stays only on videos
+still waiting at the old gate. Pair with showrunner-app `johnny/add-clips-anytime`.
+Did not touch AppShell NAV or Studio.
+
+## 2026-11-27 — Tap the waiting card to act (Johnny)
+
+Tom's phone screenshot is the Videos episode page on live SWapp: the card
+tap already goes there, and that page had no buttons. Finish / Add clips
+now sit on that same card. Videos list marks it "Waiting on you". Demo
+`:3110`. Live still needs merge.
+
+## 2026-11-27 — Waiting on you: Finish and Add clips in SWapp (Johnny)
+
+Tom: "waiting on me" needs a button, not copy that sends him to the send app.
+Full auto off parks the video at step 6. SWapp now has **Add clips** (signed
+`/phone?addTo=<batch>` → ripley send page) and **Finish** (sets
+`finishRequestedAt`, writes `done/<batch>/.finish.json` on ripley). On the
+Videos episode page, the production page, and the job bar. Demo
+`http://100.98.89.93:3110`. Merge only when Tom says merge. Production Vercel
+still needs `showrunner_review.py` to poll `/api/showrunner/video-finish` after
+merge; :3110 writes the file itself.
+
+## 2026-11-27 — Video job bar missing during a live phone send (Johnny)
+
+Tom: bar at the top of every page while a video is being made, like Donna's job bar; tap for
+that video's progress page. It was already in PR #249 but hidden during the current send
+(`mwzglzlj-5643aa`). Cause: `loadVideoStatus` took 12 rows by `updatedAt` desc. Ripley upserts
+the live send first, then 12 published videos in the same push, so the send is 13th and dropped.
+Fix: load unpublished rows on their own (take 50), then recent published (take 12). Sending
+stage percent fills the bar before steps exist. `ProductionBar` layout matches `DonnaCleanBar`.
+Branch `johnny/video-bar`, worktree `~/projects/worktrees/swapp-video-bar`, demo
+`http://100.98.89.93:3110`. Merge only when Tom says merge. Did not touch AppShell NAV or Studio.
+
 ## 2026-11-26 — Japan Budget tab as a compact table (Ummon)
 
 Tom: Budget tab should use the same table styling as trip-prep / logistics.

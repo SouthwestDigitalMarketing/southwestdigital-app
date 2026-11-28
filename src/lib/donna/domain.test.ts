@@ -369,9 +369,12 @@ describe("honest health and counts", () => {
       tagged: [],
       rescued: [],
       blocked: [],
+      unsubscribed: [],
+      trashed: 0,
       empty: null,
       emptied: null,
       emptyError: null,
+      zoho: null,
       waiting: [{ subject: "Bank login", from: "", waitingOn: "Client" }],
       needsYou: [
         {
@@ -610,6 +613,9 @@ describe("clean up (step 4)", () => {
           samples: [],
           verdict: "block",
           why: "Spam",
+          sure: true,
+          unsubscribe: false,
+          where: ["Spam"],
         },
       ],
       trash: { total: 10, older30: 4 },

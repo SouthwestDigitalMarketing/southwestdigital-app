@@ -18,6 +18,7 @@ import {
   cleanIsDo,
   cleanupPlan,
   cleanupSkipped,
+  chooseSkipped,
   cleanIsClosed,
   cleanIsSort,
   cleanReport,
@@ -521,6 +522,42 @@ export async function resortJob(form: FormData) {
 }
 
 /** A job closed at step 2 goes back to Tom's turn, so it can be finished. */
+/**
+ * Take an unfinished job off the lists (Tom, 2026-11-28). It only hides the job:
+ * anything it already did stays done, and its page still opens by link.
+ */
+export async function discardJob(form: FormData) {
+  const { dataContext, session } = await requireDonna();
+  const id = z.string().min(1).parse(form.get("jobId"));
+  await withBrandDataTransaction(dataContext, async (tx) => {
+    const job = await tx.donnaJob.findFirst({
+      where: {
+        id,
+        kind: { in: ["clean", "undo"] },
+        status: { in: ["done", "cancelled"] },
+        mailbox: { brandId: dataContext.brandId },
+      },
+    });
+    if (!job) return;
+    await tx.donnaJob.update({
+      where: { id: job.id },
+      data: {
+        options: {
+          ...(job.options as Record<string, unknown>),
+          discarded: true,
+        } as Prisma.InputJsonObject,
+      },
+    });
+    await cleanControl(
+      tx,
+      job.mailboxId,
+      session.user.id,
+      `Job #${job.number} discarded from the lists.`,
+    );
+  });
+  refresh();
+}
+
 export async function reopenSort(form: FormData) {
   const { dataContext, session } = await requireDonna();
   const id = z.string().min(1).parse(form.get("jobId"));
@@ -571,6 +608,8 @@ async function sortReadyForCleanup(
     select: { id: true, status: true, options: true },
   });
   if (later.some((j) => cleanIsCleanup(j.options))) return null;
+  // The Spam step follows step 3, or step 2 when Tom had nothing to do there.
+  if (chooseSkipped(sort.options)) return sort;
   const done = later.find((j) => cleanIsDo(j.options));
   if (!done || done.status !== "done") return null;
   return sort;
@@ -590,7 +629,7 @@ export async function applyCleanup(form: FormData) {
     if (!plan) return null;
     const senders = plan.spam.flatMap((s, i) => {
       const action = String(form.get(`sender-${i}`) ?? "leave");
-      return action === "block" || action === "keep"
+      return action === "spam" || action === "keep"
         ? [{ sender: s.sender, action }]
         : [];
     });
@@ -616,17 +655,61 @@ export async function applyCleanup(form: FormData) {
       },
     });
     await resetCleanProgress(tx, sort.mailbox, Math.max(senders.length, 1));
-    const blocks = senders.filter((s) => s.action === "block").length;
+    const blocks = senders.filter((s) => s.action === "spam").length;
     await cleanControl(
       tx,
       sort.mailboxId,
       session.user.id,
-      `Step 4 started: block ${blocks}, not spam ${senders.length - blocks}, trash ${trash}${approved ? ", deletion approved" : ", no deletion"}.`,
+      `Step 4 (Spam) started: spam ${blocks}, not spam ${senders.length - blocks}, empty Trash ${trash}${approved ? " (approved)" : " (not approved)"}.`,
     );
     return job.id;
   });
   refresh();
   redirect(`/donna/cleans/${encodeURIComponent(jobId ?? sortId)}`);
+}
+
+/** Nothing to choose in step 2 (all the Inbox mail was spam): go straight to Spam. */
+export async function skipChoose(form: FormData) {
+  const { dataContext, session } = await requireDonna();
+  const sortId = z.string().min(1).parse(form.get("jobId"));
+  await withBrandDataTransaction(dataContext, async (tx) => {
+    const sort = await tx.donnaJob.findFirst({
+      where: {
+        id: sortId,
+        kind: "clean",
+        status: { in: ["done", "cancelled"] },
+        mailbox: { brandId: dataContext.brandId },
+      },
+    });
+    if (!sort || !cleanIsSort(sort.options) || cleanIsClosed(sort.options))
+      return;
+    const started = await tx.donnaJob.findFirst({
+      where: {
+        mailboxId: sort.mailboxId,
+        kind: "clean",
+        options: { path: ["previewJobId"], equals: sort.id },
+      },
+      select: { id: true },
+    });
+    if (started) return;
+    await tx.donnaJob.update({
+      where: { id: sort.id },
+      data: {
+        options: {
+          ...(sort.options as Record<string, unknown>),
+          chooseSkipped: true,
+        } as Prisma.InputJsonObject,
+      },
+    });
+    await cleanControl(
+      tx,
+      sort.mailboxId,
+      session.user.id,
+      "Step 2 had nothing to do; on to the Spam step.",
+    );
+  });
+  refresh();
+  redirect(`/donna/cleans/${encodeURIComponent(sortId)}`);
 }
 
 /** Finish a job without cleaning up Spam and Trash this time. */

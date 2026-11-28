@@ -214,7 +214,7 @@ async function zohoJson<T>(input: {
   if (!response.ok) throw new ZohoApiError(`Zoho ${input.what} failed`, response.status, text);
   try {
     // Zoho ids are longs past Number.MAX_SAFE_INTEGER: read them as strings.
-    return JSON.parse(text.replace(/"(messageId|folderId|labelId|tagId|threadId|accountId)"\s*:\s*(\d+)/g, '"$1":"$2"')) as T;
+    return JSON.parse(text.replace(/"(messageId|folderId|labelId|tagId|threadId|accountId|zoid)"\s*:\s*(\d+)/g, '"$1":"$2"')) as T;
   } catch {
     throw new ZohoApiError(`Zoho returned non-JSON for ${input.what}`, response.status, text);
   }
@@ -305,5 +305,73 @@ export async function applyZohoLabel(auth: ZohoAuth, labelId: string, messageIds
     method: "PUT",
     body: `{"mode":"applyLabel","labelId":[${labelId}],"messageId":[${messageIds.join(",")}]}`,
     what: "apply label",
+  });
+}
+
+// ─── Organization spam list (Donna, 2026-11-28) ──────────────────────────────
+
+/**
+ * The Zoho organization id (zoid). Zoho's docs are unclear about which call an
+ * org admin may use, so try the organization endpoint, then the zoid carried in
+ * the account list; the caller checks the result against the spam list.
+ */
+export async function findZohoOrgIds(auth: ZohoAuth): Promise<string[]> {
+  const ids: string[] = [];
+  try {
+    const org = await zohoJson<{ data?: { zoid?: string | number } | Array<{ zoid?: string | number }> }>({
+      ...auth,
+      path: "/api/organization",
+      what: "organization",
+    });
+    const rows = Array.isArray(org.data) ? org.data : org.data ? [org.data] : [];
+    for (const row of rows) if (row.zoid !== undefined) ids.push(String(row.zoid));
+  } catch {
+    // Not allowed for this token; try the account list.
+  }
+  try {
+    const accounts = await zohoJson<{ data?: Array<{ accountId?: string; policyId?: { zoid?: string | number } }> }>({
+      ...auth,
+      path: "/api/accounts",
+      what: "account list",
+    });
+    for (const a of accounts.data ?? [])
+      if (a.policyId?.zoid !== undefined && String(a.accountId) === auth.accountId) ids.push(String(a.policyId.zoid));
+  } catch {
+    // No account list either.
+  }
+  return [...new Set(ids)].filter((id) => /^\d{1,25}$/.test(id));
+}
+
+/** True when this zoid's spam list can be read with this token. */
+export async function canReadZohoSpamList(auth: ZohoAuth, zoid: string) {
+  try {
+    const params = new URLSearchParams({ spamCategory: "spamEmail", mode: "getMarkingData", limit: "1" });
+    await zohoJson<unknown>({
+      ...auth,
+      path: `/api/organization/${zoid}/antispam/data?${params}`,
+      what: "spam list",
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export type ZohoSpamCategory = "spamEmail" | "whiteListEmail";
+
+/** Add exact addresses to an organization spam list (spamEmail: to Spam; whiteListEmail: never spam). */
+export async function addZohoOrgSpamList(
+  auth: ZohoAuth,
+  zoid: string,
+  category: ZohoSpamCategory,
+  addresses: string[],
+) {
+  if (!/^\d{1,25}$/.test(zoid) || !addresses.length) return;
+  await zohoJson<unknown>({
+    ...auth,
+    path: `/api/organization/${zoid}/antispam/data`,
+    method: "PUT",
+    body: JSON.stringify({ spamCategory: category, [category]: addresses }),
+    what: "spam list update",
   });
 }

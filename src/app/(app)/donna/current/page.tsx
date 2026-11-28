@@ -26,7 +26,7 @@ export default async function JobsInProgressPage() {
     <DonnaFrame active="current" refreshEvery={running ? 5000 : undefined}>
       {running ? null : <DonnaStart />}
       {jobs.length ? (
-        <JobsTable label="Jobs in progress" jobs={jobs} />
+        <JobsTable label="Jobs in progress" jobs={jobs} discard />
       ) : (
         <p className="text-sm text-slate-600">No jobs in progress.</p>
       )}

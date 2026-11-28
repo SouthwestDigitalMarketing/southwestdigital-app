@@ -577,144 +577,112 @@ class WorkerTests(unittest.TestCase):
         store.db.commit()
         return store
 
-    def test_junk_goes_first_and_guards_keep_real_mail_out(self):
+    def spam_plan(self, store, judge=None):
+        with patch.dict(self.BY_SENDER, {"scam@bad.example": self.SCAM, "junk@spam.example": self.SCAM,
+                                         "x@trash.example": self.SCAM}), \
+                patch.object(donna, "judge_senders", judge or (lambda batch, root: {})):
+            return next(d["result"]["report"] for op, d in self.run_clean(store, {}, settings={}) if op == "complete")
+
+    def test_spam_is_one_step_grouped_by_sender_sure_and_check(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = self.junk_fixture(tmp)
-            with patch.dict(self.BY_SENDER, {"scam@bad.example": self.SCAM, "junk@spam.example": self.SCAM,
-                                             "x@trash.example": self.SCAM}):
-                report = next(d["result"]["report"] for op, d in self.run_clean(store, {}, settings={}) if op == "complete")
-            by = {i["subject"]: i for i in report["sorted"]}
-            self.assertEqual((by["Verify now"]["bucket"], by["Verify now"]["action"]), ("Junk", "spam-block"))
-            self.assertEqual(by["Report"]["bucket"], "Clients")  # a client is never junk
-            # Spam/Trash sweep: only mail that may not be junk is offered back; the rest is counted.
-            self.assertEqual((by["Your report"]["bucket"], by["Your report"]["action"]), ("Rescue from Spam/Trash", "inbox"))
-            self.assertNotIn("Win big", by)
-            self.assertEqual(report["empty"], {"Spam": 2, "Trash": 1})
+            judge = lambda batch, root: {g["sender"]: ("block", "Lottery spam", True) for g in batch}
+            report = self.spam_plan(store, judge)
+            # Choose shows real mail only: no Junk, no rescues.
+            self.assertEqual({i["bucket"] for i in report["sorted"]}, {"Newsletter", "Clients"})
+            spam = {g["sender"]: g for g in report["cleanup"]["spam"]}
+            # Inbox junk: sure spam; phishing is never unsubscribed from.
+            self.assertEqual((spam["scam@bad.example"]["sure"], spam["scam@bad.example"]["unsubscribe"],
+                              spam["scam@bad.example"]["where"]), (True, False, ["INBOX"]))
+            # A client's mail in Spam: check these, Not spam, never sure.
+            self.assertEqual((spam["client@example.com"]["verdict"], spam["client@example.com"]["sure"]), ("keep", False))
+            self.assertIn("now in Spam", spam["client@example.com"]["why"])
+            # Spam folder sender judged by Donna: sure, and a real company's bulk mail may unsubscribe.
+            self.assertEqual((spam["junk@spam.example"]["sure"], spam["junk@spam.example"]["unsubscribe"]), (True, True))
+            # Trash is only reviewed for guarded mail; the rest is the Trash row.
+            self.assertNotIn("x@trash.example", spam)
+            self.assertEqual(report["cleanup"]["trash"]["total"], 1)
             store.db.close()
-        msgs = [{"from": "a@x.com", "subject": "Hi", "outgoing": False}, {"from": "us", "outgoing": True, "draft": False}]
-        self.assertEqual(donna.protected_reason(msgs, [], {}, {}), "You replied in this thread")
         lists = {"never": ["@intuit.com"], "never_subjects": ["final notice"], "always": set()}
+        self.assertEqual(donna.protected_reason([{"from": "a@x.com", "subject": "Hi", "outgoing": False},
+                                                 {"from": "us", "outgoing": True, "draft": False}], [], {}, {}),
+                         "You replied in this thread")
         self.assertEqual(donna.protected_reason([{"from": "q@intuit.com", "subject": "x"}], [], lists, {}),
                          "On your never-block list")
-        # Money mail is never junk, even when the model says so.
         self.assertNotEqual(donna.bucket_for(self.SCAM, [{"from": "b@x.com", "subject": "Bill"}], [], None, {}, lists, "To pay")[0],
                             "Junk")
 
-    def test_always_spam_senders_skip_review(self):
+    def test_always_spam_senders_skip_review_and_go_to_the_spam_step(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = self.clean_fixture(tmp)
             always = Path(tmp) / "always.json"
             always.write_text(json.dumps({"senders": ["promo@shop.example"]}))
             with patch.object(donna, "ALWAYS_BLOCK", always):
                 report = next(d["result"]["report"] for op, d in self.run_clean(store, {}, settings={}) if op == "complete")
-            sale = next(i for i in report["sorted"] if i["subject"] == "Sale")
-            self.assertEqual((sale["bucket"], sale["why"], sale["action"]), ("Junk", "On your always-spam list", "spam"))
+            self.assertNotIn("Sale", [i["subject"] for i in report["sorted"]])
+            promo = next(g for g in report["cleanup"]["spam"] if g["sender"] == "promo@shop.example")
+            self.assertEqual((promo["sure"], promo["why"]), (True, "On your always-spam list"))
             self.assertEqual(store.usage()["reviews"], 1)  # only the client email was reviewed
             store.db.close()
 
-    def test_step_three_blocks_rescues_then_empties_only_with_approval(self):
+    def test_spam_step_unsubscribes_blocks_trashes_and_empties_only_with_approval(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = self.junk_fixture(tmp)
+            judge = lambda batch, root: {g["sender"]: ("block", "Bulk promo", True) for g in batch}
             always, never = Path(tmp) / "always.json", Path(tmp) / "never.json"
-            never.write_text(json.dumps({"senders": [], "subjects": []}))
-            with patch.dict(self.BY_SENDER, {"scam@bad.example": self.SCAM, "junk@spam.example": self.SCAM,
-                                             "x@trash.example": self.SCAM}), \
-                    patch.object(donna, "ALWAYS_BLOCK", always), patch.object(donna, "NEVER_BLOCK", never):
-                report = next(d["result"]["report"] for op, d in self.run_clean(store, {}, settings={}) if op == "complete")
-                by = {i["subject"]: i["thread"] for i in report["sorted"]}
-                plan = [{"thread": by["Verify now"], "action": "spam-block"},
-                        {"thread": by["Your report"], "action": "inbox-never"}]
-                moves, back, emptied = [], [], []
-
-                def run(empty):
-                    work_extra = {"rescuer": lambda folder, key: back.append((folder, key)),
-                                  "emptier": lambda snap, moved, rescued: emptied.append((sorted(snap), moved, rescued)) or {"Spam": 9}}
-                    with patch.object(donna, "rescue_via_imap", work_extra["rescuer"]), \
-                            patch.object(donna, "empty_via_imap", work_extra["emptier"]):
-                        return self.run_clean(store, {"previewJobId": "j", "plan": plan, "buckets": True, **({"empty": True} if empty else {})},
-                                              filer=lambda uid, dest, mid: moves.append((uid, dest)), job_id="do", settings={})
-                calls = run(empty=False)
-            self.assertEqual(moves, [(14, "Spam")])
-            self.assertEqual(back, [("Spam", "<lost@example.com>")])
-            self.assertEqual(json.loads(always.read_text())["senders"], ["scam@bad.example"])
-            self.assertEqual(json.loads(never.read_text())["senders"], ["client@example.com"])
-            self.assertEqual(emptied, [])  # no approval, no delete
-            done = next(d["result"]["report"] for op, d in calls if op == "complete")
-            self.assertTrue(done["filed"][0]["blocked"])
-            self.assertEqual(done["rescued"][0]["folder"], "Spam")
-            store.db.close()
-
-    def test_empty_deletes_the_step_one_snapshot_minus_rescued_plus_what_moved(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            store = self.junk_fixture(tmp)
-            with patch.dict(self.BY_SENDER, {"scam@bad.example": self.SCAM, "junk@spam.example": self.SCAM,
-                                             "x@trash.example": self.SCAM}), \
-                    patch.object(donna, "ALWAYS_BLOCK", Path(tmp) / "a.json"), patch.object(donna, "NEVER_BLOCK", Path(tmp) / "n.json"):
-                report = next(d["result"]["report"] for op, d in self.run_clean(store, {}, settings={}) if op == "complete")
-                by = {i["subject"]: i["thread"] for i in report["sorted"]}
-                plan = [{"thread": by["Verify now"], "action": "trash"}, {"thread": by["Your report"], "action": "inbox"}]
-                seen = []
-                with patch.object(donna, "rescue_via_imap", lambda f, k: None), \
-                        patch.object(donna, "empty_via_imap", lambda snap, moved, rescued: seen.append((snap, moved, rescued)) or {"Spam": 1, "Trash": 2}):
-                    calls = self.run_clean(store, {"previewJobId": "j", "plan": plan, "buckets": True, "empty": True},
-                                           filer=lambda *a: None, job_id="do", settings={})
-            snap, moved, rescued = seen[0]
-            self.assertEqual(sorted(k for _, _, _, k in snap), ["<junk@example.com>", "<lost@example.com>", "<old@trash.example>"])
-            self.assertEqual(rescued, {"<lost@example.com>"})
-            self.assertEqual(moved, {"Spam": [], "Trash": ["<scam@bad.example>"]})
-            done = next(d["result"]["report"] for op, d in calls if op == "complete")
-            self.assertEqual(done["emptied"], {"Spam": 1, "Trash": 2})
-            store.db.close()
-
-    def test_step_one_groups_spam_by_sender_with_verdicts_for_clean_up(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            store = self.junk_fixture(tmp)
-            store.save("box", "Spam", "7", 33, message("<junk2@example.com>", "Win more", sender="junk@spam.example").as_bytes(),
-                       "ours@example.com", Helper)
-            store.db.commit()
-            verdicts = lambda batch, root: {g["sender"]: ("block", "Lottery spam") for g in batch}
-            with patch.dict(self.BY_SENDER, {"scam@bad.example": self.SCAM, "junk@spam.example": self.SCAM,
-                                             "x@trash.example": self.SCAM}), patch.object(donna, "judge_senders", verdicts):
-                report = next(d["result"]["report"] for op, d in self.run_clean(store, {}, settings={}) if op == "complete")
-            spam = report["cleanup"]["spam"]
-            # The client's email in Spam is a rescue, never a sender to block.
-            self.assertEqual([g["sender"] for g in spam], ["junk@spam.example"])
-            self.assertEqual((spam[0]["count"], spam[0]["verdict"], spam[0]["why"]), (2, "block", "Lottery spam"))
-            self.assertEqual(sorted(spam[0]["samples"]), ["Win big", "Win more"])
-            self.assertEqual(report["cleanup"]["trash"]["total"], 1)
-            store.db.close()
-
-    def test_clean_up_rescues_blocks_and_deletes_only_with_approval(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            store = self.junk_fixture(tmp)
-            store.save("box", "Spam", "7", 34, message("<real@vendor.example>", "Invoice 12", sender="ap@vendor.example").as_bytes(),
-                       "ours@example.com", Helper)
-            store.db.commit()
-            always, never = Path(tmp) / "always.json", Path(tmp) / "never.json"
-            with patch.dict(self.BY_SENDER, {"scam@bad.example": self.SCAM, "junk@spam.example": self.SCAM,
-                                             "x@trash.example": self.SCAM}), \
-                    patch.object(donna, "ALWAYS_BLOCK", always), patch.object(donna, "NEVER_BLOCK", never):
-                self.run_clean(store, {}, settings={})
-                senders = [{"sender": "junk@spam.example", "action": "block"},
-                           {"sender": "ap@vendor.example", "action": "keep"}]
-                back, deleted = [], []
+            with patch.object(donna, "ALWAYS_BLOCK", always), patch.object(donna, "NEVER_BLOCK", never):
+                self.spam_plan(store, judge)
+                senders = [{"sender": "junk@spam.example", "action": "spam"},
+                           {"sender": "scam@bad.example", "action": "spam"},
+                           {"sender": "client@example.com", "action": "keep"}]
+                moves, unsubs, deleted = [], [], []
                 def run(**extra):
-                    with patch.object(donna, "rescue_via_imap", lambda f, k: back.append((f, k))), \
-                            patch.object(donna, "empty_via_imap", lambda snap, moved, rescued: deleted.append(sorted(k for *_, k in snap)) or {"Spam": len(snap)}):
+                    with patch.object(donna, "move_via_imap", lambda f, k, d: moves.append((f, k, d))), \
+                            patch.object(donna, "unsubscribe_via_header", lambda f, k: unsubs.append((f, k)) or "unsubscribed"), \
+                            patch.object(donna, "empty_via_imap", lambda snap, moved, rescued: deleted.append(sorted(k for *_, k in snap)) or {"Trash": len(snap)}):
                         return self.run_clean(store, {"previewJobId": "j", "cleanup": True, "senders": senders, **extra},
                                               job_id="clean", settings={})
                 calls = run(trash="all")
-            self.assertEqual(back, [("Spam", "<real@vendor.example>")])
-            self.assertEqual(json.loads(always.read_text())["senders"], ["junk@spam.example"])
-            self.assertEqual(json.loads(never.read_text())["senders"], ["ap@vendor.example"])
-            self.assertEqual(deleted, [])  # not approved: nothing deleted
+            # Unsubscribe only where it is safe: the Spam-folder bulk sender, not the phisher.
+            self.assertEqual(unsubs, [("Spam", "<junk@example.com>")])
+            self.assertIn(("Spam", "<junk@example.com>", "Trash"), moves)
+            self.assertIn(("INBOX", "<scam@bad.example>", "Trash"), moves)
+            self.assertIn(("Spam", "<lost@example.com>", "INBOX"), moves)
+            self.assertEqual(sorted(json.loads(always.read_text())["senders"]), ["junk@spam.example", "scam@bad.example"])
+            self.assertEqual(json.loads(never.read_text())["senders"], ["client@example.com"])
+            self.assertEqual(deleted, [])  # Trash is never emptied without the Approve tick
             done = next(d["result"]["report"] for op, d in calls if op == "complete")
-            self.assertEqual(len(done["blocked"]), 1)
+            self.assertEqual((done["trashed"], len(done["blocked"]), done["unsubscribed"][0]["reason"]), (2, 2, "unsubscribed"))
+            block = next(d for op, d in calls if op == "block")
+            self.assertEqual((sorted(block["spam"]), block["allow"]), (["junk@spam.example", "scam@bad.example"], ["client@example.com"]))
             with patch.object(donna, "ALWAYS_BLOCK", always), patch.object(donna, "NEVER_BLOCK", never):
-                calls = run(trash="all", approved=True)
-            # Only the blocked sender's Spam and all of Trash; never the rescued or unreviewed mail.
-            self.assertEqual(deleted, [["<junk@example.com>", "<old@trash.example>"]])
+                run(trash="all", approved=True)
+            # Approved: only what was in Trash at step 1.
+            self.assertEqual(deleted, [["<old@trash.example>"]])
             store.db.close()
+
+    def test_reviewer_is_lean_claude_opus_and_reports_limits(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = Path(tmp) / "claude"
+            log = Path(tmp) / "args.json"
+            fake.write_text("#!/usr/bin/env python3\nimport json, sys, os\n"
+                            "json.dump({'argv': sys.argv[1:], 'stdin': sys.stdin.read(), 'cwd': os.getcwd()}, "
+                            "open(%r, 'w'))\n"
+                            "print(json.dumps({'is_error': False, 'structured_output': {'ok': True}}))\n" % str(log))
+            fake.chmod(0o755)
+            with patch.object(donna, "CLAUDE_BIN", fake):
+                self.assertEqual(donna.review("hello", {"type": "object"}, tmp), {"ok": True})
+            seen = json.loads(log.read_text())
+            argv = seen["argv"]
+            self.assertEqual(argv[argv.index("--model") + 1], "claude-opus-5-5")
+            self.assertEqual(argv[argv.index("--tools") + 1], "")
+            self.assertEqual(argv[argv.index("--setting-sources") + 1], "project")
+            self.assertIn("--no-session-persistence", argv)
+            self.assertEqual(seen["stdin"], "hello")  # the email goes in on stdin, not the command line
+            fake.write_text("#!/usr/bin/env python3\nimport json\n"
+                            "print(json.dumps({'is_error': True, 'result': 'Claude usage limit reached'}))\n")
+            with patch.object(donna, "CLAUDE_BIN", fake), self.assertRaisesRegex(RuntimeError, "usage limit"):
+                donna.review("hello", {"type": "object"}, tmp)
 
     def test_cancel_stops_before_the_next_move_and_reports_what_moved(self):
         with tempfile.TemporaryDirectory() as tmp:

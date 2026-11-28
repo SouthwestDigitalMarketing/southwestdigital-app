@@ -2,6 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { ThumbnailCopy, TranscriptAccordion } from "@/components/showrunner/ThumbnailCopy";
+import { WaitingActions } from "@/components/showrunner/WaitingActions";
+import { isWaitingForYou } from "@/lib/showrunner/production";
 import type { VideoDetails, VideoRender, VideoStep } from "@/lib/showrunner/video-status";
 
 export type VideoCard = {
@@ -15,6 +18,11 @@ export type VideoCard = {
   title: string | null;
   thumbnail: string | null;
   details: VideoDetails | null;
+  finishRequestedAt?: Date | string | null;
+  transcript?: string | null;
+  thumbnailText?: string | null;
+  thumbnailOptions?: string[] | null;
+  thumbnailBusy?: boolean;
 };
 
 const MARK: Record<VideoStep["state"], string> = { done: "✓", now: "●", todo: "○", stopped: "✕" };
@@ -28,12 +36,14 @@ const TONE: Record<VideoStep["state"], string> = {
 function Bar({ label, share }: { label: string; share: number }) {
   const pct = Math.floor(100 * Math.min(1, Math.max(0, share)));
   return (
-    <div className="mt-2 flex items-center gap-3 text-sm text-slate-600">
-      <span className="w-36 shrink-0">{label}</span>
-      <div className="h-2.5 flex-1 rounded-full bg-slate-200">
+    <div className="mt-2">
+      <div className="flex items-center justify-between gap-3 text-sm text-slate-600">
+        <span className="min-w-0 truncate">{label}</span>
+        <span className="shrink-0 font-semibold tabular-nums text-slate-900">{pct}%</span>
+      </div>
+      <div className="mt-1 h-2.5 rounded-full bg-slate-200">
         <div className="h-2.5 rounded-full bg-slate-900" style={{ width: `${pct}%` }} />
       </div>
-      <span className="w-10 text-right font-semibold text-slate-900">{pct}%</span>
     </div>
   );
 }
@@ -65,17 +75,19 @@ function Steps({ video }: { video: VideoCard }) {
           <span className="mr-2 inline-block w-4">{MARK[step.state]}</span>
           {step.label}
           {step.state === "stopped" && step.message ? <p className="ml-6 text-sm">{step.message}</p> : null}
-          {step.state === "now" && video.render?.total !== undefined ? (
+          {step.state === "now" && (video.render?.total !== undefined || video.render?.piece) ? (
             <div className="ml-6 font-normal">
               {video.render.piece && video.render.pieces ? (
                 <Bar
-                  label={`${video.render.pieceLabel ?? "Piece"} ${video.render.piece} of ${video.render.pieces}`}
+                  label={`${video.render.pieceLabel ?? "Cut"} ${video.render.piece} of ${video.render.pieces}`}
                   share={video.render.pieceShare ?? 0}
                 />
               ) : null}
               {video.render.pieceName ? <p className="mt-1 text-sm text-slate-500">Now: {video.render.pieceName}</p> : null}
-              <Bar label="Whole video" share={video.render.total} />
-              {video.render.minutesLeft ? <p className="mt-1 text-sm text-slate-500">About {video.render.minutesLeft} min left</p> : null}
+              {video.render.total !== undefined ? <Bar label="Whole video" share={video.render.total} /> : null}
+              {video.render.minutesLeft ? (
+                <p className="mt-1 text-sm text-slate-500">About {video.render.minutesLeft} min left</p>
+              ) : null}
             </div>
           ) : null}
         </li>
@@ -88,28 +100,32 @@ function Steps({ video }: { video: VideoCard }) {
  * Every video ripley is making, full width: the YouTube title once written, the steps and render
  * bars on the left, the thumbnail and details on the right (stacked on a phone). Refreshes itself.
  */
-export function VideosInProgress({ videos }: { videos: VideoCard[] }) {
+export function VideosInProgress({
+  videos,
+  copyBatch,
+  heading = true,
+}: {
+  videos: VideoCard[];
+  copyBatch?: string;
+  heading?: boolean;
+}) {
   const router = useRouter();
   useEffect(() => {
-    const timer = setInterval(() => router.refresh(), 10_000);
+    const timer = setInterval(() => router.refresh(), 4_000);
     return () => clearInterval(timer);
   }, [router]);
 
   if (videos.length === 0) return null;
   return (
     <section className="mt-6 flex flex-col gap-4">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Videos in progress</h2>
+      {heading ? <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Videos in progress</h2> : null}
       {videos.map((video) => {
         const details = detailLine(video.details);
+        const copy = copyBatch === video.batch;
         return (
           <div key={video.batch} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,20rem)]">
-              <div className="min-w-0">
-                <p className="text-lg font-semibold leading-snug text-slate-900">{video.title ?? video.project ?? "New video"}</p>
-                {video.title && video.project ? <p className="mt-0.5 text-xs text-slate-500">{video.project}</p> : null}
-                {video.url ? <p className="mt-2 font-semibold text-green-700">Published on YouTube</p> : <Steps video={video} />}
-              </div>
-              <div className={video.thumbnail || details || video.url ? "min-w-0" : "hidden md:block"}>
+              <div className={video.thumbnail || details || video.url || copy ? "min-w-0 md:order-2" : "hidden md:order-2 md:block"}>
                 {video.thumbnail ? (
                   // eslint-disable-next-line @next/next/no-img-element -- inline data: JPEG from ripley
                   <img src={video.thumbnail} alt="" className="aspect-video w-full rounded-xl object-cover" />
@@ -124,8 +140,31 @@ export function VideosInProgress({ videos }: { videos: VideoCard[] }) {
                     Watch on YouTube
                   </a>
                 ) : null}
+                {copy ? (
+                  <ThumbnailCopy
+                    batch={video.batch}
+                    thumbnailText={video.thumbnailText ?? null}
+                    thumbnailOptions={video.thumbnailOptions ?? null}
+                    busy={Boolean(video.thumbnailBusy)}
+                    published={Boolean(video.url)}
+                  />
+                ) : null}
+              </div>
+              <div className="min-w-0 md:order-1">
+                <p className="text-lg font-semibold leading-snug text-slate-900">{video.title ?? video.project ?? "New video"}</p>
+                {video.title && video.project ? <p className="mt-0.5 text-xs text-slate-500">{video.project}</p> : null}
+                {video.url ? <p className="mt-2 font-semibold text-green-700">Published on YouTube</p> : <Steps video={video} />}
+                {copy ? (
+                  <WaitingActions
+                    batch={video.batch}
+                    finishing={Boolean(video.finishRequestedAt)}
+                    waiting={isWaitingForYou(video.steps, video.stage)}
+                    published={Boolean(video.url)}
+                  />
+                ) : null}
               </div>
             </div>
+            {copy ? <TranscriptAccordion transcript={video.transcript ?? null} /> : null}
           </div>
         );
       })}
