@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireQuoteStaffOrThrow } from "@/lib/quotes/access";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
 import { ensureQuoteEngagement } from "@/lib/engagements/fromOffer";
+import { assertQuoteNotFrozen, quoteFreezeSelect } from "@/lib/quotes/isQuoteFrozen";
 import { lockQuoteMutation } from "@/lib/quotes/mutationLock";
 import {
   buildHourlyCheckoutSummary,
@@ -59,7 +60,7 @@ async function loadOwnedQuote(offerId: string, brandId: string) {
     select: {
       id: true,
       kind: true,
-      status: true,
+      ...quoteFreezeSelect,
       publicToken: true,
       snapshotJson: true,
       clientId: true,
@@ -67,6 +68,7 @@ async function loadOwnedQuote(offerId: string, brandId: string) {
     },
   });
   if (!quote) throw new Error("Offer not found.");
+  assertQuoteNotFrozen(quote);
   if (!isHourlyOfferKind(quote.kind)) throw new Error("This offer is not an hourly offer.");
   if (quote.status === "archived") throw new Error("This offer is archived.");
   return quote;
@@ -112,9 +114,12 @@ export async function saveHourlyOfferDraftAction(offerId: string, snapshot: Hour
   validateSelection(snapshot);
   const merged = normalizedSnapshot(snapshot, existing.snapshotJson);
   const jsonSnapshot = asJsonObject(merged);
-  await prisma.quote.update({
+  await prisma.$transaction(async (tx) => {
+    await lockQuoteMutation(tx, brand.id, existing.id, "edit");
+    await tx.quote.update({
     where: { id: existing.id },
     data: { snapshotJson: jsonSnapshot },
+  });
   });
   revalidatePath("/offers");
   revalidatePath(`/offers/${existing.id}`);

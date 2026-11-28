@@ -1,3 +1,4 @@
+import { isQuoteFrozen, quoteFreezeSelect } from "@/lib/quotes/isQuoteFrozen";
 import Link from "next/link";
 import { Copy, Eye, FlaskConical } from "lucide-react";
 import { BrandStatus, type Prisma } from "@prisma/client";
@@ -135,9 +136,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
       include: {
         client: true,
         lineItems: { select: { amount: true, billingType: true } },
-        engagement: {
-          select: { signedAt: true, onboardingFeeStatus: true },
-        },
+        ...quoteFreezeSelect,
       },
     }),
     withBrandDataTransaction(dataContext, (transaction) => transaction.contact.findMany({
@@ -235,7 +234,9 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
           : {};
       return [
         quote.id,
-        deriveLifecycleStage(quote) === "DRAFT"
+        isQuoteFrozen(quote)
+          ? `/offers/${quote.id}`
+          : deriveLifecycleStage(quote) === "DRAFT"
           ? resumeOfferHref({
               id: quote.id,
               kind: rowSnapshot.kind ?? quote.kind,
@@ -521,6 +522,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center justify-end gap-1 [&>*]:shrink-0">
+                        {!isQuoteFrozen(quote) ? <>
                         <OfferEditButton
                           href={editHref}
                           offerId={quote.id}
@@ -537,10 +539,12 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                           primaryLabel={sendPrimaryLabel}
                           followUpKind={followUpKind}
                         />
+                        </> : <Link href={`/offers/${quote.id}`} className="px-3 py-2 text-sm underline">Accepted copy</Link>}
                         <OfferStatusButtons
                           offerId={quote.id}
                           bucket={itemBucket}
                           hasPublicLink={Boolean(quote.publicToken)}
+                          frozen={isQuoteFrozen(quote)}
                         >
                           <div className="border-b border-slate-200 px-3 py-2 text-xs text-slate-500">
                             <p className="break-words">{quote.offerCode}</p>
@@ -548,6 +552,14 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                             <p>Last sent: {formatLastSentAge(quote.lastSentAt ?? quote.sentAt)}</p>
                             <p>MRR: {formatUsd(monthlyTotal)} · Lump: {formatUsd(oneTimeTotal)}</p>
                           </div>
+                          {isQuoteFrozen(quote) ? (
+                            <Link
+                              href={`/offers/${quote.id}`}
+                              className="flex min-h-9 items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 focus-visible:outline-2"
+                            >
+                              Accepted proposal copy
+                            </Link>
+                          ) : null}
                           {!isDraft ? (
                             <Link
                               href={publishedProposalHref ?? `/offers/${quote.id}`}

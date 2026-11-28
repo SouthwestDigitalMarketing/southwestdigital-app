@@ -1,3 +1,4 @@
+import { isQuoteFrozen, quoteFreezeSelect } from "@/lib/quotes/isQuoteFrozen";
 import { sendProposalAlert } from "@/lib/notifications/staffAlert";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -27,9 +28,10 @@ export async function ensureQuoteEngagement(input: {
   const fields = extractOfferEngagementFields(input.snapshot);
   const quote = await database.quote.findFirst({
     where: { id: input.quoteId, brandId: input.brandId },
-    select: { id: true, engagementId: true, kind: true },
+    select: { id: true, engagementId: true, kind: true, ...quoteFreezeSelect },
   });
   if (!quote) throw new Error("Offer not found.");
+  if (isQuoteFrozen(quote) && !quote.engagementId) throw new Error("Accepted, signed or paid offers are frozen.");
   const productKind = resolveProductKind(quote.kind);
 
   const proposalBuilderState = {
@@ -43,10 +45,10 @@ export async function ensureQuoteEngagement(input: {
   if (quote.engagementId) {
     const existing = await database.engagement.findFirst({
       where: { id: quote.engagementId, brandId: input.brandId },
-      select: { id: true, onboardingData: true, signedAt: true, updatedAt: true },
+      select: { id: true, onboardingData: true, signedAt: true, status: true, onboardingFeeStatus: true, updatedAt: true },
     });
     if (existing) {
-      if (existing.signedAt) return existing.id;
+      if (isQuoteFrozen(quote) || isQuoteFrozen(existing)) return existing.id;
       const onboardingData = isRecord(existing.onboardingData) ? existing.onboardingData : {};
       const previousState = isRecord(onboardingData.proposalBuilderState)
         ? onboardingData.proposalBuilderState
@@ -138,8 +140,9 @@ export async function markEngagementDepositPaid(
     return false; // Preserve the original evidence and timestamp on retries.
   }
   const paidAt = new Date();
+  // A saved-copy JSON patch leaves updatedAt alone; compare JSON as well.
   const updated = await tx.engagement.updateMany({
-    where: { id: engagement.id, brandId, updatedAt: engagement.updatedAt },
+    where: { id: engagement.id, brandId, updatedAt: engagement.updatedAt, onboardingData: { equals: onboardingData as Prisma.InputJsonValue } },
     data: {
       onboardingFeeStatus: "PAID",
       status: "DEPOSIT_PAID",

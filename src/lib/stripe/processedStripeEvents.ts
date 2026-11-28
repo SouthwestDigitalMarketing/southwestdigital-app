@@ -46,8 +46,9 @@ export async function recordProcessedStripeEvent(
     if (ids.includes(eventId)) return;
     const onboardingData = asRecord(engagement.onboardingData);
     const acceptance = asRecord(onboardingData.proposalAcceptance);
+    // A staff archive can patch JSON without changing the activity timestamp.
     const updated = await tx.engagement.updateMany({
-      where: { id: engagementId, brandId, updatedAt: engagement.updatedAt },
+      where: { id: engagementId, brandId, updatedAt: engagement.updatedAt, onboardingData: { equals: onboardingData as Prisma.InputJsonValue } },
       data: {
         onboardingData: {
           ...onboardingData,

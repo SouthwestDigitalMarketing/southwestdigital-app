@@ -28,3 +28,10 @@ describe("quote publication/signature lock", () => {
     await expect(lockQuoteMutation(tx as unknown as Prisma.TransactionClient, "brand", "quote", "sign")).rejects.toThrow("no longer available");
   });
 });
+
+describe("freeze checks under the quote row lock", () => {
+  it.each(["publish", "send", "edit", "sign"] as const)("refuses %s for a paid engagement even if its quote status is stale", async (intent) => {
+    const tx = transaction({ ...openQuote, engagement: { signedAt: null, onboardingFeeStatus: "PAID" } });
+    await expect(lockQuoteMutation(tx as unknown as Prisma.TransactionClient, "brand", "quote", intent)).rejects.toThrow("frozen");
+  });
+});
