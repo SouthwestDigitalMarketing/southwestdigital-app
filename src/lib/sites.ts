@@ -5,6 +5,8 @@ export type PublicSite = {
   use: string;
   status: "Live" | "Template";
   name?: string;
+  /** GA4 property for a site with no brand of its own (read by the SWapp service account). */
+  ga4PropertyId?: string;
 };
 
 /** Extra sites on the Music and Website pages (Tom, 2026-11-28: focus on the wedding band;
@@ -18,6 +20,8 @@ export const MUSIC_SITES: PublicSite[] = [
     use: "Wedding band leads (solo, duo or four-piece)",
     status: "Live",
     name: "The Easy Wedding Band",
+    // GA4 property easyweddingband-web, Lochside LLC account (Tom, 2026-11-28).
+    ga4PropertyId: "566101201",
   },
   {
     host: "thomasgrantmacdonald.com",
