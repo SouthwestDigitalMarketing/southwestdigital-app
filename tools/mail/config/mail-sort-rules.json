@@ -1,0 +1,63 @@
+{
+  "_about": [
+    "Rules for bin/mail-sort (Zoho, thomas@bookkeepingconroe.com).",
+    "Each run reads the boxes named in 'sources', checks every message",
+    "against 'keep' first, then 'rules' top to bottom. First match wins.",
+    "No match = the message stays where it is.",
+    "A rule matches when ANY 'from' entry matches the sender (exact address,",
+    "or '@domain' for the whole domain and its subdomains) AND, if 'subject'",
+    "is given, ANY subject pattern matches (Python regex, case-insensitive).",
+    "A rule with only 'subject' matches any sender. 'only_from_box' limits a",
+    "rule to messages found in that box.",
+    "Human-readable version: All Thing sops/sop-inbox-sorting.md."
+  ],
+  "account": "zoho",
+  "sources": ["INBOX", "Newsletter"],
+
+  "keep": [
+    {"why": "Money or legal trouble stays in front of Tom",
+     "subject": ["final notice", "past due", "overdue", "collection",
+                 "payment (failed|declined|unsuccessful)", "card (was )?declined",
+                 "has expired", "will expire", "expir(es|ing) (soon|in|on)",
+                 "suspend", "lawsuit", "subpoena", "levy", "lien"]},
+    {"why": "Collection agency on the Intuit file",
+     "from": ["@mbandw.com"]},
+    {"why": "A client asked a question in Double: a person needs an answer",
+     "from": ["questions@doublehq.com"], "subject": ["asked you a question"]}
+  ],
+
+  "rules": [
+    {"folder": "DMARC", "why": "Daily email-safety reports",
+     "from": ["noreply-dmarc-support@google.com", "dmarcreport@microsoft.com"]},
+    {"folder": "DMARC", "why": "Daily email-safety reports from other senders",
+     "subject": ["^(\\[preview\\] )?report domain: bookkeepingconroe\\.com"]},
+
+    {"folder": "Payments", "why": "A customer paid: QuickBooks 'Payment received' notices. Only the last two months are kept (bin/mail-retain)", "from": ["quickbooks@notification.intuit.com"], "subject": ["^payment received"]},
+    {"folder": "INBOX", "why": "Money mail Zoho files as Newsletter: QuickBooks invoice links and payment requests. Stays in front of Tom (his rule, 2026-11-12)", "from": ["quickbooks@notification.intuit.com"], "subject": ["invoice link", "payment request", "^invoice"]},
+    {"folder": "Bills", "why": "Vendor bills and receipts: patrol bills works from this folder", "from": ["coryh@conroe.org", "payments@zohocorp.com", "googleplay-noreply@google.com", "@namecheap.com", "donotreply@upwork.com", "beachwalkoffice@mydeskworks.com", "noreply@notify.thinkific.com", "no_reply@notifications.intuit.com", "noreply@wise.com", "mail@etsy.com"], "subject": ["invoice", "billing statement", "statement", "receipt", "payment (received|confirmation)", "renewal", "auto.?renewal", "amount due", "payment due", "subscription"]},
+    {"folder": "Notification", "why": "Double uploads and daily digests",
+     "from": ["questions@doublehq.com"]},
+    {"folder": "Notification", "why": "Cal.com bookings and account mail",
+     "from": ["hello@cal.com"]},
+    {"folder": "Notification", "why": "Zoho Calendar reminders",
+     "from": ["noreply@zohocalendar.com"]},
+    {"folder": "Notification", "why": "Stripe receipts",
+     "from": ["@stripe.com"], "only_from_box": "INBOX"},
+    {"folder": "Notification", "why": "QuickBooks app update notices",
+     "from": ["do_not_reply@intuit.com"], "subject": ["updates to your quickbooks"]},
+    {"folder": "Notification", "why": "Calendar invite replies",
+     "subject": ["^(accepted|declined|tentative|tentatively accepted):"]},
+
+    {"folder": "Cold Outreach", "why": "Known pitch senders (added after the first manual move)",
+     "from": ["alfieka33@hotmail.com", "shelia.goss.usa0@gmail.com",
+              "@goillumina.com", "@fairviewgrowth.com", "@bigtop.show",
+              "@paperhoundhq.com", "@gopulsepeak.com", "@therapeuticrg.org",
+              "@t.upwork.com"],
+     "only_from_box": "INBOX"},
+
+    {"folder": "Newsletter", "why": "Shops and promotions",
+     "from": ["@nachopadres.com", "@email.etsy.com", "@e.adobe.com",
+              "@mail.adobe.com", "@link.com", "@e.link.com"],
+     "only_from_box": "INBOX"}
+  ]
+}

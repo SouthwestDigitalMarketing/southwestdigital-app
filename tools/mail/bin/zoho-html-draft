@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+"""Save a Zoho draft in Tom's house format. Never sends.
+
+usage: zoho-html-draft --to A [--cc B] --subject S BODYFILE [--dry-run] [--reply-to-uid UID] [--attach FILE ...] [--from ADDR] [--signature "a|b|c"]
+
+BODYFILE: plain text, no signature (the template adds "Kind regards, Thomas" block).
+  blank line  = paragraph gap
+  "- item"    = numbered list item (1. 2. 3.), 12px gap between items
+  "https://.." alone on a line = clickable link
+  "| a | b |" lines = table (first row is the header; "|---|" rows skipped)
+  "**whole line**" = bold, 14pt line (e.g. **[📊 Open your client portal](https://..)**)
+  "[link text](https://..)" = link text shown, URL behind it (plain part: "link text: URL")
+  www.bookkeepingconroe.com and (936) 283-4346 become links (the phone is tap-to-call)
+Template: ~/.local/share/zoho-html-draft/template.html (Arial 12pt + signature, from a Sent msg).
+"""
+import argparse, importlib.machinery, importlib.util, imaplib, os, re, sys, time
+from email.message import EmailMessage
+from email.utils import formatdate, make_msgid
+
+HOME = os.path.expanduser("~")
+# The mail tool sits next to this one (SWapp tools/mail, installed by tools/mail/install.sh).
+MAIL_BIN = os.path.join(os.path.dirname(os.path.realpath(__file__)), "mail")
+TPL = HOME + "/.local/share/zoho-html-draft/template.html"
+
+def fmt(x):
+    import re
+    if x.startswith("https://") and " " not in x:
+        return '<a href="%s">%s</a>' % (x, x)
+    links = []
+    def keep(m):
+        links.append('<a href="%s">%s</a>' % (m.group(2), m.group(1)))
+        return "\0%d\0" % (len(links) - 1)
+    x = re.sub(r'\[([^\]]+)\]\((https://[^\s)]+)\)', keep, x)
+    x = re.sub(r'(https://[^\s<\0]+)', r'<a href="\1">\1</a>', x)
+    x = re.sub(r'\0(\d+)\0', lambda m: links[int(m.group(1))], x)
+    x = x.replace("www.bookkeepingconroe.com", '<a href="https://www.bookkeepingconroe.com">www.bookkeepingconroe.com</a>')
+    return x.replace("(936) 283-4346", '<a href="tel:+19362834346">(936) 283-4346</a>')
+
+def build(lines):
+    parts, plain, i, n = [], [], 0, 0
+    while i < len(lines):
+        x = lines[i]
+        if x.startswith("- "):
+            items = []
+            while i < len(lines) and (lines[i].startswith("- ") or lines[i] == ""):
+                if lines[i].startswith("- "):
+                    items.append(lines[i][2:])
+                i += 1
+            parts.append("<ol>" + "".join('<li style="margin-bottom:12px">%s</li>' % fmt(t) for t in items) + "</ol>")
+            for k, t in enumerate(items, 1):
+                plain += ["%d. %s" % (k, t), ""]
+            continue
+        if x.startswith("|"):
+            rows = []
+            while i < len(lines) and lines[i].startswith("|"):
+                cells = [c.strip() for c in lines[i].strip().strip("|").split("|")]
+                if not all(set(c) <= set("-: ") for c in cells):
+                    rows.append(cells)
+                plain.append(lines[i]); i += 1
+            td = 'style="border:1px solid #999;padding:4px 10px;text-align:%s"'
+            html_rows = []
+            for r, cells in enumerate(rows):
+                tag = "th" if r == 0 else "td"
+                html_rows.append("<tr>" + "".join("<%s %s>%s</%s>" % (tag, td % ("left" if k == 0 else "right"), fmt(c), tag) for k, c in enumerate(cells)) + "</tr>")
+            parts.append('<table style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;font-size:12pt">' + "".join(html_rows) + "</table>")
+            continue
+        if x.startswith("**") and x.endswith("**") and len(x) > 4:
+            x = x[2:-2]
+            parts.append('<div><b><span style="font-size:14pt">%s</span></b><br></div>' % fmt(x))
+        else:
+            parts.append("<div>%s<br></div>" % fmt(x) if x else "<div><br></div>")
+        plain.append(re.sub(r'\[([^\]]+)\]\((https://[^\s)]+)\)', r'\1: \2', x)); i += 1
+    return "".join(parts), "\n".join(plain)
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--to", required=True); ap.add_argument("--cc"); ap.add_argument("--subject", required=True)
+    ap.add_argument("--reply-to-uid"); ap.add_argument("--reply-box", default="INBOX"); ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--attach", action="append", default=[], help="file to attach (repeatable)")
+    ap.add_argument("--from", dest="sender", default="Thomas Grant MacDonald <thomas@bookkeepingconroe.com>",
+                    help="From header (must be a Zoho send-as address, e.g. Southwest Digital Marketing <billing@southwestdigital.io>)")
+    ap.add_argument("--signature", help="plain signature lines separated by '|' instead of the Bookkeeping Conroe template signature")
+    ap.add_argument("body")
+    a = ap.parse_args()
+    lines = open(a.body).read().rstrip("\n").split("\n") + [""]
+    body_html, plain = build(lines)
+    if a.signature:
+        sig = a.signature.split("|")
+        html = ('<div style="font-family:Arial,Helvetica,sans-serif;font-size:12pt">' + body_html
+                + "<div><br></div><div>Kind regards,<br></div>" + "".join("<div>%s<br></div>" % fmt(x) for x in sig) + "</div>")
+        sig_plain = "\nKind regards,\n" + "\n".join(sig) + "\n"
+    else:
+        html = open(TPL).read().replace("{{BODY}}", body_html)
+        sig_plain = "\nKind regards,\nThomas\n"
+    msg = EmailMessage()
+    msg["From"] = a.sender
+    msg["To"] = a.to
+    if a.cc: msg["Cc"] = a.cc
+    msg["Subject"] = a.subject
+    msg["Date"] = formatdate(localtime=True)
+    m_dom = re.search(r"@([^>\s]+)", a.sender)
+    msg["Message-ID"] = make_msgid(domain=m_dom.group(1) if m_dom else "bookkeepingconroe.com")
+    msg.set_content(plain + sig_plain, cte="quoted-printable")
+    msg.add_alternative(html, subtype="html", cte="quoted-printable")
+    import mimetypes
+    for path in a.attach:
+        ctype = mimetypes.guess_type(path)[0] or "application/octet-stream"
+        main_t, sub_t = ctype.split("/", 1)
+        with open(path, "rb") as fh:
+            msg.add_attachment(fh.read(), maintype=main_t, subtype=sub_t, filename=os.path.basename(path))
+    if a.reply_to_uid:
+        import email as _e
+        _l = importlib.machinery.SourceFileLoader("mailmod", MAIL_BIN)
+        _m = importlib.util.module_from_spec(importlib.util.spec_from_loader("mailmod", _l)); _l.exec_module(_m)
+        _c, _ = _m.connect("zoho"); _c.select(_m.quote(a.reply_box), readonly=True)
+        _t, _d = _c.uid("fetch", a.reply_to_uid, "(BODY.PEEK[HEADER.FIELDS (MESSAGE-ID REFERENCES)])")
+        _o = _e.message_from_bytes(_d[0][1])
+        if _o["Message-ID"]:
+            # Outlook folds long References across lines; EmailMessage rejects CR/LF in values
+            msg["In-Reply-To"] = " ".join(_o["Message-ID"].split())
+            msg["References"] = " ".join(((_o["References"] or "") + " " + _o["Message-ID"]).split())
+    raw = msg.as_bytes()
+    bad = sum(b > 127 for b in raw)
+    if bad: sys.exit("refusing: %d bytes over 127 (Zoho APPEND fails)" % bad)
+    if a.dry_run:
+        out = "/tmp/zoho-html-draft-preview.eml"; open(out, "wb").write(raw)
+        print("dry run ok, 0 bytes over 127, wrote", out); return
+    l = importlib.machinery.SourceFileLoader("mailmod", MAIL_BIN)
+    m = importlib.util.module_from_spec(importlib.util.spec_from_loader("mailmod", l)); l.exec_module(m)
+    conn, acct = m.connect("zoho")
+    box = m.drafts_box(conn)
+    t, d = conn.append(m.quote(box), "(\\Draft)", imaplib.Time2Internaldate(time.time()), raw)
+    if t != "OK": sys.exit("append failed: %s" % d)
+    print("saved to %s: %s (not sent). Print the draft, wait for Tom's yes." % (box, d[0].decode()))
+main()

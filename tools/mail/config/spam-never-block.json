@@ -1,0 +1,41 @@
+{
+  "_about": "Senders spam-patrol must never block. '@domain' covers subdomains. `spam-patrol restore` appends here. 'subjects' are regexes: a matching subject is never auto-blocked (money, expiry and legal mail stays in front of Tom, same idea as mail-sort keep rules).",
+  "senders": [
+    "@doublehq.com",
+    "@intuit.com",
+    "@quickbooks.com",
+    "@mbandw.com",
+    "@zoho.com",
+    "@stripe.com",
+    "@netlify.com",
+    "@irs.gov",
+    "@texas.gov",
+    "@bookkeepingconroe.com",
+    "@southwestdigital.io",
+    "@cal.com",
+    "@zohocorp.com",
+    "@seller.etsy.com"
+  ],
+  "subjects": [
+    "final notice",
+    "past due",
+    "overdue",
+    "collection",
+    "payment (failed|declined|unsuccessful)",
+    "card (was )?declined",
+    "has expired",
+    "will expire",
+    "expir(es|ing)",
+    "suspend",
+    "lawsuit",
+    "subpoena",
+    "levy",
+    "lien",
+    "invoice",
+    "receipt",
+    "tax",
+    "irs",
+    "audit",
+    "renew"
+  ]
+}

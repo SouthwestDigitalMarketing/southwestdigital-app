@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+"""Send one text through Quo. Same shape as `mail send`: it prints the
+envelope first and refuses without --yes. Sending is only ever one message to
+one number; there is no loop and no bulk mode.
+
+    text --from "Bookkeeping Conroe" --to +12815550100 --body "..."          # shows, does not send
+    text --from signage --to +12815550100 --body - --yes < message.txt      # sends
+"""
+import argparse
+import json
+import os
+import re
+import sys
+import urllib.error
+import urllib.request
+
+API = "https://api.quo.com/v1"
+ENV = os.path.expanduser("~/.config/lochside-sales/env")
+
+
+def api_key():
+    key = os.environ.get("QUO_API_KEY")
+    if not key and os.path.exists(ENV):
+        for line in open(ENV):
+            name, _, value = line.strip().partition("=")
+            if name == "QUO_API_KEY":
+                key = value.strip().strip("'\"")
+    if not key:
+        sys.exit("QUO_API_KEY not found in the environment or " + ENV)
+    return key
+
+
+def call(method, path, key, payload=None):
+    request = urllib.request.Request(
+        API + path, method=method, data=None if payload is None else json.dumps(payload).encode(),
+        headers={"Authorization": key, "Accept": "application/json",
+                 "Content-Type": "application/json", "User-Agent": "mailroom-text/0.1"})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return json.load(response)
+    except urllib.error.HTTPError as error:
+        sys.exit("Quo returned %d: %s" % (error.code, error.read().decode(errors="replace")[:300]))
+    except urllib.error.URLError as error:
+        sys.exit("Could not reach Quo: %s" % error.reason)
+
+
+def e164(number):
+    digits = re.sub(r"\D", "", number)
+    if len(digits) == 10:
+        digits = "1" + digits
+    if len(digits) != 11 or not digits.startswith("1"):
+        sys.exit("expected a US number, got %r" % number)
+    return "+" + digits
+
+
+def choose_line(lines, wanted):
+    wanted = wanted.lower().strip()
+    digits = re.sub(r"\D", "", wanted)
+    hits = [l for l in lines
+            if wanted in (l.get("name") or "").lower()
+            or wanted == l.get("id", "").lower()
+            or (len(digits) >= 7 and digits in re.sub(r"\D", "", l.get("number") or ""))]
+    if len(hits) != 1:
+        sys.exit("--from %r matched %d lines: %s" % (wanted, len(hits),
+                 ", ".join("%s %s" % (l.get("name"), l.get("number")) for l in lines)))
+    return hits[0]
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(prog="text", description=__doc__.split("\n\n")[0])
+    parser.add_argument("--from", dest="line", required=True, help="line name, number or id")
+    parser.add_argument("--to", required=True)
+    parser.add_argument("--body", required=True, help="text, or - to read stdin")
+    parser.add_argument("--yes", action="store_true", help="required to actually send")
+    args = parser.parse_args(argv)
+    body = sys.stdin.read().strip() if args.body == "-" else args.body
+    if not body:
+        sys.exit("empty message")
+    key = api_key()
+    line = choose_line(call("GET", "/phone-numbers", key).get("data", []), args.line)
+    to = e164(args.to)
+    print("FROM %s (%s)" % (line.get("name"), line.get("number")))
+    print("TO   %s" % to)
+    print("BODY %s" % body)
+    if not args.yes:
+        sys.exit("refusing to send without --yes")
+    sent = call("POST", "/messages", key, {"content": body, "from": line["id"], "to": [to]}).get("data", {})
+    print("sent: id %s status %s" % (sent.get("id"), sent.get("status")))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

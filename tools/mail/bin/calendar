@@ -1,0 +1,413 @@
+#!/usr/bin/env python3
+"""Zoho calendar: interactive terminal UI or printable agenda."""
+import argparse
+import base64
+import datetime as dt
+import json
+import os
+import subprocess
+import sys
+import uuid
+import urllib.error
+import urllib.parse
+import urllib.request
+import xml.etree.ElementTree as ET
+from zoneinfo import ZoneInfo
+
+try:
+    import icalendar
+    import recurring_ical_events
+except ImportError:
+    runtime = os.path.expanduser('~/.local/share/mailroom-calendar/venv/bin/python')
+    if __name__ == '__main__' and os.path.exists(runtime) and os.path.abspath(sys.executable) != runtime:
+        os.execv(runtime, [runtime, os.path.abspath(__file__), *sys.argv[1:]])
+    raise SystemExit('Calendar dependencies missing. See README calendar setup.')
+
+BASE = 'https://calendar.zoho.com'
+DAV = '{DAV:}'
+CAL = '{urn:ietf:params:xml:ns:caldav}'
+ZONE = ZoneInfo('America/Chicago')
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+class Client:
+    def __init__(self):
+        with open(os.path.expanduser('~/.config/mailroom/accounts.json')) as f:
+            account = json.load(f)['zoho']
+        self.user = account['user']
+        result = subprocess.run(['pass', 'show', account['pass']],
+                                capture_output=True, text=True, check=True, timeout=20)
+        password = result.stdout.splitlines()[0].replace(' ', '').strip()
+        self.auth = 'Basic ' + base64.b64encode(
+            (self.user + ':' + password).encode()).decode()
+        self.opener = urllib.request.build_opener(NoRedirect)
+
+    def create(self, path, title, start, end, location=''):
+        """Create once, then read back. Never overwrite or send invitations."""
+        if not title.strip() or end <= start:
+            raise ValueError('A title and an end after the start are required')
+        uid = str(uuid.uuid4()) + '@mailroom'
+        url = urllib.parse.urljoin(BASE, path.rstrip('/') + '/' + uid + '.ics')
+        if not url.startswith(BASE + '/'):
+            raise ValueError('Unexpected calendar host')
+        calendar = icalendar.Calendar()
+        calendar.add('prodid', '-//Mailroom//Calendar v1//EN')
+        calendar.add('version', '2.0')
+        event = icalendar.Event()
+        for key, value in [('uid', uid), ('summary', title.strip()),
+                           ('dtstart', start.astimezone(dt.timezone.utc)),
+                           ('dtend', end.astimezone(dt.timezone.utc)),
+                           ('dtstamp', dt.datetime.now(dt.timezone.utc)),
+                           ('location', location), ('status', 'CONFIRMED')]:
+            event.add(key, value)
+        calendar.add_component(event)
+        request = urllib.request.Request(url, calendar.to_ical(), method='PUT', headers={
+            'Authorization': self.auth, 'Content-Type': 'text/calendar; charset=utf-8',
+            'If-None-Match': '*'})
+        try:
+            with self.opener.open(request, timeout=30) as response:
+                if response.status not in (200, 201, 204):
+                    raise ValueError('Unexpected save response')
+            request = urllib.request.Request(url, headers={'Authorization': self.auth})
+            with self.opener.open(request, timeout=30) as response:
+                stored = icalendar.Calendar.from_ical(response.read())
+            matches = [e for e in stored.walk('VEVENT') if str(e.get('UID')) == uid]
+            if len(matches) != 1 or str(matches[0].get('SUMMARY')) != title.strip() or \
+                    matches[0].decoded('DTSTART') != start or matches[0].decoded('DTEND') != end:
+                raise ValueError('Saved appointment did not match readback')
+        except Exception as exc:
+            raise RuntimeError('Save not verified. Refresh before trying again; the event may exist. '
+                               'Reference: ' + uid + '. ' + str(exc)) from exc
+        return uid
+
+    def request(self, path, body, method='PROPFIND', depth='0'):
+        url = urllib.parse.urljoin(BASE, path)
+        if urllib.parse.urlsplit(url).netloc != 'calendar.zoho.com' or not url.startswith(BASE + '/'):
+            raise ValueError('Calendar server returned an unexpected host')
+        req = urllib.request.Request(url, body.encode(), method=method, headers={
+            'Authorization': self.auth, 'Content-Type': 'application/xml', 'Depth': depth})
+        with self.opener.open(req, timeout=30) as response:
+            return ET.fromstring(response.read())
+
+    def prop(self, path, fields, depth='0'):
+        return self.request(path, '<d:propfind xmlns:d="DAV:" '
+                            'xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop>' +
+                            fields + '</d:prop></d:propfind>', depth=depth)
+
+    def calendars(self):
+        root = self.prop('/.well-known/caldav', '<d:current-user-principal/>')
+        principal = root.find('.//' + DAV + 'current-user-principal/' + DAV + 'href').text
+        root = self.prop(principal, '<c:calendar-home-set/>')
+        home = root.find('.//' + CAL + 'calendar-home-set/' + DAV + 'href').text
+        root = self.prop(home, '<d:displayname/><d:resourcetype/>', '1')
+        return [(r.find(DAV + 'href').text, r.findtext('.//' + DAV + 'displayname', 'Unnamed'))
+                for r in root.findall(DAV + 'response')
+                if r.find('.//' + CAL + 'calendar') is not None]
+
+    def events(self, path, start, end):
+        stamp = lambda d: d.astimezone(dt.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+        span = 'start="%s" end="%s"' % (stamp(start), stamp(end))
+        root = self.request(path, '<c:calendar-query xmlns:d="DAV:" '
+            'xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><d:getetag/>'
+            '<c:calendar-data/></d:prop><c:filter>'
+            '<c:comp-filter name="VCALENDAR"><c:comp-filter name="VEVENT">'
+            '<c:time-range ' + span + '/></c:comp-filter></c:comp-filter>'
+            '</c:filter></c:calendar-query>', method='REPORT', depth='1')
+        events = []
+        for response in root.findall(DAV + 'response'):
+            href = response.findtext(DAV + 'href', '')
+            if urllib.parse.unquote(href).rstrip('/') == urllib.parse.unquote(path).rstrip('/'):
+                continue  # Zoho includes the collection itself in REPORT results.
+            data = response.find('.//' + CAL + 'calendar-data')
+            if data is None:
+                # Zoho returns etags without calendar-data. Read that resource.
+                url = urllib.parse.urljoin(BASE, href)
+                if not url.startswith(BASE + '/'):
+                    raise ValueError('Unexpected event host')
+                request = urllib.request.Request(url, headers={'Authorization': self.auth})
+                with self.opener.open(request, timeout=30) as result:
+                    text = result.read()
+            else:
+                text = data.text or ''
+            events.extend(parse_events(text, start, end))
+        return events
+
+
+def clean(text):
+    return ''.join(c if c.isprintable() else ' ' for c in text)
+
+
+def local_date(value):
+    if not isinstance(value, dt.datetime):
+        return dt.datetime.combine(value, dt.time.min, ZONE)
+    return value.replace(tzinfo=ZONE) if value.tzinfo is None else value.astimezone(ZONE)
+
+
+def parse_events(text, start, end):
+    calendar = icalendar.Calendar.from_ical(text)
+    events = []
+    for event in recurring_ical_events.of(calendar).between(start, end):
+        if str(event.get('STATUS', '')).upper() == 'CANCELLED':
+            continue
+        value = event.decoded('DTSTART')
+        beginning = local_date(value)
+        finish = local_date(event.decoded('DTEND')) if 'DTEND' in event else beginning
+        events.append({'start': beginning, 'end': finish,
+                       'all_day': not isinstance(value, dt.datetime),
+                       'summary': clean(str(event.get('SUMMARY', '(Untitled)'))),
+                       'description': clean(str(event.get('DESCRIPTION', ''))),
+                       'location': clean(str(event.get('LOCATION', ''))),
+                       # Zoho rewrites PRODID, so how an event arrived has to
+                       # be read from these three instead. See app/calendar_source.py.
+                       'uid': clean(str(event.get('UID', ''))),
+                       'organizer': clean(str(event.get('ORGANIZER', ''))),
+                       'url': clean(str(event.get('URL', '')))})
+    return events
+
+
+def reminders(action, value):
+    """calendar quiet / snooze: the controls for our own reminders.
+
+    No calendar server is touched here. Both commands only write the state
+    file the background notifier reads on its next tick.
+    """
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), 'app'))
+    import calendar_notify as notify
+    now = dt.datetime.now(dt.timezone.utc)
+    state, settings = notify.load_state(), notify.config()
+
+    def clock(moment):
+        return moment.astimezone(ZONE).strftime('%I:%M %p').lstrip('0')
+
+    if action == 'snooze':
+        minutes = int(value) if value else 5
+        title = notify.snooze(state, minutes, now)
+        if not title:
+            print('Nothing to snooze: no reminder has fired.')
+            return 0
+        notify.save_state(state)
+        print('Snoozed %s for %d minutes.' % (title, minutes))
+        return 0
+
+    if value and str(value).lower() == 'status':
+        until = notify.quiet_until(state)
+        held = len(state.get('held') or [])
+        print('Quiet until ' + clock(until) if until else 'Reminders are on.')
+        if held:
+            print('%d reminder(s) held so far.' % held)
+        return 0
+
+    if value and str(value).lower() in ('off', 'on'):
+        notify.stop_quiet(state)
+        summary = notify.release(state)
+        notify.save_state(state)
+        print('Reminders are on.')
+        if summary:
+            print(summary[0])
+            print(summary[1])
+        return 0
+
+    minutes = settings['quiet_default_minutes'] if value is None else int(value)
+    if not 1 <= minutes <= 1440:
+        raise ValueError('Quiet must be 1 to 1440 minutes')
+    notify.start_quiet(state, minutes, now)
+    notify.save_state(state)
+    print('Quiet for %d minutes. Reminders resume at %s.'
+          % (minutes, clock(notify.quiet_until(state))))
+    print('Anything due meanwhile is held, not dropped.')
+    return 0
+
+
+def appointment(date_text, time_text, duration_text):
+    naive = dt.datetime.fromisoformat(date_text + 'T' + time_text)
+    start = naive.replace(tzinfo=ZONE)
+    # Reject nonexistent or ambiguous wall times rather than silently pick one.
+    if start.astimezone(dt.timezone.utc).astimezone(ZONE).replace(tzinfo=None) != naive:
+        raise ValueError('That time does not exist because of daylight saving time')
+    if start.utcoffset() != start.replace(fold=1).utcoffset():
+        raise ValueError('That time occurs twice; choose a time outside the clock change')
+    duration = int(duration_text)
+    if not 1 <= duration <= 10080:
+        raise ValueError('Duration must be 1 to 10080 minutes')
+    end = (start.astimezone(dt.timezone.utc) + dt.timedelta(minutes=duration)).astimezone(ZONE)
+    return start, end
+
+
+def prompt(label, default=''):
+    suffix = ' [%s]' % default if default else ''
+    try:
+        value = input(label + suffix + ': ')
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return None
+    return value.strip() or default
+
+
+def add_event():
+    client = Client()
+    calendars = client.calendars()
+    if not calendars:
+        print('No calendars exposed by Zoho. Check its CalDAV settings.', file=sys.stderr)
+        return 1
+
+    now = dt.datetime.now(ZONE)
+    title = prompt('Title')
+    if title is None:
+        print('Canceled.')
+        return 0
+    date_text = prompt('Date (YYYY-MM-DD)', now.date().isoformat())
+    if date_text is None:
+        print('Canceled.')
+        return 0
+    time_text = prompt('Start time (24-hour HH:MM, Chicago time)', '09:00')
+    if time_text is None:
+        print('Canceled.')
+        return 0
+    duration_text = prompt('Duration in minutes', '30')
+    if duration_text is None:
+        print('Canceled.')
+        return 0
+    location = prompt('Location or meeting link (optional)', '')
+    if location is None:
+        print('Canceled.')
+        return 0
+
+    try:
+        if not title.strip():
+            raise ValueError('Please enter an appointment title')
+        start, end = appointment(date_text, time_text, duration_text)
+    except (TypeError, ValueError) as exc:
+        print('Not added: %s' % exc, file=sys.stderr)
+        return 1
+
+    chosen = 0
+    if len(calendars) > 1:
+        print('Choose a calendar:')
+        for number, (_, name) in enumerate(calendars, 1):
+            print('  %d. %s' % (number, clean(name)))
+        choice = prompt('Calendar number', '1')
+        if choice is None:
+            print('Canceled.')
+            return 0
+        try:
+            chosen = int(choice) - 1
+            if not 0 <= chosen < len(calendars):
+                raise ValueError
+        except ValueError:
+            print('Not added: choose one of the listed calendars.', file=sys.stderr)
+            return 1
+
+    path, name = calendars[chosen]
+    conflicts = []
+    try:
+        for source, source_name in calendars:
+            for event in client.events(source, start, end):
+                if event['start'] < end and event['end'] > start:
+                    conflicts.append(clean(source_name) + ': ' + clean(event['summary']))
+    except Exception as exc:
+        print('Not added: could not check for conflicts: %s' % clean(str(exc)),
+              file=sys.stderr)
+        return 1
+
+    print('\nReview appointment')
+    print('  Title:    %s' % clean(title))
+    print('  Calendar: %s · %s' % (clean(name), client.user))
+    print('  Starts:   %s' % start.strftime('%a %b %d, %Y · %I:%M %p %Z'))
+    print('  Ends:     %s' % end.strftime('%a %b %d, %Y · %I:%M %p %Z'))
+    print('  Location: %s' % (clean(location) if location else 'None'))
+    print('  Conflicts: %d' % len(conflicts))
+    for conflict in conflicts:
+        print('    ' + conflict)
+    print('  No guests or invitations will be sent.')
+    choice = prompt('Create this event? [y/N]')
+    if choice is None or choice.lower() not in ('y', 'yes'):
+        print('Canceled. Nothing was written.')
+        return 0
+    try:
+        uid = client.create(path, title, start, end, location)
+    except Exception as exc:
+        print('Not confirmed: %s' % clean(str(exc)), file=sys.stderr)
+        return 1
+    print('Created and verified in Zoho.')
+    print('  UID: %s' % uid)
+    return 0
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('view', nargs='?',
+                        choices=['ui', 'today', 'week', 'list', 'calendars',
+                                 'quiet', 'snooze', 'add'], default=None)
+    parser.add_argument('value', nargs='?',
+                        help='quiet: minutes, off, or status. snooze: minutes')
+    parser.add_argument('--days', type=int, help='Number of days, starting today (1–90)')
+    args = parser.parse_args()
+    if args.view in ('quiet', 'snooze'):
+        return reminders(args.view, args.value)
+    if args.view == 'add':
+        return add_event()
+    if args.view == 'ui' or (args.view is None and args.days is None and sys.stdin.isatty()):
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'app'))
+        import calendar_tui
+        return calendar_tui.run(Client, ZONE)
+    days = args.days if args.days is not None else 1 if args.view == 'today' else 7
+    if not 1 <= days <= 90:
+        parser.error('--days must be between 1 and 90')
+    client = Client()
+    calendars = client.calendars()
+    print('ZOHO CALENDAR · ' + client.user)
+    print('Read live · ' + dt.datetime.now(ZONE).strftime('%b %d, %Y at %I:%M %p %Z'))
+    if args.view == 'calendars':
+        for _, name in calendars:
+            print('  ' + clean(name))
+        print('%d calendar(s) exposed by Zoho CalDAV.' % len(calendars))
+        return 0
+    start = dt.datetime.combine(dt.datetime.now(ZONE).date(), dt.time.min, ZONE)
+    end = start + dt.timedelta(days=days)
+    events, failures = [], []
+    for path, name in calendars:
+        try:
+            for event in client.events(path, start, end):
+                if event['start'] < end and (event['end'] > start or event['start'] >= start):
+                    event['calendar'] = clean(name)
+                    events.append(event)
+        except Exception as exc:
+            failures.append(clean(name) + ': ' + clean(str(exc)))
+    print('Today through ' + (end - dt.timedelta(days=1)).strftime('%a, %b %d') + ' · America/Chicago\n')
+    previous = None
+    for event in sorted(events, key=lambda e: e['start']):
+        day = event['start'].strftime('%A, %B %d')
+        if day != previous:
+            if previous is not None:
+                print()
+            print(day)
+            previous = day
+        when = 'All day' if event['all_day'] else event['start'].strftime('%I:%M %p')
+        if event['all_day'] and event['end'] > event['start'] + dt.timedelta(days=1):
+            when += ' through ' + (event['end'] - dt.timedelta(days=1)).strftime('%b %d')
+        if not event['all_day'] and event['end'] > event['start']:
+            when += '–' + event['end'].strftime('%I:%M %p' if event['end'].date() == event['start'].date() else '%b %d %I:%M %p')
+        print('  %s  %s  [%s]' % (when, event['summary'], event['calendar']))
+        if event['location']:
+            print('    ' + event['location'])
+    if not calendars:
+        print('No calendars exposed by Zoho. Check its CalDAV settings.')
+    elif not events and not failures:
+        print('No events in this period in the %d connected Zoho calendar(s).' % len(calendars))
+    for failure in failures:
+        print('Could not read ' + failure, file=sys.stderr)
+    print('\nRead-only · Refresh: calendar week · Today: calendar today · Longer: calendar --days 30')
+    return 1 if failures else 0
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main())
+    except Exception as exc:
+        print('Calendar unavailable: ' + clean(str(exc)), file=sys.stderr)
+        sys.exit(1)

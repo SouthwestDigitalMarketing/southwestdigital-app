@@ -1,0 +1,3029 @@
+#!/usr/bin/env python3
+"""Terminal mail across accounts: read, triage, draft, send.
+
+Sending is deliberately awkward. It only ever sends a draft that already
+exists on the server, it prints the envelope first, and it refuses without
+--yes. There is no path that composes and sends in one step.
+"""
+
+import argparse, datetime, email, imaplib, json, os, re, shutil, signal
+import smtplib, subprocess, sys, time, unicodedata
+import tempfile
+import urllib.error, urllib.request
+from email.header import decode_header, make_header
+from email.message import EmailMessage
+from email.utils import (formatdate, getaddresses, make_msgid,
+                         parsedate_to_datetime)
+from urllib.parse import urlparse
+
+CONFIG = os.path.expanduser("~/.config/mailroom/accounts.json")
+MESSAGE_STATE = os.path.expanduser("~/.local/state/mailroom/message-ids.json")
+UNSUB_LOG = os.path.expanduser("~/.local/state/mailroom/unsubscribed.json")
+STATS_LEDGER = os.path.expanduser("~/.local/state/mailroom/stats-ledger.json")
+LEDGER_KEEP_DAYS = 366
+# Interactive prompts give up after this many unusable answers instead of
+# asking forever: a mistyped reply costs one retry, a broken pipe or a
+# fixed mock answer costs three, and then the command quits.
+MAX_PROMPT_ATTEMPTS = 3
+# A draft body read from stdin ends at a lone dot or EOF; this bounds a
+# stream that never sends either.
+MAX_BODY_LINES = 2000
+DEFAULTS = {
+    "gmail": {"host": "imap.gmail.com", "user": "tmacdonald7@gmail.com",
+              "pass": "gmail/imap", "trash": "[Gmail]/Trash"},
+    "zoho": {"host": "imap.zoho.com", "user": "thomas@bookkeepingconroe.com",
+             "pass": "zoho/imap", "trash": "Trash"},
+}
+
+
+def accounts():
+    if not os.path.exists(CONFIG):
+        os.makedirs(os.path.dirname(CONFIG), exist_ok=True)
+        with open(CONFIG, "w") as fh:
+            json.dump(DEFAULTS, fh, indent=2)
+        os.chmod(CONFIG, 0o600)
+    with open(CONFIG) as fh:
+        return json.load(fh)
+
+
+def connect(name):
+    acct = accounts()[name]
+    pw = subprocess.run(["pass", "show", acct["pass"]], capture_output=True,
+                        text=True, check=True).stdout.split("\n")[0]
+    pw = pw.replace(" ", "").strip()
+    conn = imaplib.IMAP4_SSL(acct["host"], acct.get("port", 993))
+    conn.login(acct["user"], pw)
+    return conn, acct
+
+
+def caps(conn):
+    return {c.decode() if isinstance(c, bytes) else c for c in conn.capabilities}
+
+
+def hdr(value):
+    try:
+        return str(make_header(decode_header(value or ""))).strip()
+    except Exception:
+        return (value or "").strip()
+
+
+def quote(box):
+    return '"%s"' % box.replace('"', '\\"')
+
+
+def body_text(msg, limit=4000):
+    plain, html = [], []
+    for part in msg.walk():
+        if part.get_content_maintype() == "multipart":
+            continue
+        if part.get_filename():
+            continue
+        ctype = part.get_content_type()
+        if ctype not in ("text/plain", "text/html"):
+            continue
+        try:
+            raw = part.get_payload(decode=True)
+            text = raw.decode(part.get_content_charset() or "utf-8", "replace")
+        except Exception:
+            continue
+        (plain if ctype == "text/plain" else html).append(text)
+    text = "\n".join(plain) if plain else "\n".join(html)
+    if not plain and html:
+        text = re.sub(r"(?is)<(script|style).*?</\1>", " ", text)
+        text = re.sub(r"(?i)<br\s*/?>|</p>", "\n", text)
+        text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+    return text[:limit]
+
+
+def attachments(msg):
+    return [part.get_filename() for part in msg.walk() if part.get_filename()]
+
+
+def fetch_headers(conn, uids):
+    """UID -> (from, to, subject, date, flags) for the given uids."""
+    if not uids:
+        return {}
+    out = {}
+    for chunk in (uids[i:i + 200] for i in range(0, len(uids), 200)):
+        typ, data = conn.uid("FETCH", b",".join(chunk),
+                             "(FLAGS BODY.PEEK[HEADER.FIELDS "
+                             "(FROM TO SUBJECT DATE)])")
+        if typ != "OK":
+            continue
+        for item in data:
+            if not isinstance(item, tuple):
+                continue
+            meta = item[0].decode("utf-8", "replace")
+            uid = re.search(r"UID\s+(\d+)", meta)
+            flags = re.search(r"FLAGS\s+\(([^)]*)\)", meta)
+            if not uid:
+                continue
+            msg = email.message_from_bytes(item[1])
+            out[uid.group(1)] = (hdr(msg.get("From")), hdr(msg.get("To")),
+                                 hdr(msg.get("Subject")), hdr(msg.get("Date")),
+                                 flags.group(1) if flags else "")
+    return out
+
+
+def fetch_message_ids(conn, uids):
+    """UID -> normalized Message-ID for local tag lookup."""
+    if not uids:
+        return {}
+    out = {}
+    for chunk in (uids[i:i + 200] for i in range(0, len(uids), 200)):
+        typ, data = conn.uid(
+            "FETCH", b",".join(chunk),
+            "(BODY.PEEK[HEADER.FIELDS (MESSAGE-ID)])")
+        if typ != "OK":
+            continue
+        for item in data:
+            if not isinstance(item, tuple):
+                continue
+            meta = item[0].decode("utf-8", "replace")
+            uid = re.search(r"UID\s+(\d+)", meta)
+            if not uid:
+                continue
+            msg = email.message_from_bytes(item[1])
+            value = msg.get("Message-ID", "")
+            if value:
+                out[uid.group(1)] = value.strip().strip("<>").lower()
+    return out
+
+
+def iter_notmuch_messages(node):
+    if isinstance(node, dict):
+        if "tags" in node and ("id" in node or "headers" in node):
+            yield node
+        for value in node.values():
+            yield from iter_notmuch_messages(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from iter_notmuch_messages(value)
+
+
+def local_tags(message_ids):
+    """Return local notmuch tags, without making them a mail dependency."""
+    wanted = {value for value in message_ids if value}
+    if not wanted:
+        return {}
+    query = " OR ".join(
+        'id:"%s"' % value.replace('"', '\\"') for value in wanted)
+    try:
+        result = subprocess.run(
+            ["notmuch", "show", "--format=json", "--body=false", query],
+            capture_output=True, text=True, timeout=10, check=True)
+        data = json.loads(result.stdout or "[]")
+    except (FileNotFoundError, OSError, subprocess.SubprocessError,
+            json.JSONDecodeError):
+        return {}
+    out = {}
+    for message in iter_notmuch_messages(data):
+        key = (message.get("id") or "").strip().strip("<>").lower()
+        if key in wanted:
+            out[key] = set(message.get("tags") or [])
+    return out
+
+
+def normalize_message_id(value):
+    return (value or "").strip().strip("<>").lower()
+
+
+def message_identity(item):
+    """Return a stable local key for one message in one account."""
+    account = item.get("account", "")
+    message_id = normalize_message_id(item.get("message_id"))
+    if message_id:
+        return "%s|id:%s" % (account, message_id)
+    fields = (item.get("from"), item.get("to"), item.get("subject"),
+              item.get("date"))
+    fallback = "\x1f".join(oneline(value).casefold() for value in fields)
+    return "%s|header:%s" % (account, fallback)
+
+
+def load_message_state():
+    try:
+        with open(MESSAGE_STATE) as fh:
+            state = json.load(fh)
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return {"next": 1, "messages": {}}
+    if not isinstance(state, dict) or not isinstance(state.get("messages"), dict):
+        return {"next": 1, "messages": {}}
+    try:
+        state["next"] = max(1, int(state.get("next", 1)))
+    except (TypeError, ValueError):
+        state["next"] = 1
+    numbers = [entry.get("number", 0) for entry in state["messages"].values()
+               if isinstance(entry, dict) and isinstance(entry.get("number"), int)]
+    state["next"] = max([state["next"]] + [number + 1 for number in numbers])
+    return state
+
+
+def save_message_state(state):
+    directory = os.path.dirname(MESSAGE_STATE)
+    os.makedirs(directory, exist_ok=True)
+    fd, path = tempfile.mkstemp(prefix="message-ids-", dir=directory, text=True)
+    try:
+        with os.fdopen(fd, "w") as fh:
+            json.dump(state, fh, indent=2, sort_keys=True)
+            fh.write("\n")
+        os.chmod(path, 0o600)
+        os.replace(path, MESSAGE_STATE)
+    finally:
+        if os.path.exists(path):
+            os.unlink(path)
+
+
+def assign_message_numbers(items):
+    """Attach persistent numbers and local tags to fetched messages."""
+    state = load_message_state()
+    changed = False
+    for item in items:
+        key = message_identity(item)
+        entry = state["messages"].get(key)
+        if not isinstance(entry, dict) or not isinstance(entry.get("number"), int):
+            entry = {"number": state["next"], "tags": []}
+            state["messages"][key] = entry
+            state["next"] += 1
+            changed = True
+        tags = set(entry.get("tags") or [])
+        item["message_no"] = entry["number"]
+        item["tags"] = set(item.get("tags") or []) | tags
+        for field in ("account", "uid", "box", "message_id", "subject",
+                      "from"):
+            value = item.get(field)
+            if value and entry.get(field) != value:
+                entry[field] = value
+                changed = True
+    if changed:
+        save_message_state(state)
+    return items
+
+
+def registry_entries(numbers):
+    state = load_message_state()
+    wanted = set(numbers)
+    return {
+        entry.get("number"): (key, entry)
+        for key, entry in state["messages"].items()
+        if isinstance(entry, dict) and entry.get("number") in wanted
+    }, state
+
+
+def set_registry_tag(numbers, tag, enabled):
+    entries, state = registry_entries(numbers)
+    for number in numbers:
+        key, entry = entries[number]
+        tags = set(entry.get("tags") or [])
+        if enabled:
+            tags.add(tag)
+        else:
+            tags.discard(tag)
+        entry["tags"] = sorted(tags)
+    save_message_state(state)
+    return entries
+
+
+def mirror_notmuch_tag(entry, tag, enabled):
+    message_id = normalize_message_id(entry.get("message_id"))
+    if not message_id or not shutil.which("notmuch"):
+        return True
+    operation = "+%s" % tag if enabled else "-%s" % tag
+    try:
+        result = subprocess.run(
+            ["notmuch", "tag", operation, "id:%s" % message_id],
+            capture_output=True, text=True, timeout=10, check=False)
+        return result.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def status_icons(flags, tags=()):
+    icons = []
+    if "followup" in tags:
+        icons.append("🚩")
+    if "lead" in tags:
+        icons.append("💵")
+    if "\\Flagged" in flags:
+        icons.append("★")
+    return "".join(icons)
+
+
+def show(uid, row, width=64, number=None):
+    frm, _, subj, date, flags = row[:5]
+    tags = row[5] if len(row) > 5 else ()
+    prefix = "%2d " % number if number is not None else ""
+    line = "%s%-6s %-8s %-30.30s %-*.*s  %s" % (
+        prefix, cell(status_icons(flags, tags), 6), uid, frm, width, width,
+        subj, date[:22])
+    if "\\Seen" not in flags and sys.stdout.isatty():
+        line = "\033[2m%s\033[0m" % line
+    print(line)
+
+
+def select(conn, box, readonly=True):
+    typ, _ = conn.select(quote(box), readonly=readonly)
+    if typ != "OK":
+        sys.exit("cannot open mailbox: %s" % box)
+
+
+def cmd_accounts(args):
+    for name, acct in accounts().items():
+        try:
+            conn, _ = connect(name)
+            typ, data = conn.status(quote("INBOX"), "(MESSAGES UNSEEN)")
+            print("%-8s %-34s OK  %s" % (name, acct["user"],
+                                         data[0].decode() if typ == "OK" else ""))
+            conn.logout()
+        except Exception as exc:
+            print("%-8s %-34s FAIL  %s: %s" % (name, acct["user"],
+                                               type(exc).__name__, exc))
+
+
+def cmd_boxes(args):
+    conn, _ = connect(args.account)
+    typ, data = conn.list()
+    for item in data or []:
+        print("  " + item.decode("utf-8", "replace"))
+    conn.logout()
+
+
+def legacy_ls_rows(account, box, n, unseen):
+    conn, _ = connect(account)
+    select(conn, box)
+    query = "(UNSEEN)" if unseen else "(ALL)"
+    typ, data = conn.uid("SEARCH", None, query)
+    uids = data[0].split()
+    if not uids:
+        conn.logout()
+        return []
+    uids = uids[-n:]
+    rows = fetch_headers(conn, uids)
+    out = []
+    for uid in reversed(uids):
+        key = uid.decode()
+        if key in rows:
+            out.append((key, rows[key]))
+    conn.logout()
+    return out
+
+
+LS_CATEGORIES = (
+    ("inbox", "Inbox"), ("spam", "Spam / Junk"), ("sent", "Sent"),
+    ("drafts", "Drafts"), ("trash", "Trash"), ("all", "All mail"),
+    ("starred", "Starred"),
+)
+LS_TIMEFRAMES = (
+    ("all", "All time"), ("today", "Today"),
+    ("24h", "Last 24 hours"), ("7d", "Last 7 days"),
+    ("30d", "Last 30 days"),
+)
+
+
+def account_user(name):
+    return accounts().get(name, {}).get("user", name)
+
+
+def resolve_account(value):
+    for name, config in accounts().items():
+        if value == name or value == config.get("user"):
+            return name
+    raise ValueError("unknown account: %s" % value)
+
+
+def choose_ls_scope(account):
+    names = list(accounts())
+    if account:
+        try:
+            return [resolve_account(account)]
+        except ValueError as exc:
+            sys.exit(str(exc))
+    print("Choose mail source:")
+    print("  1. Unified (all accounts)")
+    for number, name in enumerate(names, 2):
+        print("  %d. %s" % (number, account_user(name)))
+    misses = 0
+    while True:
+        try:
+            choice = input("Source (number, or q to quit): ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return None
+        if choice in ("q", "quit", ""):
+            return None
+        if choice.isdigit():
+            number = int(choice)
+            if number == 1:
+                return names
+            if 2 <= number <= len(names) + 1:
+                return [names[number - 2]]
+        misses += 1
+        if misses >= MAX_PROMPT_ATTEMPTS:
+            print("too many invalid choices; giving up")
+            return None
+        print("Choose a number from 1 to %d, or q to quit." % (len(names) + 1))
+
+
+def choose_ls_option(title, options, prompt):
+    print(title)
+    for number, (_, label) in enumerate(options, 1):
+        print("  %d. %s" % (number, label))
+    misses = 0
+    while True:
+        try:
+            choice = input("%s (number, or q to quit): " % prompt)
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return None
+        choice = choice.strip().lower()
+        if choice in ("q", "quit", ""):
+            return None
+        if choice.isdigit() and 1 <= int(choice) <= len(options):
+            return options[int(choice) - 1][0]
+        misses += 1
+        if misses >= MAX_PROMPT_ATTEMPTS:
+            print("too many invalid choices; giving up")
+            return None
+        print("Choose a number from 1 to %d, or q to quit." % len(options))
+
+
+def mailbox_list(account):
+    conn, _ = connect(account)
+    try:
+        typ, data = conn.list()
+        if typ != "OK":
+            raise RuntimeError("could not list mailboxes")
+        out = []
+        for item in data or []:
+            text = item.decode("utf-8", "replace")
+            flags = text.split(")", 1)[0].lower()
+            match = re.search(r'"((?:\\.|[^"\\])*)"\s*$', text)
+            name = (match.group(1).replace('\\"', '"') if match
+                    else text.rsplit(" ", 1)[-1])
+            out.append((name, flags))
+        return out
+    finally:
+        try:
+            conn.logout()
+        except Exception:
+            pass
+
+
+def resolve_ls_box(account, category):
+    boxes = mailbox_list(account)
+    by_name = {name.casefold(): (name, flags) for name, flags in boxes}
+    config = accounts()[account]
+    preferred = {
+        "inbox": ["INBOX"],
+        "spam": ["Spam", "[Gmail]/Spam"],
+        "sent": ["Sent", "[Gmail]/Sent Mail"],
+        "drafts": ["Drafts", "[Gmail]/Drafts"],
+        "trash": [config.get("trash", "Trash"), "Trash", "[Gmail]/Trash"],
+        "all": ["All Mail", "[Gmail]/All Mail", "Archive"],
+    }
+    lookup = "all" if category == "starred" else category
+    for candidate in preferred[lookup]:
+        found = by_name.get(candidate.casefold())
+        if found:
+            return found[0]
+
+    def leaf(name):
+        return name.rsplit("/", 1)[-1].casefold()
+
+    flag_for = {"inbox": "\\inbox", "spam": "\\junk", "sent": "\\sent",
+                "drafts": "\\drafts", "trash": "\\trash"}
+    flag = flag_for.get(lookup)
+    for name, flags in boxes:
+        if flag and flag in flags:
+            return name
+        if lookup == "spam" and leaf(name) in ("spam", "junk"):
+            return name
+        if lookup == "all" and leaf(name) in ("all mail", "archive"):
+            return name
+    available = ", ".join(name for name, _ in boxes) or "none"
+    raise RuntimeError("could not find %s for %s (available: %s)" %
+                       (dict(LS_CATEGORIES)[category], account_user(account), available))
+
+
+def ls_cutoff(timeframe):
+    now = datetime.datetime.now(datetime.timezone.utc)
+    if timeframe == "all":
+        return None
+    if timeframe == "today":
+        local = now.astimezone().replace(hour=0, minute=0, second=0, microsecond=0)
+        return local.astimezone(datetime.timezone.utc)
+    return now - datetime.timedelta(days={"24h": 1, "7d": 7, "30d": 30}[timeframe])
+
+
+def ls_items(scope, category, timeframe, n, unseen):
+    cutoff = ls_cutoff(timeframe)
+    since = since_token(cutoff) if cutoff else None
+    items, trouble = [], []
+    for account in scope:
+        try:
+            box = resolve_ls_box(account, category)
+        except Exception as exc:
+            trouble.append(str(exc))
+            continue
+        got, error = gather(account, box, max(n, 100), unseen, since,
+                            flagged=category == "starred")
+        if error:
+            trouble.append(error)
+            continue
+        for item in got:
+            if cutoff and (not item["at"] or item["at"] < cutoff):
+                continue
+            item["box"] = box
+            items.append(item)
+    floor = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+    items.sort(key=lambda item: item["at"] or floor, reverse=True)
+    assign_message_numbers(items)
+    return items[:n], trouble
+
+
+def ls_row(item):
+    at = item["at"].astimezone().strftime("%a, %d %b %Y %H:%M %z") if item["at"] else ""
+    return (item["from"], item["to"], item["subject"], at, item["flags"],
+            item.get("tags", set()))
+
+
+def parse_ls_selection(value, count):
+    value = str(value).strip().lower()
+    if value in ("q", "quit", "b", "back", ""):
+        return None
+    if not value.isdigit() or not 1 <= int(value) <= count:
+        raise ValueError("choose a row from 1 to %d, or q to quit" % count)
+    return int(value) - 1
+
+
+def parse_message_selection(value, items):
+    value = str(value).strip().lower()
+    if value in ("q", "quit", "b", "back", ""):
+        return None
+    if not value.isdigit():
+        raise ValueError("choose a message number, or q to quit")
+    number = int(value)
+    for item in items:
+        if item.get("message_no") == number:
+            return item
+    available = ", ".join(str(item.get("message_no")) for item in items)
+    raise ValueError("message %d is not in this view (available: %s)" %
+                     (number, available or "none"))
+
+
+def run_ls_action(account, box, uid, row):
+    print("\nSelected: %s" % (oneline(row[2]) or "(no subject)"))
+    print("  r  read")
+    print("  s  %s star" % ("un" if "\\Flagged" in row[4] else ""))
+    print("  m  mark read")
+    print("  n  mark unread")
+    print("  t  move to Trash")
+    print("  b  back to the list")
+    try:
+        action = input("Action: ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return False
+    if action in ("b", "back", ""):
+        return True
+    common = argparse.Namespace(target=account, account=account, uid=uid,
+                                box=box)
+    if action == "r":
+        common.limit = 4000
+        common.mark = False
+        cmd_read(common)
+    elif action == "s":
+        common.command = "unflag" if "\\Flagged" in row[4] else "flag"
+        cmd_flag(common)
+    elif action == "m":
+        common.command = "seen"
+        cmd_flag(common)
+    elif action == "n":
+        common.command = "unseen"
+        cmd_flag(common)
+    elif action == "t":
+        common.command = "trash"
+        cmd_move(common)
+    elif action in ("q", "quit"):
+        return False
+    else:
+        print("Choose r, s, m, n, t, b, or q.")
+    return True
+
+
+def interactive_ls(scope, category, timeframe, n, unseen):
+    misses = 0
+    while True:
+        items, trouble = ls_items(scope, category, timeframe, n, unseen)
+        for line in trouble:
+            print("! " + line)
+        if not items:
+            print("(no messages)")
+            return
+        for item in items:
+            show(item["uid"], ls_row(item), number=item["message_no"])
+        print("\nSelect a message number, or q to quit.")
+        try:
+            choice = input("Message number: ")
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return
+        try:
+            selected = parse_message_selection(choice, items)
+        except ValueError as exc:
+            misses += 1
+            if misses >= MAX_PROMPT_ATTEMPTS:
+                print("too many invalid choices; giving up")
+                return
+            print(exc)
+            continue
+        misses = 0
+        if selected is None:
+            return
+        if not run_ls_action(item["account"], item["box"], item["uid"],
+                             ls_row(item)):
+            return
+
+
+def cmd_ls(args):
+    if not args.account and (args.no_interactive
+                             or not (sys.stdin.isatty() and sys.stdout.isatty())):
+        sys.exit("mail ls needs an account outside an interactive terminal")
+    scope = choose_ls_scope(args.account)
+    if not scope:
+        return
+    if not args.no_interactive and sys.stdin.isatty() and sys.stdout.isatty():
+        category = choose_ls_option("Choose mail category:", LS_CATEGORIES,
+                                    "Category")
+        if not category:
+            return
+        timeframe = choose_ls_option("Choose time frame:", LS_TIMEFRAMES,
+                                     "Time frame")
+        if not timeframe:
+            return
+        interactive_ls(scope, category, timeframe, args.n, args.unseen)
+        return
+    items, error = gather(scope[0], args.box, args.n, args.unseen)
+    if error:
+        sys.exit(error)
+    for item in items:
+        item["box"] = args.box
+    floor = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+    items.sort(key=lambda item: item["at"] or floor, reverse=True)
+    assign_message_numbers(items)
+    if not items:
+        print("(no messages)")
+        return
+    for item in items:
+        show(item["uid"], ls_row(item), number=item["message_no"])
+
+
+# One list across every account. The accounts stay separate on the wire —
+# separate logins, separate INBOXes — and are merged only for the display,
+# newest first. The account name and UID stay on every row because that
+# pair is what every other command in this tool takes.
+def when(date_str):
+    """Header Date as an aware datetime, or None if the sender mangled it."""
+    try:
+        at = parsedate_to_datetime(date_str)
+    except Exception:
+        return None
+    if at is None:
+        return None
+    if at.tzinfo is None:
+        at = at.replace(tzinfo=datetime.timezone.utc)
+    return at
+
+
+def oneline(text):
+    """A folded header keeps its newlines, which tear a fixed-width row in
+    half and push the date onto its own line."""
+    return re.sub(r"\s+", " ", text or "").strip()
+
+
+# Marketing subjects are full of emoji, and a terminal draws those two
+# cells wide while Python counts them as one character. Padding by
+# len() therefore overflows the row by one cell per emoji and wraps the
+# date onto the next line. Measure in cells, not characters.
+def dwidth(text):
+    total = 0
+    for ch in text:
+        if unicodedata.combining(ch) or unicodedata.category(ch) in ("Mn", "Cf"):
+            continue
+        total += 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+    return total
+
+
+def cell(text, n, right=False):
+    """Trim to n terminal cells, then pad to exactly n."""
+    out, used = [], 0
+    for ch in text:
+        w = 0 if (unicodedata.combining(ch)
+                  or unicodedata.category(ch) in ("Mn", "Cf")) else (
+            2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1)
+        if used + w > n:
+            break
+        out.append(ch)
+        used += w
+    pad = " " * (n - used)
+    return pad + "".join(out) if right else "".join(out) + pad
+
+
+def display_name(frm):
+    """'Matt Arceneaux <matt@x.com>' -> 'Matt Arceneaux'; bare address kept."""
+    pairs = getaddresses([frm or ""])
+    if not pairs:
+        return (frm or "").strip()
+    name, addr = pairs[0]
+    return oneline(name or addr or frm).strip('"')
+
+
+def display_sender(frm):
+    """The sender as `Name <addr>` so a row shows both, or the bare
+    address when there is no separate display name to show."""
+    pairs = getaddresses([frm or ""])
+    if not pairs:
+        return (frm or "").strip()
+    name, addr = pairs[0]
+    name = oneline(name or "").strip().strip('"')
+    addr = (addr or "").strip()
+    if name and addr and name != addr:
+        return "%s <%s>" % (name, addr)
+    return addr or (frm or "").strip()
+
+
+def sender_addr(frm):
+    """The bare, lowercased address out of a From header, or ''."""
+    for _, addr in getaddresses([frm or ""]):
+        if addr:
+            return addr.lower()
+    return ""
+
+
+def display_recipient(to, fallback):
+    """Show the address the sender used, not merely the mailbox login.
+
+    Zoho can deliver several domain aliases into one real mailbox. Keeping
+    the original To address visible is what lets one unified inbox still say
+    which business the message was sent to. Bcc and malformed mail may not
+    have a usable To header, so those rows fall back to the login address.
+    """
+    for _, addr in getaddresses([to or ""]):
+        if addr:
+            return oneline(addr)
+    return fallback
+
+
+def since_token(cutoff):
+    """IMAP SINCE for a cutoff instant.
+
+    SINCE matches whole days against the server's INTERNALDATE, in the
+    server's own time zone, so it cannot express "the last 24 hours". It is
+    used only to stop fetching ancient headers; a day is subtracted so no
+    message inside the window is excluded on the wire, and the exact cutoff
+    is applied afterwards against the Date header.
+    """
+    return (cutoff - datetime.timedelta(days=1)).strftime("%d-%b-%Y")
+
+
+def gather(name, box, n, unseen, since=None, flagged=False, frm=None):
+    """Headers for one account's most recent mail. Never raises: an account
+    that is down is reported as a row of its own, not a dead command.
+
+    `frm` narrows the server-side search to one sender, which is how
+    "every message from this address" is answered without paging back
+    through recent headers."""
+    try:
+        conn, _ = connect(name)
+    except Exception as exc:
+        return [], "%s: cannot sign in (%s)" % (name, str(exc)[:80])
+    try:
+        typ, _ = conn.select(quote(box), readonly=True)
+        if typ != "OK":
+            return [], "%s: no mailbox %s" % (name, box)
+        terms = (["UNSEEN"] if unseen else [])
+        terms += (["FLAGGED"] if flagged else [])
+        terms += (["SINCE", since] if since else [])
+        if frm:
+            # IMAP quoted-string: backslash-escape the two characters that
+            # would otherwise end the string or escape the next one.
+            safe = str(frm).replace("\\", "\\\\").replace('"', '\\"')
+            terms += ["FROM", '"%s"' % safe]
+        typ, data = conn.uid("SEARCH", None, "(%s)" % " ".join(terms or ["ALL"]))
+        if typ != "OK":
+            return [], "%s: search failed" % name
+        uids = data[0].split()[-n:]
+        rows = fetch_headers(conn, uids)
+        message_ids = fetch_message_ids(conn, uids)
+    except Exception as exc:
+        return [], "%s: %s" % (name, str(exc)[:80])
+    finally:
+        try:
+            conn.logout()
+        except Exception:
+            pass
+    out = []
+    tags_by_id = local_tags(message_ids.values())
+    for uid in uids:
+        key = uid.decode()
+        if key not in rows:
+            continue
+        frm, to, subj, date, flags = rows[key]
+        out.append({"account": name, "uid": key, "from": frm,
+                    "to": to, "subject": subj, "flags": flags,
+                    "date": date,
+                    "at": when(date),
+                    "message_id": message_ids.get(key),
+                    "tags": tags_by_id.get(message_ids.get(key), set())})
+    return out, None
+
+
+def fetch_inbox(names, box, per, unseen, hours=None, cutoff=None, box_for=None):
+    """One pass across every account: headers, an address to print per
+    account, and anything that went wrong. Shared by `inbox` (one shot)
+    and `watch` (the same thing on a timer).
+
+    `box_for`, when given, is called with each account name and must return
+    the mailbox to open for that account, overriding `box` -- for a mailbox
+    whose real name is not one fixed string across every server, like
+    Spam."""
+    # The account key ("gmail") stops being unique once a second Gmail
+    # address is configured; the address itself is what actually tells
+    # two accounts apart, so that is what gets printed and counted.
+    addr = {n: accounts().get(n, {}).get("user", n) for n in names}
+    if cutoff is None and hours:
+        cutoff = (datetime.datetime.now(datetime.timezone.utc)
+                  - datetime.timedelta(hours=hours))
+    items, trouble = [], []
+    for name in names:
+        this_box = box_for(name) if box_for else box
+        got, err = gather(name, this_box, per, unseen,
+                          since_token(cutoff) if cutoff else None)
+        for item in got:
+            item["box"] = this_box
+        items.extend(got)
+        if err:
+            trouble.append(err)
+    if cutoff:
+        # A message whose Date header will not parse cannot be shown to be
+        # inside the window, so it is left out and counted rather than
+        # quietly treated as recent.
+        undated = len([i for i in items if not i["at"]])
+        items = [i for i in items if i["at"] and i["at"] >= cutoff]
+        if undated:
+            trouble.append("%d message(s) without a usable date were left out "
+                           "of the window" % undated)
+    # Undated mail sorts oldest rather than jumping to the top of his day.
+    floor = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+    items.sort(key=lambda i: i["at"] or floor, reverse=True)
+    assign_message_numbers(items)
+    return items, addr, trouble
+
+
+def fetch_sender(names, box, addr, per=1000):
+    """Every message from one sender, asked of each server directly.
+
+    Unlike fetch_inbox this does not page back through recent headers: each
+    account runs an IMAP SEARCH FROM, so how old the mail is does not matter.
+    The server matches FROM as a substring of the whole header, so the bare
+    address is checked again here -- "hello@e.stessa.com" must not drag in
+    "not-hello@e.stessa.com.example".
+    """
+    addr = (addr or "").lower()
+    addr_map = {n: accounts().get(n, {}).get("user", n) for n in names}
+    items, trouble = [], []
+    for name in names:
+        got, err = gather(name, box, per, False, frm=addr)
+        for item in got:
+            item["box"] = box
+        items.extend(got)
+        if err:
+            trouble.append(err)
+    items = [it for it in items if sender_addr(it.get("from")) == addr]
+    floor = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+    items.sort(key=lambda i: i["at"] or floor, reverse=True)
+    assign_message_numbers(items)
+    return items, addr_map, trouble
+
+
+def render_inbox(items, names, addr, n, trouble=(), new_keys=frozenset(),
+                 hours=None, period_label=None):
+    """Print the numbered table. `new_keys` is (account, uid) pairs that
+    were not on screen the previous pass, from `watch`; they print in
+    green with a NEW tag so a just-arrived message stands out from the
+    ordinary backlog of unread mail."""
+    shown = items[:n]
+
+    width = shutil.get_terminal_size((100, 24)).columns
+    numbers = [it.get("message_no", idx)
+               for idx, it in enumerate(shown, 1)]
+    num_w = max([len(str(number)) for number in numbers] + [2])
+    recipients = [display_recipient(it.get("to"), addr[it["account"]])
+                  for it in shown]
+    acct_w = max([len(recipient) for recipient in recipients] + [4])
+    from_w = 40
+    date_w = 12
+    # 6 single spaces between the seven columns, plus the status icons. The
+    # UID still rides along on each item for read/trash/move/etc; it is
+    # just not printed here, since the row number is what Tom points at.
+    subj_w = max(20, width - (6 + num_w + acct_w + from_w + date_w + 6))
+
+    # The message number is assigned from the local registry and does not
+    # change when a different account, category, or time frame is selected.
+    for idx, it in enumerate(shown, 1):
+        line = "%s %s %s %s %s %s" % (
+            cell(status_icons(it["flags"], it.get("tags", set())), 6),
+            cell(str(it.get("message_no", idx)), num_w, right=True),
+            cell(display_recipient(it.get("to"), addr[it["account"]]), acct_w),
+            cell(display_sender(it["from"]), from_w),
+            cell(oneline(it["subject"]) or "(no subject)", subj_w),
+            it["at"].astimezone().strftime("%b %d %H:%M") if it["at"]
+            else "no date")
+        if "\\Seen" not in it["flags"] and sys.stdout.isatty():
+            line = "\033[2m%s\033[0m" % line
+        if (it["account"], it["uid"]) in new_keys:
+            line = "\x1b[1;32m%s  NEW\x1b[0m" % line
+        print(line)
+
+    unseen = len([i for i in items if "\\Seen" not in i["flags"]])
+    per = ", ".join("%s %d" % (addr[nm], len([i for i in items if i["account"] == nm]))
+                    for nm in names)
+    print()
+    period = period_label or ("last %d hours" % hours if hours else None)
+    if period and not shown:
+        sentence_period = ("the " + period if period.startswith("last ")
+                           else period)
+        print("Nothing received in %s." % sentence_period)
+    print("%s%d shown of %d fetched (%s) · %d unread · unread lighter, 🚩 flagged, 💵 lead, ★ starred"
+          % ("%s · " % period if period else "",
+             len(shown), len(items), per, unseen))
+    if len(items) > len(shown):
+        print("More waiting: raise -n to see further back.")
+    for line in trouble:
+        print("! " + line)
+
+
+def cmd_inbox(args):
+    interactive = (not args.no_interactive and sys.stdin.isatty()
+                   and sys.stdout.isatty())
+    if args.account:
+        names = []
+        for value in args.account:
+            try:
+                name = resolve_account(value)
+            except ValueError as exc:
+                sys.exit(str(exc))
+            if name not in names:
+                names.append(name)
+    elif interactive:
+        names = choose_ls_scope(None)
+        if names is None:
+            return
+    else:
+        names = list(accounts())
+
+    period_label = None
+    cutoff = None
+    if args.hours is None and interactive:
+        timeframe = choose_ls_option("Choose time frame:", LS_TIMEFRAMES,
+                                     "Time frame")
+        if timeframe is None:
+            return
+        cutoff = ls_cutoff(timeframe)
+        period_label = dict(LS_TIMEFRAMES)[timeframe].lower()
+    items, addr, trouble = fetch_inbox(names, args.box, args.per, args.unseen,
+                                       args.hours, cutoff=cutoff)
+    if args.unsubscribed:
+        items = filter_unsubbed(items)
+    render_inbox(items, names, addr, args.n, trouble, hours=args.hours,
+                 period_label=period_label)
+
+
+def cmd_spam(args):
+    """`mail inbox`'s shortcut for Spam: each account calls the folder
+    something different (Zoho plainly "Spam", Gmail "[Gmail]/Spam" when it
+    is exposed at all), so the real name is discovered per account instead
+    of taking a `-b` box argument.
+
+    With message numbers and --block this becomes the report path:
+    `mail spam n1,n2,n7-10,n12 --block` marks the messages as spam, fires
+    their List-Unsubscribe links, and sweeps their senders into Spam."""
+    if getattr(args, "numbers", None) or getattr(args, "block", False):
+        if not getattr(args, "block", False):
+            sys.exit("mail spam lists until --block arrives: mail spam %s "
+                     "--block" % args.numbers)
+        if not args.numbers:
+            sys.exit("mail spam --block needs message numbers, e.g. "
+                     "mail spam n1,n2 --block")
+        return cmd_spam_block(args)
+    interactive = (not args.no_interactive and sys.stdin.isatty()
+                   and sys.stdout.isatty())
+    if args.account:
+        names = []
+        for value in args.account:
+            try:
+                name = resolve_account(value)
+            except ValueError as exc:
+                sys.exit(str(exc))
+            if name not in names:
+                names.append(name)
+    elif interactive:
+        names = choose_ls_scope(None)
+        if names is None:
+            return
+    else:
+        names = list(accounts())
+
+    boxes, trouble = {}, []
+    for name in names:
+        acct = accounts()[name]
+        try:
+            conn, _ = connect(name)
+        except Exception as exc:
+            trouble.append("%s: cannot sign in (%s)" % (name, str(exc)[:80]))
+            continue
+        try:
+            found = find_spam(conn, acct.get("spam"))
+        finally:
+            conn.logout()
+        if found:
+            boxes[name] = found
+        else:
+            trouble.append("%s: no Spam folder is visible over IMAP.%s"
+                           % (name, spam_hint(acct)))
+
+    period_label = None
+    cutoff = None
+    if args.hours is None and interactive:
+        timeframe = choose_ls_option("Choose time frame:", LS_TIMEFRAMES,
+                                     "Time frame")
+        if timeframe is None:
+            return
+        cutoff = ls_cutoff(timeframe)
+        period_label = dict(LS_TIMEFRAMES)[timeframe].lower()
+
+    found_names = [name for name in names if name in boxes]
+    items, addr, fetch_trouble = fetch_inbox(
+        found_names, None, args.per, args.unseen, args.hours, cutoff=cutoff,
+        box_for=boxes.get)
+    render_inbox(items, found_names, addr, args.n, trouble + fetch_trouble,
+                hours=args.hours, period_label=period_label)
+
+
+def move_uids_to_spam(tagged):
+    """MOVE (label, account, source box, uid, subject) rows to Spam.
+
+    Every (account, source box) is opened and proven MOVE-capable with a
+    really visible Spam folder before anything moves, so a login,
+    capability, or missing-Spam failure cannot leave a half-applied bulk
+    report. Rows already sitting in the destination Spam are skipped, not
+    moved. A move into Spam is also the report itself: Gmail and Zoho
+    both train their own spam filters off what lands there.
+
+    Per-UID failures are reported and counted rather than raised, so one
+    stale row does not strand the rest. Returns (moved, skipped, failed).
+    """
+    openers, dests = {}, {}
+    try:
+        for _, account, srcbox, _, _ in tagged:
+            if (account, srcbox) in openers:
+                continue
+            conn, acct = connect(account)
+            typ, data = conn.select(quote(srcbox), readonly=False)
+            if typ != "OK":
+                conn.logout()
+                raise RuntimeError("cannot open %s: %s" % (srcbox, data))
+            if "MOVE" not in caps(conn):
+                conn.logout()
+                raise RuntimeError(
+                    "%s: server does not support MOVE; refusing copy+expunge here"
+                    % account)
+            dest = find_spam(conn, acct.get("spam"))
+            if not dest:
+                conn.logout()
+                raise RuntimeError(
+                    "%s: no Spam folder is visible over IMAP (configured "
+                    "%r is not there), so nothing was moved.%s"
+                    % (account, acct.get("spam"), spam_hint(acct)))
+            openers[(account, srcbox)] = conn
+            dests[(account, srcbox)] = dest
+        moved = skipped = failed = 0
+        for label, account, srcbox, uid, subject in tagged:
+            conn, dest = openers[(account, srcbox)], dests[(account, srcbox)]
+            if srcbox == dest:
+                print("%s already in %s; skipped: %s"
+                      % (label, dest, subject or "(no subject)"))
+                skipped += 1
+                continue
+            typ, data = conn.uid("MOVE", uid, quote(dest))
+            if typ != "OK":
+                print("! move failed for %s: %s" % (label, data))
+                failed += 1
+                continue
+            print("marked spam %s -> %s: %s"
+                  % (label, dest, subject or "(no subject)"))
+            moved += 1
+        return moved, skipped, failed
+    finally:
+        for conn in openers.values():
+            try:
+                conn.logout()
+            except Exception:
+                pass
+
+
+def cmd_spam_block(args):
+    """Report numbered messages as spam, unsubscribe, and sweep the sender.
+
+    `mail spam n1,n2,n7-10,n12 --block`: every named message moves to its
+    account's Spam folder, each message's List-Unsubscribe link fires when
+    it carries one, and then every message from those senders is swept out
+    of INBOX into Spam too. Messages sharing one unsubscribe link fire it
+    only once. Inspection comes first and nothing fires before the split
+    is shown; per-message failures are reported and counted, and the
+    command exits nonzero when anything did not go through.
+    """
+    try:
+        wanted = parse_row_numbers(args.numbers)
+    except ValueError as exc:
+        sys.exit(str(exc))
+    entries, _ = registry_entries(wanted)
+    missing = [number for number in wanted if number not in entries]
+    if missing:
+        sys.exit("message number %s is unknown; list it first with "
+                 "mail inbox or mail ls" % ",".join(str(n) for n in missing))
+    good, bad = [], []
+    for number in wanted:
+        try:
+            addr, name, subject, url, one_click = unsub_target(number, entries)
+        except SystemExit as exc:
+            bad.append((number, "", str(exc)))
+            continue
+        if url:
+            good.append((number, addr, name, subject, url, one_click))
+        else:
+            bad.append((number, addr,
+                        "no https List-Unsubscribe link on this message; "
+                        "reporting as spam anyway"))
+    groups = {}
+    for entry in good:
+        groups.setdefault((entry[4], entry[5]), []).append(entry)
+    if good:
+        print("unsubscribing %s:"
+              % ",".join(str(number) for number, *_ in good))
+        for number, addr, name, subject, url, one_click in good:
+            print("message %d: %s" % (number, subject))
+        for (url, one_click), members in groups.items():
+            print("method for %s: %s %s" % (
+                ",".join(str(number) for number, *_ in members),
+                "POST (one-click)" if one_click else "GET", url))
+    failures = []
+    addrs = []
+    for (url, one_click), members in groups.items():
+        numbers = [number for number, *_ in members]
+        try:
+            result = do_unsubscribe(url, one_click)
+        except SystemExit as exc:
+            failures.extend(numbers)
+            print("! unsub failed for %s: %s"
+                  % (",".join(str(n) for n in numbers), exc))
+            continue
+        print(result)
+        latest = {}
+        for _, addr, name, subject, _, _ in members:
+            if addr:
+                latest[addr] = (name, subject)
+        for addr, (name, subject) in latest.items():
+            record_unsub(addr, name, subject, url, one_click, result)
+            if addr not in addrs:
+                addrs.append(addr)
+    if bad:
+        print("cannot unsubscribe %s:"
+              % ",".join(str(number) for number, _, _ in bad))
+        for number, addr, err in bad:
+            print("message %d: %s" % (number, err))
+            if addr and addr not in addrs:
+                addrs.append(addr)
+    tagged = []
+    for number in wanted:
+        _, entry = entries[number]
+        account, uid = entry.get("account"), entry.get("uid")
+        if not account or not uid:
+            print("! message %d has no account/uid on record; skipped"
+                  % number)
+            failures.append(number)
+            continue
+        tagged.append(("message %d" % number, account,
+                       entry.get("box") or "INBOX", uid,
+                       entry.get("subject")))
+    try:
+        _, _, failed = move_uids_to_spam(tagged)
+    except RuntimeError as exc:
+        sys.exit(str(exc))
+    if failed:
+        failures.append("spam-move")
+    for addr in addrs:
+        items, _, trouble = fetch_sender(list(accounts()), "INBOX", addr)
+        for line in trouble:
+            print("! " + line)
+        if not items:
+            print("no mail from %s in INBOX" % addr)
+            continue
+        print("sweeping %d message(s) from %s to Spam:" % (len(items), addr))
+        swept = [("message %d" % it.get("message_no", 0), it["account"],
+                  it.get("box") or "INBOX", it["uid"],
+                  it.get("subject")) for it in items]
+        try:
+            _, _, sweep_failed = move_uids_to_spam(swept)
+        except RuntimeError as exc:
+            print("! sweep failed for %s: %s" % (addr, exc))
+            failures.append("sweep:%s" % addr)
+            continue
+        if sweep_failed:
+            failures.append("sweep:%s" % addr)
+        print("future mail from %s: the Spam-folder reports train "
+              "Gmail/Zoho's own filters, so most of what comes next "
+              "should land in Spam on its own. No server-side "
+              "always-spam rule exists over IMAP, so this is a strong "
+              "signal, not a guarantee." % addr)
+    if failures:
+        sys.exit("spam block incomplete for %s"
+                 % ",".join(str(f) for f in failures))
+
+
+def parse_row_numbers(value):
+    """Parse the row numbers printed by `mail inbox`.
+
+    Comma-separated numbers, with `189-202` ranges allowed: each range
+    expands to its full inclusive span, in order, duplicates dropped. A
+    leading `n` on any part is ignored, so `n1,n2,n7-10` works as written."""
+    hint = "rows must be positive numbers like 1,4 or ranges like 189-202"
+    rows = []
+
+    def take(number):
+        if number not in rows:
+            rows.append(number)
+
+    for part in str(value).split(","):
+        part = part.strip()
+        if part[:1] in ("n", "N"):
+            part = part[1:].strip()
+        if "-" in part:
+            bounds = [b.strip() for b in part.split("-")]
+            if len(bounds) != 2 or not all(b.isdigit() for b in bounds):
+                raise ValueError(hint)
+            start, end = int(bounds[0]), int(bounds[1])
+            if start < 1 or end < 1:
+                raise ValueError(hint)
+            if start > end:
+                raise ValueError("range %s runs backwards; write it %d-%d"
+                                 % (part, end, start))
+            for number in range(start, end + 1):
+                take(number)
+        else:
+            if not part or not part.isdigit() or int(part) < 1:
+                raise ValueError(hint)
+            take(int(part))
+    if not rows:
+        raise ValueError("at least one row is required")
+    return rows
+
+
+def set_uid_star(conn, uid, starred):
+    """Set and verify one already-selected mailbox UID's star state."""
+    op = "+FLAGS.SILENT" if starred else "-FLAGS.SILENT"
+    typ, data = conn.uid("STORE", uid, op, "(\\Flagged)")
+    if typ != "OK":
+        raise RuntimeError("STORE failed: %s" % data)
+    rows = fetch_headers(conn, [str(uid).encode()])
+    flags = rows.get(str(uid), ("", "", "", "", ""))[-1]
+    if ("\\Flagged" in flags) != starred:
+        raise RuntimeError("server returned the wrong star state")
+
+
+def cmd_row_flag(args):
+    """Star or unstar persistent message numbers."""
+    try:
+        wanted = parse_row_numbers(args.rows)
+    except ValueError as exc:
+        sys.exit(str(exc))
+    names = [resolve_account(value) for value in (args.account or list(accounts()))]
+    items, addr, trouble = fetch_inbox(names, args.box, args.per, args.unseen,
+                                       args.hours)
+    if trouble:
+        for line in trouble:
+            print("! " + line, file=sys.stderr)
+        sys.exit("refusing to change rows while the inbox is incomplete")
+    by_number = {item["message_no"]: item for item in items}
+    missing = [number for number in wanted if number not in by_number]
+    if missing:
+        sys.exit("message number %s is not in this inbox fetch; raise --per"
+                 % ",".join(str(number) for number in missing))
+
+    selected = [(number, by_number[number]) for number in wanted]
+    connections = {}
+    try:
+        # Open every needed account before changing any message. A login or
+        # mailbox failure must not leave a half-applied multi-row command.
+        for _, item in selected:
+            name = item["account"]
+            if name in connections:
+                continue
+            conn, _ = connect(name)
+            typ, data = conn.select(quote(args.box), readonly=False)
+            if typ != "OK":
+                conn.logout()
+                raise RuntimeError("cannot open %s: %s" % (args.box, data))
+            connections[name] = conn
+
+        for number, item in selected:
+            set_uid_star(connections[item["account"]], item["uid"],
+                         args.command == "star")
+            verb = "starred" if args.command == "star" else "unstarred"
+            print("%s message %d: %s" % (
+                verb, number, oneline(item.get("subject")) or "(no subject)"))
+    except Exception as exc:
+        sys.exit(str(exc))
+    finally:
+        for conn in connections.values():
+            try:
+                conn.logout()
+            except Exception:
+                pass
+
+
+def cmd_row_tag(args):
+    """Add or remove a local tag from persistent message numbers."""
+    try:
+        wanted = parse_row_numbers(args.rows)
+    except ValueError as exc:
+        sys.exit(str(exc))
+    names = [resolve_account(value) for value in (args.account or list(accounts()))]
+    items, _, trouble = fetch_inbox(names, args.box, args.per, args.unseen,
+                                    getattr(args, "hours", None))
+    for line in trouble:
+        print("! " + line, file=sys.stderr)
+    by_number = {item["message_no"]: item for item in items}
+    entries, _ = registry_entries(wanted)
+    missing = [number for number in wanted
+               if number not in by_number and number not in entries]
+    if missing:
+        sys.exit("message number %s is unknown; list it first with mail inbox or mail ls"
+                 % ",".join(str(number) for number in missing))
+
+    enabled = args.command == "lead"
+    registry = set_registry_tag(wanted, "lead", enabled)
+    verb = "lead" if enabled else "unlead"
+    for number in wanted:
+        item = by_number.get(number)
+        _, entry = registry[number]
+        subject = (item.get("subject") if item else entry.get("subject"))
+        print("%s message %d: %s" %
+              (verb, number, oneline(subject) or "(no subject)"))
+        if not mirror_notmuch_tag(entry, "lead", enabled):
+            print("! notmuch did not update message %d; local lead state is saved"
+                  % number, file=sys.stderr)
+
+
+LIST_ROW = re.compile(
+    r'^\((?P<attrs>[^)]*)\)\s+(?:"(?:[^"\\]|\\.)*"|NIL)\s+(?P<name>.+)$')
+
+
+def parse_mailbox_row(row):
+    """(lowercased attribute blob, mailbox name) out of one LIST row."""
+    text = row.decode("utf-8", "replace") if isinstance(row, bytes) else str(row)
+    match = LIST_ROW.match(text.strip())
+    if not match:
+        return "", ""
+    name = match.group("name").strip()
+    if len(name) > 1 and name.startswith('"') and name.endswith('"'):
+        name = name[1:-1].replace('\\"', '"').replace("\\\\", "\\")
+    return match.group("attrs").lower(), name
+
+
+def mailbox_rows(conn):
+    """Raw LIST rows, with special-use flags where the server offers them.
+
+    RETURN (SPECIAL-USE) is an extension; a server that does not advertise
+    or understand it gets a plain LIST instead, and the rows come back in
+    the same shape either way."""
+    if "SPECIAL-USE" in caps(conn):
+        try:
+            conn._simple_command("LIST", '""', '"*"', "RETURN (SPECIAL-USE)")
+            typ, data = conn._untagged_response("OK", [None], "LIST")
+            if typ == "OK" and data:
+                return [row for row in data if row]
+        except Exception:
+            pass  # fall through to the plain LIST below
+    try:
+        typ, data = conn.list()
+    except Exception:
+        return []
+    return [row for row in (data or []) if row] if typ == "OK" else []
+
+
+def trash_hint(acct):
+    """Gmail hides its system folders from IMAP per-account, and that is
+    the one cause of a missing Trash a person can actually fix."""
+    if "gmail" in (acct.get("host") or "").lower():
+        return (" In Gmail: Settings -> See all settings -> Labels -> "
+                "Trash -> tick Show in IMAP.")
+    return ""
+
+
+def find_trash(conn, configured):
+    """The account's Trash: what the server itself flags, else the
+    configured name, else None if neither is really there.
+
+    Checking beats trusting the config. Gmail can be set to hide
+    [Gmail]/Trash from IMAP entirely, and then there is no trash to move
+    to -- which must be found before a bulk delete starts, not halfway
+    through it."""
+    names, flagged = set(), None
+    for row in mailbox_rows(conn):
+        attrs, name = parse_mailbox_row(row)
+        if not name:
+            continue
+        names.add(name)
+        if flagged is None and "\\trash" in attrs:
+            flagged = name
+    if flagged:
+        return flagged
+    if configured and configured in names:
+        return configured
+    return None
+
+
+def spam_hint(acct):
+    """Same shape as trash_hint: Gmail can hide Spam from IMAP the same way
+    it hides Trash, behind its own per-label Show in IMAP setting."""
+    if "gmail" in (acct.get("host") or "").lower():
+        return (" In Gmail: Settings -> See all settings -> Labels -> "
+                "Spam -> tick Show in IMAP.")
+    return ""
+
+
+def find_spam(conn, configured):
+    """The account's Spam: what the server flags \\Junk, else a mailbox
+    plainly named Spam or Junk, else the configured name, else None.
+
+    Same trust rule as find_trash -- the mailbox must really be listed.
+    Gmail does not expose its Spam over IMAP here at all, so for that
+    account this is honestly None and the period view says so."""
+    names, flagged, plain = set(), None, None
+    for row in mailbox_rows(conn):
+        attrs, name = parse_mailbox_row(row)
+        if not name:
+            continue
+        names.add(name)
+        if flagged is None and "\\junk" in attrs:
+            flagged = name
+        if plain is None and name.lower() in ("spam", "junk"):
+            plain = name
+    if flagged:
+        return flagged
+    if plain:
+        return plain
+    if configured and configured in names:
+        return configured
+    return None
+
+
+def find_archive(conn, configured):
+    """The account's Archive: what the server flags \\Archive, else a
+    mailbox plainly named Archive, else the configured name, else None.
+
+    Same trust rule as find_trash -- the mailbox must really be listed.
+    Gmail's Archive here is a plain user mailbox, Zoho's likewise; neither
+    carries the special-use flag, so the name match matters."""
+    names, flagged, plain = set(), None, None
+    for row in mailbox_rows(conn):
+        attrs, name = parse_mailbox_row(row)
+        if not name:
+            continue
+        names.add(name)
+        if flagged is None and "\\archive" in attrs:
+            flagged = name
+        if plain is None and name.lower() == "archive":
+            plain = name
+    if flagged:
+        return flagged
+    if plain:
+        return plain
+    if configured and configured in names:
+        return configured
+    return None
+
+
+def purge_items(selected, box="INBOX"):
+    """Move already-fetched messages to each account's Trash.
+
+    Takes (number, item) pairs the caller has already listed, so an
+    interactive delete acts on exactly the rows on screen instead of
+    re-fetching and inheriting whatever window that fetch had.
+
+    Every account is opened and confirmed MOVE-capable before anything
+    moves: a login or capability failure must not leave a half-applied
+    bulk delete. Raises rather than exiting, so a caller still inside a
+    prompt loop can report the failure and carry on.
+    """
+    connections, trash_box = {}, {}
+    try:
+        for _, item in selected:
+            name = item["account"]
+            where = item.get("box") or box
+            if (name, where) in connections:
+                continue
+            conn, acct = connect(name)
+            typ, data = conn.select(quote(where), readonly=False)
+            if typ != "OK":
+                conn.logout()
+                raise RuntimeError("cannot open %s: %s" % (where, data))
+            if "MOVE" not in caps(conn):
+                conn.logout()
+                raise RuntimeError(
+                    "%s: server does not support MOVE; refusing copy+expunge here" % name)
+            dest = find_trash(conn, acct.get("trash"))
+            if not dest:
+                conn.logout()
+                raise RuntimeError(
+                    "%s: no Trash folder is visible over IMAP (configured "
+                    "%r is not there), so nothing was deleted.%s"
+                    % (name, acct.get("trash"), trash_hint(acct)))
+            connections[(name, where)] = conn
+            trash_box[name] = dest
+
+        for number, item in selected:
+            key = (item["account"], item.get("box") or box)
+            conn, dest = connections[key], trash_box[item["account"]]
+            typ, data = conn.uid("MOVE", item["uid"], quote(dest))
+            if typ != "OK":
+                raise RuntimeError("move failed for message %d: %s" % (number, data))
+            print("purged message %d -> %s: %s" % (
+                number, dest, oneline(item.get("subject")) or "(no subject)"))
+    finally:
+        for conn in connections.values():
+            try:
+                conn.logout()
+            except Exception:
+                pass
+
+
+def cmd_purge(args):
+    """Move persistent message numbers straight to each account's Trash, in
+    bulk -- the mass-delete side of mail unsub/unsubs: find the rows with
+    --unsubscribed, then purge them."""
+    try:
+        wanted = parse_row_numbers(args.rows)
+    except ValueError as exc:
+        sys.exit(str(exc))
+    names = [resolve_account(value) for value in (args.account or list(accounts()))]
+    items, _, trouble = fetch_inbox(names, args.box, args.per, args.unseen,
+                                    args.hours)
+    if trouble:
+        for line in trouble:
+            print("! " + line, file=sys.stderr)
+        sys.exit("refusing to purge rows while the inbox is incomplete")
+    by_number = {item["message_no"]: item for item in items}
+    missing = [number for number in wanted if number not in by_number]
+    if missing:
+        sys.exit("message number %s is not in this inbox fetch; raise --per"
+                 % ",".join(str(number) for number in missing))
+
+    selected = [(number, by_number[number]) for number in wanted]
+    try:
+        purge_items(selected, args.box)
+    except Exception as exc:
+        sys.exit(str(exc))
+
+
+def watch_row_limit(requested):
+    """Keep the newest row on screen in the alternate-screen watcher.
+
+    Six lines are reserved for the blank line, totals, overflow note,
+    another blank line, refresh status, and the final newline below it.
+    """
+    lines = shutil.get_terminal_size((100, 24)).lines
+    return max(1, min(requested, lines - 6))
+
+
+def cmd_watch(args):
+    """Redraw the inbox every --interval seconds until Ctrl-C. A message
+    that was not on screen last pass is marked NEW, which is what makes
+    this useful for triage: 80 unread is a backlog, but one green NEW row
+    is something that just landed."""
+    names = args.account or list(accounts())
+    seen = None  # None on the first pass: nothing is "new" against nothing
+
+    # SIGTERM (a plain `kill`, not Ctrl-C) skips Python's exception
+    # handling by default and would leave the pane stuck on the
+    # alternate screen. Route it through the same KeyboardInterrupt
+    # path Ctrl-C already takes, so either way the real screen comes back.
+    def _stop(signum, frame):
+        raise KeyboardInterrupt
+    old_term = signal.signal(signal.SIGTERM, _stop)
+
+    sys.stdout.write("\x1b[?1049h")  # alternate screen; restored on exit,
+    try:                             # so quitting leaves no mess behind
+        while True:
+            items, addr, trouble = fetch_inbox(
+                names, args.box, args.per, args.unseen, args.hours)
+            keys = {(i["account"], i["uid"]) for i in items}
+            new_keys = set() if seen is None else keys - seen
+            sys.stdout.write("\x1b[2J\x1b[H")
+            render_inbox(items, names, addr, watch_row_limit(args.n),
+                         trouble, new_keys, hours=args.hours)
+            stamp = datetime.datetime.now().strftime("%H:%M:%S")
+            print("\nlast refreshed %s · every %ds · Ctrl-C to stop"
+                  % (stamp, args.interval))
+            if new_keys:
+                sys.stdout.write("\a")  # bell: something just arrived
+            sys.stdout.flush()
+            seen = keys
+            time.sleep(args.interval)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        signal.signal(signal.SIGTERM, old_term)
+        sys.stdout.write("\x1b[?1049l")
+        sys.stdout.flush()
+
+
+def cmd_search(args):
+    conn, acct = connect(args.account)
+    select(conn, args.box)
+    if "X-GM-EXT-1" in caps(conn):
+        typ, data = conn.uid("SEARCH", "X-GM-RAW", '"%s"' % args.query)
+    else:
+        typ, data = conn.uid("SEARCH", None, "TEXT", '"%s"' % args.query)
+    if typ != "OK":
+        sys.exit("search failed: %s" % data)
+    uids = data[0].split()[-args.n:]
+    if not uids:
+        print("(no matches)")
+        conn.logout()
+        return
+    rows = fetch_headers(conn, uids)
+    for uid in reversed(uids):
+        key = uid.decode()
+        if key in rows:
+            show(key, rows[key])
+    conn.logout()
+
+
+def cmd_read(args):
+    """Print one message: headers, attachments, body text.
+
+    Takes a persistent message number from mail inbox/ls, or the old
+    account-plus-UID form."""
+    box = args.box
+    if args.uid is None:
+        if not str(args.target).isdigit():
+            sys.exit("mail read takes a message number, "
+                     "or an account plus UID")
+        number = int(args.target)
+        entries, _ = registry_entries([number])
+        if number not in entries:
+            sys.exit("message number %d is unknown; list it first with "
+                     "mail inbox or mail ls" % number)
+        _, entry = entries[number]
+        account, uid = entry.get("account"), entry.get("uid")
+        box = entry.get("box") or args.box
+        if not account or not uid:
+            sys.exit("message number %d has no account/uid on record"
+                     % number)
+    else:
+        account, uid = args.target, args.uid
+    conn, _ = connect(account)
+    select(conn, box, readonly=not args.mark)
+    typ, data = conn.uid("FETCH", uid, "(BODY%s[])" % ("" if args.mark else ".PEEK"))
+    if typ != "OK" or not data or not isinstance(data[0], tuple):
+        sys.exit("no such message: uid %s in %s" % (uid, box))
+    msg = email.message_from_bytes(data[0][1])
+    for field in ("From", "To", "Cc", "Date", "Subject", "Reply-To"):
+        if msg.get(field):
+            print("%-9s %s" % (field + ":", hdr(msg.get(field))))
+    files = attachments(msg)
+    if files:
+        print("%-9s %s" % ("Files:", ", ".join(f for f in files if f)))
+    print("-" * 72)
+    print(body_text(msg, args.limit))
+    conn.logout()
+
+
+UNSUB_HTTP = re.compile(r"<(https://[^<>\s]+)>", re.IGNORECASE)
+
+
+def parse_unsub(msg):
+    """(https url or None, one-click bool) from List-Unsubscribe headers.
+
+    Only https is trusted. Plain http and mailto targets come back as
+    (None, False) -- same policy as the notmuch-side mover in app/server.py,
+    so a message with no safe web link just gets reported as such."""
+    urls = UNSUB_HTTP.findall(msg.get("List-Unsubscribe") or "")
+    post = (msg.get("List-Unsubscribe-Post") or "").lower()
+    one_click = "list-unsubscribe=one-click" in post
+    return (urls[0] if urls else None, one_click)
+
+
+def do_unsubscribe(url, one_click, timeout=20):
+    """Fire a list's own unsubscribe endpoint. Returns a report line."""
+    if urlparse(url).scheme != "https":
+        sys.exit("refusing a non-https unsubscribe link")
+    if one_click:
+        req = urllib.request.Request(
+            url, data=b"List-Unsubscribe=One-Click", method="POST",
+            headers={"User-Agent": "mail/1.0",
+                     "Content-Type": "application/x-www-form-urlencoded"})
+    else:
+        req = urllib.request.Request(url, headers={"User-Agent": "mail/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            code = resp.status
+    except urllib.error.HTTPError as exc:
+        sys.exit("unsubscribe answered %d" % exc.code)
+    except urllib.error.URLError as exc:
+        sys.exit("unsubscribe did not go through: %s" % exc)
+    if one_click and code not in (200, 201, 202, 204):
+        sys.exit("unsubscribe answered %d" % code)
+    return ("unsubscribed -- no more from this list" if one_click
+            else "opened the list's unsubscribe link (answered %d)" % code)
+
+
+def load_unsub_log():
+    try:
+        with open(UNSUB_LOG) as fh:
+            log = json.load(fh)
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return {}
+    return log if isinstance(log, dict) else {}
+
+
+def save_unsub_log(log):
+    directory = os.path.dirname(UNSUB_LOG)
+    os.makedirs(directory, exist_ok=True)
+    fd, path = tempfile.mkstemp(prefix="unsubscribed-", dir=directory, text=True)
+    try:
+        with os.fdopen(fd, "w") as fh:
+            json.dump(log, fh, indent=2, sort_keys=True)
+            fh.write("\n")
+        os.chmod(path, 0o600)
+        os.replace(path, UNSUB_LOG)
+    finally:
+        if os.path.exists(path):
+            os.unlink(path)
+
+
+def record_unsub(addr, name, subject, url, one_click, result):
+    """Remember that we tried to leave this sender's list, so a new message
+    from the same address later can be checked against this log instead of
+    repeating the work blind."""
+    if not addr:
+        return
+    log = load_unsub_log()
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+    entry = log.get(addr) or {"first_at": now, "count": 0}
+    entry["name"] = name or entry.get("name") or ""
+    entry["last_at"] = now
+    entry["count"] = entry.get("count", 0) + 1
+    entry["last_subject"] = subject or ""
+    entry["last_url"] = url
+    entry["one_click"] = one_click
+    entry["last_result"] = result
+    log[addr] = entry
+    save_unsub_log(log)
+
+
+def offer_sender_cleanup(addr, no_prompt):
+    """After a successful unsub, offer the sender's whole history.
+
+    Saying yes lists every message from that address in every account, at
+    any age, and then hands over: read one, delete some, delete all, or
+    keep the lot. Nothing is touched until a delete is actually chosen.
+    """
+    if no_prompt or not addr:
+        return
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        return
+    try:
+        answer = input(
+            "List all mail from %s? [y/N]: " % addr).strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return
+    if answer not in ("y", "yes"):
+        return
+    sender_cleanup_loop(addr)
+
+
+CLEANUP_MENU = (
+    "\n  r N     read message N",
+    "  N,N     delete those rows",
+    "  all     delete all %d",
+    "  q       keep them and quit",
+)
+
+
+def sender_cleanup_loop(addr, box="INBOX"):
+    """List everything from one sender and act on it until Tom quits.
+
+    The list is fetched once, by server-side search, and then kept in
+    step with what has been deleted -- so the numbers on screen stay the
+    numbers that work, and a delete never silently re-scopes itself.
+    """
+    names = list(accounts())
+    items, addr_map, trouble = fetch_sender(names, box, addr)
+    for line in trouble:
+        print("! " + line)
+    if trouble:
+        print("! some accounts did not answer; the list below may be short")
+    if not items:
+        print("no mail from %s in %s" % (addr, box))
+        return
+    misses = 0
+
+    def invalid(message):
+        """One unusable answer: say so, and give up after enough in a row."""
+        nonlocal misses
+        print(message)
+        misses += 1
+        if misses >= MAX_PROMPT_ATTEMPTS:
+            print("too many invalid choices; kept %d message(s) from %s"
+                  % (len(items), addr))
+            return True
+        return False
+
+    while items:
+        render_inbox(items, names, addr_map, len(items))
+        for line in CLEANUP_MENU:
+            print(line % len(items) if "%d" in line else line)
+        try:
+            choice = input("Action: ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return
+        if choice in ("", "q", "quit", "n", "no"):
+            print("kept %d message(s) from %s" % (len(items), addr))
+            return
+        by_number = {it["message_no"]: it for it in items}
+        if choice.startswith("r"):
+            rest = choice[1:].strip()
+            if not rest.isdigit():
+                if invalid("read takes one message number, like: r %d"
+                           % items[0]["message_no"]):
+                    return
+                continue
+            number = int(rest)
+            if number not in by_number:
+                if invalid("message %d is not in this list" % number):
+                    return
+                continue
+            cmd_read(argparse.Namespace(target=str(number), uid=None,
+                                        box=box, limit=4000, mark=False))
+            misses = 0
+            continue
+        if choice == "all":
+            wanted = [it["message_no"] for it in items]
+        else:
+            try:
+                wanted = parse_row_numbers(choice)
+            except ValueError as exc:
+                if invalid(exc):
+                    return
+                continue
+            unknown = [n for n in wanted if n not in by_number]
+            if unknown:
+                if invalid("not in this list: %s"
+                           % ",".join(str(n) for n in unknown)):
+                    return
+                continue
+        misses = 0
+        try:
+            purge_items([(n, by_number[n]) for n in wanted], box)
+        except Exception as exc:
+            print("! %s" % exc)
+            return
+        gone = set(wanted)
+        items = [it for it in items if it["message_no"] not in gone]
+    print("no mail from %s left in %s" % (addr, box))
+
+
+def sender_of_number(number):
+    """The bare address a numbered message came from.
+
+    The registry records `from` as of this version, but every row numbered
+    before it does not -- so rather than making Tom re-list mail he is
+    looking at right now, the header is fetched from the server using the
+    account and UID the registry has always kept."""
+    entries, _ = registry_entries([number])
+    if number not in entries:
+        sys.exit("message number %d is unknown; list it first with "
+                 "mail inbox or mail ls" % number)
+    _, entry = entries[number]
+    addr = sender_addr(entry.get("from") or "")
+    if addr:
+        return addr
+    account, uid = entry.get("account"), entry.get("uid")
+    if not account or not uid:
+        sys.exit("message number %d has no account/uid on record" % number)
+    conn, _ = connect(account)
+    try:
+        select(conn, entry.get("box") or "INBOX", readonly=True)
+        typ, data = conn.uid("FETCH", uid, "(BODY.PEEK[HEADER.FIELDS (FROM)])")
+        if typ != "OK" or not data or not isinstance(data[0], tuple):
+            sys.exit("cannot read message %d to find out who sent it" % number)
+        addr = sender_addr(email.message_from_bytes(data[0][1]).get("From") or "")
+    finally:
+        try:
+            conn.logout()
+        except Exception:
+            pass
+    if not addr:
+        sys.exit("message %d has no readable From address" % number)
+    return addr
+
+
+STATUS_ITEM = re.compile(r"(\w+)\s+(\d+)")
+
+
+def status_counts(conn, box):
+    """Counters for a mailbox, or {} if it cannot be read.
+
+    STATUS answers from the server's own counters, so this stays cheap on
+    a 2,500-message inbox where fetching every header would not. UIDNEXT
+    and UIDVALIDITY ride along for the stats ledger; callers that only
+    want sizes ignore them."""
+    try:
+        typ, data = conn.status(quote(box), "(MESSAGES UNSEEN UIDNEXT UIDVALIDITY)")
+    except Exception:
+        return {}
+    if typ != "OK" or not data or not data[0]:
+        return {}
+    text = data[0].decode("utf-8", "replace")
+    inside = text[text.find("(") + 1:text.rfind(")")]
+    return {k.upper(): int(v) for k, v in STATUS_ITEM.findall(inside)}
+
+
+def search_count(conn, box, term):
+    """How many messages in a mailbox match one search term."""
+    try:
+        typ, _ = conn.select(quote(box), readonly=True)
+        if typ != "OK":
+            return None
+        typ, data = conn.uid("SEARCH", None, term)
+    except Exception:
+        return None
+    if typ != "OK" or not data:
+        return None
+    return len(data[0].split())
+
+
+def account_stats(name, box="INBOX"):
+    """One account's row: inbox size, unread, flagged, and trash size.
+
+    Everything here is read-only and counts only -- no message is fetched,
+    marked, or moved."""
+    row = {"account": name, "address": name, "messages": None, "unseen": None,
+           "flagged": None, "trash": None, "trash_box": None}
+    try:
+        conn, acct = connect(name)
+    except Exception as exc:
+        return row, "%s: cannot sign in (%s)" % (name, str(exc)[:80])
+    row["address"] = acct.get("user", name)
+    try:
+        counts = status_counts(conn, box)
+        row["messages"] = counts.get("MESSAGES")
+        row["unseen"] = counts.get("UNSEEN")
+        row["flagged"] = search_count(conn, box, "FLAGGED")
+        trash = find_trash(conn, acct.get("trash"))
+        row["trash_box"] = trash
+        if trash:
+            row["trash"] = status_counts(conn, trash).get("MESSAGES")
+    except Exception as exc:
+        return row, "%s: %s" % (name, str(exc)[:80])
+    finally:
+        try:
+            conn.logout()
+        except Exception:
+            pass
+    return row, None
+
+
+def load_stats_ledger():
+    """The daily snapshots behind `mail stats --day/--week/--month`."""
+    try:
+        with open(STATS_LEDGER) as fh:
+            ledger = json.load(fh)
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return {"snapshots": []}
+    if not isinstance(ledger, dict) or not isinstance(
+            ledger.get("snapshots"), list):
+        return {"snapshots": []}
+    return ledger
+
+
+def save_stats_ledger(ledger):
+    directory = os.path.dirname(STATS_LEDGER)
+    os.makedirs(directory, exist_ok=True)
+    fd, path = tempfile.mkstemp(prefix="stats-ledger-", dir=directory, text=True)
+    try:
+        with os.fdopen(fd, "w") as fh:
+            json.dump(ledger, fh, indent=2, sort_keys=True)
+            fh.write("\n")
+        os.chmod(path, 0o600)
+        os.replace(path, STATS_LEDGER)
+    finally:
+        if os.path.exists(path):
+            os.unlink(path)
+
+
+def snapshot_account(conn, acct, box="INBOX"):
+    """One account's ledger entry: inbox, archive, trash and spam marks.
+
+    Everything here is read-only STATUS. The inbox mark carries
+    (uidvalidity, uidnext, count, unread): UIDs only ever rise, so arrivals
+    since the last snapshot are exactly uidnext_now - uidnext_then, and
+    departures are whatever the count cannot otherwise explain. The pile
+    marks (trash, spam) carry just (box, count) -- their growth between
+    snapshots is the buildup the progress view watches."""
+    entry = {"box": box, "unread": None, "archive": None, "trash": None,
+             "spam": None}
+    counts = status_counts(conn, box)
+    if (counts.get("MESSAGES") is None or counts.get("UIDNEXT") is None
+            or counts.get("UIDVALIDITY") is None):
+        return entry, "no usable STATUS for %s" % box
+    entry.update({"uidvalidity": counts["UIDVALIDITY"],
+                  "uidnext": counts["UIDNEXT"],
+                  "count": counts["MESSAGES"],
+                  "unread": counts.get("UNSEEN")})
+    archive = find_archive(conn, acct.get("archive"))
+    if archive:
+        counts = status_counts(conn, archive)
+        if counts.get("MESSAGES") is not None and \
+                counts.get("UIDVALIDITY") is not None:
+            entry["archive"] = {"box": archive,
+                                "uidvalidity": counts["UIDVALIDITY"],
+                                "uidnext": counts.get("UIDNEXT", 0),
+                                "count": counts["MESSAGES"]}
+    trash = find_trash(conn, acct.get("trash"))
+    if trash:
+        counts = status_counts(conn, trash)
+        if counts.get("MESSAGES") is not None:
+            entry["trash"] = {"box": trash, "count": counts["MESSAGES"]}
+    spam = find_spam(conn, acct.get("spam"))
+    if spam:
+        counts = status_counts(conn, spam)
+        if counts.get("MESSAGES") is not None:
+            entry["spam"] = {"box": spam, "count": counts["MESSAGES"]}
+    return entry, None
+
+
+def record_stats_snapshot(names, box="INBOX"):
+    """Take today's snapshot for each account and file it in the ledger.
+
+    Best effort per account: one that will not sign in is skipped with a
+    note, never aborting the rest. Snapshots older than LEDGER_KEEP_DAYS
+    are pruned on the way through."""
+    from datetime import date as _date
+    today = _date.today().isoformat()
+    cutoff = _date.today().toordinal() - LEDGER_KEEP_DAYS
+    ledger = load_stats_ledger()
+
+    def fresh(snap):
+        try:
+            return isinstance(snap, dict) and _date.fromisoformat(
+                snap.get("date", "")).toordinal() >= cutoff
+        except (ValueError, TypeError):
+            return False
+
+    snapshots = [s for s in ledger.get("snapshots", []) if fresh(s)]
+    current = {"date": today, "accounts": {}}
+    snapshots = [s for s in snapshots if s.get("date") != today]
+    trouble = []
+    for name in names:
+        try:
+            conn, acct = connect(name)
+        except Exception as exc:
+            trouble.append("%s: cannot sign in (%s)" % (name, str(exc)[:80]))
+            continue
+        try:
+            entry, err = snapshot_account(conn, acct, box)
+        except Exception as exc:
+            err, entry = "%s: %s" % (name, str(exc)[:80]), None
+        finally:
+            try:
+                conn.logout()
+            except Exception:
+                pass
+        if err:
+            trouble.append("%s: %s" % (name, err))
+            continue
+        current["accounts"][name] = entry
+    snapshots.append(current)
+    snapshots.sort(key=lambda s: s.get("date", ""))
+    ledger["snapshots"] = snapshots
+    try:
+        save_stats_ledger(ledger)
+    except OSError as exc:
+        trouble.append("ledger not saved (%s)" % str(exc)[:80])
+    return current, trouble
+
+
+def pick_baseline(snapshots, today, days):
+    """The snapshot a --day/--week/--month view measures against.
+
+    The latest snapshot old enough, else the oldest one there is -- with
+    the actual span reported, so a three-day-old ledger never pretends to
+    be a week. Returns (snapshot, span_days) or (None, 0)."""
+    from datetime import date as _date
+    try:
+        today_ord = _date.fromisoformat(today).toordinal()
+    except (ValueError, TypeError):
+        return None, 0
+    want = today_ord - days
+
+    def dated(snap):
+        try:
+            day = _date.fromisoformat(snap.get("date", "")).toordinal()
+        except (ValueError, TypeError):
+            return None
+        if not isinstance(snap, dict) or day >= today_ord:
+            return None
+        return day
+
+    older = sorted(((day, snap) for snap in snapshots
+                    for day in [dated(snap)] if day is not None))
+    if not older:
+        return None, 0
+    base, base_day = older[0][1], older[0][0]
+    for day, snap in reversed(older):
+        if day <= want:
+            base, base_day = snap, day
+            break
+    return base, today_ord - base_day
+
+
+def compute_period(old, new):
+    """Arrived, archived, deleted and pile changes between two snapshots.
+
+    Arrived is exact: UIDs never repeat while uidvalidity holds, so every
+    UID the server has handed out since shows in uidnext. Departed is the
+    inbox count the arrivals cannot explain; whatever the Archive box has
+    grown by counts as archived and the rest as deleted. The pile deltas --
+    unread, trash, spam -- are plain new-minus-old: minus is progress,
+    plus is buildup. Anything unknown stays unknown rather than guessed."""
+    row = {"arrived": None, "archived": None, "deleted": None,
+           "unread": None, "trash": None, "spam": None, "note": None}
+    if not old or not new:
+        row["note"] = "no earlier snapshot"
+        return row
+    if (old.get("uidvalidity") is None or new.get("uidvalidity") is None
+            or old["uidvalidity"] != new["uidvalidity"]):
+        row["note"] = "mailbox reset since; baseline starts today"
+        return row
+    arrived = new["uidnext"] - old["uidnext"]
+    if arrived < 0:
+        row["note"] = "server counters went backwards; baseline starts today"
+        return row
+    departed = max(0, (old["count"] + arrived) - new["count"])
+    old_arc, new_arc = old.get("archive"), new.get("archive")
+    if not old_arc or not new_arc:
+        row["arrived"] = arrived
+        row["note"] = "archive not visible; archived/deleted unknown"
+    else:
+        archived = max(0, new_arc["count"] - old_arc["count"])
+        row.update({"arrived": arrived, "archived": archived,
+                    "deleted": max(0, departed - archived)})
+
+    def delta(new_v, old_v):
+        if new_v is None or old_v is None:
+            return None
+        return new_v - old_v
+
+    row["unread"] = delta(new.get("unread"), old.get("unread"))
+    old_pile = (old.get("trash") or {})
+    new_pile = (new.get("trash") or {})
+    if old_pile and new_pile:
+        row["trash"] = delta(new_pile.get("count"), old_pile.get("count"))
+    old_pile = (old.get("spam") or {})
+    new_pile = (new.get("spam") or {})
+    if old_pile and new_pile:
+        row["spam"] = delta(new_pile.get("count"), old_pile.get("count"))
+    return row
+
+
+def cmd_stats_period(args, names, days):
+    """Arrived, archived, deleted per account since the baseline snapshot.
+
+    Today's snapshot is taken first, so the view always measures through
+    right now. The ledger starts the day this ships -- a week view on a
+    three-day-old ledger says three days, never seven."""
+    current, record_trouble = record_stats_snapshot(names, args.box)
+    for line in record_trouble:
+        print("! " + line)
+    ledger = load_stats_ledger()
+    base, span = pick_baseline(ledger["snapshots"], current["date"], days)
+    if base is None:
+        print("ledger started %s; no earlier snapshot yet -- "
+              "run mail stats again tomorrow" % current["date"])
+        return
+    cfg = accounts()
+    rows = []
+    for name in names:
+        new = current["accounts"].get(name)
+        if new is None:
+            rows.append({"account": name,
+                         "address": cfg.get(name, {}).get("user", name),
+                         "arrived": None, "archived": None, "deleted": None,
+                         "note": "today's snapshot missed this account"})
+            continue
+        row = compute_period(base["accounts"].get(name), new)
+        row["account"] = name
+        row["address"] = cfg.get(name, {}).get("user", name)
+        rows.append(row)
+
+    def num(value):
+        return "-" if value is None else str(value)
+
+    def signed(value):
+        return "-" if value is None else "%+d" % value
+
+    width = max([len("unified")] + [len(r["address"]) for r in rows])
+    print("progress since %s (%d %s):" %
+          (base["date"], span, "day" if span == 1 else "days"))
+    print("flow is arrived/archived/deleted; piles are new-minus-old, "
+          "so minus is progress and plus is buildup")
+    head = "%-*s %9s %9s %9s %9s %9s %9s" % (
+        width, "account", "arrived", "archived", "deleted", "unread",
+        "trash", "spam")
+    print(head)
+    for row in rows:
+        print("%-*s %9s %9s %9s %9s %9s %9s" % (
+            width, row["address"], num(row["arrived"]),
+            num(row["archived"]), num(row["deleted"]),
+            signed(row["unread"]), signed(row["trash"]),
+            signed(row["spam"])))
+    print("-" * len(head))
+
+    def total(field):
+        seen = [r[field] for r in rows if r[field] is not None]
+        return sum(seen) if seen else None
+
+    print("%-*s %9s %9s %9s %9s %9s %9s" % (
+        width, "unified", num(total("arrived")), num(total("archived")),
+        num(total("deleted")), signed(total("unread")),
+        signed(total("trash")), signed(total("spam"))))
+    for row in rows:
+        if row["note"]:
+            print("  %s: %s" % (row["address"], row["note"]))
+
+
+def cmd_stats(args):
+    """Per-account mail counts and the unified totals underneath them."""
+    names = [resolve_account(value) for value in (args.account or list(accounts()))]
+    period = ("day" if getattr(args, "day", False)
+              else "week" if getattr(args, "week", False)
+              else "month" if getattr(args, "month", False) else None)
+    if period:
+        cmd_stats_period(args, names, {"day": 1, "week": 7, "month": 30}[period])
+        return
+    current, record_trouble = record_stats_snapshot(names, args.box)
+    for line in record_trouble:
+        print("! " + line)
+    rows, trouble = [], []
+    for name in names:
+        row, err = account_stats(name, args.box)
+        rows.append(row)
+        if err:
+            trouble.append(err)
+    for line in trouble:
+        print("! " + line)
+
+    def num(value):
+        return "-" if value is None else str(value)
+
+    width = max([len("unified")] + [len(r["address"]) for r in rows])
+    head = "%-*s %9s %8s %8s %8s" % (width, "account", "messages", "unread",
+                                     "flagged", "trash")
+    print(head)
+    for row in rows:
+        print("%-*s %9s %8s %8s %8s" % (
+            width, row["address"], num(row["messages"]), num(row["unseen"]),
+            num(row["flagged"]), num(row["trash"])))
+    print("-" * len(head))
+
+    def total(field):
+        seen = [r[field] for r in rows if r[field] is not None]
+        return sum(seen) if seen else None
+
+    print("%-*s %9s %8s %8s %8s" % (
+        width, "unified", num(total("messages")), num(total("unseen")),
+        num(total("flagged")), num(total("trash"))))
+    missing = [r["address"] for r in rows if not r["trash_box"]]
+    if missing:
+        print("\nno Trash visible over IMAP: %s" % ", ".join(missing))
+    if trouble:
+        print("\n%d account(s) did not answer; totals are short by "
+              "whatever they hold" % len(trouble))
+
+
+def cmd_empty(args):
+    """Permanently delete everything in each account's Trash.
+
+    This is the one irreversible command in the file, so it counts first,
+    shows the damage per account, and will not act on a bare invocation:
+    a terminal gets a y/N prompt, a script must pass --yes.
+
+    Which accounts to empty comes from -a, or from the same chooser
+    `mail ls` and `mail inbox` use. --yes means no questions at all, so it
+    skips the chooser too and covers every account unless -a narrows it."""
+    if args.account:
+        try:
+            names = [resolve_account(value) for value in args.account]
+        except ValueError as exc:
+            sys.exit(str(exc))
+    elif not args.yes and sys.stdin.isatty() and sys.stdout.isatty():
+        names = choose_ls_scope(None)
+        if not names:
+            return
+    else:
+        names = list(accounts())
+    found, trouble = [], []
+    for name in names:
+        try:
+            conn, acct = connect(name)
+        except Exception as exc:
+            trouble.append("%s: cannot sign in (%s)" % (name, str(exc)[:80]))
+            continue
+        try:
+            trash = find_trash(conn, acct.get("trash"))
+            count = status_counts(conn, trash).get("MESSAGES") if trash else None
+            found.append({"account": name, "address": acct.get("user", name),
+                          "trash": trash, "count": count})
+        finally:
+            try:
+                conn.logout()
+            except Exception:
+                pass
+    for line in trouble:
+        print("! " + line)
+
+    width = max([len("account")] + [len(f["address"]) for f in found] or [7])
+    print("%-*s %-18s %9s" % (width, "account", "trash", "messages"))
+    for f in found:
+        print("%-*s %-18s %9s" % (
+            width, f["address"], f["trash"] or "(none visible)",
+            "-" if f["count"] is None else f["count"]))
+
+    doomed = [f for f in found if f["trash"] and f["count"]]
+    total = sum(f["count"] for f in doomed)
+    if not doomed:
+        print("\nnothing to empty")
+        return
+    print("\n%d message(s) would be deleted permanently." % total)
+    if not args.yes:
+        if not (sys.stdin.isatty() and sys.stdout.isatty()):
+            sys.exit("refusing to empty the trash without --yes")
+        try:
+            answer = input("Permanently delete them? This cannot be "
+                           "undone. [y/N]: ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return
+        if answer not in ("y", "yes"):
+            print("kept everything")
+            return
+
+    for f in doomed:
+        if (f["trash"] or "").upper() == "INBOX":
+            print("! %s: refusing to expunge INBOX as a trash folder"
+                  % f["address"])
+            continue
+        conn, _ = connect(f["account"])
+        try:
+            typ, _ = conn.select(quote(f["trash"]), readonly=False)
+            if typ != "OK":
+                print("! %s: cannot open %s" % (f["address"], f["trash"]))
+                continue
+            typ, data = conn.uid("SEARCH", None, "ALL")
+            uids = data[0].split() if typ == "OK" and data and data[0] else []
+            if not uids:
+                print("%s: already empty" % f["address"])
+                continue
+            typ, _ = conn.uid("STORE", b",".join(uids), "+FLAGS.SILENT",
+                              "(\\Deleted)")
+            if typ != "OK":
+                print("! %s: could not mark messages deleted" % f["address"])
+                continue
+            conn.expunge()
+            print("%s: deleted %d message(s) from %s"
+                  % (f["address"], len(uids), f["trash"]))
+        finally:
+            try:
+                conn.logout()
+            except Exception:
+                pass
+
+
+def cmd_filter(args):
+    """List every message from one sender, then read or delete them.
+
+    The same loop `mail unsub` offers, reachable on its own -- unsubscribing
+    is a one-shot act, and the mail it leaves behind outlives it. Takes one
+    address or number, or a comma-separated list: each distinct sender gets
+    the loop once, in the order named."""
+    addrs = []
+    for part in str(args.target).split(","):
+        target = part.strip()
+        if target.isdigit():
+            addr = sender_of_number(int(target))
+        else:
+            addr = sender_addr(target) or target.lower()
+            if "@" not in addr:
+                sys.exit("give an email address, or a message number")
+        if addr and addr not in addrs:
+            addrs.append(addr)
+    for addr in addrs:
+        sender_cleanup_loop(addr, args.box)
+
+
+def unsub_target(number, entries):
+    """Read-only inspection of one message's unsubscribe path.
+
+    Returns (addr, name, subject, url, one_click); url is None when the
+    message carries no trusted https List-Unsubscribe link. Exits only
+    when the message itself cannot be read.
+    """
+    _, entry = entries[number]
+    account, uid, box = entry.get("account"), entry.get("uid"), entry.get("box") or "INBOX"
+    if not account or not uid:
+        sys.exit("message number %d has no account/uid on record" % number)
+
+    conn, _ = connect(account)
+    select(conn, box, readonly=True)
+    typ, data = conn.uid(
+        "FETCH", uid, "(BODY.PEEK[HEADER.FIELDS "
+        "(SUBJECT FROM LIST-UNSUBSCRIBE LIST-UNSUBSCRIBE-POST)])")
+    conn.logout()
+    if typ != "OK" or not data or not isinstance(data[0], tuple):
+        sys.exit("no such message: uid %s in %s" % (uid, box))
+    msg = email.message_from_bytes(data[0][1])
+    frm = hdr(msg.get("From"))
+    subject = hdr(msg.get("Subject")) or entry.get("subject") or "(no subject)"
+    url, one_click = parse_unsub(msg)
+    return sender_addr(frm), display_name(frm), subject, url, one_click
+
+
+def cmd_unsub(args):
+    """Use messages' List-Unsubscribe headers to leave mailing lists.
+    Takes persistent message numbers from mail inbox/ls, one or many:
+    a comma-separated list, a 189-202 range, or both mixed. Every number
+    is inspected first and the list is split: messages with a usable link
+    are all unsubscribed at once, and the senders that cannot be
+    unsubscribed are offered in the filter loop instead, so their mail
+    can still be reviewed and deleted. Nothing fires before the split is
+    shown. Messages sharing one unsubscribe link fire it only once."""
+    try:
+        wanted = parse_row_numbers(args.numbers)
+    except ValueError as exc:
+        sys.exit(str(exc))
+    entries, _ = registry_entries(wanted)
+    missing = [number for number in wanted if number not in entries]
+    if missing:
+        sys.exit("message number %s is unknown; list it first with "
+                 "mail inbox or mail ls" % ",".join(str(n) for n in missing))
+    good, bad = [], []
+    for number in wanted:
+        try:
+            addr, name, subject, url, one_click = unsub_target(number, entries)
+        except SystemExit as exc:
+            bad.append((number, "", str(exc)))
+            continue
+        if url:
+            good.append((number, addr, name, subject, url, one_click))
+        else:
+            bad.append((number, addr,
+                        "no https List-Unsubscribe link on this message; "
+                        "handle manually"))
+    groups = {}
+    for entry in good:
+        groups.setdefault((entry[4], entry[5]), []).append(entry)
+    if good:
+        print("unsubscribing %s:" %
+              ",".join(str(number) for number, *_ in good))
+        for number, addr, name, subject, url, one_click in good:
+            print("message %d: %s" % (number, subject))
+        for (url, one_click), members in groups.items():
+            print("method for %s: %s %s" % (
+                ",".join(str(number) for number, *_ in members),
+                "POST (one-click)" if one_click else "GET", url))
+    failures = []
+    addrs = []
+    for (url, one_click), members in groups.items():
+        numbers = [number for number, *_ in members]
+        try:
+            result = do_unsubscribe(url, one_click)
+        except SystemExit as exc:
+            failures.extend((number, str(exc)) for number in numbers)
+            continue
+        print(result)
+        latest = {}
+        for _, addr, name, subject, _, _ in members:
+            if addr:
+                latest[addr] = (name, subject)
+        for addr, (name, subject) in latest.items():
+            record_unsub(addr, name, subject, url, one_click, result)
+            if addr not in addrs:
+                addrs.append(addr)
+    if bad:
+        print("cannot unsubscribe %s:" %
+              ",".join(str(number) for number, _, _ in bad))
+        for number, addr, err in bad:
+            print("message %d: %s" % (number, err))
+            if addr and addr not in addrs:
+                addrs.append(addr)
+    for addr in addrs:
+        offer_sender_cleanup(addr, getattr(args, "no_prompt", False))
+    if failures:
+        sys.exit("unsub failed for message number %s" %
+                 ",".join(str(number) for number, _ in failures))
+
+
+def cmd_unsubs(args):
+    """List every sender/list mail unsub has ever fired against."""
+    log = load_unsub_log()
+    if not log:
+        print("no unsubscribe attempts recorded yet")
+        return
+    rows = sorted(log.items(), key=lambda kv: kv[1].get("last_at") or "", reverse=True)
+    addr_w = max([len(addr) for addr, _ in rows] + [7])
+    name_w = max([len(e.get("name", "")) for _, e in rows] + [4])
+    for addr, e in rows:
+        when_str = (e.get("last_at") or "")[:19].replace("T", " ")
+        status = "confirmed" if e.get("one_click") else "opened"
+        print("%s  %s  x%-3d  %s  %-9s  %s" % (
+            cell(addr, addr_w), cell(e.get("name", ""), name_w),
+            e.get("count", 0), when_str, status,
+            oneline(e.get("last_subject", ""))))
+
+
+def filter_unsubbed(items):
+    """Items whose sender is on the unsub log -- candidates for mail purge."""
+    log = load_unsub_log()
+    if not log:
+        return []
+    return [it for it in items if sender_addr(it.get("from")) in log]
+
+
+def cmd_move(args):
+    conn, acct = connect(args.account)
+    dest = acct["trash"] if args.command == "trash" else args.dest
+    select(conn, args.box, readonly=False)
+    rows = fetch_headers(conn, [args.uid.encode()])
+    if args.uid not in rows:
+        sys.exit("no such message: uid %s in %s" % (args.uid, args.box))
+    frm, _, subj, _, _ = rows[args.uid]
+    if "MOVE" not in caps(conn):
+        sys.exit("server does not support MOVE; refusing copy+expunge here")
+    typ, data = conn.uid("MOVE", args.uid, quote(dest))
+    if typ != "OK":
+        sys.exit("move failed: %s" % data)
+    print("moved uid %s -> %s\n  %s\n  %s" % (args.uid, dest, frm, subj))
+    conn.logout()
+
+
+def drafts_box(conn):
+    """The mailbox the server flags \\Drafts, else the name Drafts."""
+    typ, data = conn.list()
+    for item in data or []:
+        line = item.decode("utf-8", "replace")
+        if "\\Drafts" in line:
+            return line.rsplit(' "', 1)[-1].rstrip('"')
+    return "Drafts"
+
+
+def cmd_draft(args):
+    conn, acct = connect(args.account)
+    body = args.body
+    if body == "-":
+        body = sys.stdin.read()
+    msg = EmailMessage()
+    msg["From"] = acct["user"]
+    msg["To"] = args.to
+    if args.cc:
+        msg["Cc"] = args.cc
+    msg["Subject"] = args.subject
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid(domain=acct["user"].split("@")[-1])
+    msg.set_content(body)
+
+    box = args.box or drafts_box(conn)
+    raw = msg.as_bytes()
+    typ, data = conn.append(quote(box), "(\\Draft)", imaplib.Time2Internaldate(time.time()), raw)
+    if typ != "OK":
+        sys.exit("append failed: %s" % data)
+    print("saved to %s on %s (%d bytes, not sent)" % (box, args.account, len(raw)))
+    print("-" * 72)
+    print(msg.as_string())
+    conn.logout()
+
+
+def choose_compose_account(account):
+    """Return a configured account key, showing real sender addresses."""
+    if account:
+        try:
+            return resolve_account(account)
+        except ValueError as exc:
+            sys.exit(str(exc))
+
+    names = list(accounts())
+    if not names:
+        sys.exit("no mail accounts are configured")
+    print("Choose sender:")
+    for number, name in enumerate(names, 1):
+        print("  %d. %s" % (number, account_user(name)))
+    misses = 0
+    while True:
+        try:
+            choice = input("Sender (number, or q to quit): ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return None
+        if choice in ("q", "quit", ""):
+            return None
+        if choice.isdigit() and 1 <= int(choice) <= len(names):
+            return names[int(choice) - 1]
+        misses += 1
+        if misses >= MAX_PROMPT_ATTEMPTS:
+            print("too many invalid choices; giving up")
+            return None
+        print("Choose a number from 1 to %d, or q to quit." % len(names))
+
+
+def compose_line(prompt, required=False):
+    misses = 0
+    while True:
+        try:
+            value = input(prompt).strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            raise KeyboardInterrupt
+        if value or not required:
+            return value
+        misses += 1
+        if misses >= MAX_PROMPT_ATTEMPTS:
+            print("no answer; cancelling")
+            raise KeyboardInterrupt
+        print("This field is required.")
+
+
+def compose_body():
+    print("Body: enter text; finish with a line containing only a single .")
+    lines = []
+    try:
+        while True:
+            line = input()
+            if line == ".":
+                return "\n".join(lines)
+            lines.append(line)
+            if len(lines) >= MAX_BODY_LINES:
+                print("body is over %d lines; cancelling" % MAX_BODY_LINES)
+                raise KeyboardInterrupt
+    except (EOFError, KeyboardInterrupt):
+        print()
+        raise KeyboardInterrupt
+
+
+def cmd_compose(args):
+    """Interactively collect a message and save it as a draft."""
+    try:
+        account = choose_compose_account(args.account)
+        if account is None:
+            return
+        to = args.to if args.to is not None else compose_line("To: ", required=True)
+        cc = args.cc if args.cc is not None else compose_line("Cc (optional): ")
+        subject = (args.subject if args.subject is not None
+                   else compose_line("Subject (optional): "))
+        if args.body is None:
+            body = compose_body()
+        elif args.body == "-":
+            body = sys.stdin.read()
+        else:
+            body = args.body
+    except KeyboardInterrupt:
+        print("compose cancelled")
+        return
+
+    draft_args = argparse.Namespace(account=account, to=to, cc=cc or None,
+                                    subject=subject, body=body, box=args.box)
+    cmd_draft(draft_args)
+
+
+def server_saved_copy(conn, box, message_id, tries=5, wait=1.0):
+    """True once a message with this Message-ID shows up in box."""
+    if not message_id:
+        return False
+    for attempt in range(tries):
+        select(conn, box, readonly=True)
+        typ, data = conn.uid("SEARCH", None, "HEADER", "Message-ID",
+                             quote(message_id.strip()))
+        if typ == "OK" and data and data[0].split():
+            return True
+        if attempt < tries - 1:
+            time.sleep(wait)
+    return False
+
+
+def sent_box(conn):
+    typ, data = conn.list()
+    for item in data or []:
+        line = item.decode("utf-8", "replace")
+        if "\\Sent" in line:
+            return line.rsplit(' "', 1)[-1].rstrip('"')
+    return "Sent"
+
+
+def cmd_send(args):
+    """Send an existing draft. Requires --yes; never composes silently."""
+    conn, acct = connect(args.account)
+    box = args.box or drafts_box(conn)
+    select(conn, box, readonly=False)
+    typ, data = conn.uid("FETCH", args.uid, "(BODY.PEEK[])")
+    if typ != "OK" or not data or not isinstance(data[0], tuple):
+        sys.exit("no such draft: uid %s in %s" % (args.uid, box))
+    raw = data[0][1]
+    msg = email.message_from_bytes(raw)
+
+    recipients = []
+    for field in ("To", "Cc", "Bcc"):
+        recipients += [a for _, a in getaddresses([msg.get(field, "")]) if a]
+    if not recipients:
+        sys.exit("draft has no recipients")
+
+    print("FROM %s" % acct["user"])
+    print("TO   %s" % ", ".join(recipients))
+    print("SUBJ %s" % hdr(msg.get("Subject")))
+    if not args.yes:
+        conn.logout()
+        sys.exit("refusing to send without --yes")
+
+    pw = subprocess.run(["pass", "show", acct["pass"]], capture_output=True,
+                        text=True, check=True).stdout.split("\n")[0]
+    pw = pw.replace(" ", "").strip()
+    host = acct.get("smtp") or acct["host"].replace("imap.", "smtp.")
+    port = acct.get("smtp_port", 465)
+    server = smtplib.SMTP_SSL(host, port, timeout=60)
+    try:
+        server.login(acct["user"], pw)
+        refused = server.send_message(msg, from_addr=acct["user"],
+                                      to_addrs=recipients)
+    finally:
+        server.quit()
+    if refused:
+        sys.exit("refused by server: %s" % refused)
+    print("sent via %s:%s" % (host, port))
+
+    dest = sent_box(conn)
+    # Zoho files its own copy in Sent for mail sent over its SMTP, so an
+    # unconditional append left every message in Sent twice (same
+    # Message-ID). Wait briefly for the server's copy; append only if none.
+    if server_saved_copy(conn, dest, msg.get("Message-ID")):
+        print("copy to %s: saved by server" % dest)
+    else:
+        typ, _ = conn.append(quote(dest), "(\\Seen)",
+                             imaplib.Time2Internaldate(time.time()), raw)
+        print("copy to %s: %s" % (dest, "ok" if typ == "OK" else "FAILED"))
+    select(conn, box, readonly=False)
+    typ, _ = conn.uid("MOVE", args.uid, quote(acct["trash"]))
+    print("draft uid %s -> %s: %s" % (args.uid, acct["trash"],
+                                      "ok" if typ == "OK" else "FAILED"))
+    conn.logout()
+
+
+def cmd_flag(args):
+    conn, _ = connect(args.account)
+    select(conn, args.box, readonly=False)
+    flag = {"seen": "\\Seen", "unseen": "\\Seen",
+            "flag": "\\Flagged", "unflag": "\\Flagged"}[args.command]
+    op = "-FLAGS" if args.command in ("unseen", "unflag") else "+FLAGS"
+    typ, data = conn.uid("STORE", args.uid, op, "(%s)" % flag)
+    if typ != "OK":
+        sys.exit("store failed: %s" % data)
+    print("%s %s on uid %s" % (op, flag, args.uid))
+    conn.logout()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    sub.add_parser("accounts", help="test every configured login")
+
+    p = sub.add_parser("boxes", help="list mailboxes")
+    p.add_argument("account")
+
+    p = sub.add_parser("ls", help="recent messages")
+    p.add_argument("account", nargs="?")
+    p.add_argument("-b", "--box", default="INBOX")
+    p.add_argument("-n", type=int, default=20)
+    p.add_argument("-u", "--unseen", action="store_true")
+    p.add_argument("--no-interactive", action="store_true",
+                   help="print rows without opening the selection menu")
+
+    p = sub.add_parser("inbox", help="choose accounts and time, then list INBOX")
+    p.add_argument("-a", "--account", action="append",
+                   help="limit to this account; repeatable")
+    p.add_argument("-b", "--box", default="INBOX")
+    p.add_argument("-n", type=int, default=40, help="rows to show")
+    p.add_argument("--per", type=int, default=50,
+                   help="most recent to fetch from each account")
+    p.add_argument("-u", "--unseen", action="store_true")
+    p.add_argument("--hours", type=int,
+                   help="only mail received in the last N hours")
+    p.add_argument("--no-interactive", action="store_true",
+                   help="skip account and time prompts")
+    p.add_argument("--unsubscribed", action="store_true",
+                   help="show only mail from senders on the mail unsubs log")
+
+    p = sub.add_parser("spam", help="list each account's Spam; with numbers --block reports spam, unsubscribes, and sweeps the sender")
+    p.add_argument("numbers", nargs="?",
+                   help="persistent message number(s), e.g. n1,n2,n7-10,n12; requires --block")
+    p.add_argument("--block", action="store_true",
+                   help="mark the messages as spam, unsubscribe, and sweep every message from those senders into Spam")
+    p.add_argument("-a", "--account", action="append",
+                   help="limit to this account; repeatable")
+    p.add_argument("-n", type=int, default=40, help="rows to show")
+    p.add_argument("--per", type=int, default=50,
+                   help="most recent to fetch from each account")
+    p.add_argument("-u", "--unseen", action="store_true")
+    p.add_argument("--hours", type=int,
+                   help="only mail received in the last N hours")
+    p.add_argument("--no-interactive", action="store_true",
+                   help="skip account and time prompts")
+
+    p = sub.add_parser("watch", help="redraw the inbox on a timer until Ctrl-C")
+    p.add_argument("-a", "--account", action="append",
+                   help="limit to this account; repeatable")
+    p.add_argument("-b", "--box", default="INBOX")
+    p.add_argument("-n", type=int, default=40, help="rows to show")
+    p.add_argument("--per", type=int, default=50,
+                   help="most recent to fetch from each account")
+    p.add_argument("-u", "--unseen", action="store_true")
+    p.add_argument("--hours", type=int,
+                   help="only mail received in the last N hours")
+    p.add_argument("--interval", type=int, default=30,
+                   help="seconds between refreshes (default 30)")
+
+    p = sub.add_parser("search", help="Gmail syntax on gmail, IMAP TEXT elsewhere")
+    p.add_argument("account")
+    p.add_argument("query")
+    p.add_argument("-b", "--box", default="INBOX")
+    p.add_argument("-n", type=int, default=20)
+
+    p = sub.add_parser("read", help="one message")
+    p.add_argument("target",
+                   help="persistent message number, or an account for UID form")
+    p.add_argument("uid", nargs="?",
+                   help="server UID; omit when target is a message number")
+    p.add_argument("-b", "--box", default="INBOX")
+    p.add_argument("--limit", type=int, default=4000)
+    p.add_argument("--mark", action="store_true", help="also mark as read")
+
+    p = sub.add_parser("stats", help="message counts per account and unified")
+    p.add_argument("-a", "--account", action="append",
+                   help="limit to this account; repeatable")
+    p.add_argument("-b", "--box", default="INBOX")
+    span = p.add_mutually_exclusive_group()
+    span.add_argument("--day", action="store_true",
+                      help="arrived/archived/deleted since the last snapshot")
+    span.add_argument("--week", action="store_true",
+                      help="arrived/archived/deleted over the last 7 days")
+    span.add_argument("--month", action="store_true",
+                      help="arrived/archived/deleted over the last 30 days")
+
+    p = sub.add_parser("empty", help="permanently delete everything in the Trash")
+    p.add_argument("-a", "--account", action="append",
+                   help="which account to empty, by key or address; "
+                        "repeatable. Omit it in a terminal to be asked.")
+    p.add_argument("--yes", action="store_true",
+                   help="required outside a terminal; skips the prompt")
+
+    p = sub.add_parser("filter",
+                       help="list everything from one sender, then read or delete")
+    p.add_argument("target",
+                   help="an email address or number, or a comma-separated list like 14,18")
+    p.add_argument("-b", "--box", default="INBOX")
+
+    p = sub.add_parser("unsub", help="use List-Unsubscribe to leave a mailing list")
+    p.add_argument("numbers",
+                   help="persistent message number(s) from mail inbox or mail ls, e.g. 12, 12,13,16 or 189-202")
+    p.add_argument("--no-prompt", action="store_true",
+                   help="skip the offer to list and purge the sender's mail")
+
+    sub.add_parser("unsubs", help="list every sender mail unsub has fired against")
+
+    p = sub.add_parser("purge", help="move persistent message numbers to Trash, in bulk")
+    p.add_argument("rows", help="comma-separated message numbers, e.g. 12,19")
+    p.add_argument("-a", "--account", action="append",
+                   help="limit to this account; repeatable")
+    p.add_argument("-b", "--box", default="INBOX")
+    p.add_argument("--per", type=int, default=50,
+                   help="most recent to fetch from each account")
+    p.add_argument("-u", "--unseen", action="store_true")
+    p.add_argument("--hours", type=int,
+                   help="only mail received in the last N hours")
+
+    p = sub.add_parser("move", help="move a message")
+    p.add_argument("account")
+    p.add_argument("uid")
+    p.add_argument("dest")
+    p.add_argument("-b", "--box", default="INBOX")
+
+    p = sub.add_parser("trash", help="move to the account's Trash")
+    p.add_argument("account")
+    p.add_argument("uid")
+    p.add_argument("-b", "--box", default="INBOX")
+
+    p = sub.add_parser("draft", help="save a draft; never sends")
+    p.add_argument("account")
+    p.add_argument("--to", required=True)
+    p.add_argument("--subject", required=True)
+    p.add_argument("--body", required=True, help='text, or - to read stdin')
+    p.add_argument("--cc")
+    p.add_argument("-b", "--box", help="default: the server's Drafts folder")
+
+    p = sub.add_parser("compose", help="compose and save a draft; never sends")
+    p.add_argument("account", nargs="?",
+                   help="account key or sender address; omit to choose")
+    p.add_argument("--to", help="recipient; omit to enter it interactively")
+    p.add_argument("--subject", help="subject; omit to enter it interactively")
+    p.add_argument("--body", help="text, - for stdin, or omit for multiline entry")
+    p.add_argument("--cc", help="optional copy recipient")
+    p.add_argument("-b", "--box", help="default: the server's Drafts folder")
+
+    p = sub.add_parser("help", help="show help for mail or one command")
+    p.add_argument("topic", nargs="?", metavar="COMMAND",
+                   help="command to explain; omit for the full command list")
+
+    p = sub.add_parser("send", help="send an existing draft; needs --yes")
+    p.add_argument("account")
+    p.add_argument("uid")
+    p.add_argument("--yes", action="store_true", help="required to actually send")
+    p.add_argument("-b", "--box", help="default: the server's Drafts folder")
+
+    for name in ("seen", "unseen", "flag", "unflag"):
+        p = sub.add_parser(name, help="set or clear a flag")
+        p.add_argument("account")
+        p.add_argument("uid")
+        p.add_argument("-b", "--box", default="INBOX")
+
+    for name in ("star", "unstar"):
+        p = sub.add_parser(name, help="star or unstar persistent message numbers")
+        p.add_argument("rows", help="comma-separated message numbers, e.g. 12,19")
+        p.add_argument("-a", "--account", action="append",
+                       help="limit to this account; repeatable")
+        p.add_argument("-b", "--box", default="INBOX")
+        p.add_argument("-n", type=int, default=40, help="rows to use")
+        p.add_argument("--per", type=int, default=50,
+                       help="most recent to fetch from each account")
+        p.add_argument("-u", "--unseen", action="store_true")
+        p.add_argument("--hours", type=int,
+                       help="only mail received in the last N hours")
+
+    for name in ("lead", "unlead"):
+        p = sub.add_parser(name, help="add or remove the local lead tag")
+        p.add_argument("rows", help="comma-separated message numbers, e.g. 12,19")
+        p.add_argument("-a", "--account", action="append",
+                       help="limit the lookup to this account; repeatable")
+        p.add_argument("-b", "--box", default="INBOX")
+        p.add_argument("--per", type=int, default=50,
+                       help="most recent to fetch from each account")
+        p.add_argument("-u", "--unseen", action="store_true")
+
+    args = parser.parse_args()
+    if args.command == "help":
+        if not args.topic:
+            parser.print_help()
+            return
+        topic = sub.choices.get(args.topic)
+        if topic is None:
+            parser.error("unknown command for help: %s" % args.topic)
+        topic.print_help()
+        return
+    handler = {"accounts": cmd_accounts, "boxes": cmd_boxes, "ls": cmd_ls,
+               "inbox": cmd_inbox, "spam": cmd_spam, "watch": cmd_watch,
+               "search": cmd_search, "read": cmd_read, "unsub": cmd_unsub,
+               "unsubs": cmd_unsubs, "purge": cmd_purge,
+               "filter": cmd_filter, "stats": cmd_stats, "empty": cmd_empty,
+               "move": cmd_move,
+               "draft": cmd_draft, "compose": cmd_compose, "send": cmd_send,
+               "trash": cmd_move, "seen": cmd_flag, "unseen": cmd_flag,
+               "flag": cmd_flag, "unflag": cmd_flag,
+               "star": cmd_row_flag, "unstar": cmd_row_flag,
+               "lead": cmd_row_tag, "unlead": cmd_row_tag}[args.command]
+    handler(args)
+
+
+if __name__ == "__main__":
+    main()

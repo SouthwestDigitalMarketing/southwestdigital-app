@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+"""Calendar reminders, running in the background.
+
+Reads the calendars every few minutes, checks the clock every 30 seconds,
+and fires our own reminders. It keeps working when the calendar UI is
+closed, which is the whole reason it is a service and not a key in the UI.
+"""
+import datetime as dt
+import os
+import runpy
+import sys
+import time
+
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(HERE, 'app'))
+import calendar_notify as notify  # noqa: E402
+
+REFRESH = 300   # seconds between calendar reads
+TICK = 30       # seconds between clock checks
+HORIZON = 2     # days of events to hold in memory
+
+
+def calendar_module():
+    """bin/calendar is a script, not a package; run it for Client and ZONE."""
+    return runpy.run_path(os.path.join(HERE, 'bin', 'calendar'))
+
+
+def read_events(client, zone):
+    now = dt.datetime.now(zone)
+    start = dt.datetime.combine(now.date(), dt.time.min, zone)
+    end = start + dt.timedelta(days=HORIZON)
+    events = []
+    for path, name in client.calendars():
+        for event in client.events(path, start, end):
+            events.append(dict(event, calendar=name))
+    return events
+
+
+def main():
+    module = calendar_module()
+    zone = module['ZONE']
+    client = module['Client']()
+    events, last_read = read_events(client, zone), time.monotonic()
+    was_quiet = False
+    while True:
+        now = dt.datetime.now(dt.timezone.utc)
+        settings = notify.config()
+        state = notify.load_state()
+
+        quiet = notify.is_quiet(state, now)
+        waiting = []
+        if was_quiet and not quiet:
+            summary = notify.release(state)
+            if summary:
+                waiting.append(summary)
+        was_quiet = quiet
+
+        for item in notify.ripe_snoozes(state, now):
+            waiting.append((item['title'], item['body']))
+
+        for key, event, label in notify.due(events, now, settings,
+                                            state['fired'], zone):
+            waiting.append(notify.describe(event, label, zone))
+            state['fired'][key] = now.timestamp()
+
+        # Yesterday's keys are not worth carrying; two days is plenty.
+        cutoff = (now - dt.timedelta(days=2)).timestamp()
+        state['fired'] = {k: t for k, t in state['fired'].items() if t >= cutoff}
+
+        # Decide and write first, pop up second. notify-send can block, and
+        # Tom may be typing `calendar quiet` while it does.
+        sending = [(title, body) for title, body in waiting
+                   if notify.announce(state, title, body, now, send=False)]
+        notify.save_state(state)
+        for title, body in sending:
+            print('reminder: %s — %s' % (title, body.split('\n')[0]), flush=True)
+            notify.popup(title, body)
+
+        if time.monotonic() - last_read >= REFRESH:
+            try:
+                events = read_events(client, zone)
+            except Exception as exc:
+                print('calendar read failed: ' + str(exc)[:200], file=sys.stderr)
+            last_read = time.monotonic()
+        time.sleep(TICK)
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        pass

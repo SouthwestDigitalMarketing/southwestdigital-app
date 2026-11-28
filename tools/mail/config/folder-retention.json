@@ -1,0 +1,4 @@
+{
+  "_about": "mail-retain keeps the last N calendar months in each folder; older mail moves to Trash.",
+  "Payments": {"keep_months": 2}
+}

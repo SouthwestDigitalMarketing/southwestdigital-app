@@ -1,0 +1,17 @@
+[Unit]
+# Runs ON RIPLEY (home /home/tom), beside the desktop it notifies.
+# Installed by SWapp tools/mail/install.sh (copies it to ~/.config/systemd/user).
+Description=Calendar reminders (1 hour and 10 minutes before)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/home/tom/.local/share/mailroom-calendar/venv/bin/python /home/tom/.local/share/swapp-mail/bin/calendar-notify
+# A dropped network, a Zoho outage, or a laptop waking up should not end
+# the reminders for the rest of the day.
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=default.target

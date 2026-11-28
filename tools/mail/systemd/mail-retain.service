@@ -1,0 +1,11 @@
+[Unit]
+# Runs ON RIPLEY. Installed by SWapp tools/mail/install.sh.
+Description=Mail retention: move old mail in chosen Zoho folders to Trash
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=PATH=/home/tom/.local/bin:/usr/local/bin:/usr/bin
+ExecStart=/home/tom/.local/share/swapp-mail/bin/mail-retain --apply
+TimeoutStartSec=5min
