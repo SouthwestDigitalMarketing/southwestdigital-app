@@ -19,7 +19,7 @@ export function AudioOptions({ batch }: { batch: string }) {
     <div className="mt-4">
       <p className="text-sm font-semibold text-slate-900">Hear the voice</p>
       <p className="mt-1 text-sm text-slate-700">
-        Same 20 seconds. 5 is the SM7B take you liked. 6 adds chest bass. 7 is the punchier Stern-desk EQ. Earlier options 1–4 are still below.
+        7 was the best of the last round, but the bass move was too small. 8–10 are big on purpose — especially on a phone. Play 7 then 8 then 10.
       </p>
       <ul className="mt-3 space-y-3">
         {options.map((option, index) => (

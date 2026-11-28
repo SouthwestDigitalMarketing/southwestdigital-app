@@ -7,9 +7,12 @@ describe("audioOptionsFor", () => {
   it("gives TREB 261127 SM7B EQ variants first, then the earlier clips", () => {
     const options = audioOptionsFor("mwzglzlj-5643aa");
     expect(options.map((option) => option.id)).toEqual([
+      "sm7b-stern",
+      "sm7b-phone",
+      "sm7b-graft",
+      "sm7b-wall",
       "sm7b",
       "sm7b-chest",
-      "sm7b-stern",
       "original",
       "loudnorm",
       "isolator",

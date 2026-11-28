@@ -1,4 +1,12 @@
 # SWapp handoff
+## 2026-11-27 — Bigger SM7B punch A/B (Johnny)
+
+Tom picked 7, said 5–7 still had no real low-end punch and the differences
+felt tiny. Cause: first EQ was ~+4 dB at 110 Hz, then loudnorm ate it, and
+phones barely play 110 Hz. New clips 8 (180–250 Hz phone punch), 9 (Pixel
+lows grafted under SM7B), 10 (radio wall, too much on purpose). Recut waits
+on 8, 9, 10, or a blend.
+
 ## 2026-11-27 — SM7B chest / Stern EQ on the episode page (Johnny)
 
 Tom picked clip 5 (SM7B STS). It was thin on bass. Same take now has 6

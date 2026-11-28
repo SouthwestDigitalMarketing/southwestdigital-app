@@ -9,6 +9,30 @@ const TREB_261127 = "mwzglzlj-5643aa";
 
 const TREB_261127_OPTIONS: AudioOption[] = [
   {
+    id: "sm7b-stern",
+    label: "7 · SM7B + Stern punch (your pick)",
+    blurb: "Best of the last round. The extra bass was still too small, especially on a phone.",
+    src: "/showrunner/audio-ab/7-sm7b-stern.mp3",
+  },
+  {
+    id: "sm7b-phone",
+    label: "8 · Phone punch",
+    blurb: "Big boost around 180–250 Hz (the bass a phone speaker can actually play) plus harmonic sub. About +3.5 dB of chest vs 7.",
+    src: "/showrunner/audio-ab/8-phone-body.mp3",
+  },
+  {
+    id: "sm7b-graft",
+    label: "9 · Pixel chest under SM7B",
+    blurb: "Your phone's real low end mixed under the SM7B mids. Different shape, not just louder EQ.",
+    src: "/showrunner/audio-ab/9-bass-graft.mp3",
+  },
+  {
+    id: "sm7b-wall",
+    label: "10 · Radio wall (too much on purpose)",
+    blurb: "Huge 170–240 Hz, heavy smash. If this is too much, say so — then we sit between 8 and 10.",
+    src: "/showrunner/audio-ab/10-radio-wall.mp3",
+  },
+  {
     id: "sm7b",
     label: "5 · Studio SM7B (no extra EQ)",
     blurb: "The take you liked. Speech-to-speech through the SM7B clone, Isolator off.",
@@ -19,12 +43,6 @@ const TREB_261127_OPTIONS: AudioOption[] = [
     label: "6 · SM7B + chest bass",
     blurb: "+5 dB at 110 Hz, +2.5 dB at 200 Hz, a little 400 Hz cut. More body, still your voice.",
     src: "/showrunner/audio-ab/6-sm7b-chest.mp3",
-  },
-  {
-    id: "sm7b-stern",
-    label: "7 · SM7B + Stern punch",
-    blurb: "More proximity bass, tighter radio compression, a bit of 3.5 kHz bite. Howard Stern desk energy.",
-    src: "/showrunner/audio-ab/7-sm7b-stern.mp3",
   },
   {
     id: "original",
