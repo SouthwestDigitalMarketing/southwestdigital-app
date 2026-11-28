@@ -232,7 +232,7 @@ Worker environment in `~/.config/swapp-donna/env`, mode 600:
 | --- | --- |
 | `DONNA_BASE_URL` | SWapp deployment URL |
 | `DONNA_WORKER_TOKEN` | Same dedicated server token |
-| `DONNA_REVIEW_MODEL` | Reviewer model; defaults to existing scanner default `gpt-6-luna` |
+| `DONNA_REVIEW_MODEL` | Reviewer model; default `claude-opus-5-5` (Tom, 2026-11-28: Claude, not Codex). Reviews run through `claude -p` lean: no tools, no session, own system prompt, `--setting-sources project` in an empty folder, prompt on stdin, `--json-schema`. Uses the Claude plan's limits. `DONNA_CLAUDE_BIN` overrides the CLI path. |
 | `DONNA_STATE` | Private SQLite/raw-source directory; default `~/.local/state/swapp-donna` |
 | `DONNA_MAILDIR` | Existing pull-only mail cache; default `~/Mail/zoho` |
 
