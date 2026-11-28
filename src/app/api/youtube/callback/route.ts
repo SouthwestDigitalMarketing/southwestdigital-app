@@ -1,17 +1,14 @@
 import { cookies, headers } from "next/headers";
 import { NextResponse } from "next/server";
-import { IntegrationProvider, IntegrationStatus } from "@prisma/client";
 import { requireAdminBrandOrThrow } from "@/lib/brands/staff";
-import { prisma } from "@/lib/prisma";
 import { requestOrigin } from "@/lib/stripe/requestOrigin";
-import { encryptSecret } from "@/lib/secrets/encryption";
 import {
   readYouTubeOAuthState,
   verifyYouTubeOAuthState,
   youtubeOAuthCallbackOrigin,
   YOUTUBE_OAUTH_STATE_COOKIE,
 } from "@/lib/youtube/oauth";
-import { YOUTUBE_INTEGRATION_KEY } from "@/lib/youtube/credentials";
+import { saveYouTubeConnection } from "@/lib/youtube/saveConnection";
 import { isAuthorizedCallbackOrigin } from "@/lib/integrations/callbackOrigin";
 
 function result(value: string, origin: string) {
@@ -67,13 +64,11 @@ export async function GET(request: Request) {
   const channel = channels.items?.[0];
   if (!channel?.id) return result("no-channel", origin);
 
-  await prisma.$transaction([
-    prisma.brandIntegration.upsert({
-      where: { brandId_key: { brandId: brand.id, key: YOUTUBE_INTEGRATION_KEY } },
-      create: { brandId: brand.id, key: YOUTUBE_INTEGRATION_KEY, provider: IntegrationProvider.YOUTUBE, status: IntegrationStatus.ACTIVE, displayName: "YouTube", externalAccountId: channel.id, publicIdentifier: channel.snippet?.title ?? null, secretCiphertext: encryptSecret(token.refresh_token), secretKeyVersion: 1, lastVerifiedAt: new Date(), lastErrorAt: null, lastErrorCode: null },
-      update: { provider: IntegrationProvider.YOUTUBE, status: IntegrationStatus.ACTIVE, displayName: "YouTube", externalAccountId: channel.id, publicIdentifier: channel.snippet?.title ?? null, secretCiphertext: encryptSecret(token.refresh_token), secretKeyVersion: 1, lastVerifiedAt: new Date(), lastErrorAt: null, lastErrorCode: null },
-    }),
-    prisma.brandTheme.update({ where: { brandId: brand.id }, data: { youtubeChannelId: channel.id } }),
-  ]);
+  await saveYouTubeConnection({
+    brandId: brand.id,
+    channelId: channel.id,
+    channelTitle: channel.snippet?.title ?? null,
+    refreshToken: token.refresh_token,
+  });
   return result("connected", origin);
 }

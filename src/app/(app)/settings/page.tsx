@@ -93,7 +93,7 @@ export default async function SettingsPage({
   });
   const youtube = await prisma.brandIntegration.findUnique({
     where: { brandId_key: { brandId: brand.id, key: "youtube" } },
-    select: { status: true, externalAccountId: true, publicIdentifier: true },
+    select: { status: true, externalAccountId: true, publicIdentifier: true, lastVerifiedAt: true },
   });
   const [quo, googleReview] = await Promise.all([
     prisma.brandIntegration.findUnique({
@@ -163,8 +163,10 @@ export default async function SettingsPage({
         />
         <YouTubeIntegrationForm
           status={youtube?.status === IntegrationStatus.ACTIVE ? "active" : youtube?.status === IntegrationStatus.ERROR ? "error" : "missing"}
+          brandName={brand.name}
           channelName={youtube?.publicIdentifier ?? null}
           channelId={youtube?.externalAccountId ?? null}
+          lastVerifiedAt={youtube?.lastVerifiedAt?.toISOString() ?? null}
           notice={query.youtube}
           reason={query.reason ?? null}
         />
