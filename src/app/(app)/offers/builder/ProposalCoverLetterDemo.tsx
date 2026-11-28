@@ -159,6 +159,9 @@ export default function ProposalCoverLetterDemo() {
   const effectiveEmailBody = restamp(emailBody ?? defaultEmailBody);
   const effectiveEmailSubject = restamp(emailSubject ?? subject);
   const effectiveSmsBody = restamp(smsBody ?? defaultSmsBody);
+  // Spec 07 promise check scans the SMS body in the finalize step, but delivery
+  // here is a client-side `sms:` link the device handles — no server path can
+  // gate it, so the finalize UI scan is the only enforcement.
   const smsHref = proposalUrl && smsRecipients.length
     ? `sms:${smsRecipients.join(",")}?body=${encodeURIComponent(effectiveSmsBody)}`
     : "";

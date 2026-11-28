@@ -4,7 +4,10 @@ import {
   hashPromiseText,
   PromiseBlockedError,
   promiseBlockMessage,
+  publishedOrDraftSnapshot,
   readPromiseConfirmations,
+  readRenderedOptionCopy,
+  renderedOptionCopyForAssessment,
   scanPromiseRisks,
   unresolvedPromiseHits,
   unresolvedSnapshotPromiseHits,
@@ -12,7 +15,7 @@ import {
 } from "./promiseCheck";
 
 describe("collectPromiseFieldsFromAssessment", () => {
-  it("collects intro, bonus, option, and note text with named places", () => {
+  it("collects intro, bonus, and option text with named places", () => {
     const fields = collectPromiseFieldsFromAssessment({
       introHeadline: "Clean books, guaranteed.",
       introBody: "Plain body.",
@@ -24,23 +27,93 @@ describe("collectPromiseFieldsFromAssessment", () => {
       additionalOptions: [
         { id: "o1", name: "Extra Reports", description: "Unlimited revisions." },
       ],
-      discretionaryMultiplierNote: "CPA review included.",
-      assessmentNotes: "Client audit next month.",
     });
     expect(fields.map((field) => field.where)).toEqual([
       "Intro headline",
       "Intro body",
       "Bonus: Bonus One",
       "Additional option: Extra Reports",
-      "Custom note",
-      "Assessment notes",
     ]);
+  });
+
+  it("never scans the internal-only notes", () => {
+    const fields = collectPromiseFieldsFromAssessment({
+      introBody: "Plain body.",
+      discretionaryMultiplierNote: "CPA review included, guaranteed.",
+      assessmentNotes: "Client audit next month, 24/7 help.",
+    });
+    expect(fields).toEqual([{ where: "Intro body", text: "Plain body." }]);
   });
 
   it("returns no fields for an empty or missing assessment", () => {
     expect(collectPromiseFieldsFromAssessment(null)).toEqual([]);
     expect(collectPromiseFieldsFromAssessment({})).toEqual([]);
     expect(collectPromiseFieldsFromAssessment({ introHeadline: "", bonuses: "junk" })).toEqual([]);
+  });
+
+  it("scans frozen option copy when provided", () => {
+    const assessment = {
+      bonuses: [{ id: "b1", name: "Bonus One", description: "Clean stored text." }],
+    };
+    expect(collectPromiseFieldsFromAssessment(assessment)).toEqual([
+      { where: "Bonus: Bonus One", text: "Clean stored text." },
+    ]);
+    expect(
+      collectPromiseFieldsFromAssessment(assessment, { b1: "Frozen text, guaranteed." }),
+    ).toEqual([{ where: "Bonus: Bonus One", text: "Frozen text, guaranteed." }]);
+  });
+});
+
+describe("renderedOptionCopy", () => {
+  it("freezes non-archived option descriptions keyed by id", () => {
+    expect(
+      renderedOptionCopyForAssessment({
+        bonuses: [
+          { id: "b1", description: "Bonus text." },
+          { id: "b2", description: "Archived text.", archived: true },
+          { id: "b3" },
+        ],
+        additionalOptions: [{ id: "o1", description: "Option text." }],
+      }),
+    ).toEqual({ b1: "Bonus text.", o1: "Option text." });
+    expect(renderedOptionCopyForAssessment({})).toEqual({});
+    expect(renderedOptionCopyForAssessment(null)).toEqual({});
+  });
+
+  it("reads back only well-formed frozen copies", () => {
+    expect(readRenderedOptionCopy({ renderedOptionCopy: { b1: "Frozen." } })).toEqual({ b1: "Frozen." });
+    expect(readRenderedOptionCopy({})).toBeNull();
+    expect(readRenderedOptionCopy({ renderedOptionCopy: {} })).toBeNull();
+    expect(readRenderedOptionCopy({ renderedOptionCopy: { b1: "", b2: 42 } })).toBeNull();
+    expect(readRenderedOptionCopy({ renderedOptionCopy: "junk" })).toBeNull();
+  });
+
+  it("scans the frozen text, not later stored edits", () => {
+    const frozen = { b1: "Call us 24/7 for help." };
+    const snapshot = {
+      assessment: { bonuses: [{ id: "b1", name: "Bonus One", description: "Clean stored text." }] },
+      renderedOptionCopy: frozen,
+      promiseConfirmations: [],
+    };
+    const unresolved = unresolvedSnapshotPromiseHits(snapshot);
+    expect(unresolved.map((hit) => hit.phrase)).toEqual(["24/7"]);
+    const confirmed = unresolved.map((hit) => ({
+      where: hit.where, phrase: hit.phrase, textHash: hit.textHash, confirmedAt: "2026-11-27T00:00:00Z",
+    }));
+    expect(unresolvedSnapshotPromiseHits({ ...snapshot, promiseConfirmations: confirmed })).toEqual([]);
+  });
+});
+
+describe("publishedOrDraftSnapshot", () => {
+  const draft = { assessment: { introBody: "Draft." } };
+  const published = { assessment: { introBody: "Published." } };
+
+  it("prefers the published snapshot and falls back to the draft", () => {
+    expect(publishedOrDraftSnapshot({ snapshotJson: draft, publishedSnapshotJson: published })).toBe(published);
+    expect(publishedOrDraftSnapshot({ snapshotJson: draft })).toBe(draft);
+    expect(publishedOrDraftSnapshot({ snapshotJson: draft, publishedSnapshotJson: null })).toBe(draft);
+    expect(publishedOrDraftSnapshot({ snapshotJson: draft, publishedSnapshotJson: {} })).toBe(draft);
+    expect(publishedOrDraftSnapshot({})).toBeNull();
   });
 });
 

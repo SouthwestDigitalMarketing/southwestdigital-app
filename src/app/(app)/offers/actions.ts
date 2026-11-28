@@ -19,6 +19,7 @@ import { resolveSendExpiry } from "@/lib/quotes/sendExpiry";
 import { supersedeReplacedQuoteOnWrite } from "@/lib/quotes/supersedeReplaced";
 import {
   promiseBlockMessage,
+  publishedOrDraftSnapshot,
   unresolvedSnapshotPromiseHits,
 } from "@/lib/quotes/promiseCheck";
 
@@ -29,6 +30,12 @@ function assertSnapshotPromisesResolved(snapshot: unknown) {
   const unresolved = unresolvedSnapshotPromiseHits(snapshot);
   if (unresolved.length > 0) throw new Error(promiseBlockMessage(unresolved));
 }
+
+// Send gates scan the PUBLISHED snapshot (what the emailed link serves),
+// falling back to the draft when nothing was ever published.
+function assertSendPromisesResolved(quote: { snapshotJson?: unknown; publishedSnapshotJson?: unknown }) {
+  assertSnapshotPromisesResolved(publishedOrDraftSnapshot(quote));
+}
 export async function markQuoteSentAction(formData: FormData) {
   const { brand } = await requireQuoteStaffOrThrow();
   const id = (formData.get("id") as string | null)?.trim() ?? "";
@@ -36,14 +43,14 @@ export async function markQuoteSentAction(formData: FormData) {
 
   const quote = await prisma.quote.findFirst({
     where: { id, brandId: brand.id },
-    select: { id: true, ...quoteFreezeSelect, firstSentAt: true, expiresAt: true, snapshotJson: true, publishedAt: true },
+    select: { id: true, ...quoteFreezeSelect, firstSentAt: true, expiresAt: true, snapshotJson: true, publishedSnapshotJson: true, publishedAt: true },
   });
   if (!quote) throw new Error("Not found");
   assertQuoteNotFrozen(quote);
   if (quote.status !== "draft" && quote.status !== "completed") {
     throw new Error("Only unsent offers can be marked sent");
   }
-  assertSnapshotPromisesResolved(quote.snapshotJson);
+  assertSendPromisesResolved(quote);
 
   const now = new Date();
   const send = await resolveSendExpiry({
@@ -82,14 +89,14 @@ export async function resendQuoteAction(formData: FormData) {
 
   const quote = await prisma.quote.findFirst({
     where: { id, brandId: brand.id },
-    select: { id: true, ...quoteFreezeSelect, firstSentAt: true, expiresAt: true, snapshotJson: true, publishedAt: true },
+    select: { id: true, ...quoteFreezeSelect, firstSentAt: true, expiresAt: true, snapshotJson: true, publishedSnapshotJson: true, publishedAt: true },
   });
   if (!quote) throw new Error("Not found");
   assertQuoteNotFrozen(quote);
   if (quote.status === "draft" || quote.status === "archived") {
     throw new Error("Only sent offers can be resent");
   }
-  assertSnapshotPromisesResolved(quote.snapshotJson);
+  assertSendPromisesResolved(quote);
 
   const now = new Date();
   const send = await resolveSendExpiry({
@@ -188,8 +195,13 @@ export async function reassignQuoteContactAction(formData: FormData) {
     ]),
   };
   const client = quoteClientDetailsFromSnapshot(snapshot, quote.client);
-  const { quoteRevisions, quoteEngagement } = await getSchemaCapabilities();
   const publishedAt = quote.publishedAt;
+  // A reassign on a published quote republishes the snapshot (plus a new
+  // revision) to a new recipient, so it runs the same promise gate as
+  // publish — before any write. Draft-only reassigns just edit the draft
+  // and stay ungated.
+  if (publishedAt) assertSnapshotPromisesResolved(snapshot);
+  const { quoteRevisions, quoteEngagement } = await getSchemaCapabilities();
   const publicToken = quote.publicToken ?? randomBytes(32).toString("base64url");
 
   await prisma.$transaction(async (tx) => {
@@ -480,13 +492,14 @@ export async function setOfferStatusAction(formData: FormData) {
       publicToken: true,
       expiresAt: true,
       snapshotJson: true,
+      publishedSnapshotJson: true,
       publishedAt: true,
       ...quoteFreezeSelect,
     },
   });
   if (!quote) throw new Error("Not found");
   assertQuoteNotFrozen(quote);
-  if (status === "sent") assertSnapshotPromisesResolved(quote.snapshotJson);
+  if (status === "sent") assertSendPromisesResolved(quote);
 
   const revokePublicLink = status === "archived" && !quote.engagement?.signedAt;
   const sentAt = status === "sent" ? new Date() : null;

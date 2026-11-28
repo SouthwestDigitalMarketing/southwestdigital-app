@@ -24,6 +24,7 @@ import {
 } from "./ProposalCreationWorkspaceDemo";
 import {
   getOfferKindAction,
+  getOfferPromiseConfirmationsAction,
   getOfferPublicPathAction,
   publishOfferChangesAction,
   saveOfferDraftAction,
@@ -84,6 +85,11 @@ export default function ProposalFinalizeDemo() {
       setPublicPath(publicPath ?? "");
     });
     void getOfferKindAction(offerId).then((kind) => setOfferKind(kind));
+    // Hydrate stored "Keep this wording" confirmations so a reload does not
+    // resurface already-confirmed hits or keep publish disabled.
+    void getOfferPromiseConfirmationsAction(offerId).then((stored) => {
+      if (stored.length > 0) setPromiseConfirmations(stored);
+    });
   }, [offerId]);
 
   // Spec 07 promise check: scan the intro, bonus/option descriptions, custom

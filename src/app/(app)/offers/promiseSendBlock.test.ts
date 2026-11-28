@@ -52,6 +52,37 @@ describe("send promise block", () => {
     expect(mocks.update).not.toHaveBeenCalled();
   });
 
+  it("scans the published snapshot when one exists", async () => {
+    // Draft was cleaned but the published page is still flagged: send stays blocked.
+    mocks.quote.mockResolvedValue({
+      id: "quote",
+      status: "draft",
+      engagement: null,
+      snapshotJson: cleanSnapshot,
+      publishedSnapshotJson: riskySnapshot,
+    });
+    await expect(markQuoteSentAction(form())).rejects.toThrow(/finalize/);
+    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  it("lets a cleaned republish through even when the draft is still flagged", async () => {
+    // Published snapshot is clean (republished after edits); the draft still
+    // holds the old flagged text. The gate scans what the link serves.
+    mocks.quote.mockResolvedValue({
+      id: "quote",
+      status: "draft",
+      engagement: null,
+      snapshotJson: riskySnapshot,
+      publishedSnapshotJson: cleanSnapshot,
+    });
+    const result = await markQuoteSentAction(form()).then(
+      () => "resolved",
+      (error) => (error instanceof Error ? error.message : String(error)),
+    );
+    expect(result).not.toMatch(/finalize/);
+  });
+
   it("lets a clean snapshot through the promise check", async () => {
     // The block passes, so mark-as-sent proceeds into the expiry/write path
     // (which the stubs here do not back). Either outcome proves the block let

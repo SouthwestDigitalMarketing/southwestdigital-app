@@ -25,7 +25,7 @@ vi.mock("@/lib/quotes/mutationLock", () => ({ lockQuoteMutation: vi.fn() }));
 vi.mock("@/lib/database/schemaCapabilities", () => ({ getSchemaCapabilities: async () => ({ quoteRevisions: false, quoteEngagement: false }) }));
 vi.mock("@/lib/engagements/fromOffer", () => ({ ensureQuoteEngagement: vi.fn() }));
 vi.mock("@/lib/quotes/supersedeReplaced", () => ({ supersedeReplacedQuoteOnWrite: vi.fn() }));
-import { publishOfferChangesAction } from "./actions";
+import { getOfferPromiseConfirmationsAction, publishOfferChangesAction } from "./actions";
 
 const draftQuote = (snapshotJson: unknown) => ({
   id: "quote",
@@ -79,5 +79,48 @@ describe("publish promise block", () => {
     }));
     const result = await publishOfferChangesAction("quote", {});
     expect(result.publicPath).toMatch(/^\/proposal\//);
+  });
+
+  it("freezes the rendered bonus/option copy into the published snapshot", async () => {
+    mocks.quote.mockResolvedValue(draftQuote({
+      assessment: {
+        introBody: "Clean books, clear answers.",
+        bonuses: [{ id: "b1", name: "Bonus", description: "Bonus text as rendered." }],
+        additionalOptions: [{ id: "o1", name: "Option", description: "Option text as rendered." }],
+      },
+    }));
+    const result = await publishOfferChangesAction("quote", {});
+    expect(result.publicPath).toMatch(/^\/proposal\//);
+    const written = mocks.quoteUpdate.mock.calls[0][0].data;
+    expect(written.publishedSnapshotJson.renderedOptionCopy).toEqual({
+      b1: "Bonus text as rendered.",
+      o1: "Option text as rendered.",
+    });
+    expect(written.snapshotJson.renderedOptionCopy).toEqual({
+      b1: "Bonus text as rendered.",
+      o1: "Option text as rendered.",
+    });
+  });
+
+  it("omits the frozen copy when there is nothing to freeze", async () => {
+    mocks.quote.mockResolvedValue(draftQuote({ assessment: { introBody: "Clean books, clear answers." } }));
+    await publishOfferChangesAction("quote", {});
+    const written = mocks.quoteUpdate.mock.calls[0][0].data;
+    expect(written.publishedSnapshotJson).not.toHaveProperty("renderedOptionCopy");
+  });
+});
+
+describe("getOfferPromiseConfirmationsAction", () => {
+  it("returns the stored confirmations for hydration", async () => {
+    const stored = [{ where: "Intro body", phrase: "guarantee", textHash: "abc12345", confirmedAt: "2026-11-27T00:00:00Z" }];
+    mocks.quote.mockResolvedValue({ snapshotJson: { assessment: {}, promiseConfirmations: stored } });
+    await expect(getOfferPromiseConfirmationsAction("quote")).resolves.toEqual(stored);
+  });
+
+  it("returns none when nothing is stored", async () => {
+    mocks.quote.mockResolvedValue({ snapshotJson: { assessment: {} } });
+    await expect(getOfferPromiseConfirmationsAction("quote")).resolves.toEqual([]);
+    mocks.quote.mockResolvedValue(null);
+    await expect(getOfferPromiseConfirmationsAction("quote")).resolves.toEqual([]);
   });
 });

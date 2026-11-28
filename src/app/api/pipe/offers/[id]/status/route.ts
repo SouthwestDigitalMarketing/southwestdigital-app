@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { checkRateLimit } from "@/lib/simpleRateLimit";
 import { PipeBrandError, authenticatePipeRequest } from "@/lib/pipe/contacts";
+import { PromiseBlockedError } from "@/lib/quotes/promiseCheck";
 import { PipeOfferError, setPipeOfferStatus } from "@/lib/pipe/offers";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +35,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   } catch (error) {
     if (error instanceof RangeError) return NextResponse.json({ error: error.message }, { status: 400 });
     if (error instanceof PipeBrandError) return NextResponse.json({ error: error.message }, { status: 404 });
+    if (error instanceof PromiseBlockedError) return NextResponse.json({ error: error.message }, { status: 409 });
     if (error instanceof PipeOfferError) return NextResponse.json({ error: error.message }, { status: 404 });
     throw error;
   }

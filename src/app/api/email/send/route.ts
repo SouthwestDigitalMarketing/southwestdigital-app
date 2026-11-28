@@ -16,6 +16,7 @@ import { supersedeReplacedQuoteOnWrite } from "@/lib/quotes/supersedeReplaced";
 import {
   PromiseBlockedError,
   promiseBlockMessage,
+  publishedOrDraftSnapshot,
   unresolvedSnapshotPromiseHits,
 } from "@/lib/quotes/promiseCheck";
 
@@ -57,8 +58,9 @@ export async function POST(request: Request) {
         const quote = await lockQuoteMutation(tx, ctx.brand.id, offerId, "send");
         // Spec 07: the proposal email refuses while flagged promise wording
         // is neither edited nor confirmed — the submitted cover body plus the
-        // snapshot's stored free text, against its confirmations.
-        const unresolved = unresolvedSnapshotPromiseHits(quote.snapshotJson, [
+        // PUBLISHED snapshot's stored free text (fallback draft), against its
+        // confirmations. The emailed link serves the published snapshot.
+        const unresolved = unresolvedSnapshotPromiseHits(publishedOrDraftSnapshot(quote), [
           { where: "Cover email", text: normalizeCoverTextForScan(`${subject}\n\n${bodyText}`) },
         ]);
         if (unresolved.length > 0) throw new PromiseBlockedError(promiseBlockMessage(unresolved));

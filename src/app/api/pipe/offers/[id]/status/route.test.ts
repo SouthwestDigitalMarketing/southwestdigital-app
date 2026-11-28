@@ -57,4 +57,12 @@ describe("/api/pipe/offers/[id]/status", () => {
     const response = await POST(post({ brand: "b", status: "archived" }), { params });
     expect(response.status).toBe(404);
   });
+
+  it("reports a promise block with 409", async () => {
+    const { PromiseBlockedError } = await import("@/lib/quotes/promiseCheck");
+    mocks.setStatus.mockRejectedValue(new PromiseBlockedError("This proposal has wording that may promise more."));
+    const response = await POST(post({ brand: "b", status: "sent" }), { params });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "This proposal has wording that may promise more." });
+  });
 });

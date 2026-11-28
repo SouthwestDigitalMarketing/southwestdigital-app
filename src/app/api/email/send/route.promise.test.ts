@@ -50,6 +50,31 @@ describe("proposal email promise block", () => {
     expect(mocks.send).not.toHaveBeenCalled();
   });
 
+  it("scans the published snapshot, not just the cleaned draft", async () => {
+    mocks.quote.mockResolvedValue({
+      id: "quote",
+      status: "sent",
+      snapshotJson: { assessment: { introBody: "Clean books." } },
+      publishedSnapshotJson: { assessment: { introBody: "We guarantee results." } },
+    });
+    const response = await call("Proposal follow-up");
+    expect(response.status).toBe(409);
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
+
+  it("sends a cleaned republish even when the draft is still flagged", async () => {
+    mocks.quote.mockResolvedValue({
+      id: "quote",
+      status: "sent",
+      firstSentAt: new Date(),
+      snapshotJson: { assessment: { introBody: "We guarantee results." } },
+      publishedSnapshotJson: { assessment: { introBody: "Clean books." } },
+    });
+    const response = await call("Proposal follow-up");
+    expect(response.status).toBe(200);
+    expect(mocks.send).toHaveBeenCalledOnce();
+  });
+
   it("sends when the flagged body is confirmed", async () => {
     const bodyText = "Hi there, call us 24/7 for help.";
     const { normalizeCoverTextForScan } = await import("@/app/(app)/offers/builder/coverLetterState");

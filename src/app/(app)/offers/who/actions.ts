@@ -29,8 +29,10 @@ import { supportCopyForPublish } from "@/lib/quotes/serviceLevels";
 import {
   promiseBlockMessage,
   readPromiseConfirmations,
+  renderedOptionCopyForAssessment,
   unresolvedSnapshotPromiseHits,
   validatePromiseConfirmations,
+  type PromiseConfirmation,
 } from "@/lib/quotes/promiseCheck";
 
 export type OfferAudienceContact = {
@@ -437,6 +439,10 @@ export async function publishOfferChangesAction(
     { freezeApplicability: true },
   );
   const assessment = await materializeAgreementTemplate(brand.id, catalogAssessment);
+  // New publishes freeze the client-facing bonus/option descriptions as they
+  // render (after the catalog remap above). Omitted when empty so snapshots
+  // without options keep their shape.
+  const renderedOptionCopy = renderedOptionCopyForAssessment(assessment);
   const baseSnapshot = asJsonObject({
     ...previous,
     kind: existing.kind,
@@ -448,6 +454,7 @@ export async function publishOfferChangesAction(
     // accepted/old proposals keep rendering what the client saw. Drafts and
     // legacy snapshots carry none and render the legacy map.
     supportCopy: supportCopyForPublish(),
+    ...(Object.keys(renderedOptionCopy).length > 0 ? { renderedOptionCopy } : {}),
     promiseConfirmations: mergePromiseConfirmations(previous, state.promiseConfirmations),
   });
   // Publish refuses while flagged promise wording is neither edited nor
@@ -572,6 +579,20 @@ export async function publishOfferChangesAction(
   revalidatePath(`/offers/${existing.id}`);
   revalidatePath(`/proposal/${publicToken}`);
   return { publicPath: `/proposal/${publicToken}`, version };
+}
+
+// Stored "Keep this wording" confirmations for an offer, so the finalize
+// step can hydrate them on mount instead of asking staff to re-confirm
+// after a reload. Anything malformed reads as none (publish/send stay
+// blocked), matching the scan's own tolerance.
+export async function getOfferPromiseConfirmationsAction(offerId: string): Promise<PromiseConfirmation[]> {
+  const { brand } = await requireQuoteStaffOrThrow();
+  const existing = await prisma.quote.findFirst({
+    where: { id: offerId, brandId: brand.id },
+    select: { snapshotJson: true },
+  });
+  if (!existing) return [];
+  return readPromiseConfirmations(existing.snapshotJson);
 }
 
 export async function getOfferPublicPathAction(offerId: string) {

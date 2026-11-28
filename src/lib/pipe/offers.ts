@@ -1,6 +1,12 @@
 import "server-only";
 
 import { isQuoteFrozen, quoteFreezeSelect } from "@/lib/quotes/isQuoteFrozen";
+import {
+  PromiseBlockedError,
+  promiseBlockMessage,
+  publishedOrDraftSnapshot,
+  unresolvedSnapshotPromiseHits,
+} from "@/lib/quotes/promiseCheck";
 import { resolveSendExpiry } from "@/lib/quotes/sendExpiry";
 import { supersedeReplacedQuoteOnWrite } from "@/lib/quotes/supersedeReplaced";
 import { lockQuoteMutation } from "@/lib/quotes/mutationLock";
@@ -267,8 +273,15 @@ export async function setPipeOfferStatus(args: {
   if (args.status === "sent") {
     const sendSource = await prisma.quote.findFirst({
       where: { id: args.offerId, brandId: brand.id },
-      select: { snapshotJson: true, publishedAt: true },
+      select: { snapshotJson: true, publishedSnapshotJson: true, publishedAt: true },
     });
+    // Same promise gate as the web send: the emailed link serves the
+    // published snapshot, so scan it (falling back to the draft).
+    const unresolved = unresolvedSnapshotPromiseHits(publishedOrDraftSnapshot({
+      snapshotJson: sendSource?.snapshotJson ?? null,
+      publishedSnapshotJson: sendSource?.publishedSnapshotJson ?? null,
+    }));
+    if (unresolved.length > 0) throw new PromiseBlockedError(promiseBlockMessage(unresolved));
     sendSnapshot = sendSource?.snapshotJson ?? null;
     sentAt = new Date();
     sendState = await resolveSendExpiry({

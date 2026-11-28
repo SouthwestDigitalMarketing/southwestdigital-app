@@ -413,4 +413,48 @@ describe("public proposal data boundary", () => {
     expect(result.assessment.additionalOptions[0].description).toBe("");
     expect(result.assessment.bonuses[0].description).toBe("");
   });
+
+  it("renders the frozen option copy instead of the live catalog", () => {
+    const pricing = { maintain: { monthly: 500 }, improve: { monthly: 600 }, grow: { monthly: 750 } };
+    const snapshot = {
+      assessment: {
+        additionalOptions: [{
+          id: "reports", name: "Reports", description: "Frozen reports text.",
+          monthlyPrice: 50, showInProposal: true, archived: false,
+        }],
+        bonuses: [{ id: "portal", name: "Portal", description: "Frozen portal text.", archived: false }],
+      },
+      renderedOptionCopy: { reports: "Frozen reports text.", portal: "Frozen portal text." },
+      contactInfo: {},
+      pricing,
+    };
+    // The live catalog changed after publish: the frozen page must not move.
+    const editedCatalog = catalogCopyFromRows([
+      { offerKey: "reports", clientBenefit: "Edited catalog text with 24/7 help." },
+      { offerKey: "portal", clientBenefit: "Edited portal text." },
+    ]);
+    const frozen = toPublicBookkeepingProposal(snapshot, editedCatalog);
+    expect(frozen.assessment.additionalOptions[0].description).toBe("Frozen reports text.");
+    expect(frozen.assessment.bonuses[0].description).toBe("Frozen portal text.");
+  });
+
+  it("keeps the live remap for snapshots without the frozen key", () => {
+    const pricing = { maintain: { monthly: 500 }, improve: { monthly: 600 }, grow: { monthly: 750 } };
+    const snapshot = {
+      assessment: {
+        additionalOptions: [{
+          id: "reports", name: "Reports", description: "Stored text.",
+          monthlyPrice: 50, showInProposal: true, archived: false,
+        }],
+        bonuses: [],
+      },
+      contactInfo: {},
+      pricing,
+    };
+    const live = toPublicBookkeepingProposal(
+      snapshot,
+      catalogCopyFromRows([{ offerKey: "reports", clientBenefit: "Live catalog text." }]),
+    );
+    expect(live.assessment.additionalOptions[0].description).toBe("Live catalog text.");
+  });
 });

@@ -104,11 +104,53 @@ function textOf(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-// Every staff-editable free-text surface the promise check scans: the intro,
-// bonus and additional-option descriptions, and the custom notes staff can
-// type on the offer. Cover-letter email/SMS bodies are ephemeral (never stored
-// in the snapshot), so the caller appends them as { where, text } fields.
-export function collectPromiseFieldsFromAssessment(assessmentValue: unknown): PromiseField[] {
+// Frozen client-facing bonus/option descriptions, stamped at publish time and
+// keyed by option id. New publishes freeze the descriptions as they render
+// (after the catalog remap); the public payload and this scan read the frozen
+// copy when present, so a later catalog edit cannot move client-facing text
+// (or the scan) without a republish. Snapshots without the key keep the live
+// remap. Only non-archived items with a description are frozen.
+export type RenderedOptionCopy = Record<string, string>;
+
+export function renderedOptionCopyForAssessment(assessmentValue: unknown): RenderedOptionCopy {
+  const assessment = record(assessmentValue);
+  const copy: RenderedOptionCopy = {};
+  for (const item of [...records(assessment.bonuses), ...records(assessment.additionalOptions)]) {
+    if (typeof item.id !== "string" || item.id.length === 0) continue;
+    if (item.archived === true) continue;
+    const description = textOf(item.description);
+    if (description) copy[item.id] = description;
+  }
+  return copy;
+}
+
+// Reads the frozen copy back: anything missing, malformed, or empty means
+// "no frozen copy" and the caller keeps the live remap.
+export function readRenderedOptionCopy(snapshotValue: unknown): RenderedOptionCopy | null {
+  const stored = record(snapshotValue).renderedOptionCopy;
+  if (!stored || typeof stored !== "object" || Array.isArray(stored)) return null;
+  const copy: RenderedOptionCopy = {};
+  for (const [id, description] of Object.entries(stored as Record<string, unknown>)) {
+    if (typeof description === "string" && description.length > 0) copy[id] = description;
+  }
+  return Object.keys(copy).length > 0 ? copy : null;
+}
+
+// Every staff-editable CLIENT-FACING free-text surface the promise check
+// scans: the intro and the bonus/additional-option descriptions. The
+// internal-only notes (assessmentNotes, discretionaryMultiplierNote) never
+// reach the public proposal (stripped by the public zod schema), so scanning
+// them only blocks publish over wording no client will see. Cover-letter
+// email/SMS bodies are ephemeral (never stored in the snapshot), so the
+// caller appends them as { where, text } fields.
+//
+// When the snapshot carries a frozen renderedOptionCopy, option descriptions
+// scan as frozen (exactly what the public page renders); otherwise they scan
+// as stored.
+export function collectPromiseFieldsFromAssessment(
+  assessmentValue: unknown,
+  renderedCopy?: RenderedOptionCopy | null,
+): PromiseField[] {
   const assessment = record(assessmentValue);
   const fields: PromiseField[] = [];
   const introHeadline = textOf(assessment.introHeadline);
@@ -116,21 +158,21 @@ export function collectPromiseFieldsFromAssessment(assessmentValue: unknown): Pr
   const introBody = textOf(assessment.introBody);
   if (introBody) fields.push({ where: "Intro body", text: introBody });
   for (const item of records(assessment.bonuses)) {
-    const description = textOf(item.description);
-    if (!description || item.archived === true) continue;
+    if (item.archived === true) continue;
+    const id = typeof item.id === "string" && item.id.length > 0 ? item.id : null;
+    const description = (id && renderedCopy?.[id]) || textOf(item.description);
+    if (!description) continue;
     const name = typeof item.name === "string" && item.name ? item.name : String(item.id ?? "bonus");
     fields.push({ where: `Bonus: ${name}`, text: description });
   }
   for (const item of records(assessment.additionalOptions)) {
-    const description = textOf(item.description);
-    if (!description || item.archived === true) continue;
+    if (item.archived === true) continue;
+    const id = typeof item.id === "string" && item.id.length > 0 ? item.id : null;
+    const description = (id && renderedCopy?.[id]) || textOf(item.description);
+    if (!description) continue;
     const name = typeof item.name === "string" && item.name ? item.name : String(item.id ?? "option");
     fields.push({ where: `Additional option: ${name}`, text: description });
   }
-  const discretionaryNote = textOf(assessment.discretionaryMultiplierNote);
-  if (discretionaryNote) fields.push({ where: "Custom note", text: discretionaryNote });
-  const assessmentNotes = textOf(assessment.assessmentNotes);
-  if (assessmentNotes) fields.push({ where: "Assessment notes", text: assessmentNotes });
   return fields;
 }
 
@@ -163,15 +205,39 @@ export function validatePromiseConfirmations(value: unknown): PromiseConfirmatio
   return Array.isArray(value) ? value.filter(isPromiseConfirmation) : [];
 }
 
-// Every unresolved hit for a stored snapshot: the assessment free text plus
-// any caller-supplied ephemeral fields (cover-letter bodies), against the
+// Every unresolved hit for a stored snapshot: the assessment free text (as
+// frozen when the snapshot carries a renderedOptionCopy) plus any
+// caller-supplied ephemeral fields (cover-letter bodies), against the
 // snapshot's "Keep this wording" confirmations.
 export function unresolvedSnapshotPromiseHits(snapshotValue: unknown, extraFields: PromiseField[] = []): PromiseHit[] {
   const snapshot = record(snapshotValue);
   return unresolvedPromiseHits(
-    scanPromiseRisks([...collectPromiseFieldsFromAssessment(snapshot.assessment), ...extraFields]),
+    scanPromiseRisks([
+      ...collectPromiseFieldsFromAssessment(snapshot.assessment, readRenderedOptionCopy(snapshot)),
+      ...extraFields,
+    ]),
     readPromiseConfirmations(snapshot),
   );
+}
+
+// Send paths (mark sent, resend, email) serve the PUBLISHED snapshot while
+// sends stamp the draft, so the send gate scans the published snapshot —
+// falling back to the draft only when nothing was ever published (or the
+// stored value is a database null rather than a snapshot object).
+export function publishedOrDraftSnapshot(quote: {
+  snapshotJson?: unknown;
+  publishedSnapshotJson?: unknown;
+}): unknown {
+  const published = quote?.publishedSnapshotJson;
+  if (
+    published
+    && typeof published === "object"
+    && !Array.isArray(published)
+    && Object.keys(published as Record<string, unknown>).length > 0
+  ) {
+    return published;
+  }
+  return quote?.snapshotJson ?? null;
 }
 
 // Thrown (and mapped to a 409 with the message) when publish/send refuses

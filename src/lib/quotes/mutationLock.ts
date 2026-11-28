@@ -17,7 +17,7 @@ export async function lockQuoteMutation(
   if (rows.length !== 1) throw new QuoteMutationConflictError("Offer not found.");
   const quote = await tx.quote.findFirst({
     where: { id: quoteId, brandId },
-    select: { id: true, ...quoteFreezeSelect, publishedAt: true, expiresAt: true, snapshotJson: true, firstSentAt: true },
+    select: { id: true, ...quoteFreezeSelect, publishedAt: true, expiresAt: true, snapshotJson: true, publishedSnapshotJson: true, firstSentAt: true },
   });
   if (!quote) throw new QuoteMutationConflictError("Offer not found.");
   if ((quote.status === "archived" && intent !== "delete" && intent !== "restore") || (quote.status === "completed" && (intent === "publish" || intent === "sign"))) throw new QuoteMutationConflictError("This offer is closed.");

@@ -35,6 +35,7 @@ import {
 } from "@/lib/quotes/companyBundle";
 import { effectiveAssessment } from "@/app/(app)/offers/builder/effectiveAssessment";
 import type { AssessmentState } from "@/app/(app)/offers/builder/ProposalCreationWorkspaceDemo";
+import { readRenderedOptionCopy } from "@/lib/quotes/promiseCheck";
 
 const tier = z.enum(["maintain", "improve", "grow"]);
 const text = z.string().max(100_000);
@@ -165,7 +166,19 @@ export function catalogCopyFromRows(
 function remapPublicDescription<T extends { id: string; description: string }>(
   items: T[],
   catalogCopy?: PublicCatalogCopy,
+  renderedCopy?: Record<string, string> | null,
 ): T[] {
+  // A published frozen copy wins over the live catalog: the client keeps
+  // seeing the wording frozen at publish time even after a catalog edit. An
+  // id missing from the frozen copy keeps its stored description (never the
+  // live catalog). Without the frozen key the live remap runs as before.
+  if (renderedCopy) {
+    return items.map((item) => {
+      const frozen = renderedCopy[item.id];
+      if (frozen === undefined) return item;
+      return { ...item, description: frozen };
+    });
+  }
   if (!catalogCopy) return items;
   return items.map((item) => {
     const row = catalogCopy.get(item.id);
@@ -486,14 +499,17 @@ export function toPublicBookkeepingProposal(
   const firstPaymentCreditReason = publicFirstPaymentCreditReasonForSnapshot(snapshotValue);
   // Spec 07 frozen support copy; same conditional-spread rule as the plan.
   const supportCopy = publicSupportCopyForSnapshot(snapshotValue);
+  // Spec 07 round 2 frozen option copy: when the snapshot carries it, the
+  // public page renders those descriptions instead of the live catalog.
+  const renderedCopy = readRenderedOptionCopy(snapshot);
   return {
     accountInventory,
     assessment: {
       ...assessment,
       ...(serviceStartMonth !== null ? { serviceStartMonth } : {}),
       ...(firstPaymentCreditReason !== null ? { firstPaymentCreditReason } : {}),
-      additionalOptions: remapPublicDescription(assessment.additionalOptions, catalogCopy),
-      bonuses: remapPublicDescription(assessment.bonuses, catalogCopy),
+      additionalOptions: remapPublicDescription(assessment.additionalOptions, catalogCopy, renderedCopy),
+      bonuses: remapPublicDescription(assessment.bonuses, catalogCopy, renderedCopy),
     },
     pricing: publishedPricingSchema.parse(snapshot.pricing),
     // Legacy proposals (no bundle) get null; `assessment.companies` itself
