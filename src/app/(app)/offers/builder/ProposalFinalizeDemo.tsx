@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Save, Send, Upload } from "lucide-react";
 import ProposalAppDemoHeader from "./ProposalAppDemoHeader";
+import CompanyMismatchWarningForOffer from "./CompanyMismatchWarning";
 import PricingSnapshotSidebar from "./PricingSnapshotSidebar";
 import { readProposalBuilderLocalState } from "./ProposalBuilderStorage";
 import type { ContactInfoState } from "./ProposalContactInfoState";
@@ -145,6 +146,7 @@ export default function ProposalFinalizeDemo() {
         <ProposalAppDemoHeader
           currentStep="finalize"
         />
+        <CompanyMismatchWarningForOffer offerId={offerId} />
 
         <div className="mt-4 grid gap-5 xl:grid-cols-[minmax(0,1fr)_280px] 2xl:grid-cols-[minmax(0,1fr)_300px]">
           <div>
