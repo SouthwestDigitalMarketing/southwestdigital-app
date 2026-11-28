@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { buildProposalCheckoutSummary } from "@/lib/engagements/proposalCheckout";
 
 const mocks = vi.hoisted(() => ({
   headersGet: vi.fn(),
@@ -96,6 +97,194 @@ describe("public proposal receipt page", () => {
   it("receipt page notFound for a revoked token", async () => {
     mocks.quoteFindFirst.mockResolvedValue(null);
     await expect(openReceipt()).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
+  it("receipt page shows the wrap-up plan only when the stored checkout has one", async () => {
+    const withPlan = buildProposalCheckoutSummary({
+      assessment: {
+        annualSavingsPercent: 20,
+        waiveOnboardingFee: false,
+        onboardingFeeOverride: null,
+        historicalCleanupPeriods: [
+          { year: 2026, startMonth: 1, endMonth: 3 },
+          { year: 2025, startMonth: 11, endMonth: 12 },
+        ],
+        cleanupPlan: {
+          caughtUpThrough: "2026-03",
+          startDate: "2026-02-14",
+          wrapUpDate: "2026-05-14",
+          wrapUpSource: "default",
+          paymentPlan: "monthly",
+        },
+        additionalOptions: [],
+      },
+      pricing: {
+        maintain: { monthly: 300 },
+        improve: { monthly: 450 },
+        grow: { monthly: 600 },
+      },
+    }, {
+      tier: "improve",
+      hasTwelveMonthAgreement: false,
+      selectedCleanupPeriodKeys: ["2026-1-3", "2025-11-12"],
+      selectedAdditionalOptionIds: [],
+      // M3: the stored plan is frozen at selection time (start = selection +
+      // 14 days, default wrap-up recomputed), never the stale builder dates.
+    }, { todayISO: "2026-02-01" });
+    mocks.quoteFindFirst.mockResolvedValue(signedReceiptRow({
+      engagement: {
+        brandId: "brand",
+        clientName: "Alex",
+        status: "SIGNED",
+        onboardingFeeStatus: "REQUIRED",
+        onboardingData: {
+          proposalAcceptance: { selection: JSON.parse(JSON.stringify(withPlan)) },
+        },
+        agreementText: "Signed agreement",
+        agreementTextHash: "hash",
+        signerName: "Alex Example",
+        signerTitle: "Owner",
+        billingContactEmail: "alex@example.test",
+        signedAt: new Date("2026-01-02T00:00:00Z"),
+        agreementManagerStatus: "ACTIVE",
+        isTestProposal: false,
+      },
+    }));
+    const el = await openReceipt();
+    const markup = renderToStaticMarkup(el as never);
+    expect(markup).toContain("Your agreed payment schedule");
+    expect(markup).toContain("We will have your books caught up through March 2026 by April 15, 2026.");
+    expect(markup).toContain("Monthly service and billing begin on April 15, 2026 or when cleanup is complete, whichever comes first.");
+    expect(markup).toContain("Cleanup is paid in 2 monthly installments of $750.00.");
+    expect(markup).toContain("If cleanup runs past the wrap-up date");
+  });
+
+  it("receipt page names the $150 fee only when the signed agreement charges it", async () => {
+    const withPlan = buildProposalCheckoutSummary({
+      assessment: {
+        annualSavingsPercent: 20,
+        waiveOnboardingFee: false,
+        onboardingFeeOverride: null,
+        historicalCleanupPeriods: [
+          { year: 2026, startMonth: 1, endMonth: 3 },
+        ],
+        cleanupPlan: {
+          caughtUpThrough: "2026-03",
+          startDate: "2026-02-14",
+          wrapUpDate: "2026-05-14",
+          wrapUpSource: "default",
+          paymentPlan: "monthly",
+        },
+        additionalOptions: [],
+      },
+      pricing: {
+        maintain: { monthly: 300 },
+        improve: { monthly: 450 },
+        grow: { monthly: 600 },
+      },
+    }, {
+      tier: "maintain",
+      hasTwelveMonthAgreement: false,
+      selectedCleanupPeriodKeys: ["2026-1-3"],
+      selectedAdditionalOptionIds: [],
+    }, { todayISO: "2026-02-01" });
+    async function markupForAgreementText(agreementText: string) {
+      mocks.quoteFindFirst.mockResolvedValue(signedReceiptRow({
+        engagement: {
+          brandId: "brand",
+          clientName: "Alex",
+          status: "SIGNED",
+          onboardingFeeStatus: "REQUIRED",
+          onboardingData: {
+            proposalAcceptance: { selection: JSON.parse(JSON.stringify(withPlan)) },
+          },
+          agreementText,
+          agreementTextHash: "hash",
+          signerName: "Alex Example",
+          signerTitle: "Owner",
+          billingContactEmail: "alex@example.test",
+          signedAt: new Date("2026-01-02T00:00:00Z"),
+          agreementManagerStatus: "ACTIVE",
+          isTestProposal: false,
+        },
+      }));
+      return renderToStaticMarkup(await openReceipt() as never);
+    }
+    const withFee = await markupForAgreementText(
+      "Terms. If documents are not received within 30 days of payment, a $150/month file-maintenance fee applies to keep the engagement open. Signed.",
+    );
+    expect(withFee).toContain("replaces the $150 file-maintenance fee");
+    const withoutFee = await markupForAgreementText("Custom terms with no maintenance fee. Signed.");
+    expect(withoutFee).not.toContain("$150 file-maintenance fee");
+    expect(withoutFee).toContain("replaces any file-maintenance fee");
+  });
+
+  it("receipt page itemizes the complexity add so the estimate adds up", async () => {
+    const withComplexity = buildProposalCheckoutSummary({
+      assessment: {
+        annualSavingsPercent: 20,
+        waiveOnboardingFee: false,
+        onboardingFeeOverride: null,
+        historicalCleanupPeriods: [
+          { year: 2026, startMonth: 1, endMonth: 3 },
+          { year: 2025, startMonth: 11, endMonth: 12 },
+        ],
+        cleanupPlan: {
+          caughtUpThrough: "2026-03",
+          startDate: "2026-02-14",
+          wrapUpDate: "2026-05-14",
+          wrapUpSource: "default",
+          paymentPlan: "monthly",
+        },
+        additionalOptions: [],
+      },
+      pricing: {
+        maintain: {
+          monthly: 300,
+          complexity: { lines: [], monthlyTotal: 0, cleanupPerMonthTotal: 65, cleanupTotal: 325 },
+        },
+        improve: { monthly: 450 },
+        grow: { monthly: 600 },
+      },
+    }, {
+      tier: "improve",
+      hasTwelveMonthAgreement: false,
+      selectedCleanupPeriodKeys: ["2026-1-3", "2025-11-12"],
+      selectedAdditionalOptionIds: [],
+    }, { todayISO: "2026-02-01" });
+    mocks.quoteFindFirst.mockResolvedValue(signedReceiptRow({
+      engagement: {
+        brandId: "brand",
+        clientName: "Alex",
+        status: "SIGNED",
+        onboardingFeeStatus: "REQUIRED",
+        onboardingData: {
+          proposalAcceptance: { selection: JSON.parse(JSON.stringify(withComplexity)) },
+        },
+        agreementText: "Signed agreement",
+        agreementTextHash: "hash",
+        signerName: "Alex Example",
+        signerTitle: "Owner",
+        billingContactEmail: "alex@example.test",
+        signedAt: new Date("2026-01-02T00:00:00Z"),
+        agreementManagerStatus: "ACTIVE",
+        isTestProposal: false,
+      },
+    }));
+    const el = await openReceipt();
+    const markup = renderToStaticMarkup(el as never);
+    // 5 months × $300 base + $325 complexity add = $1,825 frozen total.
+    expect(markup).toContain("Cleanup estimate: 5 months × $300.00 = $1,500.00.");
+    expect(markup).toContain("Complexity adjustment: $325.00. Estimated Cleanup Total: $1,825.00.");
+  });
+
+  it("receipt page omits the wrap-up plan for legacy stored checkouts", async () => {
+    mocks.quoteFindFirst.mockResolvedValue(signedReceiptRow());
+    const el = await openReceipt();
+    const markup = renderToStaticMarkup(el as never);
+    expect(markup).toContain("Signed proposal record");
+    expect(markup).not.toContain("caught up through");
+    expect(markup).not.toContain("wrap-up date");
   });
 
   it("receipt page notFound when unsigned", async () => {

@@ -47,6 +47,8 @@ vi.mock("@/lib/quotes/mutationLock", () => ({
 }));
 
 import { GET } from "./route";
+import { buildCleanupInstallments } from "@/lib/quotes/cleanupPlan";
+import { FILE_MAINTENANCE_NO_STACKING_SENTENCE } from "@/lib/agreements/template";
 
 const checkout = buildProposalCheckoutSummary(
   toPublicBookkeepingProposal(
@@ -397,6 +399,124 @@ describe("public proposal agreement API", () => {
     const body = await (await call()).json();
     expect(body.text).toBe("Previously generated agreement");
     expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  describe("Spec 04 cleanup plan", () => {
+    const cleanupPlanFixture = {
+      caughtUpThrough: "2025-12",
+      startDate: "2026-01-05",
+      wrapUpDate: "2026-03-05",
+      wrapUpSource: "default",
+      paymentPlan: "monthly",
+    } as const;
+    const cleanupInstallmentsFixture = buildCleanupInstallments(90000, cleanupPlanFixture);
+
+    function planRow(extraServices: Record<string, unknown> = {}) {
+      const row = rowWithAccounts(accounts);
+      return {
+        ...row,
+        agreementText: null,
+        onboardingData: {
+          ...row.onboardingData,
+          proposalBuilderState: {
+            ...row.onboardingData.proposalBuilderState,
+            services: {
+              ...row.onboardingData.proposalBuilderState.services,
+              cleanupMonths: 3,
+              cleanupMonthlyRate: 300,
+              cleanupTotal: 900,
+              cleanupPlan: cleanupPlanFixture,
+              cleanupInstallments: cleanupInstallmentsFixture,
+              ...extraServices,
+            },
+          },
+        },
+      };
+    }
+
+    it("generates the wrap-up clause, payment plan line, and no-stacking sentence", async () => {
+      mocks.engagement.mockResolvedValue(planRow());
+      const body = await (await call()).json();
+      expect(body.text).toContain("14. Cleanup Wrap-Up and Extension");
+      expect(body.text).toContain("We will have your books caught up through December 2025 by March 5, 2026.");
+      expect(body.text).toContain("Estimated Cleanup (not due today): 3 months × $300.00 = $900.00. Cleanup is paid in 2 monthly installments of $450.00.");
+      expect(body.text).toContain(`$150/month file-maintenance fee applies to keep the engagement open. ${FILE_MAINTENANCE_NO_STACKING_SENTENCE}`);
+      expect(body.text).toContain("currently $600");
+      expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: { agreementText: body.text },
+      }));
+    });
+
+    it("itemizes the stored complexity add so the fee equation adds up", async () => {
+      mocks.engagement.mockResolvedValue(planRow({
+        cleanupTotal: 1095,
+        complexityCleanupAdd: 195,
+        cleanupInstallments: buildCleanupInstallments(109500, { ...cleanupPlanFixture, paymentPlan: "full" }),
+        cleanupPlan: { ...cleanupPlanFixture, paymentPlan: "full" },
+      }));
+      const body = await (await call()).json();
+      expect(body.text).toContain("Estimated Cleanup (not due today): 3 months × $300.00 = $900.00.");
+      expect(body.text).toContain("Complexity adjustment: $195.00");
+      expect(body.text).toContain("Estimated Cleanup Total: $1,095.00");
+    });
+
+    it("uses the prepaid-annual start text for a 12-month plan-bearing agreement", async () => {
+      mocks.engagement.mockResolvedValue(planRow({ hasTwelveMonthAgreement: true }));
+      const body = await (await call()).json();
+      expect(body.text).toContain("Your 12 months of service begin on March 5, 2026 or when cleanup is complete, whichever comes first.");
+    });
+
+    it("ignores malformed stored cleanup fields and renders legacy text", async () => {
+      mocks.engagement.mockResolvedValue(planRow({ cleanupPlan: { bogus: true }, cleanupInstallments: ["nope"] }));
+      const junk = await (await call()).json();
+      expect(junk.text).not.toContain("Wrap-Up");
+      expect(junk.text).not.toContain(FILE_MAINTENANCE_NO_STACKING_SENTENCE);
+      const full = planRow().onboardingData.proposalBuilderState.services as Record<string, unknown>;
+      const legacyServices: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(full)) {
+        if (key !== "cleanupPlan" && key !== "cleanupInstallments") legacyServices[key] = value;
+      }
+      const base = planRow();
+      mocks.engagement.mockResolvedValue({
+        ...base,
+        onboardingData: {
+          ...base.onboardingData,
+          proposalBuilderState: { ...base.onboardingData.proposalBuilderState, services: legacyServices },
+        },
+      });
+      const legacy = await (await call()).json();
+      expect(junk.text).toBe(legacy.text);
+    });
+
+    it("returns a stored signed agreement verbatim despite plan-bearing services", async () => {
+      const storedText = "Signed agreement with plan\r\n  Preserve verbatim.\n";
+      mocks.engagement.mockResolvedValue({
+        ...planRow(),
+        signedAt: new Date("2026-10-01T12:00:00Z"),
+        agreementText: storedText,
+      });
+      const body = await (await call()).json();
+      expect(body.text).toBe(storedText);
+      expect(mocks.update).not.toHaveBeenCalled();
+    });
+
+    it("appends the cleanup block to a custom template without numbered headings", async () => {
+      const row = planRow();
+      mocks.engagement.mockResolvedValue({
+        ...row,
+        onboardingData: {
+          ...row.onboardingData,
+          proposalBuilderState: {
+            ...row.onboardingData.proposalBuilderState,
+            assessment: { ...row.onboardingData.proposalBuilderState.assessment, agreementTemplateContent: "Custom agreement for {{clientName}}" },
+          },
+        },
+      });
+      const body = await (await call()).json();
+      expect(body.text).toContain("Custom agreement for Example LLC");
+      expect(body.text).toContain("CLEANUP WRAP-UP AND EXTENSION");
+      expect(body.text).toContain("We will have your books caught up through December 2025 by March 5, 2026.");
+    });
   });
 
   it("GET agreement JSON omits assessment notes, cancellationReason, and raw checkout secrets", async () => {

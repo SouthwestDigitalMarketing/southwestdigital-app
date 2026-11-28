@@ -41,6 +41,7 @@ vi.mock("@/lib/discounts/resolveOnboardingWaiver", () => ({
   resolveOnboardingWaiverForEngagement: mocks.waiver,
 }));
 
+
 import { POST } from "./route";
 
 function engagementRow() {
@@ -240,6 +241,175 @@ describe("select API with a company bundle", () => {
     // The default engagement row is the legacy sentinel snapshot (no bundle).
     const body = await response.json() as { ok?: boolean; checkout?: Record<string, number> };
     expect(body.checkout?.additionalOneTimeTotal).toBe(0);
+  });
+
+  it("stores no plan keys for a snapshot without a plan, even with cleanup selected", async () => {
+    const response = await POST(
+      new Request("https://firm.example.test/api/proposal/eng/select", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-proposal-token": "token",
+          "x-hostname": "firm.example.test",
+        },
+        body: JSON.stringify({
+          tier: "improve",
+          hasTwelveMonthAgreement: false,
+          selectedCleanupPeriodKeys: ["2025-1-12"],
+          selectedAdditionalOptionIds: ["reports"],
+        }),
+      }),
+      { params: Promise.resolve({ engagementId: "eng" }) },
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json() as { ok?: boolean; checkout?: Record<string, unknown> };
+    expect(body.ok).toBe(true);
+    // The legacy sentinel snapshot carries no cleanupPlan: nothing stored.
+    expect(body.checkout).not.toHaveProperty("cleanupPlan");
+    expect(body.checkout).not.toHaveProperty("cleanupInstallments");
+  });
+
+  it("stores the whitelisted plan + installments through the real reconstruction", async () => {
+    const { addDaysIso, defaultWrapUpDate } = await import("@/lib/quotes/cleanupPlan");
+    const { staffDateKey } = await import("@/lib/quotes/staffDates");
+    const today = staffDateKey(new Date());
+    const start = addDaysIso(today, 14);
+    mocks.engagement.mockResolvedValue({
+      ...engagementRow(),
+      quotes: [{
+        publishedSnapshotJson: null,
+        revisions: [{
+          snapshotJson: {
+            assessment: {
+              annualSavingsPercent: 20,
+              historicalCleanupPeriods: [
+                { id: "2026", year: 2026, startMonth: 1, endMonth: 3 },
+                { id: "2025", year: 2025, startMonth: 11, endMonth: 12 },
+              ],
+              additionalOptions: [],
+              cleanupPlan: {
+                caughtUpThrough: "2026-03",
+                startDate: "2026-02-14",
+                wrapUpDate: "2026-05-14",
+                wrapUpSource: "default",
+                paymentPlan: "monthly",
+              },
+            },
+            pricing: {
+              maintain: {
+                monthly: 300,
+                complexity: { lines: [], monthlyTotal: 0, cleanupPerMonthTotal: 65, cleanupTotal: 325 },
+              },
+              improve: { monthly: 450 },
+              grow: { monthly: 600 },
+            },
+          },
+        }],
+      }],
+    });
+    const response = await POST(
+      new Request("https://firm.example.test/api/proposal/eng/select", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-proposal-token": "token",
+          "x-hostname": "firm.example.test",
+        },
+        body: JSON.stringify({
+          tier: "improve",
+          hasTwelveMonthAgreement: false,
+          selectedCleanupPeriodKeys: ["2026-1-3", "2025-11-12"],
+          selectedAdditionalOptionIds: [],
+        }),
+      }),
+      { params: Promise.resolve({ engagementId: "eng" }) },
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json() as { ok?: boolean; checkout?: Record<string, unknown> };
+    expect(body.ok).toBe(true);
+    // Spec 03 complexity rides the real reconstruction (rate x selected months).
+    expect(body.checkout?.complexityCleanupAdd).toBe(65 * 5);
+    expect(body.checkout?.cleanupTotal).toBe(300 * 5 + 65 * 5);
+    // M1: caught up through the latest SELECTED period, not the snapshot value.
+    expect(body.checkout?.cleanupPlan).toMatchObject({ paymentPlan: "monthly", caughtUpThrough: "2026-03" });
+    // M3: start is the selection date + 14 days; the default-source wrap-up
+    // is recomputed from it.
+    const plan = body.checkout?.cleanupPlan as { startDate: string; wrapUpDate: string; wrapUpSource: string };
+    expect(plan.startDate).toBe(start);
+    expect(plan.wrapUpSource).toBe("default");
+    expect(plan.wrapUpDate).toBe(defaultWrapUpDate(start, 5));
+    const installments = body.checkout?.cleanupInstallments as Array<{ amountCents: number; dueDate?: string }>;
+    expect(Array.isArray(installments) && installments.length).toBeGreaterThan(0);
+    expect(installments.reduce((sum, item) => sum + item.amountCents, 0))
+      .toBe(Math.round((body.checkout?.cleanupTotal as number) * 100));
+    expect(installments[0]?.dueDate).toBe(start);
+    // The route persists the checkout verbatim: the new keys land in stored services.
+    const stored = mocks.update.mock.calls[0][0].data.onboardingData.proposalBuilderState.services as Record<string, unknown>;
+    expect(stored.cleanupPlan).toEqual(body.checkout?.cleanupPlan);
+    expect(stored.cleanupInstallments).toEqual(body.checkout?.cleanupInstallments);
+    expect(stored.complexityCleanupAdd).toBe(65 * 5);
+  });
+
+  it("recomputes caught-up-through from a partial selection", async () => {
+    const { staffDateKey } = await import("@/lib/quotes/staffDates");
+    const { addDaysIso } = await import("@/lib/quotes/cleanupPlan");
+    mocks.engagement.mockResolvedValue({
+      ...engagementRow(),
+      quotes: [{
+        publishedSnapshotJson: null,
+        revisions: [{
+          snapshotJson: {
+            assessment: {
+              annualSavingsPercent: 20,
+              historicalCleanupPeriods: [
+                { id: "2026", year: 2026, startMonth: 1, endMonth: 3 },
+                { id: "2025", year: 2025, startMonth: 11, endMonth: 12 },
+              ],
+              additionalOptions: [],
+              cleanupPlan: {
+                caughtUpThrough: "2026-03",
+                startDate: "2026-02-14",
+                wrapUpDate: "2026-05-14",
+                wrapUpSource: "default",
+                paymentPlan: "monthly",
+              },
+            },
+            pricing: {
+              maintain: { monthly: 300 },
+              improve: { monthly: 450 },
+              grow: { monthly: 600 },
+            },
+          },
+        }],
+      }],
+    });
+    const response = await POST(
+      new Request("https://firm.example.test/api/proposal/eng/select", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-proposal-token": "token",
+          "x-hostname": "firm.example.test",
+        },
+        body: JSON.stringify({
+          tier: "improve",
+          hasTwelveMonthAgreement: false,
+          selectedCleanupPeriodKeys: ["2025-11-12"],
+          selectedAdditionalOptionIds: [],
+        }),
+      }),
+      { params: Promise.resolve({ engagementId: "eng" }) },
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json() as { ok?: boolean; checkout?: Record<string, unknown> };
+    expect(body.ok).toBe(true);
+    // Nov-Dec of a Jan-Mar + Nov-Dec plan selected: the stored plan must
+    // not claim March.
+    expect(body.checkout?.cleanupMonths).toBe(2);
+    expect(body.checkout?.cleanupPlan).toMatchObject({
+      caughtUpThrough: "2025-12",
+      startDate: addDaysIso(staffDateKey(new Date()), 14),
+    });
   });
 });
 

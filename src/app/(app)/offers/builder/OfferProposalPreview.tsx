@@ -25,6 +25,9 @@ import {
   type PublicAccountInventory,
 } from "@/lib/quotes/accountInventory";
 import { proposalPaymentSchedule } from "@/lib/quotes/paymentSchedule";
+import { addDaysIso, buildCleanupInstallments, cleanupWeeksBetween } from "@/lib/quotes/cleanupPlan";
+import type { CleanupInstallment, CleanupPlan } from "@/lib/quotes/cleanupPlan";
+import { resolvePreviewCleanupDisplay } from "./previewCleanupPlan";
 
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -94,6 +97,7 @@ import { ProposalUrgencyBanner, ProposalUrgencyNote } from "./ProposalUrgencyBan
 import {
   DEFAULT_AGREEMENT_TEMPLATE_NAME,
   DEFAULT_BOOKKEEPING_AGREEMENT_TEMPLATE,
+  agreementMentionsFileFee,
   renderAgreementTemplate,
 } from "@/lib/agreements/template";
 import type { AgreementTemplateOption } from "@/lib/agreements/types";
@@ -104,6 +108,7 @@ import {
 import type {
   ComplexityWhyByTier,
   PublicBookkeepingProposal,
+  PublicCleanupPlan,
   PublicProposalPricing,
 } from "@/lib/quotes/publicProposal";
 import { resolveProposalPackageName } from "./proposalPackageNames";
@@ -248,8 +253,12 @@ type CheckoutSummary = {
   cleanupMonths?: number;
   cleanupMonthlyRate?: number;
   additionalOneTimeTotal?: number;
-  complexityCleanupAdd?: number;
   includedServices?: { name: string; description: string }[];
+  /** Spec 04 frozen wrap-up plan + installments (stored checkout, post-selection). */
+  cleanupPlan?: CleanupPlan;
+  cleanupInstallments?: CleanupInstallment[];
+  /** Spec 03 complexity cleanup weight inside cleanupTotal (stored checkout). */
+  complexityCleanupAdd?: number;
 };
 
 // ─── Static data ──────────────────────────────────────────────────────────────
@@ -744,6 +753,7 @@ export default function OfferProposalPreview(props: OfferProposalPreviewProps = 
         publicCompanyBundle={publicBundle}
         publicComplexityWhyByTier={props.publicProposal.complexityWhyByTier}
         publicComplexityWhy={props.publicProposal.complexityWhy}
+        publicCleanupPlan={props.publicProposal.cleanupPlan ?? null}
         livePublic
       />
     );
@@ -802,6 +812,7 @@ function OfferProposalPreviewView({
   publicCompanyBundle = null,
   publicComplexityWhyByTier = null,
   publicComplexityWhy: legacyPublicComplexityWhy = null,
+  publicCleanupPlan = null,
 }: Omit<OfferProposalPreviewProps, "assessment" | "initialAssessment" | "initialContactInfo" | "publicProposal"> & {
   assessment: PreviewAssessment | AssessmentState;
   contactInfo: PreviewContactInfo;
@@ -822,6 +833,11 @@ function OfferProposalPreviewView({
    * The per-tier map is preferred; this is only the fallback.
    */
   publicComplexityWhy?: ComplexityPublicWhy[] | null;
+  /**
+   * Whitelisted Spec 04 plan for the public page; the view shows its terms
+   * pre-selection labelled as an estimate. Null (legacy) shows legacy terms.
+   */
+  publicCleanupPlan?: PublicCleanupPlan | null;
 }) {
   const { brand } = useBrand();
   const accountInventory: PublicAccountInventory | null | undefined = livePublic
@@ -1459,6 +1475,66 @@ function OfferProposalPreviewView({
     annualPrepay: hasTwelveMonthAgreement,
     creditApplied: firstPaymentCredit,
   });
+  // Spec 04 wrap-up plan for the payment plan display (priority + legacy
+  // gating live in resolvePreviewCleanupDisplay, unit-tested beside it).
+  const { plan: displayCleanupPlan, installments: displayCleanupInstallments, isEstimate: displayIsEstimate } = resolvePreviewCleanupDisplay({
+    // The live public view leans on the whitelisted plan before any tier is
+    // picked (its period rows toggle per card, not through the selected tier).
+    hasCleanup: hasCleanup || (livePublic && publicCleanupPlan !== null),
+    livePublic,
+    staffCleanupPlan: !livePublic ? (assessment as AssessmentState).cleanupPlan : null,
+    publicCleanupPlan: livePublic ? publicCleanupPlan ?? null : null,
+    checkoutCleanupPlan: checkoutSummary?.cleanupPlan,
+    checkoutInstallments: checkoutSummary?.cleanupInstallments,
+    selectedCleanupMonths,
+    selectedCleanupTotal,
+  });
+  // M2: the displayed cleanup total always equals the shown installments —
+  // post-selection the frozen checkout add applies, otherwise no add.
+  const displayComplexityAdd = checkoutSummary?.complexityCleanupAdd ?? 0;
+  // Lead ruling: before selection the wrap-up calendar date would go stale,
+  // so every surface showing it reads the cleanup length instead ("about N
+  // weeks after you accept"). After selection the stored checkout plan shows
+  // its exact refreshed dates. The live public display plan carries a
+  // placeholder start, so its weeks come from the server-computed payload.
+  const showLengthWording = displayCleanupPlan !== null && !checkoutSummary?.cleanupPlan;
+  const lengthWeeks = showLengthWording && displayCleanupPlan !== null
+    ? (livePublic
+      ? publicCleanupPlan?.wrapUpWeeks
+        ?? cleanupWeeksBetween(displayCleanupPlan.startDate, displayCleanupPlan.wrapUpDate)
+      : cleanupWeeksBetween(displayCleanupPlan.startDate, displayCleanupPlan.wrapUpDate))
+    : null;
+  // The embedded agreement reads the same wording plan the payment sections
+  // show: pre-selection the start rewinds by the week count so the agreement
+  // length builders resolve the same N; post-selection it is the checkout
+  // plan untouched.
+  const agreementCleanupPlan = showLengthWording && displayCleanupPlan !== null && lengthWeeks !== null
+    ? { ...displayCleanupPlan, startDate: addDaysIso(displayCleanupPlan.wrapUpDate, -lengthWeeks * 7) }
+    : displayCleanupPlan;
+  // Live public pre-selection: bridge the whitelisted full-scope schedule's
+  // per-month complexity rate onto the toggled months, mirroring the staff
+  // pattern (reactive totals, full-scope schedule, estimate-labelled).
+  const isLiveEstimate = livePublic && !checkoutSummary && displayCleanupPlan !== null;
+  const liveEstimatePerMonth = (() => {
+    if (!isLiveEstimate) return 0;
+    const allMonths = (assessment.historicalCleanupPeriods ?? []).reduce((total, period) => total + periodMonthCount(period), 0);
+    if (allMonths <= 0) return 0;
+    const scheduleCents = displayCleanupInstallments.reduce((total, item) => total + item.amountCents, 0);
+    const baseCents = Math.round(allMonths * options.maintain.monthlyPrice * 100);
+    return (scheduleCents - baseCents) / allMonths / 100;
+  })();
+  const liveEstimateSchedule = (months: number) => {
+    if (!isLiveEstimate || !displayCleanupPlan || months <= 0) return null;
+    const base = Math.round(months * options.maintain.monthlyPrice * 100) / 100;
+    const total = Math.round((base + liveEstimatePerMonth * months) * 100) / 100;
+    return {
+      add: Math.round((total - base) * 100) / 100,
+      installments: buildCleanupInstallments(Math.round(total * 100), displayCleanupPlan),
+    };
+  };
+  const sectionLiveSchedule = liveEstimateSchedule(checkoutSummary?.cleanupMonths ?? selectedCleanupMonths);
+  // M3: staff-only flag when the stored override was reset at selection time.
+  const storedPlanAdjustedAtSelection = !livePublic && checkoutSummary?.cleanupPlan?.wrapUpAdjustedAtSelection === true;
   const chargeFirstMonth = currentSchedule.firstMonthDueNow;
   const chargeOnboarding = selectedOnboardingFee ?? 0;
   const calculatedChargeAmount = currentSchedule.amountDueNow;
@@ -1498,6 +1574,14 @@ function OfferProposalPreviewView({
     agreementTemplate?.name
     ?? assessment.agreementTemplateName
     ?? DEFAULT_AGREEMENT_TEMPLATE_NAME;
+  // The terms blocks quote the extension clause: name the $150 fee only
+  // when the agreement template being rendered charges it (same detection
+  // the template renderer uses).
+  const agreementMentionsMaintenanceFee = agreementMentionsFileFee(
+    agreementTemplate?.content
+      ?? assessment.agreementTemplateContent
+      ?? DEFAULT_BOOKKEEPING_AGREEMENT_TEMPLATE,
+  );
   const embeddedAgreementText = renderAgreementTemplate(
     agreementTemplate?.content
       ?? assessment.agreementTemplateContent
@@ -1528,7 +1612,11 @@ function OfferProposalPreviewView({
       paymentScheduleVersion: stagedPayment ? 2 : undefined,
       cleanupMonths: selectedCleanupMonths,
       cleanupMonthlyRate: options.maintain.monthlyPrice,
-      complexityCleanupAdd: checkoutSummary?.complexityCleanupAdd,
+      cleanupPlan: agreementCleanupPlan,
+      wrapUpDateWording: showLengthWording ? "length" : undefined,
+      cleanupInstallments: displayCleanupInstallments,
+      complexityCleanupAdd: sectionLiveSchedule?.add ?? displayComplexityAdd,
+      monthlyRate: checkoutSummary?.recurringMonthlyTotal ?? selectedMonthlyCharge,
       additionalOneTimeTotal: selectedAdditionalOneTimeTotal,
       requiredOneTime: selectedOptionId
         ? additionalOptionRowsFor(selectedOptionId)
@@ -1546,17 +1634,24 @@ function OfferProposalPreviewView({
   );
   const displayedAgreementText = engagementId ? agreementText : embeddedAgreementText;
   const selectedPaymentPlan = stagedPayment && selectedOptionId ? (
+    <>
     <ProposalPaymentPlan
       cleanupMonths={checkoutSummary?.cleanupMonths ?? selectedCleanupMonths}
       cleanupMonthlyRate={checkoutSummary?.cleanupMonthlyRate ?? options.maintain.monthlyPrice}
       onboardingFee={checkoutSummary?.onboardingFee ?? selectedOnboardingFee ?? 0}
       recurringMonthlyTotal={checkoutSummary?.recurringMonthlyTotal ?? selectedMonthlyCharge}
+      cleanupPlan={displayCleanupPlan}
+      cleanupInstallments={sectionLiveSchedule?.installments ?? displayCleanupInstallments}
+      complexityCleanupAdd={sectionLiveSchedule?.add ?? displayComplexityAdd}
+      cleanupIsEstimate={displayIsEstimate}
+      cleanupLengthWeeks={lengthWeeks}
+      mentionFileFee={agreementMentionsMaintenanceFee}
+      brandName={brand.name}
       additionalOneTimeTotal={checkoutSummary?.additionalOneTimeTotal ?? selectedAdditionalOneTimeTotal}
       requiredOneTime={additionalOptionRowsFor(selectedOptionId).filter((row) => row.required && !row.billEvery).map((row) => ({ name: row.serviceName, price: row.price * row.quantity }))}
       annual={checkoutSummary?.hasTwelveMonthAgreement ?? hasTwelveMonthAgreement}
       amountDueNow={chargeAmount}
       annualSavingsPercent={annualSavingsPercent}
-      complexityCleanupAdd={checkoutSummary?.complexityCleanupAdd}
       creditApplied={isTestProposal ? 0 : checkoutSummary?.creditApplied ?? (checkoutSummary ? 0 : firstPaymentCredit)}
       originalOnboardingFee={assessment.showOriginalOneTimePrices !== false && isOnboardingFeeWaived(assessment)
         ? getListedOnboardingFee({
@@ -1566,6 +1661,10 @@ function OfferProposalPreviewView({
         : undefined}
       showStages
     />
+    {storedPlanAdjustedAtSelection ? (
+      <p className="mt-2 text-xs leading-5 text-slate-500">Staff only: the wrap-up date was reset to the default at selection time — the stored override predated the refreshed start.</p>
+    ) : null}
+    </>
   ) : null;
   const agreementIsOpen = agreementManagerStatus === "ACTIVE" || agreementManagerStatus === "ARCHIVED";
 
@@ -1943,6 +2042,7 @@ function OfferProposalPreviewView({
                   const additionalSetup  = paidOneTime.filter((r) => !r.cleanupPeriodKey && !isOnboarding(r) && !packageAdditionalOptionRows.some((addOn) => addOn.id === r.id));
 
                   const lowerTierId: OptionId | null = id === "grow" ? "improve" : id === "improve" ? "maintain" : null;
+                  const cardLiveSchedule = liveEstimateSchedule(selectedCleanupMonths);
                   const { includedRows } = pricingCardServices(option, lowerTierId ? options[lowerTierId] : undefined);
                   // One package is in view at a time, so each card lists everything; rows new at this tier stay highlighted.
                   const newAtThisTier = new Set(includedRows.map((row) => row.id));
@@ -2081,8 +2181,20 @@ function OfferProposalPreviewView({
                             annual={hasTwelveMonthAgreement} amountDueNow={isTestProposal ? 1 : undefined}
                             annualSavingsPercent={annualSavingsPercent}
                             originalOnboardingFee={assessment.showOriginalOneTimePrices !== false && onboardingWaived ? originalOnboardingFee : undefined}
-                            complexityCleanupAdd={checkoutSummary?.complexityCleanupAdd}
-                            creditApplied={isTestProposal ? 0 : firstPaymentCredit} />
+                            creditApplied={isTestProposal ? 0 : firstPaymentCredit}
+                            cleanupPlan={displayCleanupPlan}
+                            cleanupInstallments={cardLiveSchedule?.installments
+                              ?? checkoutSummary?.cleanupInstallments
+                              ?? (livePublic
+                                ? displayCleanupInstallments
+                                : displayCleanupPlan
+                                  ? buildCleanupInstallments(Math.round(selectedCleanupMonths * options.maintain.monthlyPrice * 100), displayCleanupPlan)
+                                  : [])}
+                            complexityCleanupAdd={cardLiveSchedule?.add
+                              ?? checkoutSummary?.complexityCleanupAdd ?? 0}
+                            cleanupIsEstimate={displayIsEstimate}
+                            cleanupLengthWeeks={lengthWeeks}
+                            mentionFileFee={agreementMentionsMaintenanceFee} />
                         </div>
                         <button
                           type="button"

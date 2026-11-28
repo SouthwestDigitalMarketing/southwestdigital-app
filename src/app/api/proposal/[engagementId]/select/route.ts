@@ -8,7 +8,8 @@ import {
 } from "@/lib/engagements/proposalCheckout";
 import { resolveOnboardingWaiverForEngagement } from "@/lib/discounts/resolveOnboardingWaiver";
 import { hasPublicProposalAccess, publicProposalNotFound } from "@/lib/engagements/publicProposalAccess";
-import { catalogCopyFromRows, storedComplexityCleanupPerMonthForSnapshot, toPublicBookkeepingProposal } from "@/lib/quotes/publicProposal";
+import { catalogCopyFromRows, storedCleanupPlanInputForSnapshot, storedComplexityCleanupPerMonthForSnapshot, toPublicBookkeepingProposal } from "@/lib/quotes/publicProposal";
+import { staffDateKey } from "@/lib/quotes/staffDates";
 import { asCompanyBundleSnapshot } from "@/lib/quotes/companyBundle";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
 import { lockQuoteMutation, QuoteMutationConflictError } from "@/lib/quotes/mutationLock";
@@ -98,6 +99,9 @@ export async function POST(
       ? publishedSnapshot.pricing
       : {};
     const snapshotBundle = asCompanyBundleSnapshot(storedPricing.companyBundle);
+    // Spec 04: the public assessment strips `cleanupPlan`, so carry the
+    // whitelisted plan input back in or no plan-bearing checkout can exist.
+    const storedPlanInput = storedCleanupPlanInputForSnapshot(publishedSnapshot);
     // Spec 03: the public pricing strips the priced `maintain.complexity`
     // object, so carry the per-month cleanup rate or the real select flow
     // always stores `complexityCleanupAdd: undefined`. Only the number the
@@ -110,6 +114,7 @@ export async function POST(
           companies: storedAssessment.companies,
           bundlePricingOptions: storedAssessment.bundlePricingOptions,
           bundlePricingDefaults: storedAssessment.bundlePricingDefaults,
+          ...(storedPlanInput !== null ? { cleanupPlan: storedPlanInput } : {}),
         },
         pricing: {
           ...publicProposal.pricing,
@@ -124,6 +129,8 @@ export async function POST(
         isTestProposal: isRecord(publishedSnapshot) && publishedSnapshot.isTestProposal === true,
       },
       selection,
+      // M3: the selection date (firm-Chicago calendar) anchors the plan refresh.
+      { todayISO: staffDateKey(new Date()) },
     );
     if (await resolveOnboardingWaiverForEngagement(engagementId)) {
       checkout = applyOnboardingWaiver(checkout);

@@ -5,6 +5,16 @@ import {
   resolveBundlePricingOptions,
   resolveCompanyBundleForTier,
 } from "@/lib/quotes/companyBundle";
+import {
+  buildCleanupInstallments,
+  cleanupMonthsFromSelectedPeriods,
+  readCleanupInstallments as readStoredCleanupInstallments,
+  readCleanupPlan as readStoredCleanupPlan,
+  refreshCleanupPlanAtSelection,
+  type CleanupInstallment,
+  type CleanupPlan,
+} from "@/lib/quotes/cleanupPlan";
+import { staffDateKey } from "@/lib/quotes/staffDates";
 import { proposalIncludedServices, proposalServiceAddOns } from "@/lib/quotes/proposalServices";
 import { proposalPaymentSchedule } from "@/lib/quotes/paymentSchedule";
 
@@ -35,6 +45,18 @@ export type ProposalCheckoutSummary = ProposalCheckoutSelection & {
   complexityCleanupAdd?: number;
   /** Months of recurring service covered by today's payment: 1, or 12 on a prepaid annual term. */
   prepaidMonths?: number;
+  /**
+   * Spec 04 wrap-up plan, stored only when the published snapshot carried
+   * `assessment.cleanupPlan` and cleanup months were selected. Absent on
+   * legacy checkouts, whose stored terms stay byte-identical.
+   */
+  cleanupPlan?: CleanupPlan;
+  /**
+   * Installment schedule for the stored cleanup total (sums to
+   * `cleanupTotal`, complexity add included). Frozen at selection time —
+   * never recomputed on read, so signed terms cannot drift.
+   */
+  cleanupInstallments?: CleanupInstallment[];
   /** Credit for money already paid, deducted from amountDueNow. Absent when there is none. */
   creditApplied?: number;
   amountDueBeforeCredit?: number;
@@ -58,6 +80,20 @@ function money(value: number) {
 function uniqueStrings(value: unknown) {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.filter((item): item is string => typeof item === "string" && item.length > 0))];
+}
+
+/**
+ * Stored Spec 04 wrap-up plans are frozen client terms: parse accepts them
+ * only when every field is well-formed, otherwise the keys are dropped (the
+ * checkout still parses — it just reads as a legacy no-plan checkout). The
+ * strict validators are shared with the agreement reader and the receipt.
+ */
+function parseStoredCleanupPlan(value: unknown): CleanupPlan | null {
+  return readStoredCleanupPlan(value);
+}
+
+function parseStoredCleanupInstallments(value: unknown): CleanupInstallment[] | null {
+  return readStoredCleanupInstallments(value);
 }
 
 export function isProposalCheckoutTier(value: unknown): value is ProposalCheckoutTier {
@@ -136,6 +172,15 @@ export function parseStoredProposalCheckout(value: unknown): ProposalCheckoutSum
       includedServices: Array.isArray(value.includedServices) ? value.includedServices.filter(isRecord)
         .filter((item) => typeof item.name === "string" && typeof item.description === "string")
         .map((item) => ({ name: item.name as string, description: item.description as string })) : [],
+      // Spec 04 wrap-up plan + frozen installments: only on checkouts stored
+      // with a plan and cleanup months. Anything malformed reads as legacy.
+      ...(() => {
+        if (typeof value.cleanupMonths !== "number" || value.cleanupMonths <= 0) return {};
+        const cleanupPlan = parseStoredCleanupPlan(value.cleanupPlan);
+        const cleanupInstallments = parseStoredCleanupInstallments(value.cleanupInstallments);
+        if (!cleanupPlan || !cleanupInstallments) return {};
+        return { cleanupPlan, cleanupInstallments };
+      })(),
     } : {}),
   };
 }
@@ -183,6 +228,7 @@ export function resolveBundleCheckoutAmounts(
 export function buildProposalCheckoutSummary(
   publishedSnapshot: unknown,
   selection: ProposalCheckoutSelection,
+  opts?: { todayISO?: string },
 ): ProposalCheckoutSummary {
   if (!isRecord(publishedSnapshot)) throw new Error("Published offer snapshot is missing.");
   const assessment = isRecord(publishedSnapshot.assessment) ? publishedSnapshot.assessment : {};
@@ -274,10 +320,25 @@ export function buildProposalCheckoutSummary(
     }),
   );
   const selectedCleanupPeriodKeys = [...new Set(selection.selectedCleanupPeriodKeys)].filter((key) => availablePeriods.has(key));
-  const selectedCleanupMonths = selectedCleanupPeriodKeys.reduce((total, key) => {
-    const period = availablePeriods.get(key);
-    return total + (period ? period.endMonth - period.startMonth + 1 : 0);
-  }, 0);
+  // Spec 04: when the snapshot carries a wrap-up plan, the month count is the
+  // sum of SELECTED periods (the count the client explicitly approves, via
+  // the shared helper). Without a plan the legacy envelope count stays, so
+  // proposals without a plan price exactly as today.
+  const rawCleanupPlan = isRecord(assessment.cleanupPlan) ? assessment.cleanupPlan : null;
+  const selectedCleanupMonths = rawCleanupPlan
+    ? cleanupMonthsFromSelectedPeriods(
+        periods.map((period, index) => ({
+          id: typeof period.id === "string" && period.id.length > 0 ? period.id : `period-${index}`,
+          year: finiteNumber(period.year),
+          startMonth: finiteNumber(period.startMonth),
+          endMonth: finiteNumber(period.endMonth),
+        })),
+        selection.selectedCleanupPeriodKeys,
+      )
+    : selectedCleanupPeriodKeys.reduce((total, key) => {
+        const period = availablePeriods.get(key);
+        return total + (period ? period.endMonth - period.startMonth + 1 : 0);
+      }, 0);
   const maintainMonthly = money(finiteNumber(maintainPricing.monthly));
 
   const waived = assessment.waiveOnboardingFee === true || assessment.onboardingFeeOverride === 0;
@@ -305,6 +366,23 @@ export function buildProposalCheckoutSummary(
     creditApplied: money(finiteNumber(assessment.firstPaymentCredit)),
   });
   const cleanupTotalWithComplexity = money(cleanupTotal + complexityCleanupAdd);
+  // Spec 04: store the wrap-up plan + frozen installments only when the
+  // snapshot had a plan and months were selected. The plan is refreshed for
+  // the selection date (M1 caught-up-through from the selected periods, M3
+  // start = selection + 14 days with stale overrides reset and flagged)
+  // and installments are cut from the stored cleanup total, complexity add
+  // included. amountDueNow semantics are untouched — nothing for cleanup
+  // is charged today.
+  const normalizedCleanupPlan = rawCleanupPlan && selectedCleanupMonths > 0
+    ? refreshCleanupPlanAtSelection(rawCleanupPlan, {
+        backlogMonths: selectedCleanupMonths,
+        selectedKeys: selectedCleanupPeriodKeys,
+        todayISO: opts?.todayISO ?? staffDateKey(new Date()),
+      })
+    : null;
+  const storedCleanupInstallments = normalizedCleanupPlan
+    ? buildCleanupInstallments(Math.round(cleanupTotalWithComplexity * 100), normalizedCleanupPlan)
+    : null;
   const chargeKind: ProposalCheckoutSummary["chargeKind"] = selectedCleanupMonths > 0
     ? "onboarding_and_discovery"
     : onboardingFee > 0 ? "onboarding_and_first_month" : "first_month";
@@ -327,6 +405,11 @@ export function buildProposalCheckoutSummary(
     ...(creditApplied > 0 ? { creditApplied, amountDueBeforeCredit } : {}),
     // Only present when a complexity cleanup add applies (legacy: absent).
     ...(complexityCleanupAdd > 0 ? { complexityCleanupAdd } : {}),
+    // Only present when the snapshot had a cleanupPlan and months were
+    // selected (legacy: absent, so stored terms hash exactly as before).
+    ...(normalizedCleanupPlan && storedCleanupInstallments
+      ? { cleanupPlan: normalizedCleanupPlan, cleanupInstallments: storedCleanupInstallments }
+      : {}),
     paymentScheduleVersion: 2 as const,
     cleanupMonths: selectedCleanupMonths,
     cleanupMonthlyRate: maintainMonthly,

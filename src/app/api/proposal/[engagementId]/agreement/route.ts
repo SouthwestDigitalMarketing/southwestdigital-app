@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateProposalAgreementText } from "@/lib/engagements/agreementGenerator";
-import { renderAgreementTemplate } from "@/lib/agreements/template";
 import { hasPublicProposalAccess, publicProposalNotFound } from "@/lib/engagements/publicProposalAccess";
 import { readAcceptedSelection } from "@/lib/engagements/acceptedPayment";
 import { parseStoredProposalCheckout } from "@/lib/engagements/proposalCheckout";
@@ -16,6 +15,11 @@ import {
   resolveBundlePricingOptions,
   resolveCompanyBundleForTier,
 } from "@/lib/quotes/companyBundle";
+import {
+  readCleanupInstallments,
+  readCleanupPlan,
+  renderAgreementTemplate,
+} from "@/lib/agreements/template";
 import { requiredOneTimeAddOnsForTier } from "@/lib/quotes/proposalServices";
 import { effectiveAssessment } from "@/app/(app)/offers/builder/effectiveAssessment";
 import type { AssessmentState } from "@/app/(app)/offers/builder/ProposalCreationWorkspaceDemo";
@@ -87,6 +91,12 @@ export async function GET(
   const amountDueNow = typeof services.amountDueNow === "number" ? services.amountDueNow : 0;
   const checkout = parseStoredProposalCheckout(services);
   const hasCleanup = checkout?.paymentScheduleVersion === 2 ? (checkout.cleanupMonths ?? 0) > 0 : cleanupTotal > 0;
+  // Spec 04: plan + frozen installments ride the stored checkout. The
+  // strict shared validators read them (junk is absent, so signed text is
+  // never rebuilt with altered terms); the template derives installments
+  // from the plan when only the plan is present.
+  const cleanupPlan = readCleanupPlan(services.cleanupPlan);
+  const cleanupInstallments = readCleanupInstallments(services.cleanupInstallments);
   const selectedCleanupPeriods = Array.isArray(services.selectedCleanupPeriodKeys)
     ? services.selectedCleanupPeriodKeys.filter((value): value is string => typeof value === "string")
     : [];
@@ -152,7 +162,10 @@ export async function GET(
     paymentScheduleVersion: checkout?.paymentScheduleVersion,
     cleanupMonths: checkout?.cleanupMonths,
     cleanupMonthlyRate: checkout?.cleanupMonthlyRate,
+    cleanupPlan,
+    cleanupInstallments,
     complexityCleanupAdd: checkout?.complexityCleanupAdd,
+    monthlyRate: recurringMonthlyTotal,
     additionalOneTimeTotal: checkout?.additionalOneTimeTotal,
     // Tier-filtered exactly like checkout, so no line appears that isn't
     // charged on the selected tier.
