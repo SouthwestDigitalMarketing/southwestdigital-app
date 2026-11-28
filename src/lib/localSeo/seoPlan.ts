@@ -57,7 +57,7 @@ export const SEO_PLAN: SeoPlanSection[] = [
         title: "Schema: profile link, listings, Thomas",
         status: "done",
         what: "The page code now links the Google profile (static map link), Manta, ChamberofCommerce.com and Pinterest, and describes Thomas as the founder.",
-        next: "Add Yelp and Bing (both live since 2026-11-26/27) to sameAs on the homepage; Apple when approved.",
+        next: "Yelp added to the homepage sameAs (BC PR #97, 2026-11-28). Bing has no public listing URL. Add Apple when approved.",
       },
       {
         title: "Homepage H1: bookkeeper, Conroe",
@@ -116,7 +116,8 @@ export const SEO_PLAN: SeoPlanSection[] = [
         title: "Posts every other day",
         status: "ongoing",
         what: "One post per money page, each linking to that page, scheduled in Google with the Schedule switch.",
-        next: "Scheduled through 2026-12-09. The next batch (4 posts: payroll, a town page, real estate, CFO advisory) is not written yet; schedule it before 2026-12-05.",
+        next: "Scheduled through 2026-12-09. Next 4 written 2026-11-28 (Dec 5 rental property, Dec 7 Magnolia, Dec 11 CFO advisory, Dec 13 audit support; text in All Thing sop-local-seo-calendar). Schedule them in Google before 2026-12-05.",
+        blocker: "Tom's go on the text, and a clean browser on ripley to schedule them.",
       },
       {
         title: "Categories, services, products",
@@ -170,13 +171,13 @@ export const SEO_PLAN: SeoPlanSection[] = [
         title: "Bing Places",
         status: "done",
         what: "Live: Bing emailed \"Your business is live on Bing\" on 2026-11-27.",
-        next: "Add it to schema sameAs.",
+        next: "Nothing. No public listing URL to add to schema.",
       },
       {
         title: "Yelp",
         status: "done",
         what: "Live: Yelp reported page visits from 2026-11-19 and more activity on 2026-11-26.",
-        next: "Add it to schema sameAs. Ignore Yelp's paid-ads pitches.",
+        next: "In schema sameAs since 2026-11-28. Ignore Yelp's paid-ads pitches.",
       },
       {
         title: "Data Axle",
