@@ -36,7 +36,7 @@ import {
   creditAppliedLabel,
   resolveDisplayServiceStartMonth,
 } from "@/lib/quotes/serviceStartDisplay";
-import { serviceStartText } from "@/lib/quotes/serviceStart";
+import { annualServiceStartText, serviceStartText } from "@/lib/quotes/serviceStart";
 import { addDaysIso, buildCleanupInstallments, cleanupWeeksBetween } from "@/lib/quotes/cleanupPlan";
 import type { CleanupInstallment, CleanupPlan } from "@/lib/quotes/cleanupPlan";
 import { resolvePreviewCleanupDisplay } from "./previewCleanupPlan";
@@ -1635,6 +1635,13 @@ function OfferProposalPreviewView({
         : chargeOnboarding > 0 && chargeFirstMonth > 0
     ? "Onboarding + First Month"
     : chargeIsFirstMonth ? "First Month" : "Your Deposit";
+  // Spec 06: the start-month sentence follows the term — prepaid annuals read
+  // the annual variant, mirroring ProposalPaymentPlan and the agreement template.
+  const serviceStartSentence = !displayServiceStartMonth
+    ? null
+    : hasTwelveMonthAgreement
+      ? annualServiceStartText(displayServiceStartMonth)
+      : serviceStartText(displayServiceStartMonth);
   const chargeDescription = isTestProposal
     ? "This proposal is explicitly marked for testing. It exercises the real payment flow with a $1 total."
     : stagedPayment && hasCleanup
@@ -1642,9 +1649,9 @@ function OfferProposalPreviewView({
     : selectedCleanupTotal > 0
       ? "Covers the selected cleanup work and onboarding so work can begin."
       : chargeOnboarding > 0 && chargeFirstMonth > 0
-    ? `Covers onboarding and prepays your first month. ${displayServiceStartMonth ? serviceStartText(displayServiceStartMonth) : "We confirm your service start date after receiving the required access and records."}`
+    ? `Covers onboarding and prepays your first month. ${serviceStartSentence ?? "We confirm your service start date after receiving the required access and records."}`
     : chargeIsFirstMonth
-      ? `Prepays your first month. ${displayServiceStartMonth ? serviceStartText(displayServiceStartMonth) : "We confirm your service start date during onboarding."}`
+      ? `Prepays your first month. ${serviceStartSentence ?? "We confirm your service start date during onboarding."}`
       : "Covers onboarding, document collection, and discovery. Earned upon signing and non-refundable.";
   const clientSteps = [
     "Cover",
@@ -1682,7 +1689,7 @@ function OfferProposalPreviewView({
       recurringMonthlyTotal: selectedMonthlyCharge,
       cleanupTotal: selectedCleanupTotal,
       amountDueNow: chargeAmount,
-      creditApplied: isTestProposal ? 0 : checkoutSummary?.creditApplied ?? (checkoutSummary ? 0 : firstPaymentCredit),
+      creditApplied: isTestProposal ? 0 : checkoutSummary?.creditApplied ?? (checkoutSummary ? 0 : currentSchedule.creditApplied),
       serviceStartMonth: displayServiceStartMonth,
       firstPaymentCreditReason: displayCreditReason,
       creditRemaining: summaryCreditRemaining,
