@@ -42,6 +42,7 @@ export const NAV_DESTINATIONS: Array<{
   { id: "nav.website", title: "Website", href: "/website", keys: "g w" },
   { id: "nav.showrunner", title: "Showrunner", href: "/showrunner", keys: "g y", aliases: ["youtube", "episode", "series", "video"] },
   { id: "nav.travel", title: "Japan", href: "/travel", aliases: ["travel", "trip", "trips", "itinerary", "fukuoka"] },
+  { id: "nav.music", title: "Music", href: "/music", aliases: ["band", "wedding band", "gigs", "easy wedding band"] },
   { id: "nav.reports", title: "Reports", href: "/reports", aliases: ["report", "pdf", "monthly"] },
   { id: "nav.reviews", title: "Reviews", href: "/reviews", keys: "g r" },
   { id: "nav.contacts", title: "Contacts", href: "/contacts", keys: "g c", aliases: ["people", "leads"] },
