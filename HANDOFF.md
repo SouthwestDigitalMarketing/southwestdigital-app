@@ -1,4 +1,11 @@
 # SWapp handoff
+## 2026-11-27 — Proposal builder spec 07: promises match the agreement (Ummon)
+- New publishes stamp `snapshot.supportCopy` (v2): Concierge = "We reply within 2 business hours (Mon–Fri, 9–5 Central)...". Snapshots without it render `LEGACY_SUPPORT_COPY` (byte-equal to the old text incl. "24/7"), so old/accepted proposals look unchanged.
+- New selections get a "WHAT'S INCLUDED" agreement block from the same services/support data the proposal shows (not numbered).
+- Promise check (24/7, unlimited, guarantee, same day, tax filing, audit, CPA) on client-facing text; publish/send paths blocked server-side until each hit is edited or confirmed (confirmation tied to the text hash). SMS link is UI-warned only.
+- New publishes freeze client-facing bonus/option descriptions so catalog edits can't change a live proposal.
+- Brand catalog rows still contain "24/7 priority access" in some descriptions: the check will flag them; clean up in options templates.
+
 ## 2026-11-27 — Proposal builder spec 06: start on the 1st, full first month, credits carry over (Ummon)
 - `src/lib/quotes/serviceStart.ts`: `serviceStartMonth` (default 1st of next month, Chicago; with a cleanup plan always the wrap-up month), frozen at selection. Proposal/agreement/receipt: "Service starts <Month 1, YYYY>. Billing is on the 1st of each month after." Live defaults never shown to clients before selection.
 - "The first month is billed in full..." line; no proration.
