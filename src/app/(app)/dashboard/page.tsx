@@ -478,7 +478,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           client: { select: { name: true, company: true } },
         },
       });
-    }).then((rows) => rows.filter((quote) => !quoteIsTestProposal(quote)).map((quote) => ({
+    }).then((rows) => rows.filter((quote) => !quoteIsTestProposal(quote)).slice(0, 50).map((quote) => ({
       id: quote.id,
       ...hide({ name: quote.client.name, company: quote.client.company }),
       slug: row.slug,
