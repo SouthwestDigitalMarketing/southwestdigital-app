@@ -5,6 +5,7 @@ import { getRecordMrr } from "@/lib/operations/serviceRecordsMrr";
 import { createBrandDataContext, withBrandDataTransaction } from "@/lib/tenancy/context";
 import { BRAND_WEBSITES } from "@/lib/brands/tools";
 import { summarizeCompanyMetrics, type BrandMetrics } from "./summary";
+import { quoteIsTestProposal } from "@/lib/quotes/testProposal";
 
 export { summarizeCompanyMetrics } from "./summary";
 export type { BrandMetrics, MetricsView } from "./summary";
@@ -35,13 +36,17 @@ export async function getCompanyMetrics(input: {
     const [mrr, activity] = await Promise.all([
       getRecordMrr(brand.id, input.now),
       withBrandDataTransaction(context, async (tx) => {
-        const [newLeads, sent, awaiting, replies] = await Promise.all([
+        const testFlags = { snapshotJson: true, engagement: { select: { isTestProposal: true } } } as const;
+        const [newLeads, sentQuotes, awaitingQuotes, replies] = await Promise.all([
           tx.meetingLead.count({ where: { brandId: brand.id, isActive: true, kind: "LEAD", createdAt: { gte: input.from, lt: input.to } } }),
           // Archived offers (tests, superseded versions) do not count as sent (Tom, 2026-11-24).
-          tx.quote.count({ where: { brandId: brand.id, sentAt: { gte: input.from, lt: input.to }, status: { not: "archived" } } }),
-          tx.quote.count({ where: { brandId: brand.id, status: "sent" } }),
+          tx.quote.findMany({ where: { brandId: brand.id, sentAt: { gte: input.from, lt: input.to }, status: { not: "archived" } }, select: testFlags }),
+          tx.quote.findMany({ where: { brandId: brand.id, status: "sent" }, select: testFlags }),
           tx.scorecardEvent.findMany({ where: { brandId: brand.id, startedAt: { gte: input.from, lt: input.to }, respondedAt: { not: null }, businessSeconds: { not: null }, channel: { in: ["text", "call", "email"] } }, select: { businessSeconds: true } }),
         ]);
+        // Test proposals are staff-only fixtures, not sales activity.
+        const sent = sentQuotes.filter((quote) => !quoteIsTestProposal(quote)).length;
+        const awaiting = awaitingQuotes.filter((quote) => !quoteIsTestProposal(quote)).length;
         return { newLeads, sent, awaiting, responseSeconds: replies.flatMap((row) => row.businessSeconds === null ? [] : [row.businessSeconds]) };
       }),
     ]);

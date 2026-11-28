@@ -35,6 +35,7 @@ import { BigNumbers, HowWeMeasure, LiveStrip, ResponseTimes } from "./_scorecard
 import { LiveRefresh } from "./_scorecard/LiveRefresh";
 import { parseRange } from "./_scorecard/format";
 import { getCompanyMetrics } from "@/lib/companyMetrics";
+import { quoteIsTestProposal } from "@/lib/quotes/testProposal";
 import { isLochsideBrandSlug } from "@/lib/brands/active-brand";
 import { CompanyCarousel } from "./CompanyCarousel";
 import { TARGETS as SCORECARD_TARGETS } from "@/lib/scorecard/queries";
@@ -226,14 +227,20 @@ async function getOfferStats(brandId: string, selectedPeriod: DashboardPeriod) {
         },
       ],
     },
-    select: { status: true },
+    select: {
+      status: true,
+      snapshotJson: true,
+      engagement: { select: { isTestProposal: true } },
+    },
   });
+  // Test proposals are staff-only fixtures, not sales activity.
+  const real = offers.filter((offer) => !quoteIsTestProposal(offer));
 
   return {
-    sent: offers.length,
-    accepted: offers.filter((offer) => offer.status === "accepted").length,
-    rejected: offers.filter((offer) => offer.status === "rejected").length,
-    awaiting: offers.filter((offer) => offer.status === "sent").length,
+    sent: real.length,
+    accepted: real.filter((offer) => offer.status === "accepted").length,
+    rejected: real.filter((offer) => offer.status === "rejected").length,
+    awaiting: real.filter((offer) => offer.status === "sent").length,
   };
 }
 
@@ -460,10 +467,12 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         take: 50,
         select: {
           id: true, status: true, sentAt: true, firstViewedAt: true, totalRecurring: true, totalOneTime: true,
+          snapshotJson: true,
+          engagement: { select: { isTestProposal: true } },
           client: { select: { name: true, company: true } },
         },
       }),
-    ).then((rows) => rows.map((quote) => ({
+    ).then((rows) => rows.filter((quote) => !quoteIsTestProposal(quote)).map((quote) => ({
       id: quote.id,
       ...hide({ name: quote.client.name, company: quote.client.company }),
       slug: row.slug,
