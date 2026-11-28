@@ -1,4 +1,11 @@
 # SWapp handoff
+## 2026-11-27 — SM7B chest / Stern EQ on the episode page (Johnny)
+
+Tom picked clip 5 (SM7B STS). It was thin on bass. Same take now has 6
+(+5 dB @ 110 Hz chest) and 7 (more proximity bass + radio compression +
+3.5 kHz bite). 5 stays as the uneq'd reference. Recut still waits on 6 or 7.
+Files `public/showrunner/audio-ab/6-sm7b-chest.mp3` and `7-sm7b-stern.mp3`.
+
 ## 2026-11-27 — Proposal builder spec 06: start on the 1st, full first month, credits carry over (Ummon)
 - `src/lib/quotes/serviceStart.ts`: `serviceStartMonth` (default 1st of next month, Chicago; with a cleanup plan always the wrap-up month), frozen at selection. Proposal/agreement/receipt: "Service starts <Month 1, YYYY>. Billing is on the 1st of each month after." Live defaults never shown to clients before selection.
 - "The first month is billed in full..." line; no proration.
