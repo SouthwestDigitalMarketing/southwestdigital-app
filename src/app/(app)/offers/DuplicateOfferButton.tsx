@@ -25,12 +25,15 @@ export function DuplicateOfferButton({
   contacts,
   archived,
   menuItem = false,
+  replaceMode = false,
 }: {
   offerId: string;
   currentContact: CurrentContact;
   contacts: ContactOption[];
   archived: boolean;
   menuItem?: boolean;
+  /** "Replace this proposal": the duplicate links back via snapshot `replacesQuoteId`. */
+  replaceMode?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -52,6 +55,7 @@ export function DuplicateOfferButton({
     if (contactId) data.set("contactId", contactId);
     if (archived) data.set("archived", "1");
     if (testProposal) data.set("testProposal", "1");
+    if (replaceMode) data.set("replace", "1");
     startTransition(async () => {
       try {
         setError(null);
@@ -67,8 +71,8 @@ export function DuplicateOfferButton({
     <>
       <button
         type="button"
-        aria-label="Duplicate offer"
-        title="Duplicate offer"
+        aria-label={replaceMode ? "Replace this proposal" : "Duplicate offer"}
+        title={replaceMode ? "Replace this proposal" : "Duplicate offer"}
         disabled={pending}
         onClick={(event) => {
           // The row "…" menu is a popover that hides itself on any button click
@@ -86,7 +90,7 @@ export function DuplicateOfferButton({
           : "ui-action-secondary inline-flex h-9 w-9 items-center justify-center rounded-full border transition disabled:opacity-40"}
       >
         <Copy className="h-4 w-4" />
-        {menuItem ? "Duplicate offer" : null}
+        {menuItem ? (replaceMode ? "Replace this proposal" : "Duplicate offer") : null}
       </button>
 
       {open ? (
@@ -99,7 +103,7 @@ export function DuplicateOfferButton({
           <div className="p-4 sm:p-5">
                 <div className="flex items-center justify-between gap-4">
                   <h2 id={`duplicate-offer-dialog-${offerId}`} className="text-lg font-semibold text-slate-900">
-                    Duplicate offer for…
+                    {replaceMode ? "Replace proposal with a new draft…" : "Duplicate offer for…"}
                   </h2>
                   <button
                     type="button"
@@ -113,9 +117,12 @@ export function DuplicateOfferButton({
                 </div>
 
                 <p className="mt-2 text-base text-slate-600">
-                  Choose the contact this duplicate is for. Their info will pre-populate the contact step.
+                  {replaceMode
+                    ? "Creates a new draft linked to this proposal. When the new draft is published or sent, this proposal expires automatically."
+                    : "Choose the contact this duplicate is for. Their info will pre-populate the contact step."}
                 </p>
 
+                {replaceMode ? null : (
                 <label className="mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
                   <input
                     type="checkbox"
@@ -128,6 +135,7 @@ export function DuplicateOfferButton({
                     <span className="mt-0.5 block text-amber-800">Runs the real signing and payment flow, but the amount due is limited to $1.</span>
                   </span>
                 </label>
+                )}
 
                 {currentContact.contactId ? (
                   <button

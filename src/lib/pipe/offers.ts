@@ -1,6 +1,9 @@
 import "server-only";
 
 import { isQuoteFrozen, quoteFreezeSelect } from "@/lib/quotes/isQuoteFrozen";
+import { resolveQuoteExpiresAtForWrite } from "@/lib/quotes/quoteExpiresAt";
+import { promoDeadlineFromSnapshot } from "@/lib/quotes/proposalValidity";
+import { supersedeReplacedQuoteOnWrite } from "@/lib/quotes/supersedeReplaced";
 import { lockQuoteMutation } from "@/lib/quotes/mutationLock";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -259,6 +262,22 @@ export async function setPipeOfferStatus(args: {
   if (isQuoteFrozen(quote)) throw new PipeOfferError("Accepted, signed or paid offers are frozen.");
 
   const revokePublicLink = args.status === "archived" && !quote.engagement?.signedAt;
+  let sendSnapshot: unknown = null;
+  let sentAt: Date | null = null;
+  let sendExpiresAt: Date | null = null;
+  if (args.status === "sent") {
+    const sendState = await prisma.quote.findFirst({
+      where: { id: args.offerId, brandId: brand.id },
+      select: { snapshotJson: true, expiresAt: true },
+    });
+    sendSnapshot = sendState?.snapshotJson ?? null;
+    sentAt = new Date();
+    sendExpiresAt = resolveQuoteExpiresAtForWrite({
+      at: sentAt,
+      snapshot: sendSnapshot,
+      promoDeadline: promoDeadlineFromSnapshot(sendSnapshot) ?? sendState?.expiresAt ?? null,
+    });
+  }
   const updated = await prisma.$transaction(async (tx) => {
     await lockQuoteMutation(tx, brand.id, quote.id, args.status === "archived" ? "edit" : "restore");
     return tx.quote.update({
@@ -266,13 +285,16 @@ export async function setPipeOfferStatus(args: {
     data: {
       status: args.status,
       ...(revokePublicLink ? { publicToken: null } : {}),
-      ...(args.status === "sent"
-        ? { sentAt: new Date(), firstSentAt: quote.firstSentAt ?? quote.sentAt ?? new Date(), lastSentAt: new Date() }
+      ...(args.status === "sent" && sentAt && sendExpiresAt
+        ? { sentAt, firstSentAt: quote.firstSentAt ?? quote.sentAt ?? sentAt, lastSentAt: sentAt, expiresAt: sendExpiresAt }
         : {}),
     },
     select: LIST_SELECT,
   });
   });
+  if (args.status === "sent") {
+    await supersedeReplacedQuoteOnWrite(brand.id, sendSnapshot, quote.id);
+  }
   return presentOffer(updated);
 }
 

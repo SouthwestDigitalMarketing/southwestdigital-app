@@ -3,6 +3,7 @@ import {
   getUrgencyExpiresAt,
   normalizeUrgencyOffer,
 } from "@/app/(app)/offers/builder/urgencyOffer";
+import { defaultProposalExpiryAt, minExpiresAt } from "./proposalValidity";
 
 export function quoteExpiresAtForPublish(input: {
   publishedAt: Date;
@@ -25,6 +26,21 @@ export function snapshotUrgencyFromSnapshot(snapshot: unknown): unknown {
       ? (record.assessment as Record<string, unknown>)
       : null;
   return assessment?.urgencyOffer ?? record.urgencyOffer ?? null;
+}
+
+/**
+ * Final `expiresAt` for a publish or send write: the proposal default
+ * (`sentAt + proposalValidityDays`, 30 days unless staff edited it), capped
+ * by the promotion deadline when one is earlier. Never call for frozen
+ * (accepted/signed/paid) quotes — callers assert that first.
+ */
+export function resolveQuoteExpiresAtForWrite(input: {
+  at: Date;
+  snapshot: unknown;
+  promoDeadline: Date | null | undefined;
+}): Date {
+  const fallback = defaultProposalExpiryAt(input.at, input.snapshot);
+  return minExpiresAt(fallback, input.promoDeadline ?? null) ?? fallback;
 }
 
 export function catalogDiscountWhereForQuote(input: {

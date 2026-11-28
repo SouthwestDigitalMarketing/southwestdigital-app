@@ -8,6 +8,11 @@ import { requireQuoteStaff } from "@/lib/quotes/access";
 import { formatUsd, SCENARIO_LABELS } from "@/lib/quotes/format";
 import { resumeOfferHref } from "@/lib/quotes/kinds";
 import { markQuoteSentAction } from "../actions";
+import { updateProposalValidityAction } from "./actions";
+import { DuplicateOfferButton } from "../DuplicateOfferButton";
+import { withBrandDataTransaction } from "@/lib/tenancy/context";
+import { quoteContactSummaryFromSnapshot } from "@/lib/quotes/clientInfo";
+import { proposalValidityDaysFromSnapshot } from "@/lib/quotes/proposalValidity";
 import type { QuoteSnapshot } from "@/lib/quotes/types";
 
 type PageProps = {
@@ -23,7 +28,7 @@ const STATUS_STYLE: Record<string, string> = {
 };
 
 export default async function QuoteDetailPage({ params, searchParams }: PageProps) {
-  const { brand } = await requireQuoteStaff();
+  const { brand, dataContext } = await requireQuoteStaff();
   const { id } = await params;
   const sp = await searchParams;
 
@@ -70,6 +75,20 @@ export default async function QuoteDetailPage({ params, searchParams }: PageProp
   ) : null;
 
   const snapshot = quote.snapshotJson as QuoteSnapshot;
+  const validityDays = proposalValidityDaysFromSnapshot(quote.snapshotJson);
+  const expiresLabel = quote.expiresAt
+    ? quote.expiresAt.toISOString().slice(0, 10)
+    : "no expiry set yet (stamped on publish or send)";
+  const contactSummary = quoteContactSummaryFromSnapshot(quote.snapshotJson, quote.client);
+  const replaceContacts = frozen
+    ? []
+    : await withBrandDataTransaction(dataContext, (transaction) =>
+        transaction.contact.findMany({
+          where: { brandId: brand.id, isActive: true },
+          orderBy: [{ name: "asc" }, { id: "asc" }],
+          select: { id: true, name: true, company: true, email: true },
+        }),
+      );
   if (!snapshot?.package || !snapshot.client) {
     if (frozen) return (
       <div className="mx-auto max-w-4xl space-y-6 p-8">
@@ -123,6 +142,62 @@ export default async function QuoteDetailPage({ params, searchParams }: PageProp
           <div className={`rounded-lg border px-4 py-3 text-sm font-medium ${banner.tone}`}>
             {banner.msg}
           </div>
+        )}
+
+        {!frozen && (
+          <section className="rounded-xl border border-slate-200 bg-white p-6">
+            <h2 className="text-base font-semibold text-slate-800">Proposal settings</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Public link expires {expiresLabel}. New publishes and sends use the validity below.
+            </p>
+            <form action={updateProposalValidityAction} className="mt-3 flex flex-wrap items-end gap-3">
+              <input type="hidden" name="id" value={quote.id} />
+              <label className="text-sm text-slate-600">
+                Valid for (days)
+                <input
+                  type="number"
+                  name="validityDays"
+                  min={1}
+                  max={365}
+                  defaultValue={validityDays}
+                  className="ml-2 w-24 rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-800"
+                />
+              </label>
+              <button
+                type="submit"
+                className="rounded-md border border-slate-200 px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Save validity
+              </button>
+            </form>
+            <div className="mt-4 border-t border-slate-100 pt-4">
+              <h3 className="text-sm font-semibold text-slate-800">Replace this proposal</h3>
+              <p className="mt-1 text-sm text-slate-500">
+                Creates a new draft linked to this proposal. When the new draft is published or
+                sent, this proposal expires automatically. No email is sent.
+              </p>
+              <div className="mt-2">
+                <DuplicateOfferButton
+                  offerId={quote.id}
+                  currentContact={{
+                    contactId: contactSummary.contactId,
+                    name: contactSummary.name,
+                    company: contactSummary.company,
+                    email: contactSummary.email || null,
+                  }}
+                  contacts={replaceContacts}
+                  archived={quote.status === "archived"}
+                  menuItem
+                  replaceMode
+                />
+              </div>
+            </div>
+            <p className="mt-4 text-sm">
+              <Link href="/offers/review" className="underline">
+                Review old proposal links
+              </Link>
+            </p>
+          </section>
         )}
 
         <div className="grid gap-4 sm:grid-cols-2">

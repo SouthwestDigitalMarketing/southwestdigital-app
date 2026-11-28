@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   expiresAtForQuotePublish,
   quoteExpiresAtForPublish,
+  resolveQuoteExpiresAtForWrite,
   snapshotUrgencyFromSnapshot,
 } from "./quoteExpiresAt";
 
@@ -70,5 +71,37 @@ describe("expiresAtForQuotePublish", () => {
     expect(snapshotUrgencyFromSnapshot({
       assessment: { urgencyOffer: { enabled: true, durationDays: 7 } },
     })).toEqual({ enabled: true, durationDays: 7 });
+  });
+});
+
+describe("resolveQuoteExpiresAtForWrite", () => {
+  const at = new Date("2026-09-01T12:00:00Z");
+
+  it("falls back to sentAt + 30 days when there is no promotion deadline", () => {
+    expect(
+      resolveQuoteExpiresAtForWrite({ at, snapshot: {}, promoDeadline: null }).toISOString(),
+    ).toBe("2026-10-01T12:00:00.000Z");
+  });
+
+  it("keeps the earlier promotion deadline", () => {
+    const promo = new Date("2026-09-10T00:00:00Z");
+    expect(resolveQuoteExpiresAtForWrite({ at, snapshot: {}, promoDeadline: promo })).toBe(promo);
+  });
+
+  it("ignores a later promotion deadline in favour of the default", () => {
+    const promo = new Date("2027-01-01T00:00:00Z");
+    expect(
+      resolveQuoteExpiresAtForWrite({ at, snapshot: {}, promoDeadline: promo }).toISOString(),
+    ).toBe("2026-10-01T12:00:00.000Z");
+  });
+
+  it("honours an edited per-proposal validity window", () => {
+    expect(
+      resolveQuoteExpiresAtForWrite({
+        at,
+        snapshot: { proposalValidityDays: 7 },
+        promoDeadline: null,
+      }).toISOString(),
+    ).toBe("2026-09-08T12:00:00.000Z");
   });
 });

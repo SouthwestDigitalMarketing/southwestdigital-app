@@ -10,6 +10,9 @@ import {
   EmailConnectionRegionInvalidError,
   sendFromMembership,
 } from "@/lib/emailConnections/send";
+import { resolveQuoteExpiresAtForWrite } from "@/lib/quotes/quoteExpiresAt";
+import { promoDeadlineFromSnapshot } from "@/lib/quotes/proposalValidity";
+import { supersedeReplacedQuoteOnWrite } from "@/lib/quotes/supersedeReplaced";
 
 function trim(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -68,17 +71,26 @@ export async function POST(request: Request) {
     }), timeout]).finally(() => clearTimeout(deadline));
     delivered = true;
     if (offerId) {
+      let sentSnapshot: Record<string, unknown> = {};
       await prisma.$transaction(async (tx) => {
         const quote = await lockQuoteMutation(tx, ctx.brand.id, offerId, "finishSend");
         const snapshot = asRecord(quote.snapshotJson);
         if (asRecord(snapshot.proposalSendClaim).id !== claimId) throw new QuoteMutationConflictError("Email send claim changed; check delivery before retrying.");
+        sentSnapshot = snapshot;
         const now = new Date();
+        const expiresAt = resolveQuoteExpiresAtForWrite({
+          at: now,
+          snapshot,
+          promoDeadline: promoDeadlineFromSnapshot(snapshot) ?? quote.expiresAt ?? null,
+        });
         await tx.quote.update({ where: { id: offerId }, data: {
           snapshotJson: { ...snapshot, proposalSendClaim: { id: claimId, state: "sent", messageId: result.messageId, finishedAt: now.toISOString() } } as Prisma.InputJsonValue,
           status: "sent", sentAt: now, firstSentAt: quote.firstSentAt ?? now,
-          lastSentAt: now, lastActivityAt: now, ...(quote.firstSentAt ? { lastFollowUpAt: now } : {}),
+          lastSentAt: now, lastActivityAt: now, expiresAt,
+          ...(quote.firstSentAt ? { lastFollowUpAt: now } : {}),
         } });
       });
+      await supersedeReplacedQuoteOnWrite(ctx.brand.id, sentSnapshot, offerId);
     }
 
     return NextResponse.json({ ok: true, from: result.fromAddress, provider: result.provider });
