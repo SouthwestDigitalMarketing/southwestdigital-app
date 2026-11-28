@@ -8,16 +8,30 @@
  *
  * No-double-charge rule: a driver whose `mapsToExisting` is set is already
  * priced by an existing monthly line (staffing headcount, an add-on, the
- * books-type adjustment). Checked, it emits a priced line with `monthly: 0`
- * and an `includedNote` naming that existing line — never an extra charge.
+ * books-type adjustment). Checked, when that existing line is present it
+ * emits a priced line with `monthly: 0` and an `includedNote` naming the
+ * existing line — never an extra charge. When the existing line is absent
+ * (see the `existing` presence input) the line keeps `monthly: 0` but
+ * carries `requiresExistingLine` naming the missing line instead of an
+ * "Included" note, so the wiring builder can turn that add-on on.
  * Only `mapsToExisting: null` drivers add new monthly money.
  *
- * Tier scaling rule: maintain-tier amounts are the code defaults below;
- * improve and grow scale by the SAME ratios the existing package lines use,
- * derived live from `packagePricing` constants
- * (`complexOperationsMonthly` 120/150/190, so improve = x1.25 and
- * grow = x190/120), rounded UP to $5 with `roundUpToNearestIncrement`.
- * Maintain-tier values are used as-is (so the $8 per-payee rate stays $8).
+ * Tier scaling rule: maintain-tier amounts are the code defaults below.
+ * Improve scales by the complexOperationsMonthly anchor ratio live from
+ * `packagePricing` (improve 150 / maintain 120 = x1.25), rounded UP to $5
+ * with `roundUpToNearestIncrement`. Anchor honesty note: 1.25 is the
+ * complex-operations line's ratio only — staffing (45/35), mixed-books
+ * (175/130), platform (55/40) each scale differently in the pipeline. The
+ * module deliberately anchors every driver to complexOperationsMonthly so
+ * there is one predictable rule.
+ * Grow is NEVER priced bottom-up: like the pipeline's
+ * `applyGrowPriceOverride`, every grow amount (monthly and cleanup add) is
+ * the maintain-tier amount x GROW_PRICE_MULTIPLIER_FROM_MAINTAIN (1.5),
+ * rounded UP to $5 with the same `roundUpToNearestIncrement`. Per-line grow
+ * values are each ceiled, so a set of grow lines can sum ABOVE
+ * ceil5(maintain total x 1.5) by less than $5 per extra line. The pipeline
+ * charges the total from `complexityGrowMonthlyTotal`; the UI shows the
+ * per-line values with that total as the charged figure.
  *
  * Cleanup rule: only `loans_mca` and `personal_commingling` carry a
  * `cleanupPerMonth` add, and only when `cleanupMonths > 0` — with zero
@@ -30,16 +44,29 @@
  * `complexityDriverDefaults` (`template`), then the code defaults below.
  * Overrides apply to NEW drivers only: an override on an existing
  * (`mapsToExisting`) driver is ignored so it can never stack a second
- * charge on top of the existing line.
+ * charge on top of the existing line. A `monthlyOverride` is EXACT: it
+ * bypasses tier scaling and, for `filing_1099`, the per-payee cap.
  *
- * `filing_1099` pricing: `monthly = min(payeeCount x perPayeeRate, cap)`,
- * where the def's `defaultMonthly` IS the per-payee rate and `perPayeeCap`
- * is the cap. Both scale by tier like every other amount. `loans_mca`
- * `count` is informational (lender/MCA schedule count) and does not scale
- * the flat monthly; `name` on `pos_system`/`online_store` is the system
- * name (e.g. Lightspeed, Shopify) and likewise does not affect the price.
+ * `filing_1099` pricing: `monthly = min(payeeCount x perPayeeRate, cap)`
+ * at maintain/improve (both scaled by the tier rule); grow is the maintain
+ * monthly x 1.5 ceil $5. The def's `defaultMonthly` IS the per-payee rate
+ * and `perPayeeCap` is the cap. Checked 1099 with no payee count (0 or
+ * absent) and no override emits NO line. `loans_mca` `count` is
+ * informational (lender/MCA schedule count) and does not scale the flat
+ * monthly; `name` on `pos_system`/`online_store` is the system name
+ * (e.g. Lightspeed, Shopify) and likewise does not affect the price — it
+ * is named in the priced line's `clientWhy` instead. The 1099 payee count
+ * is likewise named in its priced `clientWhy`.
+ *
+ * Distinct-work decision (Foreman default, pending Ummon confirmation):
+ * `online_store` vs the Stripe entry in payment platforms, `loans_mca` vs
+ * the loansCount-driven reconciliation line, `filing_1099` vs contractor
+ * headcount inside staffing, and `personal_commingling` vs the
+ * `mixed_books` adjustment are DISTINCT work — each side charges its own
+ * line when checked, and neither side auto-checks the other.
  */
 import {
+  GROW_PRICE_MULTIPLIER_FROM_MAINTAIN,
   PACKAGE_PRICING,
   roundUpToNearestIncrement,
   type PackageId,
@@ -73,20 +100,40 @@ export interface ComplexitySelection {
   drivers: Record<ComplexityDriverId, ComplexityValue>;
 }
 
+/**
+ * Existing pricing lines a driver can map to. Only lines a driver actually
+ * maps to are members — each `mapsToExisting` value below names the single
+ * source of truth the wiring builder reads to turn that line on.
+ */
 export type ComplexityExistingLine =
   | "staffing"
-  | "platforms"
-  | "passThrough"
   | "salesTaxAddon"
   | "projectTrackingAddon"
-  | "mixedBooks"
-  | "operations"
-  | "reconciliation";
+  | "mixedBooks";
+
+/**
+ * Which existing pricing lines are active on the proposal. The wiring
+ * builder passes what it sees: add-on flags for the optional add-ons,
+ * the books-type flag, and the staffing headcount (0 = no staffing line).
+ * Omitted `existing` — or an omitted field — defaults to present, so calls
+ * that do not track presence keep the legacy "Included" behavior.
+ */
+export interface ComplexityExistingPresence {
+  salesTaxAddon: boolean;
+  projectTrackingAddon: boolean;
+  mixedBooks: boolean;
+  staffingHeadcount: number;
+}
 
 export interface ComplexityDriverDef {
   id: ComplexityDriverId;
   label: string;
   clientWhy: string;
+  /**
+   * Builder-checklist note shown next to the label (not client-facing).
+   * Only set where the checklist row needs a counted-once warning.
+   */
+  builderHint?: string;
   /** Maintain-tier fixed monthly; for filing_1099 this is the PER-PAYEE rate. */
   defaultMonthly: number;
   cleanupPerMonthAdd: number;
@@ -120,6 +167,13 @@ export interface ComplexityPricedLine {
   /** 0 with `includedNote` when an existing line already covers this driver. */
   monthly: number;
   includedNote?: string;
+  /**
+   * Set instead of `includedNote` when the existing line covering this
+   * driver is absent. Names the missing line (the `mapsToExisting` value)
+   * so the wiring builder can turn that add-on on. Never set alongside
+   * `includedNote`.
+   */
+  requiresExistingLine?: ComplexityExistingLine;
   /** Per-cleanup-month add (0 except loans_mca, personal_commingling). */
   cleanupPerMonth: number;
 }
@@ -132,9 +186,10 @@ export interface ComplexityPriceResult {
 }
 
 export interface ComplexityPublicWhy {
+  id: ComplexityDriverId;
   label: string;
   why: string;
-  /** null when the driver is included in another priced line. */
+  /** null when the driver is included in (or waiting on) another priced line. */
   monthly: number | null;
 }
 
@@ -168,8 +223,8 @@ export const COMPLEXITY_DRIVER_IDS: readonly ComplexityDriverId[] = [
 const COMPLEXITY_PACKAGE_IDS: readonly string[] = ["grow", "improve", "maintain"];
 
 /**
- * Tier multipliers derived from the existing package lines (see module doc):
- * improve = 150/120 = 1.25, grow = 190/120. Falls back to 1 when the
+ * Improve multiplier from the complexOperationsMonthly anchor (see module
+ * doc): improve 150 / maintain 120 = 1.25. Falls back to 1 when the
  * constants cannot produce a finite ratio, so a zeroed constant can never
  * zero out or NaN the new money.
  */
@@ -181,10 +236,33 @@ function tierMultiplier(packageId: PackageId): number {
   return Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
 }
 
-/** Maintain values pass through; improve/grow scale by the tier ratio, ceil $5. */
+/** Maintain values pass through; improve scales by the anchor ratio, ceil $5. */
 function tierMonthly(maintainValue: number, packageId: PackageId): number {
   if (packageId === "maintain") return maintainValue;
   return roundUpToNearestIncrement(maintainValue * tierMultiplier(packageId));
+}
+
+/**
+ * Grow derives from the maintain-tier amount with the SAME rule the
+ * pipeline's `applyGrowPriceOverride` uses: ceil5(maintain x 1.5).
+ */
+function growMonthly(maintainValue: number): number {
+  return roundUpToNearestIncrement(
+    maintainValue * GROW_PRICE_MULTIPLIER_FROM_MAINTAIN,
+  );
+}
+
+/**
+ * Pipeline-consistent grow total: the figure the pipeline charges for a
+ * maintain-tier complexity total. Per-line grow values are each ceiled to
+ * $5, so their sum can exceed this by less than $5 per extra line — the
+ * charged total is this helper's return, not the sum.
+ */
+export function complexityGrowMonthlyTotal(maintainMonthlyTotal: number): number {
+  if (!Number.isFinite(maintainMonthlyTotal) || maintainMonthlyTotal <= 0) return 0;
+  return roundUpToNearestIncrement(
+    maintainMonthlyTotal * GROW_PRICE_MULTIPLIER_FROM_MAINTAIN,
+  );
 }
 
 function normalizePackageId(value: unknown): PackageId {
@@ -204,6 +282,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function finiteOrUndefined(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+/**
+ * Non-negative finite number, coercing numeric strings ("100" -> 100).
+ * Anything else (including negatives, NaN, Infinity, blank) is undefined.
+ */
+function nonNegativeNumber(value: unknown): number | undefined {
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value >= 0 ? value : undefined;
+  }
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value.trim());
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+  }
+  return undefined;
 }
 
 function nonNegativeInt(value: unknown): number | undefined {
@@ -231,8 +324,8 @@ function normalizeComplexityValue(raw: unknown): ComplexityValue {
   }
   const count = nonNegativeInt(raw.count);
   if (count !== undefined) value.count = count;
-  const override = finiteOrUndefined(raw.monthlyOverride);
-  if (override !== undefined && override >= 0) value.monthlyOverride = override;
+  const override = nonNegativeNumber(raw.monthlyOverride);
+  if (override !== undefined) value.monthlyOverride = override;
   return value;
 }
 
@@ -255,9 +348,8 @@ export function normalizeComplexitySelection(raw: unknown): ComplexitySelection 
 
 /** True when at least one driver is checked. Accepts raw (unnormalized) input. */
 export function hasComplexitySelection(raw: unknown): boolean {
-  return COMPLEXITY_DRIVER_IDS.some(
-    (id) => normalizeComplexitySelection(raw).drivers[id].checked === true,
-  );
+  const normalized = normalizeComplexitySelection(raw);
+  return COMPLEXITY_DRIVER_IDS.some((id) => normalized.drivers[id].checked === true);
 }
 
 function sanitizeDefaultEntry(raw: unknown): Partial<ComplexityDriverDefaultEntry> | undefined {
@@ -332,6 +424,7 @@ export function resolveComplexityDriverDefaults(input: {
 interface StaticDef {
   label: string;
   clientWhy: string;
+  builderHint?: string;
   mapsToExisting: ComplexityExistingLine | null;
   includedNote?: string;
   perCompany: boolean;
@@ -340,28 +433,32 @@ interface StaticDef {
 const STATIC_DEFS: Record<ComplexityDriverId, StaticDef> = {
   payroll: {
     label: "Payroll",
-    clientWhy: "We keep payroll and contractor payments reconciled each month.",
+    clientWhy:
+      "Covered by the staffing line — we keep payroll and contractor payments reconciled each month.",
     mapsToExisting: "staffing",
     includedNote: "Included in staffing line",
     perCompany: true,
   },
   sales_tax: {
     label: "Sales tax filing",
-    clientWhy: "We calculate, file, and remit your sales tax.",
+    clientWhy:
+      "Covered by the Sales Tax Filing & Remittance add-on — we calculate, file, and remit your sales tax.",
     mapsToExisting: "salesTaxAddon",
     includedNote: "Included in Sales Tax Filing & Remittance",
     perCompany: false,
   },
   job_tracking: {
     label: "Job / project tracking",
-    clientWhy: "We track income and costs by job or project.",
+    clientWhy:
+      "Covered by the Project Tracking add-on — we track income and costs by job or project.",
     mapsToExisting: "projectTrackingAddon",
     includedNote: "Included in Project Tracking",
     perCompany: true,
   },
   mixed_books: {
     label: "Mixed books",
-    clientWhy: "We separate business activity from other activity in the same file.",
+    clientWhy:
+      "Covered by the books-type adjustment — we separate business activity from other activity in the same file.",
     mapsToExisting: "mixedBooks",
     includedNote: "Included in books type adjustment",
     perCompany: false,
@@ -374,31 +471,38 @@ const STATIC_DEFS: Record<ComplexityDriverId, StaticDef> = {
   },
   pos_system: {
     label: "Point-of-sale system",
-    clientWhy: "We reconcile sales from your point-of-sale system each month.",
+    clientWhy: "We reconcile daily sales, tips, and fees from your point-of-sale system each month.",
     mapsToExisting: null,
     perCompany: false,
   },
   online_store: {
     label: "Online store",
-    clientWhy: "We reconcile sales from your online store each month.",
+    clientWhy: "We reconcile store sales, fees, refunds, and payouts from your online store each month.",
+    builderHint:
+      "If the store's own payout channel (e.g. Shopify Payments) is also listed as a payment platform, it is counted once here.",
     mapsToExisting: null,
     perCompany: false,
   },
   loans_mca: {
-    label: "Loans and cash advances",
-    clientWhy: "We track loan and cash-advance balances and payments each month.",
+    label: "Merchant cash advances and loans with principal / interest / fee splits",
+    clientWhy:
+      "We split each payment into principal, interest, and fees and track the balance each month — plain loan reconciliation is already in the reconciliation line.",
+    builderHint:
+      "Plain loan reconciliation is already in the reconciliation line — check this only when a payment needs a principal / interest / fee split.",
     mapsToExisting: null,
     perCompany: false,
   },
   personal_commingling: {
     label: "Personal spending in the business",
-    clientWhy: "We sort out personal spending mixed into the business books.",
+    clientWhy:
+      "We separate personal spending from business transactions each month — different from mixed books (real estate plus another business).",
     mapsToExisting: null,
     perCompany: true,
   },
   filing_1099: {
     label: "1099 filing",
-    clientWhy: "We prepare and file 1099s for your payees.",
+    clientWhy:
+      "We handle year-end W-9 collection and 1099 filing for your payees — separate from monthly contractor bookkeeping.",
     mapsToExisting: null,
     perCompany: true,
   },
@@ -423,6 +527,7 @@ export function complexityDriverDefs(
       mapsToExisting: STATIC_DEFS[id].mapsToExisting,
       perCompany: STATIC_DEFS[id].perCompany,
     };
+    if (STATIC_DEFS[id].builderHint !== undefined) def.builderHint = STATIC_DEFS[id].builderHint;
     if (id === "filing_1099") def.perPayeeCap = resolved[id].cap;
     return def;
   });
@@ -433,11 +538,65 @@ function includedNoteFor(id: ComplexityDriverId): string {
 }
 
 /**
+ * Priced-line why with the selection's own details named: the POS /
+ * online-store system name and the 1099 payee count. Falls back to the
+ * static def why when the detail is absent.
+ */
+function pricedClientWhy(id: ComplexityDriverId, value: ComplexityValue): string {
+  if (value.checked === true) {
+    if ((id === "pos_system" || id === "online_store") && value.name) {
+      return id === "pos_system"
+        ? `We reconcile daily sales, tips, and fees from ${value.name} each month.`
+        : `We reconcile store sales, fees, refunds, and payouts from ${value.name} each month.`;
+    }
+    if (id === "filing_1099" && value.count !== undefined && value.count > 0) {
+      const noun = value.count === 1 ? "payee" : "payees";
+      return `Year-end W-9 collection and 1099 filing for ${value.count} ${noun} — separate from monthly contractor bookkeeping.`;
+    }
+  }
+  return STATIC_DEFS[id].clientWhy;
+}
+
+function normalizeExistingPresence(raw: unknown): ComplexityExistingPresence {
+  const record = isRecord(raw) ? raw : {};
+  return {
+    salesTaxAddon: record.salesTaxAddon === undefined ? true : record.salesTaxAddon === true,
+    projectTrackingAddon:
+      record.projectTrackingAddon === undefined ? true : record.projectTrackingAddon === true,
+    mixedBooks: record.mixedBooks === undefined ? true : record.mixedBooks === true,
+    staffingHeadcount:
+      record.staffingHeadcount === undefined
+        ? 1
+        : (nonNegativeInt(record.staffingHeadcount) ?? 0),
+  };
+}
+
+function isExistingLinePresent(
+  line: ComplexityExistingLine,
+  existing: ComplexityExistingPresence,
+): boolean {
+  switch (line) {
+    case "staffing":
+      return existing.staffingHeadcount > 0;
+    case "salesTaxAddon":
+      return existing.salesTaxAddon;
+    case "projectTrackingAddon":
+      return existing.projectTrackingAddon;
+    case "mixedBooks":
+      return existing.mixedBooks;
+  }
+}
+
+/**
  * The one pricing call. Unchecked drivers emit nothing. Existing-line
- * drivers emit a $0 line with `includedNote` (override ignored — charging
- * it would stack on the existing line). New drivers charge
- * `monthlyOverride` when set, else the tier-scaled default; filing_1099
- * charges `min(payees x tierRate, tierCap)`.
+ * drivers emit a $0 line with `includedNote` when that existing line is
+ * present (override ignored — charging it would stack on the existing
+ * line), or with `requiresExistingLine` when it is absent. New drivers
+ * charge the EXACT `monthlyOverride` when set, else the maintain default
+ * scaled by tier (improve) or derived from maintain x 1.5 (grow);
+ * filing_1099 charges `min(payees x rate, cap)` at maintain, scaled the
+ * same way, and emits no line when the payee count is 0/absent unless an
+ * override sets the price.
  */
 export function priceComplexityDrivers(
   selection: ComplexitySelection,
@@ -445,11 +604,13 @@ export function priceComplexityDrivers(
     packageId?: unknown;
     defaults?: ComplexityDriverDefaults | ComplexityDriverDefaultsPatch;
     cleanupMonths?: unknown;
+    existing?: unknown;
   } = {},
 ): ComplexityPriceResult {
   const packageId = normalizePackageId(opts.packageId);
   const defaults = resolveComplexityDriverDefaults({ override: opts.defaults });
   const cleanupMonths = normalizeCleanupMonths(opts.cleanupMonths);
+  const existing = normalizeExistingPresence(opts.existing);
   const normalized = normalizeComplexitySelection(
     isRecord(selection) ? selection : {},
   );
@@ -460,14 +621,18 @@ export function priceComplexityDrivers(
     if (value.checked !== true) continue;
     const def = STATIC_DEFS[id];
     if (def.mapsToExisting !== null) {
-      lines.push({
+      const base = {
         id,
         label: def.label,
         clientWhy: def.clientWhy,
         monthly: 0,
-        includedNote: includedNoteFor(id),
         cleanupPerMonth: 0,
-      });
+      };
+      lines.push(
+        isExistingLinePresent(def.mapsToExisting, existing)
+          ? { ...base, includedNote: includedNoteFor(id) }
+          : { ...base, requiresExistingLine: def.mapsToExisting },
+      );
       continue;
     }
     const override =
@@ -476,28 +641,43 @@ export function priceComplexityDrivers(
       value.monthlyOverride >= 0
         ? value.monthlyOverride
         : undefined;
+    const clientWhy = pricedClientWhy(id, value);
+    const cleanupBase = defaults[id].cleanupPerMonth;
+    const cleanupPerMonth =
+      cleanupMonths > 0
+        ? packageId === "grow"
+          ? growMonthly(cleanupBase)
+          : tierMonthly(cleanupBase, packageId)
+        : 0;
     if (id === "filing_1099") {
-      const count =
-        nonNegativeInt(value.count) ?? 0;
-      const rate = tierMonthly(defaults[id].monthly, packageId);
-      const cap = tierMonthly(defaults[id].cap ?? DEFAULT_COMPLEXITY_DRIVER_DEFAULTS.filing_1099.cap ?? 160, packageId);
-      const monthly = override ?? Math.min(count * rate, cap);
+      const count = value.count ?? 0;
+      if (override === undefined && count <= 0) continue;
+      const maintainMonthly =
+        override ??
+        Math.min(
+          count * defaults[id].monthly,
+          defaults[id].cap ?? DEFAULT_COMPLEXITY_DRIVER_DEFAULTS.filing_1099.cap ?? 160,
+        );
+      const monthly =
+        override ?? (packageId === "grow" ? growMonthly(maintainMonthly) : tierMonthly(maintainMonthly, packageId));
       lines.push({
         id,
         label: def.label,
-        clientWhy: def.clientWhy,
+        clientWhy,
         monthly,
         cleanupPerMonth: 0,
       });
       continue;
     }
+    const maintainMonthly = override ?? defaults[id].monthly;
+    const monthly =
+      override ?? (packageId === "grow" ? growMonthly(maintainMonthly) : tierMonthly(maintainMonthly, packageId));
     lines.push({
       id,
       label: def.label,
-      clientWhy: def.clientWhy,
-      monthly: override ?? tierMonthly(defaults[id].monthly, packageId),
-      cleanupPerMonth:
-        cleanupMonths > 0 ? tierMonthly(defaults[id].cleanupPerMonth, packageId) : 0,
+      clientWhy,
+      monthly,
+      cleanupPerMonth,
     });
   }
 
@@ -512,9 +692,10 @@ export function priceComplexityDrivers(
 }
 
 /**
- * Client-facing "Why this price" whitelist: labels, plain reasons, amounts
- * only. `includedNote` internals never leave this module — an included
- * driver publishes `monthly: null`. Unknown/junk input publishes nothing.
+ * Client-facing "Why this price" whitelist: driver id, labels, plain
+ * reasons, amounts only. `includedNote` / `requiresExistingLine` internals
+ * never leave this module — an included (or waiting-on-a-line) driver
+ * publishes `monthly: null`. Unknown/junk input publishes nothing.
  */
 export function toPublicComplexityWhy(lines: unknown): ComplexityPublicWhy[] {
   if (!Array.isArray(lines)) return [];
@@ -525,9 +706,13 @@ export function toPublicComplexityWhy(lines: unknown): ComplexityPublicWhy[] {
     if (typeof line.label !== "string" || typeof line.clientWhy !== "string") continue;
     if (typeof line.monthly !== "number" || !Number.isFinite(line.monthly)) continue;
     result.push({
+      id: line.id,
       label: line.label,
       why: line.clientWhy,
-      monthly: typeof line.includedNote === "string" ? null : Math.max(0, line.monthly),
+      monthly:
+        typeof line.includedNote === "string" || typeof line.requiresExistingLine === "string"
+          ? null
+          : Math.max(0, line.monthly),
     });
   }
   return result;

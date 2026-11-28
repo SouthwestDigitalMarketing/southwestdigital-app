@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   complexityDriverDefs,
+  complexityGrowMonthlyTotal,
   DEFAULT_COMPLEXITY_DRIVER_DEFAULTS,
   hasComplexitySelection,
   normalizeComplexitySelection,
@@ -99,17 +100,56 @@ describe("priceComplexityDrivers tiers", () => {
     expect(pos.lines[0].monthly).toBe(70); // 55 x 1.25 = 68.75 -> 70
   });
 
-  it("scales grow by the complex-ops ratio (x190/120), ceil $5", () => {
+  it("derives grow from maintain x 1.5 like applyGrowPriceOverride, ceil $5", () => {
     const result = priceComplexityDrivers(checked("inventory_cogs"), {
       packageId: "grow",
       cleanupMonths: 0,
     });
-    expect(result.lines[0].monthly).toBe(155); // 95 x 190/120 = 150.42 -> 155
+    expect(result.lines[0].monthly).toBe(145); // ceil5(95 x 1.5) = 145
     const commingling = priceComplexityDrivers(checked("personal_commingling"), {
       packageId: "grow",
       cleanupMonths: 0,
     });
-    expect(commingling.lines[0].monthly).toBe(175); // 110 x 190/120 = 174.17 -> 175
+    expect(commingling.lines[0].monthly).toBe(165); // ceil5(110 x 1.5) = 165
+  });
+
+  it("matches the pipeline grow total for a single line", () => {
+    const maintain = priceComplexityDrivers(checked("inventory_cogs"), {
+      packageId: "maintain",
+      cleanupMonths: 0,
+    });
+    const grow = priceComplexityDrivers(checked("inventory_cogs"), {
+      packageId: "grow",
+      cleanupMonths: 0,
+    });
+    expect(grow.lines[0].monthly).toBe(complexityGrowMonthlyTotal(maintain.monthlyTotal));
+  });
+
+  it("keeps multi-line grow sums within the documented rounding of the pipeline total", () => {
+    const ids = ["inventory_cogs", "pos_system", "online_store", "loans_mca", "personal_commingling"] as const;
+    const maintain = priceComplexityDrivers(checkedMany([...ids]), {
+      packageId: "maintain",
+      cleanupMonths: 0,
+    });
+    expect(maintain.monthlyTotal).toBe(390);
+    const grow = priceComplexityDrivers(checkedMany([...ids]), {
+      packageId: "grow",
+      cleanupMonths: 0,
+    });
+    const pipelineTotal = complexityGrowMonthlyTotal(maintain.monthlyTotal);
+    expect(pipelineTotal).toBe(585); // ceil5(390 x 1.5)
+    expect(grow.monthlyTotal).toBe(595); // 145 + 85 + 85 + 115 + 165
+    // Each per-line ceil5 adds < $5, so the display sum sits within
+    // $5 per extra line above the charged pipeline total.
+    expect(grow.monthlyTotal - pipelineTotal).toBeGreaterThanOrEqual(0);
+    expect(grow.monthlyTotal - pipelineTotal).toBeLessThan(5 * grow.lines.length);
+  });
+
+  it("complexityGrowMonthlyTotal follows ceil5(maintain x 1.5)", () => {
+    expect(complexityGrowMonthlyTotal(390)).toBe(585);
+    expect(complexityGrowMonthlyTotal(95)).toBe(145);
+    expect(complexityGrowMonthlyTotal(0)).toBe(0);
+    expect(complexityGrowMonthlyTotal(NaN)).toBe(0);
   });
 
   it("falls back to maintain for an unknown package", () => {
@@ -146,6 +186,68 @@ describe("priceComplexityDrivers no-double-charge", () => {
     });
     expect(result.lines[0].monthly).toBe(0);
     expect(result.monthlyTotal).toBe(0);
+  });
+
+  it("marks the missing line when the existing line is absent", () => {
+    const result = priceComplexityDrivers(
+      checkedMany(["sales_tax", "job_tracking", "mixed_books", "payroll"]),
+      {
+        packageId: "maintain",
+        cleanupMonths: 0,
+        existing: {
+          salesTaxAddon: false,
+          projectTrackingAddon: false,
+          mixedBooks: false,
+          staffingHeadcount: 0,
+        },
+      },
+    );
+    expect(result.lines).toHaveLength(4);
+    expect(result.monthlyTotal).toBe(0);
+    const byId = Object.fromEntries(result.lines.map((line) => [line.id, line]));
+    expect(byId.sales_tax.requiresExistingLine).toBe("salesTaxAddon");
+    expect(byId.job_tracking.requiresExistingLine).toBe("projectTrackingAddon");
+    expect(byId.mixed_books.requiresExistingLine).toBe("mixedBooks");
+    expect(byId.payroll.requiresExistingLine).toBe("staffing");
+    for (const line of result.lines) {
+      expect(line.monthly).toBe(0);
+      expect(line.includedNote).toBeUndefined();
+    }
+  });
+
+  it("keeps the Included note when the existing line is present", () => {
+    const result = priceComplexityDrivers(
+      checkedMany(["sales_tax", "job_tracking", "mixed_books", "payroll"]),
+      {
+        packageId: "maintain",
+        cleanupMonths: 0,
+        existing: {
+          salesTaxAddon: true,
+          projectTrackingAddon: true,
+          mixedBooks: true,
+          staffingHeadcount: 3,
+        },
+      },
+    );
+    for (const line of result.lines) {
+      expect(line.monthly).toBe(0);
+      expect(line.includedNote).toMatch(/^Included in /);
+      expect(line.requiresExistingLine).toBeUndefined();
+    }
+  });
+
+  it("treats a string headcount as a headcount", () => {
+    const zero = priceComplexityDrivers(checked("payroll"), {
+      packageId: "maintain",
+      cleanupMonths: 0,
+      existing: {
+        salesTaxAddon: true,
+        projectTrackingAddon: true,
+        mixedBooks: true,
+        staffingHeadcount: "0",
+      },
+    });
+    expect(zero.lines[0].requiresExistingLine).toBe("staffing");
   });
 
   it("emits nothing for unchecked drivers", () => {
@@ -200,16 +302,48 @@ describe("priceComplexityDrivers overrides and counts", () => {
       packageId: "grow",
       cleanupMonths: 0,
     });
-    expect(grow.lines[0].monthly).toBe(255); // capped at ceil5(160 x 190/120)
+    expect(grow.lines[0].monthly).toBe(240); // ceil5(maintain 160 x 1.5)
   });
 
-  it("charges $0 for 1099 with no payee count", () => {
-    const result = priceComplexityDrivers(checked("filing_1099"), {
+  it("derives grow 1099 from the maintain monthly", () => {
+    const maintain = priceComplexityDrivers(checked("filing_1099", { count: 10 }), {
+      packageId: "maintain",
+      cleanupMonths: 0,
+    });
+    expect(maintain.lines[0].monthly).toBe(80);
+    const grow = priceComplexityDrivers(checked("filing_1099", { count: 10 }), {
+      packageId: "grow",
+      cleanupMonths: 0,
+    });
+    expect(grow.lines[0].monthly).toBe(complexityGrowMonthlyTotal(80)); // 120
+  });
+
+  it("emits no line for 1099 with no payee count", () => {
+    for (const extra of [{}, { count: 0 }]) {
+      const result = priceComplexityDrivers(checked("filing_1099", extra), {
+        packageId: "maintain",
+        cleanupMonths: 0,
+      });
+      expect(result.lines).toEqual([]);
+      expect(result.monthlyTotal).toBe(0);
+    }
+  });
+
+  it("emits an exact override line for 1099 even without a payee count", () => {
+    const result = priceComplexityDrivers(checked("filing_1099", { monthlyOverride: 100 }), {
       packageId: "maintain",
       cleanupMonths: 0,
     });
     expect(result.lines).toHaveLength(1);
-    expect(result.lines[0].monthly).toBe(0);
+    expect(result.lines[0].monthly).toBe(100);
+  });
+
+  it("treats a monthlyOverride as exact, bypassing the 1099 cap and tier scaling", () => {
+    const result = priceComplexityDrivers(checked("filing_1099", { count: 100, monthlyOverride: 5000 }), {
+      packageId: "grow",
+      cleanupMonths: 0,
+    });
+    expect(result.lines[0].monthly).toBe(5000);
   });
 
   it("does not scale loans_mca by its count", () => {
@@ -254,6 +388,15 @@ describe("priceComplexityDrivers cleanup", () => {
     expect(result.lines[0].cleanupPerMonth).toBe(35); // 25 x 1.25 = 31.25 -> 35
     expect(result.cleanupTotal).toBe(70);
   });
+
+  it("derives the grow cleanup add from maintain x 1.5", () => {
+    const result = priceComplexityDrivers(checked("loans_mca"), {
+      packageId: "grow",
+      cleanupMonths: 2,
+    });
+    expect(result.lines[0].cleanupPerMonth).toBe(40); // ceil5(25 x 1.5)
+    expect(result.cleanupTotal).toBe(80);
+  });
 });
 
 describe("normalizeComplexitySelection", () => {
@@ -262,6 +405,30 @@ describe("normalizeComplexitySelection", () => {
       const selection = normalizeComplexitySelection(raw);
       expect(Object.values(selection.drivers).every((v) => v.checked === false)).toBe(true);
     }
+  });
+
+  it("coerces numeric strings for count and monthlyOverride", () => {
+    const selection = normalizeComplexitySelection({
+      drivers: {
+        filing_1099: { checked: true, count: "12", monthlyOverride: "100" },
+      },
+    });
+    expect(selection.drivers.filing_1099).toEqual({ checked: true, count: 12, monthlyOverride: 100 });
+    const priced = priceComplexityDrivers(selection, {
+      packageId: "maintain",
+      cleanupMonths: 0,
+    });
+    expect(priced.lines).toHaveLength(1);
+    expect(priced.lines[0].monthly).toBe(100);
+  });
+
+  it("drops non-numeric override strings", () => {
+    const selection = normalizeComplexitySelection({
+      drivers: {
+        inventory_cogs: { checked: true, monthlyOverride: "lots" },
+      },
+    });
+    expect(selection.drivers.inventory_cogs).toEqual({ checked: true });
   });
 
   it("keeps checked drivers with name, count, and override", () => {
@@ -353,18 +520,117 @@ describe("toPublicComplexityWhy", () => {
     expect(withPayees.lines).toHaveLength(3);
     const pub = toPublicComplexityWhy(withPayees.lines);
     expect(pub).toEqual([
-      { label: "Payroll", why: withPayees.lines[0].clientWhy, monthly: null },
-      { label: "Inventory and cost of goods", why: withPayees.lines[1].clientWhy, monthly: 95 },
-      { label: "1099 filing", why: withPayees.lines[2].clientWhy, monthly: 40 },
+      { id: "payroll", label: "Payroll", why: withPayees.lines[0].clientWhy, monthly: null },
+      { id: "inventory_cogs", label: "Inventory and cost of goods", why: withPayees.lines[1].clientWhy, monthly: 95 },
+      { id: "filing_1099", label: "1099 filing", why: withPayees.lines[2].clientWhy, monthly: 40 },
     ]);
     for (const entry of pub) {
-      expect(Object.keys(entry).sort()).toEqual(["label", "monthly", "why"]);
+      expect(Object.keys(entry).sort()).toEqual(["id", "label", "monthly", "why"]);
     }
+  });
+
+  it("publishes null for a driver waiting on its existing line, hiding the line name", () => {
+    const result = priceComplexityDrivers(checked("sales_tax"), {
+      packageId: "maintain",
+      cleanupMonths: 0,
+      existing: {
+        salesTaxAddon: false,
+        projectTrackingAddon: true,
+        mixedBooks: true,
+        staffingHeadcount: 1,
+      },
+    });
+    expect(result.lines[0].requiresExistingLine).toBe("salesTaxAddon");
+    const pub = toPublicComplexityWhy(result.lines);
+    expect(pub).toEqual([
+      { id: "sales_tax", label: "Sales tax filing", why: result.lines[0].clientWhy, monthly: null },
+    ]);
   });
 
   it("publishes nothing for junk", () => {
     expect(toPublicComplexityWhy(null)).toEqual([]);
     expect(toPublicComplexityWhy([{ id: "nope", label: "x", clientWhy: "y", monthly: 1 }])).toEqual([]);
+  });
+});
+
+describe("lead copy rulings (Spec 03/A)", () => {
+  it("names what each new driver covers in its why", () => {
+    const byId = Object.fromEntries(complexityDriverDefs().map((d) => [d.id, d]));
+    expect(byId.loans_mca.label).toBe(
+      "Merchant cash advances and loans with principal / interest / fee splits",
+    );
+    expect(byId.loans_mca.clientWhy).toMatch(/principal/i);
+    expect(byId.loans_mca.clientWhy).toMatch(/interest/i);
+    expect(byId.loans_mca.clientWhy).toMatch(/fees/i);
+    expect(byId.loans_mca.clientWhy).toMatch(/balance/i);
+    expect(byId.loans_mca.clientWhy).toMatch(/reconciliation line/i);
+    expect(byId.filing_1099.clientWhy).toMatch(/W-9/);
+    expect(byId.filing_1099.clientWhy).toMatch(/1099/);
+    expect(byId.filing_1099.clientWhy).toMatch(/payees/i);
+    expect(byId.filing_1099.clientWhy).toMatch(/contractor bookkeeping/i);
+    expect(byId.personal_commingling.clientWhy).toMatch(/personal spending/i);
+    expect(byId.personal_commingling.clientWhy).toMatch(/business transactions/i);
+    expect(byId.personal_commingling.clientWhy).toMatch(/mixed books/i);
+    expect(byId.online_store.clientWhy).toMatch(/sales/i);
+    expect(byId.online_store.clientWhy).toMatch(/fees/i);
+    expect(byId.online_store.clientWhy).toMatch(/refunds/i);
+    expect(byId.online_store.clientWhy).toMatch(/payouts/i);
+    expect(byId.pos_system.clientWhy).toMatch(/daily sales/i);
+    expect(byId.pos_system.clientWhy).toMatch(/tips/i);
+    expect(byId.pos_system.clientWhy).toMatch(/fees/i);
+    expect(byId.inventory_cogs.clientWhy).toMatch(/stock/i);
+    expect(byId.inventory_cogs.clientWhy).toMatch(/cost of goods/i);
+  });
+
+  it("names the covering existing line in each existing driver's why", () => {
+    const byId = Object.fromEntries(complexityDriverDefs().map((d) => [d.id, d]));
+    expect(byId.payroll.clientWhy).toMatch(/staffing line/i);
+    expect(byId.sales_tax.clientWhy).toMatch(/Sales Tax Filing & Remittance/);
+    expect(byId.job_tracking.clientWhy).toMatch(/Project Tracking/);
+    expect(byId.mixed_books.clientWhy).toMatch(/books-type adjustment/i);
+  });
+
+  it("carries a builderHint on loans_mca and online_store only", () => {
+    const byId = Object.fromEntries(complexityDriverDefs().map((d) => [d.id, d]));
+    expect(byId.loans_mca.builderHint).toMatch(/reconciliation line/i);
+    expect(byId.online_store.builderHint).toMatch(/counted once here/i);
+    for (const id of ["payroll", "sales_tax", "job_tracking", "mixed_books", "inventory_cogs", "pos_system", "personal_commingling", "filing_1099"] as const) {
+      expect(byId[id].builderHint).toBeUndefined();
+    }
+  });
+
+  it("names the system in priced POS / online-store lines", () => {
+    const pos = priceComplexityDrivers(checked("pos_system", { name: "Lightspeed" }), {
+      packageId: "maintain",
+      cleanupMonths: 0,
+    });
+    expect(pos.lines[0].clientWhy).toMatch(/Lightspeed/);
+    expect(pos.lines[0].clientWhy).toMatch(/daily sales/i);
+    const store = priceComplexityDrivers(checked("online_store", { name: "Shopify" }), {
+      packageId: "maintain",
+      cleanupMonths: 0,
+    });
+    expect(store.lines[0].clientWhy).toMatch(/Shopify/);
+    expect(store.lines[0].clientWhy).toMatch(/payouts/i);
+    const generic = priceComplexityDrivers(checked("pos_system"), {
+      packageId: "maintain",
+      cleanupMonths: 0,
+    });
+    expect(generic.lines[0].clientWhy).toMatch(/point-of-sale system/i);
+  });
+
+  it("names the payee count in priced 1099 lines", () => {
+    const result = priceComplexityDrivers(checked("filing_1099", { count: 10 }), {
+      packageId: "maintain",
+      cleanupMonths: 0,
+    });
+    expect(result.lines[0].clientWhy).toMatch(/10 payees/);
+    expect(result.lines[0].clientWhy).toMatch(/W-9/);
+    const one = priceComplexityDrivers(checked("filing_1099", { count: 1 }), {
+      packageId: "maintain",
+      cleanupMonths: 0,
+    });
+    expect(one.lines[0].clientWhy).toMatch(/1 payee/);
   });
 });
 
