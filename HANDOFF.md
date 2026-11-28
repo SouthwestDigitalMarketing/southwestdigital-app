@@ -1,4 +1,12 @@
 # SWapp handoff
+## 2026-11-27 — Teaser before the title (Johnny)
+
+On the episode page transcript: Johnny's teaser is highlighted. Highlight
+another stretch and tap **Use this as the teaser**, or **Start on the title —
+no teaser**. Ripley splices the existing show (no graphics re-run) and recuts
+YouTube if the episode is live. Migration `20261128013000_showrunner_teaser`.
+Pair with showrunner-app `johnny/teaser`.
+
 ## 2026-11-27 — Proposal builder spec 01: account inventory + volume clause (Ummon)
 - Builder Scale step: per-account inventory (kind, label, last 4, open/closed, monthly count, measured/estimated, source). Open total sets the transaction band everywhere (`src/app/(app)/offers/builder/effectiveAssessment.ts`); manual override needs a reason. Core: `src/lib/quotes/accountInventory.ts`.
 - Public/preview "How we sized this" table from the whitelisted `accountInventory` payload (open rows only, no ids/sources); shown only when the snapshot has open accounts.

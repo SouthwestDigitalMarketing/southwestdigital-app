@@ -4,7 +4,7 @@ import type { BrandDataContext } from "@/lib/tenancy/context";
 import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import type { VideoCard } from "@/components/showrunner/VideosInProgress";
 import { latestByTarget, type LatestFeedback } from "./feedback";
-import type { VideoDetails, VideoRender, VideoStep } from "./video-status";
+import type { Teaser, TranscriptCue, VideoDetails, VideoRender, VideoStep } from "./video-status";
 import { parseWeek, type Week } from "./weekly";
 import { parseReview, type VideoReview } from "./review";
 
@@ -41,6 +41,10 @@ export type VideoStatusRow = {
   thumbnailOptions: unknown;
   thumbnailBusy: boolean;
   thumbnailRequestedAt: Date | null;
+  transcriptCues: unknown;
+  teaser: unknown;
+  teaserBusy: boolean;
+  teaserRequestedAt: Date | null;
 };
 
 const VIDEO_STATUS_SELECT = {
@@ -61,6 +65,10 @@ const VIDEO_STATUS_SELECT = {
   thumbnailOptions: true,
   thumbnailBusy: true,
   thumbnailRequestedAt: true,
+  transcriptCues: true,
+  teaser: true,
+  teaserBusy: true,
+  teaserRequestedAt: true,
 } as const;
 
 /**
@@ -105,6 +113,9 @@ export function videoCardFromStatus(row: VideoStatusRow): VideoCard {
     thumbnailText: row.thumbnailText,
     thumbnailOptions: Array.isArray(row.thumbnailOptions) ? (row.thumbnailOptions as string[]) : null,
     thumbnailBusy: row.thumbnailBusy || Boolean(row.thumbnailRequestedAt),
+    transcriptCues: Array.isArray(row.transcriptCues) ? (row.transcriptCues as TranscriptCue[]) : null,
+    teaser: row.teaser && typeof row.teaser === "object" ? (row.teaser as Teaser) : null,
+    teaserBusy: row.teaserBusy || Boolean(row.teaserRequestedAt),
   };
 }
 
@@ -132,6 +143,7 @@ export async function loadEpisodes(context: BrandDataContext): Promise<EpisodeRo
         thumbnail: true, details: true, updatedAt: true, review: true, reviewRequestedAt: true,
         finishRequestedAt: true, finishNote: true, transcript: true, thumbnailText: true,
         thumbnailOptions: true, thumbnailBusy: true, thumbnailRequestedAt: true,
+        transcriptCues: true, teaser: true, teaserBusy: true, teaserRequestedAt: true,
       },
     }),
   );
