@@ -241,14 +241,14 @@ describe("nextStaffAction", () => {
     ).toBe("NUDGE_UNSIGNED");
   });
 
-  it("recommends nudging signed-but-unpaid proposals that have gone cold", () => {
+  it("never recommends nudging signed-but-unpaid proposals", () => {
     const days = STALE_THRESHOLD_DAYS.SIGNED + 1;
     expect(
       nextStaffAction(
         { stage: "SIGNED", lastActivityAt: daysAgo(days), lastFollowUpAt: null },
         now,
       ),
-    ).toBe("NUDGE_UNPAID");
+    ).toBe("NONE");
   });
 
   it("nothing to do once the deal is paid", () => {

@@ -1,3 +1,6 @@
+import { isQuoteFrozen } from "@/lib/quotes/isQuoteFrozen";
+import { readAcceptedCopy, readAcceptedCopyLastError } from "@/lib/quotes/acceptedCopy";
+import { saveAcceptedCopyAction } from "./actions";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -28,14 +31,53 @@ export default async function QuoteDetailPage({ params, searchParams }: PageProp
     where: { id, brandId: brand.id },
     include: {
       client: true,
+      engagement: true,
       lineItems: { orderBy: { sortOrder: "asc" } },
     },
   });
 
   if (!quote) notFound();
 
+  const frozen = isQuoteFrozen(quote);
+  const copy = readAcceptedCopy(quote.engagement?.onboardingData);
+  const copyError = readAcceptedCopyLastError(quote.engagement?.onboardingData);
+  const hasCopyField = quote.engagement?.onboardingData && typeof quote.engagement.onboardingData === "object"
+    && Object.hasOwn(quote.engagement.onboardingData, "acceptedProposalCopy");
+  const copyControls = frozen ? (
+    <section className="rounded-xl border border-slate-200 bg-white p-6">
+      <h2 className="text-base font-semibold text-slate-800">Accepted proposal</h2>
+      <p className="mt-2 text-sm text-slate-600">This offer is frozen. Saved copies are for staff only.</p>
+      {copy ? (
+        <div className="mt-4 space-y-2 text-sm">
+          <p>Saved {copy.savedAt} ({copy.source}). SHA-256: <code className="break-all">{copy.sha256}</code></p>
+          <p>Frozen capture of the public proposal page (gzip+base64, verified hash).</p>
+          {copy.cssInlined === false ? <p role="status">Styles could not be fully captured (cssInlined: false).</p> : null}
+          <div className="flex gap-4">
+            <a className="underline" href={`/offers/${quote.id}/accepted-copy`}>View accepted copy</a>
+            <a className="underline" href={`/offers/${quote.id}/accepted-copy?download=1`}>Download</a>
+          </div>
+        </div>
+      ) : hasCopyField ? <p className="mt-3 text-sm">A saved copy exists but cannot be verified. Staff review is needed; it will not be overwritten.</p>
+        : quote.engagementId ? (
+        <form action={saveAcceptedCopyAction} className="mt-4">
+          <input type="hidden" name="id" value={quote.id} />
+          <p className="mb-3 text-sm text-slate-600">Fetches the live proposal page as staff (no client view is recorded), inlines its styles, and stores a verified frozen copy. Remote media uses labeled placeholders.</p>
+          {copyError ? <p role="status" className="mb-3 text-sm text-amber-700">Saved copy not made yet: {copyError.reason}. Use Save accepted copy.</p> : null}
+          <button className="ui-action-primary rounded-md px-4 py-2 text-sm" type="submit">Save accepted copy</button>
+        </form>
+      ) : <p className="mt-3 text-sm">No engagement is attached. Staff review is needed before saving a copy.</p>}
+    </section>
+  ) : null;
+
   const snapshot = quote.snapshotJson as QuoteSnapshot;
   if (!snapshot?.package || !snapshot.client) {
+    if (frozen) return (
+      <div className="mx-auto max-w-4xl space-y-6 p-8">
+        <Link href="/offers" className="text-sm underline">← All Offers</Link>
+        <h1 className="text-2xl font-semibold">{quote.client.name} — accepted offer</h1>
+        {copyControls}
+      </div>
+    );
     redirect(
       resumeOfferHref({
         id: quote.id,
@@ -74,6 +116,8 @@ export default async function QuoteDetailPage({ params, searchParams }: PageProp
             {quote.status}
           </span>
         </div>
+
+        {copyControls}
 
         {banner && (
           <div className={`rounded-lg border px-4 py-3 text-sm font-medium ${banner.tone}`}>
@@ -198,7 +242,7 @@ export default async function QuoteDetailPage({ params, searchParams }: PageProp
           <span className="self-center text-xs text-slate-400">
             Slug: <code className="font-mono">{quote.slug}</code>
           </span>
-          {quote.status === "draft" && (
+          {!frozen && quote.status === "draft" && (
             <form action={markQuoteSentAction}>
               <input type="hidden" name="id" value={quote.id} />
               <button

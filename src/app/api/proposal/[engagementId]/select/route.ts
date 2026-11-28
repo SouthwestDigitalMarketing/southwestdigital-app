@@ -10,6 +10,8 @@ import { resolveOnboardingWaiverForEngagement } from "@/lib/discounts/resolveOnb
 import { hasPublicProposalAccess, publicProposalNotFound } from "@/lib/engagements/publicProposalAccess";
 import { catalogCopyFromRows, toPublicBookkeepingProposal } from "@/lib/quotes/publicProposal";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
+import { lockQuoteMutation, QuoteMutationConflictError } from "@/lib/quotes/mutationLock";
+import { isQuoteFrozen } from "@/lib/quotes/isQuoteFrozen";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -50,7 +52,7 @@ export async function POST(
   if (engagement.agreementManagerStatus === "VOIDED" || engagement.agreementManagerStatus === "VOIDED_BEFORE_SIGNATURE" || engagement.agreementManagerStatus === "CANCELLATION_REQUESTED" || engagement.agreementManagerStatus === "TERMINATED_AFTER_SIGNATURE") {
     return NextResponse.json({ error: "This agreement is no longer available for changes." }, { status: 409 });
   }
-  if (engagement.signedAt) {
+  if (isQuoteFrozen(engagement)) {
     return NextResponse.json({ error: "A signed proposal selection cannot be changed." }, { status: 409 });
   }
   if (engagement.onboardingFeeStatus === "PAID") {
@@ -117,8 +119,13 @@ export async function POST(
 
   const onboardingFeeStatus = checkout.onboardingFee === 0 ? "WAIVED" : "REQUIRED";
 
-  const updated = await prisma.engagement.updateMany({
-    where: { id: engagementId, brandId: engagement.brandId, signedAt: null, updatedAt: engagement.updatedAt },
+  const updated = await prisma.$transaction(async (tx) => {
+    const quote = await tx.quote.findFirst({ where: { engagementId, brandId: engagement.brandId }, select: { id: true } });
+    if (!quote) throw new QuoteMutationConflictError("Offer not found.");
+    await lockQuoteMutation(tx, engagement.brandId, quote.id, "select");
+    return tx.engagement.updateMany({
+    where: { id: engagementId, brandId: engagement.brandId, signedAt: null, updatedAt: engagement.updatedAt,
+      onboardingData: { equals: onboardingData as Prisma.InputJsonValue } },
     data: {
       onboardingData: { ...onboardingData, proposalBuilderState } as Prisma.InputJsonValue,
       onboardingFee: checkout.onboardingFee,
@@ -128,6 +135,10 @@ export async function POST(
       agreementText: null,
       agreementTextHash: null,
     },
+    });
+  }).catch((error: unknown) => {
+    if (error instanceof QuoteMutationConflictError) return { count: 0 };
+    throw error;
   });
   if (updated.count !== 1) return NextResponse.json({ error: "The proposal changed in another tab. Reload before selecting again." }, { status: 409 });
 

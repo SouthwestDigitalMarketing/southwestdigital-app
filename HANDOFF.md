@@ -1,4 +1,10 @@
 # SWapp handoff
+## 2026-11-27 — Proposal builder spec 00: accepted proposals frozen + saved copy (Ummon)
+- Rule (Tom, SJ Equity): an accepted, signed or paid quote is never changed, re-published, re-priced, expired, replaced, reminded or emailed by any code, job or migration. Guard: `src/lib/quotes/isQuoteFrozen.ts`, enforced under the row lock in `src/lib/quotes/mutationLock.ts`. No new code may send a client anything automatically.
+- Saved copy: `src/lib/quotes/acceptedCopy.ts` self-fetches the public page (`?internal=1` + internal-viewer cookie, no view logged) and stores gzip+base64 HTML + sha256 in `Engagement.onboardingData.acceptedProposalCopy` (set-if-absent). Made after signing; staff "Save accepted copy" backfills old ones on the offer page.
+- Paid (`completed`) quotes are readable again (receipt/confirm-payment 404 fixed); select/pay still refused. A staff email send claim never blocks a client select/sign.
+- Follow-ups: backfill SJ Equity after deploy; move the copy to its own column (migration); PayPal stub always 409; waived zero-due path skips `onClientWon`. Specs and crew status: `~/.claude/team/proposal-builder/`.
+
 ## 2026-11-27 — Thumbnail wording looks confirmed (Johnny)
 
 Tom's phone shot of the episode page showed radios and "Use this text",

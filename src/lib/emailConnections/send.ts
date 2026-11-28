@@ -32,6 +32,7 @@ export type SendMailInput = {
   subject: string;
   bodyText: string;
   bodyHtml?: string;
+  signal?: AbortSignal;
 };
 
 export type SendMailResult = {
@@ -66,6 +67,7 @@ export async function sendFromMembership(
 
   try {
     const accessToken = await getFreshAccessToken(connection);
+    input.signal?.throwIfAborted();
     const response = await sendZohoMailMessage({
       region,
       accessToken,
@@ -75,6 +77,7 @@ export async function sendFromMembership(
       subject: input.subject,
       bodyText: input.bodyText,
       bodyHtml: input.bodyHtml,
+      signal: input.signal,
     });
     return {
       provider: connection.provider,

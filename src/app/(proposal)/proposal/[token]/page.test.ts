@@ -144,20 +144,126 @@ describe("public proposal page lifecycle", () => {
     await expect(openOffer()).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
-  it("public offer page redirects an expired signed quote to receipt", async () => {
+  it("public offer page renders an expired signed quote instead of redirecting to receipt", async () => {
+    mocks.headersGet.mockReturnValue("firm.example.test");
     mocks.resolvePublicBrand.mockResolvedValue(brand);
-    mocks.quoteFindFirst.mockResolvedValue({
-      ...quoteRow(sentinelBookkeepingSnapshot()),
-      expiresAt: new Date(0),
-      engagement: { brandId: "brand", signedAt: new Date() },
+    mocks.getSchemaCapabilities.mockResolvedValue({
+      quoteRevisions: true,
+      quoteEngagement: true,
+      proposalCatalog: true,
+      catalogProductKind: true,
+      proposalPackageDefaults: true,
+      agreementTemplates: true,
     });
-    await expect(openOffer()).rejects.toThrow("NEXT_REDIRECT:/proposal/token/receipt");
+    const snapshot = sentinelBookkeepingSnapshot();
+    mocks.quoteFindFirst.mockResolvedValue({
+      ...quoteRow(snapshot),
+      expiresAt: new Date(0),
+      engagement: { signedAt: new Date() },
+    });
+    mocks.quoteRevisionFindFirst.mockResolvedValue({ snapshotJson: snapshot });
+    mocks.brandDiscountFindMany.mockResolvedValue([]);
+    mocks.engagementFindFirst.mockResolvedValue({
+      status: "SIGNED",
+      isTestProposal: false,
+      signedAt: new Date(),
+      onboardingData: {},
+      agreementText: "Stored agreement",
+    });
+    mocks.catalogServiceFindMany.mockResolvedValue(sentinelCatalogRows);
+    // Signed-but-unpaid proposals stay payable after expiry: no redirect, no
+    // view stamp (firstViewedAt was already set, and internal/self-heal writes
+    // only run for unstamped unsigned views).
+    const page = await PublicProposalPage({
+      params: Promise.resolve({ token: "token" }),
+      searchParams: Promise.resolve({}),
+    });
+    expect(page).toBeDefined();
+    expect(mocks.quoteUpdateMany).not.toHaveBeenCalled();
   });
 
   it("public offer page notFound for a revoked token", async () => {
     mocks.resolvePublicBrand.mockResolvedValue(brand);
     mocks.quoteFindFirst.mockResolvedValue(null);
     await expect(openOffer()).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
+  it("paid-client first view on a completed quote writes no first-view/send stamps", async () => {
+    mocks.headersGet.mockReturnValue("firm.example.test");
+    mocks.resolvePublicBrand.mockResolvedValue(brand);
+    mocks.getSchemaCapabilities.mockResolvedValue({
+      quoteRevisions: true,
+      quoteEngagement: true,
+      proposalCatalog: true,
+      catalogProductKind: true,
+      proposalPackageDefaults: true,
+      agreementTemplates: true,
+    });
+    const snapshot = sentinelBookkeepingSnapshot();
+    mocks.quoteFindFirst.mockResolvedValue({
+      ...quoteRow(snapshot),
+      status: "completed",
+      firstViewedAt: null,
+      firstSentAt: null,
+      sentAt: null,
+      lastSentAt: null,
+      engagement: { brandId: "brand", signedAt: new Date() },
+    });
+    mocks.quoteRevisionFindFirst.mockResolvedValue({ snapshotJson: snapshot });
+    mocks.brandDiscountFindMany.mockResolvedValue([]);
+    mocks.engagementFindFirst.mockResolvedValue({
+      status: "SIGNED",
+      isTestProposal: false,
+      signedAt: new Date(),
+      onboardingData: {},
+      agreementText: "Stored agreement",
+    });
+    mocks.catalogServiceFindMany.mockResolvedValue(sentinelCatalogRows);
+    // Completed quotes keep the origin/main stamps: no self-heal write even
+    // though firstViewedAt was never set.
+    const page = await PublicProposalPage({
+      params: Promise.resolve({ token: "token" }),
+      searchParams: Promise.resolve({}),
+    });
+    expect(page).toBeDefined();
+    expect(mocks.quoteUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("first view on a live sent quote still stamps the origin/main self-heal fields", async () => {
+    mocks.headersGet.mockReturnValue("firm.example.test");
+    mocks.resolvePublicBrand.mockResolvedValue(brand);
+    mocks.getSchemaCapabilities.mockResolvedValue({
+      quoteRevisions: true,
+      quoteEngagement: true,
+      proposalCatalog: true,
+      catalogProductKind: true,
+      proposalPackageDefaults: true,
+      agreementTemplates: true,
+    });
+    const snapshot = sentinelBookkeepingSnapshot();
+    mocks.quoteFindFirst.mockResolvedValue({
+      ...quoteRow(snapshot),
+      status: "sent",
+      firstViewedAt: null,
+      engagement: { brandId: "brand", signedAt: null },
+    });
+    mocks.quoteRevisionFindFirst.mockResolvedValue({ snapshotJson: snapshot });
+    mocks.brandDiscountFindMany.mockResolvedValue([]);
+    mocks.engagementFindFirst.mockResolvedValue({
+      status: "active",
+      isTestProposal: false,
+      signedAt: null,
+      onboardingData: {},
+      agreementText: "Public hourly agreement",
+    });
+    mocks.catalogServiceFindMany.mockResolvedValue(sentinelCatalogRows);
+    mocks.quoteUpdateMany.mockResolvedValue({ count: 1 });
+    const page = await PublicProposalPage({
+      params: Promise.resolve({ token: "token" }),
+      searchParams: Promise.resolve({}),
+    });
+    expect(page).toBeDefined();
+    expect(mocks.quoteUpdateMany).toHaveBeenCalledTimes(1);
   });
 
   it("staff preview does not revive a revoked token or suspended brand", async () => {

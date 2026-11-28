@@ -14,6 +14,7 @@ import { materializeProposalCatalog } from "@/lib/quotes/materializeProposalCata
 import { materializeAgreementTemplate } from "@/lib/agreements/materialize";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
 import { ensureQuoteEngagement } from "@/lib/engagements/fromOffer";
+import { assertQuoteNotFrozen, quoteFreezeSelect } from "@/lib/quotes/isQuoteFrozen";
 import { lockQuoteMutation } from "@/lib/quotes/mutationLock";
 import { quoteClientDetailsFromSnapshot, quoteContactSummaryFromSnapshot } from "@/lib/quotes/clientInfo";
 import {
@@ -326,7 +327,7 @@ export async function saveOfferDraftAction(
     where: { id: offerId, brandId: brand.id },
     select: {
       id: true,
-      status: true,
+      ...quoteFreezeSelect,
       snapshotJson: true,
       kind: true,
       clientId: true,
@@ -334,6 +335,7 @@ export async function saveOfferDraftAction(
     },
   });
   if (!existing) throw new Error("Offer not found.");
+  assertQuoteNotFrozen(existing);
   if (existing.status === "archived") throw new Error("This offer is archived.");
 
   const previous =
@@ -355,6 +357,7 @@ export async function saveOfferDraftAction(
   });
 
   await prisma.$transaction(async (tx) => {
+    await lockQuoteMutation(tx, brand.id, existing.id, "edit");
     const clientId = await ensureExclusiveQuoteClient(tx, {
       brandId: brand.id,
       quoteId: existing.id,
@@ -382,7 +385,7 @@ export async function publishOfferChangesAction(
     where: { id: offerId, brandId: brand.id },
     select: {
       id: true,
-      status: true,
+      ...quoteFreezeSelect,
       snapshotJson: true,
       kind: true,
       publicToken: true,
@@ -391,6 +394,7 @@ export async function publishOfferChangesAction(
     },
   });
   if (!existing) throw new Error("Offer not found.");
+  assertQuoteNotFrozen(existing);
   if (existing.status === "archived") throw new Error("This offer is archived.");
 
   const previous =

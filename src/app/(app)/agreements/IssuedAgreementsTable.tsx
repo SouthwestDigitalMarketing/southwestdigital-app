@@ -76,6 +76,7 @@ export function IssuedAgreementsTable({ agreements }: { agreements: IssuedAgreem
     label: string;
   } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [cancellationReason, setCancellationReason] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const selectAllRef = useRef<HTMLInputElement>(null);
@@ -105,6 +106,7 @@ export function IssuedAgreementsTable({ agreements }: { agreements: IssuedAgreem
     if (!confirmation) return;
     const { ids, action } = confirmation;
     setActionError(null);
+    setActionNotice(null);
     startTransition(async () => {
       try {
         if (action === "requestCancellation") {
@@ -114,7 +116,12 @@ export function IssuedAgreementsTable({ agreements }: { agreements: IssuedAgreem
           if (action === "archive") await archiveAgreementAction(ids[0]);
           if (action === "delete") await deleteAgreementAction(ids[0]);
         } else {
-          await batchAgreementAction(ids, action);
+          const summary = await batchAgreementAction(ids, action);
+          if (summary && summary.skipped.length > 0) {
+            setActionNotice(
+              `Deleted ${summary.deleted} of ${ids.length}. Skipped ${summary.skipped.length} frozen (signed, paid or accepted): ${summary.skipped.join(", ")}.`,
+            );
+          }
         }
         setConfirmation(null);
         router.refresh();
@@ -209,6 +216,11 @@ export function IssuedAgreementsTable({ agreements }: { agreements: IssuedAgreem
       </div>
 
       <div className="mt-5 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        {actionNotice ? (
+          <p role="status" className="border-b border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-900">
+            {actionNotice}
+          </p>
+        ) : null}
         {selectedIds.size > 0 ? (
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-3">
             <p className="text-sm font-semibold text-slate-700">
