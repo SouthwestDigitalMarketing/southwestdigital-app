@@ -180,6 +180,18 @@ export async function GET(
     cleanupTotal,
     amountDueNow,
     creditApplied: checkout?.creditApplied,
+    // Spec 06: the frozen start month (explicit staff month, or the
+    // wrap-up-derived month on cleanup checkouts). Legacy checkouts carry
+    // none and render byte-identical.
+    serviceStartMonth: checkout?.serviceStartMonth ?? null,
+    // The applied-credit label reads the stored reason when one exists —
+    // the checkout carries it whenever a credit with a reason exists; fall
+    // back to the stored assessment's reason for legacy checkouts that
+    // predate the carry.
+    firstPaymentCreditReason: checkout?.firstPaymentCreditReason
+      ?? (typeof assessment.firstPaymentCreditReason === "string" ? assessment.firstPaymentCreditReason : null),
+    creditRemaining: checkout?.creditRemaining ?? null,
+    creditRemainingReason: checkout?.creditRemainingReason ?? null,
     agreementTerm: services.hasTwelveMonthAgreement === true ? "12-month" as const : "month-to-month" as const,
     selectedCleanupPeriods,
     selectedAdditionalOptionNames,

@@ -14,6 +14,7 @@
 // plan the result is byte-identical to the legacy shape above.
 import { buildCleanupInstallments, monthlyStartText } from "./cleanupPlan";
 import type { CleanupInstallment, CleanupPlan } from "./cleanupPlan";
+import { isServiceStartMonth } from "./serviceStart";
 
 export const ANNUAL_PREPAID_MONTHS = 12;
 
@@ -30,6 +31,12 @@ export type ProposalPaymentScheduleResult = {
   creditApplied: number;
   amountDueNow: number;
   annualTotal: number;
+  /**
+   * Spec 06 service start month passthrough. Present only when the caller
+   * passed a valid "YYYY-MM" — math is untouched, and without one the
+   * result stays byte-identical to the legacy shape above.
+   */
+  serviceStartMonth?: string;
 };
 
 export type ProposalPaymentScheduleWithCleanupPlan = ProposalPaymentScheduleResult & {
@@ -49,6 +56,8 @@ export function proposalPaymentSchedule(input: {
   creditApplied?: number;
   /** Spec 04 cleanup plan snapshot; absent on legacy quotes (legacy output unchanged). */
   cleanupPlan?: CleanupPlan | null;
+  /** Spec 06 service start month passthrough; math is untouched. */
+  serviceStartMonth?: string | null;
 }): ProposalPaymentScheduleResult | ProposalPaymentScheduleWithCleanupPlan {
   const money = (value: number) => Math.round(Math.max(0, value) * 100) / 100;
   const hasCleanup = input.cleanupMonths > 0;
@@ -72,13 +81,17 @@ export function proposalPaymentSchedule(input: {
     amountDueNow: money(amountDueBeforeCredit - creditApplied),
     annualTotal: money(money(input.recurringMonthlyTotal) * ANNUAL_PREPAID_MONTHS),
   };
-  if (!input.cleanupPlan) return base;
+  // Spec 06 passthrough only: spread when a valid month was passed, so
+  // legacy calls (absent or junk) return byte-identical results.
+  const startMonth = isServiceStartMonth(input.serviceStartMonth) ? input.serviceStartMonth : null;
+  if (!input.cleanupPlan) return startMonth ? { ...base, serviceStartMonth: startMonth } : base;
   const cleanupInstallments: CleanupInstallment[] = buildCleanupInstallments(
     Math.round(cleanupTotal * 100),
     input.cleanupPlan,
   );
   return {
     ...base,
+    ...(startMonth ? { serviceStartMonth: startMonth } : {}),
     monthlyStartText: monthlyStartText({
       hasCleanup,
       plan: input.cleanupPlan,

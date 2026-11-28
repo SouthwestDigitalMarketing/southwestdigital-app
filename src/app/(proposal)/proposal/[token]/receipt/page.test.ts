@@ -391,6 +391,91 @@ describe("public proposal receipt page", () => {
     expect(html).toContain("Initial payment: $1,740.00.");
   });
 
+  it("shows the remainder frozen at acceptance so the next invoice applies it", async () => {
+    const withCarry = buildProposalCheckoutSummary({
+      assessment: {
+        annualSavingsPercent: 20,
+        waiveOnboardingFee: false,
+        onboardingFeeOverride: 500,
+        historicalCleanupPeriods: [],
+        additionalOptions: [],
+        firstPaymentCredit: 1200,
+        firstPaymentCreditReason: "Credit for October work already paid",
+        serviceStartMonth: "2026-12",
+      },
+      pricing: {
+        maintain: { monthly: 300 },
+        improve: { monthly: 450 },
+        grow: { monthly: 600 },
+      },
+    }, {
+      tier: "maintain",
+      hasTwelveMonthAgreement: false,
+      selectedCleanupPeriodKeys: [],
+      selectedAdditionalOptionIds: [],
+    });
+    expect(withCarry.creditRemaining).toBe(400);
+    mocks.quoteFindFirst.mockResolvedValue(signedReceiptRow({
+      engagement: {
+        ...signedReceiptRow().engagement,
+        onboardingData: {
+          proposalAcceptance: {
+            creditRemaining: withCarry.creditRemaining,
+            creditRemainingReason: withCarry.creditRemainingReason,
+            selection: JSON.parse(JSON.stringify(withCarry)),
+          },
+        },
+      },
+    }));
+    const html = renderToStaticMarkup(await openReceipt());
+    expect(html).toContain("Initial payment: $0.00.");
+    expect(html).toContain(
+      "Remaining credit of $400.00 (Credit for October work already paid) will be applied to your next invoice.",
+    );
+  });
+
+  it("falls back to the stored checkout remainder when the acceptance carries none", async () => {
+    const withCarry = buildProposalCheckoutSummary({
+      assessment: {
+        annualSavingsPercent: 20,
+        waiveOnboardingFee: false,
+        onboardingFeeOverride: 500,
+        historicalCleanupPeriods: [],
+        additionalOptions: [],
+        firstPaymentCredit: 1200,
+        firstPaymentCreditReason: "Credit for October work already paid",
+      },
+      pricing: {
+        maintain: { monthly: 300 },
+        improve: { monthly: 450 },
+        grow: { monthly: 600 },
+      },
+    }, {
+      tier: "maintain",
+      hasTwelveMonthAgreement: false,
+      selectedCleanupPeriodKeys: [],
+      selectedAdditionalOptionIds: [],
+    });
+    mocks.quoteFindFirst.mockResolvedValue(signedReceiptRow({
+      engagement: {
+        ...signedReceiptRow().engagement,
+        onboardingData: {
+          proposalAcceptance: { selection: JSON.parse(JSON.stringify(withCarry)) },
+        },
+      },
+    }));
+    const html = renderToStaticMarkup(await openReceipt());
+    expect(html).toContain(
+      "Remaining credit of $400.00 (Credit for October work already paid) will be applied to your next invoice.",
+    );
+  });
+
+  it("omits the remainder line for legacy receipts without a carry-over", async () => {
+    mocks.quoteFindFirst.mockResolvedValue(signedReceiptRow());
+    const html = renderToStaticMarkup(await openReceipt());
+    expect(html).not.toContain("Remaining credit");
+  });
+
   it("renders the legacy cleanup equation without complexity lines when the add is absent", async () => {
     mocks.quoteFindFirst.mockResolvedValue(signedReceiptRow({
       engagement: {

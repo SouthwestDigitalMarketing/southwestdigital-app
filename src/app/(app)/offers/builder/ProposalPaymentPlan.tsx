@@ -10,6 +10,14 @@ import {
   type CleanupInstallment,
   type CleanupPlan,
 } from "@/lib/quotes/cleanupPlan";
+import {
+  annualServiceStartText,
+  firstMonthFullText,
+  isServiceStartMonth,
+  serviceStartMonthForPlan,
+  serviceStartText,
+} from "@/lib/quotes/serviceStart";
+import { remainingCreditLine } from "@/lib/quotes/serviceStartDisplay";
 import CleanupTermsBlock from "./CleanupTermsBlock";
 
 const fmt = (value: number) => value.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -19,6 +27,7 @@ export default function ProposalPaymentPlan({
   additionalOneTimeTotal, requiredOneTime = [], migrationOneTime = null, annual, amountDueNow, creditApplied = 0, creditLabel = "Credit for work already paid", originalOnboardingFee, annualSavingsPercent = 0, showStages = false,
   cleanupPlan = null, cleanupInstallments, brandName = "us", complexityCleanupAdd = 0, cleanupIsEstimate = false,
   cleanupLengthWeeks = null, mentionFileFee,
+  serviceStartMonth = null, creditRemaining = null, creditRemainingReason = null,
 }: {
   cleanupMonths: number;
   cleanupMonthlyRate: number;
@@ -82,6 +91,22 @@ export default function ProposalPaymentPlan({
    * (default) names the fee, matching the default template.
    */
   mentionFileFee?: boolean;
+  /**
+   * Spec 06 service start month ("YYYY-MM"). A valid month replaces the
+   * "confirmed during onboarding" start rule (annual: the annual variant)
+   * and adds the full-first-month line. With a cleanup plan the month is
+   * always the wrap-up month (this prop is ignored) and joins the Spec 04
+   * wrap-up rule as its own line — only with exact (post-selection) dates;
+   * under pre-selection length wording the relative rule covers the start
+   * and no month is shown. Absent or junk renders exactly as today.
+   */
+  serviceStartMonth?: string | null;
+  /**
+   * Spec 06 remainder of the first-payment credit for the next invoice, with
+   * its client-readable reason. Shown only when above zero (legacy: absent).
+   */
+  creditRemaining?: number | null;
+  creditRemainingReason?: string | null;
 }) {
   const schedule = proposalPaymentSchedule({
     cleanupMonths, cleanupMonthlyRate, onboardingFee, recurringMonthlyTotal, additionalOneTimeTotal, annualPrepay: annual, creditApplied,
@@ -114,13 +139,27 @@ export default function ProposalPaymentPlan({
   const wordingPlan = showLengthWording && cleanupPlan !== null && lengthWeeks !== null
     ? { ...cleanupPlan, startDate: addDaysIso(cleanupPlan.wrapUpDate, -lengthWeeks * 7) }
     : cleanupPlan;
-  const monthlyStartRule = showLengthWording && wordingPlan
-    ? monthlyStartLengthText({ hasCleanup: schedule.hasCleanup, plan: wordingPlan, prepaidAnnual: annual })
-    : withCleanupPlan && "monthlyStartText" in schedule
-      ? schedule.monthlyStartText
-      : annual
-        ? (schedule.hasCleanup ? ANNUAL_PREPAID_CLEANUP_START_TEXT : ANNUAL_PREPAID_START_TEXT)
-        : (schedule.hasCleanup ? CLEANUP_MONTHLY_START_TEXT : NO_CLEANUP_MONTHLY_START_TEXT);
+  // With a cleanup plan the month is always the wrap-up month — a stored
+  // explicit month is ignored, so display can never name two different
+  // months. The month joins the wrap-up rule only with exact (post-selection)
+  // dates. Under pre-selection length wording the relative rule covers the
+  // start and no month is shown (it would go stale).
+  const planStartMonth = withCleanupPlan && cleanupPlan ? serviceStartMonthForPlan(cleanupPlan) : null;
+  const displayStartMonth = planStartMonth ?? (isServiceStartMonth(serviceStartMonth) ? serviceStartMonth : null);
+  const showMonthLine = displayStartMonth !== null && !(withCleanupPlan && showLengthWording);
+  const monthLine = showMonthLine && displayStartMonth
+    ? (annual ? annualServiceStartText(displayStartMonth) : serviceStartText(displayStartMonth))
+    : null;
+  const monthlyStartRule = monthLine !== null && !withCleanupPlan
+    ? monthLine
+    : showLengthWording && wordingPlan
+      ? monthlyStartLengthText({ hasCleanup: schedule.hasCleanup, plan: wordingPlan, prepaidAnnual: annual })
+      : withCleanupPlan && "monthlyStartText" in schedule
+        ? schedule.monthlyStartText
+        : annual
+          ? (schedule.hasCleanup ? ANNUAL_PREPAID_CLEANUP_START_TEXT : ANNUAL_PREPAID_START_TEXT)
+          : (schedule.hasCleanup ? CLEANUP_MONTHLY_START_TEXT : NO_CLEANUP_MONTHLY_START_TEXT);
+  const carryLine = remainingCreditLine(creditRemaining, creditRemainingReason);
   // recurringMonthlyTotal is already discounted on an annual term; back out the undiscounted price.
   const discountFactor = annual && annualSavingsPercent > 0 && annualSavingsPercent < 100 ? 1 - annualSavingsPercent / 100 : 1;
   const grossMonthly = Math.round(recurringMonthlyTotal / discountFactor * 100) / 100;
@@ -152,6 +191,7 @@ export default function ProposalPaymentPlan({
           {schedule.creditApplied > 0 ? <div className="flex justify-between gap-3 rounded bg-emerald-100 px-2 py-1 font-semibold text-emerald-800"><dt>{creditLabel}</dt><dd>{`-${fmt(schedule.creditApplied)}`}</dd></div> : null}
           <div className="flex justify-between gap-3 border-t border-slate-200 pt-2 font-bold"><dt>Total due today</dt><dd>{fmt(amountDueNow ?? schedule.amountDueNow)}</dd></div>
         </dl>
+        {carryLine ? <p className="mt-2 text-xs leading-5 text-slate-600">{carryLine}</p> : null}
       </div>
       {schedule.hasCleanup ? (
         <div className="rounded-xl border border-slate-200 p-4">
@@ -182,6 +222,8 @@ export default function ProposalPaymentPlan({
         {annual && !schedule.hasCleanup ? <p className="mt-1 text-xs text-slate-600">12-month commitment, paid in full today. Excludes onboarding, cleanup, and one-time add-ons.</p> : null}
         {annual && schedule.hasCleanup ? <p className="mt-1 text-xs text-slate-600">12-month commitment, not due today. Billed when monthly service begins after cleanup is complete. Excludes onboarding, cleanup, and one-time add-ons.</p> : null}
         <p className="mt-2 text-xs leading-5 text-slate-600">{monthlyStartRule}</p>
+        {monthLine !== null && withCleanupPlan ? <p className="mt-2 text-xs leading-5 text-slate-600">{monthLine}</p> : null}
+        {showMonthLine ? <p className="mt-2 text-xs leading-5 text-slate-600">{firstMonthFullText()}</p> : null}
       </div>
       {showStages ? (
         <div className="rounded-xl border border-slate-200 p-4">

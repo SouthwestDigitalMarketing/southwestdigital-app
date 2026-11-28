@@ -8,6 +8,8 @@ import {
   quoteAllowsPublicCapability,
 } from "@/lib/engagements/publicProposalAccess";
 import { readAcceptedPayment, readAcceptedSelection } from "@/lib/engagements/acceptedPayment";
+import { publicCreditCarryoverForCheckout } from "@/lib/quotes/publicProposal";
+import { remainingCreditLine } from "@/lib/quotes/serviceStartDisplay";
 import AgreementTextView from "@/app/(app)/offers/builder/AgreementTextView";
 import CleanupTermsBlock from "@/app/(app)/offers/builder/CleanupTermsBlock";
 import { agreementMentionsFileFee } from "@/lib/agreements/template";
@@ -60,6 +62,15 @@ export default async function ProposalReceiptPage({ params }: { params: Promise<
   const onboardingData = isRecord(quote.engagement.onboardingData) ? quote.engagement.onboardingData : {};
   const { bookkeeping: checkout, hourly } = readAcceptedSelection(onboardingData);
   const acceptance = isRecord(onboardingData.proposalAcceptance) ? onboardingData.proposalAcceptance : {};
+  // Spec 06: the remainder frozen at acceptance (falling back to the stored
+  // checkout) is applied to the next invoice — never dropped, never messaged.
+  // Read through the one shared carry-over reader so this surface and the
+  // sign route can never disagree on what a stored remainder is.
+  const carryover = publicCreditCarryoverForCheckout(acceptance)
+    ?? publicCreditCarryoverForCheckout(checkout);
+  const carryLine = carryover
+    ? remainingCreditLine(carryover.creditRemaining, carryover.creditRemainingReason)
+    : null;
   const payment = isRecord(acceptance.payment) ? acceptance.payment : {};
   const paid = quote.engagement.onboardingFeeStatus === "PAID" || payment.status === "paid";
   const noPaymentRequired = quote.engagement.onboardingFeeStatus === "WAIVED" && readAcceptedPayment(onboardingData)?.amountInCents === 0;
@@ -104,6 +115,7 @@ export default async function ProposalReceiptPage({ params }: { params: Promise<
             <div className="mt-6 space-y-3 rounded-xl border border-slate-200 p-5 text-sm">
               <h2 className="font-bold">Your agreed payment schedule</h2>
               <p>Initial payment: {formatUsd(checkout.amountDueNow)}.</p>
+              {carryLine ? <p>{carryLine}</p> : null}
               {(checkout.cleanupMonths ?? 0) > 0 ? <p>Cleanup estimate: {checkout.cleanupMonths} months × {formatUsd(checkout.cleanupMonthlyRate ?? 0)} = {formatUsd(checkout.cleanupTotal - (checkout.complexityCleanupAdd ?? 0))}.{(checkout.complexityCleanupAdd ?? 0) > 0 ? ` Complexity adjustment: ${formatUsd(checkout.complexityCleanupAdd ?? 0)}. Estimated Cleanup Total: ${formatUsd(checkout.cleanupTotal)}.` : ""} This estimate was not part of the initial payment. Cleanup scope, price, and payment milestones require your approval after discovery.</p> : null}
               {checkout.cleanupPlan && (checkout.cleanupMonths ?? 0) > 0 && checkout.cleanupInstallments ? (
                 <div className="space-y-2 border-t border-slate-200 pt-3">

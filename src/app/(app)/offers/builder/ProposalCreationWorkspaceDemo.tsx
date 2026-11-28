@@ -117,8 +117,15 @@ import {
 import {
   formatCaughtUpThrough as formatCleanupCaughtUpThrough,
   formatWrapUpDateLong as formatCleanupWrapUpDate,
+  readCleanupPlan,
   type CleanupPlan,
 } from "@/lib/quotes/cleanupPlan";
+import {
+  formatServiceStartMonth,
+  isServiceStartMonth,
+  normalizeServiceStartMonth,
+  serviceStartMonthForPlan,
+} from "@/lib/quotes/serviceStart";
 import {
   ensureCleanupPlan,
   nextCleanupPlanOnPeriodsChange,
@@ -411,6 +418,18 @@ export type AssessmentState = {
   onboardingFeeOverride: number | null;
   /** Dollars already paid, credited against today's payment on the public proposal. */
   firstPaymentCredit: number;
+  /**
+   * Spec 06 client-readable reason for the credit (shown to the client on
+   * the credit line). "" = none (the default label). Trimmed and capped
+   * when published; the checkout stores it only with a carried remainder.
+   */
+  firstPaymentCreditReason: string;
+  /**
+   * Spec 06 explicit service-start month ("YYYY-MM"). "" = unset: the
+   * checkout derives the default (1st of next month) or, with a cleanup
+   * plan, the wrap-up month. An explicit month always wins.
+   */
+  serviceStartMonth: string;
   showOriginalOneTimePrices: boolean;
   annualSavingsPercent: number;
   packageNames: ProposalPackageNames;
@@ -557,6 +576,8 @@ const INITIAL_ASSESSMENT: AssessmentState = {
   waiveOnboardingFee: false,
   onboardingFeeOverride: null,
   firstPaymentCredit: 0,
+  firstPaymentCreditReason: "",
+  serviceStartMonth: "",
   showOriginalOneTimePrices: true,
   annualSavingsPercent: 20,
   packageNames: { ...DEFAULT_PROPOSAL_PACKAGE_NAMES },
@@ -3447,6 +3468,61 @@ export default function ProposalCreationWorkspaceDemo({
                               />
                               <span><span className="block">Waive onboarding fee</span><span className="block text-base font-normal text-slate-500">Keeps the amount above and strikes it through on the proposal.</span></span>
                             </label>
+                            {(() => {
+                              const storedPlan = readCleanupPlan(assessment.cleanupPlan);
+                              const wrapMonth = storedPlan && getCleanupMonthCount(assessment) > 0
+                                ? serviceStartMonthForPlan(storedPlan)
+                                : null;
+                              // With a cleanup plan the start month is always
+                              // the wrap-up month: read-only, no override. A
+                              // stale explicit month stays stored but is
+                              // ignored everywhere (checkout, display,
+                              // agreement).
+                              if (wrapMonth) {
+                                return (<>
+                                  <FieldLabel label="Service starts">
+                                    <input
+                                      type="month"
+                                      value={wrapMonth}
+                                      disabled
+                                      aria-readonly="true"
+                                      className={`${INPUT_CLASS_NAME} cursor-not-allowed opacity-70`}
+                                    />
+                                  </FieldLabel>
+                                  <p className="mt-2 text-base text-slate-500">
+                                    {`From cleanup wrap-up (${formatServiceStartMonth(wrapMonth)}). Service always starts here while a cleanup plan is set.`}
+                                  </p>
+                                </>);
+                              }
+                              const explicitMonth = isServiceStartMonth(assessment.serviceStartMonth)
+                                ? assessment.serviceStartMonth
+                                : null;
+                              const shownMonth = explicitMonth ?? normalizeServiceStartMonth(null);
+                              return (<>
+                                <FieldLabel label="Service starts">
+                                  <input
+                                    type="month"
+                                    value={shownMonth}
+                                    onChange={(event) => {
+                                      updateAssessment("serviceStartMonth", event.target.value);
+                                    }}
+                                    className={INPUT_CLASS_NAME}
+                                  />
+                                </FieldLabel>
+                                <p className="mt-2 text-base text-slate-500">
+                                  {"Defaults to the 1st of next month."}
+                                </p>
+                                {explicitMonth ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => updateAssessment("serviceStartMonth", "")}
+                                    className="mt-2 text-sm font-semibold text-brandnavy underline underline-offset-2"
+                                  >
+                                    {"Reset to the default"}
+                                  </button>
+                                ) : null}
+                              </>);
+                            })()}
                             <FieldLabel label="Credit for work already paid">
                               <input
                                 type="number"
@@ -3461,6 +3537,18 @@ export default function ProposalCreationWorkspaceDemo({
                               />
                             </FieldLabel>
                             <p className="mt-2 text-base text-slate-500">Shown as its own line under Due today and deducted from the amount charged. Never takes the total below $0.</p>
+                            <FieldLabel label="Reason for this credit (shown to the client)">
+                              <input
+                                type="text"
+                                maxLength={500}
+                                placeholder="e.g. Credit for October work already paid"
+                                value={assessment.firstPaymentCreditReason ?? ""}
+                                onChange={(event) => {
+                                  updateAssessment("firstPaymentCreditReason", event.target.value);
+                                }}
+                                className={INPUT_CLASS_NAME}
+                              />
+                            </FieldLabel>
                             <label className="mt-3 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-medium text-slate-700">
                               <input
                                 type="checkbox"
