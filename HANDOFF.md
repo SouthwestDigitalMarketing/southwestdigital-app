@@ -1,4 +1,11 @@
 # SWapp handoff
+## 2026-11-28 — Approve title screen recuts the video (Johnny)
+
+Approve sets `titleScreenApprovedAt` and `titleScreenRecutRequestedAt`.
+Ripley `showrunner_review.py --requests` recuts the show with that open
+(private). Page shows “Putting this title screen on the video…”. Pair
+with showrunner-app `johnny/title-recut`.
+
 ## 2026-11-28 — YouTube reconnect vs Showrunner (Johnny)
 
 Settings “connected” was Bookkeeping Conroe’s YouTube row; Showrunner

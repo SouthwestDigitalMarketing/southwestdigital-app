@@ -5,7 +5,7 @@ import { requireStaffBrandOrThrow } from "@/lib/brands/staff";
 import { showChannelBrand } from "@/lib/showrunner/channel-brand";
 import { createBrandDataContext, withBrandDataTransaction } from "@/lib/tenancy/context";
 
-import { writeLocalFinish, writeLocalTeaser, writeLocalThumbnail, writeLocalVisibility } from "@/lib/showrunner/finish";
+import { writeLocalFinish, writeLocalTeaser, writeLocalThumbnail, writeLocalTitleScreen, writeLocalVisibility } from "@/lib/showrunner/finish";
 
 /** Run review (Tom, 2026-11-25): ripley picks the request up within a minute and sends back a new scorecard. */
 export async function requestReview(batch: string) {
@@ -130,7 +130,7 @@ export async function requestVisibility(data: FormData) {
   revalidatePath("/showrunner");
 }
 
-/** Approve the open-card still (Tom, 2026-11-28). Does not recut or publish. */
+/** Approve the open-card still (Tom, 2026-11-28). Ripley recuts the show; stays private. */
 export async function approveTitleScreen(data: FormData) {
   const batch = String(data.get("batch") ?? "");
   if (!/^[A-Za-z0-9-]{1,60}$/.test(batch)) throw new Error("Not a video.");
@@ -139,9 +139,14 @@ export async function approveTitleScreen(data: FormData) {
   await withBrandDataTransaction(createBrandDataContext({ brandId: brand.id, actorUserId: dataContext.actorUserId }), (tx) =>
     tx.showrunnerVideoStatus.updateMany({
       where: { brandId: brand.id, batch },
-      data: { titleScreenApprovedAt: new Date() },
+      data: {
+        titleScreenApprovedAt: new Date(),
+        titleScreenRecutRequestedAt: new Date(),
+        titleScreenBusy: true,
+      },
     }),
   );
+  await writeLocalTitleScreen(batch);
   revalidatePath(`/showrunner/editor/${batch}`);
   revalidatePath(`/showrunner/production/${batch}`);
   revalidatePath("/showrunner");
