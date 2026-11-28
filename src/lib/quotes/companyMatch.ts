@@ -15,7 +15,9 @@
  * - Trailing corporate suffixes stripped: LLC, Inc, Co, Corp, Ltd, PLLC
  *   ("Acme Corp" = "acme"). Only trailing tokens are stripped, so "Core Labs"
  *   keeps its "core". A name that is ONLY a suffix (e.g. "Co") keeps it.
- * - Known limit: dotted suffixes ("L.L.C.") are not collapsed to "llc".
+ * - Dotted abbreviations collapsed first: "L.L.C." reads as "llc" (then
+ *   strips as a suffix), "U.S.A." as "usa". A period followed by a space
+ *   still splits words ("St. Louis" stays "st louis").
  *
  * Either side empty (null, "", whitespace-only) means there is nothing to
  * compare, so the result is "unknown" and no warning renders.
@@ -32,9 +34,13 @@ export function normalizeCompanyName(value: string | null | undefined): string {
   // "&" joins names ("Smith & Sons" = "Smith and Sons"); expand it before
   // punctuation removal so it is not dropped into "smith sons".
   const withAnd = text.replace(/&/g, " and ");
+  // Dotted abbreviations collapse ("L.L.C." = "llc", "U.S.A." = "usa") so
+  // the suffix strip below sees them. Only dots between letters collapse;
+  // a period followed by a space still splits ("St. Louis" = "st louis").
+  const undotted = withAnd.replace(/(?<=[A-Za-z])\.(?=[A-Za-z.])/g, "");
   // Apostrophes join ("Mike's" = "Mikes"); drop them before the remaining
   // punctuation is turned into word separators.
-  const withoutApostrophes = withAnd.replace(/['’`]/g, "");
+  const withoutApostrophes = undotted.replace(/['’`]/g, "");
   // Ignore punctuation: keep letters, numbers, and whitespace.
   const wordsOnly = withoutApostrophes.replace(/[^\p{L}\p{N}\s]/gu, " ");
   const tokens = wordsOnly.split(/\s+/).filter(Boolean);

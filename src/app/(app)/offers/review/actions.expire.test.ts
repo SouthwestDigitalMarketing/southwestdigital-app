@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   findFirst: vi.fn(),
   update: vi.fn(),
   revalidate: vi.fn(),
+  redirect: vi.fn(),
   lock: vi.fn(),
 }));
 
@@ -17,6 +18,7 @@ vi.mock("@/lib/prisma", () => ({
 }));
 vi.mock("@/lib/quotes/mutationLock", () => ({ lockQuoteMutation: mocks.lock }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidate }));
+vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
 
 import { expireReviewQuotesAction } from "./actions";
 import { oldLinksReviewWhere } from "./query";
@@ -44,7 +46,7 @@ describe("old-links review query", () => {
 });
 
 describe("expireReviewQuotesAction", () => {
-  it("expires selected rows now", async () => {
+  it("expires selected rows now and reports the batch", async () => {
     mocks.findFirst
       .mockResolvedValueOnce({ id: "q1", publicToken: "tok-1", status: "sent", engagement: null })
       .mockResolvedValueOnce({ id: "q2", publicToken: null, status: "sent", engagement: null });
@@ -55,14 +57,44 @@ describe("expireReviewQuotesAction", () => {
     expect(data.lastActivityAt).toBeInstanceOf(Date);
     expect(mocks.revalidate).toHaveBeenCalledWith("/offers/review");
     expect(mocks.revalidate).toHaveBeenCalledWith("/proposal/tok-1");
+    expect(mocks.redirect).toHaveBeenCalledWith("/offers/review?expired=2&skipped=0");
   });
 
-  it("refuses a frozen row without touching the others", async () => {
+  it("skips an engagement-signed row and still expires the rest", async () => {
     mocks.findFirst
       .mockResolvedValueOnce({ id: "q1", publicToken: null, status: "sent", engagement: null })
-      .mockResolvedValueOnce({ id: "q2", publicToken: null, status: "accepted", engagement: null });
-    await expect(expireReviewQuotesAction(form(["q1", "q2"]))).rejects.toThrow("frozen");
+      .mockResolvedValueOnce({
+        id: "q2",
+        publicToken: null,
+        status: "sent",
+        engagement: {
+          status: "SIGNED",
+          signedAt: new Date("2026-09-01T00:00:00Z"),
+          onboardingFeeStatus: "UNPAID",
+          onboardingData: {},
+        },
+      });
+    await expireReviewQuotesAction(form(["q1", "q2"]));
+    expect(mocks.update).toHaveBeenCalledTimes(1);
+    expect(mocks.update.mock.calls[0][0].where).toEqual({ id: "q1" });
+    expect(mocks.redirect).toHaveBeenCalledWith("/offers/review?expired=1&skipped=1");
+  });
+
+  it("skips a proposal-accepted row without touching it", async () => {
+    mocks.findFirst.mockResolvedValueOnce({
+      id: "q1",
+      publicToken: null,
+      status: "sent",
+      engagement: {
+        status: "SENT",
+        signedAt: null,
+        onboardingFeeStatus: "UNPAID",
+        onboardingData: { proposalAcceptance: { acceptedAt: "2026-09-01T00:00:00Z" } },
+      },
+    });
+    await expireReviewQuotesAction(form(["q1"]));
     expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.redirect).toHaveBeenCalledWith("/offers/review?expired=0&skipped=1");
   });
 
   it("requires a selection", async () => {

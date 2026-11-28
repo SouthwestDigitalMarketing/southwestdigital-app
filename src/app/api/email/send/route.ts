@@ -10,8 +10,7 @@ import {
   EmailConnectionRegionInvalidError,
   sendFromMembership,
 } from "@/lib/emailConnections/send";
-import { resolveQuoteExpiresAtForWrite } from "@/lib/quotes/quoteExpiresAt";
-import { promoDeadlineFromSnapshot } from "@/lib/quotes/proposalValidity";
+import { resolveSendExpiry } from "@/lib/quotes/sendExpiry";
 import { supersedeReplacedQuoteOnWrite } from "@/lib/quotes/supersedeReplaced";
 
 function trim(value: unknown): string {
@@ -78,15 +77,18 @@ export async function POST(request: Request) {
         if (asRecord(snapshot.proposalSendClaim).id !== claimId) throw new QuoteMutationConflictError("Email send claim changed; check delivery before retrying.");
         sentSnapshot = snapshot;
         const now = new Date();
-        const expiresAt = resolveQuoteExpiresAtForWrite({
-          at: now,
+        const send = await resolveSendExpiry({
+          brandId: ctx.brand.id,
+          quoteId: offerId,
+          quote,
           snapshot,
-          promoDeadline: promoDeadlineFromSnapshot(snapshot) ?? quote.expiresAt ?? null,
+          publishedAt: quote.publishedAt ?? null,
+          at: now,
         });
         await tx.quote.update({ where: { id: offerId }, data: {
-          snapshotJson: { ...snapshot, proposalSendClaim: { id: claimId, state: "sent", messageId: result.messageId, finishedAt: now.toISOString() } } as Prisma.InputJsonValue,
+          snapshotJson: { ...send.snapshot, proposalSendClaim: { id: claimId, state: "sent", messageId: result.messageId, finishedAt: now.toISOString() } } as Prisma.InputJsonValue,
           status: "sent", sentAt: now, firstSentAt: quote.firstSentAt ?? now,
-          lastSentAt: now, lastActivityAt: now, expiresAt,
+          lastSentAt: now, lastActivityAt: now, expiresAt: send.expiresAt,
           ...(quote.firstSentAt ? { lastFollowUpAt: now } : {}),
         } });
       });

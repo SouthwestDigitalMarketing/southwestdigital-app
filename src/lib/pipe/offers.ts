@@ -1,8 +1,7 @@
 import "server-only";
 
 import { isQuoteFrozen, quoteFreezeSelect } from "@/lib/quotes/isQuoteFrozen";
-import { resolveQuoteExpiresAtForWrite } from "@/lib/quotes/quoteExpiresAt";
-import { promoDeadlineFromSnapshot } from "@/lib/quotes/proposalValidity";
+import { resolveSendExpiry } from "@/lib/quotes/sendExpiry";
 import { supersedeReplacedQuoteOnWrite } from "@/lib/quotes/supersedeReplaced";
 import { lockQuoteMutation } from "@/lib/quotes/mutationLock";
 import type { Prisma } from "@prisma/client";
@@ -264,18 +263,21 @@ export async function setPipeOfferStatus(args: {
   const revokePublicLink = args.status === "archived" && !quote.engagement?.signedAt;
   let sendSnapshot: unknown = null;
   let sentAt: Date | null = null;
-  let sendExpiresAt: Date | null = null;
+  let sendState: { expiresAt: Date; snapshot: Record<string, unknown> } | null = null;
   if (args.status === "sent") {
-    const sendState = await prisma.quote.findFirst({
+    const sendSource = await prisma.quote.findFirst({
       where: { id: args.offerId, brandId: brand.id },
-      select: { snapshotJson: true, expiresAt: true },
+      select: { snapshotJson: true, publishedAt: true },
     });
-    sendSnapshot = sendState?.snapshotJson ?? null;
+    sendSnapshot = sendSource?.snapshotJson ?? null;
     sentAt = new Date();
-    sendExpiresAt = resolveQuoteExpiresAtForWrite({
+    sendState = await resolveSendExpiry({
+      brandId: brand.id,
+      quoteId: quote.id,
+      quote,
+      snapshot: sendSource?.snapshotJson ?? null,
+      publishedAt: sendSource?.publishedAt ?? null,
       at: sentAt,
-      snapshot: sendSnapshot,
-      promoDeadline: promoDeadlineFromSnapshot(sendSnapshot) ?? sendState?.expiresAt ?? null,
     });
   }
   const updated = await prisma.$transaction(async (tx) => {
@@ -285,8 +287,8 @@ export async function setPipeOfferStatus(args: {
     data: {
       status: args.status,
       ...(revokePublicLink ? { publicToken: null } : {}),
-      ...(args.status === "sent" && sentAt && sendExpiresAt
-        ? { sentAt, firstSentAt: quote.firstSentAt ?? quote.sentAt ?? sentAt, lastSentAt: sentAt, expiresAt: sendExpiresAt }
+      ...(args.status === "sent" && sentAt && sendState
+        ? { sentAt, firstSentAt: quote.firstSentAt ?? quote.sentAt ?? sentAt, lastSentAt: sentAt, expiresAt: sendState.expiresAt, snapshotJson: sendState.snapshot as Prisma.InputJsonValue }
         : {}),
     },
     select: LIST_SELECT,

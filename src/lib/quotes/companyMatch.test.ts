@@ -27,6 +27,16 @@ describe("normalizeCompanyName", () => {
   it("keeps a name that is only a suffix", () => {
     expect(normalizeCompanyName("Co")).toBe("co");
   });
+
+  it("collapses dotted suffixes before stripping them", () => {
+    expect(normalizeCompanyName("Acme L.L.C.")).toBe("acme");
+    expect(normalizeCompanyName("Acme LLC")).toBe("acme");
+    expect(normalizeCompanyName("U.S.A. Corp")).toBe("usa");
+  });
+
+  it("keeps a period followed by a space as a word split", () => {
+    expect(normalizeCompanyName("St. Louis Bread Co.")).toBe("st louis bread");
+  });
 });
 
 describe("compareCompanyNames", () => {
@@ -41,6 +51,11 @@ describe("compareCompanyNames", () => {
 
   it("matches across case, spacing, punctuation, and suffixes", () => {
     expect(compareCompanyNames("  BBQ Grill People, Inc.", "bbq grill people")).toBe("match");
+  });
+
+  it("matches a dotted suffix against its plain form", () => {
+    expect(compareCompanyNames("Acme L.L.C.", "Acme LLC")).toBe("match");
+    expect(compareCompanyNames("Acme L.L.C.", "Acme")).toBe("match");
   });
 
   it("returns unknown when either side is empty", () => {

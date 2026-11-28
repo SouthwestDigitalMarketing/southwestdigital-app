@@ -2,15 +2,24 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireQuoteStaff } from "@/lib/quotes/access";
 import { quoteContactSummaryFromSnapshot } from "@/lib/quotes/clientInfo";
+import { isQuoteFrozen, quoteFreezeSelect } from "@/lib/quotes/isQuoteFrozen";
+import { staffDateKey } from "@/lib/quotes/staffDates";
 import { expireReviewQuotesAction } from "./actions";
 import { oldLinksReviewOrderBy, oldLinksReviewWhere } from "./query";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export default async function OldLinksReviewPage() {
+export default async function OldLinksReviewPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ expired?: string; skipped?: string }>;
+}) {
   const { brand } = await requireQuoteStaff();
+  const params = await searchParams;
+  const expiredCount = Number(params.expired ?? "");
+  const skippedCount = Number(params.skipped ?? "");
   const nowMs = new Date().getTime();
-  const rows = await prisma.quote.findMany({
+  const fetched = await prisma.quote.findMany({
     where: oldLinksReviewWhere(brand.id),
     orderBy: oldLinksReviewOrderBy,
     take: 100,
@@ -21,9 +30,14 @@ export default async function OldLinksReviewPage() {
       firstSentAt: true,
       publicToken: true,
       snapshotJson: true,
+      ...quoteFreezeSelect,
       client: { select: { name: true, email: true, company: true } },
     },
   });
+  // The query cannot exclude engagement-level freezes null-safely in Prisma
+  // (acceptance lives on engagement.onboardingData), so reuse isQuoteFrozen
+  // exactly as the expire action does, before render.
+  const rows = fetched.filter((row) => !isQuoteFrozen(row));
 
   return (
     <div className="px-8 pb-8">
@@ -37,6 +51,19 @@ export default async function OldLinksReviewPage() {
             Sent, unaccepted proposals with no expiry, oldest first. Nothing expires without a
             click — each row expires only via its button or the selected batch.
           </p>
+          {Number.isFinite(expiredCount) && expiredCount > 0 ? (
+            <p className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-800">
+              Expired {expiredCount} {expiredCount === 1 ? "proposal" : "proposals"}.
+              {Number.isFinite(skippedCount) && skippedCount > 0
+                ? ` Skipped ${skippedCount} already accepted, signed or paid.`
+                : ""}
+            </p>
+          ) : Number.isFinite(skippedCount) && skippedCount > 0 ? (
+            <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+              Skipped {skippedCount} {skippedCount === 1 ? "proposal" : "proposals"} already
+              accepted, signed or paid — nothing was expired.
+            </p>
+          ) : null}
         </div>
 
         {rows.length === 0 ? (
@@ -90,7 +117,7 @@ export default async function OldLinksReviewPage() {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-slate-600">
-                          {sentAt ? sentAt.toISOString().slice(0, 10) : "—"}
+                          {sentAt ? staffDateKey(sentAt) : "—"}
                         </td>
                         <td className="px-4 py-3 text-slate-600">
                           {ageDays === null ? "—" : `${ageDays}d`}

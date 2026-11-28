@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { formatUsd } from "@/lib/quotes/format";
 import { expiryBadgeForQuote } from "@/lib/quotes/expiryBadge";
-import { quoteIsTestProposal } from "@/lib/quotes/testProposal";
+import { quoteIsTestProposal, realProposalTake, testProposalMatchWhere } from "@/lib/quotes/testProposal";
 import { isOfferKindKey, OFFER_KINDS, resumeOfferHref } from "@/lib/quotes/kinds";
 import { quoteContactSummaryFromSnapshot } from "@/lib/quotes/clientInfo";
 import {
@@ -128,15 +128,24 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
             ? { totalOneTime: sortOrder }
             : { sentAt: sortOrder };
 
+  const listWhere: Prisma.QuoteWhereInput = {
+    brandId: brand.id,
+    status: { in: statusesForOfferList({ archived, statusFilter }) },
+    ...(kindFilter === "all" ? {} : { kind: kindFilter }),
+  };
+  // Test rows fetched before the in-memory filter would displace real offers
+  // off the only staff list (`take: 50` runs first). Count tests with the
+  // null-safe positive matcher and over-fetch by that count, so the filter
+  // below still leaves 50 real rows. The toggle itself is unchanged.
+  const testCount = showTests
+    ? 0
+    : await prisma.quote.count({ where: { AND: [listWhere, testProposalMatchWhere()] } });
+
   const [fetchedQuotes, contacts, contact, tags, clients, platformBrands] = await Promise.all([
     prisma.quote.findMany({
-      where: {
-        brandId: brand.id,
-        status: { in: statusesForOfferList({ archived, statusFilter }) },
-        ...(kindFilter === "all" ? {} : { kind: kindFilter }),
-      },
+      where: listWhere,
       orderBy,
-      take: 50,
+      take: realProposalTake(testCount),
       include: {
         client: true,
         lineItems: { select: { amount: true, billingType: true } },
@@ -177,10 +186,11 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
   ]);
 
   // Test proposals stay viewable and signable, but hide from the staff list
-  // by default. Staff can reveal them with ?showTests=1.
+  // by default. Staff can reveal them with ?showTests=1. The fetch above
+  // over-fetches by the test count, so the slice still yields 50 real rows.
   const listed = showTests
     ? fetchedQuotes
-    : fetchedQuotes.filter((quote) => !quoteIsTestProposal(quote));
+    : fetchedQuotes.filter((quote) => !quoteIsTestProposal(quote)).slice(0, 50);
 
   const contactCreationOptions = {
     tags,

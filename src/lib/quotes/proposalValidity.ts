@@ -39,8 +39,12 @@ export function minExpiresAt(...candidates: Array<Date | null | undefined>): Dat
 
 /**
  * Promotion deadline captured at publish (ISO string, snapshot
- * `proposalPromoExpiresAt`). Send writes reuse it so a later send keeps the
- * earlier catalog/urgency deadline without re-querying discounts.
+ * `proposalPromoExpiresAt`). Send writes re-resolve it from the live
+ * discounts via `resolveSendExpiry` and restamp (or clear) it, so a promo
+ * deleted after publish stops capping later sends. The live `snapshotJson`
+ * is the validity/promo source of truth: the staff validity control writes
+ * it, sends restamp it, and the public self-heal reads it. The published
+ * snapshot copy keeps its publish-time stamp and is never rewritten by sends.
  */
 export function promoDeadlineFromSnapshot(snapshot: unknown): Date | null {
   if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) return null;

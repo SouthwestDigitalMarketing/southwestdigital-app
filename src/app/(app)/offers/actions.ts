@@ -15,8 +15,7 @@ import { lockQuoteMutation } from "@/lib/quotes/mutationLock";
 import {
   quoteClientDetailsFromSnapshot,
 } from "@/lib/quotes/clientInfo";
-import { resolveQuoteExpiresAtForWrite } from "@/lib/quotes/quoteExpiresAt";
-import { promoDeadlineFromSnapshot } from "@/lib/quotes/proposalValidity";
+import { resolveSendExpiry } from "@/lib/quotes/sendExpiry";
 import { supersedeReplacedQuoteOnWrite } from "@/lib/quotes/supersedeReplaced";
 export async function markQuoteSentAction(formData: FormData) {
   const { brand } = await requireQuoteStaffOrThrow();
@@ -25,7 +24,7 @@ export async function markQuoteSentAction(formData: FormData) {
 
   const quote = await prisma.quote.findFirst({
     where: { id, brandId: brand.id },
-    select: { id: true, ...quoteFreezeSelect, firstSentAt: true, expiresAt: true, snapshotJson: true },
+    select: { id: true, ...quoteFreezeSelect, firstSentAt: true, expiresAt: true, snapshotJson: true, publishedAt: true },
   });
   if (!quote) throw new Error("Not found");
   assertQuoteNotFrozen(quote);
@@ -34,10 +33,13 @@ export async function markQuoteSentAction(formData: FormData) {
   }
 
   const now = new Date();
-  const expiresAt = resolveQuoteExpiresAtForWrite({
-    at: now,
+  const send = await resolveSendExpiry({
+    brandId: brand.id,
+    quoteId: quote.id,
+    quote,
     snapshot: quote.snapshotJson,
-    promoDeadline: promoDeadlineFromSnapshot(quote.snapshotJson) ?? quote.expiresAt,
+    publishedAt: quote.publishedAt ?? null,
+    at: now,
   });
   await prisma.$transaction(async (tx) => {
     await lockQuoteMutation(tx, brand.id, quote.id, "edit");
@@ -49,7 +51,8 @@ export async function markQuoteSentAction(formData: FormData) {
       firstSentAt: quote.firstSentAt ?? now,
       lastSentAt: now,
       lastActivityAt: now,
-      expiresAt,
+      expiresAt: send.expiresAt,
+      snapshotJson: send.snapshot as Prisma.InputJsonValue,
     },
     });
   });
@@ -66,7 +69,7 @@ export async function resendQuoteAction(formData: FormData) {
 
   const quote = await prisma.quote.findFirst({
     where: { id, brandId: brand.id },
-    select: { id: true, ...quoteFreezeSelect, firstSentAt: true, expiresAt: true, snapshotJson: true },
+    select: { id: true, ...quoteFreezeSelect, firstSentAt: true, expiresAt: true, snapshotJson: true, publishedAt: true },
   });
   if (!quote) throw new Error("Not found");
   assertQuoteNotFrozen(quote);
@@ -75,10 +78,13 @@ export async function resendQuoteAction(formData: FormData) {
   }
 
   const now = new Date();
-  const expiresAt = resolveQuoteExpiresAtForWrite({
-    at: now,
+  const send = await resolveSendExpiry({
+    brandId: brand.id,
+    quoteId: quote.id,
+    quote,
     snapshot: quote.snapshotJson,
-    promoDeadline: promoDeadlineFromSnapshot(quote.snapshotJson) ?? quote.expiresAt,
+    publishedAt: quote.publishedAt ?? null,
+    at: now,
   });
   await prisma.$transaction(async (tx) => {
     await lockQuoteMutation(tx, brand.id, quote.id, "edit");
@@ -91,7 +97,8 @@ export async function resendQuoteAction(formData: FormData) {
       lastSentAt: now,
       lastActivityAt: now,
       lastFollowUpAt: now,
-      expiresAt,
+      expiresAt: send.expiresAt,
+      snapshotJson: send.snapshot as Prisma.InputJsonValue,
     },
     });
   });
@@ -449,6 +456,7 @@ export async function setOfferStatusAction(formData: FormData) {
       publicToken: true,
       expiresAt: true,
       snapshotJson: true,
+      publishedAt: true,
       ...quoteFreezeSelect,
     },
   });
@@ -457,11 +465,14 @@ export async function setOfferStatusAction(formData: FormData) {
 
   const revokePublicLink = status === "archived" && !quote.engagement?.signedAt;
   const sentAt = status === "sent" ? new Date() : null;
-  const expiresAt = sentAt
-    ? resolveQuoteExpiresAtForWrite({
-        at: sentAt,
+  const send = sentAt
+    ? await resolveSendExpiry({
+        brandId: brand.id,
+        quoteId: quote.id,
+        quote,
         snapshot: quote.snapshotJson,
-        promoDeadline: promoDeadlineFromSnapshot(quote.snapshotJson) ?? quote.expiresAt,
+        publishedAt: quote.publishedAt ?? null,
+        at: sentAt,
       })
     : null;
   await prisma.$transaction(async (tx) => {
@@ -471,12 +482,13 @@ export async function setOfferStatusAction(formData: FormData) {
     data: {
       status,
       ...(revokePublicLink ? { publicToken: null } : {}),
-      ...(sentAt && expiresAt
+      ...(sentAt && send
         ? {
             sentAt,
             firstSentAt: quote.firstSentAt ?? quote.sentAt ?? sentAt,
             lastSentAt: sentAt,
-            expiresAt,
+            expiresAt: send.expiresAt,
+            snapshotJson: send.snapshot as Prisma.InputJsonValue,
           }
         : {}),
     },

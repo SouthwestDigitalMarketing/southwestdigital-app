@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getStripeClient } from "@/lib/stripe";
-import { reconcileProposalPayment } from "@/lib/stripe/reconcileProposalPayment";
+import { reconcileProposalPayment, TestProposalPaymentRefusedError } from "@/lib/stripe/reconcileProposalPayment";
 import { recordProcessedStripeEvent, stripeEventAlreadyProcessed } from "@/lib/stripe/processedStripeEvents";
 import { syncConnectedAccountStatus } from "@/lib/stripe/connect";
 import { sendProposalAlert } from "@/lib/notifications/staffAlert";
@@ -37,7 +37,19 @@ export async function POST(request: Request) {
       try {
         await reconcileProposalPayment(paymentIntent, engagementId, brandId);
         await recordProcessedStripeEvent(engagementId, brandId, event.id);
-      } catch {
+      } catch (error) {
+        if (error instanceof TestProposalPaymentRefusedError) {
+          // A pre-Spec-08 or out-of-band test intent reached settlement.
+          // Acknowledge so Stripe stops retrying; settle nothing, so the
+          // deposit stays unpaid and no client-won follow-up runs.
+          console.error("[stripe/webhook] Test proposal payment refused; not settling", {
+            eventId: event.id,
+            intentId: paymentIntent.id,
+            engagementId,
+          });
+          await recordProcessedStripeEvent(engagementId, brandId, event.id).catch(() => undefined);
+          return NextResponse.json({ received: true, testProposal: true });
+        }
         // Retain provider retries; never acknowledge an unapplied proposal
         // payment as successfully reconciled. Do not record event.id on throw.
         console.error("[stripe/webhook] Proposal payment requires reconciliation", { eventId: event.id, intentId: paymentIntent.id });

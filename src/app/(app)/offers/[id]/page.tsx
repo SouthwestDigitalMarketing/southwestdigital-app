@@ -13,6 +13,7 @@ import { DuplicateOfferButton } from "../DuplicateOfferButton";
 import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { quoteContactSummaryFromSnapshot } from "@/lib/quotes/clientInfo";
 import { proposalValidityDaysFromSnapshot } from "@/lib/quotes/proposalValidity";
+import { staffDateKey } from "@/lib/quotes/staffDates";
 import type { QuoteSnapshot } from "@/lib/quotes/types";
 
 type PageProps = {
@@ -77,7 +78,7 @@ export default async function QuoteDetailPage({ params, searchParams }: PageProp
   const snapshot = quote.snapshotJson as QuoteSnapshot;
   const validityDays = proposalValidityDaysFromSnapshot(quote.snapshotJson);
   const expiresLabel = quote.expiresAt
-    ? quote.expiresAt.toISOString().slice(0, 10)
+    ? staffDateKey(quote.expiresAt)
     : "no expiry set yet (stamped on publish or send)";
   const contactSummary = quoteContactSummaryFromSnapshot(quote.snapshotJson, quote.client);
   const replaceContacts = frozen

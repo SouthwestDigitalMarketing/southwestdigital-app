@@ -1,17 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "./route";
 
-const mocks = vi.hoisted(() => ({
-  constructEvent: vi.fn(),
-  reconcile: vi.fn(),
-  alreadyProcessed: vi.fn(),
-  record: vi.fn(),
-  syncAccount: vi.fn(),
-  alert: vi.fn(),
-  clientWon: vi.fn(),
-}));
+const mocks = vi.hoisted(() => {
+  class TestProposalPaymentRefusedError extends Error {}
+  return {
+    constructEvent: vi.fn(),
+    reconcile: vi.fn(),
+    alreadyProcessed: vi.fn(),
+    record: vi.fn(),
+    syncAccount: vi.fn(),
+    alert: vi.fn(),
+    clientWon: vi.fn(),
+    TestRefused: TestProposalPaymentRefusedError,
+  };
+});
 vi.mock("@/lib/stripe", () => ({ getStripeClient: () => ({ webhooks: { constructEvent: mocks.constructEvent } }) }));
-vi.mock("@/lib/stripe/reconcileProposalPayment", () => ({ reconcileProposalPayment: mocks.reconcile }));
+vi.mock("@/lib/stripe/reconcileProposalPayment", () => ({
+  reconcileProposalPayment: mocks.reconcile,
+  TestProposalPaymentRefusedError: mocks.TestRefused,
+}));
 vi.mock("@/lib/stripe/processedStripeEvents", () => ({
   stripeEventAlreadyProcessed: mocks.alreadyProcessed,
   recordProcessedStripeEvent: mocks.record,
@@ -79,6 +86,21 @@ describe("stripe webhook proposal payments", () => {
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({ error: "Payment reconciliation pending" });
     expect(mocks.record).not.toHaveBeenCalled();
+  });
+
+  it("acknowledges a refused test proposal without settling or running client-won", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.reconcile.mockRejectedValueOnce(new mocks.TestRefused("Test proposal payments are never settled for real."));
+    const response = await postSucceeded({ id: "pi_test", livemode: true, metadata: { engagementId: "eng", brandId: "brand" } });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ received: true, testProposal: true });
+    expect(mocks.record).toHaveBeenCalledWith("eng", "brand", "evt_1");
+    expect(mocks.clientWon).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[stripe/webhook] Test proposal payment refused; not settling",
+      expect.objectContaining({ engagementId: "eng", intentId: "pi_test" }),
+    );
+    errorSpy.mockRestore();
   });
 
   it("rejects a proposal payment missing brandId", async () => {

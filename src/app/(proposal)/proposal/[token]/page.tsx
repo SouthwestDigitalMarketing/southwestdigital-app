@@ -158,6 +158,7 @@ export default async function PublicProposalPage({
     select: {
       id: true,
       publishedSnapshotJson: true,
+      snapshotJson: true,
       publishedAt: true,
       firstViewedAt: true,
       firstSentAt: true,
@@ -180,13 +181,17 @@ export default async function PublicProposalPage({
     // keeps DB filters (Draft/Sent/Completed) consistent with the derived
     // lifecycle stage for out-of-band-shared URLs (personal email, text,
     // Slack, etc.). The default proposal expiry is stamped too (never for
-    // frozen quotes).
+    // frozen quotes). Validity/promo reads the live snapshot — the same
+    // source the staff validity control writes — so a post-publish validity
+    // edit applies here (the published copy keeps its publish-time stamp).
     const selfHealExpiresAt =
       !quote.expiresAt && !isQuoteFrozen({ status: quote.status, engagement: quote.engagement })
         ? resolveQuoteExpiresAtForWrite({
             at: viewedAt,
-            snapshot: quote.publishedSnapshotJson,
-            promoDeadline: promoDeadlineFromSnapshot(quote.publishedSnapshotJson),
+            snapshot: quote.snapshotJson ?? quote.publishedSnapshotJson,
+            promoDeadline: promoDeadlineFromSnapshot(
+              quote.snapshotJson ?? quote.publishedSnapshotJson,
+            ),
           })
         : null;
     await prisma.quote.updateMany({

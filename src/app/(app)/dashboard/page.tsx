@@ -35,7 +35,7 @@ import { BigNumbers, HowWeMeasure, LiveStrip, ResponseTimes } from "./_scorecard
 import { LiveRefresh } from "./_scorecard/LiveRefresh";
 import { parseRange } from "./_scorecard/format";
 import { getCompanyMetrics } from "@/lib/companyMetrics";
-import { quoteIsTestProposal } from "@/lib/quotes/testProposal";
+import { quoteIsTestProposal, realProposalTake, testProposalMatchWhere } from "@/lib/quotes/testProposal";
 import { isLochsideBrandSlug } from "@/lib/brands/active-brand";
 import { CompanyCarousel } from "./CompanyCarousel";
 import { TARGETS as SCORECARD_TARGETS } from "@/lib/scorecard/queries";
@@ -460,19 +460,25 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   ))).flat().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   // The offers the Offers card counts (sent this period, both brands), newest first (Tom, 2026-11-24).
   const companyOffers = (await Promise.all(companyPaletteRows.map((row) =>
-    withBrandDataTransaction(createBrandDataContext({ brandId: row.id, actorUserId: session.user.id }), (tx) =>
-      tx.quote.findMany({
-        where: { brandId: row.id, sentAt: { gte: leadWindow.gte, lt: leadWindow.lt } },
+    withBrandDataTransaction(createBrandDataContext({ brandId: row.id, actorUserId: session.user.id }), async (tx) => {
+      // Same take-before-filter displacement as the offers list: over-fetch
+      // by the null-safe test count so test rows never hide real offers.
+      const sentWindow = { gte: leadWindow.gte, lt: leadWindow.lt };
+      const testCount = await tx.quote.count({
+        where: { brandId: row.id, sentAt: sentWindow, ...testProposalMatchWhere() },
+      });
+      return tx.quote.findMany({
+        where: { brandId: row.id, sentAt: sentWindow },
         orderBy: { sentAt: "desc" },
-        take: 50,
+        take: realProposalTake(testCount),
         select: {
           id: true, status: true, sentAt: true, firstViewedAt: true, totalRecurring: true, totalOneTime: true,
           snapshotJson: true,
           engagement: { select: { isTestProposal: true } },
           client: { select: { name: true, company: true } },
         },
-      }),
-    ).then((rows) => rows.filter((quote) => !quoteIsTestProposal(quote)).map((quote) => ({
+      });
+    }).then((rows) => rows.filter((quote) => !quoteIsTestProposal(quote)).map((quote) => ({
       id: quote.id,
       ...hide({ name: quote.client.name, company: quote.client.company }),
       slug: row.slug,
