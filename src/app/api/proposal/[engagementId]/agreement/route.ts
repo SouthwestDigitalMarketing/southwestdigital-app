@@ -30,6 +30,7 @@ export async function GET(
     where: { id: engagementId },
     select: {
       brandId: true,
+      status: true,
       productKind: true,
       updatedAt: true,
       clientName: true,

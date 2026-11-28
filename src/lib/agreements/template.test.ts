@@ -20,6 +20,43 @@ describe("renderAgreementTemplate", () => {
     includedServices: [{ name: "Priority Client Support", description: "Same-business-day responses." }],
   };
 
+  /** Sum of the fee lines due today: onboarding + one-time/setup/add-on lines + service due now − credit. */
+  function dueTodayTotal(text: string): number {
+    const section = text.slice(text.indexOf("FEE STRUCTURE"));
+    const amount = (line: string, pattern: RegExp): number => {
+      const match = pattern.exec(line);
+      return match ? Number(match[1].replace(/,/g, "")) : 0;
+    };
+    let total = 0;
+    for (const line of section.split("\n")) {
+      if (/^Total Due Upon Signing/.test(line)) continue;
+      if (line.startsWith("Credit for work already paid: -$")) {
+        total -= amount(line, /-\$([\d,]+\.\d{2})/);
+        continue;
+      }
+      if (line.startsWith("12 Months of Service (due today)")) {
+        total += amount(line, /= \$([\d,]+\.\d{2})/);
+        continue;
+      }
+      if (/\(due today\): \$/.test(line)) {
+        total += amount(line, /\(due today\): \$([\d,]+\.\d{2})/);
+        continue;
+      }
+      if (/: \$[\d,]+\.\d{2} \(one-time\)/.test(line)) {
+        total += amount(line, /: \$([\d,]+\.\d{2}) \(one-time\)/);
+        continue;
+      }
+      const onboarding = /^(?:Onboarding Fee|Onboarding \+ Discovery):\s+(Waived|\$[\d,]+\.\d{2})/.exec(line);
+      if (onboarding && onboarding[1] !== "Waived") total += Number(onboarding[1].slice(1).replace(/,/g, ""));
+    }
+    return Math.round(total * 100) / 100;
+  }
+
+  function totalDue(text: string): number {
+    const match = /Total Due Upon Signing: \$([\d,]+\.\d{2})/.exec(text);
+    return match ? Number(match[1].replace(/,/g, "")) : Number.NaN;
+  }
+
   it.each([
     ["measured", "measured"],
     ["estimated", "partly estimated"],
@@ -209,6 +246,78 @@ describe("renderAgreementTemplate", () => {
     });
     expect(text).toContain("Ongoing Monthly Services: $100.00 per month");
     expect(text).toContain("Not really a one-time line: $50.00 (one-time)");
+  });
+
+  it("lists bundle setup exactly once so the itemized due-today lines sum to the total", () => {
+    const priced = priceCompanyBundle({
+      companies: [
+        { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 0, propertiesCount: 0, accounts: [], complexity: null },
+        { id: "beta", name: "Beta", ownQboFile: true, fileStatus: "new_file", locationsCount: 0, propertiesCount: 0, accounts: [], complexity: null },
+      ],
+      packageId: "maintain",
+      baseAssessment: {},
+      options: DEFAULT_BUNDLE_PRICING_OPTIONS,
+    });
+    const setup = priced.setupTotal;
+    expect(setup).toBe(150);
+    const text = renderAgreementTemplate(DEFAULT_BOOKKEEPING_AGREEMENT_TEMPLATE, {
+      ...stagedInput,
+      hasCleanup: false, cleanupMonths: 0, cleanupTotal: 0,
+      agreementTerm: "month-to-month" as const,
+      onboardingFee: 500,
+      recurringMonthlyTotal: priced.bundleMonthly,
+      additionalOneTimeTotal: setup,
+      requiredOneTime: [],
+      companyFeeLines: companyBundleFeeLines(priced),
+      amountDueNow: 500 + setup + priced.bundleMonthly,
+    });
+    expect(text.match(/new QuickBooks file setup/g) ?? []).toHaveLength(1);
+    expect(text).not.toContain("Selected One-Time Add-ons");
+    expect(dueTodayTotal(text)).toBe(totalDue(text));
+    expect(totalDue(text)).toBe(500 + setup + priced.bundleMonthly);
+  });
+
+  it("keeps a non-setup add-on on the add-ons line while setup stays on its own line", () => {
+    const priced = priceCompanyBundle({
+      companies: [
+        { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 0, propertiesCount: 0, accounts: [], complexity: null },
+        { id: "beta", name: "Beta", ownQboFile: true, fileStatus: "new_file", locationsCount: 0, propertiesCount: 0, accounts: [], complexity: null },
+      ],
+      packageId: "maintain",
+      baseAssessment: {},
+      options: DEFAULT_BUNDLE_PRICING_OPTIONS,
+    });
+    const text = renderAgreementTemplate(DEFAULT_BOOKKEEPING_AGREEMENT_TEMPLATE, {
+      ...stagedInput,
+      hasCleanup: false, cleanupMonths: 0, cleanupTotal: 0,
+      agreementTerm: "month-to-month" as const,
+      onboardingFee: 500,
+      recurringMonthlyTotal: priced.bundleMonthly,
+      additionalOneTimeTotal: priced.setupTotal + 200,
+      requiredOneTime: [],
+      companyFeeLines: companyBundleFeeLines(priced),
+      amountDueNow: 500 + priced.setupTotal + 200 + priced.bundleMonthly,
+    });
+    expect(text.match(/new QuickBooks file setup/g) ?? []).toHaveLength(1);
+    expect(text).toContain("Selected One-Time Add-ons (due today): $200.00");
+    expect(dueTodayTotal(text)).toBe(totalDue(text));
+  });
+
+  it("sums legacy due-today lines to the total with required and selected add-ons", () => {
+    const text = renderAgreementTemplate(DEFAULT_BOOKKEEPING_AGREEMENT_TEMPLATE, {
+      ...stagedInput,
+      hasCleanup: false, cleanupMonths: 0, cleanupTotal: 0,
+      agreementTerm: "month-to-month" as const,
+      onboardingFee: 350,
+      recurringMonthlyTotal: 450,
+      additionalOneTimeTotal: 840,
+      requiredOneTime: [{ name: "QuickBooks Desktop to Online Migration", price: 640 }],
+      amountDueNow: 1640,
+    });
+    expect(text).toContain("QuickBooks Desktop to Online Migration (due today): $640.00");
+    expect(text).toContain("Selected One-Time Add-ons (due today): $200.00");
+    expect(dueTodayTotal(text)).toBe(totalDue(text));
+    expect(totalDue(text)).toBe(1640);
   });
 
   it("renders proposal-specific agreement fields without unresolved supported tokens", () => {

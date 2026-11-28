@@ -58,6 +58,7 @@ function editorHtml(props: Partial<CompanyBundleEditorProps> = {}) {
       mainAccounts: [],
       baseAssessment: effectiveAssessment(fresh),
       bundleOptions: resolveBundlePricingOptions({}),
+      newFileSetupSource: "placeholder",
       legacyEntitiesField: createElement("span", { id: "legacy-entities" }, "legacy entities input"),
       onCompaniesChange: () => {},
       onBundleOptionsChange: () => {},
@@ -236,10 +237,33 @@ describe("CompanyBundleEditor states", () => {
     const html = editorHtml({
       companies: [mainCompany(), mainCompany({ id: "b", name: "Beta" })],
       bundleOptions: { additionalCompanyDiscountPct: 10, locationMonthlyCharge: 25, newFileSetupCharge: 150 },
+      newFileSetupSource: "override",
     });
     // 250 standalone at 10% off rounds up to 225.
     expect(html).toContain("bundle discount 10%");
     expect(html).toContain("Maintain $225");
+    expect(html).toContain("effective $150 — proposal override");
+  });
+
+  it("shows the effective setup value and its source", () => {
+    const bundled = { companies: [mainCompany(), mainCompany({ id: "b", name: "Beta" })] };
+    expect(editorHtml({ ...bundled, newFileSetupSource: "placeholder" })).toContain(
+      "effective $150 — placeholder",
+    );
+    expect(
+      editorHtml({
+        ...bundled,
+        bundleOptions: { additionalCompanyDiscountPct: 20, locationMonthlyCharge: 25, newFileSetupCharge: 99 },
+        newFileSetupSource: "catalog",
+      }),
+    ).toContain("effective $99 — from catalog");
+    expect(
+      editorHtml({
+        ...bundled,
+        bundleOptions: { additionalCompanyDiscountPct: 20, locationMonthlyCharge: 25, newFileSetupCharge: 80 },
+        newFileSetupSource: "template",
+      }),
+    ).toContain("effective $80 — template default");
   });
 });
 
@@ -309,11 +333,9 @@ describe("saved-state load and normalize", () => {
       }),
       fresh,
     );
-    expect(merged.bundlePricingOptions).toEqual({
-      additionalCompanyDiscountPct: 30,
-      locationMonthlyCharge: 25,
-      newFileSetupCharge: 150,
-    });
+    // Unset fields stay unset so resolution can fall through to the template,
+    // catalog, and placeholder — only the stored 30 is explicit here.
+    expect(merged.bundlePricingOptions).toEqual({ additionalCompanyDiscountPct: 30 });
     // Main 250 + Beta (250 at 30% off = 175), no legacy entity charge.
     expect(getProposalPricingSnapshotData(merged).packagePricing.maintain.monthly).toBe(425);
   });

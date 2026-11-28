@@ -23,10 +23,16 @@ beforeEach(() => {
 });
 
 describe("options template seed bundle defaults", () => {
-  it("seeds the default slice with the proposed bundle amounts", async () => {
+  it("seeds the default slice with the proposed bundle amounts but no setup charge", async () => {
     const slice = await buildDefaultBookkeepingSlice("brand-test");
-    expect(slice.bundlePricingDefaults).toEqual(DEFAULT_BUNDLE_PRICING_OPTIONS);
+    // The setup charge stays unset so the catalog price can win over the
+    // $150 placeholder at resolution time.
+    expect(slice.bundlePricingDefaults).toEqual({
+      additionalCompanyDiscountPct: DEFAULT_BUNDLE_PRICING_OPTIONS.additionalCompanyDiscountPct,
+      locationMonthlyCharge: DEFAULT_BUNDLE_PRICING_OPTIONS.locationMonthlyCharge,
+    });
+    expect(slice.bundlePricingDefaults).not.toHaveProperty("newFileSetupCharge");
     const snapshot = buildOptionsTemplateSnapshot(slice);
-    expect(snapshot.bundlePricingDefaults).toEqual(DEFAULT_BUNDLE_PRICING_OPTIONS);
+    expect(snapshot.bundlePricingDefaults).toEqual(slice.bundlePricingDefaults);
   });
 });

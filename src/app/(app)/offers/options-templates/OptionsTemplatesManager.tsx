@@ -107,9 +107,11 @@ export default function OptionsTemplatesManager({
     const snapshot = editing;
     const discountPct = Number(snapshot.discountPct);
     const locationCharge = Number(snapshot.locationCharge);
+    const setupBlank = snapshot.setupCharge.trim() === "";
     const setupCharge = Number(snapshot.setupCharge);
-    if (![discountPct, locationCharge, setupCharge].every((n) => Number.isFinite(n) && n >= 0)) {
-      setError("Enter valid non-negative numbers for the bundle pricing defaults.");
+    if (![discountPct, locationCharge].every((n) => Number.isFinite(n) && n >= 0) ||
+      (!setupBlank && !(Number.isFinite(setupCharge) && setupCharge >= 0))) {
+      setError("Enter valid non-negative numbers for the bundle pricing defaults (setup may be blank).");
       return;
     }
     run(
@@ -120,10 +122,13 @@ export default function OptionsTemplatesManager({
         });
         await overwriteOptionsTemplateSnapshotAction(snapshot.id, {
           ...snapshot.slice as OptionsTemplateAssessmentSlice,
+          // A blank setup stays unset so proposals fall through to the
+          // catalog price (or the $150 placeholder); any number — including
+          // 150 — is an explicit template default and beats the catalog.
           bundlePricingDefaults: {
             additionalCompanyDiscountPct: discountPct,
             locationMonthlyCharge: locationCharge,
-            newFileSetupCharge: setupCharge,
+            ...(setupBlank ? {} : { newFileSetupCharge: setupCharge }),
           },
         });
       },
@@ -364,17 +369,23 @@ export default function OptionsTemplatesManager({
                 />
               </label>
               <label className="block py-1 text-sm">
-                <span className="font-medium text-slate-700">New QuickBooks file setup, per file ($)</span>
+                <span className="font-medium text-slate-700">New QuickBooks file setup, per file ($, blank follows catalog)</span>
                 <input
                   type="number"
                   min={0}
                   step="any"
                   value={editing.setupCharge}
+                  placeholder="Blank = catalog price, else $150"
                   disabled={!editing.slice}
                   onChange={(e) => setEditing({ ...editing, setupCharge: e.target.value })}
                   className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm disabled:opacity-50"
                 />
               </label>
+              <p className="pb-2 text-xs text-slate-500">
+                Leave setup blank to use the brand catalog new-file price when set (otherwise
+                the $150 placeholder). A stored value — including 150 — is an explicit
+                template default and wins over the catalog.
+              </p>
             </fieldset>
             <div className="flex justify-end gap-2 pt-2">
               <button

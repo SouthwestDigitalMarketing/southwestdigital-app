@@ -4,11 +4,13 @@ import {
   buildCompanyBundleSnapshot,
   companyBundleFeeLines,
   DEFAULT_BUNDLE_PRICING_OPTIONS,
+  describeNewFileSetupCharge,
   hasCompanyBundle,
   normalizeCompanyBundle,
   priceCompanyBundle,
   resolveBundlePricingOptions,
   resolveCompanyBundleForTier,
+  sanitizeBundlePricingOverride,
   toPublicCompanyBundle,
   toPublicCompanyBundleMap,
   type BundlePricingOptions,
@@ -517,6 +519,46 @@ describe("resolveBundlePricingOptions", () => {
     expect(
       resolveBundlePricingOptions({ bonuses, bundlePricingDefaults: { newFileSetupCharge: 80 } }).newFileSetupCharge,
     ).toBe(80);
+  });
+
+  it("lets the catalog win when the template leaves setup unset, but keeps a stored 150", () => {
+    const bonuses = [{ id: "new-quickbooks-file", name: "Setup", description: "", archived: false, addOnPrice: 99 }];
+    // New seeds omit newFileSetupCharge: the catalog price applies.
+    expect(
+      resolveBundlePricingOptions({
+        bonuses,
+        bundlePricingDefaults: { additionalCompanyDiscountPct: 20, locationMonthlyCharge: 25 },
+      }).newFileSetupCharge,
+    ).toBe(99);
+    // An old-seeded template carrying exactly 150 counts as explicitly set.
+    expect(
+      resolveBundlePricingOptions({
+        bonuses,
+        bundlePricingDefaults: { additionalCompanyDiscountPct: 20, locationMonthlyCharge: 25, newFileSetupCharge: 150 },
+      }).newFileSetupCharge,
+    ).toBe(150);
+  });
+});
+
+describe("describeNewFileSetupCharge", () => {
+  const bonuses = [{ id: "new-quickbooks-file", name: "Setup", description: "", archived: false, addOnPrice: 99 }];
+  it("reports the winning source in resolution order", () => {
+    expect(describeNewFileSetupCharge({})).toEqual({ value: 150, source: "placeholder" });
+    expect(describeNewFileSetupCharge({ bonuses })).toEqual({ value: 99, source: "catalog" });
+    expect(describeNewFileSetupCharge({ bonuses, bundlePricingDefaults: { newFileSetupCharge: 80 } })).toEqual(
+      { value: 80, source: "template" },
+    );
+    expect(
+      describeNewFileSetupCharge({ bonuses, bundlePricingOptions: { newFileSetupCharge: 40 } }),
+    ).toEqual({ value: 40, source: "override" });
+  });
+
+  it("keeps non-finite fields unset so sanitizing never manufactures a source", () => {
+    expect(sanitizeBundlePricingOverride({ newFileSetupCharge: Number.NaN })).toEqual({});
+    expect(sanitizeBundlePricingOverride("bundle")).toEqual({});
+    expect(
+      sanitizeBundlePricingOverride({ additionalCompanyDiscountPct: 150, locationMonthlyCharge: -5 }),
+    ).toEqual({ additionalCompanyDiscountPct: 100, locationMonthlyCharge: 0 });
   });
 });
 

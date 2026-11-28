@@ -231,28 +231,29 @@ function sanitizeBundlePricingOptions(options: BundlePricingOptions): BundlePric
 
 /**
  * Storage-shape sanitizer for a raw per-proposal override (or raw template
- * defaults): finite values clamp into range, anything else falls back to the
- * proposed defaults. This deliberately knows NOTHING about the catalog —
- * baking a catalog price in here would freeze it into the stored override and
- * shadow later catalog changes. Use `resolveBundlePricingOptions` for pricing.
+ * defaults): finite values clamp into range, anything else stays UNSET so the
+ * resolution chain can fall through to the next source. In particular an
+ * omitted `newFileSetupCharge` must survive sanitizing — filling the $150
+ * placeholder here would shadow the brand catalog price forever. This
+ * deliberately knows NOTHING about the catalog — baking a catalog price in
+ * here would freeze it into the stored override and shadow later catalog
+ * changes. Use `resolveBundlePricingOptions` for pricing.
  */
-export function sanitizeBundlePricingOverride(raw: unknown): BundlePricingOptions {
-  if (!isRecord(raw)) return { ...DEFAULT_BUNDLE_PRICING_OPTIONS };
+export function sanitizeBundlePricingOverride(raw: unknown): Partial<BundlePricingOptions> {
+  if (!isRecord(raw)) return {};
   const source = raw as Partial<BundlePricingOptions>;
-  return {
-    additionalCompanyDiscountPct: clampDiscountPct(
-      source.additionalCompanyDiscountPct,
-      DEFAULT_BUNDLE_PRICING_OPTIONS.additionalCompanyDiscountPct,
-    ),
-    locationMonthlyCharge: clampCharge(
-      source.locationMonthlyCharge,
-      DEFAULT_BUNDLE_PRICING_OPTIONS.locationMonthlyCharge,
-    ),
-    newFileSetupCharge: clampCharge(
-      source.newFileSetupCharge,
-      DEFAULT_BUNDLE_PRICING_OPTIONS.newFileSetupCharge,
-    ),
-  };
+  const partial: Partial<BundlePricingOptions> = {};
+  if (typeof source.additionalCompanyDiscountPct === "number" &&
+    Number.isFinite(source.additionalCompanyDiscountPct)) {
+    partial.additionalCompanyDiscountPct = Math.min(100, Math.max(0, source.additionalCompanyDiscountPct));
+  }
+  if (typeof source.locationMonthlyCharge === "number" && Number.isFinite(source.locationMonthlyCharge)) {
+    partial.locationMonthlyCharge = Math.max(0, source.locationMonthlyCharge);
+  }
+  if (typeof source.newFileSetupCharge === "number" && Number.isFinite(source.newFileSetupCharge)) {
+    partial.newFileSetupCharge = Math.max(0, source.newFileSetupCharge);
+  }
+  return partial;
 }
 
 function finiteNumber(value: unknown): number | null {
@@ -291,6 +292,9 @@ export function catalogNewQuickBooksFilePrice(assessment: unknown): number | nul
  * `new-quickbooks-file` price (only for `newFileSetupCharge`, only when it
  * carries a price above zero — the seed row is $0.00), then the proposed
  * $150 default. Every pricing call site uses this; nothing hard-codes 150.
+ * A template default counts as explicitly set whenever it is a finite
+ * number — including exactly 150, which is what the old seed wrote. Stored
+ * templates are never second-guessed here.
  */
 export function resolveBundlePricingOptions(assessment: unknown): BundlePricingOptions {
   const source = isRecord(assessment) ? assessment : {};
@@ -318,6 +322,35 @@ export function resolveBundlePricingOptions(assessment: unknown): BundlePricingO
       DEFAULT_BUNDLE_PRICING_OPTIONS.newFileSetupCharge,
     ),
   };
+}
+
+/** Where the effective new-file setup charge came from, for the editor label. */
+export type NewFileSetupChargeSource = "override" | "template" | "catalog" | "placeholder";
+
+/**
+ * The effective `newFileSetupCharge` alongside its source, using the same
+ * precedence as `resolveBundlePricingOptions`: per-proposal override, then
+ * template default (any finite value counts, including a stored 150), then
+ * the brand catalog price above zero, then the $150 placeholder.
+ */
+export function describeNewFileSetupCharge(assessment: unknown): {
+  value: number;
+  source: NewFileSetupChargeSource;
+} {
+  const source = isRecord(assessment) ? assessment : {};
+  const overrideRaw = isRecord(source.bundlePricingOptions)
+    ? (source.bundlePricingOptions as Partial<BundlePricingOptions>)
+    : {};
+  const defaultsRaw = isRecord(source.bundlePricingDefaults)
+    ? (source.bundlePricingDefaults as Partial<BundlePricingOptions>)
+    : {};
+  const override = finiteNumber(overrideRaw.newFileSetupCharge);
+  if (override !== null) return { value: Math.max(0, override), source: "override" };
+  const template = finiteNumber(defaultsRaw.newFileSetupCharge);
+  if (template !== null) return { value: Math.max(0, template), source: "template" };
+  const catalog = catalogNewQuickBooksFilePrice(source);
+  if (catalog !== null) return { value: catalog, source: "catalog" };
+  return { value: DEFAULT_BUNDLE_PRICING_OPTIONS.newFileSetupCharge, source: "placeholder" };
 }
 
 /**

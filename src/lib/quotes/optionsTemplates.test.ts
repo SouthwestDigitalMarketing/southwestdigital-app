@@ -176,9 +176,14 @@ describe("bundle pricing defaults (Spec 02)", () => {
     expect(OPTIONS_TEMPLATE_SNAPSHOT_VERSION).toBe(1);
   });
 
-  it("seeds the snapshot with the defaults when the slice omits them", () => {
+  it("leaves omitted defaults unset so the catalog can win at resolution", () => {
     const snapshot = buildOptionsTemplateSnapshot(baseSlice);
-    expect(snapshot.bundlePricingDefaults).toEqual(DEFAULT_BUNDLE_PRICING_OPTIONS);
+    expect(snapshot.bundlePricingDefaults).toEqual({});
+    const partial = buildOptionsTemplateSnapshot({
+      ...baseSlice,
+      bundlePricingDefaults: { additionalCompanyDiscountPct: 10, locationMonthlyCharge: 40 },
+    });
+    expect(partial.bundlePricingDefaults).toEqual({ additionalCompanyDiscountPct: 10, locationMonthlyCharge: 40 });
   });
 
   it("round-trips custom defaults through build and parse", () => {
@@ -194,26 +199,30 @@ describe("bundle pricing defaults (Spec 02)", () => {
     expect(parseOptionsTemplateSnapshot(JSON.parse(JSON.stringify(snapshot)))).toEqual(snapshot);
   });
 
-  it("parses pre-Spec-02 snapshots and falls back to the defaults", () => {
+  it("parses pre-Spec-02 snapshots with the defaults left unset", () => {
     const legacy = buildOptionsTemplateSnapshot(baseSlice);
     delete (legacy as { bundlePricingDefaults?: unknown }).bundlePricingDefaults;
     const parsed = parseOptionsTemplateSnapshot(JSON.parse(JSON.stringify(legacy)));
-    expect(parsed?.bundlePricingDefaults).toEqual(DEFAULT_BUNDLE_PRICING_OPTIONS);
+    expect(parsed?.bundlePricingDefaults).toEqual({});
   });
 
-  it("sanitizes out-of-range and non-finite defaults per field", () => {
-    expect(sanitizeBundlePricingDefaults(undefined)).toEqual(DEFAULT_BUNDLE_PRICING_OPTIONS);
-    expect(sanitizeBundlePricingDefaults(null)).toEqual(DEFAULT_BUNDLE_PRICING_OPTIONS);
+  it("keeps a stored 150 as an explicitly set template default", () => {
+    expect(sanitizeBundlePricingDefaults({ newFileSetupCharge: 150 })).toEqual({ newFileSetupCharge: 150 });
+  });
+
+  it("sanitizes out-of-range and non-finite defaults per field, leaving gaps unset", () => {
+    expect(sanitizeBundlePricingDefaults(undefined)).toEqual({});
+    expect(sanitizeBundlePricingDefaults(null)).toEqual({});
     expect(
       sanitizeBundlePricingDefaults({
         additionalCompanyDiscountPct: 150,
         locationMonthlyCharge: -5,
         newFileSetupCharge: Number.NaN,
       }),
-    ).toEqual({ additionalCompanyDiscountPct: 100, locationMonthlyCharge: 0, newFileSetupCharge: 150 });
+    ).toEqual({ additionalCompanyDiscountPct: 100, locationMonthlyCharge: 0 });
     expect(
       sanitizeBundlePricingDefaults({ additionalCompanyDiscountPct: Number.POSITIVE_INFINITY }),
-    ).toEqual(DEFAULT_BUNDLE_PRICING_OPTIONS);
+    ).toEqual({});
   });
 
   it("carries the defaults through reconciliation (they are not catalog items)", () => {
@@ -231,6 +240,6 @@ describe("bundle pricing defaults (Spec 02)", () => {
       { ...snapshot, bundlePricingDefaults: undefined },
       ["stessa-migration"],
     );
-    expect(missing.slice.bundlePricingDefaults).toEqual(DEFAULT_BUNDLE_PRICING_OPTIONS);
+    expect(missing.slice.bundlePricingDefaults).toEqual({});
   });
 });

@@ -78,6 +78,7 @@ import {
 } from "@/lib/quotes/packagePricing";
 import {
   buildCompanyBundleSnapshot,
+  describeNewFileSetupCharge,
   hasCompanyBundle,
   normalizeCompanyBundle,
   resolveBundlePricingOptions,
@@ -294,10 +295,10 @@ export type AssessmentState = {
   bandOverride: BandOverride | null;
   /** Spec 02 company bundle (canonical when present); `accounts` mirrors companies[0].accounts. */
   companies?: CompanyEntry[];
-  /** Per-proposal override of the three BundlePricingOptions values; omitted means defaults. */
-  bundlePricingOptions?: BundlePricingOptions;
-  /** Options-template defaults applied to the proposal; the per-proposal override wins. */
-  bundlePricingDefaults?: BundlePricingOptions;
+  /** Per-proposal override; set fields win, omitted fields fall through to the template/catalog/defaults. */
+  bundlePricingOptions?: Partial<BundlePricingOptions>;
+  /** Options-template defaults applied to the proposal; set fields beat the catalog, omitted fields fall through. */
+  bundlePricingDefaults?: Partial<BundlePricingOptions>;
   entityType: EntityType;
   taxElection: TaxElection;
   booksOverTwoMonthsBehind: boolean | null;
@@ -1925,6 +1926,7 @@ export default function ProposalCreationWorkspaceDemo({
                       mainAccounts={assessment.accounts}
                       baseAssessment={pricingAssessment}
                       bundleOptions={resolveBundlePricingOptions(assessment)}
+                      newFileSetupSource={describeNewFileSetupCharge(assessment).source}
                       legacyEntitiesField={
                         <div className="max-w-[280px]">
                           <FieldLabel label="Number of Entities">

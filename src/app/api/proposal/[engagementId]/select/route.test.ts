@@ -99,6 +99,21 @@ describe("public proposal select API", () => {
     expect(await response.json()).toEqual(expect.objectContaining({ error: expect.stringContaining("cannot be changed") }));
     expect(mocks.update).not.toHaveBeenCalled();
   });
+  it("treats a bare status marker as frozen even with no other acceptance signal", async () => {
+    // Only engagement.status marks this row: no signedAt, no PAID, no
+    // proposalAcceptance. The route select must fetch status for the freeze
+    // check to see it in production (not just through this mock).
+    mocks.engagement.mockResolvedValue({ ...engagementRow(), status: "accepted" });
+    const response = await call();
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual(expect.objectContaining({ error: expect.stringContaining("cannot be changed") }));
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.engagement).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.objectContaining({
+        status: true, signedAt: true, onboardingFeeStatus: true, onboardingData: true,
+      }),
+    }));
+  });
   it("POST select checkout omits assessment notes and catalog internalDescription", async () => {
     const response = await call();
     expect(response.status).toBe(200);

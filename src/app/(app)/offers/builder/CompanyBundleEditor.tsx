@@ -9,6 +9,7 @@ import {
   type BundlePricingOptions,
   type CompanyEntry,
   type CompanyFileStatus,
+  type NewFileSetupChargeSource,
 } from "@/lib/quotes/companyBundle";
 // Note: per-proposal option resolution lives in companyBundle
 // (`resolveBundlePricingOptions`); this editor only edits the values.
@@ -38,7 +39,14 @@ const FILE_STATUS_LABELS: Record<CompanyFileStatus, string> = {
 };
 
 const inputClass =
-  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900";
+  "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:border-brandnavy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brandnavy/20";
+
+const NEW_FILE_SETUP_SOURCE_LABELS: Record<NewFileSetupChargeSource, string> = {
+  override: "proposal override",
+  template: "template default",
+  catalog: "from catalog",
+  placeholder: "placeholder",
+};
 
 function formatMoney(value: number) {
   return `$${value.toLocaleString("en-US")}`;
@@ -81,6 +89,8 @@ export interface CompanyBundleEditorProps {
   baseAssessment: AssessmentState;
   /** Effective (resolved) per-proposal bundle options. */
   bundleOptions: BundlePricingOptions;
+  /** Where the effective new-file setup charge came from; shown beside the override input. */
+  newFileSetupSource: NewFileSetupChargeSource;
   /** Legacy entities input, rendered only while no bundle is active. */
   legacyEntitiesField: ReactNode;
   onCompaniesChange: (companies: CompanyEntry[] | undefined) => void;
@@ -94,6 +104,7 @@ export default function CompanyBundleEditor({
   baseAssessment,
   bundleOptions,
   legacyEntitiesField,
+  newFileSetupSource,
   onCompaniesChange,
   onBundleOptionsChange,
 }: CompanyBundleEditorProps) {
@@ -270,7 +281,7 @@ export default function CompanyBundleEditor({
                     type="checkbox"
                     checked={company.ownQboFile}
                     onChange={(event) => updateCompany(company.id, { ownQboFile: event.target.checked })}
-                    className="h-4 w-4 rounded border-slate-300"
+                    className="h-4 w-4 rounded border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brandnavy/20"
                   />
                   Has its own QuickBooks file
                 </label>
@@ -386,7 +397,7 @@ export default function CompanyBundleEditor({
                 />
               </label>
               <label className="text-xs font-medium text-slate-700">
-                New-file setup $/file (default {formatMoney(DEFAULT_BUNDLE_PRICING_OPTIONS.newFileSetupCharge)})
+                New-file setup $/file (effective {formatMoney(bundleOptions.newFileSetupCharge)} — {NEW_FILE_SETUP_SOURCE_LABELS[newFileSetupSource]})
                 <input
                   className={inputClass}
                   type="number"
@@ -398,7 +409,9 @@ export default function CompanyBundleEditor({
               </label>
             </div>
             <p className="mt-2 text-xs text-slate-500">
-              Defaults are proposed (20% · $25/location · $150/new file) pending confirmation.
+              Discount and location defaults are proposed (20% · $25/location). New-file setup
+              follows the brand catalog price when set, otherwise the $150 placeholder; typing a
+              value above makes it a proposal override.
             </p>
           </details>
 

@@ -1,7 +1,4 @@
-import {
-  DEFAULT_BUNDLE_PRICING_OPTIONS,
-  type BundlePricingOptions,
-} from "@/lib/quotes/companyBundle";
+import type { BundlePricingOptions } from "@/lib/quotes/companyBundle";
 
 export const OPTIONS_TEMPLATE_SNAPSHOT_VERSION = 1;
 
@@ -44,12 +41,14 @@ export type OptionsTemplateSnapshot = {
   /**
    * Spec 02 brand-level defaults for BundlePricingOptions. Additive and
    * optional so snapshots written before Spec 02 (which omit it) still parse
-   * at version 1 and fall back to {@link DEFAULT_BUNDLE_PRICING_OPTIONS}.
-   * When a template is applied to a proposal it lands on the assessment as
-   * `bundlePricingDefaults`; a per-proposal `bundlePricingOptions` override
-   * on the assessment wins over it.
+   * at version 1. Each field is optional too: an omitted field (in
+   * particular `newFileSetupCharge`, which new seeds leave out) falls
+   * through to the brand catalog price and then the proposed default at
+   * resolution time. When a template is applied to a proposal it lands on
+   * the assessment as `bundlePricingDefaults`; a per-proposal
+   * `bundlePricingOptions` override on the assessment wins over it.
    */
-  bundlePricingDefaults?: BundlePricingOptions;
+  bundlePricingDefaults?: Partial<BundlePricingOptions>;
 };
 
 export type OptionsTemplateAssessmentSlice = {
@@ -57,7 +56,7 @@ export type OptionsTemplateAssessmentSlice = {
   additionalOptions: OptionsTemplateAdditionalOption[];
   bonuses: OptionsTemplateBonus[];
   bonusPackageSelections: Record<string, OptionsTemplatePackageId[]>;
-  bundlePricingDefaults?: BundlePricingOptions;
+  bundlePricingDefaults?: Partial<BundlePricingOptions>;
 };
 
 const VALID_PACKAGES: readonly OptionsTemplatePackageId[] = ["grow", "improve", "maintain"];
@@ -72,32 +71,28 @@ function isPackageId(value: unknown): value is OptionsTemplatePackageId {
   return typeof value === "string" && (VALID_PACKAGES as readonly string[]).includes(value);
 }
 
-function finiteCharge(value: unknown, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : fallback;
+function finiteChargeOrUndefined(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : undefined;
 }
 
 /**
  * Canonical Spec 02 bundle defaults for storage. Finite values are kept
- * (discount clamped to 0–100, charges floored at 0); anything else falls
- * back to {@link DEFAULT_BUNDLE_PRICING_OPTIONS} per field.
+ * (discount clamped to 0–100, charges floored at 0); anything else stays
+ * UNSET so resolution can fall through to the catalog and then the proposed
+ * defaults. A stored 150 is kept as-is: it counts as explicitly set.
  */
-export function sanitizeBundlePricingDefaults(value: unknown): BundlePricingOptions {
+export function sanitizeBundlePricingDefaults(value: unknown): Partial<BundlePricingOptions> {
   const source = (value && typeof value === "object" ? value : {}) as Partial<BundlePricingOptions>;
-  const discount = typeof source.additionalCompanyDiscountPct === "number" &&
-    Number.isFinite(source.additionalCompanyDiscountPct)
-    ? Math.min(100, Math.max(0, source.additionalCompanyDiscountPct))
-    : DEFAULT_BUNDLE_PRICING_OPTIONS.additionalCompanyDiscountPct;
-  return {
-    additionalCompanyDiscountPct: discount,
-    locationMonthlyCharge: finiteCharge(
-      source.locationMonthlyCharge,
-      DEFAULT_BUNDLE_PRICING_OPTIONS.locationMonthlyCharge,
-    ),
-    newFileSetupCharge: finiteCharge(
-      source.newFileSetupCharge,
-      DEFAULT_BUNDLE_PRICING_OPTIONS.newFileSetupCharge,
-    ),
-  };
+  const partial: Partial<BundlePricingOptions> = {};
+  if (typeof source.additionalCompanyDiscountPct === "number" &&
+    Number.isFinite(source.additionalCompanyDiscountPct)) {
+    partial.additionalCompanyDiscountPct = Math.min(100, Math.max(0, source.additionalCompanyDiscountPct));
+  }
+  const location = finiteChargeOrUndefined(source.locationMonthlyCharge);
+  if (location !== undefined) partial.locationMonthlyCharge = location;
+  const setup = finiteChargeOrUndefined(source.newFileSetupCharge);
+  if (setup !== undefined) partial.newFileSetupCharge = setup;
+  return partial;
 }
 
 function sanitizePackageIds(value: unknown): OptionsTemplatePackageId[] {

@@ -212,8 +212,32 @@ export function renderAgreementTemplate(template: string, input: AgreementRender
     ? `${input.selectedTierLabel} package`
     : "Selected bookkeeping package";
   const staged = input.paymentScheduleVersion === 2;
+  const companyFeeLines = (input.companyFeeLines ?? []).filter(
+    (line): line is CompanyBundleFeeLine =>
+      !!line &&
+      typeof line === "object" &&
+      typeof (line as CompanyBundleFeeLine).label === "string" &&
+      typeof (line as CompanyBundleFeeLine).amount === "number" &&
+      typeof (line as CompanyBundleFeeLine).companyName === "string" &&
+      typeof (line as CompanyBundleFeeLine).kind === "string",
+  );
+  // Group by the structured kind (never by label text): monthly kinds roll
+  // into the monthly total; everything else lists as a one-time line. An
+  // unknown kind falls back to its cadence so forward-compatible lines still
+  // land on the right side.
+  const isMonthlyLine = (line: CompanyBundleFeeLine) =>
+    line.kind === "company-monthly" || line.kind === "tag" || line.kind === "locations" ||
+    (line.kind !== "setup" && line.kind !== "migration" && line.cadence === "monthly");
+  const companyMonthlyLines = companyFeeLines.filter(isMonthlyLine);
+  const companyOneTimeLines = companyFeeLines.filter((line) => !isMonthlyLine(line));
+  const companyMonthlyTotal = companyMonthlyLines.reduce((total, line) => total + line.amount, 0);
   const requiredOneTimeTotal = (input.requiredOneTime ?? []).reduce((total, row) => total + row.price, 0);
-  const selectedOneTimeTotal = Math.max(0, Math.round(((input.additionalOneTimeTotal ?? 0) - requiredOneTimeTotal) * 100) / 100);
+  // One rule for bundle setup, shared with checkout: checkout's
+  // additionalOneTimeTotal already carries the setup charges (due today), and
+  // they are itemized exactly once through the companyFeeLines setup lines
+  // above — never again through the Selected One-Time Add-ons line.
+  const companyOneTimeTotal = companyOneTimeLines.reduce((total, line) => total + line.amount, 0);
+  const selectedOneTimeTotal = Math.max(0, Math.round(((input.additionalOneTimeTotal ?? 0) - requiredOneTimeTotal - companyOneTimeTotal) * 100) / 100);
   const engagementType = staged && input.hasCleanup
     ? "Onboarding + Discovery; Estimated Cleanup and Monthly Bookkeeping"
     : input.hasCleanup
@@ -244,25 +268,6 @@ export function renderAgreementTemplate(template: string, input: AgreementRender
     }` : null,
   ].filter((line): line is string => Boolean(line));
   const scopeOfWork = scopeLines.join("\n\n");
-  const companyFeeLines = (input.companyFeeLines ?? []).filter(
-    (line): line is CompanyBundleFeeLine =>
-      !!line &&
-      typeof line === "object" &&
-      typeof (line as CompanyBundleFeeLine).label === "string" &&
-      typeof (line as CompanyBundleFeeLine).amount === "number" &&
-      typeof (line as CompanyBundleFeeLine).companyName === "string" &&
-      typeof (line as CompanyBundleFeeLine).kind === "string",
-  );
-  // Group by the structured kind (never by label text): monthly kinds roll
-  // into the monthly total; everything else lists as a one-time line. An
-  // unknown kind falls back to its cadence so forward-compatible lines still
-  // land on the right side.
-  const isMonthlyLine = (line: CompanyBundleFeeLine) =>
-    line.kind === "company-monthly" || line.kind === "tag" || line.kind === "locations" ||
-    (line.kind !== "setup" && line.kind !== "migration" && line.cadence === "monthly");
-  const companyMonthlyLines = companyFeeLines.filter(isMonthlyLine);
-  const companyOneTimeLines = companyFeeLines.filter((line) => !isMonthlyLine(line));
-  const companyMonthlyTotal = companyMonthlyLines.reduce((total, line) => total + line.amount, 0);
   const feeLines = [
     ...companyMonthlyLines.map((line) => `${line.label}: ${formatCurrency(line.amount)} per month`),
     `Ongoing Monthly Services: ${formatCurrency(companyMonthlyLines.length > 0 ? companyMonthlyTotal : (input.recurringMonthlyTotal ?? 0))} per month`,

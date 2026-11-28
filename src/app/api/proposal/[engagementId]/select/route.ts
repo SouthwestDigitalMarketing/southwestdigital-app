@@ -33,6 +33,7 @@ export async function POST(
       onboardingData: true,
       updatedAt: true,
       brandId: true,
+      status: true,
       onboardingFeeStatus: true,
       signedAt: true,
       agreementManagerStatus: true,

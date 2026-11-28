@@ -274,9 +274,25 @@ describe("public proposal agreement API", () => {
     }
     expect(body.text).toContain(`Ongoing Monthly Services: $${priced.bundleMonthly.toFixed(2)} per month`);
     expect(mocks.update).toHaveBeenCalledWith({
-      where: { id: "eng", brandId: "brand", signedAt: null, updatedAt: engagementRow().updatedAt },
+      where: { id: "eng", brandId: "brand", signedAt: null, updatedAt: engagementRow().updatedAt,
+        onboardingData: { equals: expect.any(Object) } },
       data: { agreementText: body.text },
     });
+  });
+
+  it("treats a bare status marker as frozen even with no other acceptance signal", async () => {
+    // Only engagement.status marks this row: no signedAt, no stored text, no
+    // PAID, no proposalAcceptance. The route select must fetch status for the
+    // freeze check to see it in production (not just through this mock).
+    mocks.engagement.mockResolvedValue({ ...rowWithAccounts(accounts), status: "accepted" });
+    const response = await call();
+    expect(response.status).toBe(409);
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.engagement).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.objectContaining({
+        status: true, signedAt: true, onboardingFeeStatus: true, onboardingData: true,
+      }),
+    }));
   });
 
   it("reads the selected tier from the snapshot bundle object", async () => {
