@@ -1,3 +1,5 @@
+import type { BundlePricingOptions } from "@/lib/quotes/companyBundle";
+
 export const OPTIONS_TEMPLATE_SNAPSHOT_VERSION = 1;
 
 export type OptionsTemplatePackageId = "grow" | "improve" | "maintain";
@@ -36,6 +38,17 @@ export type OptionsTemplateSnapshot = {
   additionalOptions: OptionsTemplateAdditionalOption[];
   bonuses: OptionsTemplateBonus[];
   bonusPackageSelections: Record<string, OptionsTemplatePackageId[]>;
+  /**
+   * Spec 02 brand-level defaults for BundlePricingOptions. Additive and
+   * optional so snapshots written before Spec 02 (which omit it) still parse
+   * at version 1. Each field is optional too: an omitted field (in
+   * particular `newFileSetupCharge`, which new seeds leave out) falls
+   * through to the brand catalog price and then the proposed default at
+   * resolution time. When a template is applied to a proposal it lands on
+   * the assessment as `bundlePricingDefaults`; a per-proposal
+   * `bundlePricingOptions` override on the assessment wins over it.
+   */
+  bundlePricingDefaults?: Partial<BundlePricingOptions>;
 };
 
 export type OptionsTemplateAssessmentSlice = {
@@ -43,6 +56,7 @@ export type OptionsTemplateAssessmentSlice = {
   additionalOptions: OptionsTemplateAdditionalOption[];
   bonuses: OptionsTemplateBonus[];
   bonusPackageSelections: Record<string, OptionsTemplatePackageId[]>;
+  bundlePricingDefaults?: Partial<BundlePricingOptions>;
 };
 
 const VALID_PACKAGES: readonly OptionsTemplatePackageId[] = ["grow", "improve", "maintain"];
@@ -55,6 +69,58 @@ const DOCUMENT_ORGANIZATION_DESCRIPTION =
 
 function isPackageId(value: unknown): value is OptionsTemplatePackageId {
   return typeof value === "string" && (VALID_PACKAGES as readonly string[]).includes(value);
+}
+
+function finiteChargeOrUndefined(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : undefined;
+}
+
+/**
+ * Canonical Spec 02 bundle defaults for storage. Finite values are kept
+ * (discount clamped to 0–100, charges floored at 0); anything else stays
+ * UNSET so resolution can fall through to the catalog and then the proposed
+ * defaults. A stored 150 is kept as-is: it counts as explicitly set.
+ */
+export function sanitizeBundlePricingDefaults(value: unknown): Partial<BundlePricingOptions> {
+  const source = (value && typeof value === "object" ? value : {}) as Partial<BundlePricingOptions>;
+  const partial: Partial<BundlePricingOptions> = {};
+  if (typeof source.additionalCompanyDiscountPct === "number" &&
+    Number.isFinite(source.additionalCompanyDiscountPct)) {
+    partial.additionalCompanyDiscountPct = Math.min(100, Math.max(0, source.additionalCompanyDiscountPct));
+  }
+  const location = finiteChargeOrUndefined(source.locationMonthlyCharge);
+  if (location !== undefined) partial.locationMonthlyCharge = location;
+  const setup = finiteChargeOrUndefined(source.newFileSetupCharge);
+  if (setup !== undefined) partial.newFileSetupCharge = setup;
+  return partial;
+}
+
+/**
+ * Parse the manager's bundle-defaults text inputs. A blank input DELETES its
+ * key so the field falls back down the resolution chain (catalog, then the
+ * proposed defaults) — it never saves `Number("")` (0). A non-blank input
+ * must be a finite non-negative number. Returns null when any non-blank
+ * input is invalid.
+ */
+export function parseBundlePricingDefaultsInputs(values: {
+  discountPct: string;
+  locationCharge: string;
+  setupCharge: string;
+}): Partial<BundlePricingOptions> | null {
+  const parsed: Partial<BundlePricingOptions> = {};
+  const fields = [
+    ["discountPct", "additionalCompanyDiscountPct"],
+    ["locationCharge", "locationMonthlyCharge"],
+    ["setupCharge", "newFileSetupCharge"],
+  ] as const;
+  for (const [inputKey, optionKey] of fields) {
+    const raw = values[inputKey].trim();
+    if (raw === "") continue;
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value < 0) return null;
+    parsed[optionKey] = optionKey === "additionalCompanyDiscountPct" ? Math.min(100, value) : value;
+  }
+  return parsed;
 }
 
 function sanitizePackageIds(value: unknown): OptionsTemplatePackageId[] {
@@ -164,6 +230,7 @@ export function buildOptionsTemplateSnapshot(
     additionalOptions,
     bonuses,
     bonusPackageSelections,
+    bundlePricingDefaults: sanitizeBundlePricingDefaults(slice.bundlePricingDefaults),
   };
 }
 
@@ -195,6 +262,7 @@ export function parseOptionsTemplateSnapshot(raw: unknown): OptionsTemplateSnaps
             ]),
           )
         : {},
+    bundlePricingDefaults: sanitizeBundlePricingDefaults(record.bundlePricingDefaults),
   });
 }
 
@@ -232,6 +300,9 @@ export function reconcileOptionsTemplateSnapshot(
       additionalOptions,
       bonuses,
       bonusPackageSelections,
+      // Brand-level bundle defaults are not catalog items, so reconciliation
+      // never drops them — they always travel with the slice.
+      bundlePricingDefaults: sanitizeBundlePricingDefaults(snapshot.bundlePricingDefaults),
     },
     skippedIds,
   };

@@ -59,6 +59,39 @@ import {
   proposalCatalogOptionSelected,
 } from "./proposalCatalogSync";
 import { normalizeTierPackageIds } from "./proposalTierRanges";
+import {
+  applyGrowPriceOverride,
+  buildPackagePricing,
+  countValue,
+  getMonthlyRateBreakdown,
+  hasComplexRealEstateOperations,
+  knownPaymentPlatformCount,
+  knownRealEstateOperationCount,
+  PACKAGE_PRICING,
+  paymentPlatformComplexityCount,
+  reconciliationAccountCount,
+  transactionBandScore,
+  type CountValue,
+  type MonthlyRateBreakdownItem,
+  type PackagePricingSpec,
+  type PackagePricingSummary,
+} from "@/lib/quotes/packagePricing";
+import {
+  buildCompanyBundleSnapshot,
+  describeNewFileSetupCharge,
+  hasCompanyBundle,
+  normalizeCompanyBundle,
+  resolveBundlePricingOptions,
+  sanitizeBundlePricingOverride,
+  type BundlePricingOptions,
+  type CompanyBundleSnapshot,
+  type CompanyEntry,
+} from "@/lib/quotes/companyBundle";
+import CompanyBundleEditor, { withSyncedMainAccounts } from "./CompanyBundleEditor";
+import {
+  sanitizeBundlePricingDefaults,
+  type OptionsTemplateAssessmentSlice,
+} from "@/lib/quotes/optionsTemplates";
 
 export {
   reconcileProposalAssessmentWithCatalog,
@@ -109,7 +142,6 @@ type PaymentPlatform =
   | "airbnb-payouts"
   | "other"
   | "unknown";
-type DemoComplexityLevel = "standard" | "complex" | "advanced";
 type EntityType =
   | ""
   | "llc"
@@ -215,7 +247,6 @@ type BankOption =
   | "local-community-bank"
   | "other"
   | "unknown";
-type CountValue = number | "";
 export type ProposalAdditionalOption = {
   id: string;
   name: string;
@@ -266,6 +297,12 @@ export type AssessmentState = {
   transactionBand: TransactionBand;
   accounts: AccountEntry[];
   bandOverride: BandOverride | null;
+  /** Spec 02 company bundle (canonical when present); `accounts` mirrors companies[0].accounts. */
+  companies?: CompanyEntry[];
+  /** Per-proposal override; set fields win, omitted fields fall through to the template/catalog/defaults. */
+  bundlePricingOptions?: Partial<BundlePricingOptions>;
+  /** Options-template defaults applied to the proposal; set fields beat the catalog, omitted fields fall through. */
+  bundlePricingDefaults?: Partial<BundlePricingOptions>;
   entityType: EntityType;
   taxElection: TaxElection;
   booksOverTwoMonthsBehind: boolean | null;
@@ -367,35 +404,12 @@ export type AssessmentState = {
   qboAccessStatus: QboAccessStatus;
 };
 
-type ThresholdAmount = Array<{ min: number; amount: number }>;
-
-type DemoPricingConfig = {
-  recurringPerProperty: number;
-  recurringPerEntity: number;
-  recurringComplexity: Record<DemoComplexityLevel, number>;
-  transactionBandMonthly: Record<Exclude<TransactionBand, "">, number>;
-  staffingPerPerson: number;
-  reconciliationThresholds: ThresholdAmount;
-  platformThresholds: ThresholdAmount;
-  passThroughThresholds: ThresholdAmount;
-  mixedBooksMonthly: number;
-  nonReBusinessMonthly: number;
-  complexOperationsMonthly: number;
-  multiOperationMonthly: number;
-  backlogPerProperty: number;
-  backlogPerEntity: number;
-  catchUpComplexityMultiplier: Record<DemoComplexityLevel, number>;
-};
-
-type PackageDefinition = {
-  id: PackageId;
+type PackageDefinition = PackagePricingSpec & {
   name: string;
-  monthlyPrice: number;
   description: string;
   accentClass: string;
   icon: typeof ShieldCheck;
   clientFit: string;
-  pricing: DemoPricingConfig;
 };
 
 type RecommendationSummary = {
@@ -406,24 +420,8 @@ type RecommendationSummary = {
   watchouts: string[];
 };
 
-type PackagePricingSummary = {
-  packageId: PackageId;
-  complexityLevel: DemoComplexityLevel;
-  monthly: number;
-  catchUpBase: number;
-  assessmentOneTimeAdjustments: number;
-  totalOneTimeBeforeManual: number;
-  totalOneTime: number;
-};
-
-type MonthlyRateBreakdownItem = {
-  label: string;
-  amount: number;
-};
-
 type ProposalAssessmentStep = "scale" | "complexity" | "adjustments";
 
-const CLEANUP_PURCHASED_OR_SOLD_PROPERTY_COST = 200;
 const CURRENT_DATE = new Date();
 const CURRENT_YEAR = CURRENT_DATE.getFullYear();
 const LAST_COMPLETED_MONTH = Math.max(1, CURRENT_DATE.getMonth());
@@ -670,118 +668,34 @@ export function getOptionsCatalogOrder(
 
 const PACKAGES: PackageDefinition[] = [
   {
-    id: "grow",
+    ...PACKAGE_PRICING.grow,
     name: "Grow",
-    monthlyPrice: 250,
     description:
       "Includes everything in Improve, plus concierge support, CFO-level reporting, faster turnaround, and more proactive financial guidance.",
     accentClass: "text-emerald-600",
     icon: Sparkles,
     clientFit:
       "Best for owners who want high-touch support, executive-level visibility, and a more strategic finance partner.",
-    pricing: {
-      recurringPerProperty: 50,
-      recurringPerEntity: 175,
-      recurringComplexity: { standard: 0, complex: 275, advanced: 600 },
-      transactionBandMonthly: { "0-99": 0, "100-499": 120, "500-999": 260, "1000+": 480, unknown: 0 },
-      staffingPerPerson: 60,
-      reconciliationThresholds: [
-        { min: 6, amount: 90 },
-        { min: 12, amount: 180 },
-        { min: 20, amount: 320 },
-      ],
-      platformThresholds: [
-        { min: 1, amount: 70 },
-        { min: 3, amount: 140 },
-      ],
-      passThroughThresholds: [
-        { min: 1, amount: 85 },
-        { min: 3, amount: 170 },
-      ],
-      mixedBooksMonthly: 225,
-      nonReBusinessMonthly: 325,
-      complexOperationsMonthly: 190,
-      multiOperationMonthly: 110,
-      backlogPerProperty: 40,
-      backlogPerEntity: 100,
-      catchUpComplexityMultiplier: { standard: 0, complex: 0.2, advanced: 0.35 },
-    },
   },
   {
-    id: "improve",
+    ...PACKAGE_PRICING.improve,
     name: "Improve",
-    monthlyPrice: 250,
     description:
       "Includes everything in Maintain, plus budgeting, advanced reporting, A/R and A/P reporting visibility, and stronger operating insight.",
     accentClass: "text-indigo-600",
     icon: TrendingUp,
     clientFit:
       "Best for most investors who want stronger visibility, better operating support, and more confidence in the numbers.",
-    pricing: {
-      recurringPerProperty: 50,
-      recurringPerEntity: 125,
-      recurringComplexity: { standard: 0, complex: 200, advanced: 450 },
-      transactionBandMonthly: { "0-99": 0, "100-499": 90, "500-999": 200, "1000+": 360, unknown: 0 },
-      staffingPerPerson: 45,
-      reconciliationThresholds: [
-        { min: 6, amount: 70 },
-        { min: 12, amount: 140 },
-        { min: 20, amount: 260 },
-      ],
-      platformThresholds: [
-        { min: 1, amount: 55 },
-        { min: 3, amount: 110 },
-      ],
-      passThroughThresholds: [
-        { min: 1, amount: 65 },
-        { min: 3, amount: 140 },
-      ],
-      mixedBooksMonthly: 175,
-      nonReBusinessMonthly: 250,
-      complexOperationsMonthly: 150,
-      multiOperationMonthly: 90,
-      backlogPerProperty: 30,
-      backlogPerEntity: 75,
-      catchUpComplexityMultiplier: { standard: 0, complex: 0.15, advanced: 0.25 },
-    },
   },
   {
-    id: "maintain",
+    ...PACKAGE_PRICING.maintain,
     name: "Maintain",
-    monthlyPrice: 250,
     description:
       "Core monthly bookkeeping, reconciliations, and clean monthly financials for owners who want reliable books and a steady close process.",
     accentClass: "text-amber-600",
     icon: ShieldCheck,
     clientFit:
       "Best for owners who need a reliable monthly close, clean books, and a simpler ongoing support structure.",
-    pricing: {
-      recurringPerProperty: 50,
-      recurringPerEntity: 100,
-      recurringComplexity: { standard: 0, complex: 150, advanced: 350 },
-      transactionBandMonthly: { "0-99": 0, "100-499": 70, "500-999": 150, "1000+": 280, unknown: 0 },
-      staffingPerPerson: 35,
-      reconciliationThresholds: [
-        { min: 6, amount: 50 },
-        { min: 12, amount: 110 },
-        { min: 20, amount: 200 },
-      ],
-      platformThresholds: [
-        { min: 1, amount: 40 },
-        { min: 3, amount: 80 },
-      ],
-      passThroughThresholds: [
-        { min: 1, amount: 50 },
-        { min: 3, amount: 110 },
-      ],
-      mixedBooksMonthly: 130,
-      nonReBusinessMonthly: 200,
-      complexOperationsMonthly: 120,
-      multiOperationMonthly: 70,
-      backlogPerProperty: 20,
-      backlogPerEntity: 50,
-      catchUpComplexityMultiplier: { standard: 0, complex: 0.1, advanced: 0.2 },
-    },
   },
 ];
 
@@ -856,8 +770,6 @@ export const REAL_ESTATE_OPERATIONS: Array<{ value: RealEstateOperation; label: 
   { value: "development", label: "Development" },
   { value: "unknown", label: "Unknown" },
 ];
-
-const GROW_PRICE_MULTIPLIER_FROM_MAINTAIN = 1.5;
 
 const TRANSACTION_BANDS: Array<{ value: TransactionBand; label: string; score: number }> = [
   { value: "", label: "Select...", score: 0 },
@@ -1097,10 +1009,6 @@ function calculateInclusiveMonths(startMonth: string, endMonth: string) {
   return endIndex - startIndex + 1;
 }
 
-function countValue(value: CountValue) {
-  return typeof value === "number" ? value : 0;
-}
-
 function resolveContactSourceValues(
   source: ContactSourceType,
   ownerId: string,
@@ -1188,15 +1096,26 @@ function parseAnnualSavingsPercentInput(value: string) {
   return Math.min(100, Math.max(0, parsed));
 }
 
-function roundUpToNearestIncrement(value: number, increment = 5) {
-  if (!Number.isFinite(value) || increment <= 0) return value;
-  return Math.ceil(value / increment) * increment;
-}
-
 function withComplexityUnknownDefaults(assessment: AssessmentState): AssessmentState {
+  // Spec 02: a saved bundle is canonical — companies normalize tolerantly and
+  // `accounts` mirrors companies[0].accounts. Legacy snapshots (no `companies`
+  // key, or an empty list) keep `companies` unset and price exactly as before.
+  const storedCompanies = (assessment as { companies?: unknown }).companies;
+  const normalizedBundle =
+    storedCompanies === undefined ? undefined : normalizeCompanyBundle(storedCompanies);
+  const companies = normalizedBundle && normalizedBundle.length > 0 ? normalizedBundle : undefined;
   return {
     ...assessment,
-    accounts: normalizeAccountInventory(assessment.accounts),
+    accounts: companies ? companies[0].accounts : normalizeAccountInventory(assessment.accounts),
+    companies,
+    bundlePricingOptions:
+      assessment.bundlePricingOptions === undefined
+        ? undefined
+        : sanitizeBundlePricingOverride(assessment.bundlePricingOptions),
+    bundlePricingDefaults:
+      assessment.bundlePricingDefaults === undefined
+        ? undefined
+        : sanitizeBundlePricingOverride(assessment.bundlePricingDefaults),
     bandOverride: validateBandOverride(assessment.bandOverride).ok
       ? assessment.bandOverride
       : null,
@@ -1280,6 +1199,34 @@ export function mergeStoredAssessment(
   } catch {
     return withComplexityUnknownDefaults(initialState);
   }
+}
+
+/**
+ * The live options-template apply path (OptionsTemplatesToolbar on the
+ * Options step). Copies the template's `bundlePricingDefaults` onto the
+ * proposal assessment field by field: template-set fields win, template-unset
+ * fields keep what the proposal already has, and a template with no defaults
+ * at all never wipes existing proposal defaults. The per-proposal
+ * `bundlePricingOptions` override is never touched — it always wins at
+ * resolution time.
+ */
+export function applyOptionsTemplateSlice(
+  saved: AssessmentState,
+  slice: OptionsTemplateAssessmentSlice,
+): AssessmentState {
+  const savedDefaults = sanitizeBundlePricingOverride(saved.bundlePricingDefaults);
+  const templateDefaults = sanitizeBundlePricingDefaults(slice.bundlePricingDefaults);
+  const merged = { ...savedDefaults };
+  for (const [key, value] of Object.entries(templateDefaults)) {
+    if (value !== undefined) {
+      (merged as Record<string, number>)[key] = value;
+    }
+  }
+  const next = { ...saved, ...slice };
+  if (slice.bundlePricingDefaults !== undefined || saved.bundlePricingDefaults !== undefined) {
+    next.bundlePricingDefaults = merged;
+  }
+  return next;
 }
 
 function readStoredAssessment(
@@ -1485,24 +1432,6 @@ export function useProposalAssessmentDemoState({
   };
 }
 
-function transactionBandScore(band: TransactionBand) {
-  return TRANSACTION_BANDS.find((option) => option.value === band)?.score ?? 0;
-}
-
-function amountForThreshold(value: number, thresholds: ThresholdAmount) {
-  return thresholds.reduce((current, threshold) => {
-    return value >= threshold.min ? threshold.amount : current;
-  }, 0);
-}
-
-function hasComplexRealEstateOperations(assessment: AssessmentState) {
-  return (
-    assessment.realEstateOperations.includes("short-term-rentals") ||
-    assessment.realEstateOperations.includes("flips") ||
-    assessment.realEstateOperations.includes("development")
-  );
-}
-
 function hasMonthlyPricingInputs(assessment: AssessmentState) {
   assessment = effectiveAssessment(assessment);
   return Boolean(
@@ -1528,213 +1457,6 @@ function hasMonthlyPricingInputs(assessment: AssessmentState) {
       assessment.realEstateOperations.length > 0 ||
       assessment.paymentPlatforms.length > 0
   );
-}
-
-function derivedPricingComplexityLevel(assessment: AssessmentState): DemoComplexityLevel {
-  const txScore = transactionBandScore(assessment.transactionBand);
-  const headcount = countValue(assessment.employeesCount) + countValue(assessment.contractorsCount);
-  const reconciliationCount = reconciliationAccountCount(assessment);
-  const platformComplexity = paymentPlatformComplexityCount(assessment);
-  const hasComplexOperations = hasComplexRealEstateOperations(assessment);
-
-  let score = 0;
-  score += txScore;
-  if (countValue(assessment.numberOfProperties) >= 10) score += 2;
-  else if (countValue(assessment.numberOfProperties) >= 4) score += 1;
-  if (countValue(assessment.numberOfEntities) >= 3) score += 2;
-  else if (countValue(assessment.numberOfEntities) >= 2) score += 1;
-  if (headcount >= 8) score += 2;
-  else if (headcount >= 3) score += 1;
-  if (reconciliationCount >= 16) score += 2;
-  else if (reconciliationCount >= 8) score += 1;
-  if (platformComplexity >= 4) score += 2;
-  else if (platformComplexity >= 2) score += 1;
-  if (hasComplexOperations) score += 2;
-  else if (knownRealEstateOperationCount(assessment) >= 2) score += 1;
-  if (assessment.bookSetType === "mixed-books") score += 2;
-  if (assessment.bookSetType === "other-business") score += 1;
-
-  if (score >= 9) return "advanced";
-  if (score >= 4) return "complex";
-  return "standard";
-}
-
-function reconciliationAccountCount(assessment: AssessmentState) {
-  return (
-    countValue(assessment.bankAccountsCount) +
-    countValue(assessment.creditCardsCount) +
-    countValue(assessment.unconnectedBankAccountsCount) +
-    countValue(assessment.unconnectedCreditCardsCount) +
-    countValue(assessment.loansCount) +
-    countValue(assessment.vehicleNotesCount) +
-    countValue(assessment.linesOfCreditCount) +
-    countValue(assessment.unconnectedLinesOfCreditCount)
-  );
-}
-
-function paymentPlatformComplexityCount(assessment: AssessmentState) {
-  return (
-    assessment.paymentPlatforms.filter((platform) => platform !== "unknown").length +
-    countValue(assessment.zeroBalancePlatformCount)
-  );
-}
-
-function knownRealEstateOperationCount(assessment: AssessmentState) {
-  return assessment.realEstateOperations.filter((operation) => operation !== "unknown").length;
-}
-
-function knownPaymentPlatformCount(assessment: AssessmentState) {
-  return assessment.paymentPlatforms.filter((platform) => platform !== "unknown").length;
-}
-
-function getMonthlyRateBreakdown(
-  pkg: PackageDefinition,
-  assessment: AssessmentState,
-  complexityLevel: DemoComplexityLevel,
-) {
-  const propertyCount = countValue(assessment.numberOfProperties);
-  const entityCount = countValue(assessment.numberOfEntities);
-  const headcount = countValue(assessment.employeesCount) + countValue(assessment.contractorsCount);
-  const reconciliationCount = reconciliationAccountCount(assessment);
-  const platformCount = knownPaymentPlatformCount(assessment);
-  const passThroughCount = countValue(assessment.zeroBalancePlatformCount);
-  const hasComplexOperations = hasComplexRealEstateOperations(assessment);
-  const multipleOperations = knownRealEstateOperationCount(assessment) >= 2;
-  const transactionBandMonthly = assessment.transactionBand
-    ? pkg.pricing.transactionBandMonthly[assessment.transactionBand]
-    : 0;
-  const staffingAmount = headcount * pkg.pricing.staffingPerPerson;
-  const reconciliationAmount = amountForThreshold(
-    reconciliationCount,
-    pkg.pricing.reconciliationThresholds,
-  );
-  const platformAmount = amountForThreshold(platformCount, pkg.pricing.platformThresholds);
-  const passThroughAmount = amountForThreshold(
-    passThroughCount,
-    pkg.pricing.passThroughThresholds,
-  );
-  const booksTypeAmount =
-    assessment.bookSetType === "mixed-books"
-      ? pkg.pricing.mixedBooksMonthly
-      : assessment.bookSetType === "other-business"
-        ? pkg.pricing.nonReBusinessMonthly
-        : 0;
-  const operationsAmount = hasComplexOperations
-    ? pkg.pricing.complexOperationsMonthly
-    : !hasComplexOperations && multipleOperations
-      ? pkg.pricing.multiOperationMonthly
-      : 0;
-  const baseMonthly =
-    pkg.monthlyPrice +
-    propertyCount * pkg.pricing.recurringPerProperty +
-    entityCount * pkg.pricing.recurringPerEntity +
-    pkg.pricing.recurringComplexity[complexityLevel] +
-    transactionBandMonthly +
-    staffingAmount +
-    reconciliationAmount +
-    platformAmount +
-    passThroughAmount +
-    booksTypeAmount +
-    operationsAmount;
-  const multiplierDeltaAmount =
-    Math.round((baseMonthly * assessment.discretionaryMultiplier - baseMonthly) * 100) / 100;
-
-  const baseItems: MonthlyRateBreakdownItem[] = [
-    { label: "Base monthly package", amount: pkg.monthlyPrice },
-    {
-      label: `${propertyCount} properties`,
-      amount: propertyCount * pkg.pricing.recurringPerProperty,
-    },
-    {
-      label: `${entityCount} additional entities`,
-      amount: entityCount * pkg.pricing.recurringPerEntity,
-    },
-    {
-      label: `Complexity (${complexityLevel})`,
-      amount: pkg.pricing.recurringComplexity[complexityLevel],
-    },
-    { label: "Transaction volume", amount: transactionBandMonthly },
-    { label: "Staffing", amount: staffingAmount },
-    { label: "Reconciliation load", amount: reconciliationAmount },
-    { label: "Connected platforms", amount: platformAmount },
-    { label: "Pass-through accounts", amount: passThroughAmount },
-    { label: "Books type adjustment", amount: booksTypeAmount },
-    { label: "Operations adjustment", amount: operationsAmount },
-  ].filter((item) => item.amount > 0);
-
-  const adjustmentItems: MonthlyRateBreakdownItem[] = [
-    {
-      label: `Discretionary multiplier (${assessment.discretionaryMultiplier.toFixed(2)}x)`,
-      amount: multiplierDeltaAmount,
-    },
-  ].filter((item) => item.amount !== 0);
-
-  return { baseItems, adjustmentItems };
-}
-
-function buildPackagePricing(
-  pkg: PackageDefinition,
-  assessment: AssessmentState,
-  cleanupMonths: number,
-  manualAdjustmentAmount: number,
-): PackagePricingSummary {
-  const complexityLevel = derivedPricingComplexityLevel(assessment);
-  const propertyCount = countValue(assessment.numberOfProperties);
-  const entityCount = countValue(assessment.numberOfEntities);
-  const reconciliationCount = reconciliationAccountCount(assessment);
-  const hasYearSpecificPropertyCounts = assessment.historicalCleanupPeriods.some(
-    (period) => period.purchasedOrSoldPropertiesCount !== undefined,
-  );
-  const cleanupPurchasedOrSoldPropertiesCount = hasYearSpecificPropertyCounts
-    ? assessment.historicalCleanupPeriods.reduce(
-        (total, period) => total + countValue(period.purchasedOrSoldPropertiesCount ?? 0),
-        0,
-      )
-    : countValue(assessment.cleanupPurchasedOrSoldPropertiesCount);
-  const hasComplexOperations = hasComplexRealEstateOperations(assessment);
-  const multipleOperations = knownRealEstateOperationCount(assessment) >= 2;
-  const transactionBandMonthly = assessment.transactionBand
-    ? pkg.pricing.transactionBandMonthly[assessment.transactionBand]
-    : 0;
-  const baseMonthly =
-    pkg.monthlyPrice +
-    propertyCount * pkg.pricing.recurringPerProperty +
-    entityCount * pkg.pricing.recurringPerEntity +
-    pkg.pricing.recurringComplexity[complexityLevel] +
-    transactionBandMonthly +
-    (countValue(assessment.employeesCount) + countValue(assessment.contractorsCount)) *
-      pkg.pricing.staffingPerPerson +
-    amountForThreshold(reconciliationCount, pkg.pricing.reconciliationThresholds) +
-    amountForThreshold(knownPaymentPlatformCount(assessment), pkg.pricing.platformThresholds) +
-    amountForThreshold(countValue(assessment.zeroBalancePlatformCount), pkg.pricing.passThroughThresholds) +
-    (assessment.bookSetType === "mixed-books"
-      ? pkg.pricing.mixedBooksMonthly
-      : assessment.bookSetType === "other-business"
-        ? pkg.pricing.nonReBusinessMonthly
-        : 0) +
-    (hasComplexOperations ? pkg.pricing.complexOperationsMonthly : 0) +
-    (!hasComplexOperations && multipleOperations ? pkg.pricing.multiOperationMonthly : 0);
-  const monthly = roundUpToNearestIncrement(baseMonthly * assessment.discretionaryMultiplier);
-
-  const catchUpBase = monthly * cleanupMonths;
-  const assessmentOneTimeAdjustments =
-    propertyCount * pkg.pricing.backlogPerProperty +
-    entityCount * pkg.pricing.backlogPerEntity +
-    cleanupPurchasedOrSoldPropertiesCount * CLEANUP_PURCHASED_OR_SOLD_PROPERTY_COST +
-    Math.round(catchUpBase * pkg.pricing.catchUpComplexityMultiplier[complexityLevel]);
-  const totalOneTimeBeforeManual = roundUpToNearestIncrement(
-    catchUpBase + assessmentOneTimeAdjustments,
-  );
-
-  return {
-    packageId: pkg.id,
-    complexityLevel,
-    monthly,
-    catchUpBase,
-    assessmentOneTimeAdjustments,
-    totalOneTimeBeforeManual,
-    totalOneTime: roundUpToNearestIncrement(totalOneTimeBeforeManual + manualAdjustmentAmount),
-  };
 }
 
 function buildRecommendation(assessment: AssessmentState): RecommendationSummary {
@@ -1795,7 +1517,14 @@ function buildRecommendation(assessment: AssessmentState): RecommendationSummary
   if (txScore >= 2) {
     rationale.push(`The transaction profile (${assessment.transactionBand}) suggests a heavier monthly workload.`);
   }
-  if (countValue(assessment.numberOfEntities) > 1) {
+  // When bundled, the per-entity charge is gone, so the rationale must not
+  // cite entities as a cost driver — it names the bundle instead.
+  const bundleCompanyCount = hasCompanyBundle(assessment)
+    ? normalizeCompanyBundle(assessment.companies).length
+    : 0;
+  if (bundleCompanyCount > 1) {
+    rationale.push(`${bundleCompanyCount} companies priced as a bundle.`);
+  } else if (countValue(assessment.numberOfEntities) > 1) {
     rationale.push(`${countValue(assessment.numberOfEntities)} entities increase coordination and reporting complexity.`);
   }
   if (countValue(assessment.numberOfProperties) > 0) {
@@ -1855,37 +1584,42 @@ function buildRecommendation(assessment: AssessmentState): RecommendationSummary
 
 export function getProposalPricingSnapshotData(assessment: AssessmentState) {
   assessment = effectiveAssessment(assessment);
-  const cleanupMonths = hasCatchUpPricingInputs(assessment)
-    ? calculateInclusiveMonths(assessment.cleanupStartMonth, assessment.cleanupEndMonth)
+  // A company bundle replaces the legacy per-entity charge: price the base
+  // packages with entities zeroed (no double charge), then set each monthly
+  // total to the bundle monthly below. Legacy assessments (no `companies`)
+  // take pricingAssessment === assessment, byte-identical to before.
+  const bundleActive = hasCompanyBundle(assessment);
+  const pricingAssessment = bundleActive ? { ...assessment, numberOfEntities: 0 as const } : assessment;
+  const cleanupMonths = hasCatchUpPricingInputs(pricingAssessment)
+    ? calculateInclusiveMonths(pricingAssessment.cleanupStartMonth, pricingAssessment.cleanupEndMonth)
     : 0;
   const manualAdjustmentsTotal = 0;
   const recommendation = buildRecommendation(assessment);
-  const packagePricing = Object.fromEntries(
-    PACKAGES.map((pkg) => [
-      pkg.id,
-      buildPackagePricing(pkg, assessment, cleanupMonths, manualAdjustmentsTotal),
-    ]),
-  ) as Record<PackageId, PackagePricingSummary>;
-  const maintainPricing = packagePricing.maintain;
+  const packagePricing = applyGrowPriceOverride(
+    Object.fromEntries(
+      PACKAGES.map((pkg) => [
+        pkg.id,
+        buildPackagePricing(pkg, pricingAssessment, cleanupMonths, manualAdjustmentsTotal),
+      ]),
+    ) as Record<PackageId, PackagePricingSummary>,
+  );
 
-  packagePricing.grow = {
-    ...packagePricing.grow,
-    monthly: roundUpToNearestIncrement(
-      maintainPricing.monthly * GROW_PRICE_MULTIPLIER_FROM_MAINTAIN,
-    ),
-    catchUpBase: roundUpToNearestIncrement(
-      maintainPricing.catchUpBase * GROW_PRICE_MULTIPLIER_FROM_MAINTAIN,
-    ),
-    assessmentOneTimeAdjustments: roundUpToNearestIncrement(
-      maintainPricing.assessmentOneTimeAdjustments * GROW_PRICE_MULTIPLIER_FROM_MAINTAIN,
-    ),
-    totalOneTimeBeforeManual: roundUpToNearestIncrement(
-      maintainPricing.totalOneTimeBeforeManual * GROW_PRICE_MULTIPLIER_FROM_MAINTAIN,
-    ),
-    totalOneTime: roundUpToNearestIncrement(
-      maintainPricing.totalOneTime * GROW_PRICE_MULTIPLIER_FROM_MAINTAIN,
-    ),
-  };
+  // The one bundle object (F1): per-tier BundlePricing published on the
+  // snapshot when active, null for legacy. Every consumer — preview, public
+  // payload, agreement route, checkout — reads this object; direct
+  // priceCompanyBundle calls are only the fallback for old snapshots.
+  const companyBundle: CompanyBundleSnapshot | null = bundleActive
+    ? buildCompanyBundleSnapshot({
+        companies: assessment.companies,
+        baseAssessment: pricingAssessment,
+        options: resolveBundlePricingOptions(assessment),
+      })
+    : null;
+  if (companyBundle) {
+    for (const pkg of PACKAGES) {
+      packagePricing[pkg.id] = { ...packagePricing[pkg.id], monthly: companyBundle[pkg.id].bundleMonthly };
+    }
+  }
 
   // Test proposals exercise the complete signing and payment flow with a
   // single-dollar charge (see resolveAmountDueNow). Nothing recurs, so
@@ -1907,8 +1641,19 @@ export function getProposalPricingSnapshotData(assessment: AssessmentState) {
     cleanupMonths,
     recommendation,
     packagePricing,
+    companyBundle,
     hasCatchUpPricing: hasCatchUpPricingInputs(assessment),
   };
+}
+
+/**
+ * Persisted `pricing` for a snapshot: per-tier monthlies plus the one bundle
+ * object when a bundle is active. Legacy snapshots carry no `companyBundle`
+ * key, so their stored JSON is byte-identical to before.
+ */
+export function getProposalPricingSnapshotPricing(assessment: AssessmentState) {
+  const { packagePricing, companyBundle } = getProposalPricingSnapshotData(assessment);
+  return companyBundle ? { ...packagePricing, companyBundle } : packagePricing;
 }
 
 export function getProposalPricingSnapshotItems(assessment: AssessmentState) {
@@ -1986,7 +1731,31 @@ export default function ProposalCreationWorkspaceDemo({
     togglePayrollPaymentMethod,
   } = useProposalAssessmentDemoState();
   const pricingAssessment = effectiveAssessment(assessment);
+  const normalizedCompanies = normalizeCompanyBundle(assessment.companies);
   const hasAccountInventory = assessment.accounts.some((account) => account.status === "open");
+
+  function handleCompaniesChange(next: CompanyEntry[] | undefined) {
+    const normalized = next === undefined ? undefined : normalizeCompanyBundle(next);
+    const active = normalized && normalized.length > 0 ? normalized : undefined;
+    setAssessment((current) => ({
+      ...current,
+      companies: active,
+      // The main inventory stays the source of truth for the proposal-level
+      // fields, so a bundle edit never leaves the two mirrors diverged.
+      accounts: active ? active[0].accounts : current.accounts,
+    }));
+  }
+
+  function handleMainAccountsChange(accounts: AccountEntry[]) {
+    setAssessment((current) => {
+      const synced = withSyncedMainAccounts(normalizeCompanyBundle(current.companies), accounts);
+      return {
+        ...current,
+        accounts,
+        companies: synced.length > 0 ? synced : current.companies,
+      };
+    });
+  }
   const isScaleStep = step === "scale";
   const isComplexityStep = step === "complexity";
   const isAdjustmentsStep = step === "adjustments";
@@ -2064,6 +1833,14 @@ export default function ProposalCreationWorkspaceDemo({
       ["Properties", String(assessment.numberOfProperties)],
       ["Book set", labelFor(BOOK_SET_OPTIONS, assessment.bookSetType)],
     ],
+    "Companies": normalizedCompanies.length > 0
+      ? normalizedCompanies.map(
+          (company, index): [string, string] => [
+            index === 0 ? "Main company" : `Company ${index + 1}`,
+            company.name + (company.ownQboFile ? "" : " (shares the main file)"),
+          ],
+        )
+      : [["Entities", String(assessment.numberOfEntities)]],
     "Monthly Activity": [
       ["Average monthly volume", labelFor(TRANSACTION_BANDS, pricingAssessment.transactionBand)],
       ["Books over two months behind", yesNo(assessment.booksOverTwoMonthsBehind)],
@@ -2165,6 +1942,40 @@ export default function ProposalCreationWorkspaceDemo({
                     ) : (
                       <p className="text-base text-slate-500">Property count does not apply to the selected book-set type.</p>
                     )}
+                  </AssessmentCardSection>
+                ) : null}
+
+                {isScaleStep ? (
+                  <AssessmentCardSection
+                    title="Companies"
+                    assessment={assessment}
+                    onCancel={setAssessment}
+                    summary={summaries["Companies"]}
+                  >
+                    <CompanyBundleEditor
+                      companies={assessment.companies ?? []}
+                      companyName={assessment.companyName}
+                      mainAccounts={assessment.accounts}
+                      baseAssessment={pricingAssessment}
+                      bundleOptions={resolveBundlePricingOptions(assessment)}
+                      storedBundleOptions={assessment.bundlePricingOptions ?? {}}
+                      newFileSetupSource={describeNewFileSetupCharge(assessment).source}
+                      legacyEntitiesField={
+                        <div className="max-w-[280px]">
+                          <FieldLabel label="Number of Entities">
+                            <input
+                              type="number"
+                              min={0}
+                              value={assessment.numberOfEntities}
+                              onChange={(event) => updateAssessment("numberOfEntities", parseCountInput(event.target.value))}
+                              className={INPUT_CLASS_NAME}
+                            />
+                          </FieldLabel>
+                        </div>
+                      }
+                      onCompaniesChange={handleCompaniesChange}
+                      onBundleOptionsChange={(options) => updateAssessment("bundlePricingOptions", options)}
+                    />
                   </AssessmentCardSection>
                 ) : null}
 
@@ -2885,7 +2696,7 @@ export default function ProposalCreationWorkspaceDemo({
                     <AccountInventoryEditor
                       accounts={assessment.accounts}
                       bandOverride={assessment.bandOverride}
-                      onAccountsChange={(accounts) => updateAssessment("accounts", accounts)}
+                      onAccountsChange={handleMainAccountsChange}
                       onOverrideChange={(override) => updateAssessment("bandOverride", override)}
                     />
                     <div className="grid gap-4 md:grid-cols-2">

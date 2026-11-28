@@ -1,4 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  companyBundleFeeLines,
+  DEFAULT_BUNDLE_PRICING_OPTIONS,
+  hasCompanyBundle,
+  normalizeCompanyBundle,
+  priceCompanyBundle,
+} from "@/lib/quotes/companyBundle";
+import { effectiveAssessment } from "@/app/(app)/offers/builder/effectiveAssessment";
+import type { AssessmentState } from "@/app/(app)/offers/builder/ProposalCreationWorkspaceDemo";
 import { buildProposalCheckoutSummary } from "@/lib/engagements/proposalCheckout";
 import { catalogCopyFromRows, toPublicBookkeepingProposal } from "@/lib/quotes/publicProposal";
 import {
@@ -209,6 +218,177 @@ describe("public proposal agreement API", () => {
     const body = await (await call()).json();
     expect(body.text).toBe(agreementText);
     expect(body.text).not.toMatch(/volume|pricing band/i);
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  it("renders legacy agreements identically with companies absent or empty", async () => {
+    const base = rowWithAccounts(accounts);
+    const withCompanies = (companies: unknown) => ({
+      ...base,
+      onboardingData: {
+        ...base.onboardingData,
+        proposalBuilderState: {
+          ...base.onboardingData.proposalBuilderState,
+          assessment: { ...base.onboardingData.proposalBuilderState.assessment, numberOfEntities: 2, companies },
+        },
+      },
+    });
+    mocks.engagement.mockResolvedValue(withCompanies(undefined));
+    const legacy = await (await call()).json();
+    mocks.engagement.mockResolvedValue(withCompanies([]));
+    const empty = await (await call()).json();
+    expect(empty.text).toBe(legacy.text);
+    expect(legacy.text).toContain("Ongoing Monthly Services:");
+    expect(legacy.text).not.toMatch(/bundle/i);
+  });
+
+  it("lists one fee line per company with the bundle monthly total for a bundled assessment", async () => {
+    const companies = [
+      { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 1, propertiesCount: 0, accounts: [], complexity: null },
+      { id: "beta", name: "Beta LLC", ownQboFile: true, fileStatus: "new_file", locationsCount: 0, propertiesCount: 0, accounts: [], complexity: null },
+    ];
+    const base = rowWithAccounts(accounts);
+    const storedAssessment = { ...base.onboardingData.proposalBuilderState.assessment, companies };
+    expect(hasCompanyBundle(storedAssessment)).toBe(true);
+    mocks.engagement.mockResolvedValue({
+      ...base,
+      onboardingData: {
+        ...base.onboardingData,
+        proposalBuilderState: { ...base.onboardingData.proposalBuilderState, assessment: storedAssessment },
+      },
+    });
+    // The stored checkout selects Improve, so the bundle prices the improve tier.
+    const priced = priceCompanyBundle({
+      companies: normalizeCompanyBundle(companies),
+      packageId: "improve",
+      baseAssessment: effectiveAssessment(storedAssessment as unknown as AssessmentState),
+      options: DEFAULT_BUNDLE_PRICING_OPTIONS,
+    });
+    const body = await (await call()).json();
+    expect(body.text).toContain("Main Co — monthly bookkeeping:");
+    expect(body.text).toContain("Beta LLC — monthly bookkeeping (bundle, 20% off):");
+    expect(body.text).toContain("Beta LLC — new QuickBooks file setup: $150.00 (one-time)");
+    expect(body.text).toContain("Locations — location reporting:");
+    for (const line of companyBundleFeeLines(priced)) {
+      expect(body.text).toContain(line.label);
+    }
+    expect(body.text).toContain(`Ongoing Monthly Services: $${priced.bundleMonthly.toFixed(2)} per month`);
+    expect(mocks.update).toHaveBeenCalledWith({
+      where: { id: "eng", brandId: "brand", signedAt: null, updatedAt: engagementRow().updatedAt,
+        onboardingData: { equals: expect.any(Object) } },
+      data: { agreementText: body.text },
+    });
+  });
+
+  it("tier-filters required one-time lines so no uncharged line appears", async () => {
+    const base = rowWithAccounts(accounts);
+    const tieredOptions = [
+      { id: "improve-filing", name: "Improve Only Filing", description: "File once", monthlyPrice: 120, showInProposal: true, archived: false, billingCadence: "one-time", packageIds: ["improve"], required: true },
+      { id: "grow-filing", name: "Grow Only Filing", description: "File once", monthlyPrice: 200, showInProposal: true, archived: false, billingCadence: "one-time", packageIds: ["grow"], required: true },
+    ];
+    // The stored checkout selects Improve: the improve-scoped line is charged
+    // and listed, while the grow-scoped line is not charged and stays out.
+    mocks.engagement.mockResolvedValue({
+      ...base,
+      onboardingData: {
+        ...base.onboardingData,
+        proposalBuilderState: {
+          ...base.onboardingData.proposalBuilderState,
+          assessment: { ...base.onboardingData.proposalBuilderState.assessment, additionalOptions: tieredOptions },
+          services: {
+            ...base.onboardingData.proposalBuilderState.services,
+            selectedAdditionalOptionIds: ["improve-filing", "grow-filing"],
+          },
+        },
+      },
+    });
+    const body = await (await call()).json();
+    // The charged tier's fee line appears; the uncharged tier leaves no fee line.
+    // (The scope section still names the client's full selection.)
+    expect(body.text).toContain("Improve Only Filing (due today): $120.00");
+    expect(body.text).not.toContain("Grow Only Filing (due today)");
+  });
+
+  it("treats a bare status marker as frozen even with no other acceptance signal", async () => {
+    // Only engagement.status marks this row: no signedAt, no stored text, no
+    // PAID, no proposalAcceptance. The route select must fetch status for the
+    // freeze check to see it in production (not just through this mock).
+    mocks.engagement.mockResolvedValue({ ...rowWithAccounts(accounts), status: "accepted" });
+    const response = await call();
+    expect(response.status).toBe(409);
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.engagement).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.objectContaining({
+        status: true, signedAt: true, onboardingFeeStatus: true, onboardingData: true,
+      }),
+    }));
+  });
+
+  it("reads the selected tier from the snapshot bundle object", async () => {
+    const companies = [
+      { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 0, propertiesCount: 0, accounts: [], complexity: null },
+      { id: "beta", name: "Beta LLC", ownQboFile: true, fileStatus: "new_file", locationsCount: 0, propertiesCount: 0, accounts: [], complexity: null },
+    ];
+    const base = rowWithAccounts(accounts);
+    const storedAssessment = { ...base.onboardingData.proposalBuilderState.assessment, companies };
+    const priced = (packageId: "maintain" | "improve" | "grow") => priceCompanyBundle({
+      companies: normalizeCompanyBundle(companies),
+      packageId,
+      baseAssessment: effectiveAssessment(storedAssessment as unknown as AssessmentState),
+      options: DEFAULT_BUNDLE_PRICING_OPTIONS,
+    });
+    // Hand-adjusted improve tier: the route must read this object, not recompute it.
+    const tamperedImprove = priced("improve");
+    tamperedImprove.perCompany[1] = { ...tamperedImprove.perCompany[1], standaloneMonthly: 260, discountedMonthly: 210 };
+    tamperedImprove.bundleMonthly = 550;
+    const snapshotPricing = {
+      maintain: { monthly: 450 },
+      improve: { monthly: 550 },
+      grow: { monthly: 675 },
+      companyBundle: { maintain: priced("maintain"), improve: tamperedImprove, grow: priced("grow") },
+    };
+    mocks.engagement.mockResolvedValue({
+      ...base,
+      agreementText: null,
+      onboardingData: {
+        ...base.onboardingData,
+        proposalBuilderState: { ...base.onboardingData.proposalBuilderState, assessment: storedAssessment },
+      },
+      quotes: [{
+        publishedSnapshotJson: null,
+        revisions: [{ snapshotJson: { assessment: storedAssessment, pricing: snapshotPricing } }],
+      }],
+    });
+    const body = await (await call()).json();
+    // Main prices $340 from the inventoried accounts; Beta reads the tampered
+    // $210 object line (a recompute would print $200.00 instead).
+    expect(body.text).toContain("Main Co — monthly bookkeeping: $340.00 per month");
+    expect(body.text).toContain("Beta LLC — monthly bookkeeping (bundle, 20% off): $210.00");
+    expect(body.text).toContain("Ongoing Monthly Services: $550.00 per month");
+    expect(body.text).not.toContain("$200.00 per month");
+  });
+
+  it("does not rebuild a bundled signed agreement", async () => {
+    const storedText = "Signed bundled agreement\r\n  Preserve whitespace verbatim.\n";
+    mocks.engagement.mockResolvedValue({
+      ...rowWithAccounts(accounts),
+      signedAt: new Date("2026-10-01T12:00:00Z"),
+      agreementText: storedText,
+      onboardingData: {
+        proposalBuilderState: {
+          assessment: {
+            accounts,
+            companies: [
+              { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 0, propertiesCount: 0, accounts: [], complexity: null },
+              { id: "beta", name: "Beta LLC", ownQboFile: true, fileStatus: "existing", locationsCount: 0, propertiesCount: 0, accounts: [], complexity: null },
+            ],
+          },
+          services: {},
+        },
+      },
+    });
+    const body = await (await call()).json();
+    expect(body.text).toBe(storedText);
     expect(mocks.update).not.toHaveBeenCalled();
   });
 

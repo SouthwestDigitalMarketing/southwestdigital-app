@@ -1,5 +1,10 @@
 import { extraIsRealEstateSpecific } from "./catalog";
 import { serviceLevelTitle } from "./serviceLevels";
+import {
+  hasCompanyBundle,
+  NEW_QUICKBOOKS_FILE_SERVICE_ID,
+  normalizeCompanyBundle,
+} from "./companyBundle";
 
 // Shared by preview and checkout: eligibility must not depend on browser state.
 export const SERVICE_TIERS = ["maintain", "improve", "grow"] as const;
@@ -96,6 +101,11 @@ export function proposalServiceAddOns(
   assessmentValue: unknown,
 ): ProposalServiceAddOn[] {
   const assessment = record(assessmentValue);
+  // Spec 02 R2: when the bundle already charges a per-file new-QuickBooks
+  // setup, the legacy catalog line for the same work must not charge again.
+  const bundleOwnsNewFileSetup =
+    hasCompanyBundle({ companies: assessment.companies }) &&
+    normalizeCompanyBundle(assessment.companies).some((company) => company.fileStatus === "new_file");
   const selections = record(assessment.bonusPackageSelections);
   const result = new Map<string, ProposalServiceAddOn>();
   const append = (
@@ -104,6 +114,7 @@ export function proposalServiceAddOns(
     packages: ServiceTier[],
     fallbackCadence: "monthly" | "one-time",
   ) => {
+    if (bundleOwnsNewFileSetup && item.id === NEW_QUICKBOOKS_FILE_SERVICE_ID) return;
     if (
       typeof item.id !== "string" ||
       item.archived === true ||
@@ -155,4 +166,28 @@ export function proposalServiceAddOns(
     );
   }
   return [...result.values()];
+}
+
+/**
+ * Required one-time add-on lines for one tier, for the agreement fee
+ * section. Tier-filtered exactly like checkout (`packageIds.includes(tier)`),
+ * so no line appears that isn't charged on that tier. Only explicitly
+ * selected ids list — a required option the selection never picked stays a
+ * checkout charge, not an agreement line, matching the previous listing rule.
+ */
+export function requiredOneTimeAddOnsForTier(
+  assessmentValue: unknown,
+  selectedIds: readonly string[],
+  tier: ServiceTier,
+): Array<{ name: string; price: number }> {
+  const selected = new Set(selectedIds);
+  return proposalServiceAddOns(assessmentValue)
+    .filter(
+      (option) =>
+        option.required === true &&
+        option.billingCadence === "one-time" &&
+        option.packageIds.includes(tier) &&
+        selected.has(option.id),
+    )
+    .map((option) => ({ name: option.name, price: option.monthlyPrice }));
 }

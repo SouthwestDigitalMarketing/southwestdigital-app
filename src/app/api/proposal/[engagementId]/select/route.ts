@@ -9,6 +9,7 @@ import {
 import { resolveOnboardingWaiverForEngagement } from "@/lib/discounts/resolveOnboardingWaiver";
 import { hasPublicProposalAccess, publicProposalNotFound } from "@/lib/engagements/publicProposalAccess";
 import { catalogCopyFromRows, toPublicBookkeepingProposal } from "@/lib/quotes/publicProposal";
+import { asCompanyBundleSnapshot } from "@/lib/quotes/companyBundle";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
 import { lockQuoteMutation, QuoteMutationConflictError } from "@/lib/quotes/mutationLock";
 import { isQuoteFrozen } from "@/lib/quotes/isQuoteFrozen";
@@ -32,6 +33,7 @@ export async function POST(
       onboardingData: true,
       updatedAt: true,
       brandId: true,
+      status: true,
       onboardingFeeStatus: true,
       signedAt: true,
       agreementManagerStatus: true,
@@ -84,10 +86,29 @@ export async function POST(
       publishedSnapshot,
       catalogCopyFromRows(catalogRows),
     );
+    // The public assessment strips the raw companies and bundle options, so
+    // hand them to checkout from the stored snapshot: checkout needs them to
+    // price the bundle monthly and the one-time setup charges. The public
+    // pricing parsing strips the snapshot's one bundle object (raw account
+    // data must never go public), so carry the validated object through here.
+    const storedAssessment = isRecord(publishedSnapshot) && isRecord(publishedSnapshot.assessment)
+      ? publishedSnapshot.assessment
+      : {};
+    const storedPricing = isRecord(publishedSnapshot) && isRecord(publishedSnapshot.pricing)
+      ? publishedSnapshot.pricing
+      : {};
+    const snapshotBundle = asCompanyBundleSnapshot(storedPricing.companyBundle);
     checkout = buildProposalCheckoutSummary(
       {
-        assessment: publicProposal.assessment,
-        pricing: publicProposal.pricing,
+        assessment: {
+          ...publicProposal.assessment,
+          companies: storedAssessment.companies,
+          bundlePricingOptions: storedAssessment.bundlePricingOptions,
+          bundlePricingDefaults: storedAssessment.bundlePricingDefaults,
+        },
+        pricing: snapshotBundle
+          ? { ...publicProposal.pricing, companyBundle: snapshotBundle }
+          : publicProposal.pricing,
         // The public view strips staff-only fields; the test flag still decides the $1 test checkout.
         isTestProposal: isRecord(publishedSnapshot) && publishedSnapshot.isTestProposal === true,
       },

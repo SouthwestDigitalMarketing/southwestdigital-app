@@ -11,7 +11,7 @@ import { readProposalBuilderLocalState } from "./ProposalBuilderStorage";
 import type { ContactInfoState } from "./ProposalContactInfoState";
 import {
   getProposalPricingSnapshotCleanupCard,
-  getProposalPricingSnapshotData,
+  getProposalPricingSnapshotPricing,
   getProposalPricingSnapshotItems,
   useProposalAssessmentDemoState,
   type AssessmentState,
@@ -80,7 +80,7 @@ export default function ProposalFinalizeDemo() {
           contactInfo,
           assessment: localState.assessment,
           isTestProposal: localState.assessment?.isTestProposal === true,
-          pricing: getProposalPricingSnapshotData(localState.assessment as AssessmentState).packagePricing,
+          pricing: getProposalPricingSnapshotPricing(localState.assessment as AssessmentState),
         });
       }
       setSaveStatus("saved");
@@ -121,7 +121,7 @@ export default function ProposalFinalizeDemo() {
         contactInfo,
         assessment: localState.assessment,
         isTestProposal: localState.assessment?.isTestProposal === true,
-        pricing: getProposalPricingSnapshotData(localState.assessment as AssessmentState).packagePricing,
+        pricing: getProposalPricingSnapshotPricing(localState.assessment as AssessmentState),
       });
       window.localStorage.setItem(`proposal-public-path:${offerId}`, result.publicPath);
       setPublishedVersion(result.version);

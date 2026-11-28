@@ -3,6 +3,9 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
 import {
+  DEFAULT_BUNDLE_PRICING_OPTIONS,
+} from "@/lib/quotes/companyBundle";
+import {
   buildOptionsTemplateSnapshot,
   type OptionsTemplateAssessmentSlice,
   type OptionsTemplatePackageId,
@@ -422,6 +425,14 @@ function buildSliceFromConfig(
     additionalOptions,
     bonuses,
     bonusPackageSelections,
+    // New templates seed only the discount and the location charge. The
+    // new-file setup charge is deliberately omitted so resolution falls
+    // through to the brand catalog `new-quickbooks-file` price (above zero),
+    // then the $150 placeholder.
+    bundlePricingDefaults: {
+      additionalCompanyDiscountPct: DEFAULT_BUNDLE_PRICING_OPTIONS.additionalCompanyDiscountPct,
+      locationMonthlyCharge: DEFAULT_BUNDLE_PRICING_OPTIONS.locationMonthlyCharge,
+    },
   };
 }
 

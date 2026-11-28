@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   includedServicePackages,
   proposalServiceAddOns,
+  requiredOneTimeAddOnsForTier,
   serviceIsApplicable,
 } from "./proposalServices";
 import { buildProposalCheckoutSummary } from "../engagements/proposalCheckout";
@@ -183,6 +184,47 @@ describe("shared service rules", () => {
       ),
     ).toBe(true);
   });
+  it("drops the legacy new-file line when the bundle already charges per-file setup", () => {
+    const fileBonus = {
+      ...bonus,
+      id: "new-quickbooks-file",
+      name: "New QuickBooks Setup",
+      defaultPackageIds: ["maintain"],
+      addOnPackageIds: ["improve", "grow"],
+      addOnPrice: 99,
+    };
+    const bundled = {
+      ...assessment,
+      bookSetType: "real-estate-only",
+      ongoingBookkeepingPlatform: "qbo",
+      bonuses: [fileBonus],
+      companies: [
+        { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 0, propertiesCount: 0, accounts: [] },
+        { id: "b", name: "Beta", ownQboFile: true, fileStatus: "new_file", locationsCount: 0, propertiesCount: 0, accounts: [] },
+      ],
+    };
+    expect(proposalServiceAddOns(bundled)).toEqual([]);
+    // Same catalog line without a new-file company still offers the legacy add-on.
+    const noSetup = {
+      ...bundled,
+      companies: [
+        { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 0, propertiesCount: 0, accounts: [] },
+        { id: "b", name: "Beta", ownQboFile: true, fileStatus: "existing", locationsCount: 0, propertiesCount: 0, accounts: [] },
+      ],
+    };
+    expect(proposalServiceAddOns(noSetup)).toEqual([
+      expect.objectContaining({ id: "new-quickbooks-file", monthlyPrice: 99 }),
+    ]);
+    // Legacy proposals (no companies) are untouched.
+    expect(proposalServiceAddOns({
+      ...assessment,
+      bookSetType: "real-estate-only",
+      ongoingBookkeepingPlatform: "qbo",
+      bonuses: [fileBonus],
+    })).toEqual([
+      expect.objectContaining({ id: "new-quickbooks-file", monthlyPrice: 99 }),
+    ]);
+  });
   it("preserves eligibility, cadence and price through templates and the public allowlist", () => {
     const templated = buildOptionsTemplateSnapshot(assessment);
     const published = toPublicBookkeepingProposal({
@@ -193,5 +235,46 @@ describe("shared service rules", () => {
     expect(proposalServiceAddOns(published.assessment)).toEqual(
       proposalServiceAddOns(assessment),
     );
+  });
+
+  it("lists required one-time add-ons only on tiers that charge them", () => {
+    const tiered = {
+      additionalOptions: [
+        {
+          id: "improve-filing",
+          name: "Improve Only Filing",
+          description: "File once",
+          monthlyPrice: 120,
+          showInProposal: true,
+          archived: false,
+          billingCadence: "one-time",
+          packageIds: ["improve"],
+          required: true,
+        },
+        {
+          id: "monthly-fee",
+          name: "Monthly Fee",
+          description: "Every month",
+          monthlyPrice: 30,
+          showInProposal: true,
+          archived: false,
+          billingCadence: "monthly",
+          packageIds: ["improve"],
+          required: true,
+        },
+      ],
+      bonuses: [],
+      bonusPackageSelections: {},
+    };
+    // Same tier checkout charges: the line appears.
+    expect(
+      requiredOneTimeAddOnsForTier(tiered, ["improve-filing"], "improve"),
+    ).toEqual([{ name: "Improve Only Filing", price: 120 }]);
+    // Another tier checkout does not charge it: no line appears.
+    expect(requiredOneTimeAddOnsForTier(tiered, ["improve-filing"], "grow")).toEqual([]);
+    expect(requiredOneTimeAddOnsForTier(tiered, ["improve-filing"], "maintain")).toEqual([]);
+    // Monthly cadence never lists, and unselected ids never list.
+    expect(requiredOneTimeAddOnsForTier(tiered, ["monthly-fee"], "improve")).toEqual([]);
+    expect(requiredOneTimeAddOnsForTier(tiered, [], "improve")).toEqual([]);
   });
 });

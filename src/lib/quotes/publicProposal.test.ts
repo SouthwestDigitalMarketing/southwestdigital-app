@@ -4,6 +4,7 @@ import {
   toPublicBookkeepingProposal,
   toPublicHourlyProposal,
 } from "./publicProposal";
+import { buildCompanyBundleSnapshot } from "./companyBundle";
 
 describe("public proposal data boundary", () => {
   const pricing = { maintain: { monthly: 500 }, improve: { monthly: 600 }, grow: { monthly: 750 } };
@@ -49,6 +50,7 @@ describe("public proposal data boundary", () => {
       accountInventory: null,
       assessment: { introHeadline: "Legacy plan", historicalCleanupPeriods: [], additionalOptions: [], bonuses: [] },
       pricing,
+      companyBundle: null,
       contactInfo: { companyName: "", owners: [], primaryContact: { firstName: "", lastName: "", email: "", sameAsOwner: false, ownerId: "", phone: "", role: "" } },
     });
     expect(snapshot).toEqual(before);
@@ -254,6 +256,139 @@ describe("public proposal data boundary", () => {
     expect(JSON.stringify(result)).not.toContain(privateValue);
     expect(result.assessment.additionalOptions[0].description).toBe("Monthly reporting for you");
     expect(result.assessment.bonuses[0].description).toBe("Client portal access");
+  });
+
+  it("returns a null company bundle for a single plain main company", () => {
+    const result = toPublicBookkeepingProposal({
+      assessment: {
+        companies: [
+          { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 0, propertiesCount: 0, accounts: [] },
+        ],
+      },
+      pricing,
+    });
+    expect(result.companyBundle).toBeNull();
+    expect(result.assessment).not.toHaveProperty("companies");
+  });
+
+  it("publishes a whitelisted company bundle and keeps raw companies stripped", () => {
+    const privateValue = "PRIVATE_SENTINEL_DO_NOT_PUBLISH";
+    const companies = [
+      {
+        id: "main-secret-id",
+        name: "Main Co",
+        ownQboFile: true,
+        fileStatus: "existing",
+        locationsCount: 0, propertiesCount: 0,
+        accounts: [
+          { id: privateValue, kind: "checking", label: "Chase", last4: "1234", status: "open", monthlyTransactions: 80, basis: "measured", source: privateValue, secret: privateValue },
+        ],
+      },
+      {
+        id: "second-secret-id",
+        name: "Second Co",
+        ownQboFile: true,
+        fileStatus: "new_file",
+        locationsCount: 0, propertiesCount: 0,
+        accounts: [
+          { id: privateValue, kind: "checking", label: "Second", status: "open", monthlyTransactions: 10, basis: "measured", source: privateValue },
+        ],
+      },
+    ];
+    // The published one bundle object, priced at a 50% discount: the public
+    // block must read these snapshot values, not recompute from the
+    // assessment (whose override says 20%).
+    const companyBundle = buildCompanyBundleSnapshot({
+      companies,
+      baseAssessment: {},
+      options: { additionalCompanyDiscountPct: 50, locationMonthlyCharge: 25, newFileSetupCharge: 150 },
+    });
+    const result = toPublicBookkeepingProposal({
+      assessment: {
+        assessmentNotes: privateValue,
+        companies,
+        bundlePricingOptions: {
+          additionalCompanyDiscountPct: 20,
+          locationMonthlyCharge: 25,
+          newFileSetupCharge: 150,
+        },
+      },
+      pricing: { maintain: { monthly: 450 }, improve: { monthly: 600 }, grow: { monthly: 750 }, companyBundle },
+    });
+    expect(result.companyBundle).toEqual({
+      maintain: {
+        companies: [
+          { name: "Main Co", ownQboFile: true, monthly: 250, setupOneTime: 0, migrationFlagged: false },
+          { name: "Second Co", ownQboFile: true, monthly: 125, setupOneTime: 150, migrationFlagged: false },
+        ],
+        locationsCount: 0,
+        locationsMonthly: 0,
+        bundleMonthly: 375,
+      },
+      improve: {
+        companies: [
+          { name: "Main Co", ownQboFile: true, monthly: 250, setupOneTime: 0, migrationFlagged: false },
+          { name: "Second Co", ownQboFile: true, monthly: 125, setupOneTime: 150, migrationFlagged: false },
+        ],
+        locationsCount: 0,
+        locationsMonthly: 0,
+        bundleMonthly: 375,
+      },
+      grow: {
+        companies: [
+          { name: "Main Co", ownQboFile: true, monthly: 375, setupOneTime: 0, migrationFlagged: false },
+          { name: "Second Co", ownQboFile: true, monthly: 190, setupOneTime: 150, migrationFlagged: false },
+        ],
+        locationsCount: 0,
+        locationsMonthly: 0,
+        bundleMonthly: 565,
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain(privateValue);
+    expect(JSON.stringify(result)).not.toContain("second-secret-id");
+    expect(result.assessment).not.toHaveProperty("companies");
+    expect(result.assessment).not.toHaveProperty("bundlePricingOptions");
+    expect(result.assessment).not.toHaveProperty("bundlePricingDefaults");
+  });
+
+  it("falls back to recomputation for snapshots that predate the bundle object", () => {
+    const companies = [
+      { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 0, propertiesCount: 0, accounts: [] },
+      { id: "b", name: "Second Co", ownQboFile: true, fileStatus: "new_file", locationsCount: 0, propertiesCount: 0, accounts: [] },
+    ];
+    const result = toPublicBookkeepingProposal({
+      assessment: {
+        companies,
+        bundlePricingOptions: { additionalCompanyDiscountPct: 20, locationMonthlyCharge: 25, newFileSetupCharge: 150 },
+      },
+      pricing: { maintain: { monthly: 450 }, improve: { monthly: 600 }, grow: { monthly: 750 } },
+    });
+    expect(result.companyBundle?.maintain.bundleMonthly).toBe(450);
+    expect(result.companyBundle?.maintain.companies[1]).toMatchObject({ name: "Second Co", monthly: 200 });
+  });
+
+  it("reads the per-proposal bundle override before template defaults", () => {
+    const companies = [
+      { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 0, propertiesCount: 0, accounts: [] },
+      { id: "b", name: "B Co", ownQboFile: true, fileStatus: "existing", locationsCount: 0, propertiesCount: 0, accounts: [] },
+    ];
+    const overridden = toPublicBookkeepingProposal({
+      assessment: {
+        companies,
+        bundlePricingDefaults: { additionalCompanyDiscountPct: 20, locationMonthlyCharge: 25, newFileSetupCharge: 150 },
+        bundlePricingOptions: { additionalCompanyDiscountPct: 50, locationMonthlyCharge: 25, newFileSetupCharge: 150 },
+      },
+      pricing,
+    });
+    expect(overridden.companyBundle?.maintain.bundleMonthly).toBe(375);
+    const fromDefaults = toPublicBookkeepingProposal({
+      assessment: {
+        companies,
+        bundlePricingDefaults: { additionalCompanyDiscountPct: 20, locationMonthlyCharge: 25, newFileSetupCharge: 150 },
+      },
+      pricing,
+    });
+    expect(fromDefaults.companyBundle?.maintain.bundleMonthly).toBe(450);
   });
 
   it("blanks public description when catalog clientBenefit is empty and snapshot description equals internalDescription", () => {

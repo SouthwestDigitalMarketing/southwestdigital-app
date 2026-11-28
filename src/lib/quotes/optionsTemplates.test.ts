@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { DEFAULT_BUNDLE_PRICING_OPTIONS } from "./companyBundle";
 import {
   OPTIONS_TEMPLATE_SNAPSHOT_VERSION,
   buildOptionsTemplateSnapshot,
+  parseBundlePricingDefaultsInputs,
   parseOptionsTemplateSnapshot,
   reconcileOptionsTemplateSnapshot,
+  sanitizeBundlePricingDefaults,
   type OptionsTemplateAssessmentSlice,
 } from "./optionsTemplates";
 
@@ -161,5 +164,109 @@ describe("reconcileOptionsTemplateSnapshot", () => {
     expect(result.skippedIds).toEqual([]);
     expect(result.slice.additionalOptions).toEqual(snapshot.additionalOptions);
     expect(result.slice.bonuses).toEqual(snapshot.bonuses);
+  });
+});
+
+describe("bundle pricing defaults (Spec 02)", () => {
+  it("keeps the proposed default amounts without a migration", () => {
+    expect(DEFAULT_BUNDLE_PRICING_OPTIONS).toEqual({
+      additionalCompanyDiscountPct: 20,
+      locationMonthlyCharge: 25,
+      newFileSetupCharge: 150,
+    });
+    expect(OPTIONS_TEMPLATE_SNAPSHOT_VERSION).toBe(1);
+  });
+
+  it("leaves omitted defaults unset so the catalog can win at resolution", () => {
+    const snapshot = buildOptionsTemplateSnapshot(baseSlice);
+    expect(snapshot.bundlePricingDefaults).toEqual({});
+    const partial = buildOptionsTemplateSnapshot({
+      ...baseSlice,
+      bundlePricingDefaults: { additionalCompanyDiscountPct: 10, locationMonthlyCharge: 40 },
+    });
+    expect(partial.bundlePricingDefaults).toEqual({ additionalCompanyDiscountPct: 10, locationMonthlyCharge: 40 });
+  });
+
+  it("round-trips custom defaults through build and parse", () => {
+    const snapshot = buildOptionsTemplateSnapshot({
+      ...baseSlice,
+      bundlePricingDefaults: { additionalCompanyDiscountPct: 10, locationMonthlyCharge: 40, newFileSetupCharge: 99 },
+    });
+    expect(snapshot.bundlePricingDefaults).toEqual({
+      additionalCompanyDiscountPct: 10,
+      locationMonthlyCharge: 40,
+      newFileSetupCharge: 99,
+    });
+    expect(parseOptionsTemplateSnapshot(JSON.parse(JSON.stringify(snapshot)))).toEqual(snapshot);
+  });
+
+  it("parses pre-Spec-02 snapshots with the defaults left unset", () => {
+    const legacy = buildOptionsTemplateSnapshot(baseSlice);
+    delete (legacy as { bundlePricingDefaults?: unknown }).bundlePricingDefaults;
+    const parsed = parseOptionsTemplateSnapshot(JSON.parse(JSON.stringify(legacy)));
+    expect(parsed?.bundlePricingDefaults).toEqual({});
+  });
+
+  it("keeps a stored 150 as an explicitly set template default", () => {
+    expect(sanitizeBundlePricingDefaults({ newFileSetupCharge: 150 })).toEqual({ newFileSetupCharge: 150 });
+  });
+
+  it("sanitizes out-of-range and non-finite defaults per field, leaving gaps unset", () => {
+    expect(sanitizeBundlePricingDefaults(undefined)).toEqual({});
+    expect(sanitizeBundlePricingDefaults(null)).toEqual({});
+    expect(
+      sanitizeBundlePricingDefaults({
+        additionalCompanyDiscountPct: 150,
+        locationMonthlyCharge: -5,
+        newFileSetupCharge: Number.NaN,
+      }),
+    ).toEqual({ additionalCompanyDiscountPct: 100, locationMonthlyCharge: 0 });
+    expect(
+      sanitizeBundlePricingDefaults({ additionalCompanyDiscountPct: Number.POSITIVE_INFINITY }),
+    ).toEqual({});
+  });
+
+  it("carries the defaults through reconciliation (they are not catalog items)", () => {
+    const snapshot = buildOptionsTemplateSnapshot({
+      ...baseSlice,
+      bundlePricingDefaults: { additionalCompanyDiscountPct: 10, locationMonthlyCharge: 40, newFileSetupCharge: 99 },
+    });
+    const result = reconcileOptionsTemplateSnapshot(snapshot, ["stessa-migration", "advanced-receipts"]);
+    expect(result.slice.bundlePricingDefaults).toEqual({
+      additionalCompanyDiscountPct: 10,
+      locationMonthlyCharge: 40,
+      newFileSetupCharge: 99,
+    });
+    const missing = reconcileOptionsTemplateSnapshot(
+      { ...snapshot, bundlePricingDefaults: undefined },
+      ["stessa-migration"],
+    );
+    expect(missing.slice.bundlePricingDefaults).toEqual({});
+  });
+
+  it("parses the manager's text inputs, with blank clearing the key", () => {
+    expect(
+      parseBundlePricingDefaultsInputs({ discountPct: "15", locationCharge: "30", setupCharge: "99" }),
+    ).toEqual({ additionalCompanyDiscountPct: 15, locationMonthlyCharge: 30, newFileSetupCharge: 99 });
+    // Blank clears: no key saved, so the field falls back down the chain
+    // (never a Number("") 0).
+    expect(
+      parseBundlePricingDefaultsInputs({ discountPct: "", locationCharge: "", setupCharge: "" }),
+    ).toEqual({});
+    expect(
+      parseBundlePricingDefaultsInputs({ discountPct: "  ", locationCharge: "25", setupCharge: "" }),
+    ).toEqual({ locationMonthlyCharge: 25 });
+  });
+
+  it("rejects non-numeric and negative manager inputs, clamps the discount", () => {
+    expect(
+      parseBundlePricingDefaultsInputs({ discountPct: "abc", locationCharge: "25", setupCharge: "" }),
+    ).toBeNull();
+    expect(
+      parseBundlePricingDefaultsInputs({ discountPct: "10", locationCharge: "-5", setupCharge: "" }),
+    ).toBeNull();
+    expect(
+      parseBundlePricingDefaultsInputs({ discountPct: "150", locationCharge: "25", setupCharge: "200" }),
+    ).toEqual({ additionalCompanyDiscountPct: 100, locationMonthlyCharge: 25, newFileSetupCharge: 200 });
   });
 });

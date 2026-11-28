@@ -3,6 +3,7 @@ import {
   CLEANUP_APPROVAL_TEXT, CLEANUP_MONTHLY_START_TEXT, NO_CLEANUP_MONTHLY_START_TEXT,
 } from "@/lib/quotes/paymentSchedule";
 import { volumeClauseText, type AccountBasis } from "@/lib/quotes/accountInventory";
+import type { CompanyBundleFeeLine } from "@/lib/quotes/companyBundle";
 
 const DIVIDER = "─".repeat(62);
 
@@ -157,6 +158,14 @@ export type AgreementRenderInput = {
   /** Required one-time services (already inside additionalOneTimeTotal), listed by name rather than as selected add-ons. */
   requiredOneTime?: { name: string; price: number }[];
   includedServices?: { name: string; description: string }[];
+  /**
+   * Spec 02 company bundle fee lines (companyBundleFeeLines output). When
+   * present and non-empty, the fee structure lists one line per company plus
+   * the locations and setup lines, and the monthly total equals the bundle
+   * monthly. Absent (or empty) renders byte-identical to today. Grouping
+   * keys on the structured `kind`, never on the label text.
+   */
+  companyFeeLines?: CompanyBundleFeeLine[];
   volumeMonthlyTotal?: number | null;
   volumeBasis?: AccountBasis | null;
   /** Fixed-fee bookkeeping defaults to including the clause; hourly callers must opt out. */
@@ -203,8 +212,32 @@ export function renderAgreementTemplate(template: string, input: AgreementRender
     ? `${input.selectedTierLabel} package`
     : "Selected bookkeeping package";
   const staged = input.paymentScheduleVersion === 2;
+  const companyFeeLines = (input.companyFeeLines ?? []).filter(
+    (line): line is CompanyBundleFeeLine =>
+      !!line &&
+      typeof line === "object" &&
+      typeof (line as CompanyBundleFeeLine).label === "string" &&
+      typeof (line as CompanyBundleFeeLine).amount === "number" &&
+      typeof (line as CompanyBundleFeeLine).companyName === "string" &&
+      typeof (line as CompanyBundleFeeLine).kind === "string",
+  );
+  // Group by the structured kind (never by label text): monthly kinds roll
+  // into the monthly total; everything else lists as a one-time line. An
+  // unknown kind falls back to its cadence so forward-compatible lines still
+  // land on the right side.
+  const isMonthlyLine = (line: CompanyBundleFeeLine) =>
+    line.kind === "company-monthly" || line.kind === "tag" || line.kind === "locations" ||
+    (line.kind !== "setup" && line.kind !== "migration" && line.cadence === "monthly");
+  const companyMonthlyLines = companyFeeLines.filter(isMonthlyLine);
+  const companyOneTimeLines = companyFeeLines.filter((line) => !isMonthlyLine(line));
+  const companyMonthlyTotal = companyMonthlyLines.reduce((total, line) => total + line.amount, 0);
   const requiredOneTimeTotal = (input.requiredOneTime ?? []).reduce((total, row) => total + row.price, 0);
-  const selectedOneTimeTotal = Math.max(0, Math.round(((input.additionalOneTimeTotal ?? 0) - requiredOneTimeTotal) * 100) / 100);
+  // One rule for bundle setup, shared with checkout: checkout's
+  // additionalOneTimeTotal already carries the setup charges (due today), and
+  // they are itemized exactly once through the companyFeeLines setup lines
+  // above — never again through the Selected One-Time Add-ons line.
+  const companyOneTimeTotal = companyOneTimeLines.reduce((total, line) => total + line.amount, 0);
+  const selectedOneTimeTotal = Math.max(0, Math.round(((input.additionalOneTimeTotal ?? 0) - requiredOneTimeTotal - companyOneTimeTotal) * 100) / 100);
   const engagementType = staged && input.hasCleanup
     ? "Onboarding + Discovery; Estimated Cleanup and Monthly Bookkeeping"
     : input.hasCleanup
@@ -236,7 +269,8 @@ export function renderAgreementTemplate(template: string, input: AgreementRender
   ].filter((line): line is string => Boolean(line));
   const scopeOfWork = scopeLines.join("\n\n");
   const feeLines = [
-    `Ongoing Monthly Services: ${formatCurrency(input.recurringMonthlyTotal ?? 0)} per month`,
+    ...companyMonthlyLines.map((line) => `${line.label}: ${formatCurrency(line.amount)} per month`),
+    `Ongoing Monthly Services: ${formatCurrency(companyMonthlyLines.length > 0 ? companyMonthlyTotal : (input.recurringMonthlyTotal ?? 0))} per month`,
     `Agreement Term:           ${input.agreementTerm === "12-month" ? "12 months" : "Month-to-month"}`,
     staged && input.hasCleanup
       ? `Estimated Cleanup (not due today): ${input.cleanupMonths ?? 0} months × ${formatCurrency(input.cleanupMonthlyRate ?? 0)} = ${formatCurrency(input.cleanupTotal ?? 0)}`
@@ -246,6 +280,7 @@ export function renderAgreementTemplate(template: string, input: AgreementRender
     (input.onboardingFee ?? 0) > 0
       ? `${staged && input.hasCleanup ? "Onboarding + Discovery" : "Onboarding Fee"}:         ${formatCurrency(input.onboardingFee ?? 0)}`
       : `${staged && input.hasCleanup ? "Onboarding + Discovery" : "Onboarding Fee"}:         Waived`,
+    ...companyOneTimeLines.map((line) => `${line.label}: ${formatCurrency(line.amount)} (one-time)`),
     staged && !input.hasCleanup
       ? input.agreementTerm === "12-month"
         ? `12 Months of Service (due today): ${formatCurrency(input.recurringMonthlyTotal ?? 0)} × 12 = ${formatCurrency(Math.round((input.recurringMonthlyTotal ?? 0) * 1200) / 100)}`

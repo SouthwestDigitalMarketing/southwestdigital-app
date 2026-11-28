@@ -11,6 +11,14 @@ import { isHourlyOfferKind } from "@/lib/quotes/kinds";
 import { lockQuoteMutation, QuoteMutationConflictError } from "@/lib/quotes/mutationLock";
 import { isQuoteFrozen } from "@/lib/quotes/isQuoteFrozen";
 import type { Prisma } from "@prisma/client";
+import {
+  companyBundleFeeLines,
+  resolveBundlePricingOptions,
+  resolveCompanyBundleForTier,
+} from "@/lib/quotes/companyBundle";
+import { requiredOneTimeAddOnsForTier } from "@/lib/quotes/proposalServices";
+import { effectiveAssessment } from "@/app/(app)/offers/builder/effectiveAssessment";
+import type { AssessmentState } from "@/app/(app)/offers/builder/ProposalCreationWorkspaceDemo";
 
 export async function GET(
   request: Request,
@@ -23,6 +31,7 @@ export async function GET(
     where: { id: engagementId },
     select: {
       brandId: true,
+      status: true,
       productKind: true,
       updatedAt: true,
       clientName: true,
@@ -38,6 +47,17 @@ export async function GET(
       agreementManagerStatus: true,
       agreementCancellationRequestedAt: true,
       isTestProposal: true,
+      quotes: {
+        take: 1,
+        select: {
+          publishedSnapshotJson: true,
+          revisions: {
+            take: 1,
+            orderBy: { version: "desc" },
+            select: { snapshotJson: true },
+          },
+        },
+      },
     },
   });
   if (!engagement) {
@@ -92,6 +112,24 @@ export async function GET(
     ? assessment.agreementTemplateContent
     : null;
   const inventory = summarizeAccountInventory(normalizeAccountInventory(assessment.accounts));
+  // Spec 02: one fee line per company when the stored assessment has a
+  // bundle. Signed/stored text is never rebuilt, so this only affects newly
+  // generated agreements; legacy assessments pass nothing (byte-identical).
+  // The selected tier reads the snapshot's one bundle object; old snapshots
+  // without it fall back to a fresh priceCompanyBundle for that tier.
+  const quote = engagement.quotes?.[0];
+  const publishedSnapshot = quote?.revisions?.[0]?.snapshotJson ?? quote?.publishedSnapshotJson;
+  const snapshotPricing = isRecord(publishedSnapshot) && isRecord(publishedSnapshot.pricing)
+    ? publishedSnapshot.pricing
+    : undefined;
+  const companyBundle = resolveCompanyBundleForTier({
+    pricing: snapshotPricing,
+    packageId: checkout?.tier ?? "maintain",
+    companies: assessment.companies,
+    baseAssessment: effectiveAssessment(assessment as unknown as AssessmentState),
+    options: resolveBundlePricingOptions(assessment),
+  });
+  const companyFeeLines = companyBundle ? companyBundleFeeLines(companyBundle) : undefined;
   const renderInput = {
     brandName: brand?.name ?? "Bookkeeping Conroe",
     clientName: engagement.clientName || "Client",
@@ -110,15 +148,18 @@ export async function GET(
     agreementTerm: services.hasTwelveMonthAgreement === true ? "12-month" as const : "month-to-month" as const,
     selectedCleanupPeriods,
     selectedAdditionalOptionNames,
+    companyFeeLines,
     paymentScheduleVersion: checkout?.paymentScheduleVersion,
     cleanupMonths: checkout?.cleanupMonths,
     cleanupMonthlyRate: checkout?.cleanupMonthlyRate,
     additionalOneTimeTotal: checkout?.additionalOneTimeTotal,
-    requiredOneTime: additionalOptions
-      .filter((option) => option.required === true && option.billingCadence === "one-time"
-        && typeof option.id === "string" && selectedAdditionalOptionIds.includes(option.id)
-        && typeof option.monthlyPrice === "number")
-      .map((option) => ({ name: String(option.name ?? option.id), price: Number(option.monthlyPrice) })),
+    // Tier-filtered exactly like checkout, so no line appears that isn't
+    // charged on the selected tier.
+    requiredOneTime: requiredOneTimeAddOnsForTier(
+      assessment,
+      selectedAdditionalOptionIds,
+      checkout?.tier ?? "maintain",
+    ),
     // Stored at selection time; re-resolve so support-level wording is current.
     includedServices: checkout?.includedServices?.map((item) => ({
       ...item,

@@ -22,7 +22,7 @@ import {
   type ContactInfoState,
 } from "./ProposalContactInfoState";
 import {
-  getProposalPricingSnapshotData,
+  getProposalPricingSnapshotPricing,
   type AssessmentState,
 } from "./ProposalCreationWorkspaceDemo";
 
@@ -131,7 +131,7 @@ export default function ProposalAppDemoHeader({
           contactInfo,
           assessment: localState.assessment,
           isTestProposal: localState.assessment?.isTestProposal === true,
-          pricing: getProposalPricingSnapshotData(localState.assessment as AssessmentState).packagePricing,
+          pricing: getProposalPricingSnapshotPricing(localState.assessment as AssessmentState),
         });
       }
       setSaveStatus("saved");

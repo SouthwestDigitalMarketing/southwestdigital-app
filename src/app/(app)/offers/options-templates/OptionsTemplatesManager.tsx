@@ -9,16 +9,27 @@ import {
   createOptionsTemplateFromCatalogAction,
   deleteOptionsTemplateAction,
   duplicateOptionsTemplateAction,
+  getOptionsTemplateSnapshotAction,
+  overwriteOptionsTemplateSnapshotAction,
   restoreOptionsTemplateAction,
   setDefaultOptionsTemplateAction,
   updateOptionsTemplateAction,
   type OptionsTemplateListItem,
 } from "./actions";
+import {
+  parseBundlePricingDefaultsInputs,
+  type OptionsTemplateAssessmentSlice,
+} from "@/lib/quotes/optionsTemplates";
 
 type EditingState = {
   id: string;
   name: string;
   description: string;
+  discountPct: string;
+  locationCharge: string;
+  setupCharge: string;
+  slice: OptionsTemplateAssessmentSlice | null;
+  sliceError: string | null;
 };
 
 export default function OptionsTemplatesManager({
@@ -49,15 +60,77 @@ export default function OptionsTemplatesManager({
     });
   }
 
+  function openEditor(template: { id: string; name: string; description: string | null }) {
+    setError(null);
+    setEditing({
+      id: template.id,
+      name: template.name,
+      description: template.description ?? "",
+      discountPct: "",
+      locationCharge: "",
+      setupCharge: "",
+      slice: null,
+      sliceError: null,
+    });
+    startTransition(async () => {
+      try {
+        const result = await getOptionsTemplateSnapshotAction(template.id);
+        if (!result) {
+          setEditing((prev) =>
+            prev && prev.id === template.id
+              ? { ...prev, sliceError: "Template details could not be loaded." }
+              : prev,
+          );
+          return;
+        }
+        const defaults = result.slice.bundlePricingDefaults;
+        setEditing((prev) =>
+          prev && prev.id === template.id
+            ? {
+                ...prev,
+                slice: result.slice,
+                discountPct: String(defaults?.additionalCompanyDiscountPct ?? ""),
+                locationCharge: String(defaults?.locationMonthlyCharge ?? ""),
+                setupCharge: String(defaults?.newFileSetupCharge ?? ""),
+              }
+            : prev,
+        );
+      } catch (e) {
+        setEditing((prev) =>
+          prev && prev.id === template.id
+            ? { ...prev, sliceError: e instanceof Error ? e.message : "Template details could not be loaded." }
+            : prev,
+        );
+      }
+    });
+  }
+
   function handleSaveEdit() {
-    if (!editing) return;
+    if (!editing || !editing.slice) return;
     const snapshot = editing;
+    // A blank input clears that default so proposals fall through to the
+    // next source (catalog, then the $150 placeholder); any number —
+    // including 150 — is an explicit template default and beats the catalog.
+    const bundlePricingDefaults = parseBundlePricingDefaultsInputs({
+      discountPct: snapshot.discountPct,
+      locationCharge: snapshot.locationCharge,
+      setupCharge: snapshot.setupCharge,
+    });
+    if (!bundlePricingDefaults) {
+      setError("Enter valid non-negative numbers for the bundle pricing defaults (blank clears a default).");
+      return;
+    }
     run(
-      () =>
-        updateOptionsTemplateAction(snapshot.id, {
+      async () => {
+        await updateOptionsTemplateAction(snapshot.id, {
           name: snapshot.name,
           description: snapshot.description,
-        }),
+        });
+        await overwriteOptionsTemplateSnapshotAction(snapshot.id, {
+          ...snapshot.slice as OptionsTemplateAssessmentSlice,
+          bundlePricingDefaults,
+        });
+      },
       () => setEditing(null),
     );
   }
@@ -75,7 +148,7 @@ export default function OptionsTemplatesManager({
       try {
         const id = await createOptionsTemplateFromCatalogAction();
         router.refresh();
-        setEditing({ id, name: "New options template", description: "" });
+        openEditor({ id, name: "New options template", description: "" });
       } catch (e) {
         setError(e instanceof Error ? e.message : "Something went wrong.");
       }
@@ -163,15 +236,9 @@ export default function OptionsTemplatesManager({
                       <div className="flex items-center justify-end gap-1">
                         <button
                           type="button"
-                          title="Edit name/description"
+                          title="Edit template"
                           disabled={isPending || template.archivedAt !== null}
-                          onClick={() =>
-                            setEditing({
-                              id: template.id,
-                              name: template.name,
-                              description: template.description ?? "",
-                            })
-                          }
+                          onClick={() => openEditor(template)}
                           className="rounded-md p-1.5 text-slate-600 hover:bg-slate-100 disabled:opacity-40"
                         >
                           <Pencil className="h-4 w-4" />
@@ -265,6 +332,60 @@ export default function OptionsTemplatesManager({
                 maxLength={500}
               />
             </label>
+            <fieldset className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+              <legend className="px-1 text-sm font-semibold text-slate-700">
+                Company bundle pricing defaults
+              </legend>
+              {editing.sliceError ? (
+                <p className="pb-2 text-sm text-red-700">{editing.sliceError}</p>
+              ) : null}
+              {!editing.slice && !editing.sliceError ? (
+                <p className="pb-2 text-sm text-slate-500">Loading bundle defaults…</p>
+              ) : null}
+              <label className="block py-1 text-sm">
+                <span className="font-medium text-slate-700">Discount for each additional company (%)</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="any"
+                  value={editing.discountPct}
+                  disabled={!editing.slice}
+                  onChange={(e) => setEditing({ ...editing, discountPct: e.target.value })}
+                  className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm disabled:opacity-50"
+                />
+              </label>
+              <label className="block py-1 text-sm">
+                <span className="font-medium text-slate-700">Location reporting, per location per month ($)</span>
+                <input
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={editing.locationCharge}
+                  disabled={!editing.slice}
+                  onChange={(e) => setEditing({ ...editing, locationCharge: e.target.value })}
+                  className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm disabled:opacity-50"
+                />
+              </label>
+              <label className="block py-1 text-sm">
+                <span className="font-medium text-slate-700">New QuickBooks file setup, per file ($, blank follows catalog)</span>
+                <input
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={editing.setupCharge}
+                  placeholder="Blank = catalog price, else $150"
+                  disabled={!editing.slice}
+                  onChange={(e) => setEditing({ ...editing, setupCharge: e.target.value })}
+                  className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm disabled:opacity-50"
+                />
+              </label>
+              <p className="pb-2 text-xs text-slate-500">
+                Leave setup blank to use the brand catalog new-file price when set (otherwise
+                the $150 placeholder). A stored value — including 150 — is an explicit
+                template default and wins over the catalog.
+              </p>
+            </fieldset>
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
@@ -276,7 +397,7 @@ export default function OptionsTemplatesManager({
               <button
                 type="button"
                 onClick={handleSaveEdit}
-                disabled={isPending || !editing.name.trim()}
+                disabled={isPending || !editing.name.trim() || !editing.slice}
                 className="ui-action-primary rounded-md px-3 py-2 text-sm font-semibold disabled:opacity-50"
               >
                 Save

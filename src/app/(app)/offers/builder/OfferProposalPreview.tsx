@@ -3,6 +3,15 @@
 import { pricingCardServices } from "./pricingCardServices";
 import ProposalPaymentPlan from "./ProposalPaymentPlan";
 import HowWeSizedThis from "./HowWeSizedThis";
+import CompanyBundleSummary from "./CompanyBundleSummary";
+import {
+  asPublicCompanyBundleMap,
+  companyBundleFeeLines,
+  hasCompanyBundle,
+  NEW_QUICKBOOKS_FILE_SERVICE_ID,
+  normalizeCompanyBundle,
+  type PublicCompanyBundleMap,
+} from "@/lib/quotes/companyBundle";
 import {
   toPublicAccountInventory,
   type PublicAccountInventory,
@@ -706,6 +715,8 @@ type OfferProposalPreviewProps = {
 
 export default function OfferProposalPreview(props: OfferProposalPreviewProps = {}) {
   if (props.live && props.publicProposal) {
+    // Whitelisted per-tier Spec 02 bundle; legacy snapshots carry none.
+    const publicBundle = props.publicProposal.companyBundle ?? null;
     return (
       <OfferProposalPreviewView
         {...props}
@@ -713,6 +724,7 @@ export default function OfferProposalPreview(props: OfferProposalPreviewProps = 
         contactInfo={props.publicProposal.contactInfo}
         publishedPricing={props.publicProposal.pricing}
         publicAccountInventory={props.publicProposal.accountInventory}
+        publicCompanyBundle={publicBundle}
         livePublic
       />
     );
@@ -768,16 +780,31 @@ function OfferProposalPreviewView({
   publishedPricing,
   livePublic = false,
   publicAccountInventory,
+  publicCompanyBundle = null,
 }: Omit<OfferProposalPreviewProps, "assessment" | "initialAssessment" | "initialContactInfo" | "publicProposal"> & {
   assessment: PreviewAssessment | AssessmentState;
   contactInfo: PreviewContactInfo;
   livePublic?: boolean;
   publicAccountInventory?: PublicAccountInventory | null;
+  /**
+   * Whitelisted per-tier Spec 02 bundle for the public page. A legacy
+   * single-tier payload is still tolerated and expanded to every tier.
+   */
+  publicCompanyBundle?: PublicCompanyBundleMap | null;
 }) {
   const { brand } = useBrand();
   const accountInventory: PublicAccountInventory | null | undefined = livePublic
     ? publicAccountInventory
     : toPublicAccountInventory((assessment as Partial<AssessmentState>).accounts);
+  // Spec 02 bundle: staff preview reads the snapshot's one bundle object
+  // for the selected tier; the public page renders the whitelisted per-tier
+  // `companyBundle` field only. Legacy payloads (no bundle) render neither.
+  const staffBundleCompanies = !livePublic && hasCompanyBundle(assessment as { companies?: unknown })
+    ? normalizeCompanyBundle((assessment as AssessmentState).companies)
+    : [];
+  const companyInventories = staffBundleCompanies.length > 0
+    ? staffBundleCompanies.map((company) => ({ name: company.name, inventory: toPublicAccountInventory(company.accounts) }))
+    : null;
   const searchParams = useSearchParams();
   const contractFollowsPayment = (assessment as { contractFollowsPayment?: boolean }).contractFollowsPayment === true;
   const isSimulation = isProposalPreviewSimulation({ live, embedded, isStaffPreview });
@@ -863,6 +890,20 @@ function OfferProposalPreviewView({
     livePublic,
   );
   const [selectedOptionId, setSelectedOptionId] = useState<OptionId | null>(null);
+  // Spec 02 bundle monthlies differ per package; the Companies block shows
+  // the selected package, or Maintain before anything is selected. Both the
+  // staff and public blocks read a published object for this tier — never a
+  // fresh recompute against a different tier's numbers.
+  const bundleTier: OptionId = selectedOptionId ?? "maintain";
+  const staffBundlePriced = !livePublic && staffBundleCompanies.length > 0
+    ? getProposalPricingSnapshotData(assessment as AssessmentState).companyBundle?.[bundleTier] ?? null
+    : null;
+  const publicBundleMap = livePublic ? asPublicCompanyBundleMap(publicCompanyBundle) : null;
+  const publicBundleForTier = publicBundleMap ? publicBundleMap[bundleTier] ?? null : null;
+  // On the public page the assessment strips the raw companies, so the
+  // central add-on skip cannot see a new-file setup: drop the legacy
+  // catalog line here instead, keyed on the whitelisted setup amounts.
+  const publicHasNewFileSetup = (publicBundleForTier?.companies ?? []).some((row) => row.setupOneTime > 0);
   const [selectionSubmittingId, setSelectionSubmittingId] = useState<OptionId | null>(null);
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const [step, setStep] = useState(startsSigned ? 3 : 0);
@@ -1290,7 +1331,7 @@ function OfferProposalPreviewView({
     bonuses: livePublic
       ? (assessment.bonuses ?? [])
       : getProposalBonuses(assessment as AssessmentState),
-  });
+  }).filter((option) => !(livePublic && publicHasNewFileSetup && option.id === NEW_QUICKBOOKS_FILE_SERVICE_ID));
   const additionalOptionRowsFor = (packageId: OptionId): ServiceRow[] =>
     addOns.filter((option) => option.packageIds.includes(packageId)).map((option) => ({
       id: option.id,
@@ -1443,6 +1484,9 @@ function OfferProposalPreviewView({
         ...options[selectedOptionId].recurringRows,
         ...options[selectedOptionId].oneTimeRows.filter((row) => row.price === 0 && !row.cleanupPeriodKey && !isOnboarding(row)),
       ].map((row) => ({ name: serviceLevelTitle(row.serviceName), description: row.note ?? "" })) : [],
+      // Staff preview agreement keys on the structured tier bundle (F6); the
+      // public page renders the agreement from the server route instead.
+      companyFeeLines: staffBundlePriced ? companyBundleFeeLines(staffBundlePriced) : undefined,
     },
   );
   const displayedAgreementText = engagementId ? agreementText : embeddedAgreementText;
@@ -2007,7 +2051,20 @@ function OfferProposalPreviewView({
                 })}
               </div>
 
-              <HowWeSizedThis inventory={accountInventory} brandName={brand.name} />
+              {staffBundlePriced ? (
+                <CompanyBundleSummary
+                  priced={staffBundlePriced}
+                  caption={`Monthly amounts for the ${options[bundleTier].name} package.`}
+                />
+              ) : null}
+              {livePublic && publicBundleForTier ? (
+                <CompanyBundleSummary
+                  publicBundle={publicBundleForTier}
+                  caption={`Monthly amounts for the ${options[bundleTier].name} package.`}
+                />
+              ) : null}
+
+              <HowWeSizedThis inventory={accountInventory} brandName={brand.name} companies={companyInventories} />
 
               {/* Mobile checkout bar: what's due today for the package in view, and its Select button */}
               {showMobileSelectBar ? (

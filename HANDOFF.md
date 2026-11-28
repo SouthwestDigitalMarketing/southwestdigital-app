@@ -1,4 +1,11 @@
 # SWapp handoff
+## 2026-11-27 — Proposal builder spec 02: multiple companies as one bundle (Ummon)
+- Package pricing moved out of the builder into `src/lib/quotes/packagePricing.ts` (golden tests: 19 prices + thresholds identical); bundle math in `src/lib/quotes/companyBundle.ts`.
+- `assessment.companies` is canonical (`assessment.accounts` mirrors the main company). Added companies with their own QBO file are priced from their own accounts + properties, 20% off (rounded up to $5); locations $25/mo each; new-file setup one-time (override -> template -> catalog `new-quickbooks-file` if > $0 -> $150). Defaults editable under "Bundle pricing" in options templates; final amounts pending Tom.
+- `pricing.companyBundle` in the snapshot is what preview, public page, checkout, select and agreement read. Legacy proposals byte-identical.
+- Select/agreement routes now load `engagement.status` for the freeze check.
+- Not yet per company: payroll/complexity (spec 03), cleanup/onboarding scaling (spec 04).
+
 ## 2026-11-27 — Review privately, restore teaser, visibility (Johnny)
 
 Tom: Start on the title is full width; Put the teaser back is the same slot

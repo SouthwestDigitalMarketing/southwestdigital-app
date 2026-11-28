@@ -99,6 +99,21 @@ describe("public proposal select API", () => {
     expect(await response.json()).toEqual(expect.objectContaining({ error: expect.stringContaining("cannot be changed") }));
     expect(mocks.update).not.toHaveBeenCalled();
   });
+  it("treats a bare status marker as frozen even with no other acceptance signal", async () => {
+    // Only engagement.status marks this row: no signedAt, no PAID, no
+    // proposalAcceptance. The route select must fetch status for the freeze
+    // check to see it in production (not just through this mock).
+    mocks.engagement.mockResolvedValue({ ...engagementRow(), status: "accepted" });
+    const response = await call();
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual(expect.objectContaining({ error: expect.stringContaining("cannot be changed") }));
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.engagement).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.objectContaining({
+        status: true, signedAt: true, onboardingFeeStatus: true, onboardingData: true,
+      }),
+    }));
+  });
   it("POST select checkout omits assessment notes and catalog internalDescription", async () => {
     const response = await call();
     expect(response.status).toBe(200);
@@ -114,5 +129,116 @@ describe("public proposal select API", () => {
     expect(included).toEqual(
       expect.arrayContaining([expect.objectContaining({ name: "Portal", description: "" })]),
     );
+  });
+});
+
+describe("select API with a company bundle", () => {
+  const bundleCompanies = [
+    { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 0, propertiesCount: 0, accounts: [] },
+    { id: "b", name: "B Co", ownQboFile: true, fileStatus: "new_file", locationsCount: 0, propertiesCount: 0, accounts: [] },
+  ];
+
+  function bundleEngagementRow() {
+    return {
+      ...engagementRow(),
+      quotes: [{
+        // Bundle monthlies baked by the P1 snapshot wiring (empty files, defaults).
+        publishedSnapshotJson: null,
+        revisions: [{
+          snapshotJson: {
+            assessment: {
+              annualSavingsPercent: 20,
+              historicalCleanupPeriods: [],
+              additionalOptions: [],
+              companies: bundleCompanies,
+            },
+            pricing: {
+              maintain: { monthly: 450 },
+              improve: { monthly: 450 },
+              grow: { monthly: 675 },
+            },
+          },
+        }],
+      }],
+    };
+  }
+
+  function selectTier(tier: string) {
+    return POST(
+      new Request("https://firm.example.test/api/proposal/eng/select", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-proposal-token": "token",
+          "x-hostname": "firm.example.test",
+        },
+        body: JSON.stringify({
+          tier,
+          hasTwelveMonthAgreement: false,
+          selectedCleanupPeriodKeys: [],
+          selectedAdditionalOptionIds: [],
+        }),
+      }),
+      { params: Promise.resolve({ engagementId: "eng" }) },
+    );
+  }
+
+  it("charges the published bundle monthly with setup due today", async () => {
+    mocks.engagement.mockResolvedValue(bundleEngagementRow());
+    const response = await selectTier("maintain");
+    expect(response.status).toBe(200);
+    const body = await response.json() as { ok?: boolean; checkout?: Record<string, number> };
+    expect(body.checkout?.baseMonthlyTotal).toBe(450);
+    expect(body.checkout?.recurringMonthlyTotal).toBe(450);
+    expect(body.checkout?.additionalOneTimeTotal).toBe(150);
+    expect(body.checkout?.onboardingFee).toBe(500);
+    expect(body.checkout?.amountDueNow).toBe(1100);
+  });
+
+  it("reads the selected tier from the snapshot bundle object", async () => {
+    const { buildCompanyBundleSnapshot, DEFAULT_BUNDLE_PRICING_OPTIONS } =
+      await import("@/lib/quotes/companyBundle");
+    const stored = {
+      annualSavingsPercent: 20,
+      historicalCleanupPeriods: [],
+      additionalOptions: [],
+      companies: bundleCompanies,
+    };
+    const companyBundle = buildCompanyBundleSnapshot({
+      companies: bundleCompanies,
+      baseAssessment: stored,
+      options: DEFAULT_BUNDLE_PRICING_OPTIONS,
+    });
+    mocks.engagement.mockResolvedValue({
+      ...engagementRow(),
+      quotes: [{
+        publishedSnapshotJson: null,
+        revisions: [{
+          snapshotJson: {
+            assessment: stored,
+            pricing: {
+              maintain: { monthly: 450 },
+              improve: { monthly: 450 },
+              grow: { monthly: 675 },
+              companyBundle,
+            },
+          },
+        }],
+      }],
+    });
+    const response = await selectTier("grow");
+    expect(response.status).toBe(200);
+    const body = await response.json() as { ok?: boolean; checkout?: Record<string, number> };
+    expect(body.checkout?.baseMonthlyTotal).toBe(675);
+    expect(body.checkout?.additionalOneTimeTotal).toBe(150);
+    expect(body.checkout?.amountDueNow).toBe(500 + 150 + 675);
+  });
+
+  it("leaves a legacy selection identical (no setup, published monthly)", async () => {
+    const response = await selectTier("maintain");
+    expect(response.status).toBe(200);
+    // The default engagement row is the legacy sentinel snapshot (no bundle).
+    const body = await response.json() as { ok?: boolean; checkout?: Record<string, number> };
+    expect(body.checkout?.additionalOneTimeTotal).toBe(0);
   });
 });
