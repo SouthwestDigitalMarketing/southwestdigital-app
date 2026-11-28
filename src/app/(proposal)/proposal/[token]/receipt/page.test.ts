@@ -1,3 +1,4 @@
+import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -107,5 +108,77 @@ describe("public proposal receipt page", () => {
       },
     }));
     await expect(openReceipt()).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
+  it("itemizes the complexity cleanup add so the estimate equation adds up", async () => {
+    mocks.quoteFindFirst.mockResolvedValue(signedReceiptRow({
+      engagement: {
+        ...signedReceiptRow().engagement,
+        onboardingData: {
+          proposalAcceptance: {
+            selection: {
+              tier: "maintain",
+              tierLabel: "Maintain",
+              hasTwelveMonthAgreement: false,
+              selectedCleanupPeriodKeys: ["2026-1-3"],
+              selectedAdditionalOptionIds: [],
+              baseMonthlyTotal: 300,
+              recurringMonthlyTotal: 300,
+              cleanupTotal: 1095,
+              onboardingFee: 560,
+              oneTimeTotal: 560,
+              amountDueNow: 560,
+              chargeKind: "onboarding_and_discovery",
+              selectionHash: "hash",
+              paymentScheduleVersion: 2,
+              cleanupMonths: 3,
+              cleanupMonthlyRate: 300,
+              additionalOneTimeTotal: 0,
+              complexityCleanupAdd: 195,
+              includedServices: [],
+            },
+          },
+        },
+      },
+    }));
+    const html = renderToStaticMarkup(await openReceipt());
+    expect(html).toContain("Cleanup estimate: 3 months × $300.00 = $900.00.");
+    expect(html).toContain("Complexity adjustment: $195.00. Estimated Cleanup Total: $1,095.00.");
+  });
+
+  it("renders the legacy cleanup equation without complexity lines when the add is absent", async () => {
+    mocks.quoteFindFirst.mockResolvedValue(signedReceiptRow({
+      engagement: {
+        ...signedReceiptRow().engagement,
+        onboardingData: {
+          proposalAcceptance: {
+            selection: {
+              tier: "maintain",
+              tierLabel: "Maintain",
+              hasTwelveMonthAgreement: false,
+              selectedCleanupPeriodKeys: ["2026-1-3"],
+              selectedAdditionalOptionIds: [],
+              baseMonthlyTotal: 300,
+              recurringMonthlyTotal: 300,
+              cleanupTotal: 900,
+              onboardingFee: 560,
+              oneTimeTotal: 560,
+              amountDueNow: 560,
+              chargeKind: "onboarding_and_discovery",
+              selectionHash: "hash",
+              paymentScheduleVersion: 2,
+              cleanupMonths: 3,
+              cleanupMonthlyRate: 300,
+              additionalOneTimeTotal: 0,
+              includedServices: [],
+            },
+          },
+        },
+      },
+    }));
+    const html = renderToStaticMarkup(await openReceipt());
+    expect(html).toContain("Cleanup estimate: 3 months × $300.00 = $900.00.");
+    expect(html).not.toContain("Complexity adjustment");
+    expect(html).not.toContain("Estimated Cleanup Total");
   });
 });

@@ -152,6 +152,7 @@ export async function GET(
     paymentScheduleVersion: checkout?.paymentScheduleVersion,
     cleanupMonths: checkout?.cleanupMonths,
     cleanupMonthlyRate: checkout?.cleanupMonthlyRate,
+    complexityCleanupAdd: checkout?.complexityCleanupAdd,
     additionalOneTimeTotal: checkout?.additionalOneTimeTotal,
     // Tier-filtered exactly like checkout, so no line appears that isn't
     // charged on the selected tier.

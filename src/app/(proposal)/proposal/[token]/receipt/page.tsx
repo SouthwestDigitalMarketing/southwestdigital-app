@@ -102,7 +102,7 @@ export default async function ProposalReceiptPage({ params }: { params: Promise<
             <div className="mt-6 space-y-3 rounded-xl border border-slate-200 p-5 text-sm">
               <h2 className="font-bold">Your agreed payment schedule</h2>
               <p>Initial payment: {formatUsd(checkout.amountDueNow)}.</p>
-              {(checkout.cleanupMonths ?? 0) > 0 ? <p>Cleanup estimate: {checkout.cleanupMonths} months × {formatUsd(checkout.cleanupMonthlyRate ?? 0)} = {formatUsd(checkout.cleanupTotal)}. This estimate was not part of the initial payment. Cleanup scope, price, and payment milestones require your approval after discovery.</p> : null}
+              {(checkout.cleanupMonths ?? 0) > 0 ? <p>Cleanup estimate: {checkout.cleanupMonths} months × {formatUsd(checkout.cleanupMonthlyRate ?? 0)} = {formatUsd(checkout.cleanupTotal - (checkout.complexityCleanupAdd ?? 0))}.{(checkout.complexityCleanupAdd ?? 0) > 0 ? ` Complexity adjustment: ${formatUsd(checkout.complexityCleanupAdd ?? 0)}. Estimated Cleanup Total: ${formatUsd(checkout.cleanupTotal)}.` : ""} This estimate was not part of the initial payment. Cleanup scope, price, and payment milestones require your approval after discovery.</p> : null}
               {checkout.hasTwelveMonthAgreement ? <p>12-month service total: {formatUsd(checkout.recurringMonthlyTotal)} × 12 = {formatUsd(Math.round(checkout.recurringMonthlyTotal * 1200) / 100)}, paid monthly. Excludes onboarding, cleanup, and one-time add-ons.</p> : null}
               <p>See the signed agreement below for the service stages and monthly billing start.</p>
             </div>

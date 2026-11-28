@@ -225,6 +225,22 @@ export function publicComplexityWhyByTierForSnapshot(snapshotValue: unknown): Co
   return { maintain: forTier("maintain"), improve: forTier("improve"), grow: forTier("grow") };
 }
 
+/**
+ * Spec 03 per-month complexity cleanup rate from a stored snapshot, for the
+ * select route's checkout build. The public pricing schema strips the
+ * priced `maintain.complexity` object, so without this the real select flow
+ * always stores `complexityCleanupAdd: undefined`. Only the number the
+ * checkout reads crosses — never the raw complexity selection.
+ */
+export function storedComplexityCleanupPerMonthForSnapshot(snapshotValue: unknown): number {
+  const snapshot = record(snapshotValue);
+  const pricing = record(snapshot.pricing);
+  const maintain = record(pricing.maintain);
+  const complexity = record(maintain.complexity);
+  const rate = complexity.cleanupPerMonthTotal;
+  return typeof rate === "number" && Number.isFinite(rate) && rate > 0 ? rate : 0;
+}
+
 export function toPublicBookkeepingProposal(
   snapshotValue: unknown,
   catalogCopy?: PublicCatalogCopy,

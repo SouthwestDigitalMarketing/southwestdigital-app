@@ -242,3 +242,86 @@ describe("select API with a company bundle", () => {
     expect(body.checkout?.additionalOneTimeTotal).toBe(0);
   });
 });
+
+describe("select API with a complexity cleanup weight", () => {
+  const complexitySnapshot = (complexity?: { cleanupPerMonthTotal: number }) => ({
+    assessment: {
+      annualSavingsPercent: 20,
+      historicalCleanupPeriods: [{ id: "p1", year: 2026, startMonth: 1, endMonth: 3 }],
+      additionalOptions: [],
+    },
+    pricing: {
+      maintain: complexity
+        ? { monthly: 300, complexity: { lines: [], monthlyTotal: 0, ...complexity, cleanupTotal: 325 } }
+        : { monthly: 300 },
+      improve: { monthly: 450 },
+      grow: { monthly: 675 },
+    },
+  });
+
+  function complexityEngagementRow(complexity?: { cleanupPerMonthTotal: number }) {
+    return {
+      ...engagementRow(),
+      quotes: [{
+        publishedSnapshotJson: null,
+        revisions: [{ snapshotJson: complexitySnapshot(complexity) }],
+      }],
+    };
+  }
+
+  function selectMaintain(body: Record<string, unknown>) {
+    return POST(
+      new Request("https://firm.example.test/api/proposal/eng/select", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-proposal-token": "token",
+          "x-hostname": "firm.example.test",
+        },
+        body: JSON.stringify({
+          tier: "maintain",
+          hasTwelveMonthAgreement: false,
+          selectedCleanupPeriodKeys: ["2026-1-3"],
+          selectedAdditionalOptionIds: [],
+          ...body,
+        }),
+      }),
+      { params: Promise.resolve({ engagementId: "eng" }) },
+    );
+  }
+
+  it("stores the snapshot complexity cleanup add for cleanup months (real checkout build)", async () => {
+    mocks.engagement.mockResolvedValue(complexityEngagementRow({ cleanupPerMonthTotal: 65 }));
+    const response = await selectMaintain({});
+    expect(response.status).toBe(200);
+    const body = await response.json() as { ok?: boolean; checkout?: Record<string, unknown> };
+    // 3 selected months: base 3 x 300 plus the 3 x 65 complexity weight.
+    expect(body.checkout?.cleanupTotal).toBe(900 + 195);
+    expect(body.checkout?.complexityCleanupAdd).toBe(195);
+    expect(body.checkout?.cleanupMonthlyRate).toBe(300);
+    // The stored services carry the same add.
+    const stored = mocks.update.mock.calls[0]?.[0]?.data?.onboardingData?.proposalBuilderState?.services as Record<string, unknown> | undefined;
+    expect(stored?.complexityCleanupAdd).toBe(195);
+    expect(stored?.cleanupTotal).toBe(900 + 195);
+  });
+
+  it("stores no add for a legacy snapshot without complexity", async () => {
+    mocks.engagement.mockResolvedValue(complexityEngagementRow());
+    const response = await selectMaintain({});
+    expect(response.status).toBe(200);
+    const body = await response.json() as { ok?: boolean; checkout?: Record<string, unknown> };
+    expect(body.checkout?.cleanupTotal).toBe(900);
+    expect(body.checkout?.complexityCleanupAdd).toBeUndefined();
+    const stored = mocks.update.mock.calls[0]?.[0]?.data?.onboardingData?.proposalBuilderState?.services as Record<string, unknown> | undefined;
+    expect(stored?.complexityCleanupAdd).toBeUndefined();
+  });
+
+  it("stores no add when no cleanup months are selected", async () => {
+    mocks.engagement.mockResolvedValue(complexityEngagementRow({ cleanupPerMonthTotal: 65 }));
+    const response = await selectMaintain({ selectedCleanupPeriodKeys: [] });
+    expect(response.status).toBe(200);
+    const body = await response.json() as { ok?: boolean; checkout?: Record<string, unknown> };
+    expect(body.checkout?.cleanupTotal).toBe(0);
+    expect(body.checkout?.complexityCleanupAdd).toBeUndefined();
+  });
+});

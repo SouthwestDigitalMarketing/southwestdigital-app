@@ -8,7 +8,7 @@ import {
 } from "@/lib/engagements/proposalCheckout";
 import { resolveOnboardingWaiverForEngagement } from "@/lib/discounts/resolveOnboardingWaiver";
 import { hasPublicProposalAccess, publicProposalNotFound } from "@/lib/engagements/publicProposalAccess";
-import { catalogCopyFromRows, toPublicBookkeepingProposal } from "@/lib/quotes/publicProposal";
+import { catalogCopyFromRows, storedComplexityCleanupPerMonthForSnapshot, toPublicBookkeepingProposal } from "@/lib/quotes/publicProposal";
 import { asCompanyBundleSnapshot } from "@/lib/quotes/companyBundle";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
 import { lockQuoteMutation, QuoteMutationConflictError } from "@/lib/quotes/mutationLock";
@@ -98,6 +98,11 @@ export async function POST(
       ? publishedSnapshot.pricing
       : {};
     const snapshotBundle = asCompanyBundleSnapshot(storedPricing.companyBundle);
+    // Spec 03: the public pricing strips the priced `maintain.complexity`
+    // object, so carry the per-month cleanup rate or the real select flow
+    // always stores `complexityCleanupAdd: undefined`. Only the number the
+    // checkout reads crosses — never the raw complexity selection.
+    const complexityCleanupPerMonth = storedComplexityCleanupPerMonthForSnapshot(publishedSnapshot);
     checkout = buildProposalCheckoutSummary(
       {
         assessment: {
@@ -106,9 +111,15 @@ export async function POST(
           bundlePricingOptions: storedAssessment.bundlePricingOptions,
           bundlePricingDefaults: storedAssessment.bundlePricingDefaults,
         },
-        pricing: snapshotBundle
-          ? { ...publicProposal.pricing, companyBundle: snapshotBundle }
-          : publicProposal.pricing,
+        pricing: {
+          ...publicProposal.pricing,
+          ...(snapshotBundle ? { companyBundle: snapshotBundle } : {}),
+          // The public maintain tier carries the monthly only; restore the
+          // whitelisted complexity cleanup rate for the checkout math.
+          ...(complexityCleanupPerMonth > 0
+            ? { maintain: { ...publicProposal.pricing.maintain, complexity: { cleanupPerMonthTotal: complexityCleanupPerMonth } } }
+            : {}),
+        },
         // The public view strips staff-only fields; the test flag still decides the $1 test checkout.
         isTestProposal: isRecord(publishedSnapshot) && publishedSnapshot.isTestProposal === true,
       },
