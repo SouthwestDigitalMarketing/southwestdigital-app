@@ -499,6 +499,8 @@ body {
 }
 
 .brand-swipe__heading { color: var(--swipe-ink); }
+.brand-swipe__heading-link { color: inherit; text-decoration: none; }
+.brand-swipe__heading-link:hover { text-decoration: underline; text-underline-offset: 0.18em; }
 .brand-swipe__tab[aria-selected="true"] { background: var(--swipe-tab); color: var(--swipe-tab-text); }
 .brand-swipe__dot[aria-current="true"] { background: var(--swipe-accent); }
 .brand-swipe .brand-swipe__card { border-top: 3px solid var(--swipe-accent); }

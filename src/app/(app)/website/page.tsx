@@ -10,6 +10,9 @@ import { isLochsideBrandSlug } from "@/lib/brands/active-brand";
 import { BrandSwipe } from "@/components/BrandSwipe";
 import { combineSiteHealth, combineTrafficTrends } from "./combine";
 import { brandSwipePalette, NEUTRAL_SWIPE_PALETTE } from "@/lib/brands/swipePalette";
+import { BRAND_WEBSITES } from "@/lib/brands/tools";
+import { MUSIC_SITES, publicHost, publicHref } from "@/lib/sites";
+import { ExternalLink } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +36,27 @@ function getAnalyticsNow() {
 
 type WebsiteReportData = { health: SiteHealth | null; trendRows: TrafficComparisonRow[]; error: string | null };
 
+function siteFromBrand(slug: string | undefined, ga4HostName: string | null | undefined) {
+  const raw = ga4HostName?.trim() || (slug ? BRAND_WEBSITES[slug] : "") || "";
+  if (!raw) return { name: slug ?? "Site", href: undefined as string | undefined };
+  return { name: publicHost(raw), href: publicHref(raw) };
+}
+
+function SiteLaunchLink({ host, href }: { host: string; href: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="mt-3 inline-flex max-w-full items-center gap-2 text-2xl font-semibold tracking-tight text-slate-900"
+      aria-label={`Open ${host} in a new tab`}
+    >
+      <span className="truncate">{host}</span>
+      <ExternalLink size={18} className="shrink-0" aria-hidden />
+    </a>
+  );
+}
+
 export default async function WebsitePage({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
   const { period: rawPeriod } = await searchParams;
   const period = rawPeriod && rawPeriod in PERIOD_CONFIG ? rawPeriod : "30d";
@@ -42,12 +66,19 @@ export default async function WebsitePage({ searchParams }: { searchParams: Prom
   if (!companyView) {
     const theme = await prisma.brandTheme.findUnique({ where: { brandId: brand.id }, select: { ga4PropertyId: true, ga4HostName: true, websiteEngagedSessionsGoal: true } });
     const data = theme?.ga4PropertyId ? await loadReport(theme.ga4PropertyId, theme.ga4HostName, period, config) : { health: null, trendRows: [], error: "GA4 property not configured for this brand." };
-    return <div className="p-8"><h1 className="sr-only">Website</h1><div className="mb-5"><h2 className="text-lg font-semibold text-slate-900">Traffic overview</h2><div className="mt-3 w-fit max-w-full overflow-x-auto"><PeriodSelector current={period} /></div></div><WebsiteReport brandId={brand.id} goal={theme?.websiteEngagedSessionsGoal ?? 500} editable data={data} config={config} /></div>;
+    const site = siteFromBrand(brand.slug, theme?.ga4HostName);
+    return <div className="p-8"><h1 className="sr-only">Website</h1><div className="mb-5"><h2 className="text-lg font-semibold text-slate-900">Traffic overview</h2>{site.href ? <SiteLaunchLink host={site.name} href={site.href} /> : null}<div className="mt-3 w-fit max-w-full overflow-x-auto"><PeriodSelector current={period} /></div></div><WebsiteReport brandId={brand.id} goal={theme?.websiteEngagedSessionsGoal ?? 500} editable data={data} config={config} /></div>;
   }
-  const brands = await prisma.brand.findMany({
-    where: { slug: { in: [...COMPANY_BRANDS] }, status: "ACTIVE" },
-    select: { id: true, slug: true, name: true, theme: { select: { ga4PropertyId: true, ga4HostName: true, websiteEngagedSessionsGoal: true, themePreset: true, lightColor: true, darkColor: true, accentColor: true } } },
-  });
+  const [brands, ga4Themes] = await Promise.all([
+    prisma.brand.findMany({
+      where: { slug: { in: [...COMPANY_BRANDS] }, status: "ACTIVE" },
+      select: { id: true, slug: true, name: true, theme: { select: { ga4PropertyId: true, ga4HostName: true, websiteEngagedSessionsGoal: true, themePreset: true, lightColor: true, darkColor: true, accentColor: true } } },
+    }),
+    prisma.brandTheme.findMany({
+      where: { ga4HostName: { not: null }, ga4PropertyId: { not: null } },
+      select: { brandId: true, ga4PropertyId: true, ga4HostName: true, websiteEngagedSessionsGoal: true, themePreset: true, lightColor: true, darkColor: true, accentColor: true },
+    }),
+  ]);
   const ordered = COMPANY_BRANDS.map((slug) => brands.find((item) => item.slug === slug));
   const reports = await Promise.all(ordered.map((item): Promise<WebsiteReportData> => item?.theme?.ga4PropertyId
     ? loadReport(item.theme.ga4PropertyId, item.theme.ga4HostName, period, config)
@@ -56,9 +87,35 @@ export default async function WebsitePage({ searchParams }: { searchParams: Prom
     ? { health: combineSiteHealth([reports[0].health, reports[1].health]), trendRows: combineTrafficTrends([reports[0].trendRows, reports[1].trendRows]), error: null }
     : { health: null, trendRows: [], error: "Combined traffic needs both brand reports. Check the individual views." };
   const goal = ordered.reduce((total, item) => total + (item?.theme?.websiteEngagedSessionsGoal ?? 500), 0);
+  const musicReports = await Promise.all(MUSIC_SITES.map((site): Promise<WebsiteReportData> => {
+    const theme = ga4Themes.find((row) => row.ga4HostName && publicHost(row.ga4HostName) === site.host);
+    if (!theme?.ga4PropertyId) {
+      return Promise.resolve({ health: null, trendRows: [], error: `${site.host} analytics is not connected yet.` });
+    }
+    return loadReport(theme.ga4PropertyId, theme.ga4HostName, period, config);
+  }));
   const views = [
     { key: "combined", name: "Combined", palette: NEUTRAL_SWIPE_PALETTE, content: <WebsiteReport brandId={null} goal={goal} editable={false} data={combined} config={config} /> },
-    ...ordered.map((item, index) => ({ key: item?.slug ?? COMPANY_BRANDS[index], name: item?.name ?? COMPANY_BRANDS[index], palette: brandSwipePalette(item?.theme), content: <WebsiteReport brandId={item?.id ?? null} goal={item?.theme?.websiteEngagedSessionsGoal ?? 500} editable={Boolean(item)} data={reports[index]} config={config} /> })),
+    ...ordered.map((item, index) => {
+      const site = siteFromBrand(item?.slug ?? COMPANY_BRANDS[index], item?.theme?.ga4HostName);
+      return {
+        key: item?.slug ?? COMPANY_BRANDS[index],
+        name: site.name,
+        href: site.href,
+        palette: brandSwipePalette(item?.theme),
+        content: <WebsiteReport brandId={item?.id ?? null} goal={item?.theme?.websiteEngagedSessionsGoal ?? 500} editable={Boolean(item)} data={reports[index]} config={config} />,
+      };
+    }),
+    ...MUSIC_SITES.map((site, index) => {
+      const theme = ga4Themes.find((row) => row.ga4HostName && publicHost(row.ga4HostName) === site.host);
+      return {
+        key: site.host,
+        name: site.host,
+        href: site.url,
+        palette: NEUTRAL_SWIPE_PALETTE,
+        content: <WebsiteReport brandId={theme?.brandId ?? null} goal={theme?.websiteEngagedSessionsGoal ?? 500} editable={false} data={musicReports[index]} config={config} />,
+      };
+    }),
   ];
   return <div className="p-8"><h1 className="sr-only">Website</h1><div className="mb-5"><h2 className="text-lg font-semibold text-slate-900">Traffic overview</h2><div className="mt-3 w-fit max-w-full overflow-x-auto"><PeriodSelector current={period} /></div></div><BrandSwipe label="Website traffic" views={views} /></div>;
 }
