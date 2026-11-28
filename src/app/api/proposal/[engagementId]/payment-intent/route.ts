@@ -13,7 +13,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ eng
   if (!await hasPublicProposalAccess(request, engagementId, "pay")) return publicProposalNotFound();
   const engagement = await prisma.engagement.findUnique({
     where: { id: engagementId },
-    select: { brandId: true, onboardingFeeStatus: true, onboardingData: true, agreementManagerStatus: true, signedAt: true, updatedAt: true, billingContactEmail: true },
+    select: { brandId: true, onboardingFeeStatus: true, onboardingData: true, agreementManagerStatus: true, signedAt: true, updatedAt: true, billingContactEmail: true, isTestProposal: true },
   });
   if (!engagement) return publicProposalNotFound();
   if (["VOIDED", "VOIDED_BEFORE_SIGNATURE", "CANCELLATION_REQUESTED", "TERMINATED_AFTER_SIGNATURE"].includes(engagement.agreementManagerStatus)) {
@@ -24,6 +24,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ eng
 
   const accepted = readAcceptedPayment(engagement.onboardingData);
   if (!accepted) return NextResponse.json({ error: "This signed proposal needs a payment review by your bookkeeper before checkout can continue." }, { status: 409 });
+  // Test proposals stay viewable and signable, but they are never payable
+  // for real: refuse before the zero-due path and before touching Stripe.
+  if (accepted.isTestProposal || engagement.isTestProposal) {
+    return NextResponse.json({ error: "Test proposals can't be paid for real. Ask your bookkeeper for a live proposal link." }, { status: 409 });
+  }
   if (accepted.amountInCents === 0) {
     const resolved = await prisma.$transaction(async (tx) => {
       const updated = await tx.engagement.updateMany({

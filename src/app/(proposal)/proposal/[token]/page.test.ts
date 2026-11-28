@@ -134,14 +134,50 @@ describe("public proposal page lifecycle", () => {
     expect(mocks.quoteFindFirst).not.toHaveBeenCalled();
   });
 
-  it("public offer page notFound for an expired unsigned quote", async () => {
+  it("public offer page shows the expired message for an expired unsigned quote", async () => {
     mocks.resolvePublicBrand.mockResolvedValue(brand);
     mocks.quoteFindFirst.mockResolvedValue({
       ...quoteRow(sentinelBookkeepingSnapshot()),
       expiresAt: new Date(0),
       engagement: { brandId: "brand", signedAt: null },
     });
-    await expect(openOffer()).rejects.toThrow("NEXT_NOT_FOUND");
+    const result = (await openOffer()) as unknown as {
+      props: { brandName: string; publicPath: string | null };
+    };
+    expect(result.props.brandName).toBe("Southwest");
+    expect(result.props.publicPath).toBeNull();
+  });
+
+  it("public offer page links to the replacement for a superseded quote", async () => {
+    mocks.resolvePublicBrand.mockResolvedValue(brand);
+    mocks.quoteFindFirst
+      .mockResolvedValueOnce({
+        ...quoteRow(sentinelBookkeepingSnapshot()),
+        expiresAt: new Date(0),
+        engagement: { brandId: "brand", signedAt: null },
+      })
+      .mockResolvedValueOnce({ snapshotJson: { replacedByQuoteId: "new-quote" } })
+      .mockResolvedValueOnce({ publicToken: "new-token", publishedAt: new Date() });
+    const result = (await openOffer()) as unknown as {
+      props: { brandName: string; publicPath: string | null };
+    };
+    expect(result.props.publicPath).toBe("/proposal/new-token");
+  });
+
+  it("public offer page shows the expired message when the replacement is unpublished", async () => {
+    mocks.resolvePublicBrand.mockResolvedValue(brand);
+    mocks.quoteFindFirst
+      .mockResolvedValueOnce({
+        ...quoteRow(sentinelBookkeepingSnapshot()),
+        expiresAt: new Date(0),
+        engagement: { brandId: "brand", signedAt: null },
+      })
+      .mockResolvedValueOnce({ snapshotJson: { replacedByQuoteId: "new-quote" } })
+      .mockResolvedValueOnce({ publicToken: null, publishedAt: null });
+    const result = (await openOffer()) as unknown as {
+      props: { brandName: string; publicPath: string | null };
+    };
+    expect(result.props.publicPath).toBeNull();
   });
 
   it("public offer page renders an expired signed quote instead of redirecting to receipt", async () => {

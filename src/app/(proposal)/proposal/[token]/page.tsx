@@ -18,6 +18,13 @@ import {
 import OfferProposalPreview from "@/app/(app)/offers/builder/OfferProposalPreview";
 import { isLeadConvertedForDiscount, pickActiveCatalogOffer } from "@/lib/discounts/eligibility";
 import { ensureQuoteEngagement } from "@/lib/engagements/fromOffer";
+import { isQuoteFrozen } from "@/lib/quotes/isQuoteFrozen";
+import { resolveQuoteExpiresAtForWrite } from "@/lib/quotes/quoteExpiresAt";
+import {
+  expiredPublicNoticeKind,
+  promoDeadlineFromSnapshot,
+  replacedByQuoteIdFromSnapshot,
+} from "@/lib/quotes/proposalValidity";
 import { quoteContactSummaryFromSnapshot } from "@/lib/quotes/clientInfo";
 import { HourlyPublicView } from "./HourlyPublicView";
 import { isHourlyOfferKind, OFFER_KINDS } from "@/lib/quotes/kinds";
@@ -26,6 +33,73 @@ import { isProposalPreviewSimulation } from "@/lib/quotes/previewSafety";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+/**
+ * Notice for an unreadable public proposal. A superseded quote links to the
+ * replacement's public link, but only when that replacement is published;
+ * otherwise (and for plain expiry) the client sees the expired message.
+ */
+async function getExpiredProposalNotice(input: {
+  brandId: string;
+  quoteId: string;
+  expired: boolean;
+}) {
+  const old = await prisma.quote.findFirst({
+    where: { id: input.quoteId, brandId: input.brandId },
+    select: { snapshotJson: true },
+  });
+  const replacedBy = replacedByQuoteIdFromSnapshot(old?.snapshotJson);
+  if (replacedBy) {
+    const next = await prisma.quote.findFirst({
+      where: { id: replacedBy, brandId: input.brandId },
+      select: { publicToken: true, publishedAt: true },
+    });
+    if (next?.publicToken && next.publishedAt) {
+      return expiredPublicNoticeKind({ expired: input.expired, replacedByPublicToken: next.publicToken });
+    }
+    return expiredPublicNoticeKind({ expired: true, replacedByPublicToken: null });
+  }
+  return expiredPublicNoticeKind({ expired: input.expired, replacedByPublicToken: null });
+}
+
+function ExpiredProposalMessage({
+  brandName,
+  supportEmail,
+  publicPath,
+}: {
+  brandName: string;
+  supportEmail: string | null;
+  publicPath: string | null;
+}) {
+  return (
+    <main className="mx-auto flex min-h-[60vh] max-w-xl flex-col items-center justify-center px-6 text-center">
+      <p className="text-sm font-medium uppercase tracking-wide text-slate-400">{brandName}</p>
+      <h1 className="mt-2 text-2xl font-semibold text-slate-900">
+        {publicPath ? "Replaced by a newer proposal" : "This proposal has expired"}
+      </h1>
+      <p className="mt-3 text-base text-slate-600">
+        {publicPath
+          ? "This proposal was replaced by a newer one. The link below opens the current version."
+          : "This proposal has expired. Contact us for an updated one."}
+      </p>
+      {publicPath ? (
+        <a
+          href={publicPath}
+          className="mt-6 inline-block rounded-lg bg-slate-900 px-5 py-2.5 text-base font-medium text-white"
+        >
+          View the newer proposal
+        </a>
+      ) : supportEmail ? (
+        <a
+          href={`mailto:${supportEmail}`}
+          className="mt-6 inline-block rounded-lg bg-slate-900 px-5 py-2.5 text-base font-medium text-white"
+        >
+          Contact {brandName}
+        </a>
+      ) : null}
+    </main>
+  );
 }
 
 export default async function PublicProposalPage({
@@ -62,6 +136,20 @@ export default async function PublicProposalPage({
   const canReceipt = quoteAllowsPublicCapability(found.quote, "receipt");
   if (!canRead && !isAuthorizedStaffPreview) {
     if (canReceipt) redirect(`/proposal/${encodeURIComponent(token)}/receipt`);
+    const notice = await getExpiredProposalNotice({
+      brandId: brand.id,
+      quoteId: found.quote.id,
+      expired: found.quote.expiresAt !== null && found.quote.expiresAt.getTime() <= new Date().getTime(),
+    });
+    if (notice) {
+      return (
+        <ExpiredProposalMessage
+          brandName={brand.name}
+          supportEmail={brand.theme?.supportEmail?.trim() || null}
+          publicPath={notice.kind === "replaced" ? notice.publicPath : null}
+        />
+      );
+    }
     notFound();
   }
   const { quoteRevisions, quoteEngagement, proposalCatalog, catalogProductKind } = await getSchemaCapabilities();
@@ -70,6 +158,7 @@ export default async function PublicProposalPage({
     select: {
       id: true,
       publishedSnapshotJson: true,
+      snapshotJson: true,
       publishedAt: true,
       firstViewedAt: true,
       firstSentAt: true,
@@ -91,7 +180,20 @@ export default async function PublicProposalPage({
     // so stamp firstSentAt (if not already) and flip status to "sent". This
     // keeps DB filters (Draft/Sent/Completed) consistent with the derived
     // lifecycle stage for out-of-band-shared URLs (personal email, text,
-    // Slack, etc.).
+    // Slack, etc.). The default proposal expiry is stamped too (never for
+    // frozen quotes). Validity/promo reads the live snapshot — the same
+    // source the staff validity control writes — so a post-publish validity
+    // edit applies here (the published copy keeps its publish-time stamp).
+    const selfHealExpiresAt =
+      !quote.expiresAt && !isQuoteFrozen({ status: quote.status, engagement: quote.engagement })
+        ? resolveQuoteExpiresAtForWrite({
+            at: viewedAt,
+            snapshot: quote.snapshotJson ?? quote.publishedSnapshotJson,
+            promoDeadline: promoDeadlineFromSnapshot(
+              quote.snapshotJson ?? quote.publishedSnapshotJson,
+            ),
+          })
+        : null;
     await prisma.quote.updateMany({
       where: { id: quote.id, firstViewedAt: null },
       data: {
@@ -101,6 +203,7 @@ export default async function PublicProposalPage({
         sentAt: quote.sentAt ?? viewedAt,
         lastSentAt: quote.lastSentAt ?? viewedAt,
         ...(quote.status === "draft" ? { status: "sent" } : {}),
+        ...(selfHealExpiresAt ? { expiresAt: selfHealExpiresAt } : {}),
       },
     });
   }

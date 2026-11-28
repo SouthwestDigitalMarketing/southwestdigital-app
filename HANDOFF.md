@@ -1,4 +1,11 @@
 # SWapp handoff
+## 2026-11-27 — Proposal builder spec 08: expiry, replace, tests hidden, company warning (Ummon)
+- Every send/publish path stamps `expiresAt = min(sentAt + validity (default 30 d, editable 1-365 on the offer page), promo deadline)` via `src/lib/quotes/sendExpiry.ts`; re-send extends/revives; frozen quotes never get one. Expired unsigned page shows "This proposal has expired"; select/sign/pay refused server-side.
+- "Replace this proposal" (offer page): draft with `replacesQuoteId`; publishing/sending it expires the old one, whose page links to the new one. No email.
+- `/offers/review`: one-time list of sent, unaccepted quotes with no expiry; "Expire now" per row/selection.
+- Test proposals hidden from offers list/dashboard/metrics (`?showTests=1`) and can no longer take real payments (payment-intent 409, webhook won't settle).
+- Follow-ups: editing validity on an already-sent quote only affects future sends (should it move the current expiry?); publish promo cap ignores `suppressPromotions`; `/offers/review` take 100 no paging.
+
 ## 2026-11-27 — Teaser before the title (Johnny)
 
 On the episode page transcript: Johnny's teaser is highlighted. Highlight

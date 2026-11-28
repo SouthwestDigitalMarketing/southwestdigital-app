@@ -20,24 +20,28 @@ export function OffersListControls({
   statusFilter,
   kindFilter,
   contactId,
+  showTests,
 }: {
   archived: boolean;
   statusFilter: OfferStatusFilter;
   kindFilter: string;
   contactId?: string;
+  showTests: boolean;
 }) {
   const router = useRouter();
   const [showCreateOffer, setShowCreateOffer] = useState(false);
 
-  function push(next: { archived?: boolean; status?: string; kind?: string }) {
+  function push(next: { archived?: boolean; status?: string; kind?: string; showTests?: boolean }) {
     const params = new URLSearchParams();
     const nextArchived = next.archived ?? archived;
     const nextStatus = next.status ?? statusFilter;
     const nextKind = next.kind ?? kindFilter;
+    const nextShowTests = next.showTests ?? showTests;
     if (contactId) params.set("contact", contactId);
     if (nextArchived) params.set("archived", "1");
     else if (nextStatus !== "all") params.set("status", nextStatus);
     if (nextKind !== "all") params.set("kind", nextKind);
+    if (nextShowTests) params.set("showTests", "1");
     const qs = params.toString();
     router.push(qs ? `/offers?${qs}` : "/offers", { scroll: false });
   }
@@ -92,6 +96,22 @@ export function OffersListControls({
           </button>
           <span className={archived ? "text-slate-900" : "text-slate-400"}>Archived</span>
         </div>
+        <div className="flex items-center gap-3 text-base font-medium">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={showTests}
+            aria-label="Show test proposals"
+            onClick={() => push({ showTests: !showTests })}
+            className="ui-toggle-switch"
+          >
+            <span className="ui-toggle-switch-thumb" />
+          </button>
+          <span className={showTests ? "text-slate-900" : "text-slate-400"}>Show tests</span>
+        </div>
+        <Link href="/offers/review" className="text-base font-medium text-slate-500 underline hover:text-slate-900">
+          Review old links
+        </Link>
         <button
           type="button"
           onClick={() => setShowCreateOffer(true)}

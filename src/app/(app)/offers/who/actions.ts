@@ -20,7 +20,10 @@ import { quoteClientDetailsFromSnapshot, quoteContactSummaryFromSnapshot } from 
 import {
   catalogDiscountWhereForQuote,
   expiresAtForQuotePublish,
+  resolveQuoteExpiresAtForWrite,
 } from "@/lib/quotes/quoteExpiresAt";
+import { supersedeReplacedQuoteOnWrite } from "@/lib/quotes/supersedeReplaced";
+import { snapshotWithPromoStamp } from "@/lib/quotes/proposalValidity";
 import { applyTagPipelineAutomation } from "@/lib/contacts/automation";
 
 export type OfferAudienceContact = {
@@ -407,7 +410,7 @@ export async function publishOfferChangesAction(
     { freezeApplicability: true },
   );
   const assessment = await materializeAgreementTemplate(brand.id, catalogAssessment);
-  const snapshot = asJsonObject({
+  const baseSnapshot = asJsonObject({
     ...previous,
     kind: existing.kind,
     contactInfo: state.contactInfo ?? previous.contactInfo,
@@ -418,7 +421,7 @@ export async function publishOfferChangesAction(
   const publicToken = existing.publicToken ?? randomBytes(32).toString("base64url");
   const { quoteRevisions, quoteEngagement } = await getSchemaCapabilities();
   const publishedAt = new Date();
-  const primaryContactId = quoteContactSummaryFromSnapshot(snapshot).contactId;
+  const primaryContactId = quoteContactSummaryFromSnapshot(baseSnapshot).contactId;
   const discounts = await prisma.brandDiscount.findMany({
     where: catalogDiscountWhereForQuote({
       brandId: brand.id,
@@ -427,7 +430,9 @@ export async function publishOfferChangesAction(
     }),
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
   });
-  const expiresAt = expiresAtForQuotePublish({ publishedAt, discounts, snapshot });
+  const promoDeadline = expiresAtForQuotePublish({ publishedAt, discounts, snapshot: baseSnapshot });
+  const snapshot = snapshotWithPromoStamp(baseSnapshot, promoDeadline);
+  const expiresAt = resolveQuoteExpiresAtForWrite({ at: publishedAt, snapshot, promoDeadline });
 
   if (!quoteRevisions) {
     await prisma.$transaction(async (tx) => {
@@ -464,6 +469,7 @@ export async function publishOfferChangesAction(
       }, tx);
     }
     });
+    await supersedeReplacedQuoteOnWrite(brand.id, snapshot, existing.id);
     revalidatePath("/offers");
     revalidatePath(`/offers/${existing.id}`);
     revalidatePath(`/proposal/${publicToken}`);
@@ -526,6 +532,7 @@ export async function publishOfferChangesAction(
   return version;
   });
 
+  await supersedeReplacedQuoteOnWrite(brand.id, snapshot, existing.id);
   revalidatePath("/offers");
   revalidatePath(`/offers/${existing.id}`);
   revalidatePath(`/proposal/${publicToken}`);

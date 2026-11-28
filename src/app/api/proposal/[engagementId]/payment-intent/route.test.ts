@@ -16,7 +16,7 @@ vi.mock("@/lib/stripe/reconcileProposalPayment", () => ({
   PaymentReconciliationError: class extends Error { constructor() { super("Payment needs review"); } },
 }));
 const obligation = { amountInCents: 35000, currency: "usd", selectionHash: "signed-hash", chargeKind: "hourly_consulting", isTestProposal: false };
-const row = (services = {}) => ({ brandId: "brand", signedAt: new Date(), updatedAt: new Date(), agreementManagerStatus: "ACTIVE", onboardingFeeStatus: "INVOICED", billingContactEmail: "client@example.test", onboardingData: { proposalAcceptance: { paymentObligation: obligation }, proposalBuilderState: { services } } });
+const row = (services = {}) => ({ brandId: "brand", signedAt: new Date(), updatedAt: new Date(), agreementManagerStatus: "ACTIVE", onboardingFeeStatus: "INVOICED", billingContactEmail: "client@example.test", isTestProposal: false, onboardingData: { proposalAcceptance: { paymentObligation: obligation }, proposalBuilderState: { services } } });
 const call = () => POST(new Request("https://firm.example.test/api/proposal/eng/payment-intent", { method: "POST" }), { params: Promise.resolve({ engagementId: "eng" }) });
 beforeEach(() => {
   vi.resetAllMocks();
@@ -48,6 +48,24 @@ describe("proposal payment preparation", () => {
     expect((await call()).status).toBe(200);
     expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ amount: 35000, transfer_data: { destination: "acct_firm" }, metadata: expect.objectContaining({ selectionHash: "signed-hash", brandId: "brand" }) }), expect.any(Object));
     expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ data: { onboardingData: expect.objectContaining({ proposalBuilderState: expect.objectContaining({ services: expect.objectContaining({ stripePaymentExpectation: expect.objectContaining({ intentId: "pi_new", connectedAccountId: "acct_firm", amountInCents: 35000 }) }) }) }) } }));
+  });
+  it("refuses a real charge when the accepted payment is a test proposal", async () => {
+    mocks.engagement.mockResolvedValue({ ...row(), onboardingData: {
+      proposalAcceptance: { paymentObligation: { ...obligation, isTestProposal: true } },
+      proposalBuilderState: { services: {} },
+    } });
+    const response = await call();
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual(expect.objectContaining({ error: expect.stringContaining("Test proposals") }));
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.reconcile).not.toHaveBeenCalled();
+  });
+  it("refuses a real charge when the engagement row is marked as a test", async () => {
+    mocks.engagement.mockResolvedValue({ ...row(), isTestProposal: true });
+    const response = await call();
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual(expect.objectContaining({ error: expect.stringContaining("Test proposals") }));
+    expect(mocks.create).not.toHaveBeenCalled();
   });
   it("does not charge a legacy signature without frozen payment evidence", async () => {
     mocks.engagement.mockResolvedValue({ ...row(), onboardingData: {} });

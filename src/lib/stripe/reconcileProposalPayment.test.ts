@@ -48,6 +48,29 @@ describe("Stripe proposal reconciliation", () => {
     await expect(reconcileProposalPayment(intent(), "eng", "brand")).rejects.toThrow("needs review");
     expect(mocks.paid).not.toHaveBeenCalled();
   });
+  it.each([
+    { label: "engagement flag", engagementTest: true, acceptedTest: false },
+    { label: "accepted-payment flag", engagementTest: false, acceptedTest: true },
+  ])("refuses a test proposal ($label) without settling anything", async ({ engagementTest, acceptedTest }) => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const testAccepted = { ...accepted, isTestProposal: acceptedTest };
+    const testExpected = { ...expected, isTestProposal: acceptedTest };
+    mocks.engagement.mockResolvedValue({
+      isTestProposal: engagementTest,
+      signedAt: new Date(),
+      onboardingData: {
+        proposalAcceptance: { paymentObligation: testAccepted },
+        proposalBuilderState: { services: { stripePaymentExpectation: testExpected } },
+      },
+    });
+    await expect(reconcileProposalPayment(intent(), "eng", "brand")).rejects.toThrow("never settled");
+    expect(mocks.paid).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[stripe/reconcile] Refusing to settle a test proposal payment",
+      expect.objectContaining({ engagementId: "eng", intentId: "pi_expected" }),
+    );
+    errorSpy.mockRestore();
+  });
   it("rejects mismatched saved and accepted amounts", () => {
     expect(matchesProposalPayment(intent(), { ...expected, amountInCents: 100 }, accepted)).toBe(false);
   });

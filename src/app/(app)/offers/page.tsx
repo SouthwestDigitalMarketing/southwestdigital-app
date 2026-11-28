@@ -6,6 +6,8 @@ import { requireQuoteStaff } from "@/lib/quotes/access";
 import { prisma } from "@/lib/prisma";
 import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import { formatUsd } from "@/lib/quotes/format";
+import { expiryBadgeForQuote } from "@/lib/quotes/expiryBadge";
+import { quoteIsTestProposal, realProposalTake, testProposalMatchWhere } from "@/lib/quotes/testProposal";
 import { isOfferKindKey, OFFER_KINDS, resumeOfferHref } from "@/lib/quotes/kinds";
 import { quoteContactSummaryFromSnapshot } from "@/lib/quotes/clientInfo";
 import {
@@ -40,6 +42,7 @@ type SearchParams = Promise<{
   status?: string;
   kind?: string;
   archived?: string;
+  showTests?: string;
   sort?: string;
   order?: string;
   highlight?: string;
@@ -111,6 +114,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
   const statusFilter = parseOfferStatusFilter(params.status);
   const kindFilter =
     typeof params.kind === "string" && isOfferKindKey(params.kind) ? params.kind : "all";
+  const showTests = params.showTests === "1";
   const sortKey = parseSortKey(params.sort);
   const sortOrder: "asc" | "desc" = params.order === "asc" ? "asc" : "desc";
   const orderBy: Prisma.QuoteOrderByWithRelationInput =
@@ -124,19 +128,31 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
             ? { totalOneTime: sortOrder }
             : { sentAt: sortOrder };
 
-  const [listed, contacts, contact, tags, clients, platformBrands] = await Promise.all([
+  const listWhere: Prisma.QuoteWhereInput = {
+    brandId: brand.id,
+    status: { in: statusesForOfferList({ archived, statusFilter }) },
+    ...(kindFilter === "all" ? {} : { kind: kindFilter }),
+  };
+  // Test rows fetched before the in-memory filter would displace real offers
+  // off the only staff list (`take: 50` runs first). Count tests with the
+  // null-safe positive matcher and over-fetch by that count, so the filter
+  // below still leaves 50 real rows. The toggle itself is unchanged.
+  const testCount = showTests
+    ? 0
+    : await prisma.quote.count({ where: { AND: [listWhere, testProposalMatchWhere()] } });
+
+  const [fetchedQuotes, contacts, contact, tags, clients, platformBrands] = await Promise.all([
     prisma.quote.findMany({
-      where: {
-        brandId: brand.id,
-        status: { in: statusesForOfferList({ archived, statusFilter }) },
-        ...(kindFilter === "all" ? {} : { kind: kindFilter }),
-      },
+      where: listWhere,
       orderBy,
-      take: 50,
+      take: realProposalTake(testCount),
       include: {
         client: true,
         lineItems: { select: { amount: true, billingType: true } },
         ...quoteFreezeSelect,
+        engagement: {
+          select: { status: true, signedAt: true, onboardingFeeStatus: true, onboardingData: true, isTestProposal: true },
+        },
       },
     }),
     withBrandDataTransaction(dataContext, (transaction) => transaction.contact.findMany({
@@ -168,6 +184,13 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
         })
       : Promise.resolve([]),
   ]);
+
+  // Test proposals stay viewable and signable, but hide from the staff list
+  // by default. Staff can reveal them with ?showTests=1. The fetch above
+  // over-fetches by the test count, so the slice still yields 50 real rows.
+  const listed = showTests
+    ? fetchedQuotes
+    : fetchedQuotes.filter((quote) => !quoteIsTestProposal(quote)).slice(0, 50);
 
   const contactCreationOptions = {
     tags,
@@ -335,6 +358,7 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
             statusFilter={statusFilter}
             kindFilter={kindFilter}
             contactId={contact?.id}
+            showTests={showTests}
           />
         {listed.length === 0 ? (
           <div className="px-6 py-16 text-center">
@@ -444,6 +468,8 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                 const duplicateTooltip = duplicatedFromOfferCode
                   ? `Duplicated from *${duplicatedFromOfferCode.slice(-4)}`
                   : "Duplicated from another offer";
+                const quoteFrozen = isQuoteFrozen(quote);
+                const expiryBadge = expiryBadgeForQuote(quote.expiresAt, quoteFrozen);
                 return (
                   <tr
                     id={`offer-row-${quote.id}`}
@@ -497,12 +523,30 @@ export default async function QuotesPage({ searchParams }: { searchParams: Searc
                       />
                     </td>
                     <td className="px-5 py-4">
-                      <span
-                        className={`inline-flex rounded-full px-3 py-1 font-medium ${BUCKET_STYLE[itemBucket]}`}
-                        title={outcomeLabel(quote.status)}
-                      >
-                        {outcomeLabel(quote.status)}
-                      </span>
+                      <div className="flex flex-col items-start gap-1">
+                        <span
+                          className={`inline-flex rounded-full px-3 py-1 font-medium ${BUCKET_STYLE[itemBucket]}`}
+                          title={outcomeLabel(quote.status)}
+                        >
+                          {outcomeLabel(quote.status)}
+                        </span>
+                        {expiryBadge ? (
+                          <span
+                            className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold ${
+                              expiryBadge.expired
+                                ? "bg-red-50 text-red-700"
+                                : "bg-amber-50 text-amber-800"
+                            }`}
+                            title={
+                              expiryBadge.expired
+                                ? "This proposal is past its expiry date."
+                                : "This proposal expires soon."
+                            }
+                          >
+                            {expiryBadge.label}
+                          </span>
+                        ) : null}
+                      </div>
                     </td>
                     <td className="px-5 py-4 text-slate-700">
                       {monthlyTotal > 0 ? formatUsd(monthlyTotal) : "—"}

@@ -5,7 +5,16 @@ import { markEngagementDepositPaid } from "@/lib/engagements/fromOffer";
 import { readAcceptedPayment, readStripePaymentExpectation, type AcceptedPayment, type StripePaymentExpectation } from "@/lib/engagements/acceptedPayment";
 
 export class PaymentReconciliationError extends Error {
-  constructor() { super("This payment needs review before it can be applied to the proposal."); }
+  constructor(message = "This payment needs review before it can be applied to the proposal.") {
+    super(message);
+  }
+}
+
+/** A test-proposal intent reached settlement: refuse, log, settle nothing. */
+export class TestProposalPaymentRefusedError extends PaymentReconciliationError {
+  constructor() {
+    super("Test proposal payments are never settled for real.");
+  }
 }
 
 export type ProposalPaymentIntent = Pick<Stripe.PaymentIntent,
@@ -36,9 +45,19 @@ export async function reconcileProposalPayment(intent: ProposalPaymentIntent, en
   if (!brandId || !engagementId) throw new PaymentReconciliationError();
   const engagement = await prisma.engagement.findFirst({
     where: { id: engagementId, brandId },
-    select: { onboardingData: true, signedAt: true },
+    select: { onboardingData: true, signedAt: true, isTestProposal: true },
   });
   const accepted = readAcceptedPayment(engagement?.onboardingData);
+  // Test proposals are never payable for real. Refuse before any other
+  // check: no state change to paid, Stripe retries stop at the webhook.
+  if (engagement?.isTestProposal === true || accepted?.isTestProposal === true) {
+    console.error("[stripe/reconcile] Refusing to settle a test proposal payment", {
+      engagementId,
+      brandId,
+      intentId: intent.id,
+    });
+    throw new TestProposalPaymentRefusedError();
+  }
   const expected = readStripePaymentExpectation(engagement?.onboardingData);
   if (!engagement?.signedAt || !accepted || !expected || expected.brandId !== brandId ||
       expected.engagementId !== engagementId || !matchesProposalPayment(intent, expected, accepted)) {

@@ -19,7 +19,10 @@ import { quoteContactSummaryFromSnapshot } from "@/lib/quotes/clientInfo";
 import {
   catalogDiscountWhereForQuote,
   expiresAtForQuotePublish,
+  resolveQuoteExpiresAtForWrite,
 } from "@/lib/quotes/quoteExpiresAt";
+import { snapshotWithPromoStamp } from "@/lib/quotes/proposalValidity";
+import { supersedeReplacedQuoteOnWrite } from "@/lib/quotes/supersedeReplaced";
 
 function asJsonObject(value: unknown): Prisma.InputJsonObject {
   const parsed: unknown = JSON.parse(JSON.stringify(value));
@@ -132,7 +135,7 @@ export async function publishHourlyOfferAction(offerId: string, snapshot: Hourly
   const summary = buildHourlyCheckoutSummary(selection);
 
   const merged = normalizedSnapshot(snapshot, existing.snapshotJson);
-  const finalSnapshot = asJsonObject({ ...merged, checkoutSummary: summary });
+  const baseFinalSnapshot = asJsonObject({ ...merged, checkoutSummary: summary });
 
   const publicToken = existing.publicToken ?? randomBytes(32).toString("base64url");
   const publishedAt = new Date();
@@ -146,7 +149,9 @@ export async function publishHourlyOfferAction(offerId: string, snapshot: Hourly
     }),
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
   });
-  const expiresAt = expiresAtForQuotePublish({ publishedAt, discounts, snapshot: finalSnapshot });
+  const promoDeadline = expiresAtForQuotePublish({ publishedAt, discounts, snapshot: baseFinalSnapshot });
+  const finalSnapshot = snapshotWithPromoStamp(baseFinalSnapshot, promoDeadline);
+  const expiresAt = resolveQuoteExpiresAtForWrite({ at: publishedAt, snapshot: finalSnapshot, promoDeadline });
 
   await prisma.$transaction(async (tx) => {
     await lockQuoteMutation(tx, brand.id, existing.id, "publish");
@@ -243,6 +248,7 @@ export async function publishHourlyOfferAction(offerId: string, snapshot: Hourly
 
   });
 
+  await supersedeReplacedQuoteOnWrite(brand.id, finalSnapshot, existing.id);
   revalidatePath("/offers");
   revalidatePath(`/offers/${existing.id}`);
   revalidatePath(`/proposal/${publicToken}`);
