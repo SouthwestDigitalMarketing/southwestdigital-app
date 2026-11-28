@@ -266,3 +266,12 @@ export const SEO_PLAN: SeoPlanSection[] = [
     ],
   },
 ];
+
+// Numbers SWapp cannot read yet; update with the date when they change.
+export const SEO_SCORE = {
+  googleReviews: { value: 10, asOf: "2026-11-15", note: "on the Google profile; 2 are from family" },
+  realFormLeads: { value: 0, of: 42, from: "2026-11-19", to: "2026-11-24", note: "every website form fill was spam or a test" },
+};
+
+/** Words used for the top-3 share on the Overview: Palmer's broad term, searched from the office. */
+export const SEO_GOAL_KEYWORD = "bookkeeper";
