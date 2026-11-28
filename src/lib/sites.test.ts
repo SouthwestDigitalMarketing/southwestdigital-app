@@ -12,11 +12,10 @@ describe("public site labels", () => {
     expect(publicHref("realestatebookkeeper.com")).toBe("https://realestatebookkeeper.com");
   });
 
-  it("lists the live music sites", () => {
+  it("lists the extra sites Tom wants to see", () => {
     expect(MUSIC_SITES.map((site) => site.host)).toEqual([
       "easyweddingband.com",
-      "southernrockguitarist.com",
-      "bluesbandforhire.com",
+      "thomasgrantmacdonald.com",
     ]);
   });
 });

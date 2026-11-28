@@ -1,35 +1,30 @@
 export type PublicSite = {
   host: string;
   url: string;
-  group: "business" | "music";
+  group: "business" | "music" | "personal";
   use: string;
   status: "Live" | "Template";
   name?: string;
 };
 
-/** Music sites (Tom, 2026-11-28). Business sites come from brand GA4 / BRAND_WEBSITES. */
+/** Extra sites on the Music and Website pages (Tom, 2026-11-28: focus on the wedding band;
+ * southernrockguitarist.com and bluesbandforhire.com are left off, thomasgrantmacdonald.com
+ * is shown). Business sites come from brand GA4 / BRAND_WEBSITES. */
 export const MUSIC_SITES: PublicSite[] = [
   {
     host: "easyweddingband.com",
     url: "https://easyweddingband.com",
     group: "music",
-    use: "Wedding band leads (four-piece or solo guitar)",
+    use: "Wedding band leads (solo, duo or four-piece)",
     status: "Live",
     name: "The Easy Wedding Band",
   },
   {
-    host: "southernrockguitarist.com",
-    url: "https://southernrockguitarist.com",
-    group: "music",
-    use: "Tom as a solo guitarist",
+    host: "thomasgrantmacdonald.com",
+    url: "https://thomasgrantmacdonald.com",
+    group: "personal",
+    use: "Tom's own site",
     status: "Live",
-  },
-  {
-    host: "bluesbandforhire.com",
-    url: "https://bluesbandforhire.com",
-    group: "music",
-    use: "To point at easyweddingband.com",
-    status: "Template",
   },
 ];
 
