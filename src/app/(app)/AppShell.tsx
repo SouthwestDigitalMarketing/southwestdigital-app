@@ -19,6 +19,7 @@ import {
   LogOut,
   Globe,
   Clapperboard,
+  Music,
   Plane,
   DollarSign,
   Contact,
@@ -71,6 +72,8 @@ const NAV: Array<{
   { label: "Showrunner", href: "/showrunner", icon: Clapperboard },
   // Focus on one trip (Tom, 2026-11-26): the Travel menu is labelled Japan and opens that trip.
   { label: "Japan", href: "/travel", icon: Plane },
+  // Music (Tom, 2026-11-28): overview page, one more tap opens easyweddingband.com.
+  { label: "Music", href: "/music", icon: Music },
   { label: "Reviews", href: "/reviews", icon: Star, dividerAfter: true },
   { label: "Contacts", href: "/contacts", icon: Contact },
   { label: "CRM", href: "/pipeline", icon: TrendingUp },
