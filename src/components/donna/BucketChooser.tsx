@@ -79,7 +79,7 @@ const select =
 
 /**
  * Step 2, Choose (Tom's turn). Every email has its own action, set to Donna's pick;
- * a ticked email will be done in step 3, an unticked one is left alone. Each bucket
+ * a ticked email will be done in step 4, an unticked one is left alone. Each bucket
  * has a header row: tick all, and set the ticked rows to one action at once.
  */
 export function BucketChooser({
@@ -285,8 +285,8 @@ export function BucketChooser({
         <div className="flex flex-wrap items-center gap-3">
           <span className="min-w-0 flex-1 text-slate-700">
             {doing
-              ? `Step 3 will ${summary.map(([what, n]) => `${what}: ${n}`).join("; ")}. Unticked emails stay as they are.`
-              : "Nothing ticked yet. Tick the emails (or a whole bucket) to do in step 3."}
+              ? `Step 4 will ${summary.map(([what, n]) => `${what}: ${n}`).join("; ")}. Unticked emails stay as they are.`
+              : "Nothing ticked yet. Tick the emails (or a whole bucket) to do in step 4."}
           </span>
           {blocked ? (
             <span className="text-xs text-amber-700">{blocked}</span>
@@ -296,7 +296,7 @@ export function BucketChooser({
               disabled={!doing}
               className="rounded-lg bg-slate-900 px-4 py-2 text-white disabled:opacity-40"
             >
-              Start step 3
+              Start step 4
             </button>
           )}
         </div>

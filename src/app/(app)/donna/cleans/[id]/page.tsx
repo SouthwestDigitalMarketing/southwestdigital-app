@@ -9,7 +9,6 @@ import {
   cleanIsCleanup,
   cleanIsClosed,
   cleanIsDo,
-  cleanupHasWork,
   cleanupPlan,
   cleanupSkipped,
   chooseSkipped,
@@ -18,7 +17,8 @@ import {
   cleanReport,
   jobEnd,
   jobOutcome,
-  sortAwaitsTom,
+  chooseTurn,
+  spamTurn,
   mailboxCleanReport,
   type CleanReportItem,
 } from "@/lib/donna/domain";
@@ -28,7 +28,6 @@ import {
   skipCleanup,
   approveClean,
   closeSort,
-  skipChoose,
   resortJob,
   undoFiled,
 } from "../../actions";
@@ -287,38 +286,70 @@ function jobSteps(
   const href = (id: string) => `/donna/cleans/${encodeURIComponent(id)}`;
   const outcome = (j: { status: string; options: unknown; result: unknown }) =>
     jobOutcome({ ...j, kind: "clean", error: null });
-  const sorted = cleanBuckets(sort.result).reduce(
-    (n, b) => n + b.items.length,
-    0,
-  );
+  const buckets = cleanBuckets(sort.result).length;
   const closed = cleanIsClosed(sort.options);
+  const spamSkipped = cleanupSkipped(sort.options);
+  const spamOpen = spamTurn(sort, cleanupJob);
   const skippedChoose = chooseSkipped(sort.options);
-  const doneDo = (doJob && doJob.status === "done") || skippedChoose;
-  const plan = cleanupPlan(sort.result);
+  const read = cleanReport(sort.result)?.reviewed ?? 0;
   return [
     {
       label: "Sort",
       state: running(sort) ? "current" : "done",
       note: running(sort)
         ? progressNote
-        : `${cleanReport(sort.result)?.reviewed ?? sorted} read${sort.status === "cancelled" ? " · stopped" : ""}`,
+        : `${read} read${sort.status === "cancelled" ? " · stopped" : ""}`,
       href: sort.id === job.id ? undefined : href(sort.id),
     },
     {
+      label: "Spam",
+      state: cleanupJob
+        ? running(cleanupJob)
+          ? "current"
+          : "done"
+        : running(sort)
+          ? "todo"
+          : spamOpen
+            ? "yours"
+            : closed || spamSkipped
+              ? "skipped"
+              : "done",
+      note: cleanupJob
+        ? running(cleanupJob)
+          ? cleanupJob.id === job.id
+            ? progressNote
+            : "Running"
+          : `${cleanupJob.status === "cancelled" ? "Stopped" : "Done"} · ${outcome(cleanupJob)}`
+        : running(sort)
+          ? "After sorting"
+          : spamOpen
+            ? "Your turn"
+            : closed || spamSkipped
+              ? "Skipped"
+              : "No spam",
+      href:
+        cleanupJob && cleanupJob.id !== job.id
+          ? href(cleanupJob.id)
+          : !cleanupJob && sort.id !== job.id
+            ? href(sort.id)
+            : undefined,
+    },
+    {
       label: "Choose",
-      state: running(sort)
-        ? "todo"
-        : doJob || closed || skippedChoose
+      state:
+        doJob || closed || skippedChoose || (!running(sort) && !buckets)
           ? "done"
-          : "yours",
-      note: running(sort)
-        ? "After sorting"
-        : skippedChoose
-          ? "Nothing to do"
-          : doJob
-            ? "Chosen"
-            : closed
-              ? "Closed, nothing changed"
+          : running(sort) || spamOpen
+            ? "todo"
+            : "yours",
+      note: doJob
+        ? "Chosen"
+        : closed
+          ? "Closed, nothing changed"
+          : skippedChoose || (!running(sort) && !buckets)
+            ? "Nothing to choose"
+            : running(sort) || spamOpen
+              ? "Next"
               : "Your turn",
       href: sort.id === job.id ? undefined : href(sort.id),
     },
@@ -328,7 +359,7 @@ function jobSteps(
         ? running(doJob)
           ? "current"
           : "done"
-        : closed || skippedChoose
+        : closed || skippedChoose || (!running(sort) && !buckets)
           ? "skipped"
           : "todo",
       note: doJob
@@ -337,46 +368,10 @@ function jobSteps(
             ? progressNote
             : "Running"
           : `${doJob.status === "cancelled" ? "Stopped" : "Done"} · ${outcome(doJob)}`
-        : closed || skippedChoose
+        : closed || skippedChoose || (!running(sort) && !buckets)
           ? "Skipped"
           : "Not started",
       href: doJob && doJob.id !== job.id ? href(doJob.id) : undefined,
-    },
-    {
-      label: "Spam",
-      state: cleanupJob
-        ? running(cleanupJob)
-          ? "current"
-          : "done"
-        : closed || cleanupSkipped(sort.options)
-          ? "skipped"
-          : doneDo
-            ? cleanupHasWork(sort.result)
-              ? "yours"
-              : "done"
-            : "todo",
-      note: cleanupJob
-        ? running(cleanupJob)
-          ? cleanupJob.id === job.id
-            ? progressNote
-            : "Running"
-          : `${cleanupJob.status === "cancelled" ? "Stopped" : "Done"} · ${outcome(cleanupJob)}`
-        : closed || cleanupSkipped(sort.options)
-          ? "Skipped"
-          : doneDo
-            ? cleanupHasWork(sort.result)
-              ? "Your turn"
-              : "Nothing to clean"
-            : plan
-              ? "Next"
-              : "Not started",
-      href: cleanupJob
-        ? cleanupJob.id === job.id
-          ? undefined
-          : href(cleanupJob.id)
-        : doneDo && sort.id !== job.id
-          ? href(sort.id)
-          : undefined,
     },
   ];
 }
@@ -393,7 +388,9 @@ export default async function CleanPage({
   const active = job.status === "pending" || job.status === "leased";
   const preview = cleanIsPreview(job.options);
   const sort = cleanIsSort(job.options);
-  const awaiting = sortAwaitsTom(job, job.follow);
+  // Step 2 (Spam) comes first, then step 3 (Choose) (Tom, 2026-11-28).
+  const spamNow = sort && spamTurn(job, job.cleanupJob);
+  const chooseNow = sort && !spamNow && chooseTurn(job, job.follow);
   // Jobs from before per-job reports fall back to the mailbox's last report.
   const legacy =
     !job.options ||
@@ -425,16 +422,7 @@ export default async function CleanPage({
         cleanIsCleanup(job.options) ? job : job.cleanupJob,
       )
     : jobEnd(job, job.follow);
-  // Step 4 waits for Tom on the sort's page once step 3 is done.
   const plan = sort ? cleanupPlan(job.result) : null;
-  const cleanupTurn =
-    sort &&
-    plan !== null &&
-    (job.follow?.status === "done" || chooseSkipped(job.options)) &&
-    !job.cleanupJob &&
-    !cleanupSkipped(job.options) &&
-    !cleanIsClosed(job.options) &&
-    cleanupHasWork(job.result);
   return (
     <DonnaFrame
       active={end.label === "Finished" ? "jobs" : "current"}
@@ -445,7 +433,21 @@ export default async function CleanPage({
         {active ? "" : ` · ${end.detail}`}
       </p>
       {steps ? (
-        <Stepper steps={steps} />
+        <>
+          <Stepper steps={steps} />
+          {cleanIsCleanup(job.options) &&
+          job.status === "done" &&
+          job.parent &&
+          chooseTurn(job.parent, job.approvedJobId) ? (
+            // Spam done: the rest of the mail is next (Tom, 2026-11-28).
+            <Link
+              href={`/donna/cleans/${encodeURIComponent(job.parent.id)}`}
+              className="text-sm font-medium text-sky-700 underline"
+            >
+              Spam done. Next: the rest of your mail
+            </Link>
+          ) : null}
+        </>
       ) : (
         <header className="flex flex-wrap items-baseline gap-x-2">
           <h2 className="text-lg font-semibold">
@@ -463,7 +465,34 @@ export default async function CleanPage({
         </header>
       )}
       {sort ? (
-        awaiting ? (
+        spamNow && plan ? (
+          <>
+            <p className="text-sm text-slate-600">
+              Spam first. Everything Donna found as spam, one row per sender:
+              the ones she is sure of, then the ones to check. Confirm, and the
+              rest of your mail comes next.
+            </p>
+            <CleanupChooser
+              jobId={job.id}
+              plan={plan}
+              blocked={
+                paused
+                  ? "Donna is paused. Resume her on the top bar to clean up."
+                  : null
+              }
+              action={applyCleanup}
+            />
+            <form action={skipCleanup}>
+              <input type="hidden" name="jobId" value={job.id} />
+              <button
+                type="submit"
+                className="text-xs text-slate-500 underline"
+              >
+                Skip the Spam step this time
+              </button>
+            </form>
+          </>
+        ) : chooseNow ? (
           <>
             {report && !report.empty ? (
               // Sorted before Junk and the Spam/Trash sweep existed (Tom, 2026-11-26).
@@ -490,7 +519,7 @@ export default async function CleanPage({
               {report?.remaining
                 ? ` · ${report.remaining.toLocaleString("en-US")} left for the next job`
                 : ""}
-              . Spam is in step 4.
+              . Now the rest of your mail: choose what to do with each bucket.
             </p>
             <BucketChooser
               jobId={job.id}
@@ -498,20 +527,11 @@ export default async function CleanPage({
               folders={STEP_FOLDERS}
               blocked={
                 paused
-                  ? "Donna is paused. Resume her on the top bar to start step 3."
+                  ? "Donna is paused. Resume her on the top bar to start step 4."
                   : null
               }
               action={applyBuckets}
             />
-            <form action={skipChoose}>
-              <input type="hidden" name="jobId" value={job.id} />
-              <button
-                type="submit"
-                className="text-xs text-slate-500 underline"
-              >
-                Nothing to do here: go to the Spam step
-              </button>
-            </form>
             <form action={closeSort}>
               <input type="hidden" name="jobId" value={job.id} />
               <button
@@ -519,35 +539,6 @@ export default async function CleanPage({
                 className="text-xs text-slate-500 underline"
               >
                 Close this job without changing anything
-              </button>
-            </form>
-          </>
-        ) : cleanupTurn && plan ? (
-          <>
-            <p className="text-sm text-slate-600">
-              Step 4: Spam. Everything Donna found as spam, one row per sender:
-              the ones she is sure of first, then the ones to check. Spam
-              senders are unsubscribed where it is safe, blocked in Zoho, and
-              their mail goes to Trash. Emptying Trash needs its own Approve
-              tick.
-            </p>
-            <CleanupChooser
-              jobId={job.id}
-              plan={plan}
-              blocked={
-                paused
-                  ? "Donna is paused. Resume her on the top bar to clean up."
-                  : null
-              }
-              action={applyCleanup}
-            />
-            <form action={skipCleanup}>
-              <input type="hidden" name="jobId" value={job.id} />
-              <button
-                type="submit"
-                className="text-xs text-slate-500 underline"
-              >
-                Skip the Spam step this time
               </button>
             </form>
           </>

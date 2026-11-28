@@ -14,6 +14,8 @@ import {
   cleanBuckets,
   cleanupPlan,
   jobEnd,
+  spamTurn,
+  chooseTurn,
   donnaSettings,
   cleanBarStatus,
   formatCleanEta,
@@ -588,8 +590,53 @@ describe("job end labels", () => {
     expect(
       jobEnd({ status: "done", options: sort }, { status: "cancelled" }).label,
     ).toBe("Stopped");
-    expect(jobEnd({ status: "done", options: sort }).label).toBe("Waiting");
+    const mail = {
+      sorted: [
+        {
+          thread: "a1",
+          subject: "Hi",
+          from: "a@x.com",
+          bucket: "Not sure",
+          why: "?",
+        },
+      ],
+    };
+    expect(jobEnd({ status: "done", options: sort, result: mail }).label).toBe(
+      "Waiting",
+    );
+    // Nothing to choose and no spam: the sort is the whole job.
+    expect(jobEnd({ status: "done", options: sort }).label).toBe("Finished");
     expect(jobEnd({ status: "done", options: { manual: true } }).label).toBe(
+      "Finished",
+    );
+  });
+
+  it("asks for the spam first, then the choices (Tom, 2026-11-28)", () => {
+    const result = {
+      sorted: [
+        {
+          thread: "a1",
+          subject: "Hi",
+          from: "a@x.com",
+          bucket: "Not sure",
+          why: "?",
+        },
+      ],
+      cleanup: {
+        spam: [{ sender: "s@x.com", count: 2, verdict: "block", why: "Spam" }],
+        trash: { total: 0, older30: 0 },
+      },
+    };
+    const job = { status: "done", options: sort, result };
+    expect(jobEnd(job).detail).toBe("Your turn: the spam");
+    expect(spamTurn(job, null)).toBe(true);
+    expect(chooseTurn(job, null)).toBe(true);
+    expect(jobEnd(job, null, { status: "leased" }).label).toBe("Running");
+    expect(jobEnd(job, null, { status: "done" }).detail).toBe(
+      "Your turn: choose",
+    );
+    expect(spamTurn(job, { id: "c" })).toBe(false);
+    expect(jobEnd(job, { status: "done" }, { status: "done" }).label).toBe(
       "Finished",
     );
   });

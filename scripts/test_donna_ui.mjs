@@ -535,94 +535,8 @@ try {
   const steps = page.getByRole("list", { name: "Job steps" });
   await expect(steps).toContainText("Sort");
   await expect(steps).toContainText("3 read");
-  await expect(page.getByText(/3 read\. Spam is in step 4\./)).toBeVisible();
-  // Phone: the Choose table becomes cards; every action is on screen.
-  {
-    const was = page.viewportSize();
-    await page.setViewportSize({ width: 390, height: 844 });
-    const box = await page.getByLabel("Action for Example sale A").boundingBox();
-    assert.ok(box && box.x >= 0 && box.x + box.width <= 390, "Action dropdown is off-screen on a phone: " + JSON.stringify(box));
-    // Dark mode: bucket rows stay dark under light text.
-    await page.evaluate(() => document.querySelector("[data-theme]")?.setAttribute("data-theme", "dark"));
-    const contrast = await page.getByLabel("Action for Example sale A").evaluate((el) => {
-      const row = el.closest("tr");
-      // Paint the colour on a 1x1 canvas so any CSS colour format reads back as RGB.
-      const lum = (c) => {
-        const ctx = Object.assign(document.createElement("canvas"), { width: 1, height: 1 }).getContext("2d");
-        ctx.fillStyle = c;
-        ctx.fillRect(0, 0, 1, 1);
-        const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
-        return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-      };
-      const subject = row.querySelector('td[data-cell="subject"]');
-      return { bg: lum(getComputedStyle(row).backgroundColor), fg: lum(getComputedStyle(subject).color) };
-    });
-    assert.ok(contrast.bg < 0.35 && contrast.fg > 0.6, "Dark mode row is not readable: " + JSON.stringify(contrast));
-    if (was) await page.setViewportSize(was);
-    await page.reload();
-  }
-  // Junk is the first bucket, rescues from Spam/Trash the last.
-  const bucketNames = await page.locator('tbody[aria-label^="Bucket "]').evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")));
-  assert.equal(bucketNames[0], "Bucket Junk");
-  assert.equal(bucketNames.at(-1), "Bucket Rescue from Spam/Trash");
-  await expect(page.getByLabel("Action for Example verify now")).toHaveValue("spam-block");
-  await expect(page.getByLabel("Action for Example lost report")).toHaveValue("inbox");
-  await expect(steps.locator('[aria-current="step"]')).toContainText("Your turn");
-  await expect(page.getByRole("link", { name: "Jobs in progress" })).toHaveAttribute("aria-current", "page");
-  const choose = page.getByRole("table", { name: "Choose what to do" });
-  await expect(choose).toContainText("Money and legal (1)");
-  await expect(page.getByRole("img", { name: "Why: Money or legal trouble" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Start step 3" })).toBeDisabled();
-  // Every email has its own action, set to Donna's pick.
-  await expect(page.getByLabel("Action for Example sale A")).toHaveValue("Newsletter");
-  await expect(page.getByLabel("Action for Example progress update")).toHaveValue("tag");
-  await expect(page.getByLabel("Action for Example final notice")).toHaveValue("leave");
-  // Bucket header: select all, then set the selected rows at once.
-  await page.getByLabel("Select all in Money and legal").check();
-  await page.getByLabel("Set selected in Money and legal to").selectOption("Spam");
-  await page.locator('tbody[aria-label="Bucket Money and legal"]').getByRole("button", { name: "Apply" }).click();
-  await expect(page.getByLabel("Action for Example final notice")).toHaveValue("Spam");
-  await page.getByLabel("Select all in Money and legal").uncheck();
-  // Tick what to do: the whole Newsletter bucket but one, and the client email.
-  await page.getByLabel("Select all in Newsletter").check();
-  await page.getByRole("checkbox", { name: /Do Example sale B/ }).uncheck();
-  await page.getByLabel("Action for Example progress update").selectOption("tag:Archive");
-  await page.getByRole("checkbox", { name: /Do Example progress update/ }).check();
-  await page.getByLabel("Select all in Junk").check();
-  await page.getByRole("checkbox", { name: /Do Example lost report/ }).check();
-  await expect(
-    page.getByText("Step 3 will spam + block the sender: 1; tag the client: 1; move to Archive: 1; move to Newsletter: 1; put back in Inbox: 1. Unticked emails stay as they are."),
-  ).toBeVisible();
-  // Choose never deletes: emptying Spam and Trash has its own Clean up step.
-  await expect(page.getByText(/permanently delete/)).toHaveCount(0);
-  await page.getByRole("button", { name: "Start step 3" }).click();
-  const stepTwo = await (async () => {
-    await expect.poll(async () => Boolean(await db.donnaJob.findFirst(pendingClean))).toBe(true);
-    return db.donnaJob.findFirstOrThrow(pendingClean);
-  })();
-  await expect(page).toHaveURL(new RegExp("/donna/cleans/" + stepTwo.id));
-  await expect(page.getByRole("list", { name: "Job steps" }).locator('[aria-current="step"]')).toContainText("Do");
-  assert.deepEqual(stepTwo.options, {
-    previewJobId: stepOne.id,
-    plan: [
-      { thread: "a7".repeat(32), action: "spam-block" },
-      { thread: rodan, folder: "Archive", tag: "Rodan Properties" },
-      { thread: promoA, folder: "Newsletter" },
-      { thread: "b8".repeat(32), action: "inbox" },
-    ],
-    buckets: true,
-  });
-  await db.donnaJob.updateMany({
-    where: { id: stepTwo.id },
-    data: { status: "done", result: { at: new Date().toISOString(), reviewed: 0, filed: [{ thread: promoA, subject: "Example sale A", folder: "Newsletter" }], tagged: [{ thread: rodan, subject: "Example progress update", tag: "Rodan Properties" }] } },
-  });
-  // Step 4, Clean up: after step 3 the job is Tom's turn again, on its own page.
+  // Step 2, Spam (Tom, 2026-11-28: spam first), on the sort's own page.
   const numbered = await db.donnaJob.findUniqueOrThrow({ where: { id: stepOne.id } });
-  await page.goto(base + "/donna/jobs");
-  await expect(page.getByRole("table", { name: "Completed jobs" })).not.toContainText("6 sorted into 5 buckets");
-  await page.goto(base + "/donna/current");
-  await expect(page.getByRole("table", { name: "Jobs in progress" }).getByRole("row", { name: new RegExp("^" + numbered.number + " ") })).toContainText("Your turn");
-  await page.getByRole("link", { name: /6 sorted into 5 buckets/ }).click();
   await expect(page.getByRole("list", { name: "Job steps" }).locator('[aria-current="step"]')).toContainText("Spam");
   // Two buckets: Sure spam (marked Spam) and Check these (reason up front).
   const spamTable = page.getByRole("table", { name: "Review the spam" });
@@ -663,6 +577,92 @@ try {
       rescued: [{ subject: "1 from ap@vendor.example", from: "ap@vendor.example", folder: "Spam" }],
       emptied: { Trash: 300 } } },
   });
+  // Spam done: the rest of the mail is next.
+  await page.reload();
+  await expect(page.getByRole("list", { name: "Job steps" })).toContainText("Done · ");
+  await page.getByRole("link", { name: "Spam done. Next: the rest of your mail" }).click();
+  await expect(page).toHaveURL(new RegExp("/donna/cleans/" + stepOne.id));
+  await expect(page.getByText(/3 read\. Now the rest of your mail/)).toBeVisible();
+  // Phone: the Choose table becomes cards; every action is on screen.
+  {
+    const was = page.viewportSize();
+    await page.setViewportSize({ width: 390, height: 844 });
+    const box = await page.getByLabel("Action for Example sale A").boundingBox();
+    assert.ok(box && box.x >= 0 && box.x + box.width <= 390, "Action dropdown is off-screen on a phone: " + JSON.stringify(box));
+    // Dark mode: bucket rows stay dark under light text.
+    await page.evaluate(() => document.querySelector("[data-theme]")?.setAttribute("data-theme", "dark"));
+    const contrast = await page.getByLabel("Action for Example sale A").evaluate((el) => {
+      const row = el.closest("tr");
+      // Paint the colour on a 1x1 canvas so any CSS colour format reads back as RGB.
+      const lum = (c) => {
+        const ctx = Object.assign(document.createElement("canvas"), { width: 1, height: 1 }).getContext("2d");
+        ctx.fillStyle = c;
+        ctx.fillRect(0, 0, 1, 1);
+        const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+        return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+      };
+      const subject = row.querySelector('td[data-cell="subject"]');
+      return { bg: lum(getComputedStyle(row).backgroundColor), fg: lum(getComputedStyle(subject).color) };
+    });
+    assert.ok(contrast.bg < 0.35 && contrast.fg > 0.6, "Dark mode row is not readable: " + JSON.stringify(contrast));
+    if (was) await page.setViewportSize(was);
+    await page.reload();
+  }
+  // Junk is the first bucket, rescues from Spam/Trash the last.
+  const bucketNames = await page.locator('tbody[aria-label^="Bucket "]').evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")));
+  assert.equal(bucketNames[0], "Bucket Junk");
+  assert.equal(bucketNames.at(-1), "Bucket Rescue from Spam/Trash");
+  await expect(page.getByLabel("Action for Example verify now")).toHaveValue("spam-block");
+  await expect(page.getByLabel("Action for Example lost report")).toHaveValue("inbox");
+  await expect(steps.locator('[aria-current="step"]')).toContainText("Your turn");
+  await expect(page.getByRole("link", { name: "Jobs in progress" })).toHaveAttribute("aria-current", "page");
+  const choose = page.getByRole("table", { name: "Choose what to do" });
+  await expect(choose).toContainText("Money and legal (1)");
+  await expect(page.getByRole("img", { name: "Why: Money or legal trouble" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start step 4" })).toBeDisabled();
+  // Every email has its own action, set to Donna's pick.
+  await expect(page.getByLabel("Action for Example sale A")).toHaveValue("Newsletter");
+  await expect(page.getByLabel("Action for Example progress update")).toHaveValue("tag");
+  await expect(page.getByLabel("Action for Example final notice")).toHaveValue("leave");
+  // Bucket header: select all, then set the selected rows at once.
+  await page.getByLabel("Select all in Money and legal").check();
+  await page.getByLabel("Set selected in Money and legal to").selectOption("Spam");
+  await page.locator('tbody[aria-label="Bucket Money and legal"]').getByRole("button", { name: "Apply" }).click();
+  await expect(page.getByLabel("Action for Example final notice")).toHaveValue("Spam");
+  await page.getByLabel("Select all in Money and legal").uncheck();
+  // Tick what to do: the whole Newsletter bucket but one, and the client email.
+  await page.getByLabel("Select all in Newsletter").check();
+  await page.getByRole("checkbox", { name: /Do Example sale B/ }).uncheck();
+  await page.getByLabel("Action for Example progress update").selectOption("tag:Archive");
+  await page.getByRole("checkbox", { name: /Do Example progress update/ }).check();
+  await page.getByLabel("Select all in Junk").check();
+  await page.getByRole("checkbox", { name: /Do Example lost report/ }).check();
+  await expect(
+    page.getByText("Step 4 will spam + block the sender: 1; tag the client: 1; move to Archive: 1; move to Newsletter: 1; put back in Inbox: 1. Unticked emails stay as they are."),
+  ).toBeVisible();
+  // Choose never deletes: emptying Spam and Trash has its own Clean up step.
+  await expect(page.getByText(/permanently delete/)).toHaveCount(0);
+  await page.getByRole("button", { name: "Start step 4" }).click();
+  const stepTwo = await (async () => {
+    await expect.poll(async () => Boolean(await db.donnaJob.findFirst(pendingClean))).toBe(true);
+    return db.donnaJob.findFirstOrThrow(pendingClean);
+  })();
+  await expect(page).toHaveURL(new RegExp("/donna/cleans/" + stepTwo.id));
+  await expect(page.getByRole("list", { name: "Job steps" }).locator('[aria-current="step"]')).toContainText("Do");
+  assert.deepEqual(stepTwo.options, {
+    previewJobId: stepOne.id,
+    plan: [
+      { thread: "a7".repeat(32), action: "spam-block" },
+      { thread: rodan, folder: "Archive", tag: "Rodan Properties" },
+      { thread: promoA, folder: "Newsletter" },
+      { thread: "b8".repeat(32), action: "inbox" },
+    ],
+    buckets: true,
+  });
+  await db.donnaJob.updateMany({
+    where: { id: stepTwo.id },
+    data: { status: "done", result: { at: new Date().toISOString(), reviewed: 0, filed: [{ thread: promoA, subject: "Example sale A", folder: "Newsletter" }], tagged: [{ thread: rodan, subject: "Example progress update", tag: "Rodan Properties" }] } },
+  });
   // Completed jobs: one row per job, steps 3 and 4 folded in.
   await page.goto(base + "/donna/jobs");
   const jobs = page.getByRole("table", { name: "Completed jobs" });
@@ -672,7 +672,7 @@ try {
   await expect(jobs).not.toContainText("Step 3: do what you chose");
   await jobs.getByRole("link", { name: /6 sorted into 5 buckets/ }).click();
   await expect(page.getByRole("list", { name: "Job steps" })).toContainText("Done · moved 1 · tagged 1");
-  await expect(page.getByText("Job #" + numbered.number + " · All four steps done")).toBeVisible();
+  await expect(page.getByText("Job #" + numbered.number + " · All steps done")).toBeVisible();
   await expect(page.getByRole("table", { name: "Sorted emails" })).toBeVisible();
   // Closing at step 2 changes nothing; the job stays in Jobs in progress as Closed, with Reopen.
   const closing = await db.donnaJob.create({
@@ -695,7 +695,7 @@ try {
   // Reopen puts it back to Tom's turn.
   await closedRow.getByRole("button", { name: "Reopen" }).click();
   await expect(page.getByRole("list", { name: "Job steps" }).locator('[aria-current="step"]')).toContainText("Your turn");
-  // All the Inbox mail was spam: step 2 has nothing to do, so go straight to Spam.
+  // All the Inbox mail was spam: the job opens on Spam, and Choose has nothing to do.
   const allSpam = await db.donnaJob.create({
     data: { mailboxId: box.id, kind: "clean", eventKey: "ui-all-spam", status: "done", completedAt: new Date(),
       options: { preview: true, buckets: true, limit: 25 },
@@ -704,9 +704,8 @@ try {
           trash: { total: 0, older30: 0 } } } },
   });
   await page.goto(base + "/donna/cleans/" + allSpam.id);
-  await page.getByRole("button", { name: "Nothing to do here: go to the Spam step" }).click();
   await expect(page.getByRole("table", { name: "Review the spam" })).toBeVisible();
-  await expect(page.getByRole("list", { name: "Job steps" })).toContainText("Nothing to do");
+  await expect(page.getByRole("list", { name: "Job steps" })).toContainText("Nothing to choose");
   await db.donnaJob.update({ where: { id: allSpam.id }, data: { options: { preview: true, buckets: true, limit: 25, closed: true } } });
   await page.goto(base + "/donna/cleans/" + closing.id);
   // A sort from before Junk existed offers to sort again with today's rules.
