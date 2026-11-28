@@ -26,7 +26,9 @@ export async function lockQuoteMutation(
   }
   const snapshot = quote.snapshotJson as Record<string, unknown> | null;
   const claim = snapshot?.proposalSendClaim as { state?: string } | undefined;
-  if (intent !== "finishSend" && (claim?.state === "sending" || claim?.state === "unknown")) {
+  // A staff email glitch must never stop the client from choosing or signing.
+  const clientIntent = intent === "sign" || intent === "select" || intent === "prepare";
+  if (intent !== "finishSend" && !clientIntent && (claim?.state === "sending" || claim?.state === "unknown")) {
     throw new QuoteMutationConflictError("An email send is pending or needs staff delivery review. Resolve it before changing this offer.");
   }
   if ((intent === "sign" || intent === "select" || intent === "prepare") && (!quote.publishedAt || (quote.expiresAt && quote.expiresAt <= new Date()))) {
