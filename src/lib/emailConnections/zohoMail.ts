@@ -143,6 +143,7 @@ export type ZohoSendMessageInput = {
   subject: string;
   bodyText: string;
   bodyHtml?: string;
+  signal?: AbortSignal;
 };
 
 export async function sendZohoMailMessage(input: ZohoSendMessageInput) {
@@ -157,6 +158,7 @@ export async function sendZohoMailMessage(input: ZohoSendMessageInput) {
   };
   const response = await fetch(url, {
     method: "POST",
+    signal: input.signal,
     headers: {
       Authorization: zohoAuthHeader(input.accessToken),
       "Content-Type": "application/json",

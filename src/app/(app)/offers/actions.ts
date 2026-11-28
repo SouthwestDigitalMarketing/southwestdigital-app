@@ -10,6 +10,7 @@ import { requireQuoteStaffOrThrow } from "@/lib/quotes/access";
 import { contactInfoFromCrm } from "@/lib/quotes/fromContacts";
 import { getSchemaCapabilities } from "@/lib/database/schemaCapabilities";
 import { ensureQuoteEngagement } from "@/lib/engagements/fromOffer";
+import { assertQuoteNotFrozen, quoteFreezeSelect } from "@/lib/quotes/isQuoteFrozen";
 import { lockQuoteMutation } from "@/lib/quotes/mutationLock";
 import {
   quoteClientDetailsFromSnapshot,
@@ -21,15 +22,18 @@ export async function markQuoteSentAction(formData: FormData) {
 
   const quote = await prisma.quote.findFirst({
     where: { id, brandId: brand.id },
-    select: { id: true, status: true, firstSentAt: true },
+    select: { id: true, ...quoteFreezeSelect, firstSentAt: true },
   });
   if (!quote) throw new Error("Not found");
+  assertQuoteNotFrozen(quote);
   if (quote.status !== "draft" && quote.status !== "completed") {
     throw new Error("Only unsent offers can be marked sent");
   }
 
   const now = new Date();
-  await prisma.quote.update({
+  await prisma.$transaction(async (tx) => {
+    await lockQuoteMutation(tx, brand.id, quote.id, "edit");
+    await tx.quote.update({
     where: { id: quote.id },
     data: {
       status: "sent",
@@ -38,6 +42,7 @@ export async function markQuoteSentAction(formData: FormData) {
       lastSentAt: now,
       lastActivityAt: now,
     },
+    });
   });
 
   revalidatePath("/offers");
@@ -51,15 +56,18 @@ export async function resendQuoteAction(formData: FormData) {
 
   const quote = await prisma.quote.findFirst({
     where: { id, brandId: brand.id },
-    select: { id: true, status: true, firstSentAt: true },
+    select: { id: true, ...quoteFreezeSelect, firstSentAt: true },
   });
   if (!quote) throw new Error("Not found");
+  assertQuoteNotFrozen(quote);
   if (quote.status === "draft" || quote.status === "archived") {
     throw new Error("Only sent offers can be resent");
   }
 
   const now = new Date();
-  await prisma.quote.update({
+  await prisma.$transaction(async (tx) => {
+    await lockQuoteMutation(tx, brand.id, quote.id, "edit");
+    await tx.quote.update({
     where: { id: quote.id },
     data: {
       status: "sent",
@@ -69,6 +77,7 @@ export async function resendQuoteAction(formData: FormData) {
       lastActivityAt: now,
       lastFollowUpAt: now,
     },
+    });
   });
 
   revalidatePath("/offers");
@@ -101,6 +110,7 @@ export async function reassignQuoteContactAction(formData: FormData) {
         id: true,
         clientId: true,
         engagementId: true,
+        ...quoteFreezeSelect,
         publishedAt: true,
         publicToken: true,
         snapshotJson: true,
@@ -124,6 +134,7 @@ export async function reassignQuoteContactAction(formData: FormData) {
   ]);
 
   if (!quote) throw new Error("Not found");
+  assertQuoteNotFrozen(quote);
   if (!contact) throw new Error("Contact not found");
   if (!quote.snapshotJson || typeof quote.snapshotJson !== "object" || Array.isArray(quote.snapshotJson)) {
     throw new Error("Offer snapshot is malformed.");
@@ -349,9 +360,10 @@ export async function clearDuplicateMarkerAction(formData: FormData) {
 
   const quote = await prisma.quote.findFirst({
     where: { id, brandId: brand.id },
-    select: { id: true, snapshotJson: true },
+      select: { id: true, ...quoteFreezeSelect, snapshotJson: true },
   });
   if (!quote) throw new Error("Not found");
+    assertQuoteNotFrozen(quote);
   if (!quote.snapshotJson || typeof quote.snapshotJson !== "object" || Array.isArray(quote.snapshotJson)) {
     throw new Error("Offer snapshot is malformed.");
   }
@@ -360,9 +372,12 @@ export async function clearDuplicateMarkerAction(formData: FormData) {
     Object.entries(quote.snapshotJson as Record<string, unknown>)
       .filter(([key]) => key !== "isFreshDuplicate"),
   );
-  await prisma.quote.update({
+  await prisma.$transaction(async (tx) => {
+    await lockQuoteMutation(tx, brand.id, quote.id, "edit");
+    await tx.quote.update({
     where: { id: quote.id },
     data: { snapshotJson: snapshot as Prisma.InputJsonValue },
+    });
   });
 
   revalidatePath("/offers");
@@ -375,10 +390,14 @@ export async function deleteQuoteAction(formData: FormData) {
 
   const quote = await prisma.quote.findFirst({
     where: { id, brandId: brand.id },
-    select: { id: true, status: true },
+    select: { id: true, ...quoteFreezeSelect },
   });
   if (!quote) throw new Error("Not found");
-  await prisma.quote.delete({ where: { id: quote.id } });
+  assertQuoteNotFrozen(quote);
+  await prisma.$transaction(async (tx) => {
+    await lockQuoteMutation(tx, brand.id, quote.id, "delete");
+    await tx.quote.delete({ where: { id: quote.id } });
+  });
   revalidatePath("/offers");
 }
 
@@ -405,13 +424,16 @@ export async function setOfferStatusAction(formData: FormData) {
       sentAt: true,
       firstSentAt: true,
       publicToken: true,
-      engagement: { select: { signedAt: true } },
+      ...quoteFreezeSelect,
     },
   });
   if (!quote) throw new Error("Not found");
+  assertQuoteNotFrozen(quote);
 
   const revokePublicLink = status === "archived" && !quote.engagement?.signedAt;
-  await prisma.quote.update({
+  await prisma.$transaction(async (tx) => {
+    await lockQuoteMutation(tx, brand.id, quote.id, status === "archived" ? "edit" : "restore");
+    await tx.quote.update({
     where: { id: quote.id },
     data: {
       status,
@@ -424,6 +446,7 @@ export async function setOfferStatusAction(formData: FormData) {
           }
         : {}),
     },
+    });
   });
 
   revalidatePath("/offers");
@@ -440,13 +463,17 @@ export async function revokeOfferPublicLinkAction(formData: FormData) {
 
   const quote = await prisma.quote.findFirst({
     where: { id, brandId: brand.id },
-    select: { id: true, publicToken: true },
+    select: { id: true, ...quoteFreezeSelect, publicToken: true },
   });
   if (!quote) throw new Error("Not found");
+  assertQuoteNotFrozen(quote);
 
-  await prisma.quote.update({
+  await prisma.$transaction(async (tx) => {
+    await lockQuoteMutation(tx, brand.id, quote.id, "edit");
+    await tx.quote.update({
     where: { id: quote.id },
     data: { publicToken: null },
+    });
   });
 
   revalidatePath("/offers");

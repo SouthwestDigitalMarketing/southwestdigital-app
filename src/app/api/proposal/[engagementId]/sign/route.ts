@@ -1,5 +1,6 @@
+import { saveAcceptedCopy } from "@/lib/quotes/acceptedCopy";
 import { sendProposalAlert } from "@/lib/notifications/staffAlert";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { createHash } from "crypto";
 import type { Prisma } from "@prisma/client";
@@ -152,6 +153,25 @@ export async function POST(
     throw error;
   });
   if (!recorded) return NextResponse.json({ error: "The proposal changed or was signed in another tab. Reload to see the current agreement." }, { status: 409 });
+
+  // The copy is made after the signing transaction commits, never inside it.
+  // It must not delay or fail signing: after() runs it after the response, and
+  // any failure is only logged. The fetched page carries the internal marker,
+  // so no client view, activity or status change is recorded.
+  const copyTask = saveAcceptedCopy({
+    // No request-derived origin: saveAcceptedCopy self-fetches from the
+    // brand's own verified proposal host (allowlisted), never Host headers.
+    brandId: engagement.brandId, engagementId, source: "accept",
+  }).catch(() => {
+    // Copy failures must never undo or fail a successful client signature.
+    console.error("[proposal/sign] Accepted copy could not be saved", { engagementId });
+  });
+  try {
+    after(copyTask);
+  } catch {
+    // after() is unavailable outside a request scope (unit tests): copyTask
+    // above is already running fire-and-forget, so there is nothing to redo.
+  }
 
   await sendProposalAlert(engagementId, engagement.brandId, {
     kind: "signed",

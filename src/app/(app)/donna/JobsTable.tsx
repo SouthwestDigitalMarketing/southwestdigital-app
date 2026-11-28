@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { JobRow } from "@/lib/donna/store";
 import { jobEnd, jobOutcome, jobTitle } from "@/lib/donna/domain";
-import { reopenSort } from "./actions";
+import { discardJob, reopenSort } from "./actions";
 import { shortTime } from "./DonnaFrame";
 
 const STATUS_TONE: Record<string, string> = {
@@ -16,7 +16,16 @@ const STATUS_TONE: Record<string, string> = {
  * Jobs in progress and Completed jobs (Tom, 2026-11-26): one compact table each.
  * A job closed at step 2 can be reopened from here.
  */
-export function JobsTable({ label, jobs }: { label: string; jobs: JobRow[] }) {
+export function JobsTable({
+  label,
+  jobs,
+  discard = false,
+}: {
+  label: string;
+  jobs: JobRow[];
+  /** Jobs in progress: unfinished jobs can be taken off the list. */
+  discard?: boolean;
+}) {
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
       <table
@@ -77,6 +86,20 @@ export function JobsTable({ label, jobs }: { label: string; jobs: JobRow[] }) {
                       <input type="hidden" name="jobId" value={job.id} />
                       <button type="submit" className="underline">
                         Reopen
+                      </button>
+                    </form>
+                  ) : null}
+                  {discard &&
+                  end.label !== "Running" &&
+                  end.label !== "Finished" ? (
+                    <form action={discardJob} className="ml-2 inline">
+                      <input type="hidden" name="jobId" value={job.id} />
+                      <button
+                        type="submit"
+                        title="Take this job off the list. Anything it already did stays done."
+                        className="text-slate-500 underline"
+                      >
+                        Discard
                       </button>
                     </form>
                   ) : null}

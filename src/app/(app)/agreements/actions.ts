@@ -1,5 +1,8 @@
 "use server";
 
+import type { Prisma } from "@prisma/client";
+import { lockQuoteMutation } from "@/lib/quotes/mutationLock";
+import { assertQuoteNotFrozen } from "@/lib/quotes/isQuoteFrozen";
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { createHash, randomBytes } from "node:crypto";
@@ -126,11 +129,71 @@ export async function archiveAgreementAction(id: string) {
 
 export async function deleteAgreementAction(id: string) {
   const { brand } = await requireStaffBrandOrThrow();
-  const result = await prisma.engagement.deleteMany({
-    where: agreementRecordWhere(id, brand.id),
-  });
+  const result = await deleteUnfrozenAgreements(brand.id, agreementRecordWhere(id, brand.id));
   if (result.count === 0) throw new Error("Agreement not found.");
   revalidateAgreementPaths();
+}
+
+type UnfrozenDeleteSummary = { count: number; skippedIds: string[] };
+
+async function deleteUnfrozenAgreements(
+  brandId: string,
+  where: Prisma.EngagementWhereInput,
+  options?: { skipFrozen?: boolean },
+): Promise<UnfrozenDeleteSummary> {
+  return prisma.$transaction(async (tx) => {
+    if (!options?.skipFrozen) {
+      // Follow the same quote -> engagement lock order as signing/publication.
+      const quotes = await tx.quote.findMany({
+        where: { brandId, engagement: { is: where } }, select: { id: true }, orderBy: { id: "asc" },
+      });
+      for (const quote of quotes) await lockQuoteMutation(tx, brandId, quote.id, "delete");
+      const candidates = await tx.engagement.findMany({ where, select: { id: true }, orderBy: { id: "asc" } });
+      for (const engagement of candidates) {
+        await tx.$queryRaw`SELECT id FROM "Engagement" WHERE id = ${engagement.id} AND "brandId" = ${brandId} FOR UPDATE`;
+      }
+      const engagements = await tx.engagement.findMany({
+        where, select: { id: true, status: true, signedAt: true, onboardingFeeStatus: true, onboardingData: true },
+      });
+      // Single delete refuses a frozen row: the shared freeze check throws.
+      for (const engagement of engagements) assertQuoteNotFrozen(engagement);
+      const result = await tx.engagement.deleteMany({ where: { ...where, id: { in: engagements.map((engagement) => engagement.id) } } });
+      return { count: result.count, skippedIds: [] };
+    }
+    // Batch delete: remove the eligible unfrozen rows and report the frozen
+    // ones that were skipped, instead of aborting the whole batch.
+    const engagements = await tx.engagement.findMany({
+      where,
+      select: {
+        id: true, status: true, signedAt: true, onboardingFeeStatus: true, onboardingData: true,
+        quotes: { select: { id: true, status: true }, orderBy: { id: "asc" } },
+      },
+    });
+    const skippedIds: string[] = [];
+    const deletableIds: string[] = [];
+    for (const engagement of engagements) {
+      let frozen = false;
+      try {
+        assertQuoteNotFrozen(engagement);
+      } catch {
+        frozen = true;
+      }
+      if (!frozen && engagement.quotes.some((quote) => ["accepted", "signed", "paid"].includes(quote.status?.toLowerCase() ?? ""))) {
+        frozen = true;
+      }
+      if (frozen) skippedIds.push(engagement.id);
+      else deletableIds.push(engagement.id);
+    }
+    const deletableQuoteIds = [...new Set(engagements
+      .filter((engagement) => deletableIds.includes(engagement.id))
+      .flatMap((engagement) => engagement.quotes.map((quote) => quote.id)))].sort();
+    for (const quoteId of deletableQuoteIds) await lockQuoteMutation(tx, brandId, quoteId, "delete");
+    for (const engagementId of [...deletableIds].sort()) {
+      await tx.$queryRaw`SELECT id FROM "Engagement" WHERE id = ${engagementId} AND "brandId" = ${brandId} FOR UPDATE`;
+    }
+    const result = await tx.engagement.deleteMany({ where: { ...where, id: { in: deletableIds } } });
+    return { count: result.count, skippedIds: skippedIds.sort() };
+  });
 }
 
 export async function batchAgreementAction(
@@ -157,7 +220,9 @@ export async function batchAgreementAction(
   };
 
   if (action === "delete") {
-    await prisma.engagement.deleteMany({ where });
+    const summary = await deleteUnfrozenAgreements(brand.id, where, { skipFrozen: true });
+    revalidateAgreementPaths();
+    return { deleted: summary.count, skipped: summary.skippedIds };
   } else {
     await prisma.engagement.updateMany({
       where: {

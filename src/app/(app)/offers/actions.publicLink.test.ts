@@ -11,6 +11,7 @@ vi.mock("@/lib/quotes/access", () => ({ requireQuoteStaffOrThrow: mocks.staff })
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     quote: { findFirst: mocks.findFirst, update: mocks.update },
+    $transaction: (fn: (tx: unknown) => unknown) => fn({ quote: { update: mocks.update } }),
   },
 }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidate }));
@@ -60,7 +61,7 @@ describe("offer public link write path", () => {
     }));
   });
 
-  it("archiving a signed quote keeps publicToken for receipt", async () => {
+  it("refuses archiving a signed quote without changing its public link", async () => {
     mocks.findFirst.mockResolvedValue({
       id: "quote",
       sentAt: new Date(),
@@ -68,10 +69,7 @@ describe("offer public link write path", () => {
       publicToken: "live-token",
       engagement: { signedAt: new Date() },
     });
-    await setOfferStatusAction(form({ id: "quote", status: "archived" }));
-    expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({
-      data: { status: "archived" },
-    }));
-    expect(mocks.update.mock.calls[0][0].data.publicToken).toBeUndefined();
+    await expect(setOfferStatusAction(form({ id: "quote", status: "archived" }))).rejects.toThrow("frozen");
+    expect(mocks.update).not.toHaveBeenCalled();
   });
 });

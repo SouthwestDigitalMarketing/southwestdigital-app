@@ -28,3 +28,22 @@ describe("quote publication/signature lock", () => {
     await expect(lockQuoteMutation(tx as unknown as Prisma.TransactionClient, "brand", "quote", "sign")).rejects.toThrow("no longer available");
   });
 });
+
+describe("freeze checks under the quote row lock", () => {
+  it.each(["publish", "send", "edit", "sign"] as const)("refuses %s for a paid engagement even if its quote status is stale", async (intent) => {
+    const tx = transaction({ ...openQuote, engagement: { signedAt: null, onboardingFeeStatus: "PAID" } });
+    await expect(lockQuoteMutation(tx as unknown as Prisma.TransactionClient, "brand", "quote", intent)).rejects.toThrow("frozen");
+  });
+});
+
+describe("pending staff email send", () => {
+  const pending = (state: string) => ({ ...openQuote, snapshotJson: { proposalSendClaim: { state } } });
+  it.each(["sign", "select", "prepare"] as const)("never blocks the client's %s", async (intent) => {
+    const tx = transaction(pending("unknown"));
+    await expect(lockQuoteMutation(tx as unknown as Prisma.TransactionClient, "brand", "quote", intent)).resolves.toBeTruthy();
+  });
+  it.each(["publish", "edit", "send"] as const)("still blocks staff %s while delivery is unresolved", async (intent) => {
+    const tx = transaction(pending("sending"));
+    await expect(lockQuoteMutation(tx as unknown as Prisma.TransactionClient, "brand", "quote", intent)).rejects.toThrow("email send is pending");
+  });
+});

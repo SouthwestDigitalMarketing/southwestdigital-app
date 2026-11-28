@@ -1,3 +1,4 @@
+import { isQuoteFrozen, quoteFreezeSelect } from "./isQuoteFrozen";
 import type { PrismaClient } from "@prisma/client";
 import { prisma as defaultPrisma } from "@/lib/prisma";
 
@@ -42,7 +43,7 @@ export function deriveLifecycleStage(input: LifecycleInput): LifecycleStage {
   if (settled) return "PAID";
 
   const signed = Boolean(input.engagement?.signedAt);
-  if (signed) return "SIGNED";
+  if (signed || isQuoteFrozen(input)) return "SIGNED";
 
   if (input.firstViewedAt) return "VIEWED";
   if (input.firstSentAt) return "SENT";
@@ -66,7 +67,7 @@ export const STALE_THRESHOLD_DAYS: Record<LifecycleStage, number> = {
   READY: 0,
   SENT: 4,
   VIEWED: 5,
-  SIGNED: 7,
+  SIGNED: Number.POSITIVE_INFINITY,
   PAID: Number.POSITIVE_INFINITY,
   CLOSED: Number.POSITIVE_INFINITY,
 };
@@ -116,7 +117,7 @@ export function nextStaffAction(input: {
 }, now: Date = new Date()): NextActionKey {
   if (input.stage === "DRAFT") return "EDIT_DRAFT";
   if (input.stage === "READY") return "SEND_READY";
-  if (input.stage === "PAID" || input.stage === "CLOSED") return "NONE";
+  if (isQuoteFrozen({ status: input.stage }) || input.stage === "CLOSED") return "NONE";
   const stale = isStale(
     { stage: input.stage, lastActivityAt: input.lastActivityAt, lastFollowUpAt: input.lastFollowUpAt },
     now,
@@ -124,7 +125,6 @@ export function nextStaffAction(input: {
   if (!stale) return "NONE";
   if (input.stage === "SENT") return "NUDGE_UNVIEWED";
   if (input.stage === "VIEWED") return "NUDGE_UNSIGNED";
-  if (input.stage === "SIGNED") return "NUDGE_UNPAID";
   return "NONE";
 }
 
@@ -136,10 +136,13 @@ type PrismaLike = Pick<PrismaClient, "quote">;
 // break the primary flow it's hooked into.
 export async function bumpQuoteActivity(quoteId: string, client: PrismaLike = defaultPrisma): Promise<void> {
   try {
-    await client.quote.update({
-      where: { id: quoteId },
+    const quote = await client.quote.findUnique({ where: { id: quoteId }, select: quoteFreezeSelect });
+    if (!quote || isQuoteFrozen(quote)) return;
+    await client.quote.updateMany({
+      where: { id: quoteId, status: { notIn: ["accepted", "signed", "paid"] }, OR: [
+        { engagement: null }, { engagement: { is: { signedAt: null, status: { notIn: ["SIGNED"] }, onboardingFeeStatus: { not: "PAID" } } } },
+      ] },
       data: { lastActivityAt: new Date() },
-      select: { id: true },
     });
   } catch (error) {
     console.error("[lifecycle] bumpQuoteActivity failed", { quoteId, error });
@@ -151,10 +154,13 @@ export async function bumpQuoteActivity(quoteId: string, client: PrismaLike = de
 export async function markQuoteFollowUpSent(quoteId: string, client: PrismaLike = defaultPrisma): Promise<void> {
   try {
     const now = new Date();
-    await client.quote.update({
-      where: { id: quoteId },
+    const quote = await client.quote.findUnique({ where: { id: quoteId }, select: quoteFreezeSelect });
+    if (!quote || isQuoteFrozen(quote)) return;
+    await client.quote.updateMany({
+      where: { id: quoteId, status: { notIn: ["accepted", "signed", "paid"] }, OR: [
+        { engagement: null }, { engagement: { is: { signedAt: null, status: { notIn: ["SIGNED"] }, onboardingFeeStatus: { not: "PAID" } } } },
+      ] },
       data: { lastActivityAt: now, lastFollowUpAt: now },
-      select: { id: true },
     });
   } catch (error) {
     console.error("[lifecycle] markQuoteFollowUpSent failed", { quoteId, error });

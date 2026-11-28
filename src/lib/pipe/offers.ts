@@ -1,5 +1,7 @@
 import "server-only";
 
+import { isQuoteFrozen, quoteFreezeSelect } from "@/lib/quotes/isQuoteFrozen";
+import { lockQuoteMutation } from "@/lib/quotes/mutationLock";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createBrandDataContext, withBrandDataTransaction } from "@/lib/tenancy/context";
@@ -203,9 +205,10 @@ export async function updatePipeOfferDraft(args: {
   const brand = await resolveBrand(args.brand);
   const existing = await prisma.quote.findFirst({
     where: { id: args.offerId, brandId: brand.id },
-    select: { id: true, status: true, snapshotJson: true, kind: true },
+    select: { id: true, ...quoteFreezeSelect, snapshotJson: true, kind: true },
   });
   if (!existing) throw new PipeOfferError("Offer not found.");
+  if (isQuoteFrozen(existing)) throw new PipeOfferError("Accepted, signed or paid offers are frozen.");
   if (existing.status === "archived") throw new PipeOfferError("This offer is archived.");
 
   const previous =
@@ -222,10 +225,13 @@ export async function updatePipeOfferDraft(args: {
     isTestProposal: args.patch.isTestProposal ?? previous.isTestProposal,
   });
 
-  const quote = await prisma.quote.update({
+  const quote = await prisma.$transaction(async (tx) => {
+    await lockQuoteMutation(tx, brand.id, existing.id, "edit");
+    return tx.quote.update({
     where: { id: existing.id },
     data: { snapshotJson: snapshot },
     select: LIST_SELECT,
+  });
   });
   return presentOffer(quote);
 }
@@ -246,13 +252,16 @@ export async function setPipeOfferStatus(args: {
       sentAt: true,
       firstSentAt: true,
       publicToken: true,
-      engagement: { select: { signedAt: true } },
+      ...quoteFreezeSelect,
     },
   });
   if (!quote) throw new PipeOfferError("Offer not found.");
+  if (isQuoteFrozen(quote)) throw new PipeOfferError("Accepted, signed or paid offers are frozen.");
 
   const revokePublicLink = args.status === "archived" && !quote.engagement?.signedAt;
-  const updated = await prisma.quote.update({
+  const updated = await prisma.$transaction(async (tx) => {
+    await lockQuoteMutation(tx, brand.id, quote.id, args.status === "archived" ? "edit" : "restore");
+    return tx.quote.update({
     where: { id: quote.id },
     data: {
       status: args.status,
@@ -262,6 +271,7 @@ export async function setPipeOfferStatus(args: {
         : {}),
     },
     select: LIST_SELECT,
+  });
   });
   return presentOffer(updated);
 }
@@ -279,18 +289,16 @@ export async function archivePipeOffer(args: { actorUserId: string; brand: strin
  */
 export async function deletePipeOfferDraft(args: { actorUserId: string; brand: string; offerId: string }) {
   const brand = await resolveBrand(args.brand);
-  const quote = await prisma.quote.findFirst({
-    where: { id: args.offerId, brandId: brand.id },
-    select: { id: true, status: true, sentAt: true, engagement: { select: { id: true } } },
+  return prisma.$transaction(async (tx) => {
+    await lockQuoteMutation(tx, brand.id, args.offerId, "delete");
+    const untouched = { id: args.offerId, brandId: brand.id, status: "draft", sentAt: null,
+      firstSentAt: null, firstViewedAt: null, publishedAt: null, engagementId: null };
+    const quote = await tx.quote.findFirst({ where: untouched, select: { id: true } });
+    if (!quote) throw new PipeOfferError("Only an untouched, unpublished draft can be deleted.");
+    const deleted = await tx.quote.deleteMany({ where: untouched });
+    if (deleted.count !== 1) throw new PipeOfferError("The offer changed before deletion.");
+    return { id: quote.id, deleted: true };
   });
-  if (!quote) throw new PipeOfferError("Offer not found.");
-  if (quote.status !== "draft" || quote.sentAt || quote.engagement) {
-    throw new PipeOfferError(
-      "This offer has been sent, signed, or paid, or is otherwise not a plain draft. Archive it instead of deleting it.",
-    );
-  }
-  await prisma.quote.delete({ where: { id: quote.id } });
-  return { id: quote.id, deleted: true };
 }
 
 export { PipeBrandError };

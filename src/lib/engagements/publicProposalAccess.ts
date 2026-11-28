@@ -58,13 +58,24 @@ export function quoteAllowsPublicCapability(
 
   switch (capability) {
     case "read":
-      return !withdrawn && !expired;
+      // A completed (paid) quote stays readable: the paid client's proposal
+      // page must keep rendering (so the Spec 00 backfill self-fetch sees
+      // the real page, not a receipt redirect that fails closed). Every
+      // other withdrawn status still refuses. Paid implies signed in every
+      // settlement flow, so an unsigned completed quote still fails closed.
+      if (quote.status === "completed") return signed;
+      return !withdrawn && (!expired || signed);
     case "select":
       return !withdrawn && !expired && !signed;
     case "sign":
-      return !withdrawn && !expired;
+      // A signed client retrying sign after expiry gets the existing
+      // idempotent success — including on a completed (paid) quote, where the
+      // sign route's signed early-return answers `ok`. Unsigned+expired and
+      // unsigned completed are still refused.
+      if (quote.status === "completed") return signed;
+      return !withdrawn && (!expired || signed);
     case "pay":
-      return !withdrawn && !expired && signed;
+      return !withdrawn && signed;
     case "receipt":
       return signed;
   }

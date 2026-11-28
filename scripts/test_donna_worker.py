@@ -661,6 +661,29 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual(deleted, [["<old@trash.example>"]])
             store.db.close()
 
+    def test_reviewer_is_lean_claude_opus_and_reports_limits(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = Path(tmp) / "claude"
+            log = Path(tmp) / "args.json"
+            fake.write_text("#!/usr/bin/env python3\nimport json, sys, os\n"
+                            "json.dump({'argv': sys.argv[1:], 'stdin': sys.stdin.read(), 'cwd': os.getcwd()}, "
+                            "open(%r, 'w'))\n"
+                            "print(json.dumps({'is_error': False, 'structured_output': {'ok': True}}))\n" % str(log))
+            fake.chmod(0o755)
+            with patch.object(donna, "CLAUDE_BIN", fake):
+                self.assertEqual(donna.review("hello", {"type": "object"}, tmp), {"ok": True})
+            seen = json.loads(log.read_text())
+            argv = seen["argv"]
+            self.assertEqual(argv[argv.index("--model") + 1], "claude-opus-5-5")
+            self.assertEqual(argv[argv.index("--tools") + 1], "")
+            self.assertEqual(argv[argv.index("--setting-sources") + 1], "project")
+            self.assertIn("--no-session-persistence", argv)
+            self.assertEqual(seen["stdin"], "hello")  # the email goes in on stdin, not the command line
+            fake.write_text("#!/usr/bin/env python3\nimport json\n"
+                            "print(json.dumps({'is_error': True, 'result': 'Claude usage limit reached'}))\n")
+            with patch.object(donna, "CLAUDE_BIN", fake), self.assertRaisesRegex(RuntimeError, "usage limit"):
+                donna.review("hello", {"type": "object"}, tmp)
+
     def test_cancel_stops_before_the_next_move_and_reports_what_moved(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = self.clean_fixture(tmp)

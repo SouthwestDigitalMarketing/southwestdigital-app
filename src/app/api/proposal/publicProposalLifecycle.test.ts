@@ -147,20 +147,35 @@ describe("public proposal API lifecycle", () => {
     expect((await select(request("/api/proposal/engagement/select", "POST"), params)).status).toBe(404);
   });
 
-  it("POST sign 404 for an expired signed quote", async () => {
+  it("POST sign returns the idempotent success for an expired signed quote", async () => {
     mocks.quote.mockResolvedValue(quoteRow({
       expiresAt: new Date(0),
       engagement: { brandId: "brand", signedAt: new Date() },
     }));
-    expect((await sign(request("/api/proposal/engagement/sign", "POST"), params)).status).toBe(404);
+    mocks.engagement.mockResolvedValue({ brandId: "brand", onboardingFeeStatus: "INVOICED",
+      signedAt: new Date("2026-11-27T12:00:00Z"), signerName: "Alex", agreementText: "text",
+      agreementManagerStatus: "ACTIVE" });
+    const retry = new Request("https://firm.example.test/api/proposal/engagement/sign", {
+      method: "POST",
+      headers: {
+        "x-proposal-token": "public-token",
+        "x-hostname": "firm.example.test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ signerName: "Alex", email: "alex@example.test",
+        confirmedReadAndAgreed: true, confirmedScrolledAgreement: true, consentToElectronicSignature: true }),
+    });
+    const response = await sign(retry, params);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ ok: true, signerName: "Alex" });
   });
 
-  it("POST payment-intent 404 for an expired signed quote and must not stay payable", async () => {
+  it("POST payment-intent reaches payment review for an expired signed unpaid quote", async () => {
     mocks.quote.mockResolvedValue(quoteRow({
       expiresAt: new Date(0),
       engagement: { brandId: "brand", signedAt: new Date() },
     }));
-    expect((await paymentIntent(request("/api/proposal/engagement/payment-intent", "POST"), params)).status).toBe(404);
+    expect((await paymentIntent(request("/api/proposal/engagement/payment-intent", "POST"), params)).status).toBe(409);
     expect(mocks.stripe).not.toHaveBeenCalled();
   });
 
@@ -170,20 +185,20 @@ describe("public proposal API lifecycle", () => {
     expect(mocks.stripe).not.toHaveBeenCalled();
   });
 
-  it("POST paypal/create-order 404 for an expired signed quote before the 409 stub", async () => {
+  it("POST paypal/create-order reaches the 409 stub for an expired signed quote", async () => {
     mocks.quote.mockResolvedValue(quoteRow({
       expiresAt: new Date(0),
       engagement: { brandId: "brand", signedAt: new Date() },
     }));
-    expect((await paypalCreate(request("/api/proposal/engagement/paypal/create-order", "POST"), params)).status).toBe(404);
+    expect((await paypalCreate(request("/api/proposal/engagement/paypal/create-order", "POST"), params)).status).toBe(409);
   });
 
-  it("POST paypal/capture-order 404 for an expired signed quote before the 409 stub", async () => {
+  it("POST paypal/capture-order reaches the 409 stub for an expired signed quote", async () => {
     mocks.quote.mockResolvedValue(quoteRow({
       expiresAt: new Date(0),
       engagement: { brandId: "brand", signedAt: new Date() },
     }));
-    expect((await paypalCapture(request("/api/proposal/engagement/paypal/capture-order", "POST"), params)).status).toBe(404);
+    expect((await paypalCapture(request("/api/proposal/engagement/paypal/capture-order", "POST"), params)).status).toBe(409);
   });
 
   it("POST confirm-payment allows an expired signed quote as receipt", async () => {
@@ -224,6 +239,106 @@ describe("public proposal API lifecycle", () => {
   it("POST cancel 404 for a revoked token", async () => {
     mocks.quote.mockResolvedValue(null);
     expect((await cancel(request("/api/proposal/engagement/cancel", "POST"), params)).status).toBe(404);
+  });
+
+  it("completed (paid) quote: confirm-payment returns its paid answer and agreement stays readable", async () => {
+    mocks.quote.mockResolvedValue(quoteRow({
+      status: "completed",
+      engagement: { brandId: "brand", signedAt: new Date() },
+    }));
+    mocks.engagement.mockResolvedValue({ onboardingFeeStatus: "PAID" });
+    const confirmed = await confirmPayment(request("/api/proposal/engagement/confirm-payment", "POST"), params);
+    expect(confirmed.status).toBe(200);
+    expect(await confirmed.json()).toMatchObject({ ok: true, paid: true });
+
+    mocks.engagement.mockResolvedValue({
+      brandId: "brand",
+      updatedAt: new Date(),
+      clientName: "Alex",
+      primaryContactName: "Alex",
+      primaryContactEmail: "alex@example.test",
+      onboardingFee: null,
+      onboardingData: {},
+      agreementText: "Agreement",
+      signedAt: new Date(),
+      signerName: "Alex",
+      signerTitle: "Owner",
+      onboardingFeeStatus: "PAID",
+      agreementManagerStatus: "ACTIVE",
+      agreementCancellationRequestedAt: null,
+      isTestProposal: false,
+    });
+    mocks.brandRow.mockResolvedValue({ name: "Southwest" });
+    expect((await agreement(request("/api/proposal/engagement/agreement", "GET"), params)).status).toBe(200);
+  });
+
+  it("completed (paid) quote: select, payment-intent and paypal stay refused", async () => {
+    mocks.quote.mockResolvedValue(quoteRow({
+      status: "completed",
+      engagement: { brandId: "brand", signedAt: new Date() },
+    }));
+    expect((await select(request("/api/proposal/engagement/select", "POST"), params)).status).toBe(404);
+    expect((await paymentIntent(request("/api/proposal/engagement/payment-intent", "POST"), params)).status).toBe(404);
+    expect((await paypalCreate(request("/api/proposal/engagement/paypal/create-order", "POST"), params)).status).toBe(404);
+    expect((await paypalCapture(request("/api/proposal/engagement/paypal/capture-order", "POST"), params)).status).toBe(404);
+    expect(mocks.stripe).not.toHaveBeenCalled();
+  });
+
+  it("completed (paid) quote: a signed engagement retrying sign gets the idempotent ok", async () => {
+    mocks.quote.mockResolvedValue(quoteRow({
+      status: "completed",
+      engagement: { brandId: "brand", signedAt: new Date() },
+    }));
+    mocks.engagement.mockResolvedValue({
+      brandId: "brand",
+      onboardingFeeStatus: "PAID",
+      agreementText: "Agreement",
+      signedAt: new Date("2026-11-27T12:00:00Z"),
+      signerName: "Alex",
+    });
+    // The sign route validates the body before its signed early-return, so a
+    // retry carries the same valid fields as the first signature.
+    const retry = new Request("https://firm.example.test/api/proposal/engagement/sign", {
+      method: "POST",
+      headers: {
+        "x-proposal-token": "public-token",
+        "x-hostname": "firm.example.test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ signerName: "Alex", email: "alex@example.test",
+        confirmedReadAndAgreed: true, confirmedScrolledAgreement: true, consentToElectronicSignature: true }),
+    });
+    const retried = await sign(retry, params);
+    expect(retried.status).toBe(200);
+    expect(await retried.json()).toMatchObject({ ok: true, signerName: "Alex" });
+  });
+
+  it("completed quote: an unsigned engagement retrying sign is still refused", async () => {
+    mocks.quote.mockResolvedValue(quoteRow({
+      status: "completed",
+      engagement: { brandId: "brand", signedAt: null },
+    }));
+    expect((await sign(request("/api/proposal/engagement/sign", "POST"), params)).status).toBe(404);
+  });
+
+  it("completed (paid) quote: cancel passes the receipt gate exactly as on origin/main", async () => {
+    mocks.quote.mockResolvedValue(quoteRow({
+      status: "completed",
+      engagement: { brandId: "brand", signedAt: new Date() },
+    }));
+    mocks.engagement.mockResolvedValue({ agreementManagerStatus: "ACTIVE", signedAt: new Date() });
+    const acknowledged = new Request("https://firm.example.test/api/proposal/engagement/cancel", {
+      method: "POST",
+      headers: {
+        "x-proposal-token": "public-token",
+        "x-hostname": "firm.example.test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ name: "Alex", email: "alex@example.test" }),
+    });
+    // 409 (no pending cancellation request), not 404: the receipt gate
+    // passes for a paid quote, and the engagement-state check decides.
+    expect((await cancel(acknowledged, params)).status).toBe(409);
   });
 
   it("GET signed-document allows expired signed through access and 404 when unsigned", async () => {

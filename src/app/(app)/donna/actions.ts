@@ -522,6 +522,42 @@ export async function resortJob(form: FormData) {
 }
 
 /** A job closed at step 2 goes back to Tom's turn, so it can be finished. */
+/**
+ * Take an unfinished job off the lists (Tom, 2026-11-28). It only hides the job:
+ * anything it already did stays done, and its page still opens by link.
+ */
+export async function discardJob(form: FormData) {
+  const { dataContext, session } = await requireDonna();
+  const id = z.string().min(1).parse(form.get("jobId"));
+  await withBrandDataTransaction(dataContext, async (tx) => {
+    const job = await tx.donnaJob.findFirst({
+      where: {
+        id,
+        kind: { in: ["clean", "undo"] },
+        status: { in: ["done", "cancelled"] },
+        mailbox: { brandId: dataContext.brandId },
+      },
+    });
+    if (!job) return;
+    await tx.donnaJob.update({
+      where: { id: job.id },
+      data: {
+        options: {
+          ...(job.options as Record<string, unknown>),
+          discarded: true,
+        } as Prisma.InputJsonObject,
+      },
+    });
+    await cleanControl(
+      tx,
+      job.mailboxId,
+      session.user.id,
+      `Job #${job.number} discarded from the lists.`,
+    );
+  });
+  refresh();
+}
+
 export async function reopenSort(form: FormData) {
   const { dataContext, session } = await requireDonna();
   const id = z.string().min(1).parse(form.get("jobId"));

@@ -125,13 +125,38 @@ describe("public proposal capabilities", () => {
     });
   });
 
-  it("denies pay on an expired signed quote", () => {
+  it("allows pay on an expired signed quote", () => {
     expect(quoteAllowsPublicCapability(
       quote({
         expiresAt: new Date(0),
         engagement: { brandId: "brand", signedAt: new Date() },
       }),
       "pay",
+    )).toBe(true);
+  });
+
+  it("allows sign on an expired signed quote for an idempotent retry", () => {
+    expect(quoteAllowsPublicCapability(
+      quote({
+        expiresAt: new Date(0),
+        engagement: { brandId: "brand", signedAt: new Date() },
+      }),
+      "sign",
+    )).toBe(true);
+  });
+
+  it("still refuses sign on an expired unsigned quote", () => {
+    expect(quoteAllowsPublicCapability(quote({ expiresAt: new Date(0) }), "sign")).toBe(false);
+  });
+
+  it("refuses sign on a withdrawn signed quote even after expiry", () => {
+    expect(quoteAllowsPublicCapability(
+      quote({
+        status: "archived",
+        expiresAt: new Date(0),
+        engagement: { brandId: "brand", signedAt: new Date() },
+      }),
+      "sign",
     )).toBe(false);
   });
 
@@ -180,5 +205,65 @@ describe("public proposal capabilities", () => {
     mocks.brand.mockResolvedValue(null);
     expect(await findPublishedPublicQuote({ hostname: "firm.example.test", token: "public-token" })).toBeNull();
     expect(mocks.quote).not.toHaveBeenCalled();
+  });
+
+  it("allows read, sign (idempotent retry) and receipt on a completed (paid) quote and refuses select/pay", () => {
+    expect(allowed(quote({
+      status: "completed",
+      engagement: { brandId: "brand", signedAt: new Date() },
+    }))).toEqual({
+      read: true,
+      select: false,
+      sign: true,
+      pay: false,
+      receipt: true,
+    });
+  });
+
+  it("still refuses sign on a completed quote without a signed engagement", () => {
+    expect(quoteAllowsPublicCapability(
+      quote({ status: "completed", engagement: { brandId: "brand", signedAt: null } }),
+      "sign",
+    )).toBe(false);
+  });
+
+  it("allows read on a completed signed quote even after expiry", () => {
+    expect(quoteAllowsPublicCapability(
+      quote({
+        status: "completed",
+        expiresAt: new Date(0),
+        engagement: { brandId: "brand", signedAt: new Date() },
+      }),
+      "read",
+    )).toBe(true);
+  });
+
+  it("still refuses read on a completed quote without a signed engagement", () => {
+    expect(quoteAllowsPublicCapability(
+      quote({ status: "completed", engagement: { brandId: "brand", signedAt: null } }),
+      "read",
+    )).toBe(false);
+  });
+
+  it("still refuses every live capability on archived and rejected quotes", () => {
+    for (const status of ["archived", "rejected"]) {
+      expect(allowed(quote({ status }))).toEqual({
+        read: false,
+        select: false,
+        sign: false,
+        pay: false,
+        receipt: false,
+      });
+      expect(allowed(quote({
+        status,
+        engagement: { brandId: "brand", signedAt: new Date() },
+      }))).toEqual({
+        read: false,
+        select: false,
+        sign: false,
+        pay: false,
+        receipt: true,
+      });
+    }
   });
 });

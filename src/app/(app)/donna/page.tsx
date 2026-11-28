@@ -288,7 +288,7 @@ export default async function DonnaPage({
           </label>
           <p className="text-xs text-slate-500">
             In steps, she does not read older mail or new mail on her own.
-            Reviews use your ChatGPT plan’s Codex allowance; the count resets at
+            Reviews use Claude Opus 5.5 on your Claude plan; the count resets at
             6 pm Central.
           </p>
           <button type="submit" className={button}>

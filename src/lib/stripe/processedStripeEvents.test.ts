@@ -32,7 +32,7 @@ describe("processed Stripe event ids", () => {
   it("records a Stripe event id without replacing paymentObligation", async () => {
     await recordProcessedStripeEvent("eng", "brand", "evt_1");
     expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ id: "eng", brandId: "brand", updatedAt: expect.any(Date) }),
+      where: expect.objectContaining({ id: "eng", brandId: "brand", updatedAt: expect.any(Date), onboardingData: { equals: expect.any(Object) } }),
       data: {
         onboardingData: expect.objectContaining({
           proposalAcceptance: expect.objectContaining({
@@ -43,6 +43,12 @@ describe("processed Stripe event ids", () => {
         }),
       },
     }));
+  });
+
+  it("refuses a stale JSON write so a concurrent accepted-copy patch cannot be erased", async () => {
+    mocks.update.mockResolvedValue({ count: 0 });
+    await expect(recordProcessedStripeEvent("eng", "brand", "evt_race")).rejects.toThrow("changed concurrently");
+    expect(mocks.update.mock.calls[0][0].where.onboardingData.equals).toEqual(engagement().onboardingData);
   });
 
   it("treats a repeated event id as already processed", async () => {

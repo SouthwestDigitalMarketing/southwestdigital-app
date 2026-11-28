@@ -97,8 +97,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ eng
       ...accepted, intentId: created.id, brandId: engagement.brandId, engagementId,
       connectedAccountId, livemode: created.livemode,
     };
+    // Preserve a concurrently saved accepted copy, whose JSON patch leaves updatedAt unchanged.
     const updated = await prisma.engagement.updateMany({
-      where: { id: engagementId, brandId: engagement.brandId, updatedAt: engagement.updatedAt },
+      where: { id: engagementId, brandId: engagement.brandId, updatedAt: engagement.updatedAt, onboardingData: { equals: onboardingData as Prisma.InputJsonValue } },
       data: { onboardingData: {
         ...onboardingData,
         proposalBuilderState: { ...builderState, services: {

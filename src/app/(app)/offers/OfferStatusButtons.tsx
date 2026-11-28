@@ -11,11 +11,13 @@ export function OfferStatusButtons({
   offerId,
   bucket,
   hasPublicLink = false,
+  frozen = false,
   children,
 }: {
   offerId: string;
   bucket: OfferBucket;
   hasPublicLink?: boolean;
+  frozen?: boolean;
   children: ReactNode;
 }) {
   const router = useRouter();
@@ -101,6 +103,7 @@ export function OfferStatusButtons({
         }}
       >
       {children}
+      {!frozen ? <>
       {bucket === "draft" ? (
         <button
           type="button"
@@ -184,6 +187,7 @@ export function OfferStatusButtons({
         <Trash2 className="h-4 w-4" />
         Delete offer
       </button>
+      </> : null}
       </div>
       {deleteConfirmOpen ? (
         <Modal

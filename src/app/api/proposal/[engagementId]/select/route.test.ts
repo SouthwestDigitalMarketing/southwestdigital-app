@@ -9,9 +9,11 @@ const mocks = vi.hoisted(() => ({
   access: vi.fn(),
   engagement: vi.fn(),
   update: vi.fn(),
+  txQuote: vi.fn(),
   catalog: vi.fn(),
   capabilities: vi.fn(),
   waiver: vi.fn(),
+  lock: vi.fn(),
 }));
 
 vi.mock("@/lib/engagements/publicProposalAccess", () => ({
@@ -22,7 +24,15 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     engagement: { findUnique: mocks.engagement, updateMany: mocks.update },
     catalogService: { findMany: mocks.catalog },
+    $transaction: (fn: (tx: unknown) => unknown) => fn({
+      quote: { findFirst: mocks.txQuote },
+      engagement: { updateMany: mocks.update },
+    }),
   },
+}));
+vi.mock("@/lib/quotes/mutationLock", () => ({
+  lockQuoteMutation: mocks.lock,
+  QuoteMutationConflictError: class extends Error {},
 }));
 vi.mock("@/lib/database/schemaCapabilities", () => ({
   getSchemaCapabilities: mocks.capabilities,
@@ -70,6 +80,8 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.access.mockResolvedValue(true);
   mocks.engagement.mockResolvedValue(engagementRow());
+  mocks.txQuote.mockResolvedValue({ id: "quote" });
+  mocks.lock.mockResolvedValue({ id: "quote" });
   mocks.update.mockResolvedValue({ count: 1 });
   mocks.catalog.mockResolvedValue(sentinelCatalogRows);
   mocks.capabilities.mockResolvedValue({
@@ -80,6 +92,13 @@ beforeEach(() => {
 });
 
 describe("public proposal select API", () => {
+  it("refuses a frozen signed selection without writing", async () => {
+    mocks.engagement.mockResolvedValue({ ...engagementRow(), status: "SIGNED", signedAt: new Date() });
+    const response = await call();
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual(expect.objectContaining({ error: expect.stringContaining("cannot be changed") }));
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
   it("POST select checkout omits assessment notes and catalog internalDescription", async () => {
     const response = await call();
     expect(response.status).toBe(200);

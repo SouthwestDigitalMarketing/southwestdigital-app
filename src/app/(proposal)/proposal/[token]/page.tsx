@@ -84,7 +84,9 @@ export default async function PublicProposalPage({
   });
   if (!quote) notFound();
   const viewedAt = new Date();
-  if (canRead && quote && !quote.firstViewedAt && !isAuthorizedStaffPreview && !isInternalViewer) {
+  // A completed (paid) quote keeps the origin/main stamps: a first view after
+  // payment must not write first-view/send fields or flip status.
+  if (canRead && quote && quote.status !== "completed" && !quote.firstViewedAt && !isAuthorizedStaffPreview && !isInternalViewer) {
     // Self-heal: a real client view is proof the URL made it out somehow,
     // so stamp firstSentAt (if not already) and flip status to "sent". This
     // keeps DB filters (Draft/Sent/Completed) consistent with the derived

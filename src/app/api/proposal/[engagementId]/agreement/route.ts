@@ -8,6 +8,9 @@ import { parseStoredProposalCheckout } from "@/lib/engagements/proposalCheckout"
 import { serviceLevelDescription } from "@/lib/quotes/serviceLevels";
 import { normalizeAccountInventory, summarizeAccountInventory } from "@/lib/quotes/accountInventory";
 import { isHourlyOfferKind } from "@/lib/quotes/kinds";
+import { lockQuoteMutation, QuoteMutationConflictError } from "@/lib/quotes/mutationLock";
+import { isQuoteFrozen } from "@/lib/quotes/isQuoteFrozen";
+import type { Prisma } from "@prisma/client";
 
 export async function GET(
   request: Request,
@@ -125,12 +128,22 @@ export async function GET(
 
   let text = engagement.agreementText ?? "";
   if (!engagement.signedAt && !text) {
+    if (isQuoteFrozen(engagement)) return NextResponse.json({ error: "Accepted, signed or paid offers are frozen." }, { status: 409 });
     text = templateContent
       ? renderAgreementTemplate(templateContent, renderInput)
       : generateProposalAgreementText(renderInput);
-    const updated = await prisma.engagement.updateMany({
-      where: { id: engagementId, brandId: engagement.brandId, signedAt: null, updatedAt: engagement.updatedAt },
+    const updated = await prisma.$transaction(async (tx) => {
+      const quote = await tx.quote.findFirst({ where: { engagementId, brandId: engagement.brandId }, select: { id: true } });
+      if (!quote) throw new QuoteMutationConflictError("Offer not found.");
+      await lockQuoteMutation(tx, engagement.brandId, quote.id, "prepare");
+      return tx.engagement.updateMany({
+      where: { id: engagementId, brandId: engagement.brandId, signedAt: null, updatedAt: engagement.updatedAt,
+        onboardingData: { equals: onboardingData as Prisma.InputJsonValue } },
       data: { agreementText: text },
+      });
+    }).catch((error: unknown) => {
+      if (error instanceof QuoteMutationConflictError) return { count: 0 };
+      throw error;
     });
     if (updated.count !== 1) return NextResponse.json({ error: "The agreement changed. Reload before signing." }, { status: 409 });
   }
