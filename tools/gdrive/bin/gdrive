@@ -1,0 +1,112 @@
+#!/usr/bin/env python3
+"""Google Drive, read-only: list/download the most recent file.
+
+One-time setup: run `gdrive --setup-help` for the Google Cloud Console
+steps (Tom does these himself, signed in as the Drive account), then
+`gdrive --authorize` once to get a token. After that this needs no
+browser -- the refresh token is reused silently.
+"""
+import argparse
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from app.drive_client import (  # noqa: E402
+    CLIENT_SECRET_PATH,
+    TOKEN_PATH,
+    download_file,
+    drive_service,
+    most_recent_file,
+)
+
+SETUP_HELP = f"""
+One-time Google Cloud Console setup (you do this signed in as the Drive
+account -- nobody else can click through your Google login for you):
+
+1. Open https://console.cloud.google.com/ and create a project (or pick
+   an existing one you're fine using for this).
+2. In that project, open "APIs & Services" -> "Library", search for
+   "Google Drive API", and click Enable.
+3. "APIs & Services" -> "OAuth consent screen": choose External, fill in
+   an app name (e.g. "Bookkeeping Conroe tools"), add your own email as a
+   test user. It can stay in "Testing" status -- no Google review needed
+   for personal use.
+4. "APIs & Services" -> "Credentials" -> "Create Credentials" -> "OAuth
+   client ID" -> Application type "Desktop app". Create it, then
+   "Download JSON".
+5. Save that downloaded file to exactly this path (on this machine):
+     {CLIENT_SECRET_PATH}
+   (make the folder first if needed: mkdir -p {CLIENT_SECRET_PATH.parent})
+6. Then run: gdrive --authorize
+   It prints a URL -- open it in your own browser, sign in, approve, and
+   it finishes on its own. After that, `gdrive latest` just works.
+"""
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--setup-help", action="store_true", help="print one-time setup steps"
+    )
+    parser.add_argument(
+        "--authorize", action="store_true", help="run the one-time OAuth flow"
+    )
+    sub = parser.add_subparsers(dest="command")
+
+    latest = sub.add_parser("latest", help="show the most recent file's metadata")
+    latest.add_argument("--query", help="extra Drive query clause (q=)")
+
+    get = sub.add_parser(
+        "get", help="download the most recent file to a directory"
+    )
+    get.add_argument("--query", help="extra Drive query clause (q=)")
+    get.add_argument(
+        "--out", default=".", help="directory to save into (default: cwd)"
+    )
+
+    args = parser.parse_args()
+
+    if args.setup_help:
+        print(SETUP_HELP)
+        return 0
+
+    if args.authorize:
+        drive_service(run_authorization=True)
+        print(f"Authorized. Token saved to {TOKEN_PATH}.")
+        return 0
+
+    if not CLIENT_SECRET_PATH.exists() and not TOKEN_PATH.exists():
+        print(
+            "Not set up yet. Run `gdrive --setup-help` for the one-time steps.",
+            file=sys.stderr,
+        )
+        return 2
+
+    service = drive_service(run_authorization=False)
+
+    if args.command == "latest":
+        meta = most_recent_file(service, query=args.query)
+        print(f"name:          {meta['name']}")
+        print(f"id:            {meta['id']}")
+        print(f"mimeType:      {meta['mimeType']}")
+        print(f"createdTime:   {meta['createdTime']}")
+        print(f"modifiedTime:  {meta['modifiedTime']}")
+        print(f"size:          {meta.get('size', 'n/a')}")
+        owners = ", ".join(o.get("emailAddress", "?") for o in meta.get("owners", []))
+        print(f"owners:        {owners}")
+        print(f"webViewLink:   {meta.get('webViewLink', 'n/a')}")
+        return 0
+
+    if args.command == "get":
+        meta = most_recent_file(service, query=args.query)
+        out_path = download_file(service, meta, Path(args.out))
+        print(f"saved: {out_path}")
+        return 0
+
+    parser.print_help()
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
