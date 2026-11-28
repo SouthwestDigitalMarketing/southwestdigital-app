@@ -1,4 +1,19 @@
 # SWapp handoff
+## 2026-11-28 — Mailroom retired; mail tools live in `tools/mail` (Ummon)
+
+Tom retired Mailroom. PR #357 moved `mail`, `zoho-html-draft`, `text`, `calendar`/`cal`,
+`calendar-notify`, `mail-retain` (+ config, units, 212 tests) into `tools/mail`; install on
+ripley with `tools/mail/install.sh` (→ `~/.local/share/swapp-mail`, `~/.local/bin` wrappers,
+units). Re-run it after any merge touching `tools/mail`. Donna's worker loads the mail tool from
+the install (`DONNA_MAIL_BIN`); Tom's never-block and keep rules now live in `~/.config/mailroom/`.
+The Scanner no longer runs mail-sort, spam sweep/patrol or the spam/newsletter reviews;
+`/scanner/spam` and `/scanner/newsletters` redirect to Donna. `swapp-scan-prod` moved to #357.
+Off and deleted on ripley: spam-patrol, spam-sweep, mail-sort, spam-report, digest-sweep units,
+the Mailroom web app; dalliance's `mail`/`cal` forward to ripley. GitHub `lochsidellc/mailroom-app`
+archived (read-only); local checkouts in the Trash. Left alone: dalliance's old checkout, which holds
+uncommitted `gdrive` (Google Drive) work its `~/.local/bin/gdrive` still runs. Older notes below that
+name `~/projects/mailroom-app` are history.
+
 ## 2026-11-28 — Van: tabs, savings bar, one top pick (Donna)
 
 Tom: tabs like Showrunner, swipe between them; open on a savings status bar (target $40,000) and
