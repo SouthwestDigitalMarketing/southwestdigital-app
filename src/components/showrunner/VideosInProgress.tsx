@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { AudioOptions } from "@/components/showrunner/AudioOptions";
 import { ThumbnailCopy, TranscriptAccordion } from "@/components/showrunner/ThumbnailCopy";
 import { WaitingActions } from "@/components/showrunner/WaitingActions";
 import { YouTubeVisibility } from "@/components/showrunner/YouTubeVisibility";
@@ -159,6 +160,7 @@ export function VideosInProgress({
                     busy={Boolean(video.visibilityBusy)}
                   />
                 ) : null}
+                {copy ? <AudioOptions batch={video.batch} /> : null}
                 {copy ? (
                   <ThumbnailCopy
                     batch={video.batch}
