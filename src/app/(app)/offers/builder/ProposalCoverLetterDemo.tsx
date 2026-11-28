@@ -1,25 +1,32 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { Check, Copy, ExternalLink, MessageSquare, Send } from "lucide-react";
+import { AlertTriangle, Check, Copy, ExternalLink, MessageSquare, Send } from "lucide-react";
 import ProposalAppDemoHeader from "./ProposalAppDemoHeader";
 import {
   formatPersonName,
   resolvePrimaryContact,
   useProposalContactInfoDemoState,
 } from "./ProposalContactInfoState";
+import { useProposalAssessmentDemoState } from "./ProposalCreationWorkspaceDemo";
 import { useBrand } from "@/lib/brands/context";
-import { getOfferKindAction, getOfferPublicPathAction } from "../who/actions";
+import { getOfferKindAction, getOfferPromiseConfirmationsAction, getOfferPublicPathAction } from "../who/actions";
 import { markQuoteSentAction } from "../actions";
 import { MessageTemplateManager, type MessageTemplate } from "./MessageTemplateManager";
 import {
+  coverPromiseHits,
   defaultCoverEmailForKind,
   defaultCoverSmsBody,
   readCoverLetterOverrides,
   restampCoverLinks,
   writeCoverLetterOverrides,
 } from "./coverLetterState";
+import {
+  unresolvedPromiseHits,
+  type PromiseConfirmation,
+  type PromiseHit,
+} from "@/lib/quotes/promiseCheck";
 
 type FollowUpKind = "unviewed" | "unsigned" | "unpaid";
 
@@ -59,9 +66,40 @@ function renderMessageTemplate(template: string, values: Record<string, string>)
   return template.replace(/{{\s*([a-zA-Z]+)\s*}}/g, (_, key: string) => values[key] ?? "");
 }
 
+// Warning-only promise scan above the out-of-band sends (copy-email, SMS
+// link, "I sent it another way"). Publishing and in-app sending stay gated
+// by the server; this only surfaces the same hits the finalize step shows so
+// short-circuit staff see them before the link leaves the app.
+function CoverPromiseWarning({ hits }: { hits: PromiseHit[] }) {
+  if (hits.length === 0) return null;
+  return (
+    <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3" role="note" aria-label="Promise wording warning">
+      <p className="flex items-center gap-2 text-sm font-semibold text-amber-950">
+        <AlertTriangle className="h-4 w-4 shrink-0" />
+        This wording may promise more than the agreement covers
+      </p>
+      <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-amber-900">
+        {hits.map((hit) => (
+          <li key={`${hit.where} ${hit.phrase} ${hit.textHash}`}>
+            {hit.where} — &ldquo;{hit.phrase}&rdquo;
+          </li>
+        ))}
+      </ul>
+      <p className="mt-1 text-sm text-amber-900">
+        This warning doesn&apos;t block copying, texting, or marking as sent — edit the
+        flagged wording or confirm &ldquo;Keep this wording&rdquo; in the finalize step.
+      </p>
+    </div>
+  );
+}
+
 export default function ProposalCoverLetterDemo() {
   const { brand } = useBrand();
   const { contactInfo } = useProposalContactInfoDemoState();
+  // Read-only mirror of the builder draft: this step never writes assessment
+  // state, it only scans the same client-facing text finalize enforces.
+  const { assessment } = useProposalAssessmentDemoState({ persist: false, syncExternal: true });
+  const [promiseConfirmations, setPromiseConfirmations] = useState<PromiseConfirmation[]>([]);
   const [copied, setCopied] = useState(false);
   const [publicPath, setPublicPath] = useState("");
   const [offerId] = useState<string | null>(() => {
@@ -201,6 +239,11 @@ ${effectiveEmailBody}`;
     void getOfferKindAction(offerId).then((kind) => {
       setOfferKind(kind);
     });
+    // Hydrate stored "Keep this wording" confirmations so already-confirmed
+    // hits don't warn here either. Warning-only: nothing here blocks.
+    void getOfferPromiseConfirmationsAction(offerId).then((stored) => {
+      if (stored.length > 0) setPromiseConfirmations(stored);
+    });
   }, [offerId]);
 
   async function handleCopy() {
@@ -272,6 +315,21 @@ ${effectiveEmailBody}`;
 
   const canSend = Boolean(recipientEmail) && Boolean(proposalUrl) && sendState.kind !== "sending";
 
+  // The same client-side scan the finalize step enforces, over the exact
+  // bodies shown here. Follow-up variants are ephemeral reminders, never
+  // scanned. Warning-only: the server gates on publish/send are unchanged.
+  const coverWarningHits = useMemo<PromiseHit[]>(() => {
+    if (followUp) return [];
+    return unresolvedPromiseHits(
+      coverPromiseHits(assessment, {
+        emailSubject: effectiveEmailSubject,
+        emailBody: effectiveEmailBody,
+        smsBody: effectiveSmsBody,
+      }),
+      promiseConfirmations,
+    );
+  }, [followUp, assessment, effectiveEmailSubject, effectiveEmailBody, effectiveSmsBody, promiseConfirmations]);
+
   return (
     <main className="min-h-screen">
       <section className="w-full px-5 py-6 lg:px-8">
@@ -328,6 +386,8 @@ ${effectiveEmailBody}`;
               <span className={FIELD_LABEL_CLASS}>Email</span>
               <textarea readOnly rows={17} value={effectiveEmailBody} className={`${INPUT_CLASS_NAME} leading-6`} />
             </label>
+
+            <CoverPromiseWarning hits={coverWarningHits} />
 
             <div className="flex flex-wrap items-center gap-3">
               <button
@@ -422,6 +482,8 @@ ${effectiveEmailBody}`;
                   className={`${INPUT_CLASS_NAME} leading-6`}
                 />
               </label>
+
+              <CoverPromiseWarning hits={coverWarningHits} />
 
               <a
                 href={smsHref || undefined}

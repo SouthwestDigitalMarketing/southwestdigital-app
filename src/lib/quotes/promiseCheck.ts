@@ -46,7 +46,7 @@ const PROMISE_PATTERNS: Array<{ phrase: string; pattern: RegExp }> = [
   { phrase: "unlimited", pattern: /\bunlimited\b/i },
   { phrase: "guarantee", pattern: /\bguarantee[sd]?\b/i },
   { phrase: "same day", pattern: /\bsame[\s-]+day\b/i },
-  { phrase: "tax filing", pattern: /\btax\s+filing\b/i },
+  { phrase: "tax filing", pattern: /\btax\s+filings?\b/i },
   { phrase: "file your taxes", pattern: /\bfile\s+your\s+taxes\b/i },
   { phrase: "file taxes", pattern: /\bfile\s+taxes\b/i },
   { phrase: "audit", pattern: /\baudit(?:s|ed)?\b/i },
@@ -137,12 +137,19 @@ export function readRenderedOptionCopy(snapshotValue: unknown): RenderedOptionCo
 }
 
 // Every staff-editable CLIENT-FACING free-text surface the promise check
-// scans: the intro and the bonus/additional-option descriptions. The
-// internal-only notes (assessmentNotes, discretionaryMultiplierNote) never
-// reach the public proposal (stripped by the public zod schema), so scanning
-// them only blocks publish over wording no client will see. Cover-letter
-// email/SMS bodies are ephemeral (never stored in the snapshot), so the
-// caller appends them as { where, text } fields.
+// scans: the intro, the package names, the first-payment credit reason, and
+// the bonus/additional-option names + descriptions. The internal-only notes
+// (assessmentNotes, discretionaryMultiplierNote) never reach the public
+// proposal (stripped by the public zod schema), so scanning them only blocks
+// publish over wording no client will see. Cover-letter email/SMS bodies are
+// ephemeral (never stored in the snapshot), so the caller appends them as
+// { where, text } fields.
+//
+// Bonus/option NAMES render on the public tier cards next to their
+// descriptions, so they scan too — keyed by the item's stable id (never the
+// display name or list position), so a rename or reorder keeps the same
+// `where` and an earlier "keep this wording" confirmation still counts.
+// Items without an id cannot be keyed stably, so their names are skipped.
 //
 // When the snapshot carries a frozen renderedOptionCopy, option descriptions
 // scan as frozen (exactly what the public page renders); otherwise they scan
@@ -157,9 +164,25 @@ export function collectPromiseFieldsFromAssessment(
   if (introHeadline) fields.push({ where: "Intro headline", text: introHeadline });
   const introBody = textOf(assessment.introBody);
   if (introBody) fields.push({ where: "Intro body", text: introBody });
+  // Staff-editable package names render on the public tier cards
+  // (resolveProposalPackageName). Tier ids are stable, so confirmations keyed
+  // on them survive renames.
+  const packageNames = record(assessment.packageNames);
+  for (const tier of ["grow", "improve", "maintain"] as const) {
+    const packageName = textOf(packageNames[tier]);
+    if (packageName) fields.push({ where: `Package name: ${tier}`, text: packageName });
+  }
+  // Staff-entered credit reason renders on the receipt/agreement next to the
+  // applied-credit line. One stable place by definition.
+  const creditReason = textOf(assessment.firstPaymentCreditReason);
+  if (creditReason) fields.push({ where: "First payment credit reason", text: creditReason });
   for (const item of records(assessment.bonuses)) {
     if (item.archived === true) continue;
     const id = typeof item.id === "string" && item.id.length > 0 ? item.id : null;
+    if (id) {
+      const itemName = textOf(item.name);
+      if (itemName) fields.push({ where: `Bonus name: ${id}`, text: itemName });
+    }
     const description = (id && renderedCopy?.[id]) || textOf(item.description);
     if (!description) continue;
     const name = typeof item.name === "string" && item.name ? item.name : String(item.id ?? "bonus");
@@ -168,6 +191,10 @@ export function collectPromiseFieldsFromAssessment(
   for (const item of records(assessment.additionalOptions)) {
     if (item.archived === true) continue;
     const id = typeof item.id === "string" && item.id.length > 0 ? item.id : null;
+    if (id) {
+      const itemName = textOf(item.name);
+      if (itemName) fields.push({ where: `Additional option name: ${id}`, text: itemName });
+    }
     const description = (id && renderedCopy?.[id]) || textOf(item.description);
     if (!description) continue;
     const name = typeof item.name === "string" && item.name ? item.name : String(item.id ?? "option");

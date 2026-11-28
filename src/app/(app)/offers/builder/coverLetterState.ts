@@ -1,6 +1,11 @@
 // Server-safe (every window access is guarded): the email-send route imports
 // the scan normalization from here.
 import { assessmentStorageKey } from "./ProposalBuilderStorage";
+import {
+  collectPromiseFieldsFromAssessment,
+  scanPromiseRisks,
+  type PromiseHit,
+} from "@/lib/quotes/promiseCheck";
 
 export type CoverLetterBodies = {
   emailSubject?: string;
@@ -100,6 +105,21 @@ export function restampCoverLinks(text: string, currentUrl: string, storedUrl?: 
     restamped = restamped.split("[Publish changes to generate the proposal link]").join(currentUrl);
   }
   return restamped;
+}
+
+// The cover step warns over the same client-side scan the finalize step
+// enforces: the assessment collector plus the exact email/SMS bodies shown
+// here (normalized so the proposal link never affects hashing or matching).
+// Warning-only: the server gates on publish/send are unchanged.
+export function coverPromiseHits(
+  assessment: unknown,
+  bodies: { emailSubject: string; emailBody: string; smsBody: string },
+): PromiseHit[] {
+  return scanPromiseRisks([
+    ...collectPromiseFieldsFromAssessment(assessment),
+    { where: "Cover email", text: normalizeCoverTextForScan(`${bodies.emailSubject}\n\n${bodies.emailBody}`) },
+    { where: "Cover SMS", text: normalizeCoverTextForScan(bodies.smsBody) },
+  ]);
 }
 
 // The finalize step scans the same bodies the cover step shows: persisted

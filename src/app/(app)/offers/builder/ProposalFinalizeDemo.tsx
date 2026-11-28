@@ -48,7 +48,11 @@ function editHrefForHit(where: string, query: string) {
     : where.startsWith("Intro")
       ? "/offers/intro"
       : where.startsWith("Bonus:") || where.startsWith("Additional option:")
+        || where.startsWith("Bonus name:") || where.startsWith("Additional option name:")
+        || where.startsWith("Package name:")
         ? "/offers/add-ons"
+        // "First payment credit reason" is edited beside pricing, so the
+        // adjustments fallback covers it.
         : "/offers/adjustments";
   return withQuery(step, query);
 }
@@ -92,8 +96,9 @@ export default function ProposalFinalizeDemo() {
     });
   }, [offerId]);
 
-  // Spec 07 promise check: scan the intro, bonus/option descriptions, custom
-  // notes, and the cover email + SMS bodies staff are about to send.
+  // Spec 07 promise check: scan the intro, package names, credit reason,
+  // bonus/option names + descriptions, and the cover email + SMS bodies staff
+  // are about to send.
   const promiseHits = useMemo<PromiseHit[]>(() => {
     const origin = typeof window !== "undefined" ? window.location.origin : "";
     const resolvedPrimary = resolvePrimaryContact(contactInfo);

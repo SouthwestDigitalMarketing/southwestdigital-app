@@ -32,6 +32,7 @@ import {
 import { resolveCoverMedia } from "./coverMedia";
 import { CoverMediaPicker, type CoverMediaFolder, type CoverMediaItem } from "./CoverMediaPicker";
 import type { AgreementTemplateOption } from "@/lib/agreements/types";
+import { getOfferPreviewSupportCopyAction } from "../who/actions";
 
 export type BrandMediaItem = CoverMediaItem;
 
@@ -55,6 +56,18 @@ export default function ProposalIntroDemo({
   const router = useRouter();
   const searchParams = useSearchParams();
   const isRoutedFullscreenPreview = searchParams.get("preview") === "fullscreen";
+  const offerId = searchParams.get("offer");
+  // Staff preview of an existing published/accepted quote renders the viewed
+  // snapshot's stored support copy (legacy when absent), never the current
+  // wording. Unpublished drafts and fresh quotes omit it and preview the
+  // current copy, frozen at the next publish.
+  const [viewedQuote, setViewedQuote] = useState<{ supportCopy?: unknown; isPublished: boolean } | null>(null);
+  useEffect(() => {
+    if (!offerId) return;
+    void getOfferPreviewSupportCopyAction(offerId).then((viewed) => {
+      if (viewed) setViewedQuote(viewed);
+    });
+  }, [offerId]);
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const [showPreviewEditControls, setShowPreviewEditControls] = useState(false);
   const routedNativeFullscreenSeenRef = useRef(false);
@@ -489,6 +502,7 @@ export default function ProposalIntroDemo({
                   assessment={assessment}
                   catalogOffer={catalogOffer}
                   agreementTemplate={selectedAgreement}
+                  viewedQuote={viewedQuote}
                   editMode={showPreviewEditControls}
                   onEdit={(target) => void editPreviewElement(target)}
                 />

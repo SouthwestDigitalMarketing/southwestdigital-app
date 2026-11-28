@@ -31,9 +31,88 @@ describe("collectPromiseFieldsFromAssessment", () => {
     expect(fields.map((field) => field.where)).toEqual([
       "Intro headline",
       "Intro body",
+      "Bonus name: b1",
       "Bonus: Bonus One",
+      "Bonus name: b3",
+      "Additional option name: o1",
       "Additional option: Extra Reports",
     ]);
+  });
+
+  it("scans package names and the credit reason with stable places", () => {
+    const fields = collectPromiseFieldsFromAssessment({
+      packageNames: { grow: "24/7 Advisory", improve: "Momentum", maintain: "Essentials" },
+      firstPaymentCreditReason: "CPA work already paid.",
+    });
+    expect(fields).toEqual([
+      { where: "Package name: grow", text: "24/7 Advisory" },
+      { where: "Package name: improve", text: "Momentum" },
+      { where: "Package name: maintain", text: "Essentials" },
+      { where: "First payment credit reason", text: "CPA work already paid." },
+    ]);
+    const hits = scanPromiseRisks(fields);
+    expect(hits.map((hit) => [hit.where, hit.phrase])).toEqual([
+      ["Package name: grow", "24/7"],
+      ["First payment credit reason", "CPA"],
+    ]);
+  });
+
+  it("keys bonus/option names by stable id so confirmations survive renames and reorders", () => {
+    const assessment = {
+      bonuses: [
+        { id: "b2", name: "Second", description: "Plain." },
+        { id: "b1", name: "Guaranteed fast books", description: "Plain." },
+      ],
+      additionalOptions: [
+        { id: "o1", name: "Unlimited check-ins", description: "Plain." },
+      ],
+    };
+    const hits = scanPromiseRisks(collectPromiseFieldsFromAssessment(assessment));
+    expect(hits.map((hit) => [hit.where, hit.phrase])).toEqual([
+      ["Bonus name: b1", "guarantee"],
+      ["Additional option name: o1", "unlimited"],
+    ]);
+    const confirmed = hits.map((hit) => ({
+      where: hit.where, phrase: hit.phrase, textHash: hit.textHash, confirmedAt: "2026-11-27T00:00:00Z",
+    }));
+    // Renaming the bonus and reordering the list keeps the same stable
+    // places and text, so the earlier confirmation still counts.
+    const renamed = {
+      bonuses: [
+        { id: "b1", name: "Fast books, new name, guaranteed", description: "Plain." },
+        { id: "b2", name: "Second", description: "Plain." },
+      ],
+      additionalOptions: [
+        { id: "o1", name: "Unlimited check-ins", description: "Plain." },
+      ],
+    };
+    const renamedHits = scanPromiseRisks(collectPromiseFieldsFromAssessment(renamed));
+    expect(renamedHits.map((hit) => [hit.where, hit.phrase])).toEqual([
+      ["Bonus name: b1", "guarantee"],
+      ["Additional option name: o1", "unlimited"],
+    ]);
+    expect(renamedHits[0].textHash).not.toBe(hits[0].textHash);
+    const reorderOnly = {
+      bonuses: [...assessment.bonuses].reverse(),
+      additionalOptions: assessment.additionalOptions,
+    };
+    expect(unresolvedPromiseHits(
+      scanPromiseRisks(collectPromiseFieldsFromAssessment(reorderOnly)),
+      confirmed,
+    )).toEqual([]);
+  });
+
+  it("skips archived and id-less bonus/option names", () => {
+    const fields = collectPromiseFieldsFromAssessment({
+      bonuses: [
+        { id: "b1", name: "24/7 help", description: "Plain.", archived: true },
+        { name: "Guaranteed nameless", description: "Plain." },
+      ],
+      additionalOptions: [
+        { id: "o1", name: "Same-day rush", archived: true, description: "Plain." },
+      ],
+    });
+    expect(fields.map((field) => field.where)).toEqual(["Bonus: Guaranteed nameless"]);
   });
 
   it("never scans the internal-only notes", () => {
@@ -56,11 +135,15 @@ describe("collectPromiseFieldsFromAssessment", () => {
       bonuses: [{ id: "b1", name: "Bonus One", description: "Clean stored text." }],
     };
     expect(collectPromiseFieldsFromAssessment(assessment)).toEqual([
+      { where: "Bonus name: b1", text: "Bonus One" },
       { where: "Bonus: Bonus One", text: "Clean stored text." },
     ]);
     expect(
       collectPromiseFieldsFromAssessment(assessment, { b1: "Frozen text, guaranteed." }),
-    ).toEqual([{ where: "Bonus: Bonus One", text: "Frozen text, guaranteed." }]);
+    ).toEqual([
+      { where: "Bonus name: b1", text: "Bonus One" },
+      { where: "Bonus: Bonus One", text: "Frozen text, guaranteed." },
+    ]);
   });
 });
 

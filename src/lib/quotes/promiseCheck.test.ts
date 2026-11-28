@@ -45,6 +45,15 @@ describe("scanPromiseRisks", () => {
     expect(hits.map((hit) => hit.phrase)).toEqual(["tax filing", "file your taxes", "file taxes"]);
   });
 
+  it("flags the natural plural tax filings", () => {
+    const hits = scanPromiseRisks([
+      { where: "a", text: "We handle your tax filings each quarter." },
+      { where: "b", text: "We handle your tax filing each quarter." },
+    ]);
+    expect(hits.map((hit) => hit.match)).toEqual(["tax filings", "tax filing"]);
+    expect(hits.map((hit) => hit.phrase)).toEqual(["tax filing", "tax filing"]);
+  });
+
   it("flags audit, audits and audited but not auditorium", () => {
     const hits = scanPromiseRisks([
       { where: "a", text: "Survive any audit with clean books." },

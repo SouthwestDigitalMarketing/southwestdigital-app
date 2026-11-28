@@ -72,7 +72,7 @@ import {
   type ProposalMode,
 } from "./proposalThemes";
 import { ProposalReviewsSection } from "./ProposalReviewsSection";
-import { LEGACY_SUPPORT_COPY_VERSION, resolveSupportCopy, serviceLevelTitle, splitServiceLevelMeaning, supportCopyForPublish } from "@/lib/quotes/serviceLevels";
+import { hasStoredSupportCopy, LEGACY_SUPPORT_COPY_VERSION, resolveSupportCopy, serviceLevelTitle, splitServiceLevelMeaning, supportCopyForPublish } from "@/lib/quotes/serviceLevels";
 import AgreementTextView from "./AgreementTextView";
 import DepositPaymentForm from "./DepositPaymentForm";
 import { waitForRecordedProposalPayment } from "@/lib/engagements/waitForRecordedProposalPayment";
@@ -742,6 +742,16 @@ type OfferProposalPreviewProps = {
   agreementTemplate?: AgreementTemplateOption | null;
   isTestProposal?: boolean;
   isStaffPreview?: boolean;
+  /**
+   * The existing quote being viewed, when staff opened a published or
+   * accepted quote in the builder (?offer=): the draft snapshot's stored
+   * support copy plus whether the quote is published. A published/accepted
+   * snapshot renders its stored copy (the legacy map when it predates the
+   * wiring) and gates WHAT'S INCLUDED like the agreement route. Omitted (an
+   * unpublished draft being composed) previews the current copy, frozen at
+   * the next publish.
+   */
+  viewedQuote?: { supportCopy?: unknown; isPublished: boolean } | null;
   alreadySigned?: boolean;
   editMode?: boolean;
   onEdit?: (target: ProposalPreviewEditTarget) => void;
@@ -836,6 +846,7 @@ function OfferProposalPreviewView({
   publicCleanupPlan = null,
   publicDesktopMigration = null,
   publicSupportCopy = null,
+  viewedQuote = null,
 }: Omit<OfferProposalPreviewProps, "assessment" | "initialAssessment" | "initialContactInfo" | "publicProposal"> & {
   assessment: PreviewAssessment | AssessmentState;
   contactInfo: PreviewContactInfo;
@@ -1668,14 +1679,25 @@ function OfferProposalPreviewView({
     "Payment",
   ] as const;
   // Spec 07 frozen copy: the public page renders the snapshot's stored copy
-  // (legacy map when the snapshot predates the wiring); staff/draft preview
-  // renders the current wording, which the next publish freezes.
-  const resolvedSupportCopy = livePublic ? resolveSupportCopy(publicSupportCopy) : supportCopyForPublish();
+  // (legacy map when the snapshot predates the wiring). A staff preview of an
+  // existing published/accepted snapshot renders that snapshot's stored copy
+  // the same way (legacy when absent); only an unpublished draft previews the
+  // current wording, which the next publish freezes.
+  const viewingPublishedSnapshot = viewedQuote != null && viewedQuote.isPublished === true;
+  const viewedSupportCopy = viewingPublishedSnapshot ? viewedQuote.supportCopy : undefined;
+  const resolvedSupportCopy = livePublic
+    ? resolveSupportCopy(publicSupportCopy)
+    : viewingPublishedSnapshot
+      ? resolveSupportCopy(viewedSupportCopy)
+      : supportCopyForPublish();
   // New publishes only: the controls line and WHAT'S INCLUDED render when a
-  // stored copy exists, so old proposals look exactly as before.
+  // stored copy exists, so old proposals look exactly as before — the staff
+  // preview of an existing snapshot gates exactly like the agreement route.
   const showNewPublishCopy = livePublic
     ? resolvedSupportCopy.version !== LEGACY_SUPPORT_COPY_VERSION
-    : true;
+    : viewingPublishedSnapshot
+      ? hasStoredSupportCopy(viewedSupportCopy)
+      : true;
   const agreementTitle =
     agreementTemplate?.name
     ?? assessment.agreementTemplateName
@@ -1741,7 +1763,9 @@ function OfferProposalPreviewView({
       // Staff preview (never a stored/signed text): the selected package's
       // included services plus the support title + meaning, like the client
       // sees on the cards. The public page renders the server agreement.
-      whatsIncluded: selectedOptionId
+      // WHAT'S INCLUDED only for new publishes — a legacy viewed snapshot
+      // omits it, exactly like the agreement route.
+      whatsIncluded: selectedOptionId && (!viewingPublishedSnapshot || hasStoredSupportCopy(viewedSupportCopy))
         ? agreementWhatsIncluded(assessment, selectedOptionId, resolvedSupportCopy)
         : null,
       // Staff preview agreement keys on the structured tier bundle (F6); the

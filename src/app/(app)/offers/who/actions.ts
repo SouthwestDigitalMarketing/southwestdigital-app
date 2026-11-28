@@ -80,9 +80,10 @@ function asJsonObject(value: unknown): Prisma.InputJsonObject {
 }
 
 // Spec 07 promise check (server-side): scan the stored assessment free text
-// (intro, bonus/option descriptions, custom notes) against the snapshot's
-// "Keep this wording" confirmations. Cover-letter bodies are ephemeral and
-// enforced client-side; publish/send refuse here on what the snapshot holds.
+// (intro, package names, credit reason, bonus/option names + descriptions)
+// against the snapshot's "Keep this wording" confirmations. Cover-letter
+// bodies are ephemeral and enforced client-side; publish/send refuse here on
+// what the snapshot holds.
 function mergePromiseConfirmations(previous: unknown, incoming: unknown) {
   const merged = new Map<string, ReturnType<typeof validatePromiseConfirmations>[number]>();
   for (const confirmation of [...readPromiseConfirmations(previous), ...validatePromiseConfirmations(incoming)]) {
@@ -593,6 +594,29 @@ export async function getOfferPromiseConfirmationsAction(offerId: string): Promi
   });
   if (!existing) return [];
   return readPromiseConfirmations(existing.snapshotJson);
+}
+
+// Staff preview of an existing quote: the draft snapshot's stored support
+// copy plus whether the quote is published, so the builder preview renders
+// the frozen copy the client saw (the legacy map when the snapshot predates
+// the wiring) instead of previewing the current wording. Unpublished drafts
+// carry none and preview the current copy, frozen at the next publish.
+// Read-only: publish/send and the frozen-quote guard are untouched.
+export async function getOfferPreviewSupportCopyAction(offerId: string): Promise<{
+  supportCopy?: unknown;
+  isPublished: boolean;
+} | null> {
+  const { brand } = await requireQuoteStaffOrThrow();
+  const existing = await prisma.quote.findFirst({
+    where: { id: offerId, brandId: brand.id },
+    select: { snapshotJson: true, publishedAt: true },
+  });
+  if (!existing) return null;
+  if (!existing.snapshotJson || typeof existing.snapshotJson !== "object") return null;
+  return {
+    supportCopy: (existing.snapshotJson as Record<string, unknown>).supportCopy,
+    isPublished: existing.publishedAt !== null,
+  };
 }
 
 export async function getOfferPublicPathAction(offerId: string) {
