@@ -3,6 +3,16 @@
 import { pricingCardServices } from "./pricingCardServices";
 import ProposalPaymentPlan from "./ProposalPaymentPlan";
 import HowWeSizedThis from "./HowWeSizedThis";
+import CompanyBundleSummary from "./CompanyBundleSummary";
+import { effectiveAssessment } from "./effectiveAssessment";
+import {
+  DEFAULT_BUNDLE_PRICING_OPTIONS,
+  hasCompanyBundle,
+  normalizeCompanyBundle,
+  priceCompanyBundle,
+  type BundlePricingOptions,
+  type PublicCompanyBundle,
+} from "@/lib/quotes/companyBundle";
 import {
   toPublicAccountInventory,
   type PublicAccountInventory,
@@ -706,6 +716,9 @@ type OfferProposalPreviewProps = {
 
 export default function OfferProposalPreview(props: OfferProposalPreviewProps = {}) {
   if (props.live && props.publicProposal) {
+    // P3 adds the whitelisted `companyBundle` field to toPublicBookkeepingProposal
+    // output; read it tolerantly until that lands.
+    const publicBundle = (props.publicProposal as PublicBookkeepingProposal & { companyBundle?: PublicCompanyBundle | null }).companyBundle ?? null;
     return (
       <OfferProposalPreviewView
         {...props}
@@ -713,6 +726,7 @@ export default function OfferProposalPreview(props: OfferProposalPreviewProps = 
         contactInfo={props.publicProposal.contactInfo}
         publishedPricing={props.publicProposal.pricing}
         publicAccountInventory={props.publicProposal.accountInventory}
+        publicCompanyBundle={publicBundle}
         livePublic
       />
     );
@@ -768,16 +782,31 @@ function OfferProposalPreviewView({
   publishedPricing,
   livePublic = false,
   publicAccountInventory,
+  publicCompanyBundle = null,
 }: Omit<OfferProposalPreviewProps, "assessment" | "initialAssessment" | "initialContactInfo" | "publicProposal"> & {
   assessment: PreviewAssessment | AssessmentState;
   contactInfo: PreviewContactInfo;
   livePublic?: boolean;
   publicAccountInventory?: PublicAccountInventory | null;
+  /** Whitelisted Spec 02 bundle for the public page (P3 adds it to toPublicBookkeepingProposal). */
+  publicCompanyBundle?: PublicCompanyBundle | null;
 }) {
   const { brand } = useBrand();
   const accountInventory: PublicAccountInventory | null | undefined = livePublic
     ? publicAccountInventory
     : toPublicAccountInventory((assessment as Partial<AssessmentState>).accounts);
+  // Spec 02 bundle: staff preview computes from the full assessment; the
+  // public page renders the whitelisted `companyBundle` field only. Legacy
+  // payloads (no bundle) render neither block.
+  const bundlePricingOptions: BundlePricingOptions =
+    (assessment as { bundlePricingOptions?: BundlePricingOptions }).bundlePricingOptions
+    ?? DEFAULT_BUNDLE_PRICING_OPTIONS;
+  const staffBundleCompanies = !livePublic && hasCompanyBundle(assessment as { companies?: unknown })
+    ? normalizeCompanyBundle((assessment as AssessmentState).companies)
+    : [];
+  const companyInventories = staffBundleCompanies.length > 0
+    ? staffBundleCompanies.map((company) => ({ name: company.name, inventory: toPublicAccountInventory(company.accounts) }))
+    : null;
   const searchParams = useSearchParams();
   const contractFollowsPayment = (assessment as { contractFollowsPayment?: boolean }).contractFollowsPayment === true;
   const isSimulation = isProposalPreviewSimulation({ live, embedded, isStaffPreview });
@@ -863,6 +892,17 @@ function OfferProposalPreviewView({
     livePublic,
   );
   const [selectedOptionId, setSelectedOptionId] = useState<OptionId | null>(null);
+  // Spec 02 bundle monthlies differ per package; the Companies block shows the
+  // selected package, or Maintain before anything is selected.
+  const staffBundlePackageId: OptionId = selectedOptionId ?? "maintain";
+  const staffBundlePriced = staffBundleCompanies.length > 0
+    ? priceCompanyBundle({
+        companies: staffBundleCompanies,
+        packageId: staffBundlePackageId,
+        baseAssessment: effectiveAssessment(assessment as AssessmentState),
+        options: bundlePricingOptions,
+      })
+    : null;
   const [selectionSubmittingId, setSelectionSubmittingId] = useState<OptionId | null>(null);
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const [step, setStep] = useState(startsSigned ? 3 : 0);
@@ -2007,7 +2047,17 @@ function OfferProposalPreviewView({
                 })}
               </div>
 
-              <HowWeSizedThis inventory={accountInventory} brandName={brand.name} />
+              {staffBundlePriced ? (
+                <CompanyBundleSummary
+                  priced={staffBundlePriced}
+                  caption={`Monthly amounts for the ${options[staffBundlePackageId].name} package.`}
+                />
+              ) : null}
+              {livePublic && publicCompanyBundle ? (
+                <CompanyBundleSummary publicBundle={publicCompanyBundle} />
+              ) : null}
+
+              <HowWeSizedThis inventory={accountInventory} brandName={brand.name} companies={companyInventories} />
 
               {/* Mobile checkout bar: what's due today for the package in view, and its Select button */}
               {showMobileSelectBar ? (

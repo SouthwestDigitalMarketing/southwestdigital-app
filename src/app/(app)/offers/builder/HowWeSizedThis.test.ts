@@ -33,6 +33,43 @@ describe("How we sized this", () => {
     expect(html).toContain(ESTIMATE_NOTICE_TEXT);
     expect(html).toContain("partly estimated");
   });
+  it("renders nothing different for legacy callers when companies is absent or empty", () => {
+    const main = toPublicAccountInventory(accounts);
+    const without = renderToStaticMarkup(createElement(HowWeSizedThis, { inventory: main, brandName: "Our Firm" }));
+    for (const companies of [undefined, null, [] as never[]]) {
+      expect(renderToStaticMarkup(createElement(HowWeSizedThis, { inventory: main, brandName: "Our Firm", companies }))).toBe(without);
+    }
+    expect(without).toContain("How we sized this");
+  });
+  it("shows one table per company with its own open accounts when a bundle exists", () => {
+    const main = toPublicAccountInventory(accounts)!;
+    const betaAccounts: AccountEntry[] = [
+      { id: "b1", kind: "credit_card", label: "Beta Card", last4: "9999", monthlyTransactions: 45, status: "open", basis: "measured" },
+    ];
+    const html = renderToStaticMarkup(createElement(HowWeSizedThis, {
+      inventory: main,
+      brandName: "Our Firm",
+      companies: [
+        { name: "Main Co", inventory: main },
+        { name: "Beta", inventory: toPublicAccountInventory(betaAccounts) },
+        { name: "Empty Co", inventory: toPublicAccountInventory([]) },
+      ],
+    }));
+    expect(html).toContain("Main Co");
+    expect(html).toContain("Beta");
+    expect(html).toContain("Beta Card ••9999");
+    expect(html).toContain("45");
+    expect(html).not.toContain("Empty Co");
+    expect(html).toContain("Proposal terms");
+    expect(html).toContain("Our Firm will recheck");
+  });
+  it("renders nothing when no company has open accounts", () => {
+    expect(renderToStaticMarkup(createElement(HowWeSizedThis, {
+      inventory: null,
+      brandName: "Our Firm",
+      companies: [{ name: "Main Co", inventory: null }],
+    }))).toBe("");
+  });
 });
 
 describe("account editor", () => {

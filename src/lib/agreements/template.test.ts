@@ -5,6 +5,11 @@ import {
   renderAgreementTemplate,
 } from "./template";
 import { generateProposalAgreementText } from "@/lib/engagements/agreementGenerator";
+import {
+  companyBundleFeeLines,
+  DEFAULT_BUNDLE_PRICING_OPTIONS,
+  priceCompanyBundle,
+} from "@/lib/quotes/companyBundle";
 
 describe("renderAgreementTemplate", () => {
   const stagedInput = {
@@ -164,6 +169,36 @@ describe("renderAgreementTemplate", () => {
     expect(text).toContain("SELECTED SERVICES AND PAYMENT SCHEDULE");
     expect(text).toContain("Total Due Upon Signing: $560.00");
   });
+  it("renders byte-identical text when companyFeeLines is absent or empty", () => {
+    const without = renderAgreementTemplate(DEFAULT_BOOKKEEPING_AGREEMENT_TEMPLATE, stagedInput);
+    expect(renderAgreementTemplate(DEFAULT_BOOKKEEPING_AGREEMENT_TEMPLATE, { ...stagedInput, companyFeeLines: [] })).toBe(without);
+    expect(renderAgreementTemplate(DEFAULT_BOOKKEEPING_AGREEMENT_TEMPLATE, { ...stagedInput, companyFeeLines: undefined })).toBe(without);
+    expect(without).not.toContain("bundle");
+  });
+
+  it("lists one fee line per company plus locations and setup lines with the bundle monthly total", () => {
+    const priced = priceCompanyBundle({
+      companies: [
+        { id: "main", name: "Main Co", ownQboFile: true, fileStatus: "existing", locationsCount: 2, accounts: [], complexity: null },
+        { id: "beta", name: "Beta", ownQboFile: true, fileStatus: "new_file", locationsCount: 0, accounts: [], complexity: null },
+      ],
+      packageId: "maintain",
+      baseAssessment: {},
+      options: DEFAULT_BUNDLE_PRICING_OPTIONS,
+    });
+    const feeLines = companyBundleFeeLines(priced);
+    const text = renderAgreementTemplate(DEFAULT_BOOKKEEPING_AGREEMENT_TEMPLATE, {
+      ...stagedInput,
+      companyFeeLines: feeLines,
+    });
+    expect(text).toContain("Main Co — monthly bookkeeping: $250.00 per month");
+    expect(text).toContain("Beta — monthly bookkeeping (bundle, 20% off): $200.00 per month");
+    expect(text).toContain("Beta — new QuickBooks file setup: $150.00 (one-time)");
+    expect(text).toContain("Locations — location reporting: $50.00 per month");
+    expect(text).toContain(`Ongoing Monthly Services: $${priced.bundleMonthly.toFixed(2)} per month`);
+    expect(priced.bundleMonthly).toBe(500);
+  });
+
   it("renders proposal-specific agreement fields without unresolved supported tokens", () => {
     const rendered = renderAgreementTemplate(DEFAULT_BOOKKEEPING_AGREEMENT_TEMPLATE, {
       brandName: "Southwest Digital Marketing",

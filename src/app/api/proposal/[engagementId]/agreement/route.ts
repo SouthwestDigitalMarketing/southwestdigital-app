@@ -11,6 +11,16 @@ import { isHourlyOfferKind } from "@/lib/quotes/kinds";
 import { lockQuoteMutation, QuoteMutationConflictError } from "@/lib/quotes/mutationLock";
 import { isQuoteFrozen } from "@/lib/quotes/isQuoteFrozen";
 import type { Prisma } from "@prisma/client";
+import {
+  companyBundleFeeLines,
+  DEFAULT_BUNDLE_PRICING_OPTIONS,
+  hasCompanyBundle,
+  normalizeCompanyBundle,
+  priceCompanyBundle,
+  type BundlePricingOptions,
+} from "@/lib/quotes/companyBundle";
+import { effectiveAssessment } from "@/app/(app)/offers/builder/effectiveAssessment";
+import type { AssessmentState } from "@/app/(app)/offers/builder/ProposalCreationWorkspaceDemo";
 
 export async function GET(
   request: Request,
@@ -92,6 +102,20 @@ export async function GET(
     ? assessment.agreementTemplateContent
     : null;
   const inventory = summarizeAccountInventory(normalizeAccountInventory(assessment.accounts));
+  // Spec 02: one fee line per company when the stored assessment has a
+  // bundle. Signed/stored text is never rebuilt, so this only affects newly
+  // generated agreements; legacy assessments pass nothing (byte-identical).
+  const bundlePricingOptions: BundlePricingOptions =
+    (assessment as { bundlePricingOptions?: BundlePricingOptions }).bundlePricingOptions
+    ?? DEFAULT_BUNDLE_PRICING_OPTIONS;
+  const companyFeeLines = hasCompanyBundle(assessment)
+    ? companyBundleFeeLines(priceCompanyBundle({
+        companies: normalizeCompanyBundle(assessment.companies),
+        packageId: checkout?.tier ?? "maintain",
+        baseAssessment: effectiveAssessment(assessment as unknown as AssessmentState),
+        options: bundlePricingOptions,
+      }))
+    : undefined;
   const renderInput = {
     brandName: brand?.name ?? "Bookkeeping Conroe",
     clientName: engagement.clientName || "Client",
@@ -110,6 +134,7 @@ export async function GET(
     agreementTerm: services.hasTwelveMonthAgreement === true ? "12-month" as const : "month-to-month" as const,
     selectedCleanupPeriods,
     selectedAdditionalOptionNames,
+    companyFeeLines,
     paymentScheduleVersion: checkout?.paymentScheduleVersion,
     cleanupMonths: checkout?.cleanupMonths,
     cleanupMonthlyRate: checkout?.cleanupMonthlyRate,
