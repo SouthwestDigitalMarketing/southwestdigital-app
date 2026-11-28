@@ -12,6 +12,7 @@ import {
   type ComplexitySelection,
   type ComplexityValue,
 } from "@/lib/quotes/complexityDrivers";
+import { onlineStorePayoutOverlap } from "@/lib/quotes/packagePricing";
 
 /**
  * Existing-line presence shape for the checklist display. Omitted fields
@@ -45,26 +46,15 @@ const EXISTING_LINE_LABELS: Record<string, string> = {
   mixedBooks: "the books type adjustment",
 };
 
-function foldName(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
 /**
- * Local counted-once check: the store's own payout channel (e.g. "Stripe"
- * typed as the store name) is also selected as a payment platform.
- *
- * TODO: replace with Builder B's `isStorePayoutChannelDuplicate` helper
- * from `src/lib/quotes/complexityDrivers.ts` (or companyBundle) when it
- * lands — it does not exist yet, so this folds both sides to alphanumerics
- * and matches either direction.
+ * Counted-once check, wired to the pricing helper (`onlineStorePayoutOverlap`
+ * in `packagePricing.ts`) so the hint fires exactly when pricing excludes the
+ * platform from the platform count: the normalized store name must equal a
+ * normalized platform value, or contain one (`stripe` in "Stripe payouts").
+ * `other`/`unknown` never match — they carry no channel identity.
  */
-export function isStoreChannelAlsoPlatform(storeName: string, paymentPlatforms: string[]): boolean {
-  const folded = foldName(storeName);
-  if (!folded) return false;
-  return (paymentPlatforms ?? []).some((platform) => {
-    const candidate = foldName(platform);
-    return candidate.length > 0 && (folded.includes(candidate) || candidate.includes(folded));
-  });
+function isStoreChannelAlsoPlatform(selection: ComplexitySelection, paymentPlatforms: string[]): boolean {
+  return onlineStorePayoutOverlap({ paymentPlatforms, complexity: selection }) !== null;
 }
 
 function formatMoney(value: number): string {
@@ -129,10 +119,7 @@ export default function ComplexityChecklist({
         const needsName = NEEDS_NAME.includes(id);
         const needsCount = NEEDS_COUNT.includes(id);
         const storeDuplicate =
-          id === "online_store" &&
-          checked &&
-          value.checked === true &&
-          isStoreChannelAlsoPlatform(value.name ?? "", paymentPlatforms);
+          id === "online_store" && checked && isStoreChannelAlsoPlatform(normalized, paymentPlatforms);
         return (
           <li key={id} className="rounded-xl border border-slate-200 bg-white p-3">
             <label className="flex items-start gap-2 text-sm font-medium text-slate-800">

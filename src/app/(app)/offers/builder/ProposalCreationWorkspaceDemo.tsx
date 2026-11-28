@@ -94,6 +94,7 @@ import {
   complexityDriverDefs,
   hasComplexitySelection,
   normalizeComplexitySelection,
+  sanitizeComplexityDriverDefaults,
   type ComplexityDriverDefaultsPatch,
   type ComplexitySelection,
 } from "@/lib/quotes/complexityDrivers";
@@ -101,11 +102,6 @@ import {
   sanitizeBundlePricingDefaults,
   type OptionsTemplateAssessmentSlice,
 } from "@/lib/quotes/optionsTemplates";
-import {
-  normalizeComplexitySelection,
-  sanitizeComplexityDriverDefaults,
-  type ComplexityDriverDefaultsPatch,
-} from "@/lib/quotes/complexityDrivers";
 
 export {
   reconcileProposalAssessmentWithCatalog,
@@ -1117,6 +1113,35 @@ function parseAnnualSavingsPercentInput(value: string) {
   return Math.min(100, Math.max(0, parsed));
 }
 
+/**
+ * Spec 03 sales-tax / project-tracking auto-on (single source of truth).
+ * Ticking the driver turns its existing add-on line ON; unticking the driver
+ * NEVER turns an add-on off — the add-on toggle stays the single off-switch,
+ * so an add-on the user chose independently (or that was on before the
+ * driver existed) is never silently removed. Payroll and mixed books never
+ * auto-change headcount or bookSetType; they price a "requires" line.
+ */
+export function complexityDriverAutoOn(
+  selection: ComplexitySelection,
+  flags: { offerSalesTaxFiling: boolean; offerProjectTracking: boolean },
+): { offerSalesTaxFiling: boolean; offerProjectTracking: boolean } {
+  return {
+    offerSalesTaxFiling: selection.drivers.sales_tax.checked === true ? true : flags.offerSalesTaxFiling,
+    offerProjectTracking: selection.drivers.job_tracking.checked === true ? true : flags.offerProjectTracking,
+  };
+}
+
+/**
+ * Live complexity edit path: normalize the checklist selection and apply the
+ * auto-on rule in the same state update, so ticking sales-tax / job-tracking
+ * turns the add-on on immediately (not just on the next reload) and the
+ * checklist "Included in <line>" note agrees with pricing in the same render.
+ */
+export function applyComplexitySelection(current: AssessmentState, next: unknown): AssessmentState {
+  const complexity = normalizeComplexitySelection(next);
+  return { ...current, complexity, ...complexityDriverAutoOn(complexity, current) };
+}
+
 function withComplexityUnknownDefaults(assessment: AssessmentState): AssessmentState {
   // Spec 02: a saved bundle is canonical — companies normalize tolerantly and
   // `accounts` mirrors companies[0].accounts. Legacy snapshots (no `companies`
@@ -1134,10 +1159,10 @@ function withComplexityUnknownDefaults(assessment: AssessmentState): AssessmentS
     assessment.complexity === undefined
       ? undefined
       : normalizeComplexitySelection(assessment.complexity);
-  const offerSalesTaxFiling =
-    complexity?.drivers.sales_tax.checked === true ? true : assessment.offerSalesTaxFiling;
-  const offerProjectTracking =
-    complexity?.drivers.job_tracking.checked === true ? true : assessment.offerProjectTracking;
+  // Same auto-on rule as the live edit path (applyComplexitySelection).
+  const { offerSalesTaxFiling, offerProjectTracking } = complexity
+    ? complexityDriverAutoOn(complexity, assessment)
+    : { offerSalesTaxFiling: assessment.offerSalesTaxFiling, offerProjectTracking: assessment.offerProjectTracking };
   return {
     ...assessment,
     accounts: companies ? companies[0].accounts : normalizeAccountInventory(assessment.accounts),
@@ -2802,7 +2827,7 @@ export default function ProposalCreationWorkspaceDemo({
                       defaults={assessment.complexityDriverDefaults}
                       existing={complexityExistingPresence(assessment)}
                       paymentPlatforms={assessment.paymentPlatforms}
-                      onChange={(next) => updateAssessment("complexity", normalizeComplexitySelection(next))}
+                      onChange={(next) => setAssessment((current) => applyComplexitySelection(current, next))}
                     />
                   </AssessmentCardSection>
                 ) : null}

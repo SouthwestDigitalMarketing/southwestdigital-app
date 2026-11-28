@@ -101,7 +101,11 @@ import {
   isProposalPreviewSimulation,
   resolveProposalInteractionEngagementId,
 } from "@/lib/quotes/previewSafety";
-import type { PublicBookkeepingProposal, PublicProposalPricing } from "@/lib/quotes/publicProposal";
+import type {
+  ComplexityWhyByTier,
+  PublicBookkeepingProposal,
+  PublicProposalPricing,
+} from "@/lib/quotes/publicProposal";
 import { resolveProposalPackageName } from "./proposalPackageNames";
 import { includedServicePackages, proposalServiceAddOns, serviceIsApplicable } from "@/lib/quotes/proposalServices";
 
@@ -726,9 +730,9 @@ export default function OfferProposalPreview(props: OfferProposalPreviewProps = 
   if (props.live && props.publicProposal) {
     // Whitelisted per-tier Spec 02 bundle; legacy snapshots carry none.
     const publicBundle = props.publicProposal.companyBundle ?? null;
-    // Spec 03 whitelisted "Why this price" lines (Builder B adds the
-    // top-level field); legacy snapshots carry none, which hides the list.
-    const publicComplexityWhyRaw = (props.publicProposal as unknown as { complexityWhy?: unknown }).complexityWhy;
+    // Spec 03 whitelisted per-tier "Why this price" lists, typed from the
+    // public payload (no defensive cast); legacy snapshots carry none, which
+    // hides the list.
     return (
       <OfferProposalPreviewView
         {...props}
@@ -737,7 +741,8 @@ export default function OfferProposalPreview(props: OfferProposalPreviewProps = 
         publishedPricing={props.publicProposal.pricing}
         publicAccountInventory={props.publicProposal.accountInventory}
         publicCompanyBundle={publicBundle}
-        publicComplexityWhy={Array.isArray(publicComplexityWhyRaw) ? (publicComplexityWhyRaw as ComplexityPublicWhy[]) : null}
+        publicComplexityWhyByTier={props.publicProposal.complexityWhyByTier}
+        publicComplexityWhy={props.publicProposal.complexityWhy}
         livePublic
       />
     );
@@ -794,7 +799,8 @@ function OfferProposalPreviewView({
   livePublic = false,
   publicAccountInventory,
   publicCompanyBundle = null,
-  publicComplexityWhy = null,
+  publicComplexityWhyByTier = null,
+  publicComplexityWhy: legacyPublicComplexityWhy = null,
 }: Omit<OfferProposalPreviewProps, "assessment" | "initialAssessment" | "initialContactInfo" | "publicProposal"> & {
   assessment: PreviewAssessment | AssessmentState;
   contactInfo: PreviewContactInfo;
@@ -806,8 +812,13 @@ function OfferProposalPreviewView({
    */
   publicCompanyBundle?: PublicCompanyBundleMap | null;
   /**
-   * Whitelisted Spec 03 "Why this price" lines for the public page; null
-   * (legacy) hides the list.
+   * Whitelisted per-tier Spec 03 "Why this price" lists for the public page;
+   * the view shows the SELECTED tier tab's list. Null (legacy) hides the list.
+   */
+  publicComplexityWhyByTier?: ComplexityWhyByTier | null;
+  /**
+   * Maintain-tier alias of the field above, kept for payload shape compat.
+   * The per-tier map is preferred; this is only the fallback.
    */
   publicComplexityWhy?: ComplexityPublicWhy[] | null;
 }) {
@@ -1343,8 +1354,9 @@ function OfferProposalPreviewView({
     : [];
 
   // Spec 03 "Why this price": staff preview prices the full assessment for
-  // the viewed tier; the public page renders the whitelisted field only.
-  // Either side with no selection renders nothing (legacy unchanged).
+  // the selected tier; the public page renders the whitelisted per-tier field
+  // for the selected tier tab (no recompute). Either side with no selection
+  // renders nothing (legacy unchanged).
   const staffComplexityAssessment = livePublic ? null : (assessment as AssessmentState);
   const staffComplexityWhy =
     staffComplexityAssessment !== null && hasComplexitySelection(staffComplexityAssessment.complexity)
@@ -1357,6 +1369,9 @@ function OfferProposalPreviewView({
           }).lines,
         )
       : null;
+  const publicComplexityWhy = livePublic
+    ? (publicComplexityWhyByTier?.[bundleTier] ?? legacyPublicComplexityWhy)
+    : null;
 
   const cleanupKey = (optionId: OptionId, periodKey: string) => `${optionId}:${periodKey}`;
   const cleanupIsSelected = (optionId: OptionId, periodKey: string) => cleanupSelections[cleanupKey(optionId, periodKey)] !== false;

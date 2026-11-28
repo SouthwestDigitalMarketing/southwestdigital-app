@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import ComplexityChecklist, { isStoreChannelAlsoPlatform } from "./ComplexityChecklist";
+import ComplexityChecklist from "./ComplexityChecklist";
 import {
   hasComplexitySelection,
   normalizeComplexitySelection,
@@ -189,11 +189,29 @@ describe("ComplexityChecklist onChange", () => {
   });
 });
 
-describe("isStoreChannelAlsoPlatform", () => {
-  it("matches either direction after folding", () => {
-    expect(isStoreChannelAlsoPlatform("Stripe", ["stripe"])).toBe(true);
-    expect(isStoreChannelAlsoPlatform("Cash App", ["cash-app"])).toBe(true);
-    expect(isStoreChannelAlsoPlatform("Shopify", ["stripe"])).toBe(false);
-    expect(isStoreChannelAlsoPlatform("", ["stripe"])).toBe(false);
+describe("payout-channel hint follows pricing (onlineStorePayoutOverlap)", () => {
+  function hintShows(storeName: string, paymentPlatforms: string[]): boolean {
+    const { html } = renderHtml({
+      selection: normalizeComplexitySelection({ drivers: { online_store: { checked: true, name: storeName } } }),
+      paymentPlatforms,
+    });
+    return html.includes("the store driver wins");
+  }
+
+  it("fires exactly when pricing counts the channel once", () => {
+    expect(hintShows("Stripe", ["stripe"])).toBe(true);
+    expect(hintShows("Cash App", ["cash-app"])).toBe(true);
+    expect(hintShows("Stripe payouts", ["stripe"])).toBe(true);
+    expect(hintShows("Shopify", ["stripe"])).toBe(false);
+    expect(hintShows("", ["stripe"])).toBe(false);
+    expect(hintShows("Stripe", ["other"])).toBe(false);
+  });
+
+  it("does not match a platform name merely containing the store name", () => {
+    // The old local helper folded both sides and matched either direction, so
+    // store "App" against platform "cash-app" showed the hint while pricing
+    // still charged the platform. The wired helper matches only when the
+    // store name equals or contains the platform token.
+    expect(hintShows("App", ["cash-app"])).toBe(false);
   });
 });

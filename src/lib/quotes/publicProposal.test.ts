@@ -52,6 +52,7 @@ describe("public proposal data boundary", () => {
       pricing,
       companyBundle: null,
       complexityWhy: null,
+      complexityWhyByTier: null,
       contactInfo: { companyName: "", owners: [], primaryContact: { firstName: "", lastName: "", email: "", sameAsOwner: false, ownerId: "", phone: "", role: "" } },
     });
     expect(snapshot).toEqual(before);

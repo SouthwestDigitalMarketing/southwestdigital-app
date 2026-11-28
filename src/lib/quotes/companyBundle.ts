@@ -403,6 +403,13 @@ function syntheticCompanyInputs(
   );
   return {
     ...emptyPackagePricingInputs(),
+    // No headcount or add-on flags are synthesized: per-company existing-line
+    // drivers honestly report their line absent (monthly $0 with
+    // `requiresExistingLine`), matching the per-company checklist display.
+    // Stated explicitly rather than relying on the `?? true` legacy default
+    // in `complexityExistingPresence`.
+    offerSalesTaxFiling: false,
+    offerProjectTracking: false,
     transactionBand: summary.hasInventory ? (summary.derivedBand ?? "") : "",
     numberOfProperties: company.propertiesCount,
     bankAccountsCount: summary.derivedCounts.bankAccountsCount,

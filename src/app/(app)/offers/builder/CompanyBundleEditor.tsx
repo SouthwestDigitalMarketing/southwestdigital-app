@@ -18,10 +18,7 @@ import type { AccountEntry } from "@/lib/quotes/accountInventory";
 import type { PackageId } from "@/lib/quotes/packagePricing";
 import AccountInventoryEditor from "./AccountInventoryEditor";
 import ComplexityChecklist from "./ComplexityChecklist";
-import {
-  complexityExistingPresence,
-  type AssessmentState,
-} from "./ProposalCreationWorkspaceDemo";
+import type { AssessmentState } from "./ProposalCreationWorkspaceDemo";
 
 const PACKAGE_IDS = ["grow", "improve", "maintain"] as const satisfies readonly PackageId[];
 
@@ -359,7 +356,16 @@ export default function CompanyBundleEditor({
                       compact
                       selection={company.complexity}
                       defaults={baseAssessment.complexityDriverDefaults}
-                      existing={complexityExistingPresence(baseAssessment)}
+                      // Per-company pricing synthesizes its own inputs with no
+                      // add-ons, headcount or books type, so every existing
+                      // line reads absent here — matching the priced
+                      // `requiresExistingLine` notes ("Will add <line>").
+                      existing={{
+                        salesTaxAddon: false,
+                        projectTrackingAddon: false,
+                        mixedBooks: false,
+                        staffingHeadcount: 0,
+                      }}
                       paymentPlatforms={baseAssessment.paymentPlatforms ?? []}
                       onChange={(next) =>
                         // Spread: the normalized selection interface gains

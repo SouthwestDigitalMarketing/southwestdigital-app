@@ -148,6 +148,34 @@ describe("CompanyBundleEditor per-company complexity checklist", () => {
     expect(next.find((entry) => entry.id === "main")?.complexity).toBeNull();
   });
 
+  it("per-company existing-line drivers read absent (Will add), matching per-company pricing", () => {
+    const fresh = freshAssessment();
+    const html = renderToStaticMarkup(
+      createElement(CompanyBundleEditor, {
+        companies: [
+          company({ id: "main", name: "Main Co" }),
+          company({
+            id: "beta",
+            name: "Beta",
+            complexity: { ...normalizeComplexitySelection({ drivers: { sales_tax: { checked: true } } }) },
+          }),
+        ],
+        companyName: "Acme LLC",
+        mainAccounts: [],
+        baseAssessment: effectiveAssessment(fresh),
+        bundleOptions: resolveBundlePricingOptions({}),
+        storedBundleOptions: {},
+        newFileSetupSource: "placeholder",
+        legacyEntitiesField: createElement("span", { id: "legacy-entities" }, "legacy"),
+        onCompaniesChange: () => {},
+        onBundleOptionsChange: () => {},
+      }),
+    );
+    // The added file has no add-on of its own, so the row reads "Will add" —
+    // the same `requiresExistingLine` pricing emits for the file.
+    expect(html).toContain("Will add the Sales Tax Filing &amp; Remittance add-on.");
+  });
+
   it("a ticked per-company selection renders ticked", () => {
     const fresh = freshAssessment();
     const html = renderToStaticMarkup(

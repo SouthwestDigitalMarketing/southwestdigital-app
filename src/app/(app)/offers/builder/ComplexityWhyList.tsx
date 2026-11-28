@@ -17,9 +17,9 @@ function formatMonthly(monthly: number): string {
 /**
  * Client-facing "Why this price" list. Staff preview feeds it from
  * `priceComplexityDrivers` via `toPublicComplexityWhy`; the public page
- * feeds it the whitelisted top-level `complexityWhy` field. Null, undefined
- * or an empty list renders nothing, so legacy proposals read exactly as
- * before.
+ * feeds it the selected tier tab's entry of the whitelisted per-tier
+ * `complexityWhyByTier` field. Null, undefined or an empty list renders
+ * nothing, so legacy proposals read exactly as before.
  */
 export default function ComplexityWhyList({
   lines,
