@@ -1,4 +1,12 @@
 # SWapp handoff
+## 2026-11-28 — Title screen preview + collapsed voice tests (Johnny)
+
+Episode page: Hear the voice is a closed accordion. Every episode shows the
+open-card still (daily: domain + Day N; weekly: custom series open) with
+Approve. Approval is SWapp-only; it does not recut or publish. Demo :3117
+`/showrunner/editor/mwzglzlj-5643aa`. Showrunner worktree
+`showrunner-title-preview` draws the daily card and pushes `titleScreen`.
+
 ## 2026-11-27 — Bigger SM7B punch A/B (Johnny)
 
 Tom picked 7, said 5–7 still had no real low-end punch and the differences

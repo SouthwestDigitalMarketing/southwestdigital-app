@@ -60,10 +60,18 @@ export async function POST(request: Request) {
         visibilityBusy: row.visibilityBusy,
         sentAt: row.sentAt,
       };
+      const withTitle = row.titleScreen
+        ? {
+            ...data,
+            titleScreen: row.titleScreen,
+            titleScreenKind: row.titleScreenKind,
+            titleScreenDay: row.titleScreenDay,
+          }
+        : data;
       await tx.showrunnerVideoStatus.upsert({
         where: { brandId_batch: { brandId: brand.id, batch: row.batch } },
-        create: { brandId: brand.id, batch: row.batch, ...data },
-        update: data,
+        create: { brandId: brand.id, batch: row.batch, ...withTitle },
+        update: withTitle,
       });
     }
     // Ripley sends every batch it still has. An unfinished row it no longer sends was cancelled, merged into
