@@ -68,6 +68,32 @@ describe("parseVideoStatus", () => {
     expect(row?.thumbnailBusy).toBe(true);
   });
 
+  it("keeps timed transcript cues and the teaser span", () => {
+    const row = parseVideoStatus({
+      batch: "b7",
+      state: "episode",
+      transcriptCues: [
+        { start: 10, end: 14, text: "able to give them three years" },
+        { start: 14, end: 18, text: "with solid reporting." },
+        { start: 18, end: 10, text: "backwards" },
+        "nope",
+      ],
+      teaser: { wanted: true, start: 10, end: 18.3, text: "able to give them three years with solid reporting." },
+      teaserBusy: true,
+    });
+    expect(row?.transcriptCues).toEqual([
+      { start: 10, end: 14, text: "able to give them three years" },
+      { start: 14, end: 18, text: "with solid reporting." },
+    ]);
+    expect(row?.teaser).toEqual({
+      wanted: true,
+      start: 10,
+      end: 18.3,
+      text: "able to give them three years with solid reporting.",
+    });
+    expect(row?.teaserBusy).toBe(true);
+  });
+
   it("keeps the YouTube link and a stopped step's reason", () => {
     const row = parseVideoStatus({
       batch: "b1", state: "episode", url: "https://www.youtube.com/watch?v=g-S6zVZycr4",

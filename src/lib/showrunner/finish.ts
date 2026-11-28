@@ -37,3 +37,20 @@ export async function writeLocalThumbnail(batch: string, text: string): Promise<
   );
   return true;
 }
+
+/** On ripley, leave .teaser.json so the review timer splices a new open without waiting on the next poll. */
+export async function writeLocalTeaser(
+  batch: string,
+  request: { wanted: false } | { wanted: true; start: number; end: number },
+): Promise<boolean> {
+  const inbox = process.env.PHONE_INTAKE_INBOX ?? "";
+  if (!inbox || !BATCH.test(batch)) return false;
+  const folder = path.join(inbox, "done", batch);
+  try {
+    await access(folder);
+  } catch {
+    return false;
+  }
+  await writeFile(path.join(folder, ".teaser.json"), JSON.stringify({ ...request, at: Math.floor(Date.now() / 1000) }));
+  return true;
+}

@@ -20,6 +20,12 @@ export type VideoRender = {
 /** Facts about the episode, filled in as the autopilot learns them. */
 export type VideoDetails = { lengthSeconds?: number; graphics?: number; quickbooksScreens?: number };
 
+/** One timed line of the talking-head transcript, for highlighting a teaser. */
+export type TranscriptCue = { start: number; end: number; text: string };
+
+/** Teaser before the title screen. `wanted` false means start on the title. */
+export type Teaser = { wanted: boolean; start: number | null; end: number | null; text: string | null };
+
 /** A JPEG thumbnail sent inline by ripley. */
 export const THUMBNAIL_PREFIX = "data:image/jpeg;base64,";
 const THUMBNAIL_MAX = 200 * 1024;
@@ -39,6 +45,9 @@ export type VideoStatusInput = {
   thumbnailText: string | null;
   thumbnailOptions: string[] | null;
   thumbnailBusy: boolean;
+  transcriptCues: TranscriptCue[] | null;
+  teaser: Teaser | null;
+  teaserBusy: boolean;
   sentAt: Date | null;
 };
 
@@ -106,6 +115,29 @@ export function parseVideoStatus(raw: unknown): VideoStatusInput | null {
     details = Object.keys(kept).length > 0 ? kept : null;
   }
   const created = typeof row.created === "number" && row.created > 0 ? new Date(row.created * 1000) : null;
+  const transcriptCues = Array.isArray(row.transcriptCues)
+    ? row.transcriptCues.slice(0, 400).flatMap((cue): TranscriptCue[] => {
+        if (!cue || typeof cue !== "object") return [];
+        const item = cue as Record<string, unknown>;
+        const start = typeof item.start === "number" && Number.isFinite(item.start) ? item.start : null;
+        const end = typeof item.end === "number" && Number.isFinite(item.end) ? item.end : null;
+        const cueText = text(item.text, 280);
+        if (start === null || end === null || end <= start || !cueText) return [];
+        return [{ start, end, text: cueText }];
+      })
+    : null;
+  let teaser: Teaser | null = null;
+  if (row.teaser && typeof row.teaser === "object") {
+    const item = row.teaser as Record<string, unknown>;
+    if (typeof item.wanted === "boolean") {
+      teaser = {
+        wanted: item.wanted,
+        start: typeof item.start === "number" && Number.isFinite(item.start) ? item.start : null,
+        end: typeof item.end === "number" && Number.isFinite(item.end) ? item.end : null,
+        text: text(item.text, 2000),
+      };
+    }
+  }
   const thumbnailOptions = Array.isArray(row.thumbnailOptions)
     ? row.thumbnailOptions
         .slice(0, 8)
@@ -129,6 +161,9 @@ export function parseVideoStatus(raw: unknown): VideoStatusInput | null {
     thumbnailText: text(row.thumbnailText, 80),
     thumbnailOptions: thumbnailOptions && thumbnailOptions.length > 0 ? thumbnailOptions : null,
     thumbnailBusy: row.thumbnailBusy === true,
+    transcriptCues: transcriptCues && transcriptCues.length > 0 ? transcriptCues : null,
+    teaser,
+    teaserBusy: row.teaserBusy === true,
     sentAt: created && !Number.isNaN(created.getTime()) ? created : null,
   };
 }

@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import { ThumbnailCopy, TranscriptAccordion } from "@/components/showrunner/ThumbnailCopy";
 import { WaitingActions } from "@/components/showrunner/WaitingActions";
 import { isWaitingForYou } from "@/lib/showrunner/production";
-import type { VideoDetails, VideoRender, VideoStep } from "@/lib/showrunner/video-status";
+import type { Teaser, TranscriptCue, VideoDetails, VideoRender, VideoStep } from "@/lib/showrunner/video-status";
 
 export type VideoCard = {
   batch: string;
@@ -23,6 +23,9 @@ export type VideoCard = {
   thumbnailText?: string | null;
   thumbnailOptions?: string[] | null;
   thumbnailBusy?: boolean;
+  transcriptCues?: TranscriptCue[] | null;
+  teaser?: Teaser | null;
+  teaserBusy?: boolean;
 };
 
 const MARK: Record<VideoStep["state"], string> = { done: "✓", now: "●", todo: "○", stopped: "✕" };
@@ -164,7 +167,16 @@ export function VideosInProgress({
                 ) : null}
               </div>
             </div>
-            {copy ? <TranscriptAccordion transcript={video.transcript ?? null} /> : null}
+            {copy ? (
+              <TranscriptAccordion
+                batch={video.batch}
+                transcript={video.transcript ?? null}
+                cues={video.transcriptCues ?? null}
+                teaser={video.teaser ?? null}
+                busy={Boolean(video.teaserBusy)}
+                published={Boolean(video.url)}
+              />
+            ) : null}
           </div>
         );
       })}

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { requestThumbnailText } from "@/app/(app)/showrunner/editor/actions";
+import { requestTeaser, requestThumbnailText } from "@/app/(app)/showrunner/editor/actions";
+import type { Teaser, TranscriptCue } from "@/lib/showrunner/video-status";
 
 function sameWording(a: string, b: string) {
   return a.replace(/\s*\/\s*/g, " ").trim().toUpperCase() === b.replace(/\s*\/\s*/g, " ").trim().toUpperCase();
@@ -101,14 +102,128 @@ export function ThumbnailCopy({
   );
 }
 
-export function TranscriptAccordion({ transcript }: { transcript: string | null }) {
-  if (!transcript) return null;
+function selectedRange(root: HTMLElement): { start: number; end: number } | null {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
+  const range = sel.getRangeAt(0);
+  if (!root.contains(range.commonAncestorContainer)) return null;
+  const hits = [...root.querySelectorAll<HTMLElement>("[data-start]")].filter((el) => {
+    try {
+      return range.intersectsNode(el);
+    } catch {
+      return false;
+    }
+  });
+  if (!hits.length) return null;
+  return {
+    start: Math.min(...hits.map((el) => Number(el.dataset.start))),
+    end: Math.max(...hits.map((el) => Number(el.dataset.end))),
+  };
+}
+
+function cueInTeaser(cue: TranscriptCue, teaser: Teaser | null, draft: { start: number; end: number } | null) {
+  const span =
+    draft ??
+    (teaser?.wanted && teaser.start != null && teaser.end != null ? { start: teaser.start, end: teaser.end } : null);
+  if (!span) return false;
+  return cue.end > span.start && cue.start < span.end;
+}
+
+/** Transcript with Johnny's teaser highlighted. Highlight another stretch to change it, or start on the title. */
+export function TranscriptAccordion({
+  batch,
+  transcript,
+  cues,
+  teaser,
+  busy,
+  published = false,
+}: {
+  batch: string;
+  transcript: string | null;
+  cues?: TranscriptCue[] | null;
+  teaser?: Teaser | null;
+  busy?: boolean;
+  published?: boolean;
+}) {
+  const [draft, setDraft] = useState<{ start: number; end: number } | null>(null);
+  if (!transcript && !cues?.length) return null;
+  const timed = cues && cues.length > 0;
+  const draftText = draft && timed ? cues.filter((cue) => cue.end > draft.start && cue.start < draft.end).map((cue) => cue.text).join(" ") : "";
   return (
-    <details className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+    <details className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3" open={Boolean(timed && teaser)}>
       <summary className="cursor-pointer text-sm font-semibold text-slate-900">Transcript</summary>
-      <pre className="mt-3 max-h-80 overflow-y-auto whitespace-pre-wrap font-sans text-sm leading-relaxed text-slate-700">
-        {transcript}
-      </pre>
+      {busy ? (
+        <p className="mt-3 text-sm text-slate-700">
+          Remaking the opening.{published ? " YouTube will get the new cut." : " The rest of the video stays as it is."}
+        </p>
+      ) : null}
+      {timed && !busy ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <form action={requestTeaser}>
+            <input type="hidden" name="batch" value={batch} />
+            <input type="hidden" name="wanted" value="false" />
+            <button
+              type="submit"
+              className="rounded-full border border-slate-300 bg-white px-4 py-1.5 text-sm font-semibold text-slate-800"
+            >
+              {teaser?.wanted === false ? "Starts on the title" : "Start on the title — no teaser"}
+            </button>
+          </form>
+          {teaser?.wanted === false && teaser.start != null && teaser.end != null ? (
+            <form action={requestTeaser}>
+              <input type="hidden" name="batch" value={batch} />
+              <input type="hidden" name="wanted" value="true" />
+              <input type="hidden" name="start" value={teaser.start} />
+              <input type="hidden" name="end" value={teaser.end} />
+              <button type="submit" className="rounded-full bg-slate-900 px-4 py-1.5 text-sm font-semibold text-white">
+                Put the teaser back
+              </button>
+            </form>
+          ) : null}
+        </div>
+      ) : null}
+      {timed && !busy ? (
+        <p className="mt-2 text-sm text-slate-600">
+          {teaser?.wanted === false
+            ? "This video starts on the title. Highlight words below if you want a teaser before it."
+            : "Yellow is the teaser before the title. Highlight other words to change it."}
+        </p>
+      ) : null}
+      {timed ? (
+        <p
+          className="mt-3 max-h-80 overflow-y-auto font-sans text-sm leading-relaxed text-slate-700"
+          onMouseUp={(event) => setDraft(selectedRange(event.currentTarget))}
+          onTouchEnd={(event) => setDraft(selectedRange(event.currentTarget))}
+        >
+          {cues.map((cue, index) => (
+            <span
+              key={`${cue.start}-${index}`}
+              data-start={cue.start}
+              data-end={cue.end}
+              className={cueInTeaser(cue, teaser ?? null, draft) ? "rounded-sm bg-amber-200" : undefined}
+            >
+              {cue.text}
+              {index < cues.length - 1 ? " " : ""}
+            </span>
+          ))}
+        </p>
+      ) : (
+        <pre className="mt-3 max-h-80 overflow-y-auto whitespace-pre-wrap font-sans text-sm leading-relaxed text-slate-700">
+          {transcript}
+        </pre>
+      )}
+      {timed && draft && !busy ? (
+        <form action={requestTeaser} className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+          <input type="hidden" name="batch" value={batch} />
+          <input type="hidden" name="wanted" value="true" />
+          <input type="hidden" name="start" value={draft.start} />
+          <input type="hidden" name="end" value={draft.end} />
+          <p className="text-sm text-slate-800">{draftText}</p>
+          <button type="submit" className="mt-2 rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white">
+            Use this as the teaser
+          </button>
+        </form>
+      ) : null}
     </details>
   );
 }

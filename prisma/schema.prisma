@@ -2169,6 +2169,14 @@ model ShowrunnerVideoStatus {
   /// Tom picked new thumbnail words; ripley remakes the picture and clears this.
   thumbnailRequestedAt DateTime?
   thumbnailRequestText String?
+  /// Timed talking-head cues so the transcript can highlight the teaser.
+  transcriptCues Json?
+  /// {wanted, start, end, text} — teaser before the title, or start on the title.
+  teaser Json?
+  teaserBusy Boolean @default(false)
+  /// Tom picked a teaser range or turned it off; ripley splices the show and clears this.
+  teaserRequestedAt DateTime?
+  teaserRequest Json?
   updatedAt DateTime  @default(now()) @updatedAt
   brand     Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
