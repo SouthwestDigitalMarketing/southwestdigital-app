@@ -1114,12 +1114,15 @@ function parseAnnualSavingsPercentInput(value: string) {
 }
 
 /**
- * Spec 03 sales-tax / project-tracking auto-on (single source of truth).
- * Ticking the driver turns its existing add-on line ON; unticking the driver
- * NEVER turns an add-on off — the add-on toggle stays the single off-switch,
- * so an add-on the user chose independently (or that was on before the
- * driver existed) is never silently removed. Payroll and mixed books never
- * auto-change headcount or bookSetType; they price a "requires" line.
+ * Spec 03 sales-tax / project-tracking two-way binding (single source of
+ * truth for the live edit paths; load never heals either direction).
+ * Ticking the driver turns its existing add-on line ON; turning the add-on
+ * OFF unticks its driver in the same update (applyAddonFlagChange), so a
+ * stored OFF stays OFF across save/reload and never silently raises the
+ * price. Unticking the driver NEVER turns an add-on off, so an add-on the
+ * user chose independently (or that was on before the driver existed) is
+ * never silently removed. Payroll and mixed books never auto-change
+ * headcount or bookSetType; they price a "requires" line.
  */
 export function complexityDriverAutoOn(
   selection: ComplexitySelection,
@@ -1128,6 +1131,32 @@ export function complexityDriverAutoOn(
   return {
     offerSalesTaxFiling: selection.drivers.sales_tax.checked === true ? true : flags.offerSalesTaxFiling,
     offerProjectTracking: selection.drivers.job_tracking.checked === true ? true : flags.offerProjectTracking,
+  };
+}
+
+/**
+ * Live add-on toggle path: turning the sales-tax / project-tracking
+ * add-on OFF unticks its checklist driver in the same state update, so
+ * the checklist never prices a row for a line the proposal no longer
+ * carries. Turning the add-on ON leaves drivers alone — a ticked driver
+ * already implies ON via the live complexity path, and an unticked one
+ * must not self-check. The `flag` union is exactly the two add-ons with
+ * mapped drivers; nothing else routes through here.
+ */
+export function applyAddonFlagChange(
+  current: AssessmentState,
+  flag: "offerSalesTaxFiling" | "offerProjectTracking",
+  value: boolean,
+): AssessmentState {
+  if (value) return { ...current, [flag]: true };
+  if (current.complexity === undefined) return { ...current, [flag]: false };
+  const driverId = flag === "offerSalesTaxFiling" ? "sales_tax" : "job_tracking";
+  return {
+    ...current,
+    [flag]: false,
+    complexity: normalizeComplexitySelection({
+      drivers: { ...current.complexity.drivers, [driverId]: { checked: false } },
+    }),
   };
 }
 
@@ -1151,25 +1180,23 @@ function withComplexityUnknownDefaults(assessment: AssessmentState): AssessmentS
     storedCompanies === undefined ? undefined : normalizeCompanyBundle(storedCompanies);
   const companies = normalizedBundle && normalizedBundle.length > 0 ? normalizedBundle : undefined;
   // Spec 03: the checklist selection normalizes tolerantly (junk drops to
-  // unchecked). A ticked sales-tax / project-tracking driver turns its
-  // existing add-on line ON here — the single source of truth, in the
-  // assessment normalization step, never in render. Payroll and mixed books
-  // never auto-change headcount or bookSetType; they price a "requires" line.
+  // unchecked). Load NEVER heals flags or drivers: a stored add-on OFF
+  // stays OFF even when its driver is ticked (the checklist then prices a
+  // "Will add <line>" waiting row instead of charging), and a stored ON
+  // stays ON. The two-way binding lives in the live edit paths only —
+  // driver tick turns the add-on ON (applyComplexitySelection via
+  // complexityDriverAutoOn), add-on OFF unticks the driver
+  // (applyAddonFlagChange). Payroll and mixed books never auto-change
+  // headcount or bookSetType; they price a "requires" line.
   const complexity =
     assessment.complexity === undefined
       ? undefined
       : normalizeComplexitySelection(assessment.complexity);
-  // Same auto-on rule as the live edit path (applyComplexitySelection).
-  const { offerSalesTaxFiling, offerProjectTracking } = complexity
-    ? complexityDriverAutoOn(complexity, assessment)
-    : { offerSalesTaxFiling: assessment.offerSalesTaxFiling, offerProjectTracking: assessment.offerProjectTracking };
   return {
     ...assessment,
     accounts: companies ? companies[0].accounts : normalizeAccountInventory(assessment.accounts),
     companies,
     complexity,
-    offerSalesTaxFiling,
-    offerProjectTracking,
     complexityDriverDefaults:
       assessment.complexityDriverDefaults === undefined
         ? undefined
@@ -2827,6 +2854,7 @@ export default function ProposalCreationWorkspaceDemo({
                       defaults={assessment.complexityDriverDefaults}
                       existing={complexityExistingPresence(assessment)}
                       paymentPlatforms={assessment.paymentPlatforms}
+                      paymentPlatformOptions={PAYMENT_PLATFORM_OPTIONS}
                       onChange={(next) => setAssessment((current) => applyComplexitySelection(current, next))}
                     />
                   </AssessmentCardSection>

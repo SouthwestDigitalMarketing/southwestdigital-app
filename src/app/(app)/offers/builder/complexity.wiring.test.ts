@@ -10,12 +10,14 @@ vi.mock("../who/actions", () => ({
 
 import ComplexityChecklist from "./ComplexityChecklist";
 import {
+  applyAddonFlagChange,
   applyComplexitySelection,
   applyOptionsTemplateSlice,
   complexityDriverAutoOn,
   complexityExistingPresence,
   getProposalPricingSnapshotCleanupCard,
   getProposalPricingSnapshotData,
+  mergeStoredAssessment,
   useProposalAssessmentDemoState,
   type AssessmentState,
 } from "./ProposalCreationWorkspaceDemo";
@@ -83,15 +85,19 @@ describe("spec 03 builder wiring", () => {
     expect(data.packagePricing.maintain.complexity?.lines).toHaveLength(1);
   });
 
-  it("turns a ticked sales-tax driver on in normalization, never in render", () => {
+  it("load never re-enables an add-on the user turned off", () => {
     const assessment = assessmentWith({
       historicalCleanupPeriods: [],
       offerSalesTaxFiling: false,
       offerProjectTracking: false,
       complexity: selectionWith({ sales_tax: { checked: true }, job_tracking: { checked: true } }),
     });
-    expect(assessment.offerSalesTaxFiling).toBe(true);
-    expect(assessment.offerProjectTracking).toBe(true);
+    // Stored OFF stays OFF across reload — the checklist prices a
+    // "Will add <line>" waiting row instead of silently raising the price.
+    expect(assessment.offerSalesTaxFiling).toBe(false);
+    expect(assessment.offerProjectTracking).toBe(false);
+    expect(assessment.complexity?.drivers.sales_tax).toEqual({ checked: true });
+    expect(assessment.complexity?.drivers.job_tracking).toEqual({ checked: true });
     const idle = assessmentWith({ historicalCleanupPeriods: [] });
     expect(idle.offerSalesTaxFiling).toBe(false);
     expect(idle.offerProjectTracking).toBe(false);
@@ -189,23 +195,74 @@ describe("spec 03 sales-tax / project-tracking auto-on", () => {
     expect(next.complexity?.drivers.sales_tax).toEqual({ checked: true });
   });
 
-  it("load normalization and the live path share one rule", () => {
+  it("only the live tick turns the add-on on; load keeps stored flags", () => {
     const loaded = assessmentWith({
       historicalCleanupPeriods: [],
       offerSalesTaxFiling: false,
       offerProjectTracking: false,
       complexity: selectionWith({ sales_tax: { checked: true }, job_tracking: { checked: true } }),
     });
-    expect(loaded.offerSalesTaxFiling).toBe(true);
-    expect(loaded.offerProjectTracking).toBe(true);
+    expect(loaded.offerSalesTaxFiling).toBe(false);
+    expect(loaded.offerProjectTracking).toBe(false);
     const live = applyComplexitySelection(
       assessmentWith({ historicalCleanupPeriods: [] }),
       selectionWith({ sales_tax: { checked: true }, job_tracking: { checked: true } }),
     );
-    expect({ offerSalesTaxFiling: live.offerSalesTaxFiling, offerProjectTracking: live.offerProjectTracking }).toEqual({
-      offerSalesTaxFiling: loaded.offerSalesTaxFiling,
-      offerProjectTracking: loaded.offerProjectTracking,
-    });
+    expect(live.offerSalesTaxFiling).toBe(true);
+    expect(live.offerProjectTracking).toBe(true);
+  });
+
+  it("turning the add-on off unticks its driver in the same update", () => {
+    const ticked = applyComplexitySelection(
+      assessmentWith({ historicalCleanupPeriods: [] }),
+      selectionWith({ sales_tax: { checked: true }, job_tracking: { checked: true } }),
+    );
+    expect(ticked.offerSalesTaxFiling).toBe(true);
+    expect(ticked.offerProjectTracking).toBe(true);
+    const salesOff = applyAddonFlagChange(ticked, "offerSalesTaxFiling", false);
+    expect(salesOff.offerSalesTaxFiling).toBe(false);
+    expect(salesOff.complexity?.drivers.sales_tax).toEqual({ checked: false });
+    // The other add-on and driver are untouched.
+    expect(salesOff.offerProjectTracking).toBe(true);
+    expect(salesOff.complexity?.drivers.job_tracking).toEqual({ checked: true });
+    const trackingOff = applyAddonFlagChange(salesOff, "offerProjectTracking", false);
+    expect(trackingOff.offerProjectTracking).toBe(false);
+    expect(trackingOff.complexity?.drivers.job_tracking).toEqual({ checked: false });
+    expect(trackingOff.complexity?.drivers.sales_tax).toEqual({ checked: false });
+  });
+
+  it("turning the add-on on leaves drivers alone", () => {
+    const base = assessmentWith({ historicalCleanupPeriods: [] });
+    const on = applyAddonFlagChange(base, "offerSalesTaxFiling", true);
+    expect(on.offerSalesTaxFiling).toBe(true);
+    expect(on.complexity).toBeUndefined();
+    const ticked = applyComplexitySelection(
+      base,
+      selectionWith({ inventory_cogs: { checked: true } }),
+    );
+    const onWithDrivers = applyAddonFlagChange(ticked, "offerProjectTracking", true);
+    expect(onWithDrivers.offerProjectTracking).toBe(true);
+    expect(onWithDrivers.complexity?.drivers.inventory_cogs).toEqual({ checked: true });
+    expect(onWithDrivers.complexity?.drivers.job_tracking).toEqual({ checked: false });
+  });
+
+  it("reload keeps a user-turned-off add-on off with its driver unticked", () => {
+    const base = assessmentWith({ historicalCleanupPeriods: [] });
+    const ticked = applyComplexitySelection(
+      base,
+      selectionWith({ sales_tax: { checked: true } }),
+    );
+    const turnedOff = applyAddonFlagChange(ticked, "offerSalesTaxFiling", false);
+    // Simulate save -> reload through the stored JSON.
+    const reloaded = mergeStoredAssessment(
+      JSON.stringify({ complexity: turnedOff.complexity, offerSalesTaxFiling: turnedOff.offerSalesTaxFiling }),
+      base,
+    );
+    expect(reloaded.offerSalesTaxFiling).toBe(false);
+    expect(reloaded.complexity?.drivers.sales_tax).toEqual({ checked: false });
+    // Pricing charges nothing and waits on no line.
+    const data = getProposalPricingSnapshotData(reloaded);
+    expect(data.packagePricing.maintain.complexity?.lines ?? []).toEqual([]);
   });
 
   it("unticking a driver never silently unticks an independently chosen add-on", () => {

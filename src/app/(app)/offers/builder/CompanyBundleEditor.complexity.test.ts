@@ -176,6 +176,40 @@ describe("CompanyBundleEditor per-company complexity checklist", () => {
     expect(html).toContain("Will add the Sales Tax Filing &amp; Remittance add-on.");
   });
 
+  it("per-company rows never show a counted-once hint for main-file platforms", () => {
+    const fresh = freshAssessment();
+    const html = renderToStaticMarkup(
+      createElement(CompanyBundleEditor, {
+        companies: [
+          company({ id: "main", name: "Main Co" }),
+          company({
+            id: "beta",
+            name: "Beta",
+            complexity: {
+              ...normalizeComplexitySelection({
+                drivers: { online_store: { checked: true, name: "Shopify", payoutPlatform: "stripe" } },
+              }),
+            },
+          }),
+        ],
+        companyName: "Acme LLC",
+        mainAccounts: [],
+        // Main file lists Stripe, but per-company rows price zero
+        // platforms — the hint must not fire off the main file's list.
+        baseAssessment: { ...effectiveAssessment(fresh), paymentPlatforms: ["stripe"] },
+        bundleOptions: resolveBundlePricingOptions({}),
+        storedBundleOptions: {},
+        newFileSetupSource: "placeholder",
+        legacyEntitiesField: createElement("span", { id: "legacy-entities" }, "legacy"),
+        onCompaniesChange: () => {},
+        onBundleOptionsChange: () => {},
+      }),
+    );
+    expect(html).toContain("Complexity drivers for this file");
+    expect(html).not.toContain("Counted once here");
+    expect(html).not.toContain("choose Stripe above");
+  });
+
   it("a ticked per-company selection renders ticked", () => {
     const fresh = freshAssessment();
     const html = renderToStaticMarkup(

@@ -125,7 +125,7 @@ describe("priceComplexityDrivers tiers", () => {
     expect(grow.lines[0].monthly).toBe(complexityGrowMonthlyTotal(maintain.monthlyTotal));
   });
 
-  it("keeps multi-line grow sums within the documented rounding of the pipeline total", () => {
+  it("rebalances multi-line grow lines to sum exactly to the pipeline total", () => {
     const ids = ["inventory_cogs", "pos_system", "online_store", "loans_mca", "personal_commingling"] as const;
     const maintain = priceComplexityDrivers(checkedMany([...ids]), {
       packageId: "maintain",
@@ -138,11 +138,48 @@ describe("priceComplexityDrivers tiers", () => {
     });
     const pipelineTotal = complexityGrowMonthlyTotal(maintain.monthlyTotal);
     expect(pipelineTotal).toBe(585); // ceil5(390 x 1.5)
-    expect(grow.monthlyTotal).toBe(595); // 145 + 85 + 85 + 115 + 165
-    // Each per-line ceil5 adds < $5, so the display sum sits within
-    // $5 per extra line above the charged pipeline total.
-    expect(grow.monthlyTotal - pipelineTotal).toBeGreaterThanOrEqual(0);
-    expect(grow.monthlyTotal - pipelineTotal).toBeLessThan(5 * grow.lines.length);
+    // Per-line ceils sum to 595 (145 + 85 + 85 + 115 + 165); the $10
+    // rounding remainder sits on the largest line (commingling 165 -> 155).
+    expect(grow.monthlyTotal).toBe(585);
+    expect(grow.lines.map((line) => line.monthly).reduce((a, b) => a + b, 0)).toBe(585);
+    expect(grow.lines.find((line) => line.id === "personal_commingling")?.monthly).toBe(155);
+    expect(grow.lines.find((line) => line.id === "inventory_cogs")?.monthly).toBe(145);
+  });
+
+  it("prices the review basket grow figures (730 monthly, 585 cleanup)", () => {
+    // Brief basket: inventory, POS Lightspeed, store Shopify, loans x2,
+    // commingling, 1099 x12, sales tax ticked, 6 cleanup months.
+    const selection = normalizeComplexitySelection({
+      drivers: {
+        inventory_cogs: { checked: true },
+        pos_system: { checked: true, name: "Lightspeed" },
+        online_store: { checked: true, name: "Shopify" },
+        loans_mca: { checked: true, count: 2 },
+        personal_commingling: { checked: true },
+        filing_1099: { checked: true, count: 12 },
+        sales_tax: { checked: true },
+      },
+    });
+    const maintain = priceComplexityDrivers(selection, {
+      packageId: "maintain",
+      cleanupMonths: 6,
+      existing: { salesTaxAddon: true },
+    });
+    // 95 + 55 + 55 + 75 + 110 + 96 (12 x $8); sales tax is included ($0).
+    expect(maintain.monthlyTotal).toBe(486);
+    expect(maintain.cleanupPerMonthTotal).toBe(65);
+    expect(maintain.cleanupTotal).toBe(390);
+    const grow = priceComplexityDrivers(selection, {
+      packageId: "grow",
+      cleanupMonths: 6,
+      existing: { salesTaxAddon: true },
+    });
+    // Charged rule: ceil5(486 x 1.5) = 730; lines sum to it.
+    expect(grow.monthlyTotal).toBe(730);
+    expect(grow.lines.map((line) => line.monthly).reduce((a, b) => a + b, 0)).toBe(730);
+    expect(grow.monthlyTotal).toBe(complexityGrowMonthlyTotal(maintain.monthlyTotal));
+    // Cleanup follows the total-level rule ceil5(390 x 1.5) = 585.
+    expect(grow.cleanupTotal).toBe(585);
   });
 
   it("complexityGrowMonthlyTotal follows ceil5(maintain x 1.5)", () => {
@@ -305,6 +342,20 @@ describe("priceComplexityDrivers overrides and counts", () => {
     expect(grow.lines[0].monthly).toBe(240); // ceil5(maintain 160 x 1.5)
   });
 
+  it("never rebalances exact overrides: the lines win in an override-only basket", () => {
+    const result = priceComplexityDrivers(
+      normalizeComplexitySelection({
+        drivers: {
+          inventory_cogs: { checked: true, monthlyOverride: 100 },
+          pos_system: { checked: true, monthlyOverride: 50 },
+        },
+      }),
+      { packageId: "grow", cleanupMonths: 0 },
+    );
+    expect(result.lines.map((line) => line.monthly)).toEqual([100, 50]);
+    expect(result.monthlyTotal).toBe(150);
+  });
+
   it("derives grow 1099 from the maintain monthly", () => {
     const maintain = priceComplexityDrivers(checked("filing_1099", { count: 10 }), {
       packageId: "maintain",
@@ -389,13 +440,15 @@ describe("priceComplexityDrivers cleanup", () => {
     expect(result.cleanupTotal).toBe(70);
   });
 
-  it("derives the grow cleanup add from maintain x 1.5", () => {
+  it("derives the grow cleanup total from maintain x 1.5 at the total level", () => {
     const result = priceComplexityDrivers(checked("loans_mca"), {
       packageId: "grow",
       cleanupMonths: 2,
     });
+    // Per-month display rate stays per-line ceiled; the charged total is
+    // the total-level rule ceil5(50 x 1.5) = 75.
     expect(result.lines[0].cleanupPerMonth).toBe(40); // ceil5(25 x 1.5)
-    expect(result.cleanupTotal).toBe(80);
+    expect(result.cleanupTotal).toBe(75);
   });
 });
 
@@ -443,6 +496,21 @@ describe("normalizeComplexitySelection", () => {
     expect(selection.drivers.filing_1099).toEqual({ checked: true, count: 12 });
     expect(selection.drivers.inventory_cogs).toEqual({ checked: true, monthlyOverride: 100 });
     expect(selection.drivers.payroll).toEqual({ checked: false });
+  });
+
+  it("keeps an explicit payoutPlatform and drops blanks", () => {
+    const selection = normalizeComplexitySelection({
+      drivers: {
+        online_store: { checked: true, name: "Shopify", payoutPlatform: "stripe" },
+        pos_system: { checked: true, payoutPlatform: "   " },
+      },
+    });
+    expect(selection.drivers.online_store).toEqual({
+      checked: true,
+      name: "Shopify",
+      payoutPlatform: "stripe",
+    });
+    expect(selection.drivers.pos_system).toEqual({ checked: true });
   });
 
   it("drops unknown ids and invalid fields", () => {
@@ -590,11 +658,13 @@ describe("lead copy rulings (Spec 03/A)", () => {
     expect(byId.mixed_books.clientWhy).toMatch(/books-type adjustment/i);
   });
 
-  it("carries a builderHint on loans_mca and online_store only", () => {
+  it("carries a builderHint on loans_mca, pos_system and online_store only", () => {
     const byId = Object.fromEntries(complexityDriverDefs().map((d) => [d.id, d]));
     expect(byId.loans_mca.builderHint).toMatch(/reconciliation line/i);
     expect(byId.online_store.builderHint).toMatch(/counted once here/i);
-    for (const id of ["payroll", "sales_tax", "job_tracking", "mixed_books", "inventory_cogs", "pos_system", "personal_commingling", "filing_1099"] as const) {
+    expect(byId.online_store.builderHint).toMatch(/choose it below/i);
+    expect(byId.pos_system.builderHint).toMatch(/counted once here/i);
+    for (const id of ["payroll", "sales_tax", "job_tracking", "mixed_books", "inventory_cogs", "personal_commingling", "filing_1099"] as const) {
       expect(byId[id].builderHint).toBeUndefined();
     }
   });

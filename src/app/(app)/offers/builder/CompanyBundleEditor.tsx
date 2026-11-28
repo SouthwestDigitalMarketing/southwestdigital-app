@@ -357,16 +357,17 @@ export default function CompanyBundleEditor({
                       selection={company.complexity}
                       defaults={baseAssessment.complexityDriverDefaults}
                       // Per-company pricing synthesizes its own inputs with no
-                      // add-ons, headcount or books type, so every existing
-                      // line reads absent here — matching the priced
-                      // `requiresExistingLine` notes ("Will add <line>").
+                      // add-ons, headcount, books type or payment platforms,
+                      // so every existing line reads absent here — matching
+                      // the priced `requiresExistingLine` notes ("Will add
+                      // <line>") — and no counted-once hint can fire.
                       existing={{
                         salesTaxAddon: false,
                         projectTrackingAddon: false,
                         mixedBooks: false,
                         staffingHeadcount: 0,
                       }}
-                      paymentPlatforms={baseAssessment.paymentPlatforms ?? []}
+                      paymentPlatforms={[]}
                       onChange={(next) =>
                         // Spread: the normalized selection interface gains
                         // an implicit index signature, matching

@@ -24,14 +24,21 @@
  * (175/130), platform (55/40) each scale differently in the pipeline. The
  * module deliberately anchors every driver to complexOperationsMonthly so
  * there is one predictable rule.
- * Grow is NEVER priced bottom-up: like the pipeline's
- * `applyGrowPriceOverride`, every grow amount (monthly and cleanup add) is
- * the maintain-tier amount x GROW_PRICE_MULTIPLIER_FROM_MAINTAIN (1.5),
- * rounded UP to $5 with the same `roundUpToNearestIncrement`. Per-line grow
- * values are each ceiled, so a set of grow lines can sum ABOVE
- * ceil5(maintain total x 1.5) by less than $5 per extra line. The pipeline
- * charges the total from `complexityGrowMonthlyTotal`; the UI shows the
- * per-line values with that total as the charged figure.
+ * Grow totals are NEVER bottom-up: like the pipeline's
+ * `applyGrowPriceOverride`, every grow figure derives from the maintain
+ * tier x GROW_PRICE_MULTIPLIER_FROM_MAINTAIN (1.5), rounded UP to $5 with
+ * the same `roundUpToNearestIncrement`. Per-line grow monthlies are each
+ * ceiled from maintain, then the largest NON-EXACT line is rebalanced down
+ * so the lines SUM to the charged figure
+ * `complexityGrowMonthlyTotal(maintain monthly total)` — the stored,
+ * published and Why-tab figures agree instead of drifting above the rule
+ * by rounding. Exact per-proposal overrides are never rebalanced: in an
+ * override-only basket the lines win and the total follows them.
+ * Grow `cleanupTotal` is the total-level rule ceil5(maintain cleanupTotal
+ * x 1.5); the per-month cleanup lines stay per-line ceiled display rates,
+ * so per-month x months can sit above the charged cleanup total by
+ * rounding. The pipeline (`applyGrowPriceOverride` in `packagePricing`)
+ * affirms both grow totals from the same helper.
  *
  * Cleanup rule: only `loans_mca` and `personal_commingling` carry a
  * `cleanupPerMonth` add, and only when `cleanupMonths > 0` — with zero
@@ -59,11 +66,14 @@
  * is likewise named in its priced `clientWhy`.
  *
  * Distinct-work decision (Foreman default, pending Ummon confirmation):
- * `online_store` vs the Stripe entry in payment platforms, `loans_mca` vs
+ * `online_store` vs a payment-platform entry, `loans_mca` vs
  * the loansCount-driven reconciliation line, `filing_1099` vs contractor
  * headcount inside staffing, and `personal_commingling` vs the
  * `mixed_books` adjustment are DISTINCT work — each side charges its own
- * line when checked, and neither side auto-checks the other.
+ * line when checked, and neither side auto-checks the other. One
+ * exception (lead ruling): when the store/POS driver names its own payout
+ * channel explicitly via `payoutPlatform` and that channel is also listed
+ * as a payment platform, the platform counts ONCE, on the store driver.
  */
 import {
   GROW_PRICE_MULTIPLIER_FROM_MAINTAIN,
@@ -94,6 +104,14 @@ export type ComplexityValue =
       count?: number;
       /** Per-proposal monthly override (new drivers only). */
       monthlyOverride?: number;
+      /**
+       * Explicit payout channel for `pos_system` / `online_store`: the
+       * payment-platform value the store's payouts come through (e.g.
+       * "stripe"). Pricing excludes exactly this platform from the platform
+       * count (counted once, on the store driver). Unset = no exclusion —
+       * the name is never guessed from.
+       */
+      payoutPlatform?: string;
     };
 
 export interface ComplexitySelection {
@@ -254,9 +272,11 @@ function growMonthly(maintainValue: number): number {
 
 /**
  * Pipeline-consistent grow total: the figure the pipeline charges for a
- * maintain-tier complexity total. Per-line grow values are each ceiled to
- * $5, so their sum can exceed this by less than $5 per extra line — the
- * charged total is this helper's return, not the sum.
+ * maintain-tier complexity total. `priceComplexityDrivers` rebalances the
+ * grow monthly lines so their sum EQUALS this helper's return (the
+ * rounding remainder sits on the largest non-exact line); `cleanupTotal`
+ * follows the same rule at the total level, ceil5(maintain cleanupTotal
+ * x 1.5). `applyGrowPriceOverride` affirms both totals from this helper.
  */
 export function complexityGrowMonthlyTotal(maintainMonthlyTotal: number): number {
   if (!Number.isFinite(maintainMonthlyTotal) || maintainMonthlyTotal <= 0) return 0;
@@ -326,6 +346,9 @@ function normalizeComplexityValue(raw: unknown): ComplexityValue {
   if (count !== undefined) value.count = count;
   const override = nonNegativeNumber(raw.monthlyOverride);
   if (override !== undefined) value.monthlyOverride = override;
+  if (typeof raw.payoutPlatform === "string" && raw.payoutPlatform.trim().length > 0) {
+    value.payoutPlatform = raw.payoutPlatform.trim().slice(0, 100);
+  }
   return value;
 }
 
@@ -472,6 +495,8 @@ const STATIC_DEFS: Record<ComplexityDriverId, StaticDef> = {
   pos_system: {
     label: "Point-of-sale system",
     clientWhy: "We reconcile daily sales, tips, and fees from your point-of-sale system each month.",
+    builderHint:
+      "If payouts come through a channel also listed as a payment platform, choose it below — it is counted once here.",
     mapsToExisting: null,
     perCompany: false,
   },
@@ -479,7 +504,7 @@ const STATIC_DEFS: Record<ComplexityDriverId, StaticDef> = {
     label: "Online store",
     clientWhy: "We reconcile store sales, fees, refunds, and payouts from your online store each month.",
     builderHint:
-      "If the store's own payout channel (e.g. Shopify Payments) is also listed as a payment platform, it is counted once here.",
+      "If payouts come through a channel also listed as a payment platform, choose it below — it is counted once here.",
     mapsToExisting: null,
     perCompany: false,
   },
@@ -588,6 +613,44 @@ function isExistingLinePresent(
 }
 
 /**
+ * Grow monthly rebalance: per-line grow monthlies are each ceiled from
+ * maintain, so their sum sits at or above the charged rule
+ * `complexityGrowMonthlyTotal(maintainMonthlySum)` (never below — each
+ * ceil only rounds up). The non-negative remainder is absorbed by the
+ * largest NON-EXACT line (driver order breaks ties), floored at $0 with
+ * carry to the next-largest, so the lines SUM to the charged total. Exact
+ * override lines are never touched: when the remainder survives them
+ * (an override-only basket, or a remainder larger than every adjustable
+ * line) the lines win and the total follows the lines. Returns the total
+ * the result should carry.
+ */
+function rebalanceGrowMonthlyLines(
+  lines: ComplexityPricedLine[],
+  exact: boolean[],
+  monthlyTotal: number,
+  maintainMonthlySum: number,
+): { monthlyTotal: number } {
+  const pipelineTotal = complexityGrowMonthlyTotal(maintainMonthlySum);
+  let remainder = monthlyTotal - pipelineTotal;
+  if (remainder > 0) {
+    const candidates = lines
+      .map((line, index) => ({ line, index }))
+      .filter(({ line, index }) => line.monthly > 0 && exact[index] !== true)
+      .sort((a, b) => b.line.monthly - a.line.monthly || a.index - b.index);
+    for (const { line } of candidates) {
+      if (remainder <= 0) break;
+      const take = Math.min(line.monthly, remainder);
+      line.monthly -= take;
+      remainder -= take;
+    }
+  }
+  if (remainder !== 0) {
+    return { monthlyTotal: lines.reduce((total, line) => total + line.monthly, 0) };
+  }
+  return { monthlyTotal: pipelineTotal };
+}
+
+/**
  * The one pricing call. Unchecked drivers emit nothing. Existing-line
  * drivers emit a $0 line with `includedNote` when that existing line is
  * present (override ignored — charging it would stack on the existing
@@ -596,7 +659,9 @@ function isExistingLinePresent(
  * scaled by tier (improve) or derived from maintain x 1.5 (grow);
  * filing_1099 charges `min(payees x rate, cap)` at maintain, scaled the
  * same way, and emits no line when the payee count is 0/absent unless an
- * override sets the price.
+ * override sets the price. Grow monthly lines are rebalanced so they sum
+ * to `complexityGrowMonthlyTotal(maintain total)`; grow cleanupTotal is
+ * the total-level ceil5(maintain cleanupTotal x 1.5).
  */
 export function priceComplexityDrivers(
   selection: ComplexitySelection,
@@ -616,6 +681,10 @@ export function priceComplexityDrivers(
   );
 
   const lines: ComplexityPricedLine[] = [];
+  /** True when the line's monthly is an exact override — never rebalanced. */
+  const exact: boolean[] = [];
+  let maintainMonthlySum = 0;
+  let maintainCleanupPerMonthSum = 0;
   for (const id of COMPLEXITY_DRIVER_IDS) {
     const value: ComplexityValue = normalized.drivers[id] ?? { checked: false };
     if (value.checked !== true) continue;
@@ -633,6 +702,7 @@ export function priceComplexityDrivers(
           ? { ...base, includedNote: includedNoteFor(id) }
           : { ...base, requiresExistingLine: def.mapsToExisting },
       );
+      exact.push(true);
       continue;
     }
     const override =
@@ -667,6 +737,8 @@ export function priceComplexityDrivers(
         monthly,
         cleanupPerMonth: 0,
       });
+      exact.push(override !== undefined);
+      maintainMonthlySum += maintainMonthly;
       continue;
     }
     const maintainMonthly = override ?? defaults[id].monthly;
@@ -679,15 +751,27 @@ export function priceComplexityDrivers(
       monthly,
       cleanupPerMonth,
     });
+    exact.push(override !== undefined);
+    maintainMonthlySum += maintainMonthly;
+    if (cleanupMonths > 0) maintainCleanupPerMonthSum += cleanupBase;
   }
 
-  const monthlyTotal = lines.reduce((total, line) => total + line.monthly, 0);
+  let monthlyTotal = lines.reduce((total, line) => total + line.monthly, 0);
   const cleanupPerMonthTotal = lines.reduce((total, line) => total + line.cleanupPerMonth, 0);
+  let cleanupTotal = cleanupPerMonthTotal * cleanupMonths;
+  if (packageId === "grow") {
+    ({ monthlyTotal } = rebalanceGrowMonthlyLines(lines, exact, monthlyTotal, maintainMonthlySum));
+    cleanupTotal = cleanupMonths > 0
+      ? roundUpToNearestIncrement(
+          maintainCleanupPerMonthSum * cleanupMonths * GROW_PRICE_MULTIPLIER_FROM_MAINTAIN,
+        )
+      : 0;
+  }
   return {
     lines,
     monthlyTotal,
     cleanupPerMonthTotal,
-    cleanupTotal: cleanupPerMonthTotal * cleanupMonths,
+    cleanupTotal,
   };
 }
 

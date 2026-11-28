@@ -63,6 +63,28 @@ function findInput(tree: unknown, ariaLabel: string): { checked?: boolean; value
   };
 }
 
+function findSelect(tree: unknown, ariaLabel: string): { value?: unknown; onChange: (event: { target: { value: string } }) => void } {
+  let found: ElementNode | undefined;
+  visitTree(tree, (element) => {
+    if (found === undefined && element.type === "select" && element.props?.["aria-label"] === ariaLabel) {
+      found = element;
+    }
+  });
+  expect(found, `select aria-label="${ariaLabel}"`).toBeDefined();
+  return {
+    value: found!.props?.value,
+    onChange: found!.props?.onChange as (event: { target: { value: string } }) => void,
+  };
+}
+
+function hasSelect(tree: unknown, ariaLabel: string): boolean {
+  let found = false;
+  visitTree(tree, (element) => {
+    if (element.type === "select" && element.props?.["aria-label"] === ariaLabel) found = true;
+  });
+  return found;
+}
+
 describe("ComplexityChecklist SSR states", () => {
   it("renders one unticked row per driver with no selection (legacy)", () => {
     const { html } = renderHtml({ selection: undefined });
@@ -132,17 +154,65 @@ describe("ComplexityChecklist SSR states", () => {
     expect(html).toContain("counted once here");
   });
 
-  it("payout-channel hint shows when the store name matches a payment platform", () => {
-    const withMatch = renderHtml({
-      selection: normalizeComplexitySelection({ drivers: { online_store: { checked: true, name: "Stripe" } } }),
+  it("payout-channel hint shows only for an explicit listed choice, never the name", () => {
+    const withChoice = renderHtml({
+      selection: normalizeComplexitySelection({
+        drivers: { online_store: { checked: true, name: "Shopify", payoutPlatform: "stripe" } },
+      }),
       paymentPlatforms: ["stripe"],
     });
-    expect(withMatch.html).toContain("Counted once here — the store driver wins");
-    const withoutMatch = renderHtml({
+    expect(withChoice.html).toContain("Counted once here — the store driver wins");
+    // The name alone ("Stripe") no longer counts: a separate Stripe
+    // account stays charged.
+    for (const selection of [
+      normalizeComplexitySelection({ drivers: { online_store: { checked: true, name: "Stripe" } } }),
+      normalizeComplexitySelection({ drivers: { online_store: { checked: true, name: "Shopify" } } }),
+      normalizeComplexitySelection({
+        drivers: { online_store: { checked: true, name: "Shopify", payoutPlatform: "stripe" } },
+      }),
+    ]) {
+      const { html } = renderHtml({ selection, paymentPlatforms: [] });
+      expect(html).not.toContain("the store driver wins");
+    }
+    const unlisted = renderHtml({
+      selection: normalizeComplexitySelection({
+        drivers: { online_store: { checked: true, name: "Shopify", payoutPlatform: "stripe" } },
+      }),
+      paymentPlatforms: ["paypal"],
+    });
+    expect(unlisted.html).not.toContain("the store driver wins");
+  });
+
+  it("suggests Stripe for a Shopify store but excludes nothing", () => {
+    const { html } = renderHtml({
       selection: normalizeComplexitySelection({ drivers: { online_store: { checked: true, name: "Shopify" } } }),
       paymentPlatforms: ["stripe"],
     });
-    expect(withoutMatch.html).not.toContain("the store driver wins");
+    expect(html).toContain("choose Stripe above to count it once here");
+    expect(html).not.toContain("the store driver wins");
+    const chosen = renderHtml({
+      selection: normalizeComplexitySelection({
+        drivers: { online_store: { checked: true, name: "Shopify", payoutPlatform: "stripe" } } }),
+      paymentPlatforms: ["stripe"],
+    });
+    expect(chosen.html).not.toContain("choose Stripe above");
+  });
+
+  it("ticked 1099 without a payee count asks for the count", () => {
+    const { html } = renderHtml({
+      selection: normalizeComplexitySelection({ drivers: { filing_1099: { checked: true } } }),
+    });
+    expect(html).toContain("Add the payee count to price this");
+    const counted = renderHtml({
+      selection: normalizeComplexitySelection({ drivers: { filing_1099: { checked: true, count: 10 } } }),
+    });
+    expect(counted.html).not.toContain("Add the payee count to price this");
+    const overridden = renderHtml({
+      selection: normalizeComplexitySelection({
+        drivers: { filing_1099: { checked: true, monthlyOverride: 100 } },
+      }),
+    });
+    expect(overridden.html).not.toContain("Add the payee count to price this");
   });
 
   it("new drivers show the resolved default and a per-proposal override input", () => {
@@ -187,31 +257,84 @@ describe("ComplexityChecklist onChange", () => {
     findInput(tree, "Inventory and cost of goods monthly override").onChange({ target: { value: "120" } });
     expect(seen[0].drivers.inventory_cogs).toEqual({ checked: true, monthlyOverride: 120 });
   });
+
+  it("choosing a payout channel carries payoutPlatform, None clears it", () => {
+    const { tree, seen } = renderTree({
+      selection: normalizeComplexitySelection({ drivers: { online_store: { checked: true, name: "Shopify" } } }),
+      paymentPlatforms: ["stripe", "paypal"],
+    });
+    findSelect(tree, "Online store payout channel").onChange({ target: { value: "stripe" } });
+    expect(seen[0].drivers.online_store).toEqual({
+      checked: true,
+      name: "Shopify",
+      payoutPlatform: "stripe",
+    });
+    const { tree: tree2, seen: seen2 } = renderTree({
+      selection: seen[0],
+      paymentPlatforms: ["stripe", "paypal"],
+    });
+    findSelect(tree2, "Online store payout channel").onChange({ target: { value: "" } });
+    expect(seen2[0].drivers.online_store).toEqual({ checked: true, name: "Shopify" });
+  });
+
+  it("renders the payout select only with platform options or an existing choice", () => {
+    const { tree } = renderTree({
+      selection: normalizeComplexitySelection({ drivers: { pos_system: { checked: true, name: "Square" } } }),
+      paymentPlatforms: [],
+    });
+    expect(hasSelect(tree, "Point-of-sale system payout channel")).toBe(false);
+    const { tree: withPlatforms } = renderTree({
+      selection: normalizeComplexitySelection({ drivers: { pos_system: { checked: true, name: "Square" } } }),
+      paymentPlatforms: ["stripe"],
+    });
+    expect(findSelect(withPlatforms, "Point-of-sale system payout channel").value).toBe("");
+  });
 });
 
-describe("payout-channel hint follows pricing (onlineStorePayoutOverlap)", () => {
-  function hintShows(storeName: string, paymentPlatforms: string[]): boolean {
+describe("payout-channel hint follows pricing (payoutChannelExclusions)", () => {
+  function hintShows(
+    drivers: Record<string, { checked: true; name?: string; payoutPlatform?: string }>,
+    paymentPlatforms: string[],
+  ): boolean {
     const { html } = renderHtml({
-      selection: normalizeComplexitySelection({ drivers: { online_store: { checked: true, name: storeName } } }),
+      selection: normalizeComplexitySelection({ drivers }),
       paymentPlatforms,
     });
-    return html.includes("the store driver wins");
+    return html.includes("Counted once here");
   }
 
   it("fires exactly when pricing counts the channel once", () => {
-    expect(hintShows("Stripe", ["stripe"])).toBe(true);
-    expect(hintShows("Cash App", ["cash-app"])).toBe(true);
-    expect(hintShows("Stripe payouts", ["stripe"])).toBe(true);
-    expect(hintShows("Shopify", ["stripe"])).toBe(false);
-    expect(hintShows("", ["stripe"])).toBe(false);
-    expect(hintShows("Stripe", ["other"])).toBe(false);
+    const stripeChoice = { online_store: { checked: true as const, payoutPlatform: "stripe" } };
+    expect(hintShows(stripeChoice, ["stripe"])).toBe(true);
+    // The name alone never fires, even when it equals the platform.
+    expect(hintShows({ online_store: { checked: true as const, name: "Stripe" } }, ["stripe"])).toBe(false);
+    expect(hintShows({ online_store: { checked: true as const, name: "Shopify" } }, ["stripe"])).toBe(false);
+    // An unlisted choice fires nothing.
+    expect(hintShows(stripeChoice, ["paypal"])).toBe(false);
+    expect(hintShows(stripeChoice, [])).toBe(false);
   });
 
-  it("does not match a platform name merely containing the store name", () => {
-    // The old local helper folded both sides and matched either direction, so
-    // store "App" against platform "cash-app" showed the hint while pricing
-    // still charged the platform. The wired helper matches only when the
-    // store name equals or contains the platform token.
-    expect(hintShows("App", ["cash-app"])).toBe(false);
+  it("gives the store priority when both rows claim the same channel", () => {
+    const { html } = renderHtml({
+      selection: normalizeComplexitySelection({
+        drivers: {
+          online_store: { checked: true, name: "Shopify", payoutPlatform: "stripe" },
+          pos_system: { checked: true, name: "Square", payoutPlatform: "stripe" },
+        },
+      }),
+      paymentPlatforms: ["stripe"],
+    });
+    expect(html).toContain("the store driver wins");
+    expect(html).not.toContain("the point-of-sale driver wins");
+  });
+
+  it("fires the pos hint for a pos-only choice", () => {
+    const { html } = renderHtml({
+      selection: normalizeComplexitySelection({
+        drivers: { pos_system: { checked: true, name: "Square", payoutPlatform: "stripe" } },
+      }),
+      paymentPlatforms: ["stripe"],
+    });
+    expect(html).toContain("the point-of-sale driver wins");
   });
 });

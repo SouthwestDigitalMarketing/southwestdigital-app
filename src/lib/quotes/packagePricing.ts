@@ -18,6 +18,7 @@
  * never at module-eval time.
  */
 import {
+  complexityGrowMonthlyTotal,
   hasComplexitySelection,
   normalizeComplexitySelection,
   priceComplexityDrivers,
@@ -275,45 +276,79 @@ export function knownPaymentPlatformCount(assessment: PackagePricingInputs) {
 }
 
 /**
- * Spec 03 payout-channel guard: when the online-store driver names the
- * store's own payout channel and that channel is also listed as a payment
- * platform (e.g. the store runs on Stripe and Stripe is ticked under
- * platforms), the platform is counted ONCE — on the store driver — so it is
- * excluded from the platform count here. Returns the matched platform value
- * (the Builder C checklist uses this for its counted-once hint), or null.
+ * Spec 03 payout-channel guard (lead ruling: a store's own payout channel
+ * listed both as store and as a payment platform counts ONCE, store wins,
+ * with a hint). The channel is NEVER guessed from the store name: the
+ * online-store / pos-system driver carries an explicit optional
+ * `payoutPlatform` (the checklist "Payouts come through" select lists the
+ * platforms already on the assessment). Pricing excludes exactly that
+ * platform from the platform count; without a choice the platform stays
+ * charged even when the names look alike (a genuinely separate Stripe
+ * account must never be swallowed by a name match).
  *
- * Matching is deliberately narrow: the normalized store name must equal a
- * normalized platform value/label, or contain one (`stripe` in "Stripe
- * payouts"). `other`/`unknown` never match — they carry no channel identity.
+ * Returns the claimed platform values listed on the assessment
+ * (online-store claim first, so the store wins), each once. `unknown` and
+ * empty claims never match.
+ */
+export function payoutChannelExclusions(input: {
+  paymentPlatforms: readonly unknown[];
+  complexity: unknown;
+}): string[] {
+  const platforms = Array.isArray(input.paymentPlatforms) ? input.paymentPlatforms : [];
+  const selection = normalizeComplexitySelection(input.complexity);
+  const excluded: string[] = [];
+  for (const id of ["online_store", "pos_system"] as const) {
+    const driver = selection.drivers[id];
+    if (driver.checked !== true || !driver.payoutPlatform) continue;
+    const claim = driver.payoutPlatform;
+    if (claim === "unknown") continue;
+    if (!platforms.includes(claim)) continue;
+    if (!excluded.includes(claim)) excluded.push(claim);
+  }
+  return excluded;
+}
+
+/**
+ * First counted-once payout channel (the store wins), or null. The
+ * checklist uses this for its counted-once hint; pricing excludes the full
+ * `payoutChannelExclusions` list.
  */
 export function onlineStorePayoutOverlap(input: {
   paymentPlatforms: readonly unknown[];
   complexity: unknown;
 }): string | null {
-  const platforms = Array.isArray(input.paymentPlatforms) ? input.paymentPlatforms : [];
-  const selection = normalizeComplexitySelection(input.complexity);
-  const store = selection.drivers.online_store;
-  if (store.checked !== true || !store.name) return null;
-  const name = store.name.toLowerCase().replace(/[^a-z0-9]/g, "");
-  if (!name) return null;
-  for (const platform of platforms) {
-    if (typeof platform !== "string") continue;
-    if (platform === "unknown" || platform === "other") continue;
-    const token = platform.toLowerCase().replace(/[^a-z0-9]/g, "");
-    if (!token) continue;
-    if (name === token || (token.length >= 4 && name.includes(token))) return platform;
-  }
-  return null;
+  return payoutChannelExclusions(input)[0] ?? null;
 }
 
-/** Payment platforms minus a counted-once store payout channel (legacy: unchanged). */
+/**
+ * Shopify suggestion hint (no pricing effect): the store name contains
+ * "shopify" and Stripe is listed as a payment platform, but no payout
+ * channel is chosen. The checklist suggests choosing Stripe when the
+ * store really pays out through it — it never excludes on its own.
+ */
+export function shopifyPayoutSuggestion(input: {
+  paymentPlatforms: readonly unknown[];
+  complexity: unknown;
+}): boolean {
+  const platforms = Array.isArray(input.paymentPlatforms) ? input.paymentPlatforms : [];
+  if (!platforms.includes("stripe")) return false;
+  const selection = normalizeComplexitySelection(input.complexity);
+  const store = selection.drivers.online_store;
+  if (store.checked !== true || !store.name || !/shopify/i.test(store.name)) return false;
+  if (store.payoutPlatform) return false;
+  const pos = selection.drivers.pos_system;
+  if (pos.checked === true && pos.payoutPlatform === "stripe") return false;
+  return true;
+}
+
+/** Payment platforms minus counted-once payout channels (legacy: unchanged). */
 function effectiveKnownPlatforms(assessment: PackagePricingInputs): string[] {
-  const overlap = onlineStorePayoutOverlap({
+  const excluded = payoutChannelExclusions({
     paymentPlatforms: assessment.paymentPlatforms,
     complexity: assessment.complexity,
   });
-  return overlap
-    ? assessment.paymentPlatforms.filter((platform) => platform !== overlap)
+  return excluded.length > 0
+    ? assessment.paymentPlatforms.filter((platform) => !excluded.includes(platform))
     : assessment.paymentPlatforms;
 }
 
@@ -568,33 +603,48 @@ export function buildPackagePricing(
 
 /**
  * Grow override, extracted from the snapshot builder: grow is NOT priced
- * bottom-up — every grow figure is ceil5(maintain x 1.5).
+ * bottom-up — every grow figure is ceil5(maintain x 1.5). The grow
+ * complexity figures come from the same rule via
+ * `complexityGrowMonthlyTotal` (affirmed here so stored, published and
+ * Why-tab figures agree with the charged grow monthly): monthly lines
+ * already sum to that total by construction in `priceComplexityDrivers`,
+ * and the cleanup total is the total-level ceil5(maintain cleanupTotal
+ * x 1.5).
  */
 export function applyGrowPriceOverride(
   packagePricing: Record<PackageId, PackagePricingSummary>,
 ): Record<PackageId, PackagePricingSummary> {
   const maintainPricing = packagePricing.maintain;
-  return {
-    ...packagePricing,
-    grow: {
-      ...packagePricing.grow,
-      monthly: roundUpToNearestIncrement(
-        maintainPricing.monthly * GROW_PRICE_MULTIPLIER_FROM_MAINTAIN,
-      ),
-      catchUpBase: roundUpToNearestIncrement(
-        maintainPricing.catchUpBase * GROW_PRICE_MULTIPLIER_FROM_MAINTAIN,
-      ),
-      assessmentOneTimeAdjustments: roundUpToNearestIncrement(
-        maintainPricing.assessmentOneTimeAdjustments * GROW_PRICE_MULTIPLIER_FROM_MAINTAIN,
-      ),
-      totalOneTimeBeforeManual: roundUpToNearestIncrement(
-        maintainPricing.totalOneTimeBeforeManual * GROW_PRICE_MULTIPLIER_FROM_MAINTAIN,
-      ),
-      totalOneTime: roundUpToNearestIncrement(
-        maintainPricing.totalOneTime * GROW_PRICE_MULTIPLIER_FROM_MAINTAIN,
-      ),
-    },
+  const growComplexity = packagePricing.grow.complexity;
+  const maintainComplexity = maintainPricing.complexity;
+  const grow: PackagePricingSummary = {
+    ...packagePricing.grow,
+    monthly: roundUpToNearestIncrement(
+      maintainPricing.monthly * GROW_PRICE_MULTIPLIER_FROM_MAINTAIN,
+    ),
+    catchUpBase: roundUpToNearestIncrement(
+      maintainPricing.catchUpBase * GROW_PRICE_MULTIPLIER_FROM_MAINTAIN,
+    ),
+    assessmentOneTimeAdjustments: roundUpToNearestIncrement(
+      maintainPricing.assessmentOneTimeAdjustments * GROW_PRICE_MULTIPLIER_FROM_MAINTAIN,
+    ),
+    totalOneTimeBeforeManual: roundUpToNearestIncrement(
+      maintainPricing.totalOneTimeBeforeManual * GROW_PRICE_MULTIPLIER_FROM_MAINTAIN,
+    ),
+    totalOneTime: roundUpToNearestIncrement(
+      maintainPricing.totalOneTime * GROW_PRICE_MULTIPLIER_FROM_MAINTAIN,
+    ),
   };
+  if (growComplexity && maintainComplexity) {
+    grow.complexity = {
+      ...growComplexity,
+      monthlyTotal: complexityGrowMonthlyTotal(maintainComplexity.monthlyTotal),
+      cleanupTotal: roundUpToNearestIncrement(
+        maintainComplexity.cleanupTotal * GROW_PRICE_MULTIPLIER_FROM_MAINTAIN,
+      ),
+    };
+  }
+  return { ...packagePricing, grow };
 }
 
 /**

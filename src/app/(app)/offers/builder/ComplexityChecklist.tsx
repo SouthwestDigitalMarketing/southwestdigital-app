@@ -12,7 +12,10 @@ import {
   type ComplexitySelection,
   type ComplexityValue,
 } from "@/lib/quotes/complexityDrivers";
-import { onlineStorePayoutOverlap } from "@/lib/quotes/packagePricing";
+import {
+  payoutChannelExclusions,
+  shopifyPayoutSuggestion,
+} from "@/lib/quotes/packagePricing";
 
 /**
  * Existing-line presence shape for the checklist display. Omitted fields
@@ -30,6 +33,13 @@ export interface ComplexityChecklistProps {
   existing?: ComplexityChecklistExisting;
   /** Selected payment platforms, for the payout-channel counted-once hint. */
   paymentPlatforms?: string[];
+  /**
+   * Labels for the payout-channel select options. Only values also in
+   * `paymentPlatforms` are offered (plus None); omitted labels fall back
+   * to the raw platform value. Per-company rows pass no platforms, so the
+   * select and the hint stay hidden there.
+   */
+  paymentPlatformOptions?: ReadonlyArray<{ value: string; label: string }>;
   /** Receives the normalized selection; the caller persists it as-is. */
   onChange: (next: ComplexitySelection) => void;
   /** Compact per-company rendering (no section heading). */
@@ -38,6 +48,8 @@ export interface ComplexityChecklistProps {
 
 const NEEDS_NAME: ComplexityDriverId[] = ["pos_system", "online_store"];
 const NEEDS_COUNT: ComplexityDriverId[] = ["loans_mca", "filing_1099"];
+/** Drivers with an explicit payout-channel select (never guessed from the name). */
+const NEEDS_PAYOUT: ComplexityDriverId[] = ["pos_system", "online_store"];
 
 const EXISTING_LINE_LABELS: Record<string, string> = {
   staffing: "the staffing line",
@@ -47,14 +59,27 @@ const EXISTING_LINE_LABELS: Record<string, string> = {
 };
 
 /**
- * Counted-once check, wired to the pricing helper (`onlineStorePayoutOverlap`
- * in `packagePricing.ts`) so the hint fires exactly when pricing excludes the
- * platform from the platform count: the normalized store name must equal a
- * normalized platform value, or contain one (`stripe` in "Stripe payouts").
- * `other`/`unknown` never match — they carry no channel identity.
+ * Counted-once check, wired to the pricing helpers (`payoutChannelExclusions`
+ * / `shopifyPayoutSuggestion` in `packagePricing.ts`) so the hint fires
+ * exactly when pricing excludes the platform from the platform count: the
+ * row's explicit `payoutPlatform` choice is listed on the assessment. When
+ * both rows claim the same channel, the store wins and only the store row
+ * shows the hint.
  */
-function isStoreChannelAlsoPlatform(selection: ComplexitySelection, paymentPlatforms: string[]): boolean {
-  return onlineStorePayoutOverlap({ paymentPlatforms, complexity: selection }) !== null;
+function isCountedOnceHere(
+  id: ComplexityDriverId,
+  selection: ComplexitySelection,
+  exclusions: string[],
+): boolean {
+  if (id !== "online_store" && id !== "pos_system") return false;
+  const value = selection.drivers[id];
+  if (value.checked !== true || !value.payoutPlatform) return false;
+  if (!exclusions.includes(value.payoutPlatform)) return false;
+  if (id === "pos_system") {
+    const store = selection.drivers.online_store;
+    if (store.checked === true && store.payoutPlatform === value.payoutPlatform) return false;
+  }
+  return true;
 }
 
 function formatMoney(value: number): string {
@@ -81,6 +106,7 @@ export default function ComplexityChecklist({
   defaults,
   existing,
   paymentPlatforms = [],
+  paymentPlatformOptions,
   onChange,
   compact = false,
 }: ComplexityChecklistProps) {
@@ -88,6 +114,10 @@ export default function ComplexityChecklist({
   const defs = complexityDriverDefs(defaults);
   const pricedById = Object.fromEntries(
     priceComplexityDrivers(normalized, { defaults, existing }).lines.map((line) => [line.id, line]),
+  );
+  const exclusions = payoutChannelExclusions({ paymentPlatforms, complexity: normalized });
+  const payoutOptions = (paymentPlatformOptions ?? paymentPlatforms.map((value) => ({ value, label: value }))).filter(
+    (option) => option.value !== "unknown" && paymentPlatforms.includes(option.value),
   );
 
   function patchDriver(id: ComplexityDriverId, patch: Partial<Extract<ComplexityValue, { checked: true }>> | null) {
@@ -109,6 +139,17 @@ export default function ComplexityChecklist({
     patchDriver(id, checked ? {} : null);
   }
 
+  function setPayoutPlatform(id: ComplexityDriverId, rawValue: string) {
+    const drivers = { ...normalized.drivers };
+    const current = normalized.drivers[id];
+    if (current.checked !== true) return;
+    const next = { ...current };
+    if (!rawValue) delete next.payoutPlatform;
+    else next.payoutPlatform = rawValue;
+    drivers[id] = next;
+    onChange(normalizeComplexitySelection({ drivers }));
+  }
+
   const rows = (
     <ul className="space-y-3">
       {COMPLEXITY_DRIVER_IDS.map((id) => {
@@ -118,8 +159,22 @@ export default function ComplexityChecklist({
         const priced = pricedById[id];
         const needsName = NEEDS_NAME.includes(id);
         const needsCount = NEEDS_COUNT.includes(id);
-        const storeDuplicate =
-          id === "online_store" && checked && isStoreChannelAlsoPlatform(normalized, paymentPlatforms);
+        const needsPayout = NEEDS_PAYOUT.includes(id);
+        const countedOnce = checked && isCountedOnceHere(id, normalized, exclusions);
+        const currentPayout =
+          needsPayout && value.checked === true ? (value.payoutPlatform ?? "") : "";
+        const showPayoutSelect =
+          needsPayout && checked && (payoutOptions.length > 0 || currentPayout !== "");
+        const showShopifySuggestion =
+          id === "online_store" &&
+          checked &&
+          shopifyPayoutSuggestion({ paymentPlatforms, complexity: normalized });
+        const needsPayeeCount =
+          id === "filing_1099" &&
+          checked &&
+          value.checked === true &&
+          (value.count ?? 0) <= 0 &&
+          value.monthlyOverride === undefined;
         return (
           <li key={id} className="rounded-xl border border-slate-200 bg-white p-3">
             <label className="flex items-start gap-2 text-sm font-medium text-slate-800">
@@ -152,6 +207,28 @@ export default function ComplexityChecklist({
               </label>
             ) : null}
 
+            {showPayoutSelect ? (
+              <label className="mt-2 block max-w-[280px] text-xs font-medium text-slate-700">
+                Payouts come through
+                <select
+                  value={currentPayout}
+                  onChange={(event) => setPayoutPlatform(id, event.target.value)}
+                  aria-label={`${def.label} payout channel`}
+                  className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                >
+                  <option value="">None</option>
+                  {payoutOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                  {currentPayout !== "" && !payoutOptions.some((option) => option.value === currentPayout) ? (
+                    <option value={currentPayout}>{currentPayout}</option>
+                  ) : null}
+                </select>
+              </label>
+            ) : null}
+
             {checked && needsCount ? (
               <label className="mt-2 block max-w-[280px] text-xs font-medium text-slate-700">
                 {id === "filing_1099" ? "Number of payees" : "Number of schedules"}
@@ -180,9 +257,21 @@ export default function ComplexityChecklist({
             {def.builderHint ? (
               <p className="mt-1.5 text-xs text-slate-500">{def.builderHint}</p>
             ) : null}
-            {storeDuplicate ? (
+            {countedOnce ? (
               <p className="mt-1.5 text-xs font-medium text-slate-600">
-                Counted once here — the store driver wins when its payout channel is also listed as a payment platform.
+                {id === "pos_system"
+                  ? "Counted once here — the point-of-sale driver wins when its payout channel is also listed as a payment platform."
+                  : "Counted once here — the store driver wins when its payout channel is also listed as a payment platform."}
+              </p>
+            ) : null}
+            {showShopifySuggestion ? (
+              <p className="mt-1.5 text-xs text-slate-500">
+                Shopify stores often pay out through Stripe — if yours does, choose Stripe above to count it once here.
+              </p>
+            ) : null}
+            {needsPayeeCount ? (
+              <p className="mt-1.5 text-xs font-medium text-slate-600">
+                Add the payee count to price this
               </p>
             ) : null}
 
