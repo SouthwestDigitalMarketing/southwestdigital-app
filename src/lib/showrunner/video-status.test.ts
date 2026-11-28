@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkStatusToken, parseVideoStatus } from "./video-status";
+import { checkStatusToken, parseVideoStatus, youtubeVisibilityLabel } from "./video-status";
 
 const steps = [
   { label: "Sorting the clips: talking and b-roll", state: "done" },
@@ -92,6 +92,22 @@ describe("parseVideoStatus", () => {
       text: "able to give them three years with solid reporting.",
     });
     expect(row?.teaserBusy).toBe(true);
+  });
+
+  it("keeps YouTube privacy and names it plainly", () => {
+    const row = parseVideoStatus({
+      batch: "b8",
+      state: "episode",
+      url: "https://www.youtube.com/watch?v=1vP6RQ3J2EI",
+      visibility: "private",
+      visibilityBusy: true,
+    });
+    expect(row?.visibility).toBe("private");
+    expect(row?.visibilityBusy).toBe(true);
+    expect(youtubeVisibilityLabel("private", true)).toBe("Private on YouTube");
+    expect(youtubeVisibilityLabel("unlisted", true)).toBe("Unlisted on YouTube");
+    expect(youtubeVisibilityLabel("public", true)).toBe("Public on YouTube");
+    expect(parseVideoStatus({ batch: "b8", state: "episode", visibility: "secret" })?.visibility).toBeNull();
   });
 
   it("keeps the YouTube link and a stopped step's reason", () => {

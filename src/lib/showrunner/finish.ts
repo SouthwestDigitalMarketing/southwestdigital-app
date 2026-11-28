@@ -41,7 +41,7 @@ export async function writeLocalThumbnail(batch: string, text: string): Promise<
 /** On ripley, leave .teaser.json so the review timer splices a new open without waiting on the next poll. */
 export async function writeLocalTeaser(
   batch: string,
-  request: { wanted: false } | { wanted: true; start: number; end: number },
+  request: { wanted: false } | { wanted: true; start?: number; end?: number },
 ): Promise<boolean> {
   const inbox = process.env.PHONE_INTAKE_INBOX ?? "";
   if (!inbox || !BATCH.test(batch)) return false;
@@ -52,5 +52,22 @@ export async function writeLocalTeaser(
     return false;
   }
   await writeFile(path.join(folder, ".teaser.json"), JSON.stringify({ ...request, at: Math.floor(Date.now() / 1000) }));
+  return true;
+}
+
+/** On ripley, leave .visibility.json so the review timer flips YouTube privacy. */
+export async function writeLocalVisibility(batch: string, visibility: "private" | "unlisted" | "public"): Promise<boolean> {
+  const inbox = process.env.PHONE_INTAKE_INBOX ?? "";
+  if (!inbox || !BATCH.test(batch)) return false;
+  const folder = path.join(inbox, "done", batch);
+  try {
+    await access(folder);
+  } catch {
+    return false;
+  }
+  await writeFile(
+    path.join(folder, ".visibility.json"),
+    JSON.stringify({ visibility, at: Math.floor(Date.now() / 1000) }),
+  );
   return true;
 }

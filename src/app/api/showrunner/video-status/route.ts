@@ -56,6 +56,8 @@ export async function POST(request: Request) {
         transcriptCues: row.transcriptCues ?? Prisma.JsonNull,
         teaser: row.teaser ?? Prisma.JsonNull,
         teaserBusy: row.teaserBusy,
+        visibility: row.visibility,
+        visibilityBusy: row.visibilityBusy,
         sentAt: row.sentAt,
       };
       await tx.showrunnerVideoStatus.upsert({

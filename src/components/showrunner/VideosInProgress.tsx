@@ -4,8 +4,10 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { ThumbnailCopy, TranscriptAccordion } from "@/components/showrunner/ThumbnailCopy";
 import { WaitingActions } from "@/components/showrunner/WaitingActions";
+import { YouTubeVisibility } from "@/components/showrunner/YouTubeVisibility";
 import { isWaitingForYou } from "@/lib/showrunner/production";
-import type { Teaser, TranscriptCue, VideoDetails, VideoRender, VideoStep } from "@/lib/showrunner/video-status";
+import type { Teaser, TranscriptCue, VideoDetails, VideoRender, VideoStep, YoutubeVisibility } from "@/lib/showrunner/video-status";
+import { youtubeVisibilityLabel } from "@/lib/showrunner/video-status";
 
 export type VideoCard = {
   batch: string;
@@ -26,6 +28,8 @@ export type VideoCard = {
   transcriptCues?: TranscriptCue[] | null;
   teaser?: Teaser | null;
   teaserBusy?: boolean;
+  visibility?: YoutubeVisibility | null;
+  visibilityBusy?: boolean;
 };
 
 const MARK: Record<VideoStep["state"], string> = { done: "✓", now: "●", todo: "○", stopped: "✕" };
@@ -139,9 +143,21 @@ export function VideosInProgress({
                 )}
                 {details ? <p className="mt-2 text-sm text-slate-600">{details}</p> : null}
                 {video.url ? (
-                  <a href={video.url} target="_blank" rel="noopener" className="mt-3 inline-flex rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white">
+                  <a
+                    href={video.url}
+                    target="_blank"
+                    rel="noopener"
+                    className="mt-3 flex w-full items-center justify-center rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white"
+                  >
                     Watch on YouTube
                   </a>
+                ) : null}
+                {copy && video.url ? (
+                  <YouTubeVisibility
+                    batch={video.batch}
+                    visibility={video.visibility ?? null}
+                    busy={Boolean(video.visibilityBusy)}
+                  />
                 ) : null}
                 {copy ? (
                   <ThumbnailCopy
@@ -156,7 +172,21 @@ export function VideosInProgress({
               <div className="min-w-0 md:order-1">
                 <p className="text-lg font-semibold leading-snug text-slate-900">{video.title ?? video.project ?? "New video"}</p>
                 {video.title && video.project ? <p className="mt-0.5 text-xs text-slate-500">{video.project}</p> : null}
-                {video.url ? <p className="mt-2 font-semibold text-green-700">Published on YouTube</p> : <Steps video={video} />}
+                {video.url ? (
+                  <p
+                    className={
+                      video.visibility === "public"
+                        ? "mt-2 font-semibold text-green-700"
+                        : video.visibility === "private"
+                          ? "mt-2 font-semibold text-amber-800"
+                          : "mt-2 font-semibold text-slate-800"
+                    }
+                  >
+                    {youtubeVisibilityLabel(video.visibility ?? null, true)}
+                  </p>
+                ) : (
+                  <Steps video={video} />
+                )}
                 {copy ? (
                   <WaitingActions
                     batch={video.batch}

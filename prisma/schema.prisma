@@ -2177,6 +2177,12 @@ model ShowrunnerVideoStatus {
   /// Tom picked a teaser range or turned it off; ripley splices the show and clears this.
   teaserRequestedAt DateTime?
   teaserRequest Json?
+  /// YouTube privacyStatus: private, unlisted, public, or scheduled.
+  visibility String?
+  visibilityBusy Boolean @default(false)
+  /// Tom picked a new privacy; ripley changes it in Studio and clears this.
+  visibilityRequestedAt DateTime?
+  visibilityRequest String?
   updatedAt DateTime  @default(now()) @updatedAt
   brand     Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
