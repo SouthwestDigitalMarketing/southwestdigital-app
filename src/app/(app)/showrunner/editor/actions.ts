@@ -129,3 +129,20 @@ export async function requestVisibility(data: FormData) {
   revalidatePath(`/showrunner/production/${batch}`);
   revalidatePath("/showrunner");
 }
+
+/** Approve the open-card still (Tom, 2026-11-28). Does not recut or publish. */
+export async function approveTitleScreen(data: FormData) {
+  const batch = String(data.get("batch") ?? "");
+  if (!/^[A-Za-z0-9-]{1,60}$/.test(batch)) throw new Error("Not a video.");
+  const { brand: active, dataContext } = await requireStaffBrandOrThrow();
+  const brand = await showChannelBrand(active);
+  await withBrandDataTransaction(createBrandDataContext({ brandId: brand.id, actorUserId: dataContext.actorUserId }), (tx) =>
+    tx.showrunnerVideoStatus.updateMany({
+      where: { brandId: brand.id, batch },
+      data: { titleScreenApprovedAt: new Date() },
+    }),
+  );
+  revalidatePath(`/showrunner/editor/${batch}`);
+  revalidatePath(`/showrunner/production/${batch}`);
+  revalidatePath("/showrunner");
+}

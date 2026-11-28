@@ -4,7 +4,7 @@ import type { BrandDataContext } from "@/lib/tenancy/context";
 import { withBrandDataTransaction } from "@/lib/tenancy/context";
 import type { VideoCard } from "@/components/showrunner/VideosInProgress";
 import { latestByTarget, type LatestFeedback } from "./feedback";
-import type { Teaser, TranscriptCue, VideoDetails, VideoRender, VideoStep } from "./video-status";
+import type { Teaser, TitleScreenKind, TranscriptCue, VideoDetails, VideoRender, VideoStep } from "./video-status";
 import { parseVisibility } from "./video-status";
 import { parseWeek, type Week } from "./weekly";
 import { parseReview, type VideoReview } from "./review";
@@ -49,6 +49,10 @@ export type VideoStatusRow = {
   visibility: string | null;
   visibilityBusy: boolean;
   visibilityRequestedAt: Date | null;
+  titleScreen: string | null;
+  titleScreenKind: string | null;
+  titleScreenDay: number | null;
+  titleScreenApprovedAt: Date | null;
 };
 
 const VIDEO_STATUS_SELECT = {
@@ -76,6 +80,10 @@ const VIDEO_STATUS_SELECT = {
   visibility: true,
   visibilityBusy: true,
   visibilityRequestedAt: true,
+  titleScreen: true,
+  titleScreenKind: true,
+  titleScreenDay: true,
+  titleScreenApprovedAt: true,
 } as const;
 
 /**
@@ -125,6 +133,10 @@ export function videoCardFromStatus(row: VideoStatusRow): VideoCard {
     teaserBusy: row.teaserBusy || Boolean(row.teaserRequestedAt),
     visibility: parseVisibility(row.visibility),
     visibilityBusy: row.visibilityBusy || Boolean(row.visibilityRequestedAt),
+    titleScreen: row.titleScreen,
+    titleScreenKind: row.titleScreenKind === "daily" || row.titleScreenKind === "series" ? (row.titleScreenKind as TitleScreenKind) : null,
+    titleScreenDay: row.titleScreenDay,
+    titleScreenApprovedAt: row.titleScreenApprovedAt,
   };
 }
 
@@ -154,6 +166,7 @@ export async function loadEpisodes(context: BrandDataContext): Promise<EpisodeRo
         thumbnailOptions: true, thumbnailBusy: true, thumbnailRequestedAt: true,
         transcriptCues: true, teaser: true, teaserBusy: true, teaserRequestedAt: true,
         visibility: true, visibilityBusy: true, visibilityRequestedAt: true,
+        titleScreen: true, titleScreenKind: true, titleScreenDay: true, titleScreenApprovedAt: true,
       },
     }),
   );

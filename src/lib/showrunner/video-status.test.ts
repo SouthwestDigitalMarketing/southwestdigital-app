@@ -94,6 +94,21 @@ describe("parseVideoStatus", () => {
     expect(row?.teaserBusy).toBe(true);
   });
 
+  it("keeps the title-screen still, kind and day number", () => {
+    const titleScreen = "data:image/jpeg;base64,/9j/4AAQSkZJRg==";
+    const row = parseVideoStatus({
+      batch: "b9",
+      state: "episode",
+      titleScreen,
+      titleScreenKind: "daily",
+      titleScreenDay: 452,
+    });
+    expect(row?.titleScreen).toBe(titleScreen);
+    expect(row?.titleScreenKind).toBe("daily");
+    expect(row?.titleScreenDay).toBe(452);
+    expect(parseVideoStatus({ batch: "b9", state: "episode", titleScreenKind: "other", titleScreenDay: -1 })?.titleScreenKind).toBeNull();
+  });
+
   it("keeps YouTube privacy and names it plainly", () => {
     const row = parseVideoStatus({
       batch: "b8",

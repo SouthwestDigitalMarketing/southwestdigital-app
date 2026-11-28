@@ -2183,6 +2183,13 @@ model ShowrunnerVideoStatus {
   /// Tom picked a new privacy; ripley changes it in Studio and clears this.
   visibilityRequestedAt DateTime?
   visibilityRequest String?
+  /// data:image/jpeg;base64 of the show open card, at most 200 KB.
+  titleScreen String? @db.Text
+  /// daily (domain + Day N) or series (custom weekly open).
+  titleScreenKind String?
+  titleScreenDay Int?
+  /// Tom approved this still on the episode page. SWapp-only; ripley does not clear it.
+  titleScreenApprovedAt DateTime?
   updatedAt DateTime  @default(now()) @updatedAt
   brand     Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
 

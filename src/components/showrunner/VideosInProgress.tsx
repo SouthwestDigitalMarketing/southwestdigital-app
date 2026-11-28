@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { AudioOptions } from "@/components/showrunner/AudioOptions";
 import { ThumbnailCopy, TranscriptAccordion } from "@/components/showrunner/ThumbnailCopy";
+import { TitleScreen } from "@/components/showrunner/TitleScreen";
 import { WaitingActions } from "@/components/showrunner/WaitingActions";
 import { YouTubeVisibility } from "@/components/showrunner/YouTubeVisibility";
 import { isWaitingForYou } from "@/lib/showrunner/production";
@@ -31,6 +32,10 @@ export type VideoCard = {
   teaserBusy?: boolean;
   visibility?: YoutubeVisibility | null;
   visibilityBusy?: boolean;
+  titleScreen?: string | null;
+  titleScreenKind?: "daily" | "series" | null;
+  titleScreenDay?: number | null;
+  titleScreenApprovedAt?: Date | string | null;
 };
 
 const MARK: Record<VideoStep["state"], string> = { done: "✓", now: "●", todo: "○", stopped: "✕" };
@@ -158,6 +163,15 @@ export function VideosInProgress({
                     batch={video.batch}
                     visibility={video.visibility ?? null}
                     busy={Boolean(video.visibilityBusy)}
+                  />
+                ) : null}
+                {copy ? (
+                  <TitleScreen
+                    batch={video.batch}
+                    image={video.titleScreen ?? null}
+                    kind={video.titleScreenKind ?? null}
+                    day={video.titleScreenDay ?? null}
+                    approvedAt={video.titleScreenApprovedAt ?? null}
                   />
                 ) : null}
                 {copy ? <AudioOptions batch={video.batch} /> : null}

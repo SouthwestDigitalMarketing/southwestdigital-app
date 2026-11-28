@@ -49,6 +49,8 @@ export function youtubeVisibilityLabel(visibility: YoutubeVisibility | null, has
 export const THUMBNAIL_PREFIX = "data:image/jpeg;base64,";
 const THUMBNAIL_MAX = 200 * 1024;
 
+export type TitleScreenKind = "daily" | "series";
+
 export type VideoStatusInput = {
   batch: string;
   project: string | null;
@@ -69,6 +71,9 @@ export type VideoStatusInput = {
   teaserBusy: boolean;
   visibility: YoutubeVisibility | null;
   visibilityBusy: boolean;
+  titleScreen: string | null;
+  titleScreenKind: TitleScreenKind | null;
+  titleScreenDay: number | null;
   sentAt: Date | null;
 };
 
@@ -121,13 +126,8 @@ export function parseVideoStatus(raw: unknown): VideoStatusInput | null {
     if (render.total === undefined) render = null;
   }
   const url = typeof row.url === "string" && row.url.startsWith("https://") ? row.url.slice(0, 300) : null;
-  const thumbnail =
-    typeof row.thumbnail === "string" &&
-    row.thumbnail.startsWith(THUMBNAIL_PREFIX) &&
-    row.thumbnail.length <= THUMBNAIL_MAX &&
-    /^[A-Za-z0-9+/=]+$/.test(row.thumbnail.slice(THUMBNAIL_PREFIX.length))
-      ? row.thumbnail
-      : null;
+  const thumbnail = jpeg(row.thumbnail);
+  const titleScreen = jpeg(row.titleScreen);
   let details: VideoDetails | null = null;
   if (row.details && typeof row.details === "object") {
     const d = row.details as Record<string, unknown>;
@@ -187,8 +187,20 @@ export function parseVideoStatus(raw: unknown): VideoStatusInput | null {
     teaserBusy: row.teaserBusy === true,
     visibility: parseVisibility(row.visibility),
     visibilityBusy: row.visibilityBusy === true,
+    titleScreen,
+    titleScreenKind: row.titleScreenKind === "daily" || row.titleScreenKind === "series" ? row.titleScreenKind : null,
+    titleScreenDay: count(row.titleScreenDay) ?? null,
     sentAt: created && !Number.isNaN(created.getTime()) ? created : null,
   };
+}
+
+function jpeg(value: unknown): string | null {
+  return typeof value === "string" &&
+    value.startsWith(THUMBNAIL_PREFIX) &&
+    value.length <= THUMBNAIL_MAX &&
+    /^[A-Za-z0-9+/=]+$/.test(value.slice(THUMBNAIL_PREFIX.length))
+    ? value
+    : null;
 }
 
 /** The push token from ripley, compared in constant time. 503 when this SWapp has no token set. */
