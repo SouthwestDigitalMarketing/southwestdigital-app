@@ -1,4 +1,13 @@
 # SWapp handoff
+## 2026-11-28 — Website traffic: domain links + all sites (Johnny)
+
+Traffic overview headings are the bare domain (`bookkeepingconroe.com`) and
+open the live site in a new tab. Combined stays business-only (BKC + TREB).
+After those two, swipe includes the three music sites from `src/lib/sites.ts`
+(easyweddingband.com, southernrockguitarist.com, bluesbandforhire.com). Music
+analytics show an amber "not connected yet" until GA4 is wired. Demo :3118
+`/website`. Music page now imports the same site list.
+
 ## 2026-11-28 — Title screen preview + collapsed voice tests (Johnny)
 
 Episode page: Hear the voice is a closed accordion. Every episode shows the
